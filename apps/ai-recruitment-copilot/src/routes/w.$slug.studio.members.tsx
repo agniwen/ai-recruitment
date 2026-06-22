@@ -14,6 +14,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import {
   GripVerticalIcon,
   PlusIcon,
@@ -32,6 +33,8 @@ import { TimeDisplay } from "@/components/features/display/time-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
+import type { SearchableSelectOption } from "@/components/ui/searchable-select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -124,6 +127,8 @@ interface RecruitingGroupRow {
   id: string;
   name: string;
   createdAt: string;
+  hiringUnitIds: string[];
+  hiringUnits: { id: string; name: string }[];
   isDefault: boolean;
   isVirtual?: boolean;
   members: RecruitingGroupMemberRow[];
@@ -238,6 +243,7 @@ interface RecruitingGroupsPanelProps {
   onCreateGroup: () => void;
   onDeleteGroup: (group: RecruitingGroupRow) => void;
   onGroupNameDraftChange: (groupId: string, value: string) => void;
+  onHiringUnitsChange: (group: RecruitingGroupRow, hiringUnitIds: string[]) => void;
   onRemoveGroupMember: (groupId: string, member: RecruitingGroupMemberRow) => void;
   onRenameGroup: (group: RecruitingGroupRow, name: string) => void;
   onMoveMemberToGroup: (row: MemberRow, sourceGroupId: string, targetGroupId: string) => void;
@@ -247,6 +253,7 @@ interface RecruitingGroupsPanelProps {
     role: RecruitingGroupRole,
   ) => void;
   pending: string | null;
+  hiringUnitOptions: SearchableSelectOption[];
   setNewGroupName: (value: string) => void;
 }
 
@@ -260,11 +267,13 @@ function RecruitingGroupsPanel({
   onCreateGroup,
   onDeleteGroup,
   onGroupNameDraftChange,
+  onHiringUnitsChange,
   onRemoveGroupMember,
   onRenameGroup,
   onMoveMemberToGroup,
   onRoleChange,
   pending,
+  hiringUnitOptions,
   setNewGroupName,
 }: RecruitingGroupsPanelProps) {
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
@@ -373,10 +382,12 @@ function RecruitingGroupsPanel({
                 canUpdate={canUpdate}
                 draftName={groupNameDrafts[group.id] ?? group.name}
                 group={group}
+                hiringUnitOptions={hiringUnitOptions}
                 id={getColumnId(group.id)}
                 key={group.id}
                 onDeleteGroup={onDeleteGroup}
                 onGroupNameDraftChange={onGroupNameDraftChange}
+                onHiringUnitsChange={onHiringUnitsChange}
                 onRemoveGroupMember={onRemoveGroupMember}
                 onRenameGroup={onRenameGroup}
                 onRoleChange={onRoleChange}
@@ -400,9 +411,11 @@ interface RecruitingGroupColumnProps {
   canUpdate: boolean;
   draftName?: string;
   group: RecruitingGroupRow;
+  hiringUnitOptions: SearchableSelectOption[];
   id: string;
   onDeleteGroup: (group: RecruitingGroupRow) => void;
   onGroupNameDraftChange: (groupId: string, value: string) => void;
+  onHiringUnitsChange: (group: RecruitingGroupRow, hiringUnitIds: string[]) => void;
   onRemoveGroupMember: (groupId: string, member: RecruitingGroupMemberRow) => void;
   onRenameGroup: (group: RecruitingGroupRow, name: string) => void;
   onRoleChange: (
@@ -417,9 +430,11 @@ function RecruitingGroupColumn({
   canUpdate,
   draftName,
   group,
+  hiringUnitOptions,
   id,
   onDeleteGroup,
   onGroupNameDraftChange,
+  onHiringUnitsChange,
   onRemoveGroupMember,
   onRenameGroup,
   onRoleChange,
@@ -430,6 +445,35 @@ function RecruitingGroupColumn({
     id,
   });
   const canManageGroup = canUpdate && !group.isVirtual;
+  const hiringUnitPendingKey = `hiring-units:${group.id}`;
+  let hiringUnitControl: ReactNode = null;
+  if (!group.isVirtual && canManageGroup) {
+    hiringUnitControl = (
+      <SearchableMultiSelect
+        disabled={pending === hiringUnitPendingKey}
+        emptyMessage="暂无用人组织"
+        onChange={(value) => onHiringUnitsChange(group, value)}
+        options={hiringUnitOptions}
+        placeholder="负责用人组织"
+        searchPlaceholder="搜索用人组织"
+        value={group.hiringUnitIds}
+      />
+    );
+  } else if (!group.isVirtual) {
+    hiringUnitControl = (
+      <div className="flex flex-wrap gap-1">
+        {group.hiringUnits.length > 0 ? (
+          group.hiringUnits.map((unit) => (
+            <Badge key={unit.id} variant="secondary">
+              {unit.name}
+            </Badge>
+          ))
+        ) : (
+          <Badge variant="outline">仅公共部门</Badge>
+        )}
+      </div>
+    );
+  }
 
   return (
     <section
@@ -481,6 +525,7 @@ function RecruitingGroupColumn({
             </span>
           ) : null}
         </div>
+        {hiringUnitControl}
       </div>
       <div className="flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-3">
         {group.members.length > 0 ? (
@@ -730,6 +775,27 @@ function MembersManagementPage() {
     queryKey: groupsQueryKey,
     refetchOnWindowFocus: false,
   });
+  const { data: hiringUnits = [] } = useQuery({
+    enabled: Boolean(workspaceId) && activeTab === "groups",
+    queryFn: async () => {
+      const response = await rpc.api.w[":slug"].studio["hiring-units"].all.$get({
+        param: { slug },
+      });
+      const payload = (await response.json()) as
+        | { records: { id: string; name: string }[] }
+        | { message?: string };
+      if (!response.ok || !("records" in payload)) {
+        throw new Error("加载用人组织失败");
+      }
+      return payload.records;
+    },
+    queryKey: ["hiring-units", slug, workspaceId, "all"],
+    refetchOnWindowFocus: false,
+  });
+  const hiringUnitOptions = useMemo<SearchableSelectOption[]>(
+    () => hiringUnits.map((unit) => ({ label: unit.name, value: unit.id })),
+    [hiringUnits],
+  );
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<RecruitingGroupRow | null>(null);
@@ -959,6 +1025,32 @@ function MembersManagementPage() {
       toast.success("组内角色已更新");
     } catch {
       toast.error("更新组内角色失败");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function changeGroupHiringUnits(group: RecruitingGroupRow, hiringUnitIds: string[]) {
+    if (group.isVirtual) {
+      return;
+    }
+    const pendingKey = `hiring-units:${group.id}`;
+    setPending(pendingKey);
+    try {
+      const response = await rpc.api.w[":slug"].studio.workspace.groups[":id"]["hiring-units"].$put(
+        {
+          json: { hiringUnitIds },
+          param: { id: group.id, slug },
+        },
+      );
+      if (!response.ok) {
+        toast.error(await readErrorMessage(response, "更新负责用人组织失败"));
+        return;
+      }
+      await refetchGroups();
+      toast.success("负责用人组织已更新");
+    } catch {
+      toast.error("更新负责用人组织失败");
     } finally {
       setPending(null);
     }
@@ -1217,6 +1309,9 @@ function MembersManagementPage() {
             onGroupNameDraftChange={(groupId, value) =>
               setGroupNameDrafts((current) => ({ ...current, [groupId]: value }))
             }
+            onHiringUnitsChange={(group, hiringUnitIds) =>
+              void changeGroupHiringUnits(group, hiringUnitIds)
+            }
             onRemoveGroupMember={(groupId, member) => void removeGroupMember(groupId, member)}
             onRenameGroup={(group, name) => void renameGroup(group, name)}
             onMoveMemberToGroup={(row, sourceGroupId, targetGroupId) =>
@@ -1226,6 +1321,7 @@ function MembersManagementPage() {
               void changeGroupMemberRole(groupId, member, role)
             }
             pending={pending}
+            hiringUnitOptions={hiringUnitOptions}
             setNewGroupName={setNewGroupName}
           />
         </TabsContent>

@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { chatAttachment, jobDescription } from "@arc/db-schema/schema";
+import { chatAttachment } from "@arc/db-schema/schema";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { validateResumeFile } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
@@ -20,6 +20,7 @@ import {
   reviveRetriableFailures,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches";
 import { processNextItem } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor";
+import { loadJobDescriptionById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { createBatchInputSchema } from "./schema";
 
 async function getResumeParseQueueApi() {
@@ -120,16 +121,9 @@ export const resumeUploadBatchesRouter = factory
         if (!input.jobDescriptionId) {
           return c.json({ error: "绑定模式必须选择岗位。" }, 400);
         }
-        const [jd] = await db
-          .select({ id: jobDescription.id })
-          .from(jobDescription)
-          .where(
-            and(
-              eq(jobDescription.id, input.jobDescriptionId),
-              eq(jobDescription.organizationId, activeOrg.id),
-            ),
-          )
-          .limit(1);
+        const jd = await loadJobDescriptionById(activeOrg.id, input.jobDescriptionId, {
+          actorUserId: user.id,
+        });
         if (!jd) {
           return c.json({ error: "选择的岗位不存在。" }, 400);
         }

@@ -23,6 +23,7 @@ export function resolveInterviewRecordIds(body: {
 export async function resolveAiGenerateContext(
   organizationId: string,
   options: {
+    actorUserId?: string | null;
     interviewRecordIds: string[];
     jobDescriptionId?: string;
     jobDescriptionIds?: string[];
@@ -34,7 +35,7 @@ export async function resolveAiGenerateContext(
     }
   | { error: string }
 > {
-  const { interviewRecordIds, jobDescriptionId, jobDescriptionIds } = options;
+  const { actorUserId, interviewRecordIds, jobDescriptionId, jobDescriptionIds } = options;
   let candidates: AiCandidateContext[] = [];
   let jobDescription: AiGenerateJobDescriptionContext | null = null;
 
@@ -57,7 +58,7 @@ export async function resolveAiGenerateContext(
   }
 
   if (jobDescriptionId) {
-    const jd = await loadJobDescriptionById(organizationId, jobDescriptionId);
+    const jd = await loadJobDescriptionById(organizationId, jobDescriptionId, { actorUserId });
     if (!jd) {
       return { error: "所选岗位不存在。" };
     }
@@ -65,7 +66,9 @@ export async function resolveAiGenerateContext(
   } else if (!jobDescription && jobDescriptionIds?.length) {
     const [firstJobDescriptionId] = jobDescriptionIds;
     if (firstJobDescriptionId) {
-      const jd = await loadJobDescriptionById(organizationId, firstJobDescriptionId);
+      const jd = await loadJobDescriptionById(organizationId, firstJobDescriptionId, {
+        actorUserId,
+      });
       if (jd) {
         jobDescription = { name: jd.name, prompt: jd.prompt ?? null };
       }

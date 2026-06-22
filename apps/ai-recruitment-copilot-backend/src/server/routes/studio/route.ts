@@ -4,6 +4,7 @@ import { workspaceMiddleware } from "@arc/ai-recruitment-copilot-backend/server/
 import { departmentsRouter } from "./routes/departments/route";
 import { candidateFormsRouter } from "./routes/forms/route";
 import { globalConfigRouter } from "./routes/global-config/route";
+import { hiringUnitsRouter } from "./routes/hiring-units/route";
 import { interviewQuestionTemplatesRouter } from "./routes/interview-questions/route";
 import { interviewersRouter } from "./routes/interviewers/route";
 import { studioInterviewsRouter } from "./routes/interviews/route";
@@ -25,6 +26,7 @@ export const studioRouter = factory
   .route("/resume-pool", resumePoolRouter)
   .route("/resumes", resumeLibraryRouter)
   .route("/resume-upload-batches", resumeUploadBatchesRouter)
+  .route("/hiring-units", hiringUnitsRouter)
   .route("/departments", departmentsRouter)
   .route("/global-config", globalConfigRouter)
   .route("/interviewers", interviewersRouter)

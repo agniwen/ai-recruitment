@@ -42,6 +42,7 @@ import { Route as WSlugStudioJobDescriptionsRouteImport } from './routes/w.$slug
 import { Route as WSlugStudioInterviewsRouteImport } from './routes/w.$slug.studio.interviews'
 import { Route as WSlugStudioInterviewersRouteImport } from './routes/w.$slug.studio.interviewers'
 import { Route as WSlugStudioInterviewQuestionsRouteImport } from './routes/w.$slug.studio.interview-questions'
+import { Route as WSlugStudioHiringUnitsRouteImport } from './routes/w.$slug.studio.hiring-units'
 import { Route as WSlugStudioGlobalConfigRouteImport } from './routes/w.$slug.studio.global-config'
 import { Route as WSlugStudioFormsRouteImport } from './routes/w.$slug.studio.forms'
 import { Route as WSlugStudioDepartmentsRouteImport } from './routes/w.$slug.studio.departments'
@@ -220,6 +221,11 @@ const WSlugStudioInterviewQuestionsRoute =
     path: '/interview-questions',
     getParentRoute: () => WSlugStudioRoute,
   } as any)
+const WSlugStudioHiringUnitsRoute = WSlugStudioHiringUnitsRouteImport.update({
+  id: '/hiring-units',
+  path: '/hiring-units',
+  getParentRoute: () => WSlugStudioRoute,
+} as any)
 const WSlugStudioGlobalConfigRoute = WSlugStudioGlobalConfigRouteImport.update({
   id: '/global-config',
   path: '/global-config',
@@ -281,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
   '/w/$slug/studio/global-config': typeof WSlugStudioGlobalConfigRoute
+  '/w/$slug/studio/hiring-units': typeof WSlugStudioHiringUnitsRoute
   '/w/$slug/studio/interview-questions': typeof WSlugStudioInterviewQuestionsRoute
   '/w/$slug/studio/interviewers': typeof WSlugStudioInterviewersRoute
   '/w/$slug/studio/interviews': typeof WSlugStudioInterviewsRouteWithChildren
@@ -321,6 +328,7 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
   '/w/$slug/studio/global-config': typeof WSlugStudioGlobalConfigRoute
+  '/w/$slug/studio/hiring-units': typeof WSlugStudioHiringUnitsRoute
   '/w/$slug/studio/interview-questions': typeof WSlugStudioInterviewQuestionsRoute
   '/w/$slug/studio/interviewers': typeof WSlugStudioInterviewersRoute
   '/w/$slug/studio/interviews': typeof WSlugStudioInterviewsRouteWithChildren
@@ -363,6 +371,7 @@ export interface FileRoutesById {
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
   '/w/$slug/studio/global-config': typeof WSlugStudioGlobalConfigRoute
+  '/w/$slug/studio/hiring-units': typeof WSlugStudioHiringUnitsRoute
   '/w/$slug/studio/interview-questions': typeof WSlugStudioInterviewQuestionsRoute
   '/w/$slug/studio/interviewers': typeof WSlugStudioInterviewersRoute
   '/w/$slug/studio/interviews': typeof WSlugStudioInterviewsRouteWithChildren
@@ -406,6 +415,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
     | '/w/$slug/studio/global-config'
+    | '/w/$slug/studio/hiring-units'
     | '/w/$slug/studio/interview-questions'
     | '/w/$slug/studio/interviewers'
     | '/w/$slug/studio/interviews'
@@ -446,6 +456,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
     | '/w/$slug/studio/global-config'
+    | '/w/$slug/studio/hiring-units'
     | '/w/$slug/studio/interview-questions'
     | '/w/$slug/studio/interviewers'
     | '/w/$slug/studio/interviews'
@@ -487,6 +498,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
     | '/w/$slug/studio/global-config'
+    | '/w/$slug/studio/hiring-units'
     | '/w/$slug/studio/interview-questions'
     | '/w/$slug/studio/interviewers'
     | '/w/$slug/studio/interviews'
@@ -751,6 +763,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugStudioInterviewQuestionsRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
+    '/w/$slug/studio/hiring-units': {
+      id: '/w/$slug/studio/hiring-units'
+      path: '/hiring-units'
+      fullPath: '/w/$slug/studio/hiring-units'
+      preLoaderRoute: typeof WSlugStudioHiringUnitsRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
     '/w/$slug/studio/global-config': {
       id: '/w/$slug/studio/global-config'
       path: '/global-config'
@@ -870,6 +889,7 @@ interface WSlugStudioRouteChildren {
   WSlugStudioDepartmentsRoute: typeof WSlugStudioDepartmentsRoute
   WSlugStudioFormsRoute: typeof WSlugStudioFormsRoute
   WSlugStudioGlobalConfigRoute: typeof WSlugStudioGlobalConfigRoute
+  WSlugStudioHiringUnitsRoute: typeof WSlugStudioHiringUnitsRoute
   WSlugStudioInterviewQuestionsRoute: typeof WSlugStudioInterviewQuestionsRoute
   WSlugStudioInterviewersRoute: typeof WSlugStudioInterviewersRoute
   WSlugStudioInterviewsRoute: typeof WSlugStudioInterviewsRouteWithChildren
@@ -886,6 +906,7 @@ const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
   WSlugStudioDepartmentsRoute: WSlugStudioDepartmentsRoute,
   WSlugStudioFormsRoute: WSlugStudioFormsRoute,
   WSlugStudioGlobalConfigRoute: WSlugStudioGlobalConfigRoute,
+  WSlugStudioHiringUnitsRoute: WSlugStudioHiringUnitsRoute,
   WSlugStudioInterviewQuestionsRoute: WSlugStudioInterviewQuestionsRoute,
   WSlugStudioInterviewersRoute: WSlugStudioInterviewersRoute,
   WSlugStudioInterviewsRoute: WSlugStudioInterviewsRouteWithChildren,

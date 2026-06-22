@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { department, interviewer } from "@arc/db-schema/schema";
+import { interviewer } from "@arc/db-schema/schema";
 import { minimaxVoiceSchema } from "@arc/db-schema/minimax-voices";
 import { interviewerFormSchema, interviewerUpdateSchema } from "@arc/shared/interviewers";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -16,17 +16,14 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviewers/dao";
 import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
+import { loadDepartmentById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 
-async function validateDepartmentExists(
+async function validateSelectableDepartment(
   departmentId: string,
   organizationId: string,
+  actorUserId: string | null | undefined,
 ): Promise<boolean> {
-  const [row] = await db
-    .select({ id: department.id })
-    .from(department)
-    .where(and(eq(department.id, departmentId), eq(department.organizationId, organizationId)))
-    .limit(1);
-  return !!row;
+  return !!(await loadDepartmentById(departmentId, organizationId, { actorUserId }));
 }
 
 const interviewerListQuerySchema = z.object({
@@ -57,6 +54,7 @@ export const interviewersRouter = factory
       const result = await queryPaginatedInterviewers(
         activeOrg.id,
         {
+          actorUserId: c.var.user?.id,
           departmentId: q.departmentId,
           search: q.search,
         },
@@ -75,7 +73,7 @@ export const interviewersRouter = factory
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
     }
-    const records = await listAllInterviewers(activeOrg.id);
+    const records = await listAllInterviewers(activeOrg.id, { actorUserId: c.var.user?.id });
     return c.json({ records }, 200);
   })
   .post(
@@ -88,7 +86,11 @@ export const interviewersRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
-      const hasDepartment = await validateDepartmentExists(input.departmentId, activeOrg.id);
+      const hasDepartment = await validateSelectableDepartment(
+        input.departmentId,
+        activeOrg.id,
+        c.var.user?.id,
+      );
       if (!hasDepartment) {
         return c.json({ error: "所选部门不存在。" }, 400);
       }
@@ -138,7 +140,7 @@ export const interviewersRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const record = await loadInterviewerById(id, activeOrg.id);
+    const record = await loadInterviewerById(id, activeOrg.id, { actorUserId: c.var.user?.id });
     if (!record) {
       return c.json({ error: "面试官不存在。" }, 404);
     }
@@ -154,14 +156,20 @@ export const interviewersRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const id = c.req.param("id");
-      const existing = await loadInterviewerById(id, activeOrg.id);
+      const existing = await loadInterviewerById(id, activeOrg.id, {
+        actorUserId: c.var.user?.id,
+      });
       if (!existing) {
         return c.json({ error: "面试官不存在。" }, 404);
       }
 
       const input = c.req.valid("json");
       if (input.departmentId !== existing.departmentId) {
-        const hasDepartment = await validateDepartmentExists(input.departmentId, activeOrg.id);
+        const hasDepartment = await validateSelectableDepartment(
+          input.departmentId,
+          activeOrg.id,
+          c.var.user?.id,
+        );
         if (!hasDepartment) {
           return c.json({ error: "所选部门不存在。" }, 400);
         }
@@ -181,7 +189,9 @@ export const interviewersRouter = factory
         .where(and(eq(interviewer.id, id), eq(interviewer.organizationId, activeOrg.id)));
 
       safeUpdateTag(`interviewers:${activeOrg.id}`);
-      const updated = await loadInterviewerById(id, activeOrg.id);
+      const updated = await loadInterviewerById(id, activeOrg.id, {
+        actorUserId: c.var.user?.id,
+      });
       return c.json(updated, 200);
     },
   )
@@ -191,7 +201,7 @@ export const interviewersRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const existing = await loadInterviewerById(id, activeOrg.id);
+    const existing = await loadInterviewerById(id, activeOrg.id, { actorUserId: c.var.user?.id });
     if (!existing) {
       return c.json({ error: "面试官不存在。" }, 404);
     }

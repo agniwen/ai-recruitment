@@ -37,6 +37,7 @@ export const loadStudioFormsState = createServerFn({ method: "GET" })
 
     return {
       ...(await loadStudioFormsData({
+        actorUserId: access.user.id,
         query: data.query,
         slug: data.slug,
         workspaceId: access.workspace.id,

@@ -3,17 +3,15 @@ import type { DataGridQueryState } from "@/components/data-grid/query-contract";
 import { buildDataGridQueryKey } from "@/components/data-grid/query-contract";
 import type { JsonValue } from "@/lib/start/server-function-types";
 import { createQueryClient } from "@arc/shared/query-client";
-import { listDepartments } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
+import { listHiringUnits } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao";
 
 type EmptyFilters = Record<string, never>;
 
-export async function loadStudioDepartmentsHydrationState({
-  actorUserId,
+export async function loadStudioHiringUnitsHydrationState({
   query,
   slug,
   workspaceId,
 }: {
-  actorUserId: string;
   query: DataGridQueryState<EmptyFilters>;
   slug: string;
   workspaceId: string;
@@ -21,8 +19,8 @@ export async function loadStudioDepartmentsHydrationState({
   const queryClient = createQueryClient();
   await queryClient.prefetchQuery({
     queryFn: () =>
-      listDepartments(
-        { actorUserId, organizationId: workspaceId, search: query.search },
+      listHiringUnits(
+        { organizationId: workspaceId, search: query.search },
         {
           page: query.page,
           pageSize: query.pageSize,
@@ -30,7 +28,7 @@ export async function loadStudioDepartmentsHydrationState({
           sortOrder: query.sortOrder,
         },
       ),
-    queryKey: buildDataGridQueryKey(["departments", slug], query),
+    queryKey: buildDataGridQueryKey(["hiring-units", slug], query),
   });
 
   return structuredClone(dehydrate(queryClient)) as unknown as JsonValue;

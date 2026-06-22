@@ -2,9 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  hiringUnit,
   member,
   organization,
   recruitingGroup,
+  recruitingGroupHiringUnit,
   recruitingGroupMember,
   user,
 } from "@arc/db-schema/schema";
@@ -13,6 +15,7 @@ import {
   ensureDefaultRecruitingGroupForWorkspace,
   listRecruitingGroupBoard,
   UNGROUPED_RECRUITING_GROUP_ID,
+  updateRecruitingGroupHiringUnits,
 } from "../dao";
 
 const ORG = "test_workspace_groups_org";
@@ -20,6 +23,10 @@ const CREATOR = "test_workspace_groups_creator";
 const MEMBER = "test_workspace_groups_member";
 
 async function clean() {
+  await db
+    .delete(recruitingGroupHiringUnit)
+    .where(eq(recruitingGroupHiringUnit.organizationId, ORG));
+  await db.delete(hiringUnit).where(eq(hiringUnit.organizationId, ORG));
   await db.delete(recruitingGroupMember).where(eq(recruitingGroupMember.organizationId, ORG));
   await db.delete(recruitingGroup).where(eq(recruitingGroup.organizationId, ORG));
   await db.delete(member).where(eq(member.organizationId, ORG));
@@ -179,5 +186,53 @@ describe("workspace recruiting group dao", () => {
       name: "未分组",
     });
     expect(groups[1]?.members).toEqual([expect.objectContaining({ role: null, userId: MEMBER })]);
+  }, 30_000);
+
+  it("stores and returns hiring units managed by a recruiting group", async () => {
+    const defaultGroup = await ensureDefaultRecruitingGroupForWorkspace({
+      creatorUserId: CREATOR,
+      organizationId: ORG,
+    });
+    await db.insert(hiringUnit).values([
+      {
+        createdAt: new Date(),
+        createdBy: CREATOR,
+        id: "test_workspace_hiring_unit_a",
+        name: "A 用人组织",
+        organizationId: ORG,
+        updatedAt: new Date(),
+      },
+      {
+        createdAt: new Date(),
+        createdBy: CREATOR,
+        id: "test_workspace_hiring_unit_b",
+        name: "B 用人组织",
+        organizationId: ORG,
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const first = await updateRecruitingGroupHiringUnits({
+      actorUserId: CREATOR,
+      groupId: defaultGroup.id,
+      hiringUnitIds: ["test_workspace_hiring_unit_b", "test_workspace_hiring_unit_a"],
+      organizationId: ORG,
+    });
+    const second = await updateRecruitingGroupHiringUnits({
+      actorUserId: CREATOR,
+      groupId: defaultGroup.id,
+      hiringUnitIds: ["test_workspace_hiring_unit_a"],
+      organizationId: ORG,
+    });
+
+    expect(first.status).toBe("updated");
+    expect(second.status).toBe("updated");
+
+    const groups = await listRecruitingGroupBoard(ORG);
+    expect(groups[0]).toMatchObject({
+      hiringUnitIds: ["test_workspace_hiring_unit_a"],
+      hiringUnits: [{ id: "test_workspace_hiring_unit_a", name: "A 用人组织" }],
+      id: defaultGroup.id,
+    });
   }, 30_000);
 });

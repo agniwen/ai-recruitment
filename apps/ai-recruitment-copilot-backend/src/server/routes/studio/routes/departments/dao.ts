@@ -1,4 +1,5 @@
 import type { DepartmentListRecord, DepartmentRecord } from "@arc/shared/departments";
+import type { SQL } from "drizzle-orm";
 import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -12,7 +13,8 @@ import type {
   PaginationParams,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
-import { department, interviewer, jobDescription } from "@arc/db-schema/schema";
+import { department, hiringUnit, interviewer, jobDescription } from "@arc/db-schema/schema";
+import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const departmentListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
@@ -36,19 +38,26 @@ export type PaginatedDepartmentResult = PaginatedResult<DepartmentListRecord>;
 function buildWhereConditions({
   organizationId,
   search,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
+  scopeCondition?: SQL;
 }) {
-  const orgFilter = eq(department.organizationId, organizationId);
-  if (!search) {
-    return orgFilter;
+  const conditions: SQL[] = [eq(department.organizationId, organizationId)];
+  if (search) {
+    const searchCondition = or(
+      ilike(department.name, `%${search}%`),
+      ilike(department.description, `%${search}%`),
+    );
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
   }
-
-  return and(
-    orgFilter,
-    or(ilike(department.name, `%${search}%`), ilike(department.description, `%${search}%`)),
-  );
+  if (scopeCondition) {
+    conditions.push(scopeCondition);
+  }
+  return and(...conditions);
 }
 
 function listDepartmentRows({
@@ -58,6 +67,7 @@ function listDepartmentRows({
   sortOrder = "desc",
   limit,
   offset,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
@@ -65,12 +75,23 @@ function listDepartmentRows({
   sortOrder?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  scopeCondition?: SQL;
 }) {
-  const where = buildWhereConditions({ organizationId, search });
+  const where = buildWhereConditions({ organizationId, scopeCondition, search });
 
   let query = db
-    .select()
+    .select({
+      createdAt: department.createdAt,
+      createdBy: department.createdBy,
+      description: department.description,
+      hiringUnitId: department.hiringUnitId,
+      hiringUnitName: hiringUnit.name,
+      id: department.id,
+      name: department.name,
+      updatedAt: department.updatedAt,
+    })
     .from(department)
+    .leftJoin(hiringUnit, eq(department.hiringUnitId, hiringUnit.id))
     .where(where)
     .orderBy(buildOrderBy(ORDER_COLUMNS, sortBy, sortOrder))
     .$dynamic();
@@ -88,11 +109,13 @@ function listDepartmentRows({
 async function countDepartmentRows({
   organizationId,
   search,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
+  scopeCondition?: SQL;
 }) {
-  const where = buildWhereConditions({ organizationId, search });
+  const where = buildWhereConditions({ organizationId, scopeCondition, search });
   const [result] = await db.select({ count: count() }).from(department).where(where);
   return result?.count ?? 0;
 }
@@ -142,13 +165,15 @@ async function loadReferenceCounts(departmentIds: string[]) {
 }
 
 function toDepartmentListRecord(
-  row: typeof department.$inferSelect,
+  row: Awaited<ReturnType<typeof listDepartmentRows>>[number],
   refs: { interviewerCount: number; jobDescriptionCount: number },
 ): DepartmentListRecord {
   return {
     createdAt: serializeDate(row.createdAt),
     createdBy: row.createdBy,
     description: row.description,
+    hiringUnitId: row.hiringUnitId,
+    hiringUnitName: row.hiringUnitName,
     id: row.id,
     interviewerCount: refs.interviewerCount,
     jobDescriptionCount: refs.jobDescriptionCount,
@@ -172,17 +197,29 @@ export function parseDepartmentPagination(
 }
 
 export async function queryPaginatedDepartments(
-  filters: { organizationId: string; search?: string | null },
+  filters: { organizationId: string; search?: string | null; actorUserId?: string | null },
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedDepartmentResult> {
   const { search } = parseFilters(filters);
   const { organizationId } = filters;
   const { page, pageSize, sortBy, sortOrder } = parseDepartmentPagination(pagination);
   const offset = (page - 1) * pageSize;
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: filters.actorUserId,
+    organizationId,
+  });
 
   const [records, total] = await Promise.all([
-    listDepartmentRows({ limit: pageSize, offset, organizationId, search, sortBy, sortOrder }),
-    countDepartmentRows({ organizationId, search }),
+    listDepartmentRows({
+      limit: pageSize,
+      offset,
+      organizationId,
+      scopeCondition,
+      search,
+      sortBy,
+      sortOrder,
+    }),
+    countDepartmentRows({ organizationId, scopeCondition, search }),
   ]);
 
   const refsMap = await loadReferenceCounts(records.map((record) => record.id));
@@ -202,23 +239,43 @@ export async function queryPaginatedDepartments(
 }
 
 export function listDepartments(
-  filters: { organizationId: string; search?: string | null },
+  filters: { organizationId: string; search?: string | null; actorUserId?: string | null },
   pagination?: Record<string, unknown>,
 ) {
   return queryPaginatedDepartments(filters, pagination);
 }
 
 /** Load all departments (small list, used for selects). */
-export async function listAllDepartments(organizationId: string): Promise<DepartmentRecord[]> {
+export async function listAllDepartments(
+  organizationId: string,
+  options?: { actorUserId?: string | null },
+): Promise<DepartmentRecord[]> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
+  const where = buildWhereConditions({ organizationId, scopeCondition });
   const rows = await db
-    .select()
+    .select({
+      createdAt: department.createdAt,
+      createdBy: department.createdBy,
+      description: department.description,
+      hiringUnitId: department.hiringUnitId,
+      hiringUnitName: hiringUnit.name,
+      id: department.id,
+      name: department.name,
+      updatedAt: department.updatedAt,
+    })
     .from(department)
-    .where(eq(department.organizationId, organizationId))
+    .leftJoin(hiringUnit, eq(department.hiringUnitId, hiringUnit.id))
+    .where(where)
     .orderBy(asc(department.name));
   return rows.map((row) => ({
     createdAt: serializeDate(row.createdAt),
     createdBy: row.createdBy,
     description: row.description,
+    hiringUnitId: row.hiringUnitId,
+    hiringUnitName: row.hiringUnitName,
     id: row.id,
     name: row.name,
     updatedAt: serializeDate(row.updatedAt),
@@ -240,11 +297,30 @@ export async function loadDepartmentReferenceCounts(id: string) {
 export async function loadDepartmentById(
   id: string,
   organizationId: string,
+  options?: { actorUserId?: string | null },
 ): Promise<DepartmentRecord | null> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
+  const where = and(
+    eq(department.id, id),
+    buildWhereConditions({ organizationId, scopeCondition }),
+  );
   const [row] = await db
-    .select()
+    .select({
+      createdAt: department.createdAt,
+      createdBy: department.createdBy,
+      description: department.description,
+      hiringUnitId: department.hiringUnitId,
+      hiringUnitName: hiringUnit.name,
+      id: department.id,
+      name: department.name,
+      updatedAt: department.updatedAt,
+    })
     .from(department)
-    .where(and(eq(department.id, id), eq(department.organizationId, organizationId)))
+    .leftJoin(hiringUnit, eq(department.hiringUnitId, hiringUnit.id))
+    .where(where)
     .limit(1);
   if (!row) {
     return null;
@@ -253,6 +329,8 @@ export async function loadDepartmentById(
     createdAt: serializeDate(row.createdAt),
     createdBy: row.createdBy,
     description: row.description,
+    hiringUnitId: row.hiringUnitId,
+    hiringUnitName: row.hiringUnitName,
     id: row.id,
     name: row.name,
     updatedAt: serializeDate(row.updatedAt),
@@ -264,6 +342,8 @@ export function serializeDepartment(row: typeof department.$inferSelect): Depart
     createdAt: serializeDate(row.createdAt),
     createdBy: row.createdBy,
     description: row.description,
+    hiringUnitId: row.hiringUnitId,
+    hiringUnitName: null,
     id: row.id,
     name: row.name,
     updatedAt: serializeDate(row.updatedAt),

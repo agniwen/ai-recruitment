@@ -37,6 +37,7 @@ export const loadStudioInterviewQuestionsState = createServerFn({ method: "GET" 
 
     return {
       ...(await loadStudioInterviewQuestionsData({
+        actorUserId: access.user.id,
         query: data.query,
         slug: data.slug,
         workspaceId: access.workspace.id,

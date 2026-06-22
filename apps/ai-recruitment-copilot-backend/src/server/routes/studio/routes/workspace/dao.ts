@@ -1,8 +1,10 @@
 import { and, asc, desc, eq, inArray, notExists, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  hiringUnit,
   member,
   recruitingGroup,
+  recruitingGroupHiringUnit,
   recruitingGroupMember,
   session,
   user,
@@ -22,10 +24,17 @@ export interface RecruitingGroupMemberRow {
   role: RecruitingGroupRole | null;
 }
 
+export interface RecruitingGroupHiringUnitRow {
+  id: string;
+  name: string;
+}
+
 export interface RecruitingGroupBoardRow {
   id: string;
   name: string;
   createdAt: string;
+  hiringUnitIds: string[];
+  hiringUnits: RecruitingGroupHiringUnitRow[];
   isDefault: boolean;
   isVirtual?: boolean;
   members: RecruitingGroupMemberRow[];
@@ -168,7 +177,7 @@ export function ensureDefaultRecruitingGroupForWorkspace({
 export async function listRecruitingGroupBoard(
   organizationId: string,
 ): Promise<RecruitingGroupBoardRow[]> {
-  const [rows, ungroupedRows] = await Promise.all([
+  const [rows, ungroupedRows, hiringUnitRows] = await Promise.all([
     db
       .select({
         groupCreatedAt: recruitingGroup.createdAt,
@@ -219,6 +228,16 @@ export async function listRecruitingGroupBoard(
         ),
       )
       .orderBy(asc(user.name)),
+    db
+      .select({
+        groupId: recruitingGroupHiringUnit.groupId,
+        hiringUnitId: hiringUnit.id,
+        hiringUnitName: hiringUnit.name,
+      })
+      .from(recruitingGroupHiringUnit)
+      .innerJoin(hiringUnit, eq(hiringUnit.id, recruitingGroupHiringUnit.hiringUnitId))
+      .where(eq(recruitingGroupHiringUnit.organizationId, organizationId))
+      .orderBy(asc(hiringUnit.name)),
   ]);
 
   const groups = new Map<string, RecruitingGroupBoardRow>();
@@ -227,6 +246,8 @@ export async function listRecruitingGroupBoard(
     if (!group) {
       group = {
         createdAt: row.groupCreatedAt.toISOString(),
+        hiringUnitIds: [],
+        hiringUnits: [],
         id: row.groupId,
         isDefault: row.groupIsDefault,
         memberUserIds: [],
@@ -247,10 +268,20 @@ export async function listRecruitingGroupBoard(
       });
     }
   }
+  for (const row of hiringUnitRows) {
+    const group = groups.get(row.groupId);
+    if (!group) {
+      continue;
+    }
+    group.hiringUnitIds.push(row.hiringUnitId);
+    group.hiringUnits.push({ id: row.hiringUnitId, name: row.hiringUnitName });
+  }
   return [
     ...groups.values(),
     {
       createdAt: new Date(0).toISOString(),
+      hiringUnitIds: [],
+      hiringUnits: [],
       id: UNGROUPED_RECRUITING_GROUP_ID,
       isDefault: false,
       isVirtual: true,
@@ -266,6 +297,68 @@ export async function listRecruitingGroupBoard(
       name: "未分组",
     },
   ];
+}
+
+export async function updateRecruitingGroupHiringUnits({
+  actorUserId,
+  groupId,
+  hiringUnitIds,
+  organizationId,
+}: {
+  actorUserId: string | null | undefined;
+  groupId: string;
+  hiringUnitIds: string[];
+  organizationId: string;
+}) {
+  const uniqueHiringUnitIds = [...new Set(hiringUnitIds.map((id) => id.trim()).filter(Boolean))];
+  const [group] = await db
+    .select({ id: recruitingGroup.id })
+    .from(recruitingGroup)
+    .where(and(eq(recruitingGroup.organizationId, organizationId), eq(recruitingGroup.id, groupId)))
+    .limit(1);
+  if (!group) {
+    return { status: "missing" as const };
+  }
+
+  if (uniqueHiringUnitIds.length > 0) {
+    const rows = await db
+      .select({ id: hiringUnit.id })
+      .from(hiringUnit)
+      .where(
+        and(
+          eq(hiringUnit.organizationId, organizationId),
+          inArray(hiringUnit.id, uniqueHiringUnitIds),
+        ),
+      );
+    if (rows.length !== uniqueHiringUnitIds.length) {
+      return { status: "invalid_hiring_unit" as const };
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(recruitingGroupHiringUnit)
+      .where(
+        and(
+          eq(recruitingGroupHiringUnit.organizationId, organizationId),
+          eq(recruitingGroupHiringUnit.groupId, groupId),
+        ),
+      );
+    if (uniqueHiringUnitIds.length === 0) {
+      return;
+    }
+    await tx.insert(recruitingGroupHiringUnit).values(
+      uniqueHiringUnitIds.map((hiringUnitId) => ({
+        createdBy: actorUserId ?? null,
+        groupId,
+        hiringUnitId,
+        id: crypto.randomUUID(),
+        organizationId,
+      })),
+    );
+  });
+
+  return { status: "updated" as const };
 }
 
 export async function findRecruitingGroupByName({

@@ -137,9 +137,11 @@ export function createListUploadedResumePdfsTool({
 export function createSuggestJobDescriptionTool({
   orgId,
   resumes,
+  userId,
 }: {
   orgId: string;
   resumes: BakedParsedResume[];
+  userId?: string | null;
 }) {
   return tool({
     description:
@@ -160,7 +162,7 @@ export function createSuggestJobDescriptionTool({
         return { availableResumes: availableResumeNames, status: "no-resume" as const };
       }
 
-      const jobDescriptions = await listAllJobDescriptions(orgId);
+      const jobDescriptions = await listAllJobDescriptions(orgId, { actorUserId: userId });
       if (jobDescriptions.length === 0) {
         return { status: "no-jds" as const };
       }

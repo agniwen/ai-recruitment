@@ -1,5 +1,6 @@
 import type { InterviewerListRecord, InterviewerRecord } from "@arc/shared/interviewers";
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
+import type { SQL } from "drizzle-orm";
 import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -14,6 +15,7 @@ import type {
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
 import { department, interviewer, jobDescriptionInterviewer } from "@arc/db-schema/schema";
+import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const interviewerListFiltersSchema = z.object({
   departmentId: z.string().trim().max(120).optional().nullable(),
@@ -39,13 +41,14 @@ function buildWhereConditions({
   organizationId,
   search,
   departmentId,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
   departmentId?: string;
+  scopeCondition?: SQL;
 }) {
-  const orgFilter = eq(interviewer.organizationId, organizationId);
-  const conditions = [orgFilter] as ReturnType<typeof eq | typeof and | typeof or>[];
+  const conditions: SQL[] = [eq(interviewer.organizationId, organizationId)];
 
   if (search) {
     const searchCond = or(
@@ -59,8 +62,8 @@ function buildWhereConditions({
   if (departmentId) {
     conditions.push(eq(interviewer.departmentId, departmentId));
   }
-  if (conditions.length === 1) {
-    return conditions[0];
+  if (scopeCondition) {
+    conditions.push(scopeCondition);
   }
   return and(...conditions);
 }
@@ -73,6 +76,7 @@ function listInterviewerRows({
   sortOrder = "desc",
   limit,
   offset,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
@@ -81,8 +85,9 @@ function listInterviewerRows({
   sortOrder?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  scopeCondition?: SQL;
 }) {
-  const where = buildWhereConditions({ departmentId, organizationId, search });
+  const where = buildWhereConditions({ departmentId, organizationId, scopeCondition, search });
 
   let query = db
     .select({
@@ -117,13 +122,19 @@ async function countInterviewerRows({
   organizationId,
   search,
   departmentId,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
   departmentId?: string;
+  scopeCondition?: SQL;
 }) {
-  const where = buildWhereConditions({ departmentId, organizationId, search });
-  const [result] = await db.select({ count: count() }).from(interviewer).where(where);
+  const where = buildWhereConditions({ departmentId, organizationId, scopeCondition, search });
+  const [result] = await db
+    .select({ count: count() })
+    .from(interviewer)
+    .leftJoin(department, eq(interviewer.departmentId, department.id))
+    .where(where);
   return result?.count ?? 0;
 }
 
@@ -189,12 +200,16 @@ export function parseInterviewerPagination(
 
 export async function queryPaginatedInterviewers(
   organizationId: string,
-  filters?: { search?: string | null; departmentId?: string | null },
+  filters?: { search?: string | null; departmentId?: string | null; actorUserId?: string | null },
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedInterviewerResult> {
   const { search, departmentId } = parseFilters(filters);
   const { page, pageSize, sortBy, sortOrder } = parseInterviewerPagination(pagination);
   const offset = (page - 1) * pageSize;
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: filters?.actorUserId,
+    organizationId,
+  });
 
   const [records, total] = await Promise.all([
     listInterviewerRows({
@@ -202,11 +217,12 @@ export async function queryPaginatedInterviewers(
       limit: pageSize,
       offset,
       organizationId,
+      scopeCondition,
       search,
       sortBy,
       sortOrder,
     }),
-    countInterviewerRows({ departmentId, organizationId, search }),
+    countInterviewerRows({ departmentId, organizationId, scopeCondition, search }),
   ]);
 
   const countsMap = await loadJobDescriptionCounts(records.map((record) => record.id));
@@ -224,7 +240,7 @@ export async function queryPaginatedInterviewers(
 
 export function listInterviewers(
   organizationId: string,
-  filters?: { search?: string | null; departmentId?: string | null },
+  filters?: { search?: string | null; departmentId?: string | null; actorUserId?: string | null },
   pagination?: Record<string, unknown>,
 ) {
   return queryPaginatedInterviewers(organizationId, filters, pagination);
@@ -232,7 +248,13 @@ export function listInterviewers(
 
 export async function listAllInterviewers(
   organizationId: string,
+  options?: { actorUserId?: string | null },
 ): Promise<InterviewerListRecord[]> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
+  const where = buildWhereConditions({ organizationId, scopeCondition });
   const rows = await db
     .select({
       createdAt: interviewer.createdAt,
@@ -248,7 +270,7 @@ export async function listAllInterviewers(
     })
     .from(interviewer)
     .leftJoin(department, eq(interviewer.departmentId, department.id))
-    .where(eq(interviewer.organizationId, organizationId))
+    .where(where)
     .orderBy(asc(interviewer.name));
 
   return rows.map((row) => ({
@@ -280,11 +302,27 @@ export async function loadInterviewerReferenceCounts(id: string) {
 export async function loadInterviewerById(
   id: string,
   organizationId: string,
+  options?: { actorUserId?: string | null },
 ): Promise<InterviewerRecord | null> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
   const [row] = await db
-    .select()
+    .select({
+      createdAt: interviewer.createdAt,
+      createdBy: interviewer.createdBy,
+      departmentId: interviewer.departmentId,
+      description: interviewer.description,
+      id: interviewer.id,
+      name: interviewer.name,
+      prompt: interviewer.prompt,
+      updatedAt: interviewer.updatedAt,
+      voice: interviewer.voice,
+    })
     .from(interviewer)
-    .where(and(eq(interviewer.id, id), eq(interviewer.organizationId, organizationId)))
+    .leftJoin(department, eq(interviewer.departmentId, department.id))
+    .where(and(eq(interviewer.id, id), buildWhereConditions({ organizationId, scopeCondition })))
     .limit(1);
   if (!row) {
     return null;

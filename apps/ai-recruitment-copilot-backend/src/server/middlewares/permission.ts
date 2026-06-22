@@ -16,7 +16,6 @@ type Action<R extends Resource> = (typeof statement)[R][number];
 
 const RECRUITING_GROUP_RESOURCES = new Set<Resource>([
   "candidateForm",
-  "department",
   "globalConfig",
   "interview",
   "interviewer",
@@ -24,6 +23,10 @@ const RECRUITING_GROUP_RESOURCES = new Set<Resource>([
   "questionTemplate",
   "resume",
 ]);
+
+export function usesRecruitingGroupPermission(resource: Resource) {
+  return RECRUITING_GROUP_RESOURCES.has(resource);
+}
 
 function groupRoleAllows(role: string, action: string) {
   if (action === "read") {
@@ -56,7 +59,7 @@ async function hasRecruitingGroupPermission({
 export function requirePermission<R extends Resource>(resource: R, action: Action<R>) {
   return factory.createMiddleware(async (c, next) => {
     const activeMember = c.var.member;
-    if (activeMember?.role === "member" && RECRUITING_GROUP_RESOURCES.has(resource)) {
+    if (activeMember?.role === "member" && usesRecruitingGroupPermission(resource)) {
       const { activeOrg } = c.var;
       const { user } = c.var;
       const allowed =

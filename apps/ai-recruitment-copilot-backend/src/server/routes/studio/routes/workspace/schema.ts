@@ -28,4 +28,8 @@ export const recruitingGroupMemberRoleInputSchema = z.object({
   role: recruitingGroupRoleSchema,
 });
 
+export const recruitingGroupHiringUnitsInputSchema = z.object({
+  hiringUnitIds: z.array(z.string().trim().min(1)).max(100, "最多选择 100 个用人组织"),
+});
+
 export type WorkspaceUpdateInput = z.infer<typeof workspaceUpdateSchema>;

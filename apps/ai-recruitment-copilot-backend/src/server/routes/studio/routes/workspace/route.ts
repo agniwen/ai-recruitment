@@ -13,11 +13,13 @@ import {
   listWorkspaceMembers,
   removeRecruitingGroupMember,
   updateRecruitingGroupMemberRole,
+  updateRecruitingGroupHiringUnits,
 } from "./dao";
 import { inviteLinksRouter } from "./routes/invite-links/route";
 import {
   recruitingGroupMemberInputSchema,
   recruitingGroupMemberRoleInputSchema,
+  recruitingGroupHiringUnitsInputSchema,
   recruitingGroupInputSchema,
   workspaceUpdateSchema,
 } from "./schema";
@@ -194,6 +196,34 @@ export const workspaceRouter = factory
     }
     return c.json({ success: true }, 200);
   })
+  .put(
+    "/groups/:id/hiring-units",
+    requirePermission("member", "update"),
+    zValidator(
+      "json",
+      recruitingGroupHiringUnitsInputSchema,
+      jsonValidatorError("负责用人组织参数无效。"),
+    ),
+    async (c) => {
+      const { activeOrg, user } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const result = await updateRecruitingGroupHiringUnits({
+        actorUserId: user?.id,
+        groupId: c.req.param("id"),
+        hiringUnitIds: c.req.valid("json").hiringUnitIds,
+        organizationId: activeOrg.id,
+      });
+      if (result.status === "missing") {
+        return c.json({ error: "组别不存在。" }, 404);
+      }
+      if (result.status === "invalid_hiring_unit") {
+        return c.json({ error: "存在无效的用人组织，请刷新后重试。" }, 400);
+      }
+      return c.json({ success: true }, 200);
+    },
+  )
   .post(
     "/groups/:id/members",
     requirePermission("member", "update"),

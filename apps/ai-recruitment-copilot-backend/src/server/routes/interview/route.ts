@@ -131,7 +131,9 @@ export const interviewRouter = factory
       }
 
       try {
-        const jobDescriptions = await listAllJobDescriptions(orgId);
+        const jobDescriptions = await listAllJobDescriptions(orgId, {
+          actorUserId: c.var.user?.id,
+        });
         const match = await resolveJobDescriptionMatchBestEffort({
           jobDescriptions,
           resumeProfile,
@@ -192,7 +194,9 @@ export const interviewRouter = factory
           (c.var.session as { activeOrganizationId?: string | null } | null)
             ?.activeOrganizationId ?? null;
         if (orgId) {
-          const jd = await loadJobDescriptionById(orgId, jobDescriptionId);
+          const jd = await loadJobDescriptionById(orgId, jobDescriptionId, {
+            actorUserId: c.var.user?.id,
+          });
           if (jd) {
             jobDescriptionText = [
               `岗位名称：${jd.name}`,

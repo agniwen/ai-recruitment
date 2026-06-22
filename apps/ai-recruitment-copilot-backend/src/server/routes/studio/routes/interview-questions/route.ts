@@ -94,6 +94,7 @@ export const interviewQuestionTemplatesRouter = factory
       const templateDescription = body.templateDescription?.trim() || null;
 
       const resolved = await resolveAiGenerateContext(activeOrg.id, {
+        actorUserId: c.var.user?.id,
         interviewRecordIds,
         jobDescriptionId,
         jobDescriptionIds,

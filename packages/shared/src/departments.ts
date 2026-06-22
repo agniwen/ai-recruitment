@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const departmentBaseSchema = z.object({
   description: z.string().trim().max(500, "描述不能超过 500 字").optional().or(z.literal("")),
+  hiringUnitId: z.string().trim().min(1, "请选择用人组织").nullable().optional(),
   name: z.string().trim().min(1, "请输入部门名称").max(120, "部门名称不能超过 120 个字符"),
 });
 
@@ -14,6 +15,8 @@ export type DepartmentUpdateValues = z.infer<typeof departmentUpdateSchema>;
 export interface DepartmentRecord {
   id: string;
   name: string;
+  hiringUnitId: string | null;
+  hiringUnitName: string | null;
   description: string | null;
   createdBy: string | null;
   createdAt: string | Date;

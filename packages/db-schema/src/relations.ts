@@ -95,6 +95,10 @@ export const relations = defineRelations(schema, (r) => ({
     }),
   },
   department: {
+    hiringUnit: r.one.hiringUnit({
+      from: r.department.hiringUnitId,
+      to: r.hiringUnit.id,
+    }),
     interviewers: r.many.interviewer(),
     jobDescriptions: r.many.jobDescription(),
     organization: r.one.organization({
@@ -116,6 +120,18 @@ export const relations = defineRelations(schema, (r) => ({
     organization: r.one.organization({
       from: r.globalConfig.organizationId,
       to: r.organization.id,
+    }),
+  },
+  hiringUnit: {
+    departments: r.many.department(),
+    organization: r.one.organization({
+      from: r.hiringUnit.organizationId,
+      to: r.organization.id,
+    }),
+    recruitingGroupLinks: r.many.recruitingGroupHiringUnit(),
+    user: r.one.user({
+      from: r.hiringUnit.createdBy,
+      to: r.user.id,
     }),
   },
   interviewAuditLog: {
@@ -254,6 +270,7 @@ export const relations = defineRelations(schema, (r) => ({
     departments: r.many.department(),
     feishuThreadStates: r.many.feishuThreadState(),
     globalConfigs: r.many.globalConfig(),
+    hiringUnits: r.many.hiringUnit(),
     interviewAuditLogs: r.many.interviewAuditLog(),
     interviewConversationTurns: r.many.interviewConversationTurn(),
     interviewConversations: r.many.interviewConversation(),
@@ -264,12 +281,58 @@ export const relations = defineRelations(schema, (r) => ({
     invitations: r.many.invitation(),
     jobDescriptions: r.many.jobDescription(),
     members: r.many.member(),
+    recruitingGroupHiringUnits: r.many.recruitingGroupHiringUnit(),
+    recruitingGroupMembers: r.many.recruitingGroupMember(),
+    recruitingGroups: r.many.recruitingGroup(),
     studioHumanInterviewMeetings: r.many.studioHumanInterviewMeeting(),
     studioInterviewSchedules: r.many.studioInterviewSchedule(),
     studioInterviews: r.many.studioInterview(),
     studioOrgSkills: r.many.studioOrgSkill(),
     studioRoundEmailLogs: r.many.studioRoundEmailLog(),
     workspaceInviteLinks: r.many.workspaceInviteLink(),
+  },
+  recruitingGroup: {
+    hiringUnitLinks: r.many.recruitingGroupHiringUnit(),
+    organization: r.one.organization({
+      from: r.recruitingGroup.organizationId,
+      to: r.organization.id,
+    }),
+    user: r.one.user({
+      from: r.recruitingGroup.createdBy,
+      to: r.user.id,
+    }),
+  },
+  recruitingGroupHiringUnit: {
+    group: r.one.recruitingGroup({
+      from: r.recruitingGroupHiringUnit.groupId,
+      to: r.recruitingGroup.id,
+    }),
+    hiringUnit: r.one.hiringUnit({
+      from: r.recruitingGroupHiringUnit.hiringUnitId,
+      to: r.hiringUnit.id,
+    }),
+    organization: r.one.organization({
+      from: r.recruitingGroupHiringUnit.organizationId,
+      to: r.organization.id,
+    }),
+    user: r.one.user({
+      from: r.recruitingGroupHiringUnit.createdBy,
+      to: r.user.id,
+    }),
+  },
+  recruitingGroupMember: {
+    group: r.one.recruitingGroup({
+      from: r.recruitingGroupMember.groupId,
+      to: r.recruitingGroup.id,
+    }),
+    organization: r.one.organization({
+      from: r.recruitingGroupMember.organizationId,
+      to: r.organization.id,
+    }),
+    user: r.one.user({
+      from: r.recruitingGroupMember.userId,
+      to: r.user.id,
+    }),
   },
   resumePoolEvent: {
     actor: r.one.user({

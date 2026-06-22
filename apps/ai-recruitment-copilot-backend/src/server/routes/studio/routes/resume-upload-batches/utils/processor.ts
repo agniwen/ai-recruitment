@@ -281,11 +281,12 @@ async function upsertParsedResumeRecord({
 async function buildJobDescriptionReviewContext(
   organizationId: string,
   jobDescriptionId: string | null,
+  actorUserId: string,
 ): Promise<string | null> {
   if (!jobDescriptionId) {
     return null;
   }
-  const jd = await loadJobDescriptionById(organizationId, jobDescriptionId);
+  const jd = await loadJobDescriptionById(organizationId, jobDescriptionId, { actorUserId });
   if (!jd) {
     return null;
   }
@@ -303,6 +304,7 @@ async function generateReviewForParsedResume(input: {
   jobDescriptionId: string | null;
   organizationId: string;
   resumeProfile: ParsedResume["resumeProfile"];
+  userId: string;
 }): Promise<string | null> {
   try {
     const startedAt = Date.now();
@@ -313,6 +315,7 @@ async function generateReviewForParsedResume(input: {
     const jobDescription = await buildJobDescriptionReviewContext(
       input.organizationId,
       input.jobDescriptionId,
+      input.userId,
     );
     const review = await generateResumeReview({
       jobDescription,
@@ -456,12 +459,20 @@ async function fetchAndParse(
   // The auto path does NOT re-parse the PDF — it reuses the profile parsed above.
   let jobDescriptionId: string | null = null;
   if (batchRow.jdMode === "bind") {
-    ({ jobDescriptionId } = batchRow);
+    const boundJobDescriptionId = batchRow.jobDescriptionId;
+    if (boundJobDescriptionId) {
+      const boundJobDescription = await loadJobDescriptionById(
+        organizationId,
+        boundJobDescriptionId,
+        { actorUserId: userId },
+      );
+      jobDescriptionId = boundJobDescription ? boundJobDescriptionId : null;
+    }
   } else if (batchRow.jdMode === "auto" && resumeProfile) {
     try {
       const jdStartedAt = Date.now();
       logStep("jd.match.start", { itemId: item.id });
-      const jds = await listAllJobDescriptions(organizationId);
+      const jds = await listAllJobDescriptions(organizationId, { actorUserId: userId });
       const match = await matchJobDescriptionForResume(resumeProfile, jds);
       jobDescriptionId = match?.jobDescriptionId ?? null;
       await assertBatchItemNotCancelled(batchRow.id, item.id);
@@ -485,6 +496,7 @@ async function fetchAndParse(
     jobDescriptionId,
     organizationId,
     resumeProfile,
+    userId,
   });
   await assertBatchItemNotCancelled(batchRow.id, item.id);
   const succeededRecordId = await upsertParsedResumeRecord({

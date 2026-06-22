@@ -3,13 +3,7 @@ import { and, count, eq, inArray, notInArray } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import {
-  department,
-  interviewer,
-  jobDescription,
-  jobDescriptionInterviewer,
-  studioInterview,
-} from "@arc/db-schema/schema";
+import { jobDescription, jobDescriptionInterviewer, studioInterview } from "@arc/db-schema/schema";
 import { jobDescriptionFormSchema, jobDescriptionUpdateSchema } from "@arc/shared/job-descriptions";
 import { validateJobDescriptionInterviewerDepartments } from "@arc/shared/job-description-interviewers";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -20,6 +14,8 @@ import {
   queryPaginatedJobDescriptions,
   serializeJobDescription,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
+import { loadDepartmentById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
+import { listAllInterviewers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviewers/dao";
 import { cacheTags, safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { generateJobDescriptionFromPrompt } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/ai-job-description-generate";
 import {
@@ -40,38 +36,18 @@ async function validateReferences(
   departmentId: string,
   interviewerIds: string[],
   allowCrossDepartmentInterviewers: boolean,
+  actorUserId: string | null | undefined,
 ) {
-  const [[departmentRow], interviewerRows] = await Promise.all([
-    db
-      .select({ id: department.id })
-      .from(department)
-      .where(and(eq(department.id, departmentId), eq(department.organizationId, organizationId)))
-      .limit(1),
+  const [departmentRow, selectableInterviewers] = await Promise.all([
+    loadDepartmentById(departmentId, organizationId, { actorUserId }),
     interviewerIds.length > 0
-      ? db
-          .select({
-            departmentId: interviewer.departmentId,
-            departmentName: department.name,
-            id: interviewer.id,
-            name: interviewer.name,
-          })
-          .from(interviewer)
-          .leftJoin(department, eq(interviewer.departmentId, department.id))
-          .where(
-            and(
-              inArray(interviewer.id, interviewerIds),
-              eq(interviewer.organizationId, organizationId),
-            ),
-          )
-      : Promise.resolve(
-          [] as {
-            departmentId: string;
-            departmentName: string | null;
-            id: string;
-            name: string;
-          }[],
-        ),
+      ? listAllInterviewers(organizationId, { actorUserId })
+      : Promise.resolve([]),
   ]);
+  const selectableInterviewerMap = new Map(selectableInterviewers.map((item) => [item.id, item]));
+  const interviewerRows = interviewerIds
+    .map((id) => selectableInterviewerMap.get(id))
+    .filter((item): item is (typeof selectableInterviewers)[number] => item !== undefined);
 
   if (!departmentRow) {
     return { error: "所选部门不存在。" as const };
@@ -157,6 +133,7 @@ export const jobDescriptionsRouter = factory
       const result = await queryPaginatedJobDescriptions(
         activeOrg.id,
         {
+          actorUserId: c.var.user?.id,
           departmentId: q.departmentId,
           interviewerId: q.interviewerId,
           search: q.search,
@@ -176,7 +153,7 @@ export const jobDescriptionsRouter = factory
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
     }
-    const records = await listAllJobDescriptions(activeOrg.id);
+    const records = await listAllJobDescriptions(activeOrg.id, { actorUserId: c.var.user?.id });
     return c.json({ records }, 200);
   })
   .post("/generate-code", requirePermission("jd", "read"), async (c) => {
@@ -228,6 +205,7 @@ export const jobDescriptionsRouter = factory
         input.departmentId,
         interviewerIds,
         input.allowCrossDepartmentInterviewers,
+        c.var.user?.id,
       );
       if (referenceError) {
         return c.json({ error: referenceError }, 400);
@@ -296,7 +274,9 @@ export const jobDescriptionsRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const record = await loadJobDescriptionById(activeOrg.id, id);
+    const record = await loadJobDescriptionById(activeOrg.id, id, {
+      actorUserId: c.var.user?.id,
+    });
     if (!record) {
       return c.json({ error: "在招岗位不存在。" }, 404);
     }
@@ -313,7 +293,9 @@ export const jobDescriptionsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const id = c.req.param("id");
-      const record = await loadJobDescriptionById(activeOrg.id, id);
+      const record = await loadJobDescriptionById(activeOrg.id, id, {
+        actorUserId: c.var.user?.id,
+      });
       if (!record) {
         return c.json({ error: "在招岗位不存在。" }, 404);
       }
@@ -352,7 +334,9 @@ export const jobDescriptionsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const id = c.req.param("id");
-      const existing = await loadJobDescriptionById(activeOrg.id, id);
+      const existing = await loadJobDescriptionById(activeOrg.id, id, {
+        actorUserId: c.var.user?.id,
+      });
       if (!existing) {
         return c.json({ error: "在招岗位不存在。" }, 404);
       }
@@ -368,6 +352,7 @@ export const jobDescriptionsRouter = factory
         input.departmentId,
         interviewerIds,
         input.allowCrossDepartmentInterviewers,
+        c.var.user?.id,
       );
       if (error) {
         return c.json({ error }, 400);
@@ -411,7 +396,9 @@ export const jobDescriptionsRouter = factory
 
       safeUpdateTag(`job-descriptions:${activeOrg.id}`);
       safeUpdateTag(`interviewers:${activeOrg.id}`);
-      const updated = await loadJobDescriptionById(activeOrg.id, id);
+      const updated = await loadJobDescriptionById(activeOrg.id, id, {
+        actorUserId: c.var.user?.id,
+      });
       return c.json(updated, 200);
     },
   )
@@ -421,7 +408,9 @@ export const jobDescriptionsRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const existing = await loadJobDescriptionById(activeOrg.id, id);
+    const existing = await loadJobDescriptionById(activeOrg.id, id, {
+      actorUserId: c.var.user?.id,
+    });
     if (!existing) {
       return c.json({ error: "在招岗位不存在。" }, 404);
     }

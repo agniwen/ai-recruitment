@@ -2,7 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { department } from "@arc/db-schema/schema";
+import { department, hiringUnit } from "@arc/db-schema/schema";
 import { departmentFormSchema, departmentUpdateSchema } from "@arc/shared/departments";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
@@ -14,6 +14,7 @@ import {
   serializeDepartment,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
+import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const departmentListQuerySchema = z.object({
   page: z.string().optional(),
@@ -22,6 +23,34 @@ const departmentListQuerySchema = z.object({
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
 });
+
+async function validateDepartmentHiringUnit({
+  actorUserId,
+  hiringUnitId,
+  organizationId,
+}: {
+  actorUserId: string | null | undefined;
+  hiringUnitId: string | null | undefined;
+  organizationId: string;
+}): Promise<string | null> {
+  if (!hiringUnitId) {
+    return null;
+  }
+  const [row] = await db
+    .select({ id: hiringUnit.id })
+    .from(hiringUnit)
+    .where(and(eq(hiringUnit.id, hiringUnitId), eq(hiringUnit.organizationId, organizationId)))
+    .limit(1);
+  if (!row) {
+    return "所选用人组织不存在。";
+  }
+
+  const scope = await resolveHiringUnitAccessScope({ actorUserId, organizationId });
+  if (scope.canAccessAll || scope.hiringUnitIds.includes(hiringUnitId)) {
+    return null;
+  }
+  return "所选用人组织不在当前招聘组负责范围内。";
+}
 
 export const departmentsRouter = factory
   .createApp()
@@ -36,7 +65,7 @@ export const departmentsRouter = factory
       }
       const q = c.req.valid("query");
       const result = await queryPaginatedDepartments(
-        { organizationId: activeOrg.id, search: q.search },
+        { actorUserId: c.var.user?.id, organizationId: activeOrg.id, search: q.search },
         {
           page: q.page,
           pageSize: q.pageSize,
@@ -52,7 +81,7 @@ export const departmentsRouter = factory
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
     }
-    const records = await listAllDepartments(activeOrg.id);
+    const records = await listAllDepartments(activeOrg.id, { actorUserId: c.var.user?.id });
     return c.json({ records }, 200);
   })
   .post(
@@ -65,11 +94,21 @@ export const departmentsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
+      const hiringUnitId = input.hiringUnitId ?? null;
+      const hiringUnitError = await validateDepartmentHiringUnit({
+        actorUserId: c.var.user?.id,
+        hiringUnitId,
+        organizationId: activeOrg.id,
+      });
+      if (hiringUnitError) {
+        return c.json({ error: hiringUnitError }, 400);
+      }
       const now = new Date();
       const record = {
         createdAt: now,
         createdBy: c.var.user?.id ?? null,
         description: input.description?.trim() || null,
+        hiringUnitId,
         id: crypto.randomUUID(),
         name: input.name.trim(),
         organizationId: activeOrg.id,
@@ -88,7 +127,7 @@ export const departmentsRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const record = await loadDepartmentById(id, activeOrg.id);
+    const record = await loadDepartmentById(id, activeOrg.id, { actorUserId: c.var.user?.id });
     if (!record) {
       return c.json({ error: "部门不存在。" }, 404);
     }
@@ -104,24 +143,34 @@ export const departmentsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const id = c.req.param("id");
-      const existing = await loadDepartmentById(id, activeOrg.id);
+      const existing = await loadDepartmentById(id, activeOrg.id, { actorUserId: c.var.user?.id });
       if (!existing) {
         return c.json({ error: "部门不存在。" }, 404);
       }
 
       const input = c.req.valid("json");
+      const hiringUnitId = input.hiringUnitId ?? null;
+      const hiringUnitError = await validateDepartmentHiringUnit({
+        actorUserId: c.var.user?.id,
+        hiringUnitId,
+        organizationId: activeOrg.id,
+      });
+      if (hiringUnitError) {
+        return c.json({ error: hiringUnitError }, 400);
+      }
       const now = new Date();
       await db
         .update(department)
         .set({
           description: input.description?.trim() || null,
+          hiringUnitId,
           name: input.name.trim(),
           updatedAt: now,
         })
         .where(and(eq(department.id, id), eq(department.organizationId, activeOrg.id)));
 
       safeUpdateTag(`departments:${activeOrg.id}`);
-      const updated = await loadDepartmentById(id, activeOrg.id);
+      const updated = await loadDepartmentById(id, activeOrg.id, { actorUserId: c.var.user?.id });
       return c.json(updated, 200);
     },
   )
@@ -131,7 +180,7 @@ export const departmentsRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const existing = await loadDepartmentById(id, activeOrg.id);
+    const existing = await loadDepartmentById(id, activeOrg.id, { actorUserId: c.var.user?.id });
     if (!existing) {
       return c.json({ error: "部门不存在。" }, 404);
     }

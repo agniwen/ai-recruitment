@@ -39,6 +39,7 @@ export const loadStudioJobDescriptionsState = createServerFn({ method: "GET" })
 
     return {
       ...(await loadStudioJobDescriptionsData({
+        actorUserId: access.user.id,
         query: data.query,
         slug: data.slug,
         workspaceId: access.workspace.id,

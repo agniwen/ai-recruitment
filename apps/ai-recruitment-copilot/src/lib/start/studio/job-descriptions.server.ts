@@ -12,24 +12,27 @@ import {
 import type { JobDescriptionFilters } from "./job-descriptions.functions";
 
 export async function loadStudioJobDescriptionsData({
+  actorUserId,
   query,
   slug,
   workspaceId,
 }: {
+  actorUserId: string;
   query: DataGridQueryState<JobDescriptionFilters>;
   slug: string;
   workspaceId: string;
 }) {
   const queryClient = createQueryClient();
   const [departments, interviewers, metrics] = await Promise.all([
-    listAllDepartments(workspaceId),
-    listAllInterviewers(workspaceId),
-    loadJobDescriptionMetrics(workspaceId),
+    listAllDepartments(workspaceId, { actorUserId }),
+    listAllInterviewers(workspaceId, { actorUserId }),
+    loadJobDescriptionMetrics(workspaceId, { actorUserId }),
     queryClient.prefetchQuery({
       queryFn: () =>
         listJobDescriptions(
           workspaceId,
           {
+            actorUserId,
             departmentId: query.filters.departmentId,
             interviewerId: query.filters.interviewerId,
             search: query.search,

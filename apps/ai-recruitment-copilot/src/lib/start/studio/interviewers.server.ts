@@ -9,22 +9,24 @@ import { listInterviewers } from "@arc/ai-recruitment-copilot-backend/server/rou
 type EmptyFilters = Record<string, never>;
 
 export async function loadStudioInterviewersData({
+  actorUserId,
   query,
   slug,
   workspaceId,
 }: {
+  actorUserId: string;
   query: DataGridQueryState<EmptyFilters>;
   slug: string;
   workspaceId: string;
 }) {
   const queryClient = createQueryClient();
   const [departments] = await Promise.all([
-    listAllDepartments(workspaceId),
+    listAllDepartments(workspaceId, { actorUserId }),
     queryClient.prefetchQuery({
       queryFn: () =>
         listInterviewers(
           workspaceId,
-          { search: query.search },
+          { actorUserId, search: query.search },
           {
             page: query.page,
             pageSize: query.pageSize,

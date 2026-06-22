@@ -18,6 +18,7 @@ const ROUTE_META: { prefix: string; meta: RouteMeta }[] = [
   { meta: { title: "简历广场" }, prefix: "/studio/resume-pool" },
   { meta: { title: "简历库" }, prefix: "/studio/resumes" },
   { meta: { title: "AI 面试" }, prefix: "/studio/interviews" },
+  { meta: { title: "用人组织管理" }, prefix: "/studio/hiring-units" },
   { meta: { title: "部门管理" }, prefix: "/studio/departments" },
   { meta: { title: "面试官管理" }, prefix: "/studio/interviewers" },
   { meta: { title: "在招岗位管理" }, prefix: "/studio/job-descriptions" },

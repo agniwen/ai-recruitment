@@ -538,8 +538,8 @@ export const studioOrgSkill = pgTable(
   ],
 );
 
-export const department = pgTable(
-  "department",
+export const hiringUnit = pgTable(
+  "hiring_unit",
   {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
@@ -557,9 +557,65 @@ export const department = pgTable(
       .notNull(),
   },
   (table) => [
+    index("hiring_unit_name_idx").on(table.name),
+    index("hiring_unit_created_at_idx").on(table.createdAt),
+    index("hiring_unit_organization_idx").on(table.organizationId),
+  ],
+);
+
+export const recruitingGroupHiringUnit = pgTable(
+  "recruiting_group_hiring_unit",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => recruitingGroup.id, { onDelete: "cascade" }),
+    hiringUnitId: text("hiring_unit_id")
+      .notNull()
+      .references(() => hiringUnit.id, { onDelete: "cascade" }),
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("recruiting_group_hiring_unit_uq").on(
+      table.organizationId,
+      table.groupId,
+      table.hiringUnitId,
+    ),
+    index("recruiting_group_hiring_unit_group_idx").on(table.organizationId, table.groupId),
+    index("recruiting_group_hiring_unit_unit_idx").on(table.organizationId, table.hiringUnitId),
+  ],
+);
+
+export const department = pgTable(
+  "department",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    description: text("description"),
+    hiringUnitId: text("hiring_unit_id").references(() => hiringUnit.id, {
+      onDelete: "set null",
+    }),
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, {
+        onDelete: "cascade",
+      }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
     index("department_name_idx").on(table.name),
     index("department_created_at_idx").on(table.createdAt),
     index("department_organization_idx").on(table.organizationId),
+    index("department_hiring_unit_idx").on(table.organizationId, table.hiringUnitId),
   ],
 );
 

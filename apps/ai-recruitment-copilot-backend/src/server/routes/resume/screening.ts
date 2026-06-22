@@ -153,7 +153,7 @@ function injectParsedResumesIntoMessages(messages: UIMessage[]): UIMessage[] {
  * direct iteration over `fullStream`, etc.).
  */
 export async function runResumeScreening(input: ResumeScreeningInput) {
-  const { messages, jobDescription, enableThinking, modelId, orgId } = input;
+  const { messages, jobDescription, enableThinking, modelId, orgId, userId } = input;
   const thinkingEnabled = enableThinking !== false;
   const normalizedJobDescription = jobDescription?.trim();
 
@@ -324,6 +324,7 @@ ${autoJdContext}
       suggest_job_description: createSuggestJobDescriptionTool({
         orgId,
         resumes: bakedResumes,
+        userId,
       }),
     },
   });

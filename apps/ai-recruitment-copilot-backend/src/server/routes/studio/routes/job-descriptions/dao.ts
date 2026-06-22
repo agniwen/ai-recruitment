@@ -5,6 +5,7 @@ import type {
   JobDescriptionRecord,
 } from "@arc/shared/job-descriptions";
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
+import type { SQL } from "drizzle-orm";
 import { and, asc, count, desc, eq, ilike, inArray, notInArray, or, sql } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { z } from "zod";
@@ -27,6 +28,7 @@ import {
   studioInterview,
   studioInterviewSchedule,
 } from "@arc/db-schema/schema";
+import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const jobDescriptionListFiltersSchema = z.object({
   departmentId: z.string().trim().max(120).optional().nullable(),
@@ -55,16 +57,16 @@ function buildWhereConditions({
   departmentIds,
   interviewerIds,
   jdIdsForInterviewers,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
   departmentIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
+  scopeCondition?: SQL;
 }) {
-  const conditions: (ReturnType<typeof ilike> | ReturnType<typeof eq>)[] = [
-    eq(jobDescription.organizationId, organizationId),
-  ];
+  const conditions: SQL[] = [eq(jobDescription.organizationId, organizationId)];
   if (search) {
     const searchCond = or(
       ilike(jobDescription.name, `%${search}%`),
@@ -85,8 +87,8 @@ function buildWhereConditions({
       conditions.push(inArray(jobDescription.id, jdIdsForInterviewers));
     }
   }
-  if (conditions.length === 0) {
-    return;
+  if (scopeCondition) {
+    conditions.push(scopeCondition);
   }
   return and(...conditions);
 }
@@ -118,6 +120,7 @@ function listJobDescriptionRows({
   departmentIds,
   interviewerIds,
   jdIdsForInterviewers,
+  scopeCondition,
   sortBy = "createdAt",
   sortOrder = "desc",
   limit,
@@ -128,6 +131,7 @@ function listJobDescriptionRows({
   departmentIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
+  scopeCondition?: SQL;
   sortBy?: SortColumn;
   sortOrder?: "asc" | "desc";
   limit?: number;
@@ -138,6 +142,7 @@ function listJobDescriptionRows({
     interviewerIds,
     jdIdsForInterviewers,
     organizationId,
+    scopeCondition,
     search,
   });
 
@@ -178,21 +183,28 @@ async function countJobDescriptionRows({
   departmentIds,
   interviewerIds,
   jdIdsForInterviewers,
+  scopeCondition,
 }: {
   organizationId: string;
   search?: string;
   departmentIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
+  scopeCondition?: SQL;
 }) {
   const where = buildWhereConditions({
     departmentIds,
     interviewerIds,
     jdIdsForInterviewers,
     organizationId,
+    scopeCondition,
     search,
   });
-  const [result] = await db.select({ count: count() }).from(jobDescription).where(where);
+  const [result] = await db
+    .select({ count: count() })
+    .from(jobDescription)
+    .leftJoin(department, eq(jobDescription.departmentId, department.id))
+    .where(where);
   return result?.count ?? 0;
 }
 
@@ -336,6 +348,7 @@ export async function queryPaginatedJobDescriptions(
     search?: string | null;
     departmentId?: string | null;
     interviewerId?: string | null;
+    actorUserId?: string | null;
   },
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedJobDescriptionResult> {
@@ -343,6 +356,10 @@ export async function queryPaginatedJobDescriptions(
   const { page, pageSize, sortBy, sortOrder } = parseJobDescriptionPagination(pagination);
   const offset = (page - 1) * pageSize;
   const jdIdsForInterviewers = await resolveJdIdsForInterviewers(organizationId, interviewerIds);
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: filters?.actorUserId,
+    organizationId,
+  });
 
   const [records, total] = await Promise.all([
     listJobDescriptionRows({
@@ -352,6 +369,7 @@ export async function queryPaginatedJobDescriptions(
       limit: pageSize,
       offset,
       organizationId,
+      scopeCondition,
       search,
       sortBy,
       sortOrder,
@@ -361,6 +379,7 @@ export async function queryPaginatedJobDescriptions(
       interviewerIds,
       jdIdsForInterviewers,
       organizationId,
+      scopeCondition,
       search,
     }),
   ]);
@@ -392,6 +411,7 @@ export function listJobDescriptions(
     search?: string | null;
     departmentId?: string | null;
     interviewerId?: string | null;
+    actorUserId?: string | null;
   },
   pagination?: Record<string, unknown>,
 ) {
@@ -400,8 +420,18 @@ export function listJobDescriptions(
 
 export async function listAllJobDescriptions(
   organizationId: string,
+  options?: { actorUserId?: string | null },
 ): Promise<JobDescriptionListRecord[]> {
-  const rows = await listJobDescriptionRows({ organizationId, sortBy: "name", sortOrder: "asc" });
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
+  const rows = await listJobDescriptionRows({
+    organizationId,
+    scopeCondition,
+    sortBy: "name",
+    sortOrder: "asc",
+  });
   const ids = rows.map((row) => row.id);
   const [interviewersMap, resumeCountsMap] = await Promise.all([
     loadInterviewersForJobDescriptions(ids),
@@ -437,11 +467,33 @@ export async function jobDescriptionIdsExist(
 export async function loadJobDescriptionById(
   organizationId: string,
   id: string,
+  options?: { actorUserId?: string | null },
 ): Promise<JobDescriptionRecord | null> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
+  const where = and(
+    eq(jobDescription.id, id),
+    buildWhereConditions({ organizationId, scopeCondition }),
+  );
   const [row] = await db
-    .select()
+    .select({
+      allowCrossDepartmentInterviewers: jobDescription.allowCrossDepartmentInterviewers,
+      code: jobDescription.code,
+      createdAt: jobDescription.createdAt,
+      createdBy: jobDescription.createdBy,
+      departmentId: jobDescription.departmentId,
+      description: jobDescription.description,
+      id: jobDescription.id,
+      name: jobDescription.name,
+      presetQuestions: jobDescription.presetQuestions,
+      prompt: jobDescription.prompt,
+      updatedAt: jobDescription.updatedAt,
+    })
     .from(jobDescription)
-    .where(and(eq(jobDescription.id, id), eq(jobDescription.organizationId, organizationId)))
+    .leftJoin(department, eq(jobDescription.departmentId, department.id))
+    .where(where)
     .limit(1);
   if (!row) {
     return null;
@@ -476,7 +528,7 @@ const TOP_N_CANDIDATES = 10;
 const TOP_N_COMPLETION = 5;
 const TOP_N_LOAD = 5;
 
-async function loadCandidatesByJd(organizationId: string) {
+async function loadCandidatesByJd(organizationId: string, scopeCondition?: SQL) {
   // 每个 JD 关联的非归档简历数 Top N。LEFT JOIN 让没简历的 JD 也出现在结果集（0 候选）。
   // Top N JDs by non-archived candidate count. LEFT JOIN keeps JDs with zero
   // candidates in the result set (they'll surface only if Top N isn't filled).
@@ -487,6 +539,7 @@ async function loadCandidatesByJd(organizationId: string) {
       name: jobDescription.name,
     })
     .from(jobDescription)
+    .leftJoin(department, eq(jobDescription.departmentId, department.id))
     .leftJoin(
       studioInterview,
       and(
@@ -495,7 +548,7 @@ async function loadCandidatesByJd(organizationId: string) {
         notInArray(studioInterview.status, ["archived"]),
       ),
     )
-    .where(eq(jobDescription.organizationId, organizationId))
+    .where(and(eq(jobDescription.organizationId, organizationId), scopeCondition))
     .groupBy(jobDescription.id, jobDescription.name)
     .orderBy(desc(count(studioInterview.id)), asc(jobDescription.name))
     .limit(TOP_N_CANDIDATES);
@@ -503,7 +556,7 @@ async function loadCandidatesByJd(organizationId: string) {
   return rows.map((row) => ({ count: row.count, id: row.id, name: row.name }));
 }
 
-async function loadCompletionByJd(organizationId: string) {
+async function loadCompletionByJd(organizationId: string, scopeCondition?: SQL) {
   // 每个 JD 名下所有候选人的轮次完成率：completed 数 / 总数。
   // HAVING total > 0 过滤掉完全没安排面试的 JD，避免 0/0 占满图。
   // 排序按完成率 desc，名字 asc 兜底。
@@ -524,6 +577,7 @@ async function loadCompletionByJd(organizationId: string) {
       total,
     })
     .from(jobDescription)
+    .leftJoin(department, eq(jobDescription.departmentId, department.id))
     .innerJoin(
       studioInterview,
       and(
@@ -539,6 +593,7 @@ async function loadCompletionByJd(organizationId: string) {
       and(
         eq(jobDescription.organizationId, organizationId),
         notInArray(studioInterview.status, ["archived"]),
+        scopeCondition,
       ),
     )
     .groupBy(jobDescription.id, jobDescription.name)
@@ -554,7 +609,7 @@ async function loadCompletionByJd(organizationId: string) {
   }));
 }
 
-async function loadLoadByInterviewer(organizationId: string) {
+async function loadLoadByInterviewer(organizationId: string, scopeCondition?: SQL) {
   // 通过 job_description_interviewer 关联到 studio_interview，
   // 统计每位面试官当前 status ∈ {ready, in_progress} 的候选人数 DISTINCT 计数。
   // DISTINCT 是因为同一候选人可能落在多个 JD 的同一面试官关联上——但实际 schema
@@ -570,6 +625,7 @@ async function loadLoadByInterviewer(organizationId: string) {
       name: interviewer.name,
     })
     .from(interviewer)
+    .leftJoin(department, eq(interviewer.departmentId, department.id))
     .innerJoin(
       jobDescriptionInterviewer,
       eq(jobDescriptionInterviewer.interviewerId, interviewer.id),
@@ -582,7 +638,7 @@ async function loadLoadByInterviewer(organizationId: string) {
         inArray(studioInterview.status, ["ready", "in_progress"]),
       ),
     )
-    .where(eq(interviewer.organizationId, organizationId))
+    .where(and(eq(interviewer.organizationId, organizationId), scopeCondition))
     .groupBy(interviewer.id, interviewer.name)
     .having(sql`COUNT(DISTINCT ${studioInterview.id}) > 0`)
     .orderBy(desc(sql`COUNT(DISTINCT ${studioInterview.id})`), asc(interviewer.name))
@@ -595,11 +651,18 @@ async function loadLoadByInterviewer(organizationId: string) {
   }));
 }
 
-async function queryJobDescriptionMetrics(organizationId: string): Promise<JobDescriptionMetrics> {
+async function queryJobDescriptionMetrics(
+  organizationId: string,
+  options?: { actorUserId?: string | null },
+): Promise<JobDescriptionMetrics> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
   const [candidatesByJd, completionByJd, loadByInterviewer] = await Promise.all([
-    loadCandidatesByJd(organizationId),
-    loadCompletionByJd(organizationId),
-    loadLoadByInterviewer(organizationId),
+    loadCandidatesByJd(organizationId, scopeCondition),
+    loadCompletionByJd(organizationId, scopeCondition),
+    loadLoadByInterviewer(organizationId, scopeCondition),
   ]);
   return { candidatesByJd, completionByJd, loadByInterviewer };
 }
@@ -613,8 +676,11 @@ async function queryJobDescriptionMetrics(organizationId: string): Promise<JobDe
  * `job-descriptions` tag (list-query parity) and `studio-resumes` because the
  * candidate-derived bars need to refresh whenever a resume row mutates.
  */
-export function loadJobDescriptionMetrics(organizationId: string): Promise<JobDescriptionMetrics> {
-  return queryJobDescriptionMetrics(organizationId);
+export function loadJobDescriptionMetrics(
+  organizationId: string,
+  options?: { actorUserId?: string | null },
+): Promise<JobDescriptionMetrics> {
+  return queryJobDescriptionMetrics(organizationId, options);
 }
 
 export function serializeJobDescription(

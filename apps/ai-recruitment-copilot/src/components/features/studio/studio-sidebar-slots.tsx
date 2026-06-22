@@ -6,6 +6,7 @@ import {
   Building2Icon,
   ClipboardListIcon,
   FileTextIcon,
+  GlobeIcon,
   LayoutGridIcon,
   ListChecksIcon,
   MailCheckIcon,
@@ -85,6 +86,13 @@ const navGroups: NavGroup[] = [
   },
   {
     items: [
+      {
+        action: "read",
+        icon: GlobeIcon,
+        path: "/studio/hiring-units",
+        resource: "hiringUnit",
+        title: "用人组织管理",
+      },
       {
         action: "read",
         icon: Building2Icon,

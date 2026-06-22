@@ -11,12 +11,22 @@ import {
   generateResumeReview,
   parseResumeBytesToProfile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import type * as JobMatchAgentModule from "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent";
+import { matchJobDescriptionForResume } from "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent";
 import type * as DedupServiceModule from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
+import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import {
+  department,
+  hiringUnit,
+  interviewer,
+  jobDescription,
   member,
   organization,
+  recruitingGroup,
+  recruitingGroupHiringUnit,
+  recruitingGroupMember,
   resumePoolItem,
   resumeUploadBatch,
   resumeUploadBatchItem,
@@ -32,6 +42,8 @@ import {
   processBatchItem,
   processNextItem,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor";
+
+vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 });
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", async () => {
   const actual = await vi.importActual<typeof S3Module>(
@@ -55,6 +67,19 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent
 });
 
 vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent",
+  async () => {
+    const actual = await vi.importActual<typeof JobMatchAgentModule>(
+      "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent",
+    );
+    return {
+      ...actual,
+      matchJobDescriptionForResume: vi.fn(),
+    };
+  },
+);
+
+vi.mock(
   "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service",
   async () => {
     const actual = await vi.importActual<typeof DedupServiceModule>(
@@ -75,6 +100,16 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue"
 // Fixed prefix to avoid collisions with other test runs.
 const ORG_A = "bulk_proc_org_a";
 const USER_A = "bulk_proc_user_a";
+const USER_MEMBER = "bulk_proc_member_user";
+const GROUP_A = "bulk_proc_group_a";
+const HIRING_UNIT_ALLOWED = "bulk_proc_hiring_unit_allowed";
+const HIRING_UNIT_BLOCKED = "bulk_proc_hiring_unit_blocked";
+const DEPT_PUBLIC = "bulk_proc_dept_public";
+const DEPT_ALLOWED = "bulk_proc_dept_allowed";
+const DEPT_BLOCKED = "bulk_proc_dept_blocked";
+const JD_PUBLIC = "bulk_proc_jd_public";
+const JD_ALLOWED = "bulk_proc_jd_allowed";
+const JD_BLOCKED = "bulk_proc_jd_blocked";
 
 const NOW = new Date("2026-05-18T10:00:00.000Z");
 
@@ -182,9 +217,20 @@ async function cleanup() {
   await db.delete(resumePoolItem).where(eq(resumePoolItem.organizationId, ORG_A));
 
   await db.delete(resumeUploadBatch).where(eq(resumeUploadBatch.organizationId, ORG_A));
+  await db.delete(jobDescription).where(eq(jobDescription.organizationId, ORG_A));
+  await db.delete(interviewer).where(eq(interviewer.organizationId, ORG_A));
+  await db.delete(department).where(eq(department.organizationId, ORG_A));
+  await db
+    .delete(recruitingGroupHiringUnit)
+    .where(eq(recruitingGroupHiringUnit.organizationId, ORG_A));
+  await db.delete(hiringUnit).where(eq(hiringUnit.organizationId, ORG_A));
+  await db.delete(recruitingGroupMember).where(eq(recruitingGroupMember.organizationId, ORG_A));
+  await db.delete(recruitingGroup).where(eq(recruitingGroup.organizationId, ORG_A));
   await db.delete(member).where(eq(member.userId, USER_A));
+  await db.delete(member).where(eq(member.userId, USER_MEMBER));
   await db.delete(organization).where(eq(organization.id, ORG_A));
   await db.delete(user).where(eq(user.id, USER_A));
+  await db.delete(user).where(eq(user.id, USER_MEMBER));
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -198,6 +244,14 @@ beforeAll(async () => {
     emailVerified: false,
     id: USER_A,
     name: "bulk-proc-user-a",
+    updatedAt: NOW,
+  });
+  await db.insert(user).values({
+    createdAt: NOW,
+    email: "bulk-proc-member@example.com",
+    emailVerified: false,
+    id: USER_MEMBER,
+    name: "bulk-proc-member",
     updatedAt: NOW,
   });
 
@@ -215,11 +269,18 @@ beforeAll(async () => {
     role: "owner",
     userId: USER_A,
   });
-});
+  await db.insert(member).values({
+    createdAt: NOW,
+    id: "bulk_proc_member_role",
+    organizationId: ORG_A,
+    role: "member",
+    userId: USER_MEMBER,
+  });
+}, 30_000);
 
 afterAll(async () => {
   await cleanup();
-});
+}, 30_000);
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -228,6 +289,7 @@ beforeEach(() => {
   (enqueueResumeSemanticIndexJobBestEffort as ReturnType<typeof vi.fn>).mockImplementation(() =>
     Promise.resolve(),
   );
+  (matchJobDescriptionForResume as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 });
 
 describe("getClaimMissRetryError", () => {
@@ -465,6 +527,158 @@ describe("processNextItem — resume pool target", () => {
       .from(resumePoolItem)
       .where(eq(resumePoolItem.id, beforeItem?.poolItemId ?? ""));
     expect(skippedPoolItems).toHaveLength(0);
+  });
+});
+
+describe("processNextItem — scoped auto job matching", () => {
+  async function seedScopedJobDescriptions() {
+    await db.insert(hiringUnit).values([
+      {
+        createdAt: NOW,
+        createdBy: USER_A,
+        id: HIRING_UNIT_ALLOWED,
+        name: "允许用人组织",
+        organizationId: ORG_A,
+        updatedAt: NOW,
+      },
+      {
+        createdAt: NOW,
+        createdBy: USER_A,
+        id: HIRING_UNIT_BLOCKED,
+        name: "隔离用人组织",
+        organizationId: ORG_A,
+        updatedAt: NOW,
+      },
+    ]);
+    await db.insert(recruitingGroup).values({
+      createdAt: NOW,
+      createdBy: USER_A,
+      id: GROUP_A,
+      name: "允许招聘组",
+      organizationId: ORG_A,
+      updatedAt: NOW,
+    });
+    await db.insert(recruitingGroupMember).values({
+      createdAt: NOW,
+      createdBy: USER_A,
+      groupId: GROUP_A,
+      id: "bulk_proc_scoped_group_member",
+      organizationId: ORG_A,
+      role: "hr",
+      updatedAt: NOW,
+      userId: USER_MEMBER,
+    });
+    await db.insert(recruitingGroupHiringUnit).values({
+      createdAt: NOW,
+      createdBy: USER_A,
+      groupId: GROUP_A,
+      hiringUnitId: HIRING_UNIT_ALLOWED,
+      id: "bulk_proc_scoped_group_hiring_unit",
+      organizationId: ORG_A,
+    });
+    await db.insert(department).values([
+      {
+        createdAt: NOW,
+        createdBy: USER_A,
+        hiringUnitId: null,
+        id: DEPT_PUBLIC,
+        name: "公共部门",
+        organizationId: ORG_A,
+        updatedAt: NOW,
+      },
+      {
+        createdAt: NOW,
+        createdBy: USER_A,
+        hiringUnitId: HIRING_UNIT_ALLOWED,
+        id: DEPT_ALLOWED,
+        name: "允许部门",
+        organizationId: ORG_A,
+        updatedAt: NOW,
+      },
+      {
+        createdAt: NOW,
+        createdBy: USER_A,
+        hiringUnitId: HIRING_UNIT_BLOCKED,
+        id: DEPT_BLOCKED,
+        name: "隔离部门",
+        organizationId: ORG_A,
+        updatedAt: NOW,
+      },
+    ]);
+    await db.insert(jobDescription).values([
+      {
+        allowCrossDepartmentInterviewers: false,
+        createdAt: NOW,
+        createdBy: USER_A,
+        departmentId: DEPT_PUBLIC,
+        id: JD_PUBLIC,
+        name: "公共岗位",
+        organizationId: ORG_A,
+        prompt: "公共岗位 prompt",
+        updatedAt: NOW,
+      },
+      {
+        allowCrossDepartmentInterviewers: false,
+        createdAt: NOW,
+        createdBy: USER_A,
+        departmentId: DEPT_ALLOWED,
+        id: JD_ALLOWED,
+        name: "允许岗位",
+        organizationId: ORG_A,
+        prompt: "允许岗位 prompt",
+        updatedAt: NOW,
+      },
+      {
+        allowCrossDepartmentInterviewers: false,
+        createdAt: NOW,
+        createdBy: USER_A,
+        departmentId: DEPT_BLOCKED,
+        id: JD_BLOCKED,
+        name: "隔离岗位",
+        organizationId: ORG_A,
+        prompt: "隔离岗位 prompt",
+        updatedAt: NOW,
+      },
+    ]);
+  }
+
+  it("auto 模式只把当前用户可选岗位交给 AI 匹配器", async () => {
+    await seedScopedJobDescriptions();
+    const batchId = await insertBatchWithItems({
+      dedupPolicy: "skip",
+      files: makeFiles(1),
+      jdMode: "auto",
+      jobDescriptionId: null,
+      organizationId: ORG_A,
+      userId: USER_MEMBER,
+    });
+
+    mockS3OK();
+    mockParseOK({
+      email: "scoped-auto@example.com",
+      name: "Scoped Auto User",
+      phone: null,
+      targetRoles: ["Engineer"],
+    });
+    (matchJobDescriptionForResume as ReturnType<typeof vi.fn>).mockImplementation(
+      (_profile, jobDescriptions: JobDescriptionListRecord[]) => {
+        const candidateIds = jobDescriptions.map((jd) => jd.id).toSorted();
+        expect(candidateIds).toEqual([JD_ALLOWED, JD_PUBLIC].toSorted());
+        expect(candidateIds).not.toContain(JD_BLOCKED);
+        return Promise.resolve({ jobDescriptionId: JD_ALLOWED, reason: "命中允许岗位" });
+      },
+    );
+
+    const result = await processNextItem(batchId, ORG_A, USER_MEMBER);
+
+    expect(result?.item?.status).toBe("succeeded");
+    expect(matchJobDescriptionForResume).toHaveBeenCalledOnce();
+
+    const [record] = await db
+      .select({ jobDescriptionId: studioInterview.jobDescriptionId })
+      .from(studioInterview)
+      .where(eq(studioInterview.id, result?.item?.resumeRecordId ?? ""));
+    expect(record?.jobDescriptionId).toBe(JD_ALLOWED);
   });
 });
 

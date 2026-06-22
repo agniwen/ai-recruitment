@@ -12,17 +12,19 @@ function normalizeArchivedFilter(value: string): "active" | "archived" | "all" {
 }
 
 export async function loadStudioInterviewQuestionsData({
+  actorUserId,
   query,
   slug,
   workspaceId,
 }: {
+  actorUserId: string;
   query: DataGridQueryState<InterviewQuestionFilters>;
   slug: string;
   workspaceId: string;
 }) {
   const queryClient = createQueryClient();
   const [jobDescriptions] = await Promise.all([
-    listAllJobDescriptions(workspaceId),
+    listAllJobDescriptions(workspaceId, { actorUserId }),
     queryClient.prefetchQuery({
       queryFn: () =>
         listInterviewQuestionTemplates(

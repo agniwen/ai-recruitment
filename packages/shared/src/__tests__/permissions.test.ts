@@ -16,6 +16,7 @@ describe("permissions matrix", () => {
       const resources = [
         "interview",
         "jd",
+        "hiringUnit",
         "department",
         "interviewer",
         "candidateForm",
@@ -46,6 +47,7 @@ describe("permissions matrix", () => {
       const resources = [
         "interview",
         "jd",
+        "hiringUnit",
         "department",
         "interviewer",
         "candidateForm",
@@ -77,7 +79,6 @@ describe("permissions matrix", () => {
       const resources = [
         "interview",
         "jd",
-        "department",
         "interviewer",
         "candidateForm",
         "questionTemplate",
@@ -88,6 +89,12 @@ describe("permissions matrix", () => {
           expect.arrayContaining(["create", "read", "update", "delete"]),
         );
       }
+    });
+
+    it("can only read hiring units and departments", () => {
+      const { member } = roles;
+      expect(member.statements.hiringUnit).toEqual(["read"]);
+      expect(member.statements.department).toEqual(["read"]);
     });
 
     it("can update globalConfig and read auditLog", () => {
@@ -115,8 +122,17 @@ describe("permission matrix cross-cut", () => {
     // jd
     ["member", "jd", "update", true],
     ["member", "jd", "delete", true],
+    // hiringUnit
+    ["member", "hiringUnit", "read", true],
+    ["member", "hiringUnit", "create", false],
+    ["member", "hiringUnit", "update", false],
+    ["member", "hiringUnit", "delete", false],
+    ["admin", "hiringUnit", "delete", true],
     // department / interviewer
-    ["member", "department", "create", true],
+    ["member", "department", "read", true],
+    ["member", "department", "create", false],
+    ["member", "department", "update", false],
+    ["member", "department", "delete", false],
     ["member", "interviewer", "update", true],
     ["admin", "department", "delete", true],
     // candidateForm / questionTemplate

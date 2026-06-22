@@ -21,6 +21,7 @@ import type { PaginatedDepartmentResult } from "@arc/ai-recruitment-copilot-back
 import { Building2Icon, PlusIcon } from "@/components/icons/hugeicons";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   actionsColumn,
   customColumn,
@@ -38,6 +39,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { rpc } from "@/lib/client/rpc";
+import { useHasPermission } from "@/hooks/use-has-permission";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DepartmentFormDialog } from "@/components/features/studio/departments/department-form-dialog";
 
@@ -45,6 +47,9 @@ function DepartmentManagementPage() {
   const slug = useWorkspaceSlug();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const canCreateDepartment = useHasPermission("department", "create");
+  const canUpdateDepartment = useHasPermission("department", "update");
+  const canDeleteDepartment = useHasPermission("department", "delete");
 
   const fetchDepartments = useMemo(
     () =>
@@ -109,86 +114,107 @@ function DepartmentManagementPage() {
   });
 
   const columns = useMemo(
-    () => [
-      textColumn<DepartmentListRecord>({
-        key: "name",
-        primary: true,
-        title: "部门名称",
-      }),
-      textColumn<DepartmentListRecord>({
-        fallback: "—",
-        key: "description",
-        muted: true,
-        title: "描述",
-        truncate: true,
-      }),
-      customColumn<DepartmentListRecord>({
-        cell: (r) => {
-          // 0 引用时纯文本（跟面试官页风格对齐）；>0 时 link 按钮，点击打开
-          // 只读的面试官列表弹窗。
-          // Zero → plain text (matches the interviewer page style); positive →
-          // link button opening the read-only interviewers modal.
-          if (r.interviewerCount === 0) {
-            return "0 位面试官";
-          }
-          return (
-            <Button
-              className="h-auto p-0 font-medium text-primary"
-              onClick={() => setInterviewersModalDept(r)}
-              type="button"
-              variant="link"
-            >
-              {r.interviewerCount} 位面试官
-            </Button>
-          );
-        },
-        key: "interviewerCount",
-        title: "面试官",
-      }),
-      customColumn<DepartmentListRecord>({
-        cell: (r) => {
-          // 0 引用时纯文本；>0 时 link 按钮，打开"删除/查看"语义的 JD 弹窗。
-          // Zero → plain text; positive → link button opening the JD scope
-          // modal which also supports row-level deletes.
-          if (r.jobDescriptionCount === 0) {
-            return "0 个岗位";
-          }
-          return (
-            <Button
-              className="h-auto p-0 font-medium text-primary"
-              onClick={() => setJobDescriptionsModalDept(r)}
-              type="button"
-              variant="link"
-            >
-              {r.jobDescriptionCount} 个岗位
-            </Button>
-          );
-        },
-        key: "jobDescriptionCount",
-        title: "在招岗位",
-      }),
-      dateColumn<DepartmentListRecord>({
-        key: "createdAt",
-        title: "创建时间",
-      }),
-      actionsColumn<DepartmentListRecord>({
-        inline: [
-          {
-            label: "编辑",
-            onClick: (r) => void crud.openEdit(r),
+    () => {
+      const baseColumns = [
+        textColumn<DepartmentListRecord>({
+          key: "name",
+          primary: true,
+          title: "部门名称",
+        }),
+        customColumn<DepartmentListRecord>({
+          cell: (r) =>
+            r.hiringUnitName ? (
+              <Badge variant="secondary">{r.hiringUnitName}</Badge>
+            ) : (
+              <Badge variant="outline">所有招聘组</Badge>
+            ),
+          key: "hiringUnitName",
+          title: "用人组织",
+        }),
+        textColumn<DepartmentListRecord>({
+          fallback: "—",
+          key: "description",
+          muted: true,
+          title: "描述",
+          truncate: true,
+        }),
+        customColumn<DepartmentListRecord>({
+          cell: (r) => {
+            // 0 引用时纯文本（跟面试官页风格对齐）；>0 时 link 按钮，点击打开
+            // 只读的面试官列表弹窗。
+            // Zero → plain text (matches the interviewer page style); positive →
+            // link button opening the read-only interviewers modal.
+            if (r.interviewerCount === 0) {
+              return "0 位面试官";
+            }
+            return (
+              <Button
+                className="h-auto p-0 font-medium text-primary"
+                onClick={() => setInterviewersModalDept(r)}
+                type="button"
+                variant="link"
+              >
+                {r.interviewerCount} 位面试官
+              </Button>
+            );
           },
-        ],
-        menu: [
-          {
-            label: "删除",
-            onClick: (r) => crud.setDeleteRecord(r),
-            variant: "destructive",
+          key: "interviewerCount",
+          title: "面试官",
+        }),
+        customColumn<DepartmentListRecord>({
+          cell: (r) => {
+            // 0 引用时纯文本；>0 时 link 按钮，打开"删除/查看"语义的 JD 弹窗。
+            // Zero → plain text; positive → link button opening the JD scope
+            // modal which also supports row-level deletes.
+            if (r.jobDescriptionCount === 0) {
+              return "0 个岗位";
+            }
+            return (
+              <Button
+                className="h-auto p-0 font-medium text-primary"
+                onClick={() => setJobDescriptionsModalDept(r)}
+                type="button"
+                variant="link"
+              >
+                {r.jobDescriptionCount} 个岗位
+              </Button>
+            );
           },
-        ],
-      }),
-    ],
+          key: "jobDescriptionCount",
+          title: "在招岗位",
+        }),
+        dateColumn<DepartmentListRecord>({
+          key: "createdAt",
+          title: "创建时间",
+        }),
+      ];
+
+      if (canUpdateDepartment || canDeleteDepartment) {
+        baseColumns.push(
+          actionsColumn<DepartmentListRecord>({
+            inline: [
+              {
+                label: "编辑",
+                onClick: (r) => void crud.openEdit(r),
+                show: () => canUpdateDepartment,
+              },
+            ],
+            menu: [
+              {
+                label: "删除",
+                onClick: (r) => crud.setDeleteRecord(r),
+                show: () => canDeleteDepartment,
+                variant: "destructive",
+              },
+            ],
+          }),
+        );
+      }
+
+      return baseColumns;
+    },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- columns 不应每次 crud 引用变化都重建
-    [],
+    [canDeleteDepartment, canUpdateDepartment],
   );
 
   const filtersConfig = useMemo(
@@ -225,43 +251,51 @@ function DepartmentManagementPage() {
                   创建部门之后可以把面试官和在招岗位组织起来，面试时按部门挑选配置。
                 </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <Button onClick={crud.openCreate}>
-                  <PlusIcon className="size-4" />
-                  新建部门
-                </Button>
-              </EmptyContent>
+              {canCreateDepartment ? (
+                <EmptyContent>
+                  <Button onClick={crud.openCreate}>
+                    <PlusIcon className="size-4" />
+                    新建部门
+                  </Button>
+                </EmptyContent>
+              ) : null}
             </Empty>
           }
           filters={filtersConfig}
           getRowId={(r) => r.id}
           toolbarRight={
-            <Button className="flex-1 sm:flex-none" onClick={crud.openCreate}>
-              <PlusIcon className="size-4" />
-              新建部门
-            </Button>
+            canCreateDepartment ? (
+              <Button className="flex-1 sm:flex-none" onClick={crud.openCreate}>
+                <PlusIcon className="size-4" />
+                新建部门
+              </Button>
+            ) : null
           }
         />
       </div>
 
-      <DepartmentFormDialog
-        onOpenChange={crud.onFormOpenChange}
-        onSaved={invalidateDepartmentData}
-        open={crud.formDialogOpen}
-        record={crud.editingRecord}
-      />
+      {canCreateDepartment || canUpdateDepartment ? (
+        <DepartmentFormDialog
+          onOpenChange={crud.onFormOpenChange}
+          onSaved={invalidateDepartmentData}
+          open={crud.formDialogOpen}
+          record={crud.editingRecord}
+        />
+      ) : null}
 
-      <EntityDeleteDialog
-        description={(record) =>
-          record.interviewerCount > 0 || record.jobDescriptionCount > 0
-            ? "该部门下仍有面试官或在招岗位，将无法删除。"
-            : `即将删除部门：${record.name}，删除后无法恢复。`
-        }
-        onClose={() => crud.setDeleteRecord(null)}
-        onConfirm={crud.handleDelete}
-        record={crud.deleteRecord}
-        title="确认删除这个部门？"
-      />
+      {canDeleteDepartment ? (
+        <EntityDeleteDialog
+          description={(record) =>
+            record.interviewerCount > 0 || record.jobDescriptionCount > 0
+              ? "该部门下仍有面试官或在招岗位，将无法删除。"
+              : `即将删除部门：${record.name}，删除后无法恢复。`
+          }
+          onClose={() => crud.setDeleteRecord(null)}
+          onConfirm={crud.handleDelete}
+          record={crud.deleteRecord}
+          title="确认删除这个部门？"
+        />
+      ) : null}
 
       <ScopedInterviewersModal
         departmentId={interviewersModalDept?.id ?? null}
