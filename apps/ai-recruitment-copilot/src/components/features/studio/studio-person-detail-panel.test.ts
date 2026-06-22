@@ -16,8 +16,9 @@ describe("StudioPersonDetailPanel visual density", () => {
   it("keeps the AI interview overview free of nested bordered cards", () => {
     const overviewSource = sourceBetween('<TabsContent value="overview">', "{/* 轮次概览");
 
-    expect(overviewSource).toContain("rounded-2xl bg-muted/20 p-5");
+    expect(overviewSource).toContain("rounded-2xl p-5");
     expect(overviewSource).toContain("border-t border-border/50 pt-6");
+    expect(overviewSource).not.toContain("rounded-2xl bg-muted/20 p-5");
     expect(overviewSource).not.toContain("rounded-2xl border border-border bg-background p-5");
   });
 
