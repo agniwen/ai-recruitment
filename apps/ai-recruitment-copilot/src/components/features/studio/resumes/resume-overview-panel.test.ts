@@ -9,10 +9,9 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(source).toContain("<dt");
     expect(source).toContain("<dd");
     expect(source).toContain('className="space-y-8"');
-    expect(source).toContain('className="space-y-6"');
+    expect(source).toContain("rounded-2xl bg-muted/20 p-5");
     expect(source).toContain("border-t border-border/50 pt-6");
     expect(source).toContain("rounded-full bg-background px-2.5 py-1 text-xs");
-    expect(source).not.toContain("rounded-2xl bg-muted/20 p-5");
     expect(source).not.toContain("SoftPanel");
     expect(source).not.toContain("rounded-2xl border border-border bg-background p-5");
   });
