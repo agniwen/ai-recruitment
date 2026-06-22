@@ -1,0 +1,65 @@
+import { z } from "zod";
+import { isSupportedResumeDocumentInput } from "@arc/shared/resume-documents";
+
+export const jobDescriptionConfigSchema = z.union([
+  z.object({
+    departmentName: z.string().nullable(),
+    jobDescriptionId: z.string().min(1),
+    mode: z.literal("select"),
+    name: z.string().min(1),
+    prompt: z.string(),
+  }),
+  z.object({
+    mode: z.literal("custom"),
+    text: z.string(),
+  }),
+]);
+
+export const upsertChatMessageSchema = z.object({
+  message: z
+    .object({
+      id: z.string().min(1),
+      role: z.enum(["system", "user", "assistant"]),
+    })
+    .loose(),
+});
+
+export const upsertConversationSchema = z.object({
+  createdAt: z.number().int().nonnegative().optional(),
+  id: z.string().min(1),
+  isTitleGenerating: z.boolean().optional(),
+  jobDescription: z.string().optional(),
+  jobDescriptionConfig: jobDescriptionConfigSchema.nullable().optional(),
+  resumeImports: z.record(z.string(), z.string()).optional(),
+  title: z.string().optional(),
+});
+
+export const patchConversationSchema = z.object({
+  isTitleGenerating: z.boolean().optional(),
+  jobDescription: z.string().optional(),
+  jobDescriptionConfig: jobDescriptionConfigSchema.nullable().optional(),
+  resumeImports: z.record(z.string(), z.string()).optional(),
+  title: z.string().optional(),
+});
+
+export const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
+
+const HASH_RE = /^[0-9a-f]{64}$/;
+
+export const uploadPreflightSchema = z
+  .object({
+    filename: z.string().min(1).max(255),
+    hash: z.string().regex(HASH_RE, "Invalid sha256 hex"),
+    mediaType: z.string().min(1).max(255),
+    size: z.number().int().positive().max(MAX_ATTACHMENT_SIZE),
+  })
+  .superRefine((input, ctx) => {
+    if (isSupportedResumeDocumentInput({ fileName: input.filename, mediaType: input.mediaType })) {
+      return;
+    }
+    ctx.addIssue({
+      code: "custom",
+      message: "Unsupported resume document type",
+      path: ["mediaType"],
+    });
+  });

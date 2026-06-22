@@ -1,0 +1,21 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.gitignore
+# 中文：只忽略 *.local 副本；构建时需要的 .env 允许进入镜像，由 Jenkins 落到 apps/ai-recruitment-copilot/.env
+# English: only ignore *.local; the build-time .env is allowed in (Jenkins writes it into apps/ai-recruitment-copilot/.env)
+.env.local
+.env.*.local
+**/.env.local
+**/.env.*.local
+.opencode
+*.md
+apps/livekit-agent
+.venv
+**/.venv
+__pycache__
+**/__pycache__
+*.tsbuildinfo
+**/*.tsbuildinfo

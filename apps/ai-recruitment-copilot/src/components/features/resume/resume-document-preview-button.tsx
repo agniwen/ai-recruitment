@@ -1,0 +1,117 @@
+"use client";
+
+import { EyeIcon } from "@/components/icons/hugeicons";
+import type { ReactNode } from "react";
+import { Suspense, lazy, useState } from "react";
+import { PdfPreviewButton } from "@/components/features/pdf/pdf-preview-button";
+import type { ResumeDocumentPreviewKind } from "@/components/features/resume/resume-document-preview-dialog";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { getResumeDocumentKind } from "@arc/shared/resume-documents";
+import { cn } from "@arc/shared/utils";
+export { getPptxPreviewPdfUrl } from "./resume-document-preview-url";
+
+const ResumeDocumentPreviewDialog = lazy(async () => {
+  const mod = await import("@/components/features/resume/resume-document-preview-dialog");
+  return { default: mod.ResumeDocumentPreviewDialog };
+});
+
+export type PreviewableResumeDocumentKind = ResumeDocumentPreviewKind;
+export const UNSUPPORTED_RESUME_DOCUMENT_PREVIEW_TOOLTIP =
+  "该格式不支持预览，仅 PDF、DOCX、PPTX、XLSX、图片格式支持预览。";
+
+export function getPreviewableResumeDocumentKind(input: {
+  fileName?: string | null;
+  mediaType?: string | null;
+}): PreviewableResumeDocumentKind | null {
+  const kind = getResumeDocumentKind({
+    fileName: input.fileName ?? undefined,
+    mediaType: input.mediaType ?? undefined,
+  });
+
+  if (kind === "pdf" || kind === "docx" || kind === "pptx" || kind === "xlsx" || kind === "image") {
+    return kind;
+  }
+
+  return input.fileName || input.mediaType ? null : "pdf";
+}
+
+export function isPreviewableResumeDocumentInput(input: {
+  fileName?: string | null;
+  mediaType?: string | null;
+}) {
+  return getPreviewableResumeDocumentKind(input) !== null;
+}
+
+export function UnsupportedResumeDocumentPreviewTooltip({ children }: { children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent>{UNSUPPORTED_RESUME_DOCUMENT_PREVIEW_TOOLTIP}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export interface ResumeDocumentPreviewButtonProps {
+  url: string;
+  filename?: string | null;
+  mediaType?: string | null;
+  label?: string;
+  className?: string;
+  disabled?: boolean;
+}
+
+export function ResumeDocumentPreviewButton({
+  url,
+  filename,
+  mediaType,
+  label = "预览",
+  className,
+  disabled,
+}: ResumeDocumentPreviewButtonProps) {
+  const [open, setOpen] = useState(false);
+  const kind = getPreviewableResumeDocumentKind({ fileName: filename, mediaType });
+
+  if (!kind) {
+    return null;
+  }
+
+  if (kind === "pdf") {
+    return (
+      <PdfPreviewButton
+        className={className}
+        disabled={disabled}
+        filename={filename ?? undefined}
+        label={label}
+        url={url}
+      />
+    );
+  }
+
+  return (
+    <>
+      <Button
+        className={cn("h-8 shrink-0 gap-1.5", className)}
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <EyeIcon className="size-3.5" />
+        {label}
+      </Button>
+      {open && !disabled ? (
+        <Suspense fallback={null}>
+          <ResumeDocumentPreviewDialog
+            filename={filename ?? undefined}
+            kind={kind}
+            onOpenChange={setOpen}
+            open={open}
+            url={url}
+          />
+        </Suspense>
+      ) : null}
+    </>
+  );
+}
