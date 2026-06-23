@@ -20,8 +20,10 @@ const RECRUITING_GROUP_RESOURCES = new Set<Resource>([
   "interview",
   "interviewer",
   "jd",
+  "resumeLibrary",
+  "resumePool",
+  "resumeUploadBatch",
   "questionTemplate",
-  "resume",
 ]);
 
 export function usesRecruitingGroupPermission(resource: Resource) {

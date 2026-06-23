@@ -282,6 +282,7 @@ export const relations = defineRelations(schema, (r) => ({
     invitations: r.many.invitation(),
     jobDescriptions: r.many.jobDescription(),
     members: r.many.member(),
+    organizationRoles: r.many.organizationRole(),
     recruitingGroupHiringUnits: r.many.recruitingGroupHiringUnit(),
     recruitingGroupMembers: r.many.recruitingGroupMember(),
     recruitingGroups: r.many.recruitingGroup(),
@@ -291,6 +292,12 @@ export const relations = defineRelations(schema, (r) => ({
     studioOrgSkills: r.many.studioOrgSkill(),
     studioRoundEmailLogs: r.many.studioRoundEmailLog(),
     workspaceInviteLinks: r.many.workspaceInviteLink(),
+  },
+  organizationRole: {
+    organization: r.one.organization({
+      from: r.organizationRole.organizationId,
+      to: r.organization.id,
+    }),
   },
   recruitingGroup: {
     hiringUnitLinks: r.many.recruitingGroupHiringUnit(),

@@ -10,6 +10,7 @@ import {
 import type { DataGridQueryState } from "@/components/data-grid/query-contract";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
 import { loadStudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
+import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import type { StudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
@@ -291,6 +292,11 @@ export const Route = createFileRoute("/w/$slug/studio/hiring-units")({
       params: { slug: string };
     };
     const query = parseHiringUnitQuery(location.search);
+    await requireStudioPageAccess({
+      action: "hiringUnits",
+      pathname: `/w/${params.slug}/studio/hiring-units`,
+      slug: params.slug,
+    });
     const state = (await loadStudioHiringUnitsState({
       data: { query, slug: params.slug },
     })) as StudioHiringUnitsState;

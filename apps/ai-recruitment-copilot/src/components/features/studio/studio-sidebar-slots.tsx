@@ -11,6 +11,7 @@ import {
   ListChecksIcon,
   MailCheckIcon,
   SettingsIcon,
+  ShieldCheckIcon,
   UserIcon,
   UserCircleIcon,
   UserCogIcon,
@@ -40,9 +41,9 @@ interface NavItem {
   path: string;
   icon: typeof BotIcon;
   title: string;
-  /** 仅当 (resource, action) 通过 useHasPermission 时显示。未声明则总是可见。 */
-  resource?: keyof typeof statement;
-  action?: string;
+  /** 仅当 page action 通过 useHasPermission 时显示。 */
+  action: (typeof statement)["page"][number];
+  resource: "page";
 }
 
 interface NavGroup {
@@ -54,31 +55,31 @@ const navGroups: NavGroup[] = [
   {
     items: [
       {
-        action: "read",
+        action: "resumes",
         icon: UsersIcon,
         path: "/studio/resumes",
-        resource: "resume",
+        resource: "page",
         title: "简历库",
       },
       {
-        action: "read",
+        action: "resumePool",
         icon: LayoutGridIcon,
         path: "/studio/resume-pool",
-        resource: "resume",
+        resource: "page",
         title: "简历广场",
       },
       {
-        action: "read",
+        action: "interviews",
         icon: BotIcon,
         path: "/studio/interviews",
-        resource: "interview",
+        resource: "page",
         title: "AI 面试",
       },
       {
-        action: "read",
+        action: "dashboard",
         icon: ChartNoAxesCombinedIcon,
         path: "/studio/dashboard",
-        resource: "resume",
+        resource: "page",
         title: "数据看板",
       },
     ],
@@ -87,31 +88,31 @@ const navGroups: NavGroup[] = [
   {
     items: [
       {
-        action: "read",
+        action: "hiringUnits",
         icon: GlobeIcon,
         path: "/studio/hiring-units",
-        resource: "hiringUnit",
+        resource: "page",
         title: "用人组织管理",
       },
       {
-        action: "read",
+        action: "departments",
         icon: Building2Icon,
         path: "/studio/departments",
-        resource: "department",
+        resource: "page",
         title: "部门管理",
       },
       {
-        action: "read",
+        action: "interviewers",
         icon: UserCircleIcon,
         path: "/studio/interviewers",
-        resource: "interviewer",
+        resource: "page",
         title: "面试官管理",
       },
       {
-        action: "read",
+        action: "jobDescriptions",
         icon: FileTextIcon,
         path: "/studio/job-descriptions",
-        resource: "jd",
+        resource: "page",
         title: "在招岗位管理",
       },
     ],
@@ -120,17 +121,17 @@ const navGroups: NavGroup[] = [
   {
     items: [
       {
-        action: "read",
+        action: "forms",
         icon: ClipboardListIcon,
         path: "/studio/forms",
-        resource: "candidateForm",
+        resource: "page",
         title: "面试表单",
       },
       {
-        action: "read",
+        action: "interviewQuestions",
         icon: ListChecksIcon,
         path: "/studio/interview-questions",
-        resource: "questionTemplate",
+        resource: "page",
         title: "面试题",
       },
     ],
@@ -139,25 +140,38 @@ const navGroups: NavGroup[] = [
   {
     items: [
       {
+        action: "me",
         icon: UserIcon,
         path: "/studio/me",
+        resource: "page",
         title: "我的信息",
       },
       {
+        action: "members",
         icon: UserCogIcon,
         path: "/studio/members",
+        resource: "page",
         title: "工作区管理",
       },
       {
+        action: "mailIngestAccounts",
         icon: MailCheckIcon,
         path: "/studio/mail-ingest-accounts",
+        resource: "page",
         title: "邮箱监听",
       },
       {
-        action: "read",
+        action: "permissions",
+        icon: ShieldCheckIcon,
+        path: "/studio/permissions",
+        resource: "page",
+        title: "权限管理",
+      },
+      {
+        action: "globalConfig",
         icon: SettingsIcon,
         path: "/studio/global-config",
-        resource: "globalConfig",
+        resource: "page",
         title: "系统设置",
       },
     ],
@@ -165,17 +179,11 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-type AnyAction = (typeof statement)[keyof typeof statement][number];
-
 function SidebarNavItem({ item, active, href }: { item: NavItem; active: boolean; href: string }) {
   // Hook must be called unconditionally
-  const allowed = useHasPermission(
-    (item.resource ?? "interview") as keyof typeof statement,
-    (item.action ?? "read") as AnyAction,
-  );
+  const allowed = useHasPermission(item.resource, item.action);
 
-  // Items without resource declared are always visible.
-  if (item.resource && !allowed) {
+  if (!allowed) {
     return null;
   }
 

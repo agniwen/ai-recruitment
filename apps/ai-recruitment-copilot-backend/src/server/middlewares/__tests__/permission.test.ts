@@ -10,6 +10,8 @@ describe("permission middleware", () => {
   it("keeps recruiting-group delegation for scoped recruiting resources", () => {
     expect(usesRecruitingGroupPermission("interviewer")).toBe(true);
     expect(usesRecruitingGroupPermission("jd")).toBe(true);
-    expect(usesRecruitingGroupPermission("resume")).toBe(true);
+    expect(usesRecruitingGroupPermission("resumeLibrary")).toBe(true);
+    expect(usesRecruitingGroupPermission("resumePool")).toBe(true);
+    expect(usesRecruitingGroupPermission("resumeUploadBatch")).toBe(true);
   });
 });

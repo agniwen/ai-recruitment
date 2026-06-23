@@ -261,6 +261,28 @@ export const member = pgTable(
   ],
 );
 
+export const organizationRole = pgTable(
+  "organization_role",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    permission: text("permission").notNull(),
+    role: text("role").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_role_org_role_uq").on(table.organizationId, table.role),
+    index("organization_role_organization_idx").on(table.organizationId),
+  ],
+);
+
 export const recruitingGroup = pgTable(
   "recruiting_group",
   {
