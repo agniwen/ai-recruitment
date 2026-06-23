@@ -5,16 +5,17 @@ import type { JsonValue } from "@/lib/start/server-function-types";
 import { createQueryClient } from "@arc/shared/query-client";
 import {
   getResumeParseQueueOverview,
-  listResumeParseQueueJobs,
   RESUME_PARSE_JOB_LIST_STATES,
   RESUME_PARSE_QUEUE_NAME,
 } from "@arc/resume-parse-queue/resume-parse";
 import type { ResumeParseJobListState } from "@arc/resume-parse-queue/resume-parse";
-import { enrichResumeParseQueueJobs } from "@arc/ai-recruitment-copilot-backend/server/routes/platform/queue-details";
+import { listResumeParseQueueJobsWithDetailFilters } from "@arc/ai-recruitment-copilot-backend/server/routes/platform/queue-details";
 
 export interface PlatformQueueFilters extends Record<string, string> {
+  parseStatus: string;
   queue: string;
   state: string;
+  uploadStatus: string;
 }
 
 function normalizeJobState(value: string): ResumeParseJobListState {
@@ -40,13 +41,14 @@ export async function listPlatformQueueJobs(query: DataGridQueryState<PlatformQu
     };
   }
 
-  const result = await listResumeParseQueueJobs({
+  return await listResumeParseQueueJobsWithDetailFilters({
     page: query.page,
     pageSize: query.pageSize,
+    parseStatus: query.filters.parseStatus,
     search: query.search,
     state: normalizeJobState(query.filters.state),
+    uploadStatus: query.filters.uploadStatus,
   });
-  return await enrichResumeParseQueueJobs(result);
 }
 
 export async function loadPlatformQueuesHydrationState(

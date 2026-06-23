@@ -10,8 +10,10 @@ import type { PlatformQueueFilters } from "@/lib/start/platform/queues.server";
 
 const INITIAL_PAGE_SIZE = 20;
 const INITIAL_FILTERS: PlatformQueueFilters = {
+  parseStatus: "all",
   queue: "resume-parse",
   state: "all",
+  uploadStatus: "all",
 };
 
 type SearchParamsPrimitive = boolean | number | string;

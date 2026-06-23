@@ -1,7 +1,9 @@
 import type {
+  ResumeParseJobListState,
   ResumeParseQueueJobRecord,
   ResumeParseQueueJobsResult,
 } from "@arc/resume-parse-queue/resume-parse";
+import { listResumeParseQueueJobs } from "@arc/resume-parse-queue/resume-parse";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   organization,
@@ -72,6 +74,28 @@ export type PlatformQueueJobsResult = Omit<ResumeParseQueueJobsResult, "records"
   records: PlatformQueueJobRecord[];
 };
 
+export interface ResumeQueueDetailFilters {
+  parseStatus?: string;
+  uploadStatus?: string;
+}
+
+export interface ResumeQueueJobsWithDetailFiltersQuery extends ResumeQueueDetailFilters {
+  page: number;
+  pageSize: number;
+  search?: string;
+  state: ResumeParseJobListState;
+}
+
+const DETAIL_FILTER_SCAN_PAGE_SIZE = 100;
+
+function isAllFilter(value: string | undefined): boolean {
+  return !value || value === "all";
+}
+
+function hasDetailStatusFilter(query: ResumeQueueJobsWithDetailFiltersQuery): boolean {
+  return !isAllFilter(query.uploadStatus) || !isAllFilter(query.parseStatus);
+}
+
 function toIsoString(value: Date | string | null | undefined): string | null {
   if (!value) {
     return null;
@@ -119,6 +143,32 @@ export function mergeResumeParseQueueJobsWithResumeDetails(
           }
         : null,
     };
+  });
+}
+
+export function filterEnrichedResumeParseQueueJobRecords(
+  records: PlatformQueueJobRecord[],
+  filters: ResumeQueueDetailFilters,
+): PlatformQueueJobRecord[] {
+  const parseStatus = filters.parseStatus?.trim();
+  const uploadStatus = filters.uploadStatus?.trim();
+
+  if (isAllFilter(parseStatus) && isAllFilter(uploadStatus)) {
+    return records;
+  }
+
+  return records.filter((record) => {
+    const detail = record.resumeDetail;
+    if (!detail) {
+      return false;
+    }
+    if (!isAllFilter(uploadStatus) && detail.itemStatus !== uploadStatus) {
+      return false;
+    }
+    if (!isAllFilter(parseStatus) && detail.resumeParseStatus !== parseStatus) {
+      return false;
+    }
+    return true;
   });
 }
 
@@ -238,5 +288,61 @@ export async function enrichResumeParseQueueJobs(
   return {
     ...result,
     records: mergeResumeParseQueueJobsWithResumeDetails(result.records, details),
+  };
+}
+
+export async function listResumeParseQueueJobsWithDetailFilters(
+  query: ResumeQueueJobsWithDetailFiltersQuery,
+) {
+  const queueQuery = {
+    search: query.search,
+    state: query.state,
+  };
+  if (!hasDetailStatusFilter(query)) {
+    const result = await listResumeParseQueueJobs({
+      ...queueQuery,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+    return enrichResumeParseQueueJobs(result);
+  }
+
+  const firstPage = await listResumeParseQueueJobs({
+    ...queueQuery,
+    page: 1,
+    pageSize: DETAIL_FILTER_SCAN_PAGE_SIZE,
+  });
+  const records = [...firstPage.records];
+
+  for (let page = 2; page <= firstPage.totalPages; page += 1) {
+    const pageResult = await listResumeParseQueueJobs({
+      ...queueQuery,
+      page,
+      pageSize: DETAIL_FILTER_SCAN_PAGE_SIZE,
+    });
+    records.push(...pageResult.records);
+  }
+
+  const enriched = await enrichResumeParseQueueJobs({
+    ...firstPage,
+    page: 1,
+    pageSize: DETAIL_FILTER_SCAN_PAGE_SIZE,
+    records,
+    total: records.length,
+    totalPages: records.length > 0 ? Math.ceil(records.length / DETAIL_FILTER_SCAN_PAGE_SIZE) : 0,
+  });
+  const filteredRecords = filterEnrichedResumeParseQueueJobRecords(enriched.records, {
+    parseStatus: query.parseStatus,
+    uploadStatus: query.uploadStatus,
+  });
+  const offset = (query.page - 1) * query.pageSize;
+
+  return {
+    ...enriched,
+    page: query.page,
+    pageSize: query.pageSize,
+    records: filteredRecords.slice(offset, offset + query.pageSize),
+    total: filteredRecords.length,
+    totalPages: filteredRecords.length > 0 ? Math.ceil(filteredRecords.length / query.pageSize) : 0,
   };
 }

@@ -5,9 +5,9 @@ import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend
 import { adminMiddleware } from "@arc/ai-recruitment-copilot-backend/server/middlewares/admin";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { organization, member, session, user } from "@arc/db-schema/schema";
+import { resumeParseStatusValues } from "@arc/db-schema/studio-interviews";
 import {
   getResumeParseQueueOverview,
-  listResumeParseQueueJobs,
   RESUME_PARSE_JOB_LIST_STATES,
   RESUME_PARSE_QUEUE_NAME,
 } from "@arc/resume-parse-queue/resume-parse";
@@ -27,7 +27,7 @@ import {
   mergeMailIngestLoginConfig,
   validateMailIngestAccountLogin,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/mail-ingest/validation";
-import { enrichResumeParseQueueJobs } from "./queue-details";
+import { listResumeParseQueueJobsWithDetailFilters } from "./queue-details";
 
 // --- Organizations list ---
 const orgQuerySchema = z.object({
@@ -437,11 +437,36 @@ const platformMailIngestAccounts = factory
     },
   );
 
+const resumeUploadBatchItemStatusValues = [
+  "pending",
+  "processing",
+  "succeeded",
+  "failed",
+  "duplicate_skipped",
+  "cancelled",
+] as const;
+
+function normalizeAllQueryFilter(value: unknown) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const trimmed = value.trim();
+  return trimmed || "all";
+}
+
 const queueJobsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  parseStatus: z.preprocess(
+    normalizeAllQueryFilter,
+    z.enum(["all", ...resumeParseStatusValues]).default("all"),
+  ),
   search: z.string().optional(),
   state: z.enum(RESUME_PARSE_JOB_LIST_STATES).default("all"),
+  uploadStatus: z.preprocess(
+    normalizeAllQueryFilter,
+    z.enum(["all", ...resumeUploadBatchItemStatusValues]).default("all"),
+  ),
 });
 
 const platformQueues = factory
@@ -459,8 +484,8 @@ const platformQueues = factory
         return c.json({ error: "队列不存在" }, 404);
       }
       const query = c.req.valid("query");
-      const result = await listResumeParseQueueJobs(query);
-      return c.json(await enrichResumeParseQueueJobs(result), 200);
+      const result = await listResumeParseQueueJobsWithDetailFilters(query);
+      return c.json(result, 200);
     },
   );
 
