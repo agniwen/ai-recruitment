@@ -15,4 +15,9 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(source).not.toContain("SoftPanel");
     expect(source).not.toContain("rounded-2xl border border-border bg-background p-5");
   });
+
+  it("shows the hiring unit in the resume summary", () => {
+    expect(source).toContain('label="用人组织"');
+    expect(source).toContain("detail.hiringUnitName");
+  });
 });

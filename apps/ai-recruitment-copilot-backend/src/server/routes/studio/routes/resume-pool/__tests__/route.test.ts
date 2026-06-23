@@ -2,9 +2,20 @@ import { describe, expect, it } from "vitest";
 import { resumePoolImportInputSchema } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/schema";
 
 describe("resumePoolImportInputSchema", () => {
+  it("requires a hiring unit before importing into the resume library", () => {
+    const result = resumePoolImportInputSchema.safeParse({
+      dedupPolicy: "check",
+      jobDescriptionMode: "none",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("请选择入库组织");
+  });
+
   it("requires a job description id in bind mode", () => {
     const result = resumePoolImportInputSchema.safeParse({
       dedupPolicy: "check",
+      hiringUnitId: "hu_resume_pool_import",
       jobDescriptionId: null,
       jobDescriptionMode: "bind",
     });
@@ -16,10 +27,12 @@ describe("resumePoolImportInputSchema", () => {
   it("normalizes jobDescriptionId to null in none mode", () => {
     const result = resumePoolImportInputSchema.parse({
       dedupPolicy: "force",
+      hiringUnitId: "hu_resume_pool_import",
       jobDescriptionId: "jd_should_be_ignored",
       jobDescriptionMode: "none",
     });
 
+    expect(result.hiringUnitId).toBe("hu_resume_pool_import");
     expect(result.jobDescriptionId).toBeNull();
   });
 });

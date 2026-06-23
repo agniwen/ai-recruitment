@@ -129,6 +129,7 @@ export const relations = defineRelations(schema, (r) => ({
       to: r.organization.id,
     }),
     recruitingGroupLinks: r.many.recruitingGroupHiringUnit(),
+    resumeRecords: r.many.studioInterview(),
     user: r.one.user({
       from: r.hiringUnit.createdBy,
       to: r.user.id,
@@ -458,6 +459,10 @@ export const relations = defineRelations(schema, (r) => ({
     candidateFormSubmissions: r.many.candidateFormSubmission(),
     conversationTurns: r.many.interviewConversationTurn(),
     conversations: r.many.interviewConversation(),
+    hiringUnit: r.one.hiringUnit({
+      from: r.studioInterview.hiringUnitId,
+      to: r.hiringUnit.id,
+    }),
     humanInterviewRounds: r.many.studioHumanInterviewRound(),
     jobDescription: r.one.jobDescription({
       from: r.studioInterview.jobDescriptionId,

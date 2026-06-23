@@ -11,6 +11,7 @@ export interface CreateResumeRecordFromStorageInput {
   candidateName: string | null;
   candidatePhone: string | null;
   contentHash: string | null;
+  hiringUnitId?: string | null;
   interviewQuestions?: InterviewQuestion[];
   jobDescriptionId: string | null;
   notes: string | null;
@@ -51,6 +52,7 @@ export async function createResumeRecordFromStorage(
       candidatePhone,
       createdAt: now,
       createdBy: input.userId,
+      hiringUnitId: input.hiringUnitId ?? null,
       id: recordId,
       interviewQuestions: input.interviewQuestions ?? [],
       jobDescriptionId: input.jobDescriptionId,

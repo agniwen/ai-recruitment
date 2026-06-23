@@ -383,6 +383,8 @@ export const studioInterview = pgTable(
     closedReason: text("closed_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
+    hiringUnitId: text("hiring_unit_id").references(() => hiringUnit.id, { onDelete: "set null" }),
     // ⚠️ DEPRECATED — 真人复面信息现在落到 studioHumanInterviewRound 子表（多轮 + 多面试官）。
     // 这两列留着兜底但应用层不再写入。
     // Superseded by studioHumanInterviewRound subtable; not written anymore.
@@ -473,6 +475,7 @@ export const studioInterview = pgTable(
     index("studio_interview_stage_outcome_idx").on(table.pipelineStage, table.outcome),
     index("studio_interview_created_at_idx").on(table.createdAt),
     index("studio_interview_created_by_idx").on(table.createdBy),
+    index("studio_interview_hiring_unit_idx").on(table.hiringUnitId),
     index("studio_interview_job_description_idx").on(table.jobDescriptionId),
     index("studio_interview_organization_idx").on(table.organizationId),
     index("studio_interview_org_created_at_idx").on(table.organizationId, table.createdAt),

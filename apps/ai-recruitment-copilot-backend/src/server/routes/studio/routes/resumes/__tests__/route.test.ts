@@ -102,10 +102,27 @@ describe("resume detail DTO", () => {
 });
 
 describe("resume PATCH form parsing", () => {
+  it("requires a hiring unit when editing resume library records", () => {
+    const formData = new FormData();
+    formData.set("candidateName", "候选人");
+    formData.set("candidateEmail", "candidate@example.com");
+    formData.set("candidatePhone", "13800138000");
+    formData.set("hiringUnitId", "   ");
+    formData.set("jobDescriptionId", "jd_1");
+    formData.set("notes", "备注");
+    formData.set("targetRole", "前端工程师");
+
+    const result = parseResumeLibraryEditFormInput(formData);
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("请选择用人组织");
+  });
+
   it("requires candidate name when editing resume library records", () => {
     const formData = new FormData();
     formData.set("candidateName", "   ");
     formData.set("candidateEmail", "candidate@example.com");
+    formData.set("hiringUnitId", "hu_route_resume");
     formData.set("candidatePhone", "13800138000");
     formData.set("jobDescriptionId", "jd_1");
     formData.set("notes", "备注");
@@ -115,6 +132,24 @@ describe("resume PATCH form parsing", () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe("请填写候选人姓名");
+  });
+
+  it("parses the selected hiring unit when editing resume library records", () => {
+    const formData = new FormData();
+    formData.set("candidateName", "候选人");
+    formData.set("candidateEmail", "candidate@example.com");
+    formData.set("candidatePhone", "13800138000");
+    formData.set("hiringUnitId", "hu_route_resume");
+    formData.set("jobDescriptionId", "jd_1");
+    formData.set("notes", "备注");
+    formData.set("targetRole", "前端工程师");
+
+    const result = parseResumeLibraryEditFormInput(formData);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.hiringUnitId).toBe("hu_route_resume");
+    }
   });
 });
 

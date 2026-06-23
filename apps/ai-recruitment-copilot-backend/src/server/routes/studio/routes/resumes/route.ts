@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
-import { studioInterview, studioInterviewSchedule } from "@arc/db-schema/schema";
+import { hiringUnit, studioInterview, studioInterviewSchedule } from "@arc/db-schema/schema";
 import { parseCsvParam } from "@arc/shared/csv";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
@@ -60,6 +60,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/dedup";
 import { syncResumeProfileIdentity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/profile-sync";
 import { createPptxPreviewPdfResponse } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/pptx-preview";
+import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const dedupCheckInputSchema = z.object({
   email: z.string().trim().max(200).nullable().optional(),
@@ -112,10 +113,39 @@ function parseResumeLibraryFormData(
     candidateEmail: toNullableString(formData.get("candidateEmail")) ?? "",
     candidateName: toNullableString(formData.get("candidateName")) ?? "",
     candidatePhone: toNullableString(formData.get("candidatePhone")) ?? "",
+    hiringUnitId: toNullableString(formData.get("hiringUnitId")),
     jobDescriptionId: toNullableString(formData.get("jobDescriptionId")) ?? "",
     notes: toNullableString(formData.get("notes")) ?? "",
     targetRole: toNullableString(formData.get("targetRole")) ?? "",
   });
+}
+
+async function validateResumeHiringUnit({
+  actorUserId,
+  hiringUnitId,
+  organizationId,
+}: {
+  actorUserId: string;
+  hiringUnitId: string | null | undefined;
+  organizationId: string;
+}): Promise<string | null> {
+  if (!hiringUnitId) {
+    return null;
+  }
+  const [row] = await db
+    .select({ id: hiringUnit.id })
+    .from(hiringUnit)
+    .where(and(eq(hiringUnit.id, hiringUnitId), eq(hiringUnit.organizationId, organizationId)))
+    .limit(1);
+  if (!row) {
+    return "所选用人组织不存在。";
+  }
+
+  const scope = await resolveHiringUnitAccessScope({ actorUserId, organizationId });
+  if (scope.canAccessAll || scope.hiringUnitIds.includes(hiringUnitId)) {
+    return null;
+  }
+  return "所选用人组织不在当前招聘组负责范围内。";
 }
 
 export function parseResumeLibraryCreateFormInput(formData: FormData) {
@@ -501,6 +531,19 @@ export const resumeLibraryRouter = factory
           return c.json({ error: "所选在招岗位不存在。" }, 400);
         }
       }
+      if (input.data.hiringUnitId && !c.var.user) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+      if (input.data.hiringUnitId && c.var.user) {
+        const hiringUnitError = await validateResumeHiringUnit({
+          actorUserId: c.var.user.id,
+          hiringUnitId: input.data.hiringUnitId,
+          organizationId: activeOrg.id,
+        });
+        if (hiringUnitError) {
+          return c.json({ error: hiringUnitError }, 400);
+        }
+      }
 
       const uploadResult = await resolveResumeUploadStorage({
         organizationId: activeOrg.id,
@@ -541,6 +584,7 @@ export const resumeLibraryRouter = factory
         candidateName: input.data.candidateName || null,
         candidatePhone: input.data.candidatePhone || null,
         contentHash: resumeContentHash,
+        hiringUnitId: input.data.hiringUnitId,
         interviewQuestions: parsedResumePayload?.interviewQuestions ?? [],
         jobDescriptionId: input.data.jobDescriptionId || null,
         notes: input.data.notes || null,
@@ -613,6 +657,19 @@ export const resumeLibraryRouter = factory
           return c.json({ error: "所选在招岗位不存在。" }, 400);
         }
       }
+      if (input.data.hiringUnitId && !c.var.user) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+      if (input.data.hiringUnitId && c.var.user) {
+        const hiringUnitError = await validateResumeHiringUnit({
+          actorUserId: c.var.user.id,
+          hiringUnitId: input.data.hiringUnitId,
+          organizationId: activeOrg.id,
+        });
+        if (hiringUnitError) {
+          return c.json({ error: hiringUnitError }, 400);
+        }
+      }
 
       const uploadResult =
         resume && c.var.user
@@ -659,6 +716,7 @@ export const resumeLibraryRouter = factory
         candidateEmail: input.data.candidateEmail || null,
         candidateName: input.data.candidateName || resumeProfile?.name || existing.candidateName,
         candidatePhone: input.data.candidatePhone || resumeProfile?.phone || null,
+        hiringUnitId: input.data.hiringUnitId,
         jobDescriptionId: input.data.jobDescriptionId || null,
         notes: input.data.notes || null,
         targetRole: input.data.targetRole || resumeProfile?.targetRoles[0] || null,

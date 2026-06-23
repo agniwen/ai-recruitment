@@ -2,7 +2,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
-import { jobDescription } from "@arc/db-schema/schema";
+import { hiringUnit, jobDescription } from "@arc/db-schema/schema";
 import { and, eq } from "drizzle-orm";
 import {
   parseResumeFastToProfile,
@@ -10,6 +10,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
+import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import {
   normalizeResumeFile,
   storeInterviewResume,
@@ -50,6 +51,34 @@ function parseCreateFormData(formData: FormData) {
     scope: toNullableString(formData.get("scope")) ?? "private",
     targetRole: toNullableString(formData.get("targetRole")),
   });
+}
+
+async function validateImportHiringUnit({
+  actorUserId,
+  hiringUnitId,
+  organizationId,
+}: {
+  actorUserId: string;
+  hiringUnitId: string | null | undefined;
+  organizationId: string;
+}): Promise<string | null> {
+  if (!hiringUnitId) {
+    return null;
+  }
+  const [row] = await db
+    .select({ id: hiringUnit.id })
+    .from(hiringUnit)
+    .where(and(eq(hiringUnit.id, hiringUnitId), eq(hiringUnit.organizationId, organizationId)))
+    .limit(1);
+  if (!row) {
+    return "所选用人组织不存在。";
+  }
+
+  const scope = await resolveHiringUnitAccessScope({ actorUserId, organizationId });
+  if (scope.canAccessAll || scope.hiringUnitIds.includes(hiringUnitId)) {
+    return null;
+  }
+  return "所选用人组织不在当前招聘组负责范围内。";
 }
 
 export const resumePoolRouter = factory
@@ -266,9 +295,18 @@ export const resumePoolRouter = factory
           return c.json({ error: "所选在招岗位不存在。" }, 400);
         }
       }
+      const hiringUnitError = await validateImportHiringUnit({
+        actorUserId: user.id,
+        hiringUnitId: input.hiringUnitId,
+        organizationId: activeOrg.id,
+      });
+      if (hiringUnitError) {
+        return c.json({ error: hiringUnitError }, 400);
+      }
       try {
         const result = await importPoolItemToResumeLibrary({
           dedupPolicy: input.dedupPolicy,
+          hiringUnitId: input.hiringUnitId ?? null,
           importedBy: user.id,
           jobDescriptionId: input.jobDescriptionId,
           organizationId: activeOrg.id,

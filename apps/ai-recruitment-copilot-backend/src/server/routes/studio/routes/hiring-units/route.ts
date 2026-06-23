@@ -9,6 +9,7 @@ import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/mi
 import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import {
   listAllHiringUnits,
+  listSelectableHiringUnits,
   loadHiringUnitById,
   queryPaginatedHiringUnits,
   serializeHiringUnit,
@@ -52,6 +53,17 @@ export const hiringUnitsRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const records = await listAllHiringUnits(activeOrg.id);
+    return c.json({ records }, 200);
+  })
+  .get("/selectable", requirePermission("hiringUnit", "read"), async (c) => {
+    const { activeOrg } = c.var;
+    if (!activeOrg) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const records = await listSelectableHiringUnits({
+      actorUserId: c.var.user?.id,
+      organizationId: activeOrg.id,
+    });
     return c.json({ records }, 200);
   })
   .post(

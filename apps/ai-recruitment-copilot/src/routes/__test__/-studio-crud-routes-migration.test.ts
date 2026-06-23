@@ -73,4 +73,21 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(hiringUnitSelectSource).not.toMatch(/负责 \$\{count\} 个用人组织/u);
     expect(hiringUnitSelectSource).not.toContain("showBadges");
   });
+
+  it("prompts for selectable hiring unit before importing resume pool items", () => {
+    const resumePoolSource = readSource("routes/w.$slug.studio.resume-pool.tsx");
+    const importDialogIndex = resumePoolSource.indexOf("function ImportResumePoolDialog");
+    const importDialogSource = resumePoolSource.slice(importDialogIndex, importDialogIndex + 7000);
+    const jobDescriptionIndex = importDialogSource.indexOf("<FieldLabel>关联岗位</FieldLabel>");
+    const hiringUnitIndex = importDialogSource.indexOf('htmlFor="resume-pool-import-hiring-unit"');
+
+    expect(resumePoolSource).toContain('["hiring-units"].selectable.$get');
+    expect(importDialogSource).toContain("入库组织");
+    expect(importDialogSource).not.toContain("入库组织（可选）");
+    expect(jobDescriptionIndex).toBeGreaterThanOrEqual(0);
+    expect(hiringUnitIndex).toBeGreaterThanOrEqual(0);
+    expect(jobDescriptionIndex).toBeLessThan(hiringUnitIndex);
+    expect(importDialogSource).toContain("hiringUnitInvalid");
+    expect(resumePoolSource).toContain("hiringUnitId,");
+  });
 });

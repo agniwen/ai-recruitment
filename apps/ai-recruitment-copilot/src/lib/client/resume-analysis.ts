@@ -177,6 +177,7 @@ export function formValuesFromResumeProfile(
     candidateEmail: resumeProfile.email ?? "",
     candidateName: resumeProfile.name || "未命名候选人",
     candidatePhone: resumeProfile.phone ?? "",
+    hiringUnitId: null,
     jobDescriptionId: "",
     notes: "",
     targetRole: resumeProfile.targetRoles[0] ?? "",
@@ -188,6 +189,7 @@ function appendCandidateFields(fd: FormData, value: ResumeLibraryFormValues) {
   fd.append("candidateName", value.candidateName);
   fd.append("candidateEmail", value.candidateEmail);
   fd.append("candidatePhone", value.candidatePhone);
+  fd.append("hiringUnitId", value.hiringUnitId ?? "");
   fd.append("targetRole", value.targetRole);
   fd.append("jobDescriptionId", value.jobDescriptionId);
   fd.append("notes", value.notes);

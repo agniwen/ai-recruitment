@@ -19,6 +19,7 @@ export const resumePoolCreateSchema = z.object({
 
 export const resumePoolImportSchema = z.object({
   dedupPolicy: z.enum(["check", "force"]).default("check"),
+  hiringUnitId: z.preprocess((value) => value ?? "", z.string().trim().min(1, "请选择入库组织")),
   jobDescriptionId: z.string().trim().min(1).nullable().optional(),
   jobDescriptionMode: z.enum(["none", "bind"]).default("none"),
 });

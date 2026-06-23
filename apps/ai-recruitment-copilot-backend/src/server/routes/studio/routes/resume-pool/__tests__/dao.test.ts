@@ -4,6 +4,7 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   mailIngestAccount,
   mailIngestMessage,
+  hiringUnit,
   member,
   organization,
   resumePoolImport,
@@ -42,6 +43,7 @@ const ORG_A = "resume_pool_org_a";
 const ORG_B = "resume_pool_org_b";
 const USER_A = "resume_pool_user_a";
 const USER_B = "resume_pool_user_b";
+const HIRING_UNIT_A = "resume_pool_hiring_unit_a";
 const NOW = new Date("2026-06-14T09:00:00.000Z");
 
 const PROFILE: ResumeProfile = {
@@ -107,6 +109,7 @@ async function cleanup() {
   await db.delete(resumePoolItem).where(eq(resumePoolItem.organizationId, ORG_B));
   await db.delete(studioInterview).where(eq(studioInterview.organizationId, ORG_A));
   await db.delete(studioInterview).where(eq(studioInterview.organizationId, ORG_B));
+  await db.delete(hiringUnit).where(eq(hiringUnit.organizationId, ORG_A));
   await db.delete(member).where(eq(member.userId, USER_A));
   await db.delete(member).where(eq(member.userId, USER_B));
   await db.delete(organization).where(eq(organization.id, ORG_A));
@@ -155,6 +158,13 @@ beforeAll(async () => {
       userId: USER_B,
     },
   ]);
+  await db.insert(hiringUnit).values({
+    createdAt: NOW,
+    id: HIRING_UNIT_A,
+    name: "华东事业部",
+    organizationId: ORG_A,
+    updatedAt: NOW,
+  });
 });
 
 afterAll(cleanup);
@@ -273,6 +283,35 @@ describe("queryResumePoolItems", () => {
     expect(detail?.uploaderOrganizationName).toBe("Resume Pool Org A");
     expect(detail?.uploaderName).toBe("resume-pool-a");
     expect(detail?.uploaderEmail).toBe("resume-pool-a@example.com");
+  });
+
+  it("stores selected hiring unit when importing into the resume library", async () => {
+    const poolItemId = await createResumePoolItem(
+      basePoolInput({
+        contentHash: "hash-resume-pool-import-hiring-unit",
+        resumeFileName: "candidate-import-hiring-unit.pdf",
+      }),
+    );
+
+    const result = await importPoolItemToResumeLibrary({
+      dedupPolicy: "force",
+      hiringUnitId: HIRING_UNIT_A,
+      importedBy: USER_A,
+      jobDescriptionId: null,
+      organizationId: ORG_A,
+      poolItemId,
+    });
+
+    if (result.status !== "imported") {
+      throw new Error("expected import success");
+    }
+    const [record] = await db
+      .select({ hiringUnitId: studioInterview.hiringUnitId })
+      .from(studioInterview)
+      .where(eq(studioInterview.id, result.resumeRecordId))
+      .limit(1);
+
+    expect(record?.hiringUnitId).toBe(HIRING_UNIT_A);
   });
 
   it("marks pool items created from mail ingest as email push source", async () => {
@@ -404,6 +443,7 @@ describe("importPoolItemToResumeLibrary", () => {
 
     const result = await importPoolItemToResumeLibrary({
       dedupPolicy: "check",
+      hiringUnitId: null,
       importedBy: USER_B,
       jobDescriptionId: null,
       organizationId: ORG_B,
@@ -441,6 +481,7 @@ describe("importPoolItemToResumeLibrary", () => {
 
     const result = await importPoolItemToResumeLibrary({
       dedupPolicy: "force",
+      hiringUnitId: null,
       importedBy: USER_B,
       jobDescriptionId: null,
       organizationId: ORG_B,
@@ -479,6 +520,7 @@ describe("importPoolItemToResumeLibrary", () => {
     await expect(
       importPoolItemToResumeLibrary({
         dedupPolicy: "force",
+        hiringUnitId: null,
         importedBy: USER_B,
         jobDescriptionId: null,
         organizationId: ORG_A,
@@ -493,6 +535,7 @@ describe("deleteOwnPoolItem", () => {
     const privateId = await createResumePoolItem(basePoolInput());
     const imported = await importPoolItemToResumeLibrary({
       dedupPolicy: "force",
+      hiringUnitId: null,
       importedBy: USER_A,
       jobDescriptionId: null,
       organizationId: ORG_A,

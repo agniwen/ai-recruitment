@@ -89,9 +89,10 @@ export function ResumeOverviewPanel({ detail }: { detail: ResumeLibraryDetail })
           </div>
         </div>
 
-        <dl className="grid gap-x-8 gap-y-4 md:grid-cols-3">
+        <dl className="grid gap-x-8 gap-y-4 md:grid-cols-4">
           <SummaryItem label="目标岗位" value={detail.targetRole} />
           <SummaryItem label="关联岗位" value={detail.jobDescriptionName} />
+          <SummaryItem label="用人组织" value={detail.hiringUnitName} />
           <SummaryItem label="工作年限" value={detail.resumeProfile?.workYears ?? null} />
         </dl>
 

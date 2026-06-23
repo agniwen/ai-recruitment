@@ -1,5 +1,5 @@
 import type { HiringUnitListRecord, HiringUnitRecord } from "@arc/shared/hiring-units";
-import { and, asc, count, eq, ilike, or } from "drizzle-orm";
+import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -13,6 +13,7 @@ import type {
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
 import { hiringUnit } from "@arc/db-schema/schema";
+import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const hiringUnitListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
@@ -157,6 +158,33 @@ export async function listAllHiringUnits(organizationId: string): Promise<Hiring
     .select()
     .from(hiringUnit)
     .where(eq(hiringUnit.organizationId, organizationId))
+    .orderBy(asc(hiringUnit.name));
+  return rows.map((row) => serializeHiringUnit(row));
+}
+
+export async function listSelectableHiringUnits({
+  actorUserId,
+  organizationId,
+}: {
+  actorUserId: string | null | undefined;
+  organizationId: string;
+}): Promise<HiringUnitRecord[]> {
+  const scope = await resolveHiringUnitAccessScope({ actorUserId, organizationId });
+  if (scope.canAccessAll) {
+    return listAllHiringUnits(organizationId);
+  }
+  if (scope.hiringUnitIds.length === 0) {
+    return [];
+  }
+  const rows = await db
+    .select()
+    .from(hiringUnit)
+    .where(
+      and(
+        eq(hiringUnit.organizationId, organizationId),
+        inArray(hiringUnit.id, scope.hiringUnitIds),
+      ),
+    )
     .orderBy(asc(hiringUnit.name));
   return rows.map((row) => serializeHiringUnit(row));
 }

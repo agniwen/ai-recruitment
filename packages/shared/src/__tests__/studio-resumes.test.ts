@@ -34,6 +34,20 @@ describe("resumeLibraryFormSchema", () => {
 });
 
 describe("resumeLibraryEditFormSchema", () => {
+  it("requires a hiring unit when editing a resume record", () => {
+    const result = resumeLibraryEditFormSchema.safeParse({
+      ...createResumeLibraryFormValues(),
+      candidateName: "郭靖",
+      hiringUnitId: null,
+      jobDescriptionId: "jd_1",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("请选择用人组织");
+    }
+  });
+
   it("requires candidate name when editing a resume record", () => {
     const result = resumeLibraryEditFormSchema.safeParse({
       ...createResumeLibraryFormValues(),

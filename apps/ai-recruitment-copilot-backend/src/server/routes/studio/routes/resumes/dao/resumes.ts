@@ -12,6 +12,7 @@ import { intersectRequestedCreatorIds } from "@arc/ai-recruitment-copilot-backen
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import {
   department,
+  hiringUnit,
   interviewConversation,
   jobDescription,
   studioHumanInterviewRound,
@@ -163,6 +164,8 @@ const SELECTED_COLUMNS = {
   creatorImage: user.image,
   creatorName: user.name,
   creatorOrganizationName: user.feishuTenantName,
+  hiringUnitId: studioInterview.hiringUnitId,
+  hiringUnitName: hiringUnit.name,
   humanInterviewScheduledAt: studioInterview.humanInterviewScheduledAt,
   humanInterviewerId: studioInterview.humanInterviewerId,
   id: studioInterview.id,
@@ -205,6 +208,13 @@ function selectRows({
     .select(SELECTED_COLUMNS)
     .from(studioInterview)
     .leftJoin(user, eq(studioInterview.createdBy, user.id))
+    .leftJoin(
+      hiringUnit,
+      and(
+        eq(studioInterview.hiringUnitId, hiringUnit.id),
+        eq(hiringUnit.organizationId, studioInterview.organizationId),
+      ),
+    )
     .leftJoin(
       jobDescription,
       and(
@@ -457,6 +467,8 @@ function toRecord(row: Row, derived?: ResumeDerivedFields): ResumeLibraryListRec
     creatorOrganizationName: row.creatorOrganizationName,
     hasInterviewRounds: resolvedDerived.hasInterviewRounds,
     hasResumeFile: Boolean(row.resumeStorageKey),
+    hiringUnitId: row.hiringUnitId,
+    hiringUnitName: row.hiringUnitName,
     humanInterviewScheduledAt: serializeDate(row.humanInterviewScheduledAt),
     humanInterviewerId: row.humanInterviewerId,
     id: row.id,
@@ -580,6 +592,13 @@ export async function loadResumeDetail(
     })
     .from(studioInterview)
     .leftJoin(user, eq(studioInterview.createdBy, user.id))
+    .leftJoin(
+      hiringUnit,
+      and(
+        eq(studioInterview.hiringUnitId, hiringUnit.id),
+        eq(hiringUnit.organizationId, studioInterview.organizationId),
+      ),
+    )
     .leftJoin(
       jobDescription,
       and(

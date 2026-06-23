@@ -524,13 +524,37 @@ function ImportResumePoolDialog({
 }) {
   const slug = useWorkspaceSlug();
   const { data: jobDescriptions = [] } = useJobDescriptions(slug);
+  const { data: hiringUnits = [] } = useQuery({
+    enabled: item !== null,
+    queryFn: async () => {
+      const response = await rpc.api.w[":slug"].studio["hiring-units"].selectable.$get({
+        param: { slug },
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { records: { id: string; name: string }[] }
+        | { error?: string; message?: string }
+        | null;
+      if (!response.ok || !payload || !("records" in payload)) {
+        throw new Error("加载可选用人组织失败");
+      }
+      return payload.records;
+    },
+    queryKey: ["hiring-units", slug, "selectable"],
+    refetchOnWindowFocus: false,
+  });
+  const hiringUnitOptions = useMemo(
+    () => hiringUnits.map((unit) => ({ label: unit.name, value: unit.id })),
+    [hiringUnits],
+  );
   const [mode, setMode] = useState<"none" | "bind">("none");
+  const [hiringUnitId, setHiringUnitId] = useState("");
   const [jobDescriptionId, setJobDescriptionId] = useState("");
   const [duplicates, setDuplicates] = useState<ResumePoolImportDuplicateResult | null>(null);
 
   useEffect(() => {
     if (!item) {
       setMode("none");
+      setHiringUnitId("");
       setJobDescriptionId("");
       setDuplicates(null);
       return;
@@ -540,6 +564,7 @@ function ImportResumePoolDialog({
       item.jobDescriptionId &&
       jobDescriptions.some((jd) => jd.id === item.jobDescriptionId);
     setMode(canUseSourceJd ? "bind" : "none");
+    setHiringUnitId("");
     setJobDescriptionId(canUseSourceJd ? (item.jobDescriptionId ?? "") : "");
     setDuplicates(null);
   }, [item, jobDescriptions]);
@@ -549,8 +574,12 @@ function ImportResumePoolDialog({
       if (!item) {
         throw new Error("请选择要入库的简历");
       }
+      if (!hiringUnitId) {
+        throw new Error("请选择入库组织");
+      }
       return await importResumePoolItem(slug, item.id, {
         dedupPolicy,
+        hiringUnitId,
         jobDescriptionId: mode === "bind" ? jobDescriptionId : null,
         jobDescriptionMode: mode,
       });
@@ -577,6 +606,7 @@ function ImportResumePoolDialog({
   });
 
   const bindInvalid = mode === "bind" && !jobDescriptionId;
+  const hiringUnitInvalid = !hiringUnitId;
   const { isPending } = mutation;
 
   return (
@@ -588,7 +618,10 @@ function ImportResumePoolDialog({
             <Button disabled={isPending} onClick={() => onOpenChange(false)} variant="outline">
               取消
             </Button>
-            <Button disabled={isPending || bindInvalid} onClick={() => mutation.mutate("check")}>
+            <Button
+              disabled={isPending || bindInvalid || hiringUnitInvalid}
+              onClick={() => mutation.mutate("check")}
+            >
               {isPending ? (
                 <LoaderCircleIcon className="size-4 animate-spin" />
               ) : (
@@ -647,6 +680,27 @@ function ImportResumePoolDialog({
               </FieldContent>
             </Field>
           ) : null}
+          <Field data-invalid={hiringUnitInvalid ? true : undefined}>
+            <FieldLabel htmlFor="resume-pool-import-hiring-unit">
+              入库组织
+              <span aria-hidden className="ml-1 text-destructive">
+                *
+              </span>
+            </FieldLabel>
+            <FieldContent>
+              <SearchableSelect
+                disabled={isPending}
+                emptyMessage="暂无可选用人组织"
+                id="resume-pool-import-hiring-unit"
+                invalid={hiringUnitInvalid}
+                onChange={(next) => setHiringUnitId(next ?? "")}
+                options={hiringUnitOptions}
+                placeholder="请选择入库组织"
+                searchPlaceholder="搜索用人组织..."
+                value={hiringUnitId || null}
+              />
+            </FieldContent>
+          </Field>
         </div>
       </Modal>
       <AlertDialog onOpenChange={(open) => !open && setDuplicates(null)} open={duplicates !== null}>

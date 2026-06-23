@@ -83,6 +83,7 @@ export interface PublishPrivatePoolItemInput {
 
 export interface ImportPoolItemInput {
   dedupPolicy: "check" | "force";
+  hiringUnitId: string | null;
   importedBy: string;
   jobDescriptionId: string | null;
   organizationId: string;
@@ -587,6 +588,7 @@ export async function importPoolItemToResumeLibrary(
         candidateName: poolItem.candidateName,
         candidatePhone: poolItem.candidatePhone,
         contentHash: poolItem.resumeContentHash,
+        hiringUnitId: input.hiringUnitId,
         jobDescriptionId: input.jobDescriptionId,
         notes: poolItem.notes,
         organizationId: input.organizationId,

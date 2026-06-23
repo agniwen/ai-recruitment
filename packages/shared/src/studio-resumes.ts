@@ -103,6 +103,8 @@ export interface ResumeLibraryListRecord {
   resumeParseError: string | null;
   resumeParseStatus: ResumeParseStatus;
   hasResumeFile: boolean;
+  hiringUnitId: string | null;
+  hiringUnitName: string | null;
   // 是否已存在至少一个 AI 面试轮次（studioInterviewSchedule）。
   // Whether this candidate already has at least one AI interview round.
   hasInterviewRounds: boolean;
@@ -391,6 +393,26 @@ export interface CandidateTimelineResponse {
  * `candidateName` may be empty — the server falls back to the parsed profile
  * name (and finally "未命名候选人" if the resume has no name either).
  */
+const resumeLibraryOptionalHiringUnitIdSchema = z
+  .string()
+  .trim()
+  .nullable()
+  .transform((value) => (value && value.length > 0 ? value : null));
+
+const resumeLibraryRequiredHiringUnitIdSchema = z
+  .string()
+  .trim()
+  .nullable()
+  .superRefine((value, ctx) => {
+    if (!value || value.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "请选择用人组织",
+      });
+    }
+  })
+  .transform((value) => value ?? "");
+
 export const resumeLibraryFormSchema = z.object({
   candidateEmail: z
     .string()
@@ -401,6 +423,7 @@ export const resumeLibraryFormSchema = z.object({
     }),
   candidateName: z.string().trim().max(120, "候选人姓名不能超过 120 个字符"),
   candidatePhone: z.string().trim().max(40, "联系电话不能超过 40 个字符"),
+  hiringUnitId: resumeLibraryOptionalHiringUnitIdSchema,
   jobDescriptionId: z.string().trim().min(1, "请选择关联在招岗位").max(100, "关联在招岗位无效"),
   notes: z.string().trim().max(2000, "备注不能超过 2000 字"),
   targetRole: z.string().trim().max(120, "目标岗位不能超过 120 个字符"),
@@ -412,6 +435,7 @@ export const resumeLibraryEditFormSchema = resumeLibraryFormSchema.extend({
     .trim()
     .min(1, "请填写候选人姓名")
     .max(120, "候选人姓名不能超过 120 个字符"),
+  hiringUnitId: resumeLibraryRequiredHiringUnitIdSchema,
 });
 
 export type ResumeLibraryFormValues = z.infer<typeof resumeLibraryFormSchema>;
@@ -421,6 +445,7 @@ export function createResumeLibraryFormValues(): ResumeLibraryFormValues {
     candidateEmail: "",
     candidateName: "",
     candidatePhone: "",
+    hiringUnitId: null,
     jobDescriptionId: "",
     notes: "",
     targetRole: "",
