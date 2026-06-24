@@ -112,6 +112,35 @@ const JD_ALLOWED = "bulk_proc_jd_allowed";
 const JD_BLOCKED = "bulk_proc_jd_blocked";
 
 const NOW = new Date("2026-05-18T10:00:00.000Z");
+const REVIEW_RESULT = {
+  review: "自动生成的简历评价",
+  structuredReview: {
+    biasScan: { items: [] },
+    dimensions: {
+      impactAndResults: { rationale: "有交付结果", score: 80 },
+      roleRelevance: { rationale: "岗位相关", score: 80 },
+      signalCredibility: { rationale: "待核实", score: 70 },
+      structureReadability: { rationale: "结构清晰", score: 80 },
+      technicalDepth: { rationale: "技术匹配", score: 80 },
+    },
+    levelRecommendation: { level: "中级", rationale: "经验匹配" },
+    nextStep: {
+      action: "interview",
+      disclaimer: "以上为初步结论",
+      interviewFocus: ["项目贡献"],
+      rationale: "建议面试核实",
+    },
+    overall: {
+      conclusion: "候选人匹配度较高。",
+      score: 80,
+      scoreRationale: "岗位相关性较强。",
+    },
+    schemaVersion: 1,
+    strengths: [{ evidence: "简历证据", impact: "匹配岗位", point: "经验匹配" }],
+    teamPositioning: { rationale: "经历集中", suggestion: "业务团队" },
+    weaknesses: [{ evidence: null, impact: "需面试确认", point: "细节不足" }],
+  },
+} as const;
 
 // ─── Mock helpers ─────────────────────────────────────────────────────────────
 
@@ -284,7 +313,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  (generateResumeReview as ReturnType<typeof vi.fn>).mockResolvedValue("自动生成的简历评价");
+  (generateResumeReview as ReturnType<typeof vi.fn>).mockResolvedValue(REVIEW_RESULT);
   (findSemanticResumeDuplicates as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   (enqueueResumeSemanticIndexJobBestEffort as ReturnType<typeof vi.fn>).mockImplementation(() =>
     Promise.resolve(),

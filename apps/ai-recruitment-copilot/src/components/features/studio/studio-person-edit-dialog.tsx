@@ -1,6 +1,7 @@
 "use client";
 
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
+import type { ResumeReview } from "@arc/shared/resume-review";
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { useStore, useForm } from "@tanstack/react-form";
@@ -218,6 +219,7 @@ function ResumeEditBody({
 }: Omit<StudioPersonEditDialogProps, "mode">) {
   const slug = useWorkspaceSlug();
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeReviewOverride, setResumeReviewOverride] = useState<ResumeReview | null>(null);
   const [hydratedFormKey, setHydratedFormKey] = useState<string | null>(null);
 
   // 拉取当前记录详情，open + recordId 同时为真才触发。
@@ -263,6 +265,9 @@ function ResumeEditBody({
       if (resumeFile) {
         formData.append("resume", resumeFile);
       }
+      if (resumeReviewOverride) {
+        formData.append("resumeReview", JSON.stringify(resumeReviewOverride));
+      }
 
       try {
         await apiFetch<ResumeLibraryDetail>(`/api/w/${slug}/studio/resumes/${recordId}`, {
@@ -273,6 +278,7 @@ function ResumeEditBody({
         onUpdated?.();
         onOpenChange(false);
         setResumeFile(null);
+        setResumeReviewOverride(null);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "保存失败");
       }
@@ -290,7 +296,10 @@ function ResumeEditBody({
     regenerate: regenerateReview,
   } = useResumeReviewRegeneration({
     onDraftChange: (review) => form.setFieldValue("notes", review),
-    onGenerated: (review) => form.setFieldValue("notes", review),
+    onGenerated: (result) => {
+      form.setFieldValue("notes", result.review);
+      setResumeReviewOverride(result.structuredReview);
+    },
   });
 
   // 详情加载完成后回填表单；query.data 引用变更即触发。
@@ -299,11 +308,13 @@ function ResumeEditBody({
     if (!query.data) {
       form.reset(formDefaultValues);
       setHydratedFormKey(null);
+      setResumeReviewOverride(null);
       return;
     }
     const nextHydratedFormKey = `${query.data.id}:${query.data.updatedAt}`;
     form.reset(formDefaultValues);
     setHydratedFormKey(nextHydratedFormKey);
+    setResumeReviewOverride(null);
     // form 实例在渲染间稳定，此处仅依赖 query.data 的引用变化。
     // form instance is stable across renders; only depend on query.data identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -336,6 +347,7 @@ function ResumeEditBody({
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
       cancelReviewGeneration();
+      setResumeReviewOverride(null);
     }
     onOpenChange(nextOpen);
   }

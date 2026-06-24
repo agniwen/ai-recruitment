@@ -22,6 +22,19 @@ describe("StudioPersonDetailPanel visual density", () => {
     expect(overviewSource).not.toContain("rounded-2xl border border-border bg-background p-5");
   });
 
+  it("renders resume AI parsing in its own tab instead of the overview", () => {
+    const overviewSource = sourceBetween('<TabsContent value="overview">', "{/* 轮次概览");
+    const aiAnalysisSource = sourceBetween(
+      '<TabsContent value="ai-analysis">',
+      '<TabsContent value="reports">',
+    );
+
+    expect(source).toContain('value="ai-analysis"');
+    expect(source).toContain("AI 解析");
+    expect(overviewSource).not.toContain("<ResumeReviewStructuredView");
+    expect(aiAnalysisSource).toContain("<ResumeReviewStructuredView");
+  });
+
   it("keeps tab panels lightweight across reports, questions, experience, and rounds", () => {
     const reportsSource = sourceBetween(
       '<TabsContent value="reports">',
