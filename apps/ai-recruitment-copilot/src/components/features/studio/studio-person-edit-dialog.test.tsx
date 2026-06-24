@@ -77,6 +77,7 @@ function makeDetail(): ResumeLibraryDetail {
     outcome: "in_pipeline",
     pipelineStage: "screening",
     resumeContentHash: "hash",
+    resumeEvaluationStatus: null,
     resumeFileName: "resume.pdf",
     resumeParseError: null,
     resumeParseStatus: "ready",
