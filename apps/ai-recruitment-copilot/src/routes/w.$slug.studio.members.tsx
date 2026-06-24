@@ -165,6 +165,7 @@ const EMPTY_RECRUITING_GROUPS: RecruitingGroupRow[] = [];
 const WORKSPACE_ROLE_BADGE_VARIANT: Record<WorkspaceRole, "default" | "secondary" | "outline"> = {
   admin: "secondary",
   member: "outline",
+  noAccess: "outline",
   owner: "default",
 };
 
@@ -181,9 +182,9 @@ function buildAssignableWorkspaceRoles(
 ): readonly string[] {
   let builtInRoles: string[] = [];
   if (currentRole === "owner") {
-    builtInRoles = ["admin", "member"];
+    builtInRoles = ["admin", "member", "noAccess"];
   } else if (currentRole === "admin") {
-    builtInRoles = ["member"];
+    builtInRoles = ["member", "noAccess"];
   }
   return [...builtInRoles, ...dynamicRoles.map((role) => role.role)].filter(
     (role, index, list) => list.indexOf(role) === index,
@@ -1369,7 +1370,7 @@ function MembersManagementPage() {
                   <PendingInvitationsButton organizationId={org?.id ?? null} />
                 </PermissionGate>
                 <PermissionGate action="create" resource="invitation">
-                  <InviteLinksDialog />
+                  <InviteLinksDialog assignableRoles={assignableRoles} />
                   <InviteDialog
                     assignableRoles={assignableRoles}
                     trigger={
