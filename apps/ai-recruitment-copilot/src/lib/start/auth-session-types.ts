@@ -75,3 +75,20 @@ export type WorkspaceAccessState =
         slug: string;
       };
     };
+
+export type ResumeReviewAccessState =
+  | { status: "unauthenticated" }
+  | { status: "not_found" }
+  | {
+      member: {
+        role: string;
+      };
+      status: "ready";
+      user: {
+        id: string;
+      };
+      workspace: {
+        id: string;
+        slug: string;
+      };
+    };

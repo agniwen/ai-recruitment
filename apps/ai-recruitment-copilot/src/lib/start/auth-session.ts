@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type {
   ActiveOrganizationState,
   NoAccessWaitState,
+  ResumeReviewAccessState,
   StudioPageAccessState,
   WorkspaceAccessState,
   WorkspaceSelectionState,
@@ -11,6 +12,7 @@ import {
   getActiveOrganizationStateFromRequest,
   getNoAccessWaitStateFromRequest,
   getWorkspaceSelectionStateFromRequest,
+  resolveResumeReviewAccessFromRequest,
   resolveStudioPageAccessFromRequest,
   resolveWorkspaceAccessFromRequest,
 } from "./auth-session.server";
@@ -38,6 +40,13 @@ export const getWorkspaceAccessState = createServerFn({ method: "GET" })
   .handler(
     async ({ data }): Promise<WorkspaceAccessState> =>
       await resolveWorkspaceAccessFromRequest(data.slug),
+  );
+
+export const getResumeReviewAccessState = createServerFn({ method: "GET" })
+  .validator(slugInputSchema)
+  .handler(
+    async ({ data }): Promise<ResumeReviewAccessState> =>
+      await resolveResumeReviewAccessFromRequest(data.slug),
   );
 
 export const getStudioPageAccessState = createServerFn({ method: "GET" })

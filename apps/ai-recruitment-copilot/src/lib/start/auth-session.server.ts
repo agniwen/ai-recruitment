@@ -4,6 +4,7 @@ import type { statement } from "@arc/shared/permissions";
 import type {
   ActiveOrganizationState,
   NoAccessWaitState,
+  ResumeReviewAccessState,
   StudioPageAccessState,
   StudioPagePermissionAction,
   WorkspaceAccessState,
@@ -318,6 +319,38 @@ export async function resolveWorkspaceAccessFromRequest(
   slug: string,
 ): Promise<WorkspaceAccessState> {
   return await resolveWorkspaceAccess(getRequestHeaders(), slug);
+}
+
+export async function resolveResumeReviewAccessFromRequest(
+  slug: string,
+): Promise<ResumeReviewAccessState> {
+  const requestHeaders = getRequestHeaders();
+  const session = await auth.api.getSession({ headers: requestHeaders });
+  if (!session?.user) {
+    return { status: "unauthenticated" };
+  }
+
+  const workspace = await db.query.organization.findFirst({
+    columns: {
+      id: true,
+      slug: true,
+    },
+    where: { slug },
+  });
+  if (!workspace) {
+    return { status: "not_found" };
+  }
+
+  return {
+    member: {
+      role: "authenticated-reviewer",
+    },
+    status: "ready",
+    user: {
+      id: session.user.id,
+    },
+    workspace,
+  };
 }
 
 export async function resolveStudioPageAccessFromRequest(

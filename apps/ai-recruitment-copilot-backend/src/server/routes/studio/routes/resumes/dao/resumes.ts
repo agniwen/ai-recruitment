@@ -633,7 +633,7 @@ export async function loadResumeDetail(
   };
 }
 
-export function loadResumeDetailForWorkspaceMember(
+export function loadResumeDetailForAuthenticatedReviewer(
   id: string,
   organizationId: string,
 ): Promise<ResumeLibraryDetail | null> {

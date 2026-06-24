@@ -216,13 +216,14 @@ describe("resume semantic index cleanup", () => {
 });
 
 describe("resume review detail route", () => {
-  it("exposes member-scoped review endpoints without relaxing the existing library detail route", () => {
+  it("exposes authenticated review endpoints without relaxing the existing library detail route", () => {
     expect(routeSource).toContain('"/:id/review"');
     expect(routeSource).toContain('"/:id/review/timeline"');
     expect(routeSource).toContain('"/:id/review/rounds"');
     expect(routeSource).toContain('"/:id/review/resume"');
     expect(routeSource).toContain('"/:id/review/evaluation"');
-    expect(routeSource).toContain("loadResumeDetailForWorkspaceMember");
+    expect(routeSource).toContain("loadResumeDetailForAuthenticatedReviewer");
+    expect(routeSource).not.toContain("loadResumeDetailForWorkspaceMember");
     expect(routeSource).toContain("submitResumeEvaluationOnce");
   });
 

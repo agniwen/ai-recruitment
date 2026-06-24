@@ -64,6 +64,14 @@ describe("TanStack Start studio resumes migration", () => {
     expect(source).not.toContain("同工作区成员可查看该候选人的简历详情并提交一次评估。");
   });
 
+  it("allows the review page for any authenticated user without workspace membership", () => {
+    const source = readSource("routes/resume-review.$slug.$recordId.tsx");
+
+    expect(source).toContain("getResumeReviewAccessState");
+    expect(source).not.toContain("getWorkspaceAccessState");
+    expect(source).not.toContain("NO_ACCESS_WORKSPACE_ROLE");
+  });
+
   it("keeps the review detail page on document scrolling instead of modal internal scrolling", () => {
     const source = readSource("components/features/studio/studio-person-detail-panel.tsx");
 

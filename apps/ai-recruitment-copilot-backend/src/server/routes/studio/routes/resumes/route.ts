@@ -29,7 +29,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import {
-  loadResumeDetailForWorkspaceMember,
+  loadResumeDetailForAuthenticatedReviewer,
   loadResumeDetail,
   queryPaginatedResumeRecords,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
@@ -334,7 +334,7 @@ export const resumeLibraryRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const record = await loadResumeDetailForWorkspaceMember(id, activeOrg.id);
+    const record = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
     if (!record) {
       return c.json({ error: "记录不存在。" }, 404);
     }
@@ -358,7 +358,7 @@ export const resumeLibraryRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const existing = await loadResumeDetailForWorkspaceMember(id, activeOrg.id);
+    const existing = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
     if (!existing) {
       return c.json({ error: "记录不存在。" }, 404);
     }
@@ -371,7 +371,7 @@ export const resumeLibraryRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const existing = await loadResumeDetailForWorkspaceMember(id, activeOrg.id);
+    const existing = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
     if (!existing) {
       return c.json({ error: "记录不存在。" }, 404);
     }
@@ -415,7 +415,7 @@ export const resumeLibraryRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const existing = await loadResumeDetailForWorkspaceMember(id, activeOrg.id);
+    const existing = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
     if (!existing) {
       return c.json({ error: "记录不存在。" }, 404);
     }
@@ -457,7 +457,7 @@ export const resumeLibraryRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const id = c.req.param("id");
-      const existing = await loadResumeDetailForWorkspaceMember(id, activeOrg.id);
+      const existing = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
       if (!existing) {
         return c.json({ error: "记录不存在。" }, 404);
       }
@@ -475,7 +475,7 @@ export const resumeLibraryRouter = factory
         return c.json({ error: "记录不存在。" }, 404);
       }
       invalidateStudioInterviewCaches(activeOrg.id);
-      const detail = await loadResumeDetailForWorkspaceMember(id, activeOrg.id);
+      const detail = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
       return c.json(detail, 200);
     },
   )

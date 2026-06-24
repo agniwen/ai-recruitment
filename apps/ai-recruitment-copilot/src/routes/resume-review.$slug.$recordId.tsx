@@ -6,7 +6,6 @@ import {
   useLoaderData,
   useParams,
 } from "@tanstack/react-router";
-import { NO_ACCESS_WORKSPACE_ROLE } from "@arc/shared/permissions";
 import type { ResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import { describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import { CircleCheckIcon, OctagonXIcon } from "@/components/icons/hugeicons";
@@ -15,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fetchStudioResumeReview, submitResumeReviewEvaluation } from "@/lib/client/api";
 import { WorkspaceSlugProvider, useWorkspaceSlug } from "@/lib/client/workspace-context";
-import { getWorkspaceAccessState } from "@/lib/start/auth-session";
+import { getResumeReviewAccessState } from "@/lib/start/auth-session";
 import { toast } from "sonner";
 
 function resumeReviewDetailQueryKey(slug: string, recordId: string) {
@@ -150,7 +149,7 @@ export const Route = createFileRoute("/resume-review/$slug/$recordId")({
       location: { pathname: string };
       params: { recordId: string; slug: string };
     };
-    const state = await getWorkspaceAccessState({ data: { slug: params.slug } });
+    const state = await getResumeReviewAccessState({ data: { slug: params.slug } });
     if (state.status === "unauthenticated") {
       throw redirect({
         href: `/login?callbackURL=${encodeURIComponent(location.pathname)}`,
@@ -158,9 +157,6 @@ export const Route = createFileRoute("/resume-review/$slug/$recordId")({
     }
     if (state.status === "not_found") {
       throw notFound();
-    }
-    if (state.member.role === NO_ACCESS_WORKSPACE_ROLE) {
-      throw redirect({ href: "/wait" });
     }
     return state;
   },

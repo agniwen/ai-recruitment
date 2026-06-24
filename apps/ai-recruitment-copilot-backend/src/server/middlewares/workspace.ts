@@ -22,6 +22,12 @@ const ACTIVE_MEMBER_COLUMNS = {
   userId: true,
 } as const;
 
+const RESUME_REVIEW_PATH_PATTERN = /\/studio\/resumes\/[^/]+\/review(?:\/|$)/u;
+
+function isAuthenticatedResumeReviewPath(path: string): boolean {
+  return RESUME_REVIEW_PATH_PATTERN.test(path);
+}
+
 async function pickDefaultOrgId(userId: string): Promise<string | null> {
   const row = await db.query.member.findFirst({
     columns: { organizationId: true },
@@ -42,14 +48,20 @@ export const workspaceMiddleware = factory.createMiddleware(async (c, next) => {
   // 2. session.activeOrganizationId (P3 之前的入口，后兼)
   // 3. 用户最早加入的 member 行 fallback
   const slug = c.req.param("slug");
+  const allowsAuthenticatedReview = Boolean(slug) && isAuthenticatedResumeReviewPath(c.req.path);
   let activeOrgId: string | null;
   if (slug) {
     const bySlug = await db.query.organization.findFirst({
-      columns: { id: true },
+      columns: ACTIVE_ORG_COLUMNS,
       where: { slug },
     });
     if (!bySlug) {
       return c.json({ message: "Workspace not found" }, 404);
+    }
+    if (allowsAuthenticatedReview) {
+      c.set("activeOrg", bySlug);
+      c.set("member", null);
+      return next();
     }
     activeOrgId = bySlug.id;
   } else {
