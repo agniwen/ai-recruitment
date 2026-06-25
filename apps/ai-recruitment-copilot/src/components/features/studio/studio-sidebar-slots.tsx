@@ -16,6 +16,7 @@ import {
   UserCircleIcon,
   UserCogIcon,
   UsersIcon,
+  WrenchIcon,
 } from "@/components/icons/hugeicons";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
@@ -33,7 +34,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useHasPermission } from "@/hooks/use-has-permission";
-import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import type { statement } from "@arc/shared/permissions";
 
 interface NavItem {
@@ -43,6 +44,7 @@ interface NavItem {
   title: string;
   /** 仅当 page action 通过 useHasPermission 时显示。 */
   action: (typeof statement)["page"][number];
+  adminOnly?: boolean;
   resource: "page";
 }
 
@@ -161,6 +163,14 @@ const navGroups: NavGroup[] = [
         title: "邮箱监听",
       },
       {
+        action: "agentDebug",
+        adminOnly: true,
+        icon: WrenchIcon,
+        path: "/studio/agent-debug",
+        resource: "page",
+        title: "Agent 调试",
+      },
+      {
         action: "permissions",
         icon: ShieldCheckIcon,
         path: "/studio/permissions",
@@ -182,8 +192,9 @@ const navGroups: NavGroup[] = [
 function SidebarNavItem({ item, active, href }: { item: NavItem; active: boolean; href: string }) {
   // Hook must be called unconditionally
   const allowed = useHasPermission(item.resource, item.action);
+  const memberRole = useWorkspaceMemberRole();
 
-  if (!allowed) {
+  if (!allowed || (item.adminOnly && memberRole !== "owner" && memberRole !== "admin")) {
     return null;
   }
 

@@ -50,6 +50,7 @@ import { Route as WSlugStudioGlobalConfigRouteImport } from './routes/w.$slug.st
 import { Route as WSlugStudioFormsRouteImport } from './routes/w.$slug.studio.forms'
 import { Route as WSlugStudioDepartmentsRouteImport } from './routes/w.$slug.studio.departments'
 import { Route as WSlugStudioDashboardRouteImport } from './routes/w.$slug.studio.dashboard'
+import { Route as WSlugStudioAgentDebugRouteImport } from './routes/w.$slug.studio.agent-debug'
 import { Route as WSlugChatSessionIdRouteImport } from './routes/w.$slug.chat.$sessionId'
 import { Route as WSlugStudioInterviewsRoundIdRouteImport } from './routes/w.$slug.studio.interviews.$roundId'
 
@@ -265,6 +266,11 @@ const WSlugStudioDashboardRoute = WSlugStudioDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
+const WSlugStudioAgentDebugRoute = WSlugStudioAgentDebugRouteImport.update({
+  id: '/agent-debug',
+  path: '/agent-debug',
+  getParentRoute: () => WSlugStudioRoute,
+} as any)
 const WSlugChatSessionIdRoute = WSlugChatSessionIdRouteImport.update({
   id: '/$sessionId',
   path: '/$sessionId',
@@ -304,6 +310,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/chat': typeof WSlugChatRouteWithChildren
   '/w/$slug/studio': typeof WSlugStudioRouteWithChildren
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
+  '/w/$slug/studio/agent-debug': typeof WSlugStudioAgentDebugRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
@@ -348,6 +355,7 @@ export interface FileRoutesByTo {
   '/resume-review/$slug/$recordId': typeof ResumeReviewSlugRecordIdRoute
   '/w/$slug/studio': typeof WSlugStudioRouteWithChildren
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
+  '/w/$slug/studio/agent-debug': typeof WSlugStudioAgentDebugRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
@@ -394,6 +402,7 @@ export interface FileRoutesById {
   '/w/$slug/chat': typeof WSlugChatRouteWithChildren
   '/w/$slug/studio': typeof WSlugStudioRouteWithChildren
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
+  '/w/$slug/studio/agent-debug': typeof WSlugStudioAgentDebugRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
@@ -441,6 +450,7 @@ export interface FileRouteTypes {
     | '/w/$slug/chat'
     | '/w/$slug/studio'
     | '/w/$slug/chat/$sessionId'
+    | '/w/$slug/studio/agent-debug'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
@@ -485,6 +495,7 @@ export interface FileRouteTypes {
     | '/resume-review/$slug/$recordId'
     | '/w/$slug/studio'
     | '/w/$slug/chat/$sessionId'
+    | '/w/$slug/studio/agent-debug'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
@@ -530,6 +541,7 @@ export interface FileRouteTypes {
     | '/w/$slug/chat'
     | '/w/$slug/studio'
     | '/w/$slug/chat/$sessionId'
+    | '/w/$slug/studio/agent-debug'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
@@ -858,6 +870,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugStudioDashboardRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
+    '/w/$slug/studio/agent-debug': {
+      id: '/w/$slug/studio/agent-debug'
+      path: '/agent-debug'
+      fullPath: '/w/$slug/studio/agent-debug'
+      preLoaderRoute: typeof WSlugStudioAgentDebugRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
     '/w/$slug/chat/$sessionId': {
       id: '/w/$slug/chat/$sessionId'
       path: '/$sessionId'
@@ -945,6 +964,7 @@ const WSlugStudioInterviewsRouteWithChildren =
   )
 
 interface WSlugStudioRouteChildren {
+  WSlugStudioAgentDebugRoute: typeof WSlugStudioAgentDebugRoute
   WSlugStudioDashboardRoute: typeof WSlugStudioDashboardRoute
   WSlugStudioDepartmentsRoute: typeof WSlugStudioDepartmentsRoute
   WSlugStudioFormsRoute: typeof WSlugStudioFormsRoute
@@ -963,6 +983,7 @@ interface WSlugStudioRouteChildren {
 }
 
 const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
+  WSlugStudioAgentDebugRoute: WSlugStudioAgentDebugRoute,
   WSlugStudioDashboardRoute: WSlugStudioDashboardRoute,
   WSlugStudioDepartmentsRoute: WSlugStudioDepartmentsRoute,
   WSlugStudioFormsRoute: WSlugStudioFormsRoute,

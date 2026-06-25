@@ -2,6 +2,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
+import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { hiringUnit, jobDescription } from "@arc/db-schema/schema";
 import { and, eq } from "drizzle-orm";
 import {
@@ -79,6 +80,20 @@ async function validateImportHiringUnit({
     return null;
   }
   return "所选用人组织不在当前招聘组负责范围内。";
+}
+
+async function resolveResumePoolParsedResume(
+  resume: File,
+  uploadResult: { cachedResumeProfile: ResumeProfile | null; resumeText: string | null },
+): Promise<{ resumeProfile: ResumeProfile; resumeText: string | null }> {
+  let resumeProfile = uploadResult.cachedResumeProfile ?? null;
+  let resumeText = uploadResult.resumeText ?? null;
+  if (!resumeProfile) {
+    const parsed = await parseResumeFastToProfile(resume);
+    ({ resumeProfile } = parsed);
+    resumeText = parsed.parsedText;
+  }
+  return { resumeProfile, resumeText };
 }
 
 export const resumePoolRouter = factory
@@ -218,11 +233,10 @@ export const resumePoolRouter = factory
       if (!uploadResult?.storageKey) {
         return c.json({ error: "文件上传失败，请重试。" }, 500);
       }
-      let resumeProfile = uploadResult.cachedResumeProfile ?? null;
-      if (!resumeProfile) {
-        const parsed = await parseResumeFastToProfile(resume);
-        ({ resumeProfile } = parsed);
-      }
+      const { resumeProfile, resumeText } = await resolveResumePoolParsedResume(
+        resume,
+        uploadResult,
+      );
       const id = await createResumePoolItem({
         candidateEmail: input.data.candidateEmail ?? null,
         candidateName: input.data.candidateName ?? null,
@@ -234,6 +248,7 @@ export const resumePoolRouter = factory
         organizationId: activeOrg.id,
         resumeFileName: resume.name,
         resumeProfile,
+        resumeText,
         scope: input.data.scope,
         storageKey: uploadResult.storageKey,
         targetRole: input.data.targetRole ?? null,

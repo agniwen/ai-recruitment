@@ -22,6 +22,7 @@ const STUDIO_PAGE_PATHS = [
   { action: "me", path: "/me" },
   { action: "members", path: "/members" },
   { action: "mailIngestAccounts", path: "/mail-ingest-accounts" },
+  { action: "agentDebug", path: "/agent-debug" },
   { action: "permissions", path: "/permissions" },
   { action: "globalConfig", path: "/global-config" },
 ] as const satisfies readonly {

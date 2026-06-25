@@ -469,6 +469,7 @@ export const studioInterview = pgTable(
     }),
     resumeSourceType: text("resume_source_type").$type<StudioInterviewResumeSourceType>(),
     resumeStorageKey: text("resume_storage_key"),
+    resumeText: text("resume_text"),
     // 派生自 resume_profile->'skills'：trim + 连续空白折叠为单空格 + lowercase 后的数组。
     // GIN 索引支持 `@>` 包含匹配。display 形态保存在 studioOrgSkill 表里，每 org 一份。
     // Derived from resume_profile->'skills': trim + collapse whitespace + lowercase.
@@ -1038,6 +1039,7 @@ export const studioOfferDraft = pgTable(
 
 export type ResumePoolScope = "private" | "public";
 export type ResumePoolStatus = "active" | "archived";
+export type ResumePoolSourceChannel = "mail_ingest" | "referral";
 export type ResumePoolEventType =
   | "created"
   | "parsed"
@@ -1074,11 +1076,13 @@ export const resumePoolItem = pgTable(
     resumeParsedAt: timestamp("resume_parsed_at", { withTimezone: true }),
     resumeProfile: jsonb("resume_profile").$type<ResumeProfile | null>(),
     resumeStorageKey: text("resume_storage_key"),
+    resumeText: text("resume_text"),
     scope: text("scope").$type<ResumePoolScope>().notNull(),
     skillsNormalized: text("skills_normalized")
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    sourceChannel: text("source_channel").$type<ResumePoolSourceChannel>(),
     sourceOrganizationId: text("source_organization_id").references(() => organization.id, {
       onDelete: "set null",
     }),
@@ -1101,6 +1105,10 @@ export const resumePoolItem = pgTable(
     ),
     index("resume_pool_item_resume_content_hash_idx").on(table.resumeContentHash),
     index("resume_pool_item_resume_parse_status_idx").on(table.resumeParseStatus),
+    check(
+      "resume_pool_item_source_channel_check",
+      sql`${table.sourceChannel} IS NULL OR ${table.sourceChannel} IN ('mail_ingest', 'referral')`,
+    ),
     index("resume_pool_item_source_pool_item_idx").on(table.sourcePoolItemId),
     index("resume_pool_item_skills_normalized_idx").using("gin", table.skillsNormalized),
   ],

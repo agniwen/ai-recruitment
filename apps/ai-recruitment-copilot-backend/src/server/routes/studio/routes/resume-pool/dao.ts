@@ -31,6 +31,7 @@ import { createResumeRecordFromStorage } from "@arc/ai-recruitment-copilot-backe
 import { normalizeSkill } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills";
 
 type PoolRow = typeof resumePoolItem.$inferSelect;
+type PoolListRow = Omit<PoolRow, "resumeText">;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 interface PoolUploaderMeta {
   uploaderEmail: string | null;
@@ -46,6 +47,36 @@ const EMPTY_UPLOADER_META: PoolUploaderMeta = {
   uploaderOrganizationName: null,
 };
 
+const RESUME_POOL_LIST_COLUMNS = {
+  candidateEmail: resumePoolItem.candidateEmail,
+  candidateName: resumePoolItem.candidateName,
+  candidatePhone: resumePoolItem.candidatePhone,
+  createdAt: resumePoolItem.createdAt,
+  createdBy: resumePoolItem.createdBy,
+  id: resumePoolItem.id,
+  jobDescriptionId: resumePoolItem.jobDescriptionId,
+  notes: resumePoolItem.notes,
+  organizationId: resumePoolItem.organizationId,
+  publishedAt: resumePoolItem.publishedAt,
+  publishedBy: resumePoolItem.publishedBy,
+  resumeContentHash: resumePoolItem.resumeContentHash,
+  resumeFileName: resumePoolItem.resumeFileName,
+  resumeParseError: resumePoolItem.resumeParseError,
+  resumeParseStatus: resumePoolItem.resumeParseStatus,
+  resumeParsedAt: resumePoolItem.resumeParsedAt,
+  resumeProfile: resumePoolItem.resumeProfile,
+  resumeStorageKey: resumePoolItem.resumeStorageKey,
+  scope: resumePoolItem.scope,
+  skillsNormalized: resumePoolItem.skillsNormalized,
+  sourceChannel: resumePoolItem.sourceChannel,
+  sourceOrganizationId: resumePoolItem.sourceOrganizationId,
+  sourcePoolItemId: resumePoolItem.sourcePoolItemId,
+  sourceUserId: resumePoolItem.sourceUserId,
+  status: resumePoolItem.status,
+  targetRole: resumePoolItem.targetRole,
+  updatedAt: resumePoolItem.updatedAt,
+} satisfies Record<keyof PoolListRow, unknown>;
+
 export interface CreateResumePoolItemInput {
   candidateEmail: string | null;
   candidateName: string | null;
@@ -57,7 +88,9 @@ export interface CreateResumePoolItemInput {
   organizationId: string | null;
   resumeFileName: string | null;
   resumeProfile: ResumeProfile | null;
+  resumeText?: string | null;
   scope: ResumePoolScope;
+  sourceChannel?: ResumePoolSourceChannel | null;
   storageKey: string | null;
   targetRole: string | null;
 }
@@ -67,6 +100,7 @@ export interface MarkResumePoolItemParsedInput {
   organizationId: string | null;
   poolItemId: string;
   resumeProfile: ResumeProfile | null;
+  resumeText: string | null;
 }
 
 export interface QueryResumePoolItemsInput {
@@ -161,7 +195,7 @@ export function buildMasteredSkills(profile: ResumeProfile | null): string[] {
 }
 
 function toListRecord(
-  row: PoolRow,
+  row: PoolListRow,
   importRow?: { importedAt: Date; resumeRecordId: string } | null,
   uploaderMeta: PoolUploaderMeta = EMPTY_UPLOADER_META,
   sourceChannel: ResumePoolSourceChannel | null = null,
@@ -190,7 +224,7 @@ function toListRecord(
     resumeStorageKey: row.resumeStorageKey,
     scope: row.scope,
     skillsNormalized: row.skillsNormalized,
-    sourceChannel,
+    sourceChannel: row.sourceChannel ?? sourceChannel,
     sourceOrganizationId: row.sourceOrganizationId,
     sourcePoolItemId: row.sourcePoolItemId,
     sourceUserId: row.sourceUserId,
@@ -292,8 +326,10 @@ export async function createResumePoolItem(input: CreateResumePoolItemInput): Pr
       resumeParsedAt: input.resumeProfile ? now : null,
       resumeProfile: input.resumeProfile,
       resumeStorageKey: input.storageKey,
+      resumeText: input.resumeText ?? null,
       scope: input.scope,
       skillsNormalized: normalizeSkills(input.resumeProfile?.skills),
+      sourceChannel: input.sourceChannel ?? null,
       sourceOrganizationId: input.scope === "public" ? input.organizationId : null,
       sourcePoolItemId: null,
       sourceUserId: input.scope === "public" ? input.createdBy : null,
@@ -334,8 +370,12 @@ export async function markResumePoolItemParsed(
         resumeParseStatus: "ready",
         resumeParsedAt: now,
         resumeProfile: input.resumeProfile,
+        resumeText: input.resumeText,
         skillsNormalized: normalizeSkills(input.resumeProfile?.skills),
-        targetRole: input.resumeProfile?.targetRoles?.[0] || row.targetRole,
+        targetRole:
+          row.sourceChannel === "referral"
+            ? row.targetRole
+            : input.resumeProfile?.targetRoles?.[0] || row.targetRole,
         updatedAt: now,
       })
       .where(eq(resumePoolItem.id, input.poolItemId));
@@ -391,6 +431,40 @@ async function loadImportForOrg(
   return row ?? null;
 }
 
+async function loadImportsForOrg(
+  poolItemIds: string[],
+  organizationId: string,
+): Promise<Map<string, { importedAt: Date; resumeRecordId: string }>> {
+  if (poolItemIds.length === 0) {
+    return new Map();
+  }
+  const rows = await db
+    .select({
+      importedAt: resumePoolImport.importedAt,
+      poolItemId: resumePoolImport.poolItemId,
+      resumeRecordId: resumePoolImport.importedResumeRecordId,
+    })
+    .from(resumePoolImport)
+    .where(
+      and(
+        inArray(resumePoolImport.poolItemId, poolItemIds),
+        eq(resumePoolImport.organizationId, organizationId),
+      ),
+    )
+    .orderBy(desc(resumePoolImport.importedAt));
+
+  const imports = new Map<string, { importedAt: Date; resumeRecordId: string }>();
+  for (const row of rows) {
+    if (!imports.has(row.poolItemId)) {
+      imports.set(row.poolItemId, {
+        importedAt: row.importedAt,
+        resumeRecordId: row.resumeRecordId,
+      });
+    }
+  }
+  return imports;
+}
+
 async function loadSourceChannels(
   poolItemIds: string[],
 ): Promise<Map<string, ResumePoolSourceChannel>> {
@@ -430,7 +504,7 @@ export async function queryResumePoolItems(
   const [totalRow] = await db.select({ total: count() }).from(resumePoolItem).where(where);
   const rows = await db
     .select({
-      item: resumePoolItem,
+      item: RESUME_POOL_LIST_COLUMNS,
       uploaderEmail: user.email,
       uploaderImage: user.image,
       uploaderName: user.name,
@@ -442,15 +516,16 @@ export async function queryResumePoolItems(
     .where(where)
     .orderBy(desc(resumePoolItem.createdAt))
     .limit(100);
-  const imports = await Promise.all(
-    rows.map((row) => loadImportForOrg(row.item.id, input.organizationId)),
-  );
-  const sourceChannels = await loadSourceChannels(rows.map((row) => row.item.id));
+  const poolItemIds = rows.map((row) => row.item.id);
+  const [imports, sourceChannels] = await Promise.all([
+    loadImportsForOrg(poolItemIds, input.organizationId),
+    loadSourceChannels(poolItemIds),
+  ]);
   return {
-    records: rows.map((row, index) =>
+    records: rows.map((row) =>
       toListRecord(
         row.item,
-        imports[index] ?? null,
+        imports.get(row.item.id) ?? null,
         uploaderMetaFromRow(row),
         sourceChannels.get(row.item.id) ?? null,
       ),
@@ -509,8 +584,10 @@ export async function publishPrivatePoolItem(
       resumeParsedAt: privateItem.resumeParsedAt,
       resumeProfile: privateItem.resumeProfile,
       resumeStorageKey: privateItem.resumeStorageKey,
+      resumeText: privateItem.resumeText,
       scope: "public",
       skillsNormalized: privateItem.skillsNormalized,
+      sourceChannel: privateItem.sourceChannel,
       sourceOrganizationId: input.organizationId,
       sourcePoolItemId: privateItem.id,
       sourceUserId: input.userId,
@@ -594,6 +671,7 @@ export async function importPoolItemToResumeLibrary(
         organizationId: input.organizationId,
         resumeFileName: poolItem.resumeFileName,
         resumeProfile: poolItem.resumeProfile,
+        resumeText: poolItem.resumeText,
         source: {
           importedAt,
           importedBy: input.importedBy,
