@@ -29,6 +29,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "interviewQuestions",
   "me",
   "members",
+  "chat",
   "mailIngestAccounts",
   "agentDebug",
   "permissions",
@@ -37,6 +38,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
 
 export const STUDIO_PAGE_PERMISSION_LABELS = {
   agentDebug: "Agent 调试",
+  chat: "Chat",
   dashboard: "数据看板",
   departments: "部门管理",
   forms: "面试表单",
@@ -66,6 +68,7 @@ const memberStudioPagePermissions = [
   "interviewQuestions",
   "me",
   "members",
+  "chat",
 ] as const;
 
 export const statement = {

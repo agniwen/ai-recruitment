@@ -39,7 +39,13 @@ describe("permissions matrix", () => {
 
     it("can browse every studio page", () => {
       expect(roles.owner.statements.page).toEqual(
-        expect.arrayContaining(["dashboard", "globalConfig", "mailIngestAccounts", "permissions"]),
+        expect.arrayContaining([
+          "chat",
+          "dashboard",
+          "globalConfig",
+          "mailIngestAccounts",
+          "permissions",
+        ]),
       );
     });
   });
@@ -78,7 +84,13 @@ describe("permissions matrix", () => {
 
     it("can browse every studio page", () => {
       expect(roles.admin.statements.page).toEqual(
-        expect.arrayContaining(["dashboard", "globalConfig", "mailIngestAccounts", "permissions"]),
+        expect.arrayContaining([
+          "chat",
+          "dashboard",
+          "globalConfig",
+          "mailIngestAccounts",
+          "permissions",
+        ]),
       );
     });
   });
@@ -135,7 +147,14 @@ describe("permissions matrix", () => {
         ]),
       );
       expect(roles.member.statements.page).toEqual(
-        expect.arrayContaining(["resumes", "resumePool", "interviews", "hiringUnits", "members"]),
+        expect.arrayContaining([
+          "chat",
+          "resumes",
+          "resumePool",
+          "interviews",
+          "hiringUnits",
+          "members",
+        ]),
       );
     });
   });
@@ -243,14 +262,17 @@ describe("permission matrix cross-cut", () => {
     ["admin", "page", "dashboard", true],
     ["admin", "page", "agentDebug", true],
     ["admin", "page", "mailIngestAccounts", true],
+    ["admin", "page", "chat", true],
     ["member", "page", "dashboard", false],
     ["member", "page", "agentDebug", false],
     ["member", "page", "mailIngestAccounts", false],
     ["member", "page", "permissions", false],
     ["member", "page", "globalConfig", false],
     ["member", "page", "resumes", true],
+    ["member", "page", "chat", true],
     ["member", "page", "hiringUnits", true],
     ["member", "page", "members", true],
+    ["noAccess", "page", "chat", false],
     ["noAccess", "page", "resumes", false],
     ["noAccess", "page", "members", false],
     ["noAccess", "member", "create", false],

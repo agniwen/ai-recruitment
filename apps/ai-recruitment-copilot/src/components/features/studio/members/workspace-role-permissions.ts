@@ -163,6 +163,7 @@ const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
 };
 
 const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
+  chat: "控制是否能使用侧边栏 Chat tab 并访问 Chat 页面；未勾选时 Chat tab 会禁用，直接访问会进入 404。页面内接口暂不按该页面权限限制。",
   dashboard: "控制是否能在侧边栏看到并访问「数据看板」页面；未勾选时直接访问会进入 404。",
   departments:
     "控制是否能在侧边栏看到并访问「部门管理」页面；页面内部门列表、详情和增删改仍受「部门」相关权限控制。",

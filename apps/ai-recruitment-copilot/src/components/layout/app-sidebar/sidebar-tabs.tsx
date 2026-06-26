@@ -2,6 +2,7 @@
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useHasPermission } from "@/hooks/use-has-permission";
 import { authClient } from "@/lib/client/auth-client";
 
 type SidebarTabValue = "chat" | "studio";
@@ -31,6 +32,7 @@ export function SidebarTabs() {
   const activeOrganization = authClient.useActiveOrganization();
   const activeTab = resolveActiveTab(pathname);
   const slug = extractWorkspaceSlug(pathname) ?? activeOrganization.data?.slug ?? null;
+  const canAccessChat = useHasPermission("page", "chat");
 
   const handleChange = (value: string) => {
     // 缺 slug 时无法构造路径——回到根路径让根路由解析活跃 workspace。
@@ -42,6 +44,10 @@ export function SidebarTabs() {
     }
 
     const nextTab = value as SidebarTabValue;
+    if (nextTab === "chat" && !canAccessChat) {
+      return;
+    }
+
     const target = nextTab === "chat" ? `/w/${slug}/chat` : `/w/${slug}/studio/resumes`;
 
     if (target !== pathname) {
@@ -61,7 +67,9 @@ export function SidebarTabs() {
       value={activeTab ?? "chat"}
     >
       <TabsList className="w-full  bg-sidebar/60  select-none">
-        <TabsTrigger value="chat">Chat</TabsTrigger>
+        <TabsTrigger disabled={!canAccessChat} value="chat">
+          Chat
+        </TabsTrigger>
         <TabsTrigger value="studio">Studio</TabsTrigger>
       </TabsList>
     </Tabs>

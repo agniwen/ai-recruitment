@@ -54,6 +54,7 @@ describe("workspace role permission helpers", () => {
       label: "页面浏览 · 简历库",
       resource: "page",
     });
+    expect(items.map((item) => item.key)).toContain("page:chat");
     expect(items.map((item) => item.key)).toContain("page:permissions");
     expect(items.map((item) => item.key)).toContain("resumeLibrary:read");
     expect(items.map((item) => item.key)).toContain("resumePool:import");
@@ -95,9 +96,13 @@ describe("workspace role permission helpers", () => {
     const resumeLibraryRead = items.find((item) => item.key === "resumeLibrary:read");
     const resumePoolRead = items.find((item) => item.key === "resumePool:read");
     const resumePoolPage = items.find((item) => item.key === "page:resumePool");
+    const chatPage = items.find((item) => item.key === "page:chat");
     const jobDescriptionPage = items.find((item) => item.key === "page:jobDescriptions");
     const jdRead = items.find((item) => item.key === "jd:read");
 
+    expect(chatPage?.description).toContain("Chat");
+    expect(chatPage?.description).toContain("禁用");
+    expect(chatPage?.description).toContain("404");
     expect(resumePoolPage?.description).toContain("访问「简历广场」页面");
     expect(resumePoolPage?.description).toContain("数据接口仍受「简历广场」业务权限控制");
     expect(resumePoolPage?.description).toContain("404");

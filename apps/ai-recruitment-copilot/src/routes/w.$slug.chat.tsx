@@ -4,6 +4,7 @@ import { ChatHeader } from "@/components/features/chat/chat-header";
 import { PendingOutlet } from "@/components/layout/pending-outlet";
 import { ChatSidebarSlots } from "@/components/features/chat/chat-sidebar-slots";
 import { SidebarInset } from "@/components/ui/sidebar";
+import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import { cn } from "@arc/shared/utils/cn";
 
 function ChatLayout({ children }: { children: ReactNode }) {
@@ -32,4 +33,11 @@ function ChatShellRoute() {
 
 export const Route = createFileRoute("/w/$slug/chat")({
   component: ChatShellRoute,
+  loader: async ({ location, params }) => {
+    await requireStudioPageAccess({
+      action: "chat",
+      pathname: location.pathname,
+      slug: params.slug,
+    });
+  },
 });

@@ -39,6 +39,29 @@ describe("TanStack Start workspace shell migration", () => {
     expect(sidebarSlots).not.toContain("useSyncExternalStore");
   });
 
+  it("guards direct chat page access with the chat page permission", () => {
+    const chatLayoutRoute = readSource("routes/w.$slug.chat.tsx");
+    const chatIndexRoute = readSource("routes/w.$slug.chat.index.tsx");
+    const chatSessionRoute = readSource("routes/w.$slug.chat.$sessionId.tsx");
+
+    expect(chatLayoutRoute).toContain("requireStudioPageAccess");
+    expect(chatLayoutRoute).toContain('action: "chat"');
+    expect(chatLayoutRoute).toContain("location.pathname");
+    expect(chatLayoutRoute).toContain("params.slug");
+    expect(chatLayoutRoute).toContain("<Outlet />");
+    expect(chatIndexRoute).toContain('createFileRoute("/w/$slug/chat/")');
+    expect(chatSessionRoute).toContain('createFileRoute("/w/$slug/chat/$sessionId")');
+  });
+
+  it("disables the chat sidebar tab through the chat page permission", () => {
+    const sidebarTabs = readSource("components/layout/app-sidebar/sidebar-tabs.tsx");
+
+    expect(sidebarTabs).toContain("useHasPermission");
+    expect(sidebarTabs).toContain('useHasPermission("page", "chat")');
+    expect(sidebarTabs).toContain('value="chat"');
+    expect(sidebarTabs).toContain("disabled={!canAccessChat}");
+  });
+
   it("uses typed router navigation for chat session URL changes", () => {
     const workspace = readSource("components/features/chat/chat-workspace.tsx");
     const toaster = readSource("components/features/chat/background-stream-toaster.tsx");
