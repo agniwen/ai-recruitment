@@ -73,6 +73,7 @@ import { InviteDialog } from "@/components/features/studio/members/invite-dialog
 import { InviteLinksDialog } from "@/components/features/studio/members/invite-links-dialog";
 import { PendingInvitationsButton } from "@/components/features/studio/members/pending-invitations-section";
 import {
+  buildWorkspaceRoleOptions,
   getWorkspaceRoleLabel,
   isBuiltInWorkspaceRole,
 } from "@/components/features/studio/members/role-display";
@@ -134,6 +135,7 @@ interface MemberRow {
 
 interface DynamicWorkspaceRole {
   id: string;
+  name: string;
   role: string;
 }
 
@@ -920,6 +922,10 @@ function MembersManagementPage() {
     () => buildAssignableWorkspaceRoles(currentMemberRole, dynamicWorkspaceRoles),
     [currentMemberRole, dynamicWorkspaceRoles],
   );
+  const assignableRoleOptions = useMemo(
+    () => buildWorkspaceRoleOptions(assignableRoles, dynamicWorkspaceRoles),
+    [assignableRoles, dynamicWorkspaceRoles],
+  );
 
   const allRows: MemberRow[] = useMemo(() => {
     const list = org?.members ?? [];
@@ -1244,9 +1250,9 @@ function MembersManagementPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {assignableRoles.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {getWorkspaceRoleLabel(role)}
+                {assignableRoleOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1339,6 +1345,7 @@ function MembersManagementPage() {
                 <EmptyContent>
                   <PermissionGate action="create" resource="invitation">
                     <InviteDialog
+                      assignableRoleOptions={assignableRoleOptions}
                       assignableRoles={assignableRoles}
                       trigger={
                         <Button>
@@ -1368,8 +1375,12 @@ function MembersManagementPage() {
                   <PendingInvitationsButton organizationId={org?.id ?? null} />
                 </PermissionGate>
                 <PermissionGate action="create" resource="invitation">
-                  <InviteLinksDialog assignableRoles={assignableRoles} />
+                  <InviteLinksDialog
+                    assignableRoleOptions={assignableRoleOptions}
+                    assignableRoles={assignableRoles}
+                  />
                   <InviteDialog
+                    assignableRoleOptions={assignableRoleOptions}
                     assignableRoles={assignableRoles}
                     trigger={
                       <Button>
