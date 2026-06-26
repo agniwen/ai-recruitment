@@ -23,6 +23,15 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(source).toContain("detail.hiringUnitName");
   });
 
+  it("shows resume evaluation as a read-only summary field", () => {
+    const overviewBody = source.slice(source.indexOf("export function ResumeOverviewPanel"));
+
+    expect(overviewBody).toContain("describeResumeEvaluationStatus");
+    expect(overviewBody).toContain('<SummaryItem label="简历评估"');
+    expect(overviewBody).not.toContain("<Select");
+    expect(overviewBody).not.toContain("onValueChange");
+  });
+
   it("keeps AI parsed review out of the overview summary area", () => {
     const overviewBody = source.slice(source.indexOf("export function ResumeOverviewPanel"));
 

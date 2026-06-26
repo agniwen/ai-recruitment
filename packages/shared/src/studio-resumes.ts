@@ -346,6 +346,10 @@ export function getResumeActionLockedReason(status: ResumeParseStatus): string |
 
 export const resumeEvaluationStatusValues = ["pass", "fail"] as const;
 export const resumeEvaluationStatusInputSchema = resumeEvaluationStatusSchema;
+export const resumeEvaluationStatusFormValueSchema = z.union([
+  resumeEvaluationStatusSchema,
+  z.literal("unreviewed"),
+]);
 export const resumeEvaluationStatusSubmitSchema = z.object({
   status: resumeEvaluationStatusSchema,
 });
@@ -355,6 +359,7 @@ export const resumeEvaluationUpdateSchema = z.object({
 
 export { resumeEvaluationStatusSchema };
 export type { ResumeEvaluationStatus };
+export type ResumeEvaluationStatusFormValue = z.infer<typeof resumeEvaluationStatusFormValueSchema>;
 
 export function describeResumeEvaluationStatus(status: ResumeEvaluationStatus | null): {
   label: string;
@@ -456,6 +461,7 @@ export const resumeLibraryFormSchema = z.object({
   hiringUnitId: resumeLibraryOptionalHiringUnitIdSchema,
   jobDescriptionId: z.string().trim().min(1, "请选择关联在招岗位").max(100, "关联在招岗位无效"),
   notes: z.string().trim().max(2000, "备注不能超过 2000 字"),
+  resumeEvaluationStatus: resumeEvaluationStatusFormValueSchema,
   targetRole: z.string().trim().max(120, "目标岗位不能超过 120 个字符"),
 });
 
@@ -478,6 +484,7 @@ export function createResumeLibraryFormValues(): ResumeLibraryFormValues {
     hiringUnitId: null,
     jobDescriptionId: "",
     notes: "",
+    resumeEvaluationStatus: "unreviewed",
     targetRole: "",
   };
 }

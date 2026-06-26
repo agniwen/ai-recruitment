@@ -125,6 +125,8 @@ function parseResumeLibraryFormData(
     hiringUnitId: toNullableString(formData.get("hiringUnitId")),
     jobDescriptionId: toNullableString(formData.get("jobDescriptionId")) ?? "",
     notes: toNullableString(formData.get("notes")) ?? "",
+    resumeEvaluationStatus:
+      toNullableString(formData.get("resumeEvaluationStatus")) ?? "unreviewed",
     targetRole: toNullableString(formData.get("targetRole")) ?? "",
   });
 }
@@ -979,6 +981,18 @@ export const resumeLibraryRouter = factory
           });
         }
       });
+      const nextResumeEvaluationStatus =
+        input.data.resumeEvaluationStatus === "unreviewed"
+          ? null
+          : input.data.resumeEvaluationStatus;
+      if (nextResumeEvaluationStatus !== existing.resumeEvaluationStatus) {
+        await updateResumeEvaluationStatus({
+          id,
+          operatorId: c.var.user?.id ?? null,
+          organizationId: activeOrg.id,
+          status: nextResumeEvaluationStatus,
+        });
+      }
 
       invalidateStudioInterviewCaches(activeOrg.id);
       if (resumeProfile) {
