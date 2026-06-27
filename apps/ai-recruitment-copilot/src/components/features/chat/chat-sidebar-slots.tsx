@@ -1,6 +1,11 @@
 "use client";
 
-import { PlusIcon, SquareCheckBigIcon, Trash2Icon, XIcon } from "@/components/icons/hugeicons";
+import {
+  IconPlus as PlusIcon,
+  IconSquareCheck as SquareCheckBigIcon,
+  IconTrash as Trash2Icon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import {

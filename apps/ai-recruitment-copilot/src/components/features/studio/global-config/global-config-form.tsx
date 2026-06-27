@@ -1,6 +1,6 @@
 "use client";
 
-import { SaveIcon } from "@/components/icons/hugeicons";
+import { IconDeviceFloppy as SaveIcon } from "@tabler/icons-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/features/studio/page-header";

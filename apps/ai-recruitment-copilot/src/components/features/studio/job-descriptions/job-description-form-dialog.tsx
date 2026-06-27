@@ -6,6 +6,7 @@ import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import type { InterviewQuestionTemplateListRecord } from "@arc/db-schema/interview-question-templates";
 import { jobDescriptionFormSchema } from "@arc/shared/job-descriptions";
 import type { JobDescriptionFormValues, JobDescriptionRecord } from "@arc/shared/job-descriptions";
+import { dateOnlyStringToLocalDate, localDateToDateOnlyString } from "@arc/shared/date-only";
 import {
   buildJobDescriptionInterviewerOptions,
   filterInterviewerIdsByDepartment,
@@ -16,16 +17,18 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useQuery } from "@tanstack/react-query";
 import { useForm, useStore } from "@tanstack/react-form";
 import {
-  ClipboardListIcon,
-  ExternalLinkIcon,
-  ListChecksIcon,
-  LoaderCircleIcon,
-} from "@/components/icons/hugeicons";
+  IconCalendar as CalendarDaysIcon,
+  IconClipboardList as ClipboardListIcon,
+  IconExternalLink as ExternalLinkIcon,
+  IconListCheck as ListChecksIcon,
+  IconLoader2 as LoaderCircleIcon,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { AnimatedHeight } from "@/components/features/motion/animated-height";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -36,6 +39,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -48,16 +52,44 @@ import { hasFieldErrors, toFieldErrors } from "../interviews/interview-form";
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
 const PROMPT_MAX_LENGTH = 10_000;
+const SALARY_CURRENCY_OPTIONS = [
+  { label: "CNY · 人民币", value: "CNY" },
+  { label: "TWD · 新台币", value: "TWD" },
+  { label: "USD · 美元", value: "USD" },
+  { label: "HKD · 港币", value: "HKD" },
+  { label: "SGD · 新加坡元", value: "SGD" },
+  { label: "JPY · 日元", value: "JPY" },
+] as const;
 
 export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
   return {
     allowCrossDepartmentInterviewers: false,
     code: "",
+    controlCategory: null,
     departmentId: "",
     description: "",
+    expectedOnboardDate: null,
+    gapCount: null,
+    headcount: null,
     interviewerIds: [],
+    jobLevel: null,
+    jobSeries: null,
     name: "",
+    notes: null,
+    offeredPendingOnboardCount: null,
+    onboardedCount: null,
+    priority: null,
     prompt: "",
+    recruitmentStatus: null,
+    requestedDate: null,
+    requester: null,
+    resumeContact: null,
+    salaryCurrency: null,
+    salaryMaxAmount: null,
+    salaryMinAmount: null,
+    serviceUnit: null,
+    sourceSheet: null,
+    workLocation: null,
   };
 }
 
@@ -65,11 +97,31 @@ function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
   return {
     allowCrossDepartmentInterviewers: record.allowCrossDepartmentInterviewers,
     code: record.code ?? "",
+    controlCategory: record.controlCategory,
     departmentId: record.departmentId,
     description: record.description ?? "",
+    expectedOnboardDate: record.expectedOnboardDate,
+    gapCount: record.gapCount,
+    headcount: record.headcount,
     interviewerIds: [...record.interviewerIds],
+    jobLevel: record.jobLevel,
+    jobSeries: record.jobSeries,
     name: record.name,
+    notes: record.notes,
+    offeredPendingOnboardCount: record.offeredPendingOnboardCount,
+    onboardedCount: record.onboardedCount,
+    priority: record.priority,
     prompt: record.prompt,
+    recruitmentStatus: record.recruitmentStatus,
+    requestedDate: record.requestedDate,
+    requester: record.requester,
+    resumeContact: record.resumeContact,
+    salaryCurrency: record.salaryCurrency,
+    salaryMaxAmount: record.salaryMaxAmount,
+    salaryMinAmount: record.salaryMinAmount,
+    serviceUnit: record.serviceUnit,
+    sourceSheet: record.sourceSheet,
+    workLocation: record.workLocation,
   };
 }
 
@@ -91,6 +143,124 @@ function toDepartmentScopedFormValues(
 
 function normalizeDepartmentId(value: string | null): string {
   return value ?? "";
+}
+
+function parseOptionalIntegerInput(value: string): number | null {
+  if (value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseOptionalTextInput(value: string): string | null {
+  return value.trim() || null;
+}
+
+function normalizeOptionalText(value: string | null | undefined): string | null {
+  return value?.trim() || null;
+}
+
+function normalizeOptionalCode(value: string | null | undefined): string | undefined {
+  return normalizeOptionalText(value) ?? undefined;
+}
+
+function normalizeOptionalDescription(value: string | null | undefined): string {
+  return normalizeOptionalText(value) ?? "";
+}
+
+function toSubmitBody(value: JobDescriptionFormValues) {
+  return {
+    allowCrossDepartmentInterviewers: value.allowCrossDepartmentInterviewers,
+    code: normalizeOptionalCode(value.code),
+    controlCategory: normalizeOptionalText(value.controlCategory),
+    departmentId: value.departmentId,
+    description: normalizeOptionalDescription(value.description),
+    expectedOnboardDate: normalizeOptionalText(value.expectedOnboardDate),
+    gapCount: value.gapCount ?? null,
+    headcount: value.headcount ?? null,
+    interviewerIds: value.interviewerIds,
+    jobLevel: normalizeOptionalText(value.jobLevel),
+    jobSeries: normalizeOptionalText(value.jobSeries),
+    name: value.name.trim(),
+    notes: normalizeOptionalText(value.notes),
+    offeredPendingOnboardCount: value.offeredPendingOnboardCount ?? null,
+    onboardedCount: value.onboardedCount ?? null,
+    priority: normalizeOptionalText(value.priority),
+    prompt: value.prompt.trim(),
+    recruitmentStatus: normalizeOptionalText(value.recruitmentStatus),
+    requestedDate: normalizeOptionalText(value.requestedDate),
+    requester: normalizeOptionalText(value.requester),
+    resumeContact: normalizeOptionalText(value.resumeContact),
+    salaryCurrency: normalizeOptionalText(value.salaryCurrency),
+    salaryMaxAmount: value.salaryMaxAmount ?? null,
+    salaryMinAmount: value.salaryMinAmount ?? null,
+    serviceUnit: normalizeOptionalText(value.serviceUnit),
+    sourceSheet: normalizeOptionalText(value.sourceSheet),
+    workLocation: normalizeOptionalText(value.workLocation),
+  };
+}
+
+function DateOnlyPickerField({
+  errors,
+  id,
+  invalid,
+  label,
+  onBlur,
+  onChange,
+  value,
+}: {
+  errors?: ({ message?: string } | undefined)[];
+  id: string;
+  invalid: boolean;
+  label: string;
+  onBlur: () => void;
+  onChange: (value: string | null) => void;
+  value: string | null | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedDate = dateOnlyStringToLocalDate(value);
+
+  return (
+    <Field data-invalid={invalid || undefined}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldContent className="gap-2">
+        <div className="flex gap-2">
+          <Popover onOpenChange={setOpen} open={open}>
+            <PopoverTrigger asChild>
+              <Button
+                aria-invalid={invalid || undefined}
+                className="flex-1 justify-start font-normal"
+                id={id}
+                onBlur={onBlur}
+                type="button"
+                variant="outline"
+              >
+                <CalendarDaysIcon data-icon="inline-start" />
+                {value || "选择日期"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-0">
+              <Calendar
+                mode="single"
+                onSelect={(date) => {
+                  onChange(date ? localDateToDateOnlyString(date) : null);
+                  setOpen(false);
+                }}
+                selected={selectedDate ?? undefined}
+              />
+            </PopoverContent>
+          </Popover>
+          {value ? (
+            <Button onClick={() => onChange(null)} type="button" variant="outline">
+              清空
+            </Button>
+          ) : null}
+        </div>
+        <FieldError errors={errors} />
+      </FieldContent>
+    </Field>
+  );
 }
 
 // oxlint-disable-next-line complexity -- Dialog hosts tabs, queries, validation, and form submission together.
@@ -179,15 +349,7 @@ export function JobDescriptionFormDialog({
   const form = useForm({
     defaultValues: resolvedInitialValues,
     onSubmit: async ({ value }) => {
-      const body = {
-        allowCrossDepartmentInterviewers: value.allowCrossDepartmentInterviewers,
-        code: value.code?.trim() || undefined,
-        departmentId: value.departmentId,
-        description: value.description?.trim() || "",
-        interviewerIds: value.interviewerIds,
-        name: value.name.trim(),
-        prompt: value.prompt.trim(),
-      };
+      const body = toSubmitBody(value);
 
       const response = isEdit
         ? await rpc.api.w[":slug"].studio["job-descriptions"][":id"].$patch({
@@ -215,10 +377,30 @@ export function JobDescriptionFormDialog({
         "code",
         "name",
         "departmentId",
+        "recruitmentStatus",
+        "controlCategory",
+        "jobSeries",
+        "jobLevel",
+        "serviceUnit",
+        "headcount",
+        "onboardedCount",
+        "gapCount",
+        "offeredPendingOnboardCount",
+        "requestedDate",
+        "expectedOnboardDate",
+        "priority",
+        "requester",
+        "resumeContact",
+        "workLocation",
+        "sourceSheet",
+        "notes",
         "allowCrossDepartmentInterviewers",
         "interviewerIds",
         "description",
         "prompt",
+        "salaryCurrency",
+        "salaryMaxAmount",
+        "salaryMinAmount",
       ];
       const hasBasicError = basicFields.some((key) => (meta[key]?.errors?.length ?? 0) > 0);
       if (hasBasicError) {
@@ -427,6 +609,471 @@ export function JobDescriptionFormDialog({
                     }}
                   </form.Field>
 
+                  <div className="grid gap-5 md:col-span-2 md:grid-cols-3">
+                    <form.Field name="recruitmentStatus">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>招聘状态</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：招聘中"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="priority">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>优先级</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={80}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：P0（紧急/高）"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="controlCategory">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>岗位管控分类</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：C类-正常招聘"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
+
+                  <div className="grid gap-5 md:col-span-2 md:grid-cols-3">
+                    <form.Field name="jobSeries">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>序列</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：直属"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="jobLevel">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>职级</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={80}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：P3"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="serviceUnit">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>服务单位</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：SETV"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
+
+                  <div className="grid gap-5 md:col-span-2 md:grid-cols-4">
+                    <form.Field name="headcount">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>HC</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                inputMode="numeric"
+                                min={0}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalIntegerInput(event.target.value))
+                                }
+                                placeholder="如：1"
+                                step={1}
+                                type="number"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="onboardedCount">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>已到岗</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                inputMode="numeric"
+                                min={0}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalIntegerInput(event.target.value))
+                                }
+                                placeholder="如：0"
+                                step={1}
+                                type="number"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="gapCount">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>缺口</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                inputMode="numeric"
+                                min={0}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalIntegerInput(event.target.value))
+                                }
+                                placeholder="如：1"
+                                step={1}
+                                type="number"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="offeredPendingOnboardCount">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>Offer 待入职</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                inputMode="numeric"
+                                min={0}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalIntegerInput(event.target.value))
+                                }
+                                placeholder="如：0"
+                                step={1}
+                                type="number"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
+
+                  <div className="grid gap-5 md:col-span-2 md:grid-cols-2">
+                    <form.Field name="requestedDate">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <DateOnlyPickerField
+                            errors={errors}
+                            id={field.name}
+                            invalid={hasFieldErrors(field.state.meta.errors)}
+                            label="提需日期"
+                            onBlur={field.handleBlur}
+                            onChange={field.handleChange}
+                            value={field.state.value}
+                          />
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="expectedOnboardDate">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <DateOnlyPickerField
+                            errors={errors}
+                            id={field.name}
+                            invalid={hasFieldErrors(field.state.meta.errors)}
+                            label="期望到岗日期"
+                            onBlur={field.handleBlur}
+                            onChange={field.handleChange}
+                            value={field.state.value}
+                          />
+                        );
+                      }}
+                    </form.Field>
+                  </div>
+
+                  <div className="grid gap-5 md:col-span-2 md:grid-cols-2">
+                    <form.Field name="requester">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>需求发起人</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：马姬@maji_jj321"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="resumeContact">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>简历对接人</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：小馒@atw0758"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
+
+                  <div className="grid gap-5 md:col-span-2 md:grid-cols-2">
+                    <form.Field name="workLocation">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>工作地点</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：台湾"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="sourceSheet">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>来源表格</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                maxLength={120}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalTextInput(event.target.value))
+                                }
+                                placeholder="如：万帧公司"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
+
+                  <form.Field name="notes">
+                    {(field) => {
+                      const errors = toFieldErrors(field.state.meta.errors);
+                      return (
+                        <Field
+                          className="md:col-span-2"
+                          data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                        >
+                          <FieldLabel htmlFor={field.name}>备注说明</FieldLabel>
+                          <FieldContent className="gap-2">
+                            <Textarea
+                              aria-invalid={!!errors?.length}
+                              className="min-h-20"
+                              id={field.name}
+                              maxLength={2000}
+                              onBlur={field.handleBlur}
+                              onChange={(event) =>
+                                field.handleChange(parseOptionalTextInput(event.target.value))
+                              }
+                              placeholder="非远程岗位可备注说明工作地点、补充招聘要求等"
+                              value={field.state.value ?? ""}
+                            />
+                            <FieldError errors={errors} />
+                          </FieldContent>
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+
                   <form.Field name="allowCrossDepartmentInterviewers">
                     {(field) => (
                       <Field className="md:col-span-2">
@@ -503,6 +1150,95 @@ export function JobDescriptionFormDialog({
                       );
                     }}
                   </form.Field>
+
+                  <div className="grid gap-5 md:col-span-2 md:grid-cols-3">
+                    <form.Field name="salaryMinAmount">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>薪资下限</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                inputMode="numeric"
+                                min={0}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalIntegerInput(event.target.value))
+                                }
+                                placeholder="如：40000"
+                                step={1}
+                                type="number"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="salaryMaxAmount">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>薪资上限</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                inputMode="numeric"
+                                min={0}
+                                onBlur={field.handleBlur}
+                                onChange={(event) =>
+                                  field.handleChange(parseOptionalIntegerInput(event.target.value))
+                                }
+                                placeholder="如：50000"
+                                step={1}
+                                type="number"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="salaryCurrency">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>薪资币种</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <SearchableSelect
+                                clearable
+                                emptyMessage="没有匹配的币种"
+                                id={field.name}
+                                invalid={!!errors?.length}
+                                onChange={(value) => field.handleChange(value)}
+                                options={[...SALARY_CURRENCY_OPTIONS]}
+                                placeholder="选择币种"
+                                searchPlaceholder="搜索币种…"
+                                value={field.state.value ?? null}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
                 </div>
 
                 <form.Field name="description">

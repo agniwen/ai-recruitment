@@ -10,13 +10,13 @@
 // component is presentation-only and stateless.
 
 import {
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  CircleSlashIcon,
-  RotateCcwIcon,
-  SendIcon,
-  UsersIcon,
-} from "@/components/icons/hugeicons";
+  IconArrowLeft as ArrowLeftIcon,
+  IconArrowRight as ArrowRightIcon,
+  IconCircleOff as CircleSlashIcon,
+  IconRotate as RotateCcwIcon,
+  IconSend as SendIcon,
+  IconUsers as UsersIcon,
+} from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { candidateOutcomeMeta, pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";

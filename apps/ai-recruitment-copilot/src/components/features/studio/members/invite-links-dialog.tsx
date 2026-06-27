@@ -2,13 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  BanIcon,
-  CopyIcon,
-  LinkIcon,
-  PencilIcon,
-  PlayIcon,
-  UsersIcon,
-} from "@/components/icons/hugeicons";
+  IconBan as BanIcon,
+  IconCopy as CopyIcon,
+  IconLink as LinkIcon,
+  IconPencil as PencilIcon,
+  IconPlayerPlay as PlayIcon,
+  IconUsers as UsersIcon,
+} from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { TimeDisplay } from "@/components/features/display/time-display";

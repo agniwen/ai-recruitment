@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircleIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as LoaderCircleIcon } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";

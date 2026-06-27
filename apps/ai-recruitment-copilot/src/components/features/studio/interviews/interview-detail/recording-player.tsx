@@ -9,7 +9,7 @@
  * presign request per round.
  */
 
-import { Loader2Icon, PlayIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as Loader2Icon, IconPlayerPlay as PlayIcon } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

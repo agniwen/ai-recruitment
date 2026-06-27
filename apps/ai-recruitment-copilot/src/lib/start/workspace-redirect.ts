@@ -1,4 +1,5 @@
-import { redirect } from "@tanstack/react-router";
+import { notFound, redirect } from "@tanstack/react-router";
+import { NO_ACCESS_WORKSPACE_ROLE } from "@arc/shared/permissions";
 import { getActiveOrganizationState } from "@/lib/start/auth-session";
 
 export async function redirectToActiveWorkspace({
@@ -6,7 +7,7 @@ export async function redirectToActiveWorkspace({
   getDestination,
 }: {
   callbackPath: string;
-  getDestination: (slug: string) => string;
+  getDestination: (slug: string) => Promise<string | null> | string | null;
 }) {
   const state = await getActiveOrganizationState();
   if (state.status === "unauthenticated") {
@@ -19,5 +20,14 @@ export async function redirectToActiveWorkspace({
     throw redirect({ href: "/select-workspace" });
   }
 
-  throw redirect({ href: getDestination(state.workspace.slug) });
+  if (state.member.role === NO_ACCESS_WORKSPACE_ROLE) {
+    throw redirect({ href: "/wait" });
+  }
+
+  const href = await getDestination(state.workspace.slug);
+  if (!href) {
+    throw notFound();
+  }
+
+  throw redirect({ href });
 }

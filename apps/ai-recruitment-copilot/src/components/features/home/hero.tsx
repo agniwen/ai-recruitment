@@ -2,7 +2,10 @@
 // Purpose: Hero section preserving original visuals + CTAs.
 "use client";
 
-import { ArrowRightIcon, SparklesIcon } from "@/components/icons/hugeicons";
+import {
+  IconArrowRight as ArrowRightIcon,
+  IconSparkles as SparklesIcon,
+} from "@tabler/icons-react";
 import { motion, useReducedMotion } from "motion/react";
 import { FadeContent } from "@/components/react-bits/fade-content";
 import { SplitText } from "@/components/react-bits/split-text";

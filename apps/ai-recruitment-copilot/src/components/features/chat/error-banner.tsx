@@ -1,6 +1,9 @@
 "use client";
 
-import { AlertCircleIcon, RefreshCcwIcon } from "@/components/icons/hugeicons";
+import {
+  IconAlertCircle as AlertCircleIcon,
+  IconRefresh as RefreshCcwIcon,
+} from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { useChatActionsContext } from "./chat-runtime-context";
 

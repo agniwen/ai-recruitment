@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircleIcon, SparklesIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as LoaderCircleIcon, IconSparkles as SparklesIcon } from "@tabler/icons-react";
 import { JobDescriptionSelectField } from "@/components/features/studio/interviews/job-description-select-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

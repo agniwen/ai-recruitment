@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2Icon, UsersIcon } from "@/components/icons/hugeicons";
+import { IconBuilding as Building2Icon, IconUsers as UsersIcon } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {

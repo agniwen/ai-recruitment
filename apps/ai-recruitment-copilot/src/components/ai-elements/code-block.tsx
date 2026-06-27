@@ -3,7 +3,7 @@
 import type { ComponentProps, CSSProperties, HTMLAttributes } from "react";
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from "shiki";
 
-import { CheckIcon, CopyIcon } from "@/components/icons/hugeicons";
+import { IconCheck as CheckIcon, IconCopy as CopyIcon } from "@tabler/icons-react";
 import {
   createContext,
   memo,

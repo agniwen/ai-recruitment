@@ -1,6 +1,6 @@
 "use client";
 
-import { TimerIcon } from "@/components/icons/hugeicons";
+import { IconClockHour3 as TimerIcon } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { cn } from "@arc/shared/utils";
 

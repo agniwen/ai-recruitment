@@ -1,6 +1,6 @@
 "use client";
 
-import { XIcon } from "@/components/icons/hugeicons";
+import { IconX as XIcon } from "@tabler/icons-react";
 import { useId, useMemo } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

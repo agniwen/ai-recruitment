@@ -27,7 +27,7 @@ import type {
   StudioInterviewRoundListRecord,
 } from "@arc/shared/studio-interview-rounds";
 import { pipelineStageMeta, scheduleEntryStatusMeta } from "@arc/db-schema/studio-interviews";
-import { BotIcon, Trash2Icon } from "@/components/icons/hugeicons";
+import { IconRobot as BotIcon, IconTrash as Trash2Icon } from "@tabler/icons-react";
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {

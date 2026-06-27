@@ -9,7 +9,7 @@
  */
 
 import type { CandidateFormTemplateSnapshot } from "@arc/db-schema/candidate-forms";
-import { CheckIcon, ChevronDownIcon } from "@/components/icons/hugeicons";
+import { IconCheck as CheckIcon, IconChevronDown as ChevronDownIcon } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@arc/shared/utils";

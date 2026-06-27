@@ -16,13 +16,13 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import {
-  GripVerticalIcon,
-  PlusIcon,
-  SettingsIcon,
-  Trash2Icon,
-  UserPlusIcon,
-  UsersIcon,
-} from "@/components/icons/hugeicons";
+  IconGripVertical as GripVerticalIcon,
+  IconPlus as PlusIcon,
+  IconSettings as SettingsIcon,
+  IconTrash as Trash2Icon,
+  IconUserPlus as UserPlusIcon,
+  IconUsers as UsersIcon,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/features/studio/page-header";

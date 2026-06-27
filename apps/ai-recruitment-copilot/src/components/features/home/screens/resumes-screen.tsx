@@ -4,14 +4,14 @@
 // - DataGrid: AlignUI table primitives，Toolbar 在外面 (filters 左 + button 右)
 // Purpose: simplified Studio resume library mock, mirroring the real components 1:1.
 import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  FilterXIcon,
-  PlusIcon,
-  RefreshCwIcon,
-  SearchIcon,
-  UploadCloudIcon,
-} from "@/components/icons/hugeicons";
+  IconChevronDown as ChevronDownIcon,
+  IconChevronRight as ChevronRightIcon,
+  IconFilterX as FilterXIcon,
+  IconPlus as PlusIcon,
+  IconRefresh as RefreshCwIcon,
+  IconSearch as SearchIcon,
+  IconCloudUpload as UploadCloudIcon,
+} from "@tabler/icons-react";
 import { Fragment } from "react";
 import { PdfFileIcon } from "@/components/features/pdf/pdf-file-icon";
 import {

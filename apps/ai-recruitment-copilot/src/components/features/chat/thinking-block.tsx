@@ -1,7 +1,7 @@
 "use client";
 
 import type { ToolRenderState } from "@arc/shared/tool-state";
-import { Brain } from "@/components/icons/hugeicons";
+import { IconBrain as Brain } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { ToolLayout } from "./tool-call/tool-layout";
 

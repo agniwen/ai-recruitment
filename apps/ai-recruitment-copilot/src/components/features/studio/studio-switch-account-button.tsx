@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircleIcon, LogOutIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as LoaderCircleIcon, IconLogout as LogOutIcon } from "@tabler/icons-react";
 import { useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";

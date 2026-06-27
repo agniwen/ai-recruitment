@@ -1,5 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDownIcon } from "@/components/icons/hugeicons";
+import { IconArrowsSort as ArrowUpDownIcon } from "@tabler/icons-react";
 import { DATE_TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display/time-display";
 import { Button } from "@/components/ui/button";
 
@@ -7,6 +7,7 @@ export interface DateColumnOptions<TData> {
   key: keyof TData & string;
   title: string;
   sortable?: boolean;
+  size?: number;
   /** dayjs format string; defaults to DATE_TIME_DISPLAY_OPTIONS (`YY/MM/DD HH:mm`). */
   options?: string;
   /** Text rendered when the value is null / empty. Defaults to TimeDisplay's default ("待定"). */
@@ -40,5 +41,6 @@ export function dateColumn<TData>(opts: DateColumnOptions<TData>): ColumnDef<TDa
         )
       : opts.title,
     id: opts.key,
+    size: opts.size,
   };
 }

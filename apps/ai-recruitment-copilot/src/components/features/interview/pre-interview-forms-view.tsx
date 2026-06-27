@@ -1,6 +1,9 @@
 "use client";
 
-import { ClipboardListIcon, Loader2Icon } from "@/components/icons/hugeicons";
+import {
+  IconClipboardList as ClipboardListIcon,
+  IconLoader2 as Loader2Icon,
+} from "@tabler/icons-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { rpc } from "@/lib/client/rpc";

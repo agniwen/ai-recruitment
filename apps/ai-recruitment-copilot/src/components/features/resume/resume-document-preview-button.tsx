@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeIcon } from "@/components/icons/hugeicons";
+import { IconEye as EyeIcon } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { Suspense, lazy, useState } from "react";
 import { PdfPreviewButton } from "@/components/features/pdf/pdf-preview-button";

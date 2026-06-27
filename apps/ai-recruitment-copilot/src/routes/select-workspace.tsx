@@ -1,4 +1,4 @@
-import { ArrowRightIcon, PlusIcon } from "@/components/icons/hugeicons";
+import { IconArrowRight as ArrowRightIcon, IconPlus as PlusIcon } from "@tabler/icons-react";
 import { createFileRoute, redirect, useLoaderData } from "@tanstack/react-router";
 import { NO_ACCESS_WORKSPACE_ROLE } from "@arc/shared/permissions";
 import { ThemeToggle } from "@/components/theme/theme-toggle";

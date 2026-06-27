@@ -2,7 +2,11 @@
 // 对齐 JobDescriptionFormDialog 的字段：岗位名称 / 部门 / 面试官（multi） / 简要描述 / 岗位 Prompt。
 // Purpose: simplified UI of the "新建在招岗位" dialog overlaying the JD list page.
 // Mirrors JobDescriptionFormDialog fields: name / department / interviewers / description / prompt.
-import { ChevronDownIcon, FileTextIcon, XIcon } from "@/components/icons/hugeicons";
+import {
+  IconChevronDown as ChevronDownIcon,
+  IconFileText as FileTextIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import { AppShell, StudioNav } from "./_parts/app-shell";
 import type { BreadcrumbCrumb } from "./_parts/app-shell";
 import { ScreenFrame } from "./screen-frame";

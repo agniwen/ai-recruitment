@@ -1,9 +1,9 @@
 import type { Button } from "@/components/ui/button";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  MoreHorizontalIcon,
-} from "@/components/icons/hugeicons";
+  IconChevronLeft as ChevronLeftIcon,
+  IconChevronRight as ChevronRightIcon,
+  IconDots as MoreHorizontalIcon,
+} from "@tabler/icons-react";
 
 import * as React from "react";
 import { buttonVariants } from "@/components/ui/button";

@@ -1,7 +1,13 @@
 "use client";
 
-import type { ColumnDef, OnChangeFn, RowSelectionState, SortingState } from "@tanstack/react-table";
-import type { ReactNode } from "react";
+import type {
+  Column,
+  ColumnDef,
+  OnChangeFn,
+  RowSelectionState,
+  SortingState,
+} from "@tanstack/react-table";
+import type { CSSProperties, ReactNode } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Fragment, useMemo } from "react";
 import {
@@ -25,6 +31,19 @@ import { Toolbar } from "./parts/toolbar";
 import type { ToolbarFilterConfig } from "./parts/toolbar";
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const;
+
+function getExplicitColumnSizeStyles<TData>(column: Column<TData, unknown>): CSSProperties {
+  if (typeof column.columnDef.size !== "number") {
+    return {};
+  }
+  const size = column.getSize();
+  return {
+    boxSizing: "border-box",
+    maxWidth: `${size}px`,
+    minWidth: `${size}px`,
+    width: `${size}px`,
+  };
+}
 
 export interface BulkActionContext<TData> {
   selectedIds: string[];
@@ -194,10 +213,13 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
                         pin && PINNED_HEADER_CLASS,
                       )}
                       key={header.id}
-                      style={getPinningStyles(header.column, {
-                        isHeader: true,
-                        stickToTop: !!maxHeight,
-                      })}
+                      style={{
+                        ...getExplicitColumnSizeStyles(header.column),
+                        ...getPinningStyles(header.column, {
+                          isHeader: true,
+                          stickToTop: !!maxHeight,
+                        }),
+                      }}
                     >
                       {header.isPlaceholder
                         ? null
@@ -218,7 +240,10 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
                       <TableCell
                         className={cn(pin && PINNED_CELL_CLASS)}
                         key={cell.id}
-                        style={getPinningStyles(cell.column)}
+                        style={{
+                          ...getExplicitColumnSizeStyles(cell.column),
+                          ...getPinningStyles(cell.column),
+                        }}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>

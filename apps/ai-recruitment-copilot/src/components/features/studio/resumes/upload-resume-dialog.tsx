@@ -9,7 +9,7 @@
 // 1-round interview with default schedule).
 
 import { useForm, useStore } from "@tanstack/react-form";
-import { LoaderCircleIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as LoaderCircleIcon } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ResumeAnalysisOverlay } from "@/components/features/studio/resume-analysis-overlay";

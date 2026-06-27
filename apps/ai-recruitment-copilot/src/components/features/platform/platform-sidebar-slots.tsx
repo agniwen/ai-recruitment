@@ -1,6 +1,11 @@
 "use client";
 
-import { Building2Icon, InboxIcon, ListChecksIcon, UsersIcon } from "@/components/icons/hugeicons";
+import {
+  IconBuilding as Building2Icon,
+  IconInbox as InboxIcon,
+  IconListCheck as ListChecksIcon,
+  IconUsers as UsersIcon,
+} from "@tabler/icons-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   SidebarBodyPortalContent,

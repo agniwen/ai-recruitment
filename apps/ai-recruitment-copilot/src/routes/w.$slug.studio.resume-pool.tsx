@@ -11,21 +11,21 @@ import type {
   ResumePoolImportDuplicateResult,
   ResumePoolListRecord,
 } from "@arc/shared/resume-pool";
-import type { LucideIcon } from "@/components/icons/hugeicons";
+import type { Icon as LucideIcon } from "@tabler/icons-react";
 import {
-  BriefcaseBusinessIcon,
-  Building2Icon,
-  DatabaseIcon,
-  FileTextIcon,
-  FolderGit2Icon,
-  GraduationCapIcon,
-  HistoryIcon,
-  LoaderCircleIcon,
-  RefreshCwIcon,
-  SendIcon,
-  Trash2Icon,
-  UploadIcon,
-} from "@/components/icons/hugeicons";
+  IconBriefcase2 as BriefcaseBusinessIcon,
+  IconBuilding as Building2Icon,
+  IconDatabase as DatabaseIcon,
+  IconFileText as FileTextIcon,
+  IconGitBranch as FolderGit2Icon,
+  IconSchool as GraduationCapIcon,
+  IconHistory as HistoryIcon,
+  IconLoader2 as LoaderCircleIcon,
+  IconRefresh as RefreshCwIcon,
+  IconSend as SendIcon,
+  IconTrash as Trash2Icon,
+  IconUpload as UploadIcon,
+} from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Masonry, { ResponsiveMasonry } from "react-responsive-masonry";

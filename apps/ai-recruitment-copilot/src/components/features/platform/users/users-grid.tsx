@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  BanIcon,
-  Building2Icon,
-  CheckCircle2Icon,
-  ShieldCheckIcon,
-  UsersIcon,
-  XCircleIcon,
-} from "@/components/icons/hugeicons";
+  IconBan as BanIcon,
+  IconBuilding as Building2Icon,
+  IconCircleCheck as CheckCircle2Icon,
+  IconShieldCheck as ShieldCheckIcon,
+  IconUsers as UsersIcon,
+  IconCircleX as XCircleIcon,
+} from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";

@@ -14,13 +14,13 @@ import {
   getResumeDocumentFileIconKind,
 } from "@/components/features/resume/resume-document-file-icon";
 import {
-  BriefcaseBusinessIcon,
-  Building2Icon,
-  FileSearchIcon,
-  FolderGit2Icon,
-  GraduationCapIcon,
-  UserCheckIcon,
-} from "@/components/icons/hugeicons";
+  IconBriefcase2 as BriefcaseBusinessIcon,
+  IconBuilding as Building2Icon,
+  IconFileSearch as FileSearchIcon,
+  IconGitBranch as FolderGit2Icon,
+  IconSchool as GraduationCapIcon,
+  IconUserCheck as UserCheckIcon,
+} from "@tabler/icons-react";
 import { ResumeEducationDisplayLine } from "@/components/features/resume/resume-education-line";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

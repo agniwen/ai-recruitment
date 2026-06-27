@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeIcon, LoaderCircleIcon } from "@/components/icons/hugeicons";
+import { IconEye as EyeIcon, IconLoader2 as LoaderCircleIcon } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";

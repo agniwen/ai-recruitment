@@ -7,16 +7,16 @@ import type {
   CandidateTimelineResponse,
 } from "@arc/shared/studio-resumes";
 import {
-  BellIcon,
-  BotIcon,
-  BriefcaseBusinessIcon,
-  CalendarClockIcon,
-  ClipboardListIcon,
-  FileTextIcon,
-  HistoryIcon,
-  MailIcon,
-  UserRoundIcon,
-} from "@/components/icons/hugeicons";
+  IconBell as BellIcon,
+  IconRobot as BotIcon,
+  IconBriefcase2 as BriefcaseBusinessIcon,
+  IconCalendarClock as CalendarClockIcon,
+  IconClipboardList as ClipboardListIcon,
+  IconFileText as FileTextIcon,
+  IconHistory as HistoryIcon,
+  IconMail as MailIcon,
+  IconUserCircle as UserRoundIcon,
+} from "@tabler/icons-react";
 import type { ComponentProps, ComponentType, SVGProps } from "react";
 import { MarkdownView } from "@/components/features/display/markdown-view";
 import { DATE_TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display/time-display";

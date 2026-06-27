@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  SelectChevronDownIcon,
-} from "@/components/icons/hugeicons";
+  IconCheck as CheckIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconChevronUp as ChevronUpIcon,
+  IconChevronDown as SelectChevronDownIcon,
+} from "@tabler/icons-react";
 import { Select as SelectPrimitive } from "radix-ui";
 import * as React from "react";
 

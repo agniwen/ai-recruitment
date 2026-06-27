@@ -1,6 +1,10 @@
 "use client";
 
-import { CheckIcon, ChevronRightIcon, CircleIcon } from "@/components/icons/hugeicons";
+import {
+  IconCheck as CheckIcon,
+  IconChevronRight as ChevronRightIcon,
+  IconCircle as CircleIcon,
+} from "@tabler/icons-react";
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui";
 import * as React from "react";
 

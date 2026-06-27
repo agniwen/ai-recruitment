@@ -1,7 +1,7 @@
 "use client";
 
 import { Command as CommandPrimitive } from "cmdk";
-import { SearchIcon } from "@/components/icons/hugeicons";
+import { IconSearch as SearchIcon } from "@tabler/icons-react";
 import * as React from "react";
 
 import {

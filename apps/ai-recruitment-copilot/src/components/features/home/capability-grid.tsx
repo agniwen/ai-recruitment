@@ -3,13 +3,13 @@
 "use client";
 
 import {
-  ClipboardListIcon,
-  GaugeIcon,
-  MessageSquareTextIcon,
-  RadioIcon,
-  ShieldCheckIcon,
-  SparklesIcon,
-} from "@/components/icons/hugeicons";
+  IconClipboardList as ClipboardListIcon,
+  IconGauge as GaugeIcon,
+  IconMessage as MessageSquareTextIcon,
+  IconRadio as RadioIcon,
+  IconShieldCheck as ShieldCheckIcon,
+  IconSparkles as SparklesIcon,
+} from "@tabler/icons-react";
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { FadeContent } from "@/components/react-bits/fade-content";
 import { cn } from "@arc/shared/utils";

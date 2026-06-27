@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleIcon } from "@/components/icons/hugeicons";
+import { IconCircle as CircleIcon } from "@tabler/icons-react";
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui";
 import * as React from "react";
 

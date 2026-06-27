@@ -1,7 +1,11 @@
 "use client";
 
 import type { FileUIPart, SourceUrlUIPart, UIMessage } from "ai";
-import { CheckIcon, CopyIcon, RefreshCcwIcon } from "@/components/icons/hugeicons";
+import {
+  IconCheck as CheckIcon,
+  IconCopy as CopyIcon,
+  IconRefresh as RefreshCcwIcon,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import {
   Attachment,

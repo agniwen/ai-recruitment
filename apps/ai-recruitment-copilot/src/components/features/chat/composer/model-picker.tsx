@@ -1,7 +1,11 @@
 "use client";
 
 import type { ChatModelOption } from "@/lib/client/api";
-import { CheckIcon, ChevronDownIcon, CpuIcon } from "@/components/icons/hugeicons";
+import {
+  IconCheck as CheckIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconCpu as CpuIcon,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";

@@ -48,7 +48,7 @@ export function SidebarTabs() {
       return;
     }
 
-    const target = nextTab === "chat" ? `/w/${slug}/chat` : `/w/${slug}/studio/resumes`;
+    const target = nextTab === "chat" ? `/w/${slug}/chat` : `/w/${slug}/studio`;
 
     if (target !== pathname) {
       void navigate({ to: target });

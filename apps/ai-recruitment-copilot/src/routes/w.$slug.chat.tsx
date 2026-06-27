@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { ChatHeader } from "@/components/features/chat/chat-header";
 import { PendingOutlet } from "@/components/layout/pending-outlet";
 import { ChatSidebarSlots } from "@/components/features/chat/chat-sidebar-slots";
 import { SidebarInset } from "@/components/ui/sidebar";
-import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
+import { getStudioPageAccessState } from "@/lib/start/auth-session";
+import { resolveWorkspaceLandingHref } from "@/lib/start/workspace-landing";
 import { cn } from "@arc/shared/utils/cn";
 
 function ChatLayout({ children }: { children: ReactNode }) {
@@ -34,10 +35,24 @@ function ChatShellRoute() {
 export const Route = createFileRoute("/w/$slug/chat")({
   component: ChatShellRoute,
   loader: async ({ location, params }) => {
-    await requireStudioPageAccess({
-      action: "chat",
-      pathname: location.pathname,
-      slug: params.slug,
-    });
+    const state = await getStudioPageAccessState({ data: { action: "chat", slug: params.slug } });
+    if (state.status === "unauthenticated") {
+      throw redirect({
+        href: `/login?callbackURL=${encodeURIComponent(location.pathname)}`,
+      });
+    }
+    if (state.status === "not_found") {
+      throw notFound();
+    }
+    if (!state.allowed) {
+      const href = await resolveWorkspaceLandingHref({
+        preferredArea: "studio",
+        slug: params.slug,
+      });
+      if (!href) {
+        throw notFound();
+      }
+      throw redirect({ href });
+    }
   },
 });

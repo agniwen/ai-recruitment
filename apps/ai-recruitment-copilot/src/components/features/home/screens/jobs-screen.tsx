@@ -2,7 +2,12 @@
 // PageHeader (text-2xl + text-sm muted) + JobDescriptionCharts (3 张 Card) +
 // Toolbar (search + departmentId/interviewerId multi-select) + AlignUI DataGrid table + 新建岗位按钮
 // Purpose: simplified Studio job-descriptions management mock, 1:1 with real components.
-import { ChevronDownIcon, FileTextIcon, PlusIcon, SearchIcon } from "@/components/icons/hugeicons";
+import {
+  IconChevronDown as ChevronDownIcon,
+  IconFileText as FileTextIcon,
+  IconPlus as PlusIcon,
+  IconSearch as SearchIcon,
+} from "@tabler/icons-react";
 import { Fragment } from "react";
 import {
   Table,

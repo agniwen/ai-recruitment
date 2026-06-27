@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon, Trash2Icon } from "@/components/icons/hugeicons";
+import { IconPlus as PlusIcon, IconTrash as Trash2Icon } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cossControlOverlayClass } from "@/components/ui/coss-style";
 import { FieldError } from "@/components/ui/field";

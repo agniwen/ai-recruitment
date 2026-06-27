@@ -16,17 +16,17 @@ import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useForm, useStore } from "@tanstack/react-form";
 import {
-  CheckSquareIcon,
-  ChevronDownIcon,
-  CircleDotIcon,
-  ListChecksIcon,
-  LoaderCircleIcon,
-  PlusIcon,
-  Settings2Icon,
-  Trash2Icon,
-  TypeIcon,
-  XIcon,
-} from "@/components/icons/hugeicons";
+  IconSquareCheck as CheckSquareIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconCircleDot as CircleDotIcon,
+  IconListCheck as ListChecksIcon,
+  IconLoader2 as LoaderCircleIcon,
+  IconPlus as PlusIcon,
+  IconSettings2 as Settings2Icon,
+  IconTrash as Trash2Icon,
+  IconLetterT as TypeIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";

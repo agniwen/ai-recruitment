@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  ActivityIcon,
-  Building2Icon,
-  DatabaseIcon,
-  ListChecksIcon,
-  ServerIcon,
-} from "@/components/icons/hugeicons";
+  IconActivity as ActivityIcon,
+  IconBuilding as Building2Icon,
+  IconDatabase as DatabaseIcon,
+  IconListCheck as ListChecksIcon,
+  IconServer as ServerIcon,
+} from "@tabler/icons-react";
 import type { ComponentProps } from "react";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

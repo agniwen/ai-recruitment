@@ -1,7 +1,7 @@
 "use client";
 
 import type { ButtonHTMLAttributes } from "react";
-import { ChevronRightIcon } from "@/components/icons/hugeicons";
+import { IconChevronRight as ChevronRightIcon } from "@tabler/icons-react";
 import { badgeVariants } from "@/components/ui/badge";
 import { cn } from "@arc/shared/utils";
 

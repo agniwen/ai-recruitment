@@ -3,14 +3,14 @@
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
 import type { ToolRenderState } from "@arc/shared/tool-state";
 import {
-  ClockIcon,
-  FileSearchIcon,
-  FileTextIcon,
-  ListIcon,
-  RulerIcon,
-  TargetIcon,
-  WrenchIcon,
-} from "@/components/icons/hugeicons";
+  IconClock as ClockIcon,
+  IconFileSearch as FileSearchIcon,
+  IconFileText as FileTextIcon,
+  IconList as ListIcon,
+  IconRuler as RulerIcon,
+  IconTarget as TargetIcon,
+  IconTool as WrenchIcon,
+} from "@tabler/icons-react";
 import { extractRenderState } from "@arc/shared/tool-state";
 import { ToolLayout } from "./tool-layout";
 

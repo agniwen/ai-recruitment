@@ -1,6 +1,11 @@
 "use client";
 
-import { DownloadIcon, ImageOffIcon, LoaderCircleIcon, XIcon } from "@/components/icons/hugeicons";
+import {
+  IconDownload as DownloadIcon,
+  IconPhotoOff as ImageOffIcon,
+  IconLoader2 as LoaderCircleIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { DocxViewerPreview } from "@/components/ui/docx-viewer";
 import { Modal } from "@/components/ui/modal";

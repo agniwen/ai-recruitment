@@ -1,4 +1,4 @@
-import { SelectChevronDownIcon } from "@/components/icons/hugeicons";
+import { IconChevronDown as SelectChevronDownIcon } from "@tabler/icons-react";
 import * as React from "react";
 
 import { cossFieldSurfaceClass } from "@/components/ui/coss-style";

@@ -1,7 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { HouseIcon, LogOutIcon, UserIcon } from "@/components/icons/hugeicons";
+import {
+  IconHome as HouseIcon,
+  IconLogout as LogOutIcon,
+  IconUser as UserIcon,
+} from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { FeishuSignInButton } from "@/components/features/auth/feishu-sign-in-button";

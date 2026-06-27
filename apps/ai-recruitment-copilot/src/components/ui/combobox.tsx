@@ -1,7 +1,11 @@
 "use client";
 
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
-import { CheckIcon, SelectChevronDownIcon, XIcon } from "@/components/icons/hugeicons";
+import {
+  IconCheck as CheckIcon,
+  IconChevronDown as SelectChevronDownIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";

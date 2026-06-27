@@ -18,7 +18,7 @@ import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-d
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type { InterviewerListRecord, InterviewerRecord } from "@arc/shared/interviewers";
 import type { PaginatedInterviewerResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviewers/dao";
-import { PlusIcon, UserCircleIcon } from "@/components/icons/hugeicons";
+import { IconPlus as PlusIcon, IconUserCircle as UserCircleIcon } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

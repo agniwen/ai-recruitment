@@ -2,7 +2,11 @@
 // Purpose: Three-persona section, Notion-style colorful cards.
 "use client";
 
-import { BriefcaseIcon, MicIcon, UsersIcon } from "@/components/icons/hugeicons";
+import {
+  IconBriefcase as BriefcaseIcon,
+  IconMicrophone as MicIcon,
+  IconUsers as UsersIcon,
+} from "@tabler/icons-react";
 import type { ComponentType, SVGProps } from "react";
 import { FadeContent } from "@/components/react-bits/fade-content";
 import { Eyebrow, Section, SectionLead, SectionTitle } from "./section";

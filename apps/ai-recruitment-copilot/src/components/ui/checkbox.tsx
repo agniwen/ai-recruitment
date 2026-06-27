@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon } from "@/components/icons/hugeicons";
+import { IconCheck as CheckIcon } from "@tabler/icons-react";
 import { Checkbox as CheckboxPrimitive } from "radix-ui";
 import * as React from "react";
 

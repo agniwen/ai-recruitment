@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOutIcon } from "@/components/icons/hugeicons";
+import { IconLogout as LogOutIcon } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

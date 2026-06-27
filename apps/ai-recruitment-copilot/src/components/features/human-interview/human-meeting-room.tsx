@@ -17,21 +17,21 @@ import {
 } from "@livekit/components-react";
 import type { TrackReferenceOrPlaceholder } from "@livekit/components-react";
 import {
-  AudioLinesIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  CircleStopIcon,
-  Loader2Icon,
-  LogInIcon,
-  MicOffIcon,
-  MicIcon,
-  MonitorUpIcon,
-  PhoneOffIcon,
-  UsersIcon,
-  VideoOffIcon,
-  VideoIcon,
-  WandSparklesIcon,
-} from "@/components/icons/hugeicons";
+  IconWaveSine as AudioLinesIcon,
+  IconCheck as CheckIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconPlayerStop as CircleStopIcon,
+  IconLoader2 as Loader2Icon,
+  IconLogin as LogInIcon,
+  IconMicrophoneOff as MicOffIcon,
+  IconMicrophone as MicIcon,
+  IconDeviceDesktopUp as MonitorUpIcon,
+  IconPhoneOff as PhoneOffIcon,
+  IconUsers as UsersIcon,
+  IconVideoOff as VideoOffIcon,
+  IconVideo as VideoIcon,
+  IconWand as WandSparklesIcon,
+} from "@tabler/icons-react";
 import { ConnectionState, LocalAudioTrack, RoomEvent, Track } from "livekit-client";
 import type { Room } from "livekit-client";
 import type { MouseEvent } from "react";

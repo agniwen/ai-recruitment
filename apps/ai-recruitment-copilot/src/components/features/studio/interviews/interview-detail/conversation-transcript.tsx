@@ -1,7 +1,7 @@
 "use client";
 
 import type { PersistedInterviewTurn } from "@arc/db-schema/interview-session";
-import { MessageSquareTextIcon } from "@/components/icons/hugeicons";
+import { IconMessage as MessageSquareTextIcon } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef } from "react";
 import {
   Conversation,

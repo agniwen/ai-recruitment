@@ -4,7 +4,7 @@ import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useQuery } from "@tanstack/react-query";
-import { LoaderCircleIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as LoaderCircleIcon } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import {
   Field,

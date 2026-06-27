@@ -1,6 +1,10 @@
 "use client";
 
-import { DownloadIcon, EyeIcon, XIcon } from "@/components/icons/hugeicons";
+import {
+  IconDownload as DownloadIcon,
+  IconEye as EyeIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import { Component, Suspense, lazy, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import type { PdfPreviewDialogProps } from "@/components/features/pdf/pdf-preview-dialog";

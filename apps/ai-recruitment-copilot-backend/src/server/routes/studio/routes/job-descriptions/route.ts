@@ -68,6 +68,10 @@ function dedupeInterviewerIds(ids: string[]): string[] {
   return uniq(ids.map((id) => id.trim()).filter(Boolean));
 }
 
+function nullableText(value: string | null | undefined): string | null {
+  return value?.trim() || null;
+}
+
 function isJobCodeConflict(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;
@@ -225,21 +229,41 @@ export const jobDescriptionsRouter = factory
         const record = {
           allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
           code,
+          controlCategory: nullableText(input.controlCategory),
           createdAt: now,
           createdBy: c.var.user?.id ?? null,
           departmentId: input.departmentId,
           description: input.description?.trim() || null,
+          expectedOnboardDate: nullableText(input.expectedOnboardDate),
           feishuChatBoundAt: null,
           feishuChatBoundBy: null,
           feishuChatId: null,
+          gapCount: input.gapCount ?? null,
+          headcount: input.headcount ?? null,
           id: crypto.randomUUID(),
+          jobLevel: nullableText(input.jobLevel),
+          jobSeries: nullableText(input.jobSeries),
           name: input.name.trim(),
+          notes: nullableText(input.notes),
+          offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,
+          onboardedCount: input.onboardedCount ?? null,
           organizationId: activeOrg.id,
           // presetQuestions is deprecated — column kept with default [] for legacy
           // data; new rows always store an empty array.
           presetQuestions: [],
+          priority: nullableText(input.priority),
           prompt: input.prompt.trim(),
+          recruitmentStatus: nullableText(input.recruitmentStatus),
+          requestedDate: nullableText(input.requestedDate),
+          requester: nullableText(input.requester),
+          resumeContact: nullableText(input.resumeContact),
+          salaryCurrency: nullableText(input.salaryCurrency),
+          salaryMaxAmount: input.salaryMaxAmount ?? null,
+          salaryMinAmount: input.salaryMinAmount ?? null,
+          serviceUnit: nullableText(input.serviceUnit),
+          sourceSheet: nullableText(input.sourceSheet),
           updatedAt: now,
+          workLocation: nullableText(input.workLocation),
         } satisfies typeof jobDescription.$inferSelect;
 
         try {
@@ -361,12 +385,32 @@ export const jobDescriptionsRouter = factory
       const now = new Date();
       const updateValues = {
         allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
+        controlCategory: nullableText(input.controlCategory),
         departmentId: input.departmentId,
         description: input.description?.trim() || null,
+        expectedOnboardDate: nullableText(input.expectedOnboardDate),
+        gapCount: input.gapCount ?? null,
+        headcount: input.headcount ?? null,
         ...(!existing.code && input.code ? { code: input.code } : {}),
+        jobLevel: nullableText(input.jobLevel),
+        jobSeries: nullableText(input.jobSeries),
         name: input.name.trim(),
+        notes: nullableText(input.notes),
+        offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,
+        onboardedCount: input.onboardedCount ?? null,
+        priority: nullableText(input.priority),
         prompt: input.prompt.trim(),
+        recruitmentStatus: nullableText(input.recruitmentStatus),
+        requestedDate: nullableText(input.requestedDate),
+        requester: nullableText(input.requester),
+        resumeContact: nullableText(input.resumeContact),
+        salaryCurrency: nullableText(input.salaryCurrency),
+        salaryMaxAmount: input.salaryMaxAmount ?? null,
+        salaryMinAmount: input.salaryMinAmount ?? null,
+        serviceUnit: nullableText(input.serviceUnit),
+        sourceSheet: nullableText(input.sourceSheet),
         updatedAt: now,
+        workLocation: nullableText(input.workLocation),
       };
       try {
         await db.transaction(async (tx) => {

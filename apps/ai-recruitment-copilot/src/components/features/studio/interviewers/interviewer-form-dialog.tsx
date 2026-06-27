@@ -6,7 +6,11 @@ import { interviewerFormSchema } from "@arc/shared/interviewers";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { toast } from "sonner";
-import { LoaderCircleIcon, SquareIcon, Volume2Icon } from "@/components/icons/hugeicons";
+import {
+  IconLoader2 as LoaderCircleIcon,
+  IconSquare as SquareIcon,
+  IconVolume2 as Volume2Icon,
+} from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Building2Icon, InboxIcon } from "@/components/icons/hugeicons";
+import { IconBuilding as Building2Icon, IconInbox as InboxIcon } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { actionsColumn, customColumn, DataGrid, useDataGridState } from "@/components/data-grid";

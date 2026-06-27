@@ -1,6 +1,6 @@
 "use client";
 
-import { GripVerticalIcon } from "@/components/icons/hugeicons";
+import { IconGripVertical as GripVerticalIcon } from "@tabler/icons-react";
 import * as ResizablePrimitive from "react-resizable-panels";
 
 import { cn } from "@arc/shared/utils";

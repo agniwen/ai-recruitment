@@ -2,7 +2,13 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { encryptMailIngestSecret } from "@arc/ai-recruitment-copilot-backend/lib/server/mail-ingest-crypto";
-import { mailIngestAccount, member, organization, user } from "@arc/db-schema/schema";
+import {
+  mailIngestAccount,
+  member,
+  organization,
+  organizationRole,
+  user,
+} from "@arc/db-schema/schema";
 import {
   createMailIngestAccount,
   finishMailIngestAccountRun,
@@ -25,6 +31,8 @@ async function cleanup() {
   await db.delete(mailIngestAccount).where(eq(mailIngestAccount.organizationId, OTHER_ORG));
   await db.delete(member).where(eq(member.organizationId, ORG));
   await db.delete(member).where(eq(member.organizationId, OTHER_ORG));
+  await db.delete(organizationRole).where(eq(organizationRole.organizationId, ORG));
+  await db.delete(organizationRole).where(eq(organizationRole.organizationId, OTHER_ORG));
   await db.delete(organization).where(eq(organization.id, ORG));
   await db.delete(organization).where(eq(organization.id, OTHER_ORG));
   await db.delete(user).where(eq(user.id, OWNER));
@@ -70,6 +78,15 @@ describe("mail ingest workspace administration dao", () => {
         slug: "other-mail-ingest-org",
       },
     ]);
+    await db.insert(organizationRole).values({
+      createdAt: NOW,
+      id: "mail_ingest_custom_role",
+      name: "邮箱管理员",
+      organizationId: ORG,
+      permission: JSON.stringify({ page: ["mailIngestAccounts"] }),
+      role: "mail-admin",
+      updatedAt: NOW,
+    });
     await db.insert(member).values([
       {
         createdAt: NOW,
@@ -82,7 +99,7 @@ describe("mail ingest workspace administration dao", () => {
         createdAt: NOW,
         id: "m_mail_ingest_member",
         organizationId: ORG,
-        role: "member",
+        role: "mail-admin",
         userId: MEMBER,
       },
       {
@@ -143,6 +160,10 @@ describe("mail ingest workspace administration dao", () => {
       "owner@mail-ingest.test",
       "member@mail-ingest.test",
     ]);
+    expect(rows[1]?.user).toMatchObject({
+      role: "mail-admin",
+      roleName: "邮箱管理员",
+    });
     expect(rows[0]?.account).toMatchObject({
       emailAddress: "owner-listener@mail-ingest.test",
       enabled: true,

@@ -6,7 +6,10 @@ import { createFileRoute, useParams } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertCircleIcon, FileSearchIcon } from "@/components/icons/hugeicons";
+import {
+  IconAlertCircle as AlertCircleIcon,
+  IconFileSearch as FileSearchIcon,
+} from "@tabler/icons-react";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";

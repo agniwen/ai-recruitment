@@ -1,7 +1,7 @@
 "use client";
 
 import dayjs from "dayjs";
-import { CalendarIcon } from "@/components/icons/hugeicons";
+import { IconCalendar as CalendarIcon } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

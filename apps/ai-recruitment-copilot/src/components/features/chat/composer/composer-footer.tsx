@@ -3,12 +3,12 @@
 import type { ChatStatus } from "ai";
 import { useAtom } from "jotai";
 import {
-  FileTextIcon,
-  ImageIcon,
-  SettingsIcon,
-  SparklesIcon,
-  Trash2Icon,
-} from "@/components/icons/hugeicons";
+  IconFileText as FileTextIcon,
+  IconPhoto as ImageIcon,
+  IconSettings as SettingsIcon,
+  IconSparkles as SparklesIcon,
+  IconTrash as Trash2Icon,
+} from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { ConversationDownload } from "@/components/ai-elements/conversation";
 import {

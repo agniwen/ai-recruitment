@@ -2,7 +2,7 @@
 
 import type { UseEmblaCarouselType } from "embla-carousel-react";
 import useEmblaCarousel from "embla-carousel-react";
-import { ArrowLeft, ArrowRight } from "@/components/icons/hugeicons";
+import { IconArrowLeft as ArrowLeft, IconArrowRight as ArrowRight } from "@tabler/icons-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";

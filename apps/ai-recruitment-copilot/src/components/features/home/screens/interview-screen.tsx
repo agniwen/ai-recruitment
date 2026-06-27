@@ -5,13 +5,13 @@
 //   AgentTrackControl (2-button group, rounded-l-full / rounded-r-full) + Disconnect rounded-full font-mono
 // Purpose: simplified mid-interview UI mirroring AgentSessionView_01 + livekit AgentControlBar.
 import {
-  ChevronDownIcon,
-  MessageSquareTextIcon,
-  MicIcon,
-  PhoneOffIcon,
-  UserIcon,
-  VideoIcon,
-} from "@/components/icons/hugeicons";
+  IconChevronDown as ChevronDownIcon,
+  IconMessage as MessageSquareTextIcon,
+  IconMicrophone as MicIcon,
+  IconPhoneOff as PhoneOffIcon,
+  IconUser as UserIcon,
+  IconVideo as VideoIcon,
+} from "@tabler/icons-react";
 import { ScreenFrame } from "./screen-frame";
 
 // ─────────────── Agent audio visualizer (bars) ───────────────

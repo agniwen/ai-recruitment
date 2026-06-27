@@ -2,7 +2,11 @@
 "use client";
 
 import type { DayButton } from "react-day-picker";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/hugeicons";
+import {
+  IconChevronDown as ChevronDownIcon,
+  IconChevronLeft as ChevronLeftIcon,
+  IconChevronRight as ChevronRightIcon,
+} from "@tabler/icons-react";
 import * as React from "react";
 import { DayPicker, getDefaultClassNames } from "react-day-picker";
 

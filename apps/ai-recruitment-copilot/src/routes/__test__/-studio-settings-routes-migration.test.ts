@@ -96,13 +96,14 @@ describe("TanStack Start studio settings and detail route migration", () => {
 
   it("guards direct studio page access with page permissions", () => {
     const studioRoute = readSource("routes/w.$slug.studio.tsx");
+    const workspaceLanding = readSource("lib/start/workspace-landing.ts");
     const authSession = readSource("lib/start/auth-session.ts");
     const authSessionServer = readSource("lib/start/auth-session.server.ts");
 
     expect(studioRoute).toContain("getStudioPageAccessState");
     expect(studioRoute).toContain("findFirstAllowedStudioPath");
-    expect(studioRoute).toContain('action: "dashboard"');
-    expect(studioRoute).toContain('path: "/resumes"');
+    expect(workspaceLanding).toContain('action: "dashboard"');
+    expect(workspaceLanding).toContain('path: "/resumes"');
     expect(studioRoute).toMatch(/if \(!state\.allowed\) \{\s+throw notFound\(\);\s+\}/u);
     expect(studioRoute).not.toMatch(
       /if \(!state\.allowed\) \{\s+const fallbackPath = await findFirstAllowedStudioPath/u,
@@ -180,6 +181,9 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(source).toContain("<MemberCell");
     expect(source).toContain("useDataGridState<ManagedMailIngestRow");
     expect(source).toContain("<DataGrid<ManagedMailIngestRow>");
+    expect(source).toContain("roleName: string | null");
+    expect(source).toContain("user.roleName ?? getWorkspaceRoleLabel(user.role)");
+    expect(source).toContain("{getRoleLabel(row.user)}");
     expect(source).toContain('type: "search"');
     expect(source).toContain('columnPinning={{ right: ["actions"] }}');
     expect(source).not.toContain("<Table>");

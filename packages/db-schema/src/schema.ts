@@ -730,30 +730,50 @@ export const jobDescription = pgTable(
       .default(false)
       .notNull(),
     code: text("code"),
+    controlCategory: text("control_category"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     departmentId: text("department_id")
       .notNull()
       .references(() => department.id, { onDelete: "restrict" }),
     description: text("description"),
+    expectedOnboardDate: text("expected_onboard_date"),
     feishuChatBoundAt: timestamp("feishu_chat_bound_at", { withTimezone: true }),
     feishuChatBoundBy: text("feishu_chat_bound_by").references(() => user.id, {
       onDelete: "set null",
     }),
     feishuChatId: text("feishu_chat_id"),
+    gapCount: integer("gap_count"),
+    headcount: integer("headcount"),
     id: text("id").primaryKey(),
+    jobLevel: text("job_level"),
+    jobSeries: text("job_series"),
     name: text("name").notNull(),
+    notes: text("notes"),
+    offeredPendingOnboardCount: integer("offered_pending_onboard_count"),
+    onboardedCount: integer("onboarded_count"),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
         onDelete: "cascade",
       }),
     presetQuestions: jsonb("preset_questions").$type<string[]>().notNull().default([]),
+    priority: text("priority"),
     prompt: text("prompt").notNull(),
+    recruitmentStatus: text("recruitment_status"),
+    requestedDate: text("requested_date"),
+    requester: text("requester"),
+    resumeContact: text("resume_contact"),
+    salaryCurrency: text("salary_currency"),
+    salaryMaxAmount: integer("salary_max_amount"),
+    salaryMinAmount: integer("salary_min_amount"),
+    serviceUnit: text("service_unit"),
+    sourceSheet: text("source_sheet"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    workLocation: text("work_location"),
   },
   (table) => [
     index("job_description_department_idx").on(table.departmentId),

@@ -1,4 +1,4 @@
-import { ChevronRight, MoreHorizontal } from "@/components/icons/hugeicons";
+import { IconChevronRight as ChevronRight, IconDots as MoreHorizontal } from "@tabler/icons-react";
 import { Slot } from "radix-ui";
 import * as React from "react";
 

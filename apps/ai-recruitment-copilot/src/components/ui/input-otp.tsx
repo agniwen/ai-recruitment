@@ -1,7 +1,7 @@
 "use client";
 
 import { OTPInput, OTPInputContext } from "input-otp";
-import { MinusIcon } from "@/components/icons/hugeicons";
+import { IconMinus as MinusIcon } from "@tabler/icons-react";
 import * as React from "react";
 
 import { cossControlOverlayClass } from "@/components/ui/coss-style";

@@ -2,12 +2,12 @@
 
 import type { ToasterProps } from "sonner";
 import {
-  CircleCheckIcon,
-  InfoIcon,
-  Loader2Icon,
-  OctagonXIcon,
-  TriangleAlertIcon,
-} from "@/components/icons/hugeicons";
+  IconCircleCheck as CircleCheckIcon,
+  IconInfoCircle as InfoIcon,
+  IconLoader2 as Loader2Icon,
+  IconCircleX as OctagonXIcon,
+  IconAlertTriangle as TriangleAlertIcon,
+} from "@tabler/icons-react";
 import { useTheme } from "next-themes";
 import { Toaster as Sonner } from "sonner";
 

@@ -1,23 +1,23 @@
 "use client";
 
 import {
-  ChartNoAxesCombinedIcon,
-  BotIcon,
-  Building2Icon,
-  ClipboardListIcon,
-  FileTextIcon,
-  GlobeIcon,
-  LayoutGridIcon,
-  ListChecksIcon,
-  MailCheckIcon,
-  SettingsIcon,
-  ShieldCheckIcon,
-  UserIcon,
-  UserCircleIcon,
-  UserCogIcon,
-  UsersIcon,
-  WrenchIcon,
-} from "@/components/icons/hugeicons";
+  IconChartBar as ChartNoAxesCombinedIcon,
+  IconRobot as BotIcon,
+  IconBuilding as Building2Icon,
+  IconClipboardList as ClipboardListIcon,
+  IconFileText as FileTextIcon,
+  IconWorld as GlobeIcon,
+  IconLayoutGrid as LayoutGridIcon,
+  IconListCheck as ListChecksIcon,
+  IconMailCheck as MailCheckIcon,
+  IconSettings as SettingsIcon,
+  IconShieldCheck as ShieldCheckIcon,
+  IconUser as UserIcon,
+  IconUserCircle as UserCircleIcon,
+  IconUserCog as UserCogIcon,
+  IconUsers as UsersIcon,
+  IconTool as WrenchIcon,
+} from "@tabler/icons-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   SidebarBodyPortalContent,
@@ -234,7 +234,7 @@ export function StudioSidebarSlots() {
     <>
       <SidebarBodyPortalContent>
         {navGroups.map((group) => (
-          <SidebarGroup key={group.label}>
+          <SidebarGroup className="hidden has-[li]:flex" key={group.label}>
             <SidebarGroupLabel className="select-none">{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>

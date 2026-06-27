@@ -1,21 +1,21 @@
 "use client";
 
-import type { LucideIcon } from "@/components/icons/hugeicons";
+import type { Icon as LucideIcon } from "@tabler/icons-react";
 import type { CandidateInterviewView } from "@arc/shared/interview/interview-record";
 import { useAgent, useSession } from "@livekit/components-react";
 import { ConnectionState, DisconnectReason, RoomEvent, TokenSource } from "livekit-client";
 import {
-  CheckCircle2Icon,
-  MessageSquareTextIcon,
-  MicIcon,
-  MicOffIcon,
-  RefreshCwIcon,
-  TriangleAlertIcon,
-  UserCheckIcon,
-  VideoIcon,
-  Volume2Icon,
-  WifiIcon,
-} from "@/components/icons/hugeicons";
+  IconCircleCheck as CheckCircle2Icon,
+  IconMessage as MessageSquareTextIcon,
+  IconMicrophone as MicIcon,
+  IconMicrophoneOff as MicOffIcon,
+  IconRefresh as RefreshCwIcon,
+  IconAlertTriangle as TriangleAlertIcon,
+  IconUserCheck as UserCheckIcon,
+  IconVideo as VideoIcon,
+  IconVolume2 as Volume2Icon,
+  IconWifi as WifiIcon,
+} from "@tabler/icons-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AgentSessionProvider } from "@/components/agents-ui/agent-session-provider";

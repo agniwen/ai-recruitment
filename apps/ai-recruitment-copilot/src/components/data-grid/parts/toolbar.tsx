@@ -1,4 +1,9 @@
-import { FilterXIcon, Loader2Icon, RefreshCwIcon, SearchIcon } from "@/components/icons/hugeicons";
+import {
+  IconFilterX as FilterXIcon,
+  IconLoader2 as Loader2Icon,
+  IconRefresh as RefreshCwIcon,
+  IconSearch as SearchIcon,
+} from "@tabler/icons-react";
 import type { CSSProperties, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

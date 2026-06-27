@@ -11,18 +11,107 @@ export const jobDescriptionCodeSchema = z
   .transform((value) => value || undefined)
   .optional();
 
-export const jobDescriptionBaseSchema = z.object({
-  allowCrossDepartmentInterviewers: z.boolean(),
-  code: jobDescriptionCodeSchema,
-  departmentId: z.string().trim().min(1, "请选择所属部门"),
-  description: z.string().trim().max(500, "描述不能超过 500 字").optional().or(z.literal("")),
-  interviewerIds: z
-    .array(z.string().trim().min(1))
-    .min(1, "请至少选择一位面试官")
-    .max(20, "最多只能选择 20 位面试官"),
-  name: z.string().trim().min(1, "请输入岗位名称").max(120, "岗位名称不能超过 120 个字符"),
-  prompt: z.string().trim().min(1, "请输入岗位 prompt").max(10_000, "prompt 不能超过 10000 字"),
-});
+const nullableSalaryAmountSchema = z
+  .number()
+  .int("薪资金额必须为整数")
+  .min(0, "薪资金额不能为负")
+  .nullable()
+  .optional();
+const nullableSalaryCurrencySchema = z
+  .string()
+  .trim()
+  .min(1, "请选择薪资币种")
+  .max(8, "薪资币种不能超过 8 个字符")
+  .nullable()
+  .optional();
+const nullableTextSchema = (max: number, label: string) =>
+  z.string().trim().max(max, `${label}不能超过 ${max} 个字符`).nullable().optional();
+const nullableCountSchema = (label: string) =>
+  z.number().int(`${label}必须为整数`).min(0, `${label}不能为负`).nullable().optional();
+const nullableDateStringSchema = (label: string) =>
+  z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, `${label}格式无效`)
+    .nullable()
+    .optional();
+
+export const jobDescriptionBaseSchema = z
+  .object({
+    allowCrossDepartmentInterviewers: z.boolean(),
+    code: jobDescriptionCodeSchema,
+    controlCategory: nullableTextSchema(120, "岗位管控分类"),
+    departmentId: z.string().trim().min(1, "请选择所属部门"),
+    description: z.string().trim().max(500, "描述不能超过 500 字").optional().or(z.literal("")),
+    expectedOnboardDate: nullableDateStringSchema("期望到岗日期"),
+    gapCount: nullableCountSchema("缺口"),
+    headcount: nullableCountSchema("HC"),
+    interviewerIds: z
+      .array(z.string().trim().min(1))
+      .min(1, "请至少选择一位面试官")
+      .max(20, "最多只能选择 20 位面试官"),
+    jobLevel: nullableTextSchema(80, "职级"),
+    jobSeries: nullableTextSchema(120, "序列"),
+    name: z.string().trim().min(1, "请输入岗位名称").max(120, "岗位名称不能超过 120 个字符"),
+    notes: nullableTextSchema(2000, "备注说明"),
+    offeredPendingOnboardCount: nullableCountSchema("已发 offer 待入职"),
+    onboardedCount: nullableCountSchema("已到岗"),
+    priority: nullableTextSchema(80, "优先级"),
+    prompt: z.string().trim().min(1, "请输入岗位 prompt").max(10_000, "prompt 不能超过 10000 字"),
+    recruitmentStatus: nullableTextSchema(120, "招聘状态"),
+    requestedDate: nullableDateStringSchema("提需日期"),
+    requester: nullableTextSchema(120, "需求发起人"),
+    resumeContact: nullableTextSchema(120, "简历对接人"),
+    salaryCurrency: nullableSalaryCurrencySchema,
+    salaryMaxAmount: nullableSalaryAmountSchema,
+    salaryMinAmount: nullableSalaryAmountSchema,
+    serviceUnit: nullableTextSchema(120, "服务单位"),
+    sourceSheet: nullableTextSchema(120, "来源表格"),
+    workLocation: nullableTextSchema(120, "工作地点"),
+  })
+  .superRefine((value, ctx) => {
+    const hasSalary =
+      (value.salaryMinAmount !== null && value.salaryMinAmount !== undefined) ||
+      (value.salaryMaxAmount !== null && value.salaryMaxAmount !== undefined) ||
+      Boolean(value.salaryCurrency?.trim());
+    if (!hasSalary) {
+      return;
+    }
+    if (value.salaryMinAmount === null || value.salaryMinAmount === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "请输入薪资下限",
+        path: ["salaryMinAmount"],
+      });
+    }
+    if (value.salaryMaxAmount === null || value.salaryMaxAmount === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "请输入薪资上限",
+        path: ["salaryMaxAmount"],
+      });
+    }
+    if (!value.salaryCurrency?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "请选择薪资币种",
+        path: ["salaryCurrency"],
+      });
+    }
+    if (
+      value.salaryMinAmount !== null &&
+      value.salaryMinAmount !== undefined &&
+      value.salaryMaxAmount !== null &&
+      value.salaryMaxAmount !== undefined &&
+      value.salaryMaxAmount < value.salaryMinAmount
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "薪资上限不能低于下限",
+        path: ["salaryMaxAmount"],
+      });
+    }
+  });
 
 export const jobDescriptionFormSchema = jobDescriptionBaseSchema;
 export const jobDescriptionUpdateSchema = jobDescriptionBaseSchema;
@@ -40,13 +129,33 @@ export interface JobDescriptionRecord {
   id: string;
   allowCrossDepartmentInterviewers: boolean;
   code: string | null;
+  controlCategory: string | null;
   departmentId: string;
   interviewerIds: string[];
   name: string;
   description: string | null;
+  expectedOnboardDate: string | null;
+  gapCount: number | null;
+  headcount: number | null;
+  jobLevel: string | null;
+  jobSeries: string | null;
+  notes: string | null;
+  offeredPendingOnboardCount: number | null;
+  onboardedCount: number | null;
+  priority: string | null;
   /** @deprecated Replaced by interview-question-templates. Read for legacy data only. */
   presetQuestions: string[];
   prompt: string;
+  recruitmentStatus: string | null;
+  requestedDate: string | null;
+  requester: string | null;
+  resumeContact: string | null;
+  salaryCurrency: string | null;
+  salaryMaxAmount: number | null;
+  salaryMinAmount: number | null;
+  serviceUnit: string | null;
+  sourceSheet: string | null;
+  workLocation: string | null;
   createdBy: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;

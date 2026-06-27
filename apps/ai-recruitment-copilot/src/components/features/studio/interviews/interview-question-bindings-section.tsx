@@ -5,7 +5,7 @@ import type {
   InterviewQuestionTemplateRecord,
 } from "@arc/db-schema/interview-question-templates";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ListChecksIcon } from "@/components/icons/hugeicons";
+import { IconListCheck as ListChecksIcon } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { rpc } from "@/lib/client/rpc";

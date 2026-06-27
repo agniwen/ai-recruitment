@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 
-import { BookIcon, ChevronDownIcon } from "@/components/icons/hugeicons";
+import { IconBook as BookIcon, IconChevronDown as ChevronDownIcon } from "@tabler/icons-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@arc/shared/utils";
 

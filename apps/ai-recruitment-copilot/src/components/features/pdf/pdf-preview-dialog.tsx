@@ -1,6 +1,6 @@
 "use client";
 
-import { DownloadIcon, XIcon } from "@/components/icons/hugeicons";
+import { IconDownload as DownloadIcon, IconX as XIcon } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";

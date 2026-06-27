@@ -12,7 +12,11 @@ import { ResumeDedupOverlay } from "@/components/features/resume/resume-dedup-ov
 import { TextFlip } from "@/components/features/motion/text-flip";
 import { Button } from "@/components/ui/button";
 import { cn } from "@arc/shared/utils";
-import { CheckIcon, LoaderCircleIcon, WrenchIcon } from "@/components/icons/hugeicons";
+import {
+  IconCheck as CheckIcon,
+  IconLoader2 as LoaderCircleIcon,
+  IconTool as WrenchIcon,
+} from "@tabler/icons-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef } from "react";
 

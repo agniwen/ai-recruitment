@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircleIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as LoaderCircleIcon } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";

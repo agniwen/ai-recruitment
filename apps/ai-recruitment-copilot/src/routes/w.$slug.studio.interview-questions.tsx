@@ -25,11 +25,11 @@ import type {
 } from "@arc/db-schema/interview-question-templates";
 import type { PaginatedInterviewQuestionTemplateResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interview-questions/dao/queries";
 import {
-  ChevronDownIcon,
-  ListChecksIcon,
-  PlusIcon,
-  SparklesIcon,
-} from "@/components/icons/hugeicons";
+  IconChevronDown as ChevronDownIcon,
+  IconListCheck as ListChecksIcon,
+  IconPlus as PlusIcon,
+  IconSparkles as SparklesIcon,
+} from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";

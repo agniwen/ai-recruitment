@@ -12,7 +12,10 @@
  * the in-progress overlay for this component so the user can decide.
  */
 
-import { AlertTriangleIcon, ExternalLinkIcon } from "@/components/icons/hugeicons";
+import {
+  IconAlertTriangle as AlertTriangleIcon,
+  IconExternalLink as ExternalLinkIcon,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import type { DedupMatchRecord } from "@/lib/client/api";
 import { studioInterviewStatusMeta } from "@arc/db-schema/studio-interviews";

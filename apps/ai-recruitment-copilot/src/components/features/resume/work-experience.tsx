@@ -5,7 +5,10 @@
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import { BriefcaseBusinessIcon, InfinityIcon } from "@/components/icons/hugeicons";
+import {
+  IconBriefcase2 as BriefcaseBusinessIcon,
+  IconInfinity as InfinityIcon,
+} from "@tabler/icons-react";
 import type { ComponentProps } from "react";
 import { useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";

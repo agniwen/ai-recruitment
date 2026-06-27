@@ -27,7 +27,11 @@ import type {
 import type { PaginatedJobDescriptionResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { JobDescriptionCharts } from "@/components/features/studio/job-descriptions/job-description-charts";
 import { ScopedResumesModal } from "@/components/features/studio/scoped-resumes-modal";
-import { FileTextIcon, PlusIcon, SparklesIcon } from "@/components/icons/hugeicons";
+import {
+  IconFileText as FileTextIcon,
+  IconPlus as PlusIcon,
+  IconSparkles as SparklesIcon,
+} from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +58,35 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { JobDescriptionFormDialog } from "@/components/features/studio/job-descriptions/job-description-form-dialog";
 import { JobDescriptionAiCreateDialog } from "@/components/features/studio/job-descriptions/job-description-ai-create-dialog";
 import { JobDescriptionTalentRecommendationsDialog } from "@/components/features/studio/job-descriptions/job-description-talent-recommendations-dialog";
+
+const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
+
+function formatSalaryRange(record: JobDescriptionListRecord): string | null {
+  if (
+    record.salaryCurrency === null ||
+    record.salaryMinAmount === null ||
+    record.salaryMaxAmount === null
+  ) {
+    return null;
+  }
+  return `${record.salaryCurrency} ${salaryAmountFormatter.format(record.salaryMinAmount)} - ${salaryAmountFormatter.format(record.salaryMaxAmount)}`;
+}
+
+function formatHeadcount(record: JobDescriptionListRecord): string | null {
+  if (
+    record.headcount === null &&
+    record.onboardedCount === null &&
+    record.gapCount === null &&
+    record.offeredPendingOnboardCount === null
+  ) {
+    return null;
+  }
+  const headcount = record.headcount ?? "-";
+  const gap = record.gapCount ?? "-";
+  const onboarded = record.onboardedCount ?? "-";
+  const offered = record.offeredPendingOnboardCount ?? "-";
+  return `HC ${headcount} / 缺口 ${gap} / 到岗 ${onboarded} / offer ${offered}`;
+}
 
 function JobDescriptionManagementPage({
   departments,
@@ -176,11 +209,31 @@ function JobDescriptionManagementPage({
   }) {
     setCreateDraft({
       allowCrossDepartmentInterviewers: false,
+      controlCategory: null,
       departmentId,
       description,
+      expectedOnboardDate: null,
+      gapCount: null,
+      headcount: null,
       interviewerIds: [],
+      jobLevel: null,
+      jobSeries: null,
       name,
+      notes: null,
+      offeredPendingOnboardCount: null,
+      onboardedCount: null,
+      priority: null,
       prompt,
+      recruitmentStatus: null,
+      requestedDate: null,
+      requester: null,
+      resumeContact: null,
+      salaryCurrency: null,
+      salaryMaxAmount: null,
+      salaryMinAmount: null,
+      serviceUnit: null,
+      sourceSheet: null,
+      workLocation: null,
     });
     setCreateDraftSessionId((id) => id + 1);
     crud.setEditingRecord(null);
@@ -199,23 +252,92 @@ function JobDescriptionManagementPage({
       textColumn<JobDescriptionListRecord>({
         key: "name",
         primary: true,
+        size: 220,
         title: "岗位名称",
-        truncate: "max-w-[14rem]",
+        truncate: "max-w-[11.75rem]",
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) =>
           r.code ? (
-            <span className="font-mono text-xs">{r.code}</span>
+            <span className="block max-w-20 truncate font-mono text-xs">{r.code}</span>
           ) : (
             <span className="text-muted-foreground text-sm">未生成</span>
           ),
         key: "code",
+        size: 112,
         title: "编码",
       }),
       customColumn<JobDescriptionListRecord>({
-        cell: (r) => r.departmentName ?? <Badge variant="outline">未知</Badge>,
+        cell: (r) =>
+          r.departmentName ? (
+            <span className="block max-w-24 truncate">{r.departmentName}</span>
+          ) : (
+            <Badge variant="outline">未知</Badge>
+          ),
         key: "departmentName",
+        size: 128,
         title: "部门",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.recruitmentStatus ? (
+            <Badge className="max-w-24 truncate" variant="secondary">
+              {r.recruitmentStatus}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          ),
+        key: "recruitmentStatus",
+        size: 120,
+        title: "招聘状态",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.priority ? (
+            <span className="block max-w-14 truncate">{r.priority}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          ),
+        key: "priority",
+        size: 88,
+        title: "优先级",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) => {
+          const salary = formatSalaryRange(r);
+          return salary ? (
+            <span className="block max-w-[8.5rem] truncate font-mono text-sm">{salary}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          );
+        },
+        key: "salary",
+        size: 168,
+        title: "薪资范围",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) => {
+          const headcount = formatHeadcount(r);
+          return headcount ? (
+            <span className="block max-w-[10.5rem] truncate text-sm">{headcount}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          );
+        },
+        key: "headcount",
+        size: 200,
+        title: "HC/缺口",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.workLocation ? (
+            <span className="block max-w-24 truncate">{r.workLocation}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          ),
+        key: "workLocation",
+        size: 128,
+        title: "工作地点",
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) => {
@@ -223,7 +345,7 @@ function JobDescriptionManagementPage({
             return <Badge variant="outline">未配置</Badge>;
           }
           return (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex max-w-[8.5rem] flex-wrap gap-1">
               {r.interviewers.slice(0, 3).map((item) => (
                 <Badge key={item.id} variant="secondary">
                   {item.name}
@@ -236,6 +358,7 @@ function JobDescriptionManagementPage({
           );
         },
         key: "interviewers",
+        size: 168,
         title: "面试官",
       }),
       customColumn<JobDescriptionListRecord>({
@@ -255,19 +378,22 @@ function JobDescriptionManagementPage({
           );
         },
         key: "resumeCount",
+        size: 128,
         title: "简历关联",
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) => (
-          <span className="block max-w-sm truncate text-muted-foreground text-sm">
+          <span className="block max-w-[13rem] truncate text-muted-foreground text-sm">
             {r.description || "—"}
           </span>
         ),
         key: "description",
+        size: 240,
         title: "描述",
       }),
       dateColumn<JobDescriptionListRecord>({
         key: "createdAt",
+        size: 128,
         title: "创建时间",
       }),
       actionsColumn<JobDescriptionListRecord>({
@@ -292,6 +418,7 @@ function JobDescriptionManagementPage({
             variant: "destructive",
           },
         ],
+        size: 168,
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps

@@ -13,15 +13,15 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowUpRightIcon,
-  BanIcon,
-  CheckCircle2Icon,
-  MailIcon,
-  HandshakeIcon,
-  PencilIcon,
-  PlusIcon,
-  SendIcon,
-} from "@/components/icons/hugeicons";
+  IconArrowUpRight as ArrowUpRightIcon,
+  IconBan as BanIcon,
+  IconCircleCheck as CheckCircle2Icon,
+  IconMail as MailIcon,
+  IconHeartHandshake as HandshakeIcon,
+  IconPencil as PencilIcon,
+  IconPlus as PlusIcon,
+  IconSend as SendIcon,
+} from "@tabler/icons-react";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";

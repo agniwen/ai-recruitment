@@ -14,6 +14,7 @@ import {
   mailIngestMessage,
   member,
   organization,
+  organizationRole,
   user as userTable,
 } from "@arc/db-schema/schema";
 import type { MailIngestMessageStatus } from "@arc/db-schema/schema";
@@ -82,6 +83,7 @@ export interface WorkspaceMailIngestAccountRow {
     image: string | null;
     name: string;
     role: string;
+    roleName: string | null;
   };
 }
 
@@ -376,6 +378,7 @@ function listWorkspaceMailIngestAccountRows({
       accountUpdatedAt: mailIngestAccount.updatedAt,
       accountUsername: mailIngestAccount.username,
       memberRole: member.role,
+      memberRoleName: organizationRole.name,
       userEmail: userTable.email,
       userId: userTable.id,
       userImage: userTable.image,
@@ -383,6 +386,13 @@ function listWorkspaceMailIngestAccountRows({
     })
     .from(member)
     .innerJoin(userTable, eq(userTable.id, member.userId))
+    .leftJoin(
+      organizationRole,
+      and(
+        eq(organizationRole.organizationId, member.organizationId),
+        eq(organizationRole.role, member.role),
+      ),
+    )
     .leftJoin(
       mailIngestAccount,
       and(
@@ -438,6 +448,7 @@ function listPlatformMailIngestAccountRows({
       accountUpdatedAt: mailIngestAccount.updatedAt,
       accountUsername: mailIngestAccount.username,
       memberRole: member.role,
+      memberRoleName: organizationRole.name,
       organizationId: organization.id,
       organizationName: organization.name,
       organizationSlug: organization.slug,
@@ -449,6 +460,13 @@ function listPlatformMailIngestAccountRows({
     .from(member)
     .innerJoin(organization, eq(organization.id, member.organizationId))
     .innerJoin(userTable, eq(userTable.id, member.userId))
+    .leftJoin(
+      organizationRole,
+      and(
+        eq(organizationRole.organizationId, member.organizationId),
+        eq(organizationRole.role, member.role),
+      ),
+    )
     .leftJoin(
       mailIngestAccount,
       and(
@@ -528,6 +546,7 @@ function toWorkspaceMailIngestAccountRow(
       image: row.userImage,
       name: row.userName,
       role: row.memberRole,
+      roleName: row.memberRoleName,
     },
   };
 }

@@ -3,7 +3,13 @@
 import type * as React from "react";
 import type { ReactNode } from "react";
 import type { ToolRenderState } from "@arc/shared/tool-state";
-import { CircleX, Loader2, Minus, OctagonPause, Plus } from "@/components/icons/hugeicons";
+import {
+  IconCircleX as CircleX,
+  IconLoader2 as Loader2,
+  IconMinus as Minus,
+  IconPlayerPause as OctagonPause,
+  IconPlus as Plus,
+} from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { cn } from "@arc/shared/utils";
 import { ApprovalButtons } from "./approval-buttons";

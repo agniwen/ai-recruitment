@@ -6,6 +6,7 @@ import { AppSidebarShell } from "@/components/layout/app-sidebar/app-sidebar-she
 import { authClient } from "@/lib/client/auth-client";
 import { WorkspaceSlugProvider } from "@/lib/client/workspace-context";
 import { getWorkspaceAccessState } from "@/lib/start/auth-session";
+import { resolveWorkspaceLandingHref } from "@/lib/start/workspace-landing";
 
 function ActiveWorkspaceSync({ workspaceId }: { workspaceId: string }) {
   const {
@@ -84,7 +85,14 @@ export const Route = createFileRoute("/w/$slug")({
     }
 
     if (location.pathname === `/w/${params.slug}`) {
-      throw redirect({ href: `/w/${params.slug}/studio/resumes` });
+      const href = await resolveWorkspaceLandingHref({
+        preferredArea: "studio",
+        slug: params.slug,
+      });
+      if (!href) {
+        throw notFound();
+      }
+      throw redirect({ href });
     }
 
     return state;

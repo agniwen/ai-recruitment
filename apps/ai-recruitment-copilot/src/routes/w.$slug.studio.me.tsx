@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Building2Icon,
-  InboxIcon,
-  MailIcon,
-  SaveIcon,
-  Trash2Icon,
-  UserIcon,
-} from "@/components/icons/hugeicons";
+  IconBuilding as Building2Icon,
+  IconInbox as InboxIcon,
+  IconMail as MailIcon,
+  IconDeviceFloppy as SaveIcon,
+  IconTrash as Trash2Icon,
+  IconUser as UserIcon,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { PermissionGate } from "@/components/features/permission/permission-gate";

@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 
-import { ArrowDownIcon, DownloadIcon } from "@/components/icons/hugeicons";
+import { IconArrowDown as ArrowDownIcon, IconDownload as DownloadIcon } from "@tabler/icons-react";
 import { useCallback } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { Button } from "@/components/ui/button";

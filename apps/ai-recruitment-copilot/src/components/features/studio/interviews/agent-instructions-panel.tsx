@@ -1,7 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { EyeIcon, FileTextIcon, Loader2Icon } from "@/components/icons/hugeicons";
+import {
+  IconEye as EyeIcon,
+  IconFileText as FileTextIcon,
+  IconLoader2 as Loader2Icon,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { MarkdownView } from "@/components/features/display/markdown-view";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";

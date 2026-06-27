@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight } from "@/components/icons/hugeicons";
+import { IconChevronRight as ChevronRight } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { cn } from "@arc/shared/utils";
 

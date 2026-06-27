@@ -1,6 +1,10 @@
 "use client";
 
-import { CheckIcon, LoaderCircleIcon, WrenchIcon } from "@/components/icons/hugeicons";
+import {
+  IconCheck as CheckIcon,
+  IconLoader2 as LoaderCircleIcon,
+  IconTool as WrenchIcon,
+} from "@tabler/icons-react";
 import { AnimatePresence, motion } from "motion/react";
 import { ResumeDedupOverlay } from "@/components/features/resume/resume-dedup-overlay";
 import { Button } from "@/components/ui/button";

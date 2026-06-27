@@ -13,19 +13,19 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  BanIcon,
-  CheckCircle2Icon,
-  CircleStopIcon,
-  CopyIcon,
-  CheckIcon,
-  LinkIcon,
-  Loader2Icon,
-  PencilIcon,
-  PlusIcon,
-  UsersIcon,
-  VideoIcon,
-  XIcon,
-} from "@/components/icons/hugeicons";
+  IconBan as BanIcon,
+  IconCircleCheck as CheckCircle2Icon,
+  IconPlayerStop as CircleStopIcon,
+  IconCopy as CopyIcon,
+  IconCheck as CheckIcon,
+  IconLink as LinkIcon,
+  IconLoader2 as Loader2Icon,
+  IconPencil as PencilIcon,
+  IconPlus as PlusIcon,
+  IconUsers as UsersIcon,
+  IconVideo as VideoIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import type { FormEvent, MouseEvent, ReactNode } from "react";
 import { useReducer, useState } from "react";
 import { toast } from "sonner";

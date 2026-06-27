@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  CheckCircle2Icon,
-  CircleIcon,
-  LoaderCircleIcon,
-  SkipForwardIcon,
-  XCircleIcon,
-} from "@/components/icons/hugeicons";
+  IconCircleCheck as CheckCircle2Icon,
+  IconCircle as CircleIcon,
+  IconLoader2 as LoaderCircleIcon,
+  IconPlayerSkipForward as SkipForwardIcon,
+  IconCircleX as XCircleIcon,
+} from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

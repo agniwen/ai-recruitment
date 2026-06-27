@@ -3,12 +3,12 @@
 import type { InterviewFormApi } from "./interview-form";
 import type { ScheduleEntryStatus } from "@arc/db-schema/studio-interviews";
 import {
-  CalendarDaysIcon,
-  LockIcon,
-  PlusIcon,
-  RotateCcwIcon,
-  Trash2Icon,
-} from "@/components/icons/hugeicons";
+  IconCalendar as CalendarDaysIcon,
+  IconLock as LockIcon,
+  IconPlus as PlusIcon,
+  IconRotate as RotateCcwIcon,
+  IconTrash as Trash2Icon,
+} from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

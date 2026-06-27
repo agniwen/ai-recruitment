@@ -1,7 +1,12 @@
 "use client";
 
 import { snapdom } from "@zumer/snapdom";
-import { ChevronDownIcon, LinkIcon, QrCodeIcon, SendIcon } from "@/components/icons/hugeicons";
+import {
+  IconChevronDown as ChevronDownIcon,
+  IconLink as LinkIcon,
+  IconQrcode as QrCodeIcon,
+  IconSend as SendIcon,
+} from "@tabler/icons-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";

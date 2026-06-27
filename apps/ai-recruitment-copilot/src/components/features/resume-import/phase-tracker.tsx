@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon } from "@/components/icons/hugeicons";
+import { IconCheck as CheckIcon } from "@tabler/icons-react";
 import { cn } from "@arc/shared/utils";
 import type { ImportPhase } from "./types";
 

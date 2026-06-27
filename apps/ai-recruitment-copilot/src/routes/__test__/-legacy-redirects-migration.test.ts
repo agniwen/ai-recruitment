@@ -30,4 +30,15 @@ describe("TanStack Start legacy entry migration", () => {
 
     expect(sources.join("\n")).not.toMatch(/next\/(?:navigation|headers|server)/u);
   });
+
+  it("resolves home and legacy chat entries through permission-aware workspace landing", () => {
+    const homeRoute = readSource("routes/index.tsx");
+    const legacyChatRoute = readSource("routes/chat.tsx");
+
+    expect(homeRoute).toContain("resolveWorkspaceLandingHref");
+    expect(homeRoute).toContain('preferredArea: deps.goto ?? "studio"');
+    expect(homeRoute).not.toContain("buildWorkspaceDestination");
+    expect(legacyChatRoute).toContain("resolveWorkspaceLandingHref");
+    expect(legacyChatRoute).toContain('preferredArea: "chat"');
+  });
 });

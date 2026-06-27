@@ -1,4 +1,4 @@
-import { Loader2Icon } from "@/components/icons/hugeicons";
+import { IconLoader2 as Loader2Icon } from "@tabler/icons-react";
 
 import { cn } from "@arc/shared/utils";
 

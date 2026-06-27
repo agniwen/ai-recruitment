@@ -44,14 +44,14 @@ import {
 import { env } from "@/env/client";
 import { useOptionalWorkspaceSlug } from "@/lib/client/workspace-context";
 import {
-  BotIcon,
-  ExternalLinkIcon,
-  EyeIcon,
-  InfoIcon,
-  MessageSquareTextIcon,
-  PencilIcon,
-  RotateCcwIcon,
-} from "@/components/icons/hugeicons";
+  IconRobot as BotIcon,
+  IconExternalLink as ExternalLinkIcon,
+  IconEye as EyeIcon,
+  IconInfoCircle as InfoIcon,
+  IconMessage as MessageSquareTextIcon,
+  IconPencil as PencilIcon,
+  IconRotate as RotateCcwIcon,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";

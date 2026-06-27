@@ -44,13 +44,26 @@ describe("TanStack Start workspace shell migration", () => {
     const chatIndexRoute = readSource("routes/w.$slug.chat.index.tsx");
     const chatSessionRoute = readSource("routes/w.$slug.chat.$sessionId.tsx");
 
-    expect(chatLayoutRoute).toContain("requireStudioPageAccess");
+    expect(chatLayoutRoute).toContain("getStudioPageAccessState");
+    expect(chatLayoutRoute).toContain("resolveWorkspaceLandingHref");
     expect(chatLayoutRoute).toContain('action: "chat"');
     expect(chatLayoutRoute).toContain("location.pathname");
     expect(chatLayoutRoute).toContain("params.slug");
+    expect(chatLayoutRoute).toContain('preferredArea: "studio"');
     expect(chatLayoutRoute).toContain("<Outlet />");
     expect(chatIndexRoute).toContain('createFileRoute("/w/$slug/chat/")');
     expect(chatSessionRoute).toContain('createFileRoute("/w/$slug/chat/$sessionId")');
+  });
+
+  it("routes generic workspace and studio tab entries through the studio shell fallback", () => {
+    const workspaceRoute = readSource("routes/w.$slug.tsx");
+    const sidebarTabs = readSource("components/layout/app-sidebar/sidebar-tabs.tsx");
+
+    expect(workspaceRoute).toContain("resolveWorkspaceLandingHref");
+    expect(workspaceRoute).toContain('preferredArea: "studio"');
+    expect(workspaceRoute).not.toContain("/studio/resumes");
+    expect(sidebarTabs).toMatch(/`\/w\/\$\{slug\}\/studio`/u);
+    expect(sidebarTabs).not.toContain("/studio/resumes");
   });
 
   it("disables the chat sidebar tab through the chat page permission", () => {
@@ -60,6 +73,12 @@ describe("TanStack Start workspace shell migration", () => {
     expect(sidebarTabs).toContain('useHasPermission("page", "chat")');
     expect(sidebarTabs).toContain('value="chat"');
     expect(sidebarTabs).toContain("disabled={!canAccessChat}");
+  });
+
+  it("hides studio sidebar groups when none of their menu items render", () => {
+    const studioSidebarSlots = readSource("components/features/studio/studio-sidebar-slots.tsx");
+
+    expect(studioSidebarSlots).toContain('className="hidden has-[li]:flex"');
   });
 
   it("uses typed router navigation for chat session URL changes", () => {

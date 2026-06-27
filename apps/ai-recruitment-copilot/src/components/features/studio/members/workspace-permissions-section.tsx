@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
-import { CopyIcon, PencilIcon, PlusIcon, Trash2Icon } from "@/components/icons/hugeicons";
+import {
+  IconCopy as CopyIcon,
+  IconPencil as PencilIcon,
+  IconPlus as PlusIcon,
+  IconTrash as Trash2Icon,
+} from "@tabler/icons-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,

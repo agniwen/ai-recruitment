@@ -8,17 +8,17 @@
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import {
-  BoldIcon,
-  CodeIcon,
-  Heading1Icon,
-  Heading2Icon,
-  Heading3Icon,
-  ItalicIcon,
-  ListIcon,
-  ListOrderedIcon,
-  RedoIcon,
-  UndoIcon,
-} from "@/components/icons/hugeicons";
+  IconBold as BoldIcon,
+  IconCode as CodeIcon,
+  IconH1 as Heading1Icon,
+  IconH2 as Heading2Icon,
+  IconH3 as Heading3Icon,
+  IconItalic as ItalicIcon,
+  IconList as ListIcon,
+  IconListNumbers as ListOrderedIcon,
+  IconArrowForwardUp as RedoIcon,
+  IconArrowBackUp as UndoIcon,
+} from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@arc/shared/utils";
 import type { EditorMode } from "./use-markdown-editor";

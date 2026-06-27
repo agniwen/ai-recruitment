@@ -1,6 +1,6 @@
 "use client";
 
-import { UploadIcon } from "@/components/icons/hugeicons";
+import { IconUpload as UploadIcon } from "@tabler/icons-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import {

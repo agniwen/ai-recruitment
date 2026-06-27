@@ -4,24 +4,24 @@
 // Purpose: 1:1 mirror of the real Studio sidebar+inset layout. Width / heights /
 // classes match the actual shadcn primitives the production app uses.
 import {
-  BotIcon,
-  Building2Icon,
-  ChevronRightIcon,
-  ChevronsUpDownIcon,
-  ClipboardListIcon,
-  FileTextIcon,
-  ListChecksIcon,
-  MoonIcon,
-  PanelLeftIcon,
-  PlusIcon,
-  SettingsIcon,
-  Trash2Icon,
-  UserCircleIcon,
-  UserCogIcon,
-  UserIcon,
-  UsersIcon,
-  XIcon,
-} from "@/components/icons/hugeicons";
+  IconRobot as BotIcon,
+  IconBuilding as Building2Icon,
+  IconChevronRight as ChevronRightIcon,
+  IconSelector as ChevronsUpDownIcon,
+  IconClipboardList as ClipboardListIcon,
+  IconFileText as FileTextIcon,
+  IconListCheck as ListChecksIcon,
+  IconMoon as MoonIcon,
+  IconLayoutSidebarLeftCollapse as PanelLeftIcon,
+  IconPlus as PlusIcon,
+  IconSettings as SettingsIcon,
+  IconTrash as Trash2Icon,
+  IconUserCircle as UserCircleIcon,
+  IconUserCog as UserCogIcon,
+  IconUser as UserIcon,
+  IconUsers as UsersIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@arc/shared/utils";

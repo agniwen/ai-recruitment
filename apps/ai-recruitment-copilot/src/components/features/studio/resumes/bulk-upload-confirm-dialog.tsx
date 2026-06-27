@@ -1,6 +1,6 @@
 "use client";
 
-import { FileTextIcon, XIcon } from "@/components/icons/hugeicons";
+import { IconFileText as FileTextIcon, IconX as XIcon } from "@tabler/icons-react";
 import { useState } from "react";
 import { JobDescriptionSelectField } from "@/components/features/studio/interviews/job-description-select-field";
 import { Button } from "@/components/ui/button";

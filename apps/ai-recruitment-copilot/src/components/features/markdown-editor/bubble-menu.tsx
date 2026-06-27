@@ -6,7 +6,11 @@
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import { BoldIcon, CodeIcon, ItalicIcon } from "@/components/icons/hugeicons";
+import {
+  IconBold as BoldIcon,
+  IconCode as CodeIcon,
+  IconItalic as ItalicIcon,
+} from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@arc/shared/utils";
 

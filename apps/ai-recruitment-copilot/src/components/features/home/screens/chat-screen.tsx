@@ -5,12 +5,12 @@
 // - PDF 卡: rounded-lg border bg-card p-3 + filename + (预览/查看结构化/一键入库) 三按钮行 border-t pt-3
 // - Composer: PromptInput rounded-[1.3rem] + footer tools (+/settings/download/model) + submit
 import {
-  ArrowUpIcon,
-  DownloadIcon,
-  PlusIcon,
-  SettingsIcon,
-  SparklesIcon,
-} from "@/components/icons/hugeicons";
+  IconArrowUp as ArrowUpIcon,
+  IconDownload as DownloadIcon,
+  IconPlus as PlusIcon,
+  IconSettings as SettingsIcon,
+  IconSparkles as SparklesIcon,
+} from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { AppShell, ChatNav } from "./_parts/app-shell";
 import type { BreadcrumbCrumb } from "./_parts/app-shell";

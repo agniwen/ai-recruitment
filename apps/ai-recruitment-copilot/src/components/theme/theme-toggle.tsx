@@ -1,6 +1,10 @@
 "use client";
 
-import { MonitorIcon, MoonIcon, SunIcon } from "@/components/icons/hugeicons";
+import {
+  IconDeviceDesktop as MonitorIcon,
+  IconMoon as MoonIcon,
+  IconSun as SunIcon,
+} from "@tabler/icons-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {

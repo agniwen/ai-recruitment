@@ -1,7 +1,11 @@
 "use client";
 
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
-import { CheckIcon, TargetIcon, XIcon } from "@/components/icons/hugeicons";
+import {
+  IconCheck as CheckIcon,
+  IconTarget as TargetIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";

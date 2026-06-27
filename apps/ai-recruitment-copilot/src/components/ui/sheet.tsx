@@ -1,6 +1,6 @@
 "use client";
 
-import { XIcon } from "@/components/icons/hugeicons";
+import { IconX as XIcon } from "@tabler/icons-react";
 import { Dialog as SheetPrimitive } from "radix-ui";
 import * as React from "react";
 

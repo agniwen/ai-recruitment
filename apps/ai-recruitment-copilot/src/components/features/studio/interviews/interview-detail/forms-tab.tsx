@@ -1,5 +1,5 @@
 import type { CandidateFormSubmissionWithSnapshot } from "@arc/db-schema/candidate-forms";
-import { RotateCcwIcon } from "@/components/icons/hugeicons";
+import { IconRotate as RotateCcwIcon } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 

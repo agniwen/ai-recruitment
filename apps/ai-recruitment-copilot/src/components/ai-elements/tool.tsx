@@ -4,13 +4,13 @@ import type { DynamicToolUIPart, ToolUIPart } from "ai";
 import type { ComponentProps, ReactNode } from "react";
 
 import {
-  CheckCircleIcon,
-  ChevronDownIcon,
-  CircleIcon,
-  ClockIcon,
-  WrenchIcon,
-  XCircleIcon,
-} from "@/components/icons/hugeicons";
+  IconCircleCheck as CheckCircleIcon,
+  IconChevronDown as ChevronDownIcon,
+  IconCircle as CircleIcon,
+  IconClock as ClockIcon,
+  IconTool as WrenchIcon,
+  IconCircleX as XCircleIcon,
+} from "@tabler/icons-react";
 import { isValidElement } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";

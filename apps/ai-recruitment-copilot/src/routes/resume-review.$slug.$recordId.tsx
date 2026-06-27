@@ -8,7 +8,10 @@ import {
 } from "@tanstack/react-router";
 import type { ResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import { describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
-import { CircleCheckIcon, OctagonXIcon } from "@/components/icons/hugeicons";
+import {
+  IconCircleCheck as CircleCheckIcon,
+  IconCircleX as OctagonXIcon,
+} from "@tabler/icons-react";
 import { StudioPersonDetailPanel } from "@/components/features/studio/studio-person-detail-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

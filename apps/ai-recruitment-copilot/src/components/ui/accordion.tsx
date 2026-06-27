@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDownIcon } from "@/components/icons/hugeicons";
+import { IconChevronDown as ChevronDownIcon } from "@tabler/icons-react";
 import { Accordion as AccordionPrimitive } from "radix-ui";
 import * as React from "react";
 

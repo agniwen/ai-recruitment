@@ -1,6 +1,11 @@
 "use client";
 
-import { Check, ChevronsUpDown, Mic, MicOff } from "@/components/icons/hugeicons";
+import {
+  IconCheck as Check,
+  IconSelector as ChevronsUpDown,
+  IconMicrophone as Mic,
+  IconMicrophoneOff as MicOff,
+} from "@tabler/icons-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

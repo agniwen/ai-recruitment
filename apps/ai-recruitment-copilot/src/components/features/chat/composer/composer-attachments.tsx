@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircleIcon } from "@/components/icons/hugeicons";
+import { IconAlertCircle as AlertCircleIcon } from "@tabler/icons-react";
 import {
   Attachment,
   AttachmentInfo,

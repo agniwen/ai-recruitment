@@ -1,9 +1,9 @@
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsLeftIcon,
-  ChevronsRightIcon,
-} from "@/components/icons/hugeicons";
+  IconChevronLeft as ChevronLeftIcon,
+  IconChevronRight as ChevronRightIcon,
+  IconChevronsLeft as ChevronsLeftIcon,
+  IconChevronsRight as ChevronsRightIcon,
+} from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,

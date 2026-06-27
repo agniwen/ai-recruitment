@@ -2,7 +2,7 @@
 
 import type { VariantProps } from "class-variance-authority";
 import { cva } from "class-variance-authority";
-import { PanelLeftIcon } from "@/components/icons/hugeicons";
+import { IconLayoutSidebarLeftCollapse as PanelLeftIcon } from "@tabler/icons-react";
 import { Slot } from "radix-ui";
 import * as React from "react";
 

@@ -17,7 +17,7 @@ import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-d
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type { HiringUnitListRecord, HiringUnitRecord } from "@arc/shared/hiring-units";
 import type { PaginatedHiringUnitResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao";
-import { GlobeIcon, PlusIcon } from "@/components/icons/hugeicons";
+import { IconWorld as GlobeIcon, IconPlus as PlusIcon } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {

@@ -1,0 +1,18 @@
+ALTER TABLE "job_description"
+  ADD COLUMN IF NOT EXISTS "recruitment_status" text,
+  ADD COLUMN IF NOT EXISTS "control_category" text,
+  ADD COLUMN IF NOT EXISTS "job_series" text,
+  ADD COLUMN IF NOT EXISTS "job_level" text,
+  ADD COLUMN IF NOT EXISTS "service_unit" text,
+  ADD COLUMN IF NOT EXISTS "headcount" integer,
+  ADD COLUMN IF NOT EXISTS "onboarded_count" integer,
+  ADD COLUMN IF NOT EXISTS "gap_count" integer,
+  ADD COLUMN IF NOT EXISTS "offered_pending_onboard_count" integer,
+  ADD COLUMN IF NOT EXISTS "requested_date" text,
+  ADD COLUMN IF NOT EXISTS "expected_onboard_date" text,
+  ADD COLUMN IF NOT EXISTS "priority" text,
+  ADD COLUMN IF NOT EXISTS "requester" text,
+  ADD COLUMN IF NOT EXISTS "resume_contact" text,
+  ADD COLUMN IF NOT EXISTS "work_location" text,
+  ADD COLUMN IF NOT EXISTS "notes" text,
+  ADD COLUMN IF NOT EXISTS "source_sheet" text;

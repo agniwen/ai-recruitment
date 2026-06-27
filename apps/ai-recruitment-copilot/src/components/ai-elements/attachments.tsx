@@ -4,14 +4,14 @@ import type { FileUIPart, SourceDocumentUIPart } from "ai";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 
 import {
-  FileTextIcon,
-  GlobeIcon,
-  ImageIcon,
-  Music2Icon,
-  PaperclipIcon,
-  VideoIcon,
-  XIcon,
-} from "@/components/icons/hugeicons";
+  IconFileText as FileTextIcon,
+  IconWorld as GlobeIcon,
+  IconPhoto as ImageIcon,
+  IconMusic as Music2Icon,
+  IconPaperclip as PaperclipIcon,
+  IconVideo as VideoIcon,
+  IconX as XIcon,
+} from "@tabler/icons-react";
 import { createContext, use, useCallback, useMemo } from "react";
 import { ResumeDocumentFileIcon } from "@/components/features/resume/resume-document-file-icon";
 import { Button } from "@/components/ui/button";

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { InboxIcon } from "@/components/icons/hugeicons";
+import { IconInbox as InboxIcon } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { actionsColumn, customColumn, DataGrid, useDataGridState } from "@/components/data-grid";
@@ -9,7 +9,6 @@ import { MemberCell } from "@/components/data-grid/cells/member-cell";
 import { TimeDisplay } from "@/components/features/display/time-display";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { getWorkspaceRoleLabel } from "@/components/features/studio/members/role-display";
-import type { WorkspaceRole } from "@/components/features/studio/members/role-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,6 +96,7 @@ interface ManagedMailIngestRow {
     image: string | null;
     name: string;
     role: string;
+    roleName: string | null;
   };
 }
 
@@ -128,11 +128,8 @@ function buildNewForm(user: ManagedMailIngestRow["user"]): MailIngestFormState {
   };
 }
 
-function getRoleLabel(role: string) {
-  if (role === "admin" || role === "member" || role === "owner") {
-    return getWorkspaceRoleLabel(role as WorkspaceRole);
-  }
-  return role;
+function getRoleLabel(user: ManagedMailIngestRow["user"]) {
+  return user.roleName ?? getWorkspaceRoleLabel(user.role);
 }
 
 function buildInitialForm(row: ManagedMailIngestRow): MailIngestFormState {
@@ -470,7 +467,7 @@ function ManagedMailIngestPage() {
         cell: (row) => (
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={row.user.role === "owner" ? "default" : "outline"}>
-              {getRoleLabel(row.user.role)}
+              {getRoleLabel(row.user)}
             </Badge>
             {row.account ? (
               <Badge variant={row.account.enabled ? "success" : "outline"}>

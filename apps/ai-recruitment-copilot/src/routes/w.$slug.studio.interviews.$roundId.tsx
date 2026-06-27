@@ -1,5 +1,5 @@
 import { createFileRoute, useParams, useRouter } from "@tanstack/react-router";
-import { ChevronLeftIcon } from "@/components/icons/hugeicons";
+import { IconChevronLeft as ChevronLeftIcon } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { StudioPersonDetailPanel } from "@/components/features/studio/studio-person-detail-panel";

@@ -2,7 +2,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Plus, SelectChevronsUpDownIcon } from "@/components/icons/hugeicons";
+import { IconPlus as Plus, IconSelector as SelectChevronsUpDownIcon } from "@tabler/icons-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

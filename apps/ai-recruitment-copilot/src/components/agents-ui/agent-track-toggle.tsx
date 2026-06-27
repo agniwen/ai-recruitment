@@ -3,14 +3,14 @@ import type { ComponentProps } from "react";
 import { cva } from "class-variance-authority";
 import { Track } from "livekit-client";
 import {
-  LoaderIcon,
-  MicIcon,
-  MicOffIcon,
-  MonitorOffIcon,
-  MonitorUpIcon,
-  VideoIcon,
-  VideoOffIcon,
-} from "@/components/icons/hugeicons";
+  IconLoader2 as LoaderIcon,
+  IconMicrophone as MicIcon,
+  IconMicrophoneOff as MicOffIcon,
+  IconDeviceDesktopOff as MonitorOffIcon,
+  IconDeviceDesktopUp as MonitorUpIcon,
+  IconVideo as VideoIcon,
+  IconVideoOff as VideoOffIcon,
+} from "@tabler/icons-react";
 import { Fragment, useMemo, useState } from "react";
 import { Toggle } from "@/components/ui/toggle";
 import { cn } from "@arc/shared/utils";

@@ -2,7 +2,7 @@
 // Purpose: Secondary CTA above footer.
 "use client";
 
-import { ArrowRightIcon } from "@/components/icons/hugeicons";
+import { IconArrowRight as ArrowRightIcon } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Section, SectionTitle } from "./section";
 

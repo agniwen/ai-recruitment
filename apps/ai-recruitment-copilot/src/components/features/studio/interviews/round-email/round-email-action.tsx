@@ -1,7 +1,7 @@
 "use client";
 
 import type { RoundEmailSummary } from "@arc/db-schema/round-email-log";
-import { Loader2Icon, MailIcon } from "@/components/icons/hugeicons";
+import { IconLoader2 as Loader2Icon, IconMail as MailIcon } from "@tabler/icons-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
