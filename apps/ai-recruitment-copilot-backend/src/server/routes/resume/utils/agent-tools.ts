@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { getResumeReviewFramework } from "@arc/shared/resume-review";
 import { generateResumeStructured } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
 import { selectUploadedResumePdfs } from "@arc/shared/resume-pdf";
 import { matchJobDescriptionForResume } from "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent";
@@ -44,72 +45,13 @@ export const getServerTimeTool = tool({
 });
 
 export const getResumeReviewFrameworkTool = tool({
-  description: "返回当前简历库使用的 v2 六维度简历评估框架。",
+  description: "返回一个带权重维度的通用简历筛选框架，可用于实习生和社招岗位。",
   // oxlint-disable-next-line require-await -- AI SDK tool signature requires async execute.
-  execute: async ({ seniority, targetRole }) => {
-    const level = seniority ?? "general";
-
-    return {
-      dimensions: [
-        {
-          checklist: [
-            "JD 所需技能与候选人技能、项目技术栈是否语义匹配",
-            "关键技能是否有项目或工作经历证据支撑",
-            "是否存在必备技能缺失或只停留在关键词堆叠",
-          ],
-          name: "技能匹配度",
-          weight: 35,
-        },
-        {
-          checklist: [
-            "行业背景、业务领域、技术栈是否与岗位方向一致",
-            "工作年限与岗位层级是否匹配",
-            "职责边界是否接近目标岗位要求",
-          ],
-          name: "经验相关性",
-          weight: 25,
-        },
-        {
-          checklist: [
-            "项目复杂度是否接近岗位要求",
-            "候选人在项目中的角色和贡献是否清楚",
-            "项目结果是否有量化证据或可验证上下文",
-          ],
-          name: "项目匹配度",
-          weight: 15,
-        },
-        {
-          checklist: [
-            "学历层次是否满足岗位要求",
-            "专业方向或院校背景是否提供额外支持",
-            "证书、培训或其他背景是否与岗位相关",
-          ],
-          name: "学历与背景",
-          weight: 10,
-        },
-        {
-          checklist: [
-            "成长曲线是否清晰",
-            "是否体现学习能力、技术广度或跨领域迁移能力",
-            "经历是否支持后续培养空间",
-          ],
-          name: "潜力评估",
-          weight: 8,
-        },
-        {
-          checklist: [
-            "平均在职时长是否合理",
-            "是否存在连续短经历、明显空窗或时间重叠",
-            "职业方向是否连贯",
-          ],
-          name: "稳定性评估",
-          weight: 7,
-        },
-      ],
-      seniority: level,
-      targetRole: targetRole ?? "软件工程岗位",
-    };
-  },
+  execute: async ({ seniority, targetRole }) =>
+    getResumeReviewFramework({
+      seniority,
+      targetRole,
+    }),
   inputSchema: z.object({
     seniority: z.enum(["general", "intern", "junior", "mid", "senior"]).optional(),
     targetRole: z.string().describe("目标岗位，例如前端开发").optional(),
@@ -146,11 +88,9 @@ export function createListUploadedResumePdfsTool({
 export function createSuggestJobDescriptionTool({
   orgId,
   resumes,
-  userId,
 }: {
   orgId: string;
   resumes: BakedParsedResume[];
-  userId?: string | null;
 }) {
   return tool({
     description:
@@ -171,7 +111,7 @@ export function createSuggestJobDescriptionTool({
         return { availableResumes: availableResumeNames, status: "no-resume" as const };
       }
 
-      const jobDescriptions = await listAllJobDescriptions(orgId, { actorUserId: userId });
+      const jobDescriptions = await listAllJobDescriptions(orgId);
       if (jobDescriptions.length === 0) {
         return { status: "no-jds" as const };
       }

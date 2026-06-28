@@ -29,6 +29,8 @@ import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backen
 import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle";
 import { generateResumeReview } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 
+vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 });
+
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue", () => ({
   enqueueResumeSemanticIndexJobBestEffort: vi.fn(),
 }));
@@ -105,12 +107,11 @@ const PROFILE_WITH_HIGHLIGHTS: ResumeProfile = {
 const STRUCTURED_REVIEW = {
   biasScan: { items: [] },
   dimensions: {
-    educationBackground: { rationale: "学历满足", score: 80 },
-    experienceRelevance: { rationale: "岗位相关", score: 80 },
-    potential: { rationale: "有成长性", score: 75 },
-    projectMatch: { rationale: "项目对应", score: 78 },
-    skillMatch: { rationale: "技术匹配", score: 80 },
-    stability: { rationale: "在职合理", score: 78 },
+    impactResults: { rationale: "结果明确", score: 80 },
+    roleRelevance: { rationale: "岗位相关", score: 78 },
+    signalCredibility: { rationale: "信号可信", score: 75 },
+    structureReadability: { rationale: "结构清晰", score: 80 },
+    technicalDepth: { rationale: "技术匹配", score: 80 },
   },
   levelRecommendation: { level: "中级", rationale: "经验匹配" },
   nextStep: {
@@ -122,9 +123,9 @@ const STRUCTURED_REVIEW = {
   overall: {
     baseScore: 79,
     conclusion: "候选人匹配。",
-    scoreRationale: "基于六维度按 35/25/15/10/8/7 加权得出基础分 79（不含历史面试加权）",
+    scoreRationale: "基于五维度按 30/25/20/15/10 加权得出基础分 79（不含历史面试加权）",
   },
-  schemaVersion: 2 as const,
+  schemaVersion: 3 as const,
   strengths: [{ evidence: "简历证据", impact: "匹配岗位", point: "经验匹配" }],
   teamPositioning: { rationale: "经历集中", suggestion: "业务团队" },
   weaknesses: [{ evidence: null, impact: "需核实", point: "细节不足" }],
@@ -208,7 +209,7 @@ beforeEach(() => {
   vi.mocked(findSemanticResumeDuplicates).mockResolvedValue([]);
   vi.mocked(deleteResumeSemanticIndexBestEffort).mockClear();
   vi.mocked(generateResumeReview).mockResolvedValue({
-    review: "新六维度简历评价",
+    review: "新五维度简历评价",
     structuredReview: STRUCTURED_REVIEW,
   });
 });
@@ -386,7 +387,7 @@ describe("queryResumePoolItems", () => {
       jobDescription: null,
       resumeProfile: PROFILE,
     });
-    expect(record?.notes).toBe("新六维度简历评价");
+    expect(record?.notes).toBe("新五维度简历评价");
     expect(record?.resumeReview).toEqual(STRUCTURED_REVIEW);
   });
 

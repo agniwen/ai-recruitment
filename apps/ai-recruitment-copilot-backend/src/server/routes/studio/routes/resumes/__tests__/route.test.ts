@@ -307,21 +307,23 @@ describe("resume review detail route", () => {
   });
 });
 
-describe("resume review v2 chain coverage", () => {
-  it("uses the v2 six-dimension framework in resume chat tools", () => {
-    expect(resumeAgentToolsSource).toContain("技能匹配度");
-    expect(resumeAgentToolsSource).toContain("经验相关性");
-    expect(resumeAgentToolsSource).toContain("项目匹配度");
-    expect(resumeAgentToolsSource).toContain("学历与背景");
-    expect(resumeAgentToolsSource).toContain("潜力评估");
-    expect(resumeAgentToolsSource).toContain("稳定性评估");
-    expect(resumeAgentToolsSource).not.toContain("影响力与结果");
-    expect(resumeAgentToolsSource).not.toContain("结构与可读性");
+describe("resume review v3 chain coverage", () => {
+  it("uses the shared five-dimension framework in resume chat tools", () => {
+    expect(resumeAgentToolsSource).toContain("getResumeReviewFramework");
+    expect(resumeAgentToolsSource).not.toContain("技能匹配度");
+    expect(resumeAgentToolsSource).not.toContain("稳定性评估");
   });
 
   it("generates structured resume review for resume-pool imports", () => {
     expect(resumePoolDaoSource).toContain("generateResumeReview");
     expect(resumePoolDaoSource).toContain("resumeReview: reviewResult?.structuredReview ?? null");
     expect(resumePoolDaoSource).toContain("notes: reviewResult?.review ?? poolItem.notes");
+  });
+
+  it("generates a V3 resume review on create when the client did not provide one", () => {
+    expect(routeSource).toContain("generateResumeReviewBestEffort");
+    expect(routeSource).toContain("let resumeReview = resumeReviewInput.data");
+    expect(routeSource).toContain("generatedReview?.structuredReview ?? null");
+    expect(routeSource).toContain("resumeReview,");
   });
 });

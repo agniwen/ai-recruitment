@@ -8,8 +8,10 @@ import type {
   ResumeReviewLoose,
   ResumeReviewPoint,
 } from "@arc/db-schema/resume-review";
+import { RESUME_REVIEW_DIMENSION_DEFINITIONS } from "@arc/db-schema/resume-review";
 
 export {
+  RESUME_REVIEW_SCHEMA_VERSION,
   resumeReviewActionSchema,
   resumeReviewBiasCategorySchema,
   resumeReviewBiasItemSchema,
@@ -43,20 +45,29 @@ export const resumeReviewBiasCategoryLabel: Record<ResumeReviewBiasCategory, str
   stability_signal: "稳定性信号",
 };
 
-// v2 六维度标签与权重 —— 展示与基础分计算共用。
-// v2 six-dimension labels + weights; shared between UI and baseScore calc.
-export const RESUME_REVIEW_DIMENSIONS: {
-  key: ResumeReviewDimensionKey;
-  label: string;
-  weight: number;
-}[] = [
-  { key: "skillMatch", label: "技能匹配度", weight: 0.35 },
-  { key: "experienceRelevance", label: "经验相关性", weight: 0.25 },
-  { key: "projectMatch", label: "项目匹配度", weight: 0.15 },
-  { key: "educationBackground", label: "学历与背景", weight: 0.1 },
-  { key: "potential", label: "潜力评估", weight: 0.08 },
-  { key: "stability", label: "稳定性评估", weight: 0.07 },
-];
+export const RESUME_REVIEW_DIMENSIONS = RESUME_REVIEW_DIMENSION_DEFINITIONS;
+
+export interface ResumeReviewFrameworkOptions {
+  seniority?: "general" | "intern" | "junior" | "mid" | "senior";
+  targetRole?: string;
+}
+
+export function getResumeReviewFramework(options: ResumeReviewFrameworkOptions = {}) {
+  return {
+    dimensions: RESUME_REVIEW_DIMENSIONS.map((dimension) => ({
+      checklist: [...dimension.checklist],
+      key: dimension.key,
+      name: dimension.label,
+      weight: Math.round(dimension.weight * 100),
+    })),
+    seniority: options.seniority ?? "general",
+    targetRole: options.targetRole ?? "软件工程岗位",
+  };
+}
+
+export function formatResumeReviewFrameworkWeights(): string {
+  return RESUME_REVIEW_DIMENSIONS.map((dimension) => Math.round(dimension.weight * 100)).join("/");
+}
 
 export function countResumeReviewBiasCategories(items: ResumeReviewBiasItem[]) {
   return {
@@ -94,8 +105,9 @@ export function getResumeReviewBaseScore(review: ResumeReviewLoose): number | nu
   return null;
 }
 
-// 按权重计算基础分（仅 v2 六维度齐全时有效）。
-// Compute base score by weighted sum; only meaningful for v2 six-dimension data.
+// 按当前 v3 五维框架权重计算基础分；旧数据缺维度时只按存在的当前维度累加。
+// Compute base score by the current v3 five-dimension framework; legacy rows
+// missing current keys only contribute dimensions that are present.
 export function computeResumeReviewBaseScore(
   dimensions: Record<string, ResumeReviewDimension>,
 ): number {

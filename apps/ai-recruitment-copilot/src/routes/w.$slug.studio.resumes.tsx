@@ -1,3 +1,4 @@
+import { IconHistory, IconTrash, IconUsers } from "@tabler/icons-react";
 import { HydrationBoundary, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DehydratedState } from "@tanstack/react-query";
 import {
@@ -30,11 +31,7 @@ import type {
 import { pipelineStageMeta, pipelineStageValues } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  IconHistory as HistoryIcon,
-  IconTrash as Trash2Icon,
-  IconUsers as UsersIcon,
-} from "@tabler/icons-react";
+
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -93,6 +90,8 @@ import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace
 import { useHasPermission } from "@/hooks/use-has-permission";
 import { StudioPersonDetailDialog } from "@/components/features/studio/studio-person-detail-dialog";
 import { StudioPersonEditDialog } from "@/components/features/studio/studio-person-edit-dialog";
+import { StudioResumeFloatingChat } from "@/components/features/studio/studio-resume-floating-chat";
+import { openStudioResumeChat } from "@/components/features/studio/studio-resume-chat";
 import { CreateResumeRecordDialog } from "@/components/features/studio/resumes/upload-resume-dialog";
 import type { CreateResumeRecordResult } from "@/components/features/studio/resumes/upload-resume-dialog";
 import {
@@ -375,6 +374,7 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id ?? null;
   const canCreateInterview = useHasPermission("interview", "create");
+  const canCreateChat = useHasPermission("chat", "create");
   const canCreateResumeLibrary = useHasPermission("resumeLibrary", "create");
   const canUpdateResumeLibrary = useHasPermission("resumeLibrary", "update");
   const canDeleteResumeLibrary = useHasPermission("resumeLibrary", "delete");
@@ -772,6 +772,15 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
               }),
           },
           {
+            label: "发起 AI Chat",
+            onClick: (r) =>
+              openStudioResumeChat({
+                candidateName: r.candidateName ?? null,
+                recordId: r.id,
+              }),
+            show: () => canCreateChat,
+          },
+          {
             label: "查看简历",
             onClick: (r) => setPreviewRecord(r),
             show: (r) =>
@@ -831,6 +840,7 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
     // startAiInterview captures setLaunchingRecord which is stable; safe to omit from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      canCreateChat,
       canCreateInterview,
       canDeleteResumeLibrary,
       canUpdateResumeLibrary,
@@ -993,7 +1003,7 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
                 ) : null}
                 {canReadResumeUploadBatch && hasActiveUploadBatches ? (
                   <Button onClick={() => setBatchListOpen(true)} type="button">
-                    <HistoryIcon className="size-4" />
+                    <IconHistory className="size-4" />
                   </Button>
                 ) : null}
               </ButtonGroup>
@@ -1019,7 +1029,7 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
                     }
                     variant="destructive"
                   >
-                    <Trash2Icon className="size-4" />
+                    <IconTrash className="size-4" />
                     批量删除 ({selectedIds.length})
                   </Button>
                 )
@@ -1030,7 +1040,7 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
               <Empty className="border-border">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
-                    <UsersIcon className="size-5" />
+                    <IconUsers className="size-5" />
                   </EmptyMedia>
                   <EmptyTitle>
                     暂无处于「
@@ -1045,7 +1055,7 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
               <Empty className="border-border">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
-                    <UsersIcon className="size-5" />
+                    <IconUsers className="size-5" />
                   </EmptyMedia>
                   <EmptyTitle>简历库还没有任何候选人</EmptyTitle>
                   <EmptyDescription>点击右上角「上传简历」加入第一份候选人简历。</EmptyDescription>
@@ -1391,6 +1401,7 @@ function StudioResumesRoute() {
   return (
     <HydrationBoundary state={state.dehydratedState as unknown as DehydratedState}>
       <ResumeLibraryPage metrics={state.metrics} />
+      <StudioResumeFloatingChat />
     </HydrationBoundary>
   );
 }

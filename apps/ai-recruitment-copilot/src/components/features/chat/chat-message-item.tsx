@@ -1,11 +1,8 @@
 "use client";
 
+import { IconCheck, IconCopy, IconRefresh } from "@tabler/icons-react";
 import type { FileUIPart, SourceUrlUIPart, UIMessage } from "ai";
-import {
-  IconCheck as CheckIcon,
-  IconCopy as CopyIcon,
-  IconRefresh as RefreshCcwIcon,
-} from "@tabler/icons-react";
+
 import { useState } from "react";
 import {
   Attachment,
@@ -38,6 +35,7 @@ import { TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display
 import { ApplyJobDescriptionCard } from "@/components/features/chat/tool-call/apply-job-description-card";
 import { ToolCall } from "@/components/features/chat/tool-call/tool-call";
 import {
+  getChatAttachmentIdFromUrl,
   getMessageTimeValue,
   isFilePart,
   isSourceUrlPart,
@@ -213,8 +211,7 @@ export function ChatMessageItem({
                 });
                 const showImportButton = message.role === "user" && isResumeDocument;
                 const importedId = resumeImports[part.id] ?? null;
-                const attachmentIdMatch = part.url.match(/\/api\/chat\/attachments\/([^/?#]+)/);
-                const attachmentId = attachmentIdMatch?.[1] ?? null;
+                const attachmentId = getChatAttachmentIdFromUrl(part.url);
                 const parsed = attachmentId ? parsedByAttachmentId.get(attachmentId) : null;
 
                 if (isResumeDocument) {
@@ -256,6 +253,7 @@ export function ChatMessageItem({
                         {showImportButton ? (
                           <ResumeImportButton
                             activeJobDescriptionId={activeJobDescriptionId}
+                            attachmentId={attachmentId}
                             className="flex-1 basis-0"
                             filePart={part}
                             importedInterviewId={importedId}
@@ -371,10 +369,10 @@ export function ChatMessageItem({
             onClick={() => onRegenerate(message.id)}
             tooltip="重新生成"
           >
-            <RefreshCcwIcon className="size-3" />
+            <IconRefresh className="size-3" />
           </MessageAction>
           <MessageAction label="复制内容" onClick={handleCopy} tooltip="复制">
-            {hasCopied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+            {hasCopied ? <IconCheck className="size-3" /> : <IconCopy className="size-3" />}
           </MessageAction>
         </MessageActions>
       ) : null}

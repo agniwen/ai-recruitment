@@ -1,6 +1,6 @@
 "use client";
 
-import { IconLoader2 as LoaderCircleIcon, IconSparkles as SparklesIcon } from "@tabler/icons-react";
+import { IconLoader2, IconSparkles } from "@tabler/icons-react";
 import { JobDescriptionSelectField } from "@/components/features/studio/interviews/job-description-select-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,24 +57,24 @@ export function JdPickModal({
           action={
             isAnalyzingMatch ? (
               <Button
-                className="h-13 gap-1.5"
+                className="h-9 gap-1.5"
                 onClick={onCancelAnalyze}
                 size="sm"
                 type="button"
                 variant="outline"
               >
-                <LoaderCircleIcon className="size-3.5 animate-spin" />
+                <IconLoader2 className="size-3.5 animate-spin" />
                 取消分析
               </Button>
             ) : (
               <Button
-                className="h-13 gap-1.5"
+                className="h-9 gap-1.5"
                 onClick={onAnalyze}
                 size="sm"
                 type="button"
                 variant="outline"
               >
-                <SparklesIcon className="size-3.5" />
+                <IconSparkles className="size-3.5" />
                 自动分析
               </Button>
             )
@@ -87,7 +87,7 @@ export function JdPickModal({
         {isAnalyzingMatch ? (
           <Card className="gap-0 rounded-md border-dashed py-0">
             <CardContent className="flex items-center gap-2 bg-muted/40 px-3 py-2 text-muted-foreground text-xs">
-              <LoaderCircleIcon className="size-3.5 animate-spin" />
+              <IconLoader2 className="size-3.5 animate-spin" />
               <span>正在分析简历并匹配最合适的在招岗位…</span>
             </CardContent>
           </Card>
@@ -95,7 +95,7 @@ export function JdPickModal({
         {!isAnalyzingMatch && matchReason ? (
           <Card className="gap-0 rounded-md border-amber-200/70 bg-amber-50/70 py-0 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
             <CardContent className="flex items-start gap-2 px-3 py-2 text-xs">
-              <SparklesIcon className="mt-0.5 size-3.5 shrink-0" />
+              <IconSparkles className="mt-0.5 size-3.5 shrink-0" />
               <span>已根据简历匹配到建议岗位：{matchReason}</span>
             </CardContent>
           </Card>

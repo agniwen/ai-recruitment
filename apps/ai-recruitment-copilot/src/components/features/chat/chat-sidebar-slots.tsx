@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  IconPlus as PlusIcon,
-  IconSquareCheck as SquareCheckBigIcon,
-  IconTrash as Trash2Icon,
-  IconX as XIcon,
-} from "@tabler/icons-react";
+import { IconPlus, IconSquareCheck, IconTrash, IconX } from "@tabler/icons-react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -38,6 +33,7 @@ import { deleteConversation, fetchConversations } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { cn } from "@arc/shared/utils";
 import { CHAT_EVENTS, notifyConversationsChanged } from "./lib/chat-events";
+import { isStudioResumeChatId } from "../studio/studio-resume-chat";
 
 interface ConversationListItem {
   id: string;
@@ -83,7 +79,7 @@ function ChatSidebarHeader({
             size="default"
             tooltip="新建对话"
           >
-            <PlusIcon className="size-4" />
+            <IconPlus className="size-4" />
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
@@ -100,7 +96,7 @@ function ChatSidebarHeader({
           size="sm"
           variant="destructive"
         >
-          <Trash2Icon className="size-4" />
+          <IconTrash className="size-4" />
           {isBulkDeleting ? "正在删除…" : `删除 (${selectedCount})`}
         </Button>
         <Tooltip>
@@ -113,7 +109,7 @@ function ChatSidebarHeader({
               size="icon"
               variant="ghost"
             >
-              <XIcon className="size-4" />
+              <IconX className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>退出批量编辑</TooltipContent>
@@ -130,7 +126,7 @@ function ChatSidebarHeader({
         size="sm"
         variant="ghost"
       >
-        <PlusIcon className="size-4" />
+        <IconPlus className="size-4" />
         <span className="font-medium text-sm">新建对话</span>
       </Button>
       <Tooltip>
@@ -142,7 +138,7 @@ function ChatSidebarHeader({
             size="icon"
             variant="ghost"
           >
-            <SquareCheckBigIcon className="size-4" />
+            <IconSquareCheck className="size-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>批量编辑</TooltipContent>
@@ -209,7 +205,7 @@ function renderSessionItem({
         type="button"
         variant="ghost"
       >
-        <Trash2Icon className="size-3.5" />
+        <IconTrash className="size-3.5" />
       </Button>
     </>
   );
@@ -360,12 +356,14 @@ export function ChatSidebarSlots() {
     try {
       const rows = await fetchConversations(slug);
       setConversations(
-        rows.map((item) => ({
-          id: item.id,
-          isTitleGenerating: item.isTitleGenerating,
-          title: item.title,
-          updatedAt: item.updatedAt,
-        })),
+        rows
+          .filter((item) => !isStudioResumeChatId(item.id))
+          .map((item) => ({
+            id: item.id,
+            isTitleGenerating: item.isTitleGenerating,
+            title: item.title,
+            updatedAt: item.updatedAt,
+          })),
       );
     } catch {
       // network failure — keep the previous list; the next tick will retry
