@@ -35,4 +35,12 @@ describe("TanStack Start shared component migration", () => {
     expect(previewButtonSource).toContain("<iframe");
     expect(previewButtonSource).not.toContain('toast.error("简历预览加载失败，请刷新后重试")');
   });
+
+  it("persists generated structured resume review from chat one-click import", () => {
+    const source = readSource("components/features/resume-import/resume-import-button.tsx");
+
+    expect(source).toContain("generateResumeReview");
+    expect(source).toContain("reviewResult = await generateResumeReview");
+    expect(source).toContain("resumeReview: reviewResult?.structuredReview ?? null");
+  });
 });

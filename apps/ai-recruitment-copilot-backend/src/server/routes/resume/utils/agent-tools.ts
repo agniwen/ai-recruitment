@@ -44,7 +44,7 @@ export const getServerTimeTool = tool({
 });
 
 export const getResumeReviewFrameworkTool = tool({
-  description: "返回一个带权重维度的通用简历筛选框架，可用于实习生和社招岗位。",
+  description: "返回当前简历库使用的 v2 六维度简历评估框架。",
   // oxlint-disable-next-line require-await -- AI SDK tool signature requires async execute.
   execute: async ({ seniority, targetRole }) => {
     const level = seniority ?? "general";
@@ -53,48 +53,57 @@ export const getResumeReviewFrameworkTool = tool({
       dimensions: [
         {
           checklist: [
-            "是否有量化的业务或产品结果",
-            "是否清楚说明负责范围与角色",
-            "是否使用清晰的行动-结果式表述",
+            "JD 所需技能与候选人技能、项目技术栈是否语义匹配",
+            "关键技能是否有项目或工作经历证据支撑",
+            "是否存在必备技能缺失或只停留在关键词堆叠",
           ],
-          name: "影响力与结果",
-          weight: 30,
+          name: "技能匹配度",
+          weight: 35,
         },
         {
           checklist: [
-            "是否写明具体技术栈细节",
-            "是否体现架构设计或权衡思路",
-            "是否体现性能、稳定性或扩展性相关工作",
+            "行业背景、业务领域、技术栈是否与岗位方向一致",
+            "工作年限与岗位层级是否匹配",
+            "职责边界是否接近目标岗位要求",
           ],
-          name: "技术深度",
+          name: "经验相关性",
           weight: 25,
         },
         {
           checklist: [
-            "是否匹配目标岗位关键词",
-            "项目经历是否与岗位职责相关",
-            "内容排序和重点是否支撑岗位匹配度",
+            "项目复杂度是否接近岗位要求",
+            "候选人在项目中的角色和贡献是否清楚",
+            "项目结果是否有量化证据或可验证上下文",
           ],
-          name: "岗位相关性",
-          weight: 20,
-        },
-        {
-          checklist: [
-            "项目符号和表述是否简洁",
-            "时间线与格式是否一致",
-            "层级是否清晰、便于快速扫读",
-          ],
-          name: "结构与可读性",
+          name: "项目匹配度",
           weight: 15,
         },
         {
           checklist: [
-            "是否避免夸大或失真的表述",
-            "是否提供可验证的链接或作品",
-            "成果是否具备清晰上下文",
+            "学历层次是否满足岗位要求",
+            "专业方向或院校背景是否提供额外支持",
+            "证书、培训或其他背景是否与岗位相关",
           ],
-          name: "信号可信度",
+          name: "学历与背景",
           weight: 10,
+        },
+        {
+          checklist: [
+            "成长曲线是否清晰",
+            "是否体现学习能力、技术广度或跨领域迁移能力",
+            "经历是否支持后续培养空间",
+          ],
+          name: "潜力评估",
+          weight: 8,
+        },
+        {
+          checklist: [
+            "平均在职时长是否合理",
+            "是否存在连续短经历、明显空窗或时间重叠",
+            "职业方向是否连贯",
+          ],
+          name: "稳定性评估",
+          weight: 7,
         },
       ],
       seniority: level,

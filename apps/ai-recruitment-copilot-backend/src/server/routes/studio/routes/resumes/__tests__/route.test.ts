@@ -33,6 +33,10 @@ const resumePoolRouteSource = readFileSync(
   new URL("../../resume-pool/route.ts", import.meta.url),
   "utf-8",
 );
+const resumeAgentToolsSource = readFileSync(
+  new URL("../../../../resume/utils/agent-tools.ts", import.meta.url),
+  "utf-8",
+);
 const batchProcessorSource = readFileSync(
   new URL("../../resume-upload-batches/utils/processor.ts", import.meta.url),
   "utf-8",
@@ -300,5 +304,24 @@ describe("resume review detail route", () => {
     expect(evaluationDaoSource).toContain("resume_evaluation_updated");
     expect(evaluationDaoSource).toContain("fromStatus");
     expect(evaluationDaoSource).toContain("toStatus");
+  });
+});
+
+describe("resume review v2 chain coverage", () => {
+  it("uses the v2 six-dimension framework in resume chat tools", () => {
+    expect(resumeAgentToolsSource).toContain("技能匹配度");
+    expect(resumeAgentToolsSource).toContain("经验相关性");
+    expect(resumeAgentToolsSource).toContain("项目匹配度");
+    expect(resumeAgentToolsSource).toContain("学历与背景");
+    expect(resumeAgentToolsSource).toContain("潜力评估");
+    expect(resumeAgentToolsSource).toContain("稳定性评估");
+    expect(resumeAgentToolsSource).not.toContain("影响力与结果");
+    expect(resumeAgentToolsSource).not.toContain("结构与可读性");
+  });
+
+  it("generates structured resume review for resume-pool imports", () => {
+    expect(resumePoolDaoSource).toContain("generateResumeReview");
+    expect(resumePoolDaoSource).toContain("resumeReview: reviewResult?.structuredReview ?? null");
+    expect(resumePoolDaoSource).toContain("notes: reviewResult?.review ?? poolItem.notes");
   });
 });

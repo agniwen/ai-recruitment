@@ -29,6 +29,9 @@ import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-cop
 import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle";
 import { createResumeRecordFromStorage } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/create-from-storage";
 import { normalizeSkill } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills";
+import { generateResumeReview } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import type { ResumeReviewGenerationResult } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import { loadJobDescriptionById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 
 type PoolRow = typeof resumePoolItem.$inferSelect;
 type PoolListRow = Omit<PoolRow, "resumeText">;
@@ -488,6 +491,54 @@ async function loadSourceChannels(
   );
 }
 
+async function buildJobDescriptionReviewContext(
+  organizationId: string,
+  jobDescriptionId: string | null,
+  actorUserId: string,
+): Promise<string | null> {
+  if (!jobDescriptionId) {
+    return null;
+  }
+  const jd = await loadJobDescriptionById(organizationId, jobDescriptionId, {
+    actorUserId,
+  });
+  if (!jd) {
+    return null;
+  }
+  return [
+    `岗位名称：${jd.name}`,
+    jd.description ? `岗位描述：${jd.description}` : null,
+    `岗位 Prompt：\n${jd.prompt}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+async function generateResumeReviewForPoolImport(input: {
+  importedBy: string;
+  jobDescriptionId: string | null;
+  organizationId: string;
+  resumeProfile: ResumeProfile | null;
+}): Promise<ResumeReviewGenerationResult | null> {
+  if (!input.resumeProfile) {
+    return null;
+  }
+  try {
+    const jobDescription = await buildJobDescriptionReviewContext(
+      input.organizationId,
+      input.jobDescriptionId,
+      input.importedBy,
+    );
+    return await generateResumeReview({
+      jobDescription,
+      resumeProfile: input.resumeProfile,
+    });
+  } catch (error) {
+    console.error("[resume-pool] resume review generation failed:", error);
+    return null;
+  }
+}
+
 export async function queryResumePoolItems(
   input: QueryResumePoolItemsInput,
 ): Promise<PaginatedResumePoolResult> {
@@ -657,6 +708,12 @@ export async function importPoolItemToResumeLibrary(
   }
 
   const importedAt = new Date();
+  const reviewResult = await generateResumeReviewForPoolImport({
+    importedBy: input.importedBy,
+    jobDescriptionId: input.jobDescriptionId,
+    organizationId: input.organizationId,
+    resumeProfile: poolItem.resumeProfile,
+  });
   let resumeRecordId = "";
   await db.transaction(async (tx) => {
     resumeRecordId = await createResumeRecordFromStorage(
@@ -667,10 +724,11 @@ export async function importPoolItemToResumeLibrary(
         contentHash: poolItem.resumeContentHash,
         hiringUnitId: input.hiringUnitId,
         jobDescriptionId: input.jobDescriptionId,
-        notes: poolItem.notes,
+        notes: reviewResult?.review ?? poolItem.notes,
         organizationId: input.organizationId,
         resumeFileName: poolItem.resumeFileName,
         resumeProfile: poolItem.resumeProfile,
+        resumeReview: reviewResult?.structuredReview ?? null,
         resumeText: poolItem.resumeText,
         source: {
           importedAt,

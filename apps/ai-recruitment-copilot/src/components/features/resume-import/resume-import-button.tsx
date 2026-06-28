@@ -39,6 +39,7 @@ import {
   buildResumePayload,
   buildSaveOnlyResumeFormData,
   formValuesFromResumeProfile,
+  generateResumeReview,
   matchJobDescriptionForResume,
   parseResumeFile,
 } from "@/lib/client/resume-analysis";
@@ -318,12 +319,27 @@ export function ResumeImportButton({
       accumulatedTextRef.current = "";
 
       const resumePayload = buildResumePayload(fileName, resumeProfile);
+      let reviewResult: Awaited<ReturnType<typeof generateResumeReview>> = null;
+      try {
+        setProgressStatus("正在生成简历评价…");
+        reviewResult = await generateResumeReview({
+          jobDescriptionId: jobDescriptionId || null,
+          resumeProfile,
+          signal: abortController.signal,
+        });
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+        toast.warning(error instanceof Error ? error.message : "简历评价生成失败，已跳过");
+      }
+      setProgressStatus("正在写入简历库…");
       const record = await apiFetch<ResumeLibraryDetail>(`/api/w/${workspaceSlug}/studio/resumes`, {
         body: buildSaveOnlyResumeFormData(
           formValuesFromResumeProfile(resumeProfile, { jobDescriptionId }),
           file,
           resumePayload,
-          { dedupPolicy },
+          { dedupPolicy, resumeReview: reviewResult?.structuredReview ?? null },
         ),
         method: "POST",
         signal: abortController.signal,
