@@ -78,8 +78,8 @@ export function countResumeReviewBiasCategories(items: ResumeReviewBiasItem[]) {
   };
 }
 
-// 从宽松 review（兼容 v1/v2）读取某个维度；缺失返回 null。
-// Read a dimension from a loose review (v1/v2 compatible); null when absent.
+// 从宽松 review 读取某个维度；缺失返回 null。
+// Read a dimension from a loose review; null when absent.
 export function getResumeReviewDimension(
   review: ResumeReviewLoose,
   key: ResumeReviewDimensionKey,
@@ -91,8 +91,8 @@ export function getResumeReviewDimension(
   return dim;
 }
 
-// 从宽松 review 读取基础分：v2 优先 baseScore，v1 兜底 overall.score。
-// Read base score from a loose review: v2 baseScore first, v1 overall.score fallback.
+// 从宽松 review 读取基础分：新版优先 baseScore，v1 兜底 overall.score。
+// Read base score from a loose review: current baseScore first, v1 overall.score fallback.
 export function getResumeReviewBaseScore(review: ResumeReviewLoose): number | null {
   const v2 = get(review, "overall.baseScore");
   if (typeof v2 === "number") {
@@ -105,9 +105,9 @@ export function getResumeReviewBaseScore(review: ResumeReviewLoose): number | nu
   return null;
 }
 
-// 按当前 v3 五维框架权重计算基础分；旧数据缺维度时只按存在的当前维度累加。
-// Compute base score by the current v3 five-dimension framework; legacy rows
-// missing current keys only contribute dimensions that are present.
+// 按产品六维权重计算基础分；旧数据缺维度时只按存在的当前维度累加。
+// Compute base score by the product six-dimension weights; legacy rows missing
+// current keys only contribute dimensions that are present.
 export function computeResumeReviewBaseScore(
   dimensions: Record<string, ResumeReviewDimension>,
 ): number {

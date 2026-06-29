@@ -55,15 +55,17 @@ describe("TanStack Start workspace shell migration", () => {
     expect(chatSessionRoute).toContain('createFileRoute("/w/$slug/chat/$sessionId")');
   });
 
-  it("routes generic workspace and studio tab entries through the studio shell fallback", () => {
+  it("routes generic workspace through the studio shell fallback but sends the Studio tab to a concrete allowed page", () => {
     const workspaceRoute = readSource("routes/w.$slug.tsx");
     const sidebarTabs = readSource("components/layout/app-sidebar/sidebar-tabs.tsx");
 
     expect(workspaceRoute).toContain("resolveWorkspaceLandingHref");
     expect(workspaceRoute).toContain('preferredArea: "studio"');
     expect(workspaceRoute).not.toContain("/studio/resumes");
-    expect(sidebarTabs).toMatch(/`\/w\/\$\{slug\}\/studio`/u);
-    expect(sidebarTabs).not.toContain("/studio/resumes");
+    expect(sidebarTabs).toContain("STUDIO_TAB_PAGE_PATHS");
+    expect(sidebarTabs).toContain("/studio/resumes");
+    expect(sidebarTabs).toContain("firstAllowedStudioPath");
+    expect(sidebarTabs).toMatch(/let target = `\/w\/\$\{slug\}\/studio`/u);
   });
 
   it("disables the chat sidebar tab through the chat page permission", () => {
@@ -73,6 +75,21 @@ describe("TanStack Start workspace shell migration", () => {
     expect(sidebarTabs).toContain('useHasPermission("page", "chat")');
     expect(sidebarTabs).toContain('value="chat"');
     expect(sidebarTabs).toContain("disabled={!canAccessChat}");
+  });
+
+  it("scopes Glimm transitions to Chat and Studio sidebar tab switches", () => {
+    const packageJson = readSource("../package.json");
+    const workspaceRoute = readSource("routes/w.$slug.tsx");
+    const sidebarTabs = readSource("components/layout/app-sidebar/sidebar-tabs.tsx");
+
+    expect(packageJson).toContain('"glimm"');
+    expect(workspaceRoute).toContain('import { GlimmProvider } from "glimm/react"');
+    expect(workspaceRoute).toContain('<GlimmProvider palette="azure">');
+    expect(sidebarTabs).toContain('import { useGlimm } from "glimm/react"');
+    expect(sidebarTabs).toContain("const { sweep } = useGlimm();");
+    expect(sidebarTabs).toContain("sweep(");
+    expect(sidebarTabs).toContain('direction: nextTab === "chat" ? "rtl" : "ltr"');
+    expect(sidebarTabs).not.toContain("InterceptLinks");
   });
 
   it("hides studio sidebar groups when none of their menu items render", () => {
