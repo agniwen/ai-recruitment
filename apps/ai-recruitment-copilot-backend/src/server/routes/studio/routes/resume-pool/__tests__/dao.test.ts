@@ -27,6 +27,7 @@ import {
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle";
+import { cloneResumeSemanticIndexFromPoolToInterview } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone";
 import { generateResumeReview } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 
 vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 });
@@ -41,6 +42,10 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-se
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle", () => ({
   deleteResumeSemanticIndexBestEffort: vi.fn(),
+}));
+
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone", () => ({
+  cloneResumeSemanticIndexFromPoolToInterview: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent", () => ({
@@ -209,6 +214,7 @@ beforeEach(() => {
   vi.mocked(enqueueResumeSemanticIndexJobBestEffort).mockClear();
   vi.mocked(findSemanticResumeDuplicates).mockResolvedValue([]);
   vi.mocked(deleteResumeSemanticIndexBestEffort).mockClear();
+  vi.mocked(cloneResumeSemanticIndexFromPoolToInterview).mockResolvedValue();
   vi.mocked(generateResumeReview).mockResolvedValue({
     review: "新六维度简历评价",
     structuredReview: STRUCTURED_REVIEW,
@@ -648,11 +654,47 @@ describe("importPoolItemToResumeLibrary", () => {
       .where(eq(resumePoolImport.importedResumeRecordId, result.resumeRecordId));
     expect(imports).toHaveLength(1);
     expect(imports[0]?.organizationId).toBe(ORG_B);
-    expect(enqueueResumeSemanticIndexJobBestEffort).toHaveBeenCalledWith({
+    expect(cloneResumeSemanticIndexFromPoolToInterview).toHaveBeenCalledWith({
       organizationId: ORG_B,
-      sourceId: result.resumeRecordId,
-      sourceType: "studio_interview",
+      poolItemId: publicId,
+      resumeRecordId: result.resumeRecordId,
     });
+    expect(enqueueResumeSemanticIndexJobBestEffort).not.toHaveBeenCalled();
+  });
+
+  it("fails the import and removes the created resume record when vector cloning fails", async () => {
+    const publicId = await createResumePoolItem(
+      basePoolInput({
+        contentHash: "hash-resume-pool-clone-failure",
+        resumeFileName: "candidate-clone-failure.pdf",
+        scope: "public",
+      }),
+    );
+    vi.mocked(cloneResumeSemanticIndexFromPoolToInterview).mockRejectedValueOnce(
+      new Error("clone failed"),
+    );
+
+    await expect(
+      importPoolItemToResumeLibrary({
+        dedupPolicy: "force",
+        hiringUnitId: null,
+        importedBy: USER_B,
+        jobDescriptionId: null,
+        organizationId: ORG_B,
+        poolItemId: publicId,
+      }),
+    ).rejects.toThrow("clone failed");
+
+    const records = await db
+      .select()
+      .from(studioInterview)
+      .where(eq(studioInterview.resumeSourcePoolItemId, publicId));
+    const imports = await db
+      .select()
+      .from(resumePoolImport)
+      .where(eq(resumePoolImport.poolItemId, publicId));
+    expect(records).toHaveLength(0);
+    expect(imports).toHaveLength(0);
   });
 
   it("rejects importing another user's private item", async () => {

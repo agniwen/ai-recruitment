@@ -16,6 +16,7 @@ import { matchJobDescriptionForResume } from "@arc/ai-recruitment-copilot-backen
 import type * as DedupServiceModule from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
+import { runResumeSemanticIndexJob } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer";
 import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import {
   department,
@@ -94,6 +95,10 @@ vi.mock(
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue", () => ({
   enqueueResumeSemanticIndexJobBestEffort: vi.fn(),
+}));
+
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer", () => ({
+  runResumeSemanticIndexJob: vi.fn(),
 }));
 
 // ─── Fixture IDs（固定前缀避免与其他测试冲突）────────────────────────────────
@@ -323,6 +328,9 @@ beforeEach(() => {
   (enqueueResumeSemanticIndexJobBestEffort as ReturnType<typeof vi.fn>).mockImplementation(() =>
     Promise.resolve(),
   );
+  (runResumeSemanticIndexJob as ReturnType<typeof vi.fn>).mockImplementation(() =>
+    Promise.resolve(),
+  );
   (matchJobDescriptionForResume as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 });
 
@@ -505,11 +513,12 @@ describe("processNextItem — resume pool target", () => {
     expect(poolItems[0]?.targetRole).toBe("Product Manager");
     expect(poolItems[0]?.resumeParseStatus).toBe("ready");
     expect(poolItems[0]?.resumeText).toBe("Pool User OCR 原文");
-    expect(enqueueResumeSemanticIndexJobBestEffort).toHaveBeenCalledWith({
+    expect(runResumeSemanticIndexJob).toHaveBeenCalledWith({
       organizationId: ORG_A,
       sourceId: beforeItem?.poolItemId,
       sourceType: "resume_pool_item",
     });
+    expect(enqueueResumeSemanticIndexJobBestEffort).not.toHaveBeenCalled();
   });
 
   it("私有简历池 target=resume_pool + skip 查重命中时跳过创建", async () => {
