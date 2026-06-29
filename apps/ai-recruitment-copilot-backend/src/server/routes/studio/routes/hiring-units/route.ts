@@ -55,7 +55,7 @@ export const hiringUnitsRouter = factory
     const records = await listAllHiringUnits(activeOrg.id);
     return c.json({ records }, 200);
   })
-  .get("/selectable", requirePermission("hiringUnit", "read"), async (c) => {
+  .get("/selectable", async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
