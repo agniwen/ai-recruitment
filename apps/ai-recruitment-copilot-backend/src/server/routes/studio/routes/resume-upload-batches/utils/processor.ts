@@ -41,6 +41,7 @@ import { createResumeRecordFromStorage } from "@arc/ai-recruitment-copilot-backe
 import { syncResumeSkills } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
+import { replaceDuplicateMatchesForSource } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
 import { runResumeSemanticIndexJob } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer";
 
 const ERROR_MESSAGE_MAX = 500;
@@ -63,6 +64,7 @@ function elapsed(startedAt: number): number {
 type ItemRow = Awaited<ReturnType<typeof claimNextPendingItem>>;
 type BatchRow = typeof resumeUploadBatch.$inferSelect;
 type ParsedResume = Awaited<ReturnType<typeof parseResumeBytesToProfile>>;
+type DuplicateMatches = Awaited<ReturnType<typeof findSemanticResumeDuplicates>>;
 
 class BatchItemCancelledError extends Error {
   readonly batchId: string;
@@ -350,34 +352,35 @@ async function generateReviewForParsedResume(input: {
   }
 }
 
-async function findDuplicateSkipSnapshot(input: {
+async function findDuplicateMatches(input: {
   batchRow: BatchRow;
   itemId: string;
   organizationId: string;
   resumeProfile: ParsedResume["resumeProfile"];
-}) {
-  const shouldSkipDuplicates =
-    input.batchRow.dedupPolicy === "skip" &&
-    (input.batchRow.target !== "resume_pool" || input.batchRow.resumePoolScope === "private");
-  if (!shouldSkipDuplicates) {
-    return null;
-  }
-
+  userId: string;
+}): Promise<DuplicateMatches> {
   const dedupStartedAt = Date.now();
   logStep("dedup.start", { itemId: input.itemId });
+  const shouldIncludePrivatePool =
+    input.batchRow.target === "resume_pool" && input.batchRow.resumePoolScope === "private";
   const matches = await findSemanticResumeDuplicates({
     email: input.resumeProfile?.email ?? null,
     name: input.resumeProfile?.name ?? null,
     organizationId: input.organizationId,
     phone: input.resumeProfile?.phone ?? null,
+    poolOwnerUserId: shouldIncludePrivatePool ? input.userId : undefined,
+    poolScope: shouldIncludePrivatePool ? "private" : undefined,
     resumeProfile: input.resumeProfile,
+    sourceTypes: shouldIncludePrivatePool
+      ? ["studio_interview", "resume_pool_item"]
+      : ["studio_interview"],
   });
   logStep("dedup.done", {
     durationMs: elapsed(dedupStartedAt),
     itemId: input.itemId,
     matchCount: matches.length,
   });
-  return matches.length > 0 ? matches : null;
+  return matches;
 }
 
 // S3 から PDF を取得してパースし、作成すべき studio_interview の情報を返す。
@@ -388,10 +391,9 @@ async function fetchAndParse(
   organizationId: string,
   userId: string,
 ): Promise<{
+  duplicateMatches: DuplicateMatches;
   succeededPoolItemId: string | null;
   succeededRecordId: string | null;
-  dedupSnapshot: unknown;
-  isDuplicateSkip: boolean;
 }> {
   if (!item.storageKey || item.storageKey.length === 0) {
     // 防御性检查：理论上 Zod + chat_attachment notNull 都已校验，但兜底一次
@@ -405,21 +407,14 @@ async function fetchAndParse(
   const { resumeProfile, resumeText } = await resolveResumeProfile(item);
   await assertBatchItemNotCancelled(batchRow.id, item.id);
 
-  const dedupSnapshot = await findDuplicateSkipSnapshot({
+  const duplicateMatches = await findDuplicateMatches({
     batchRow,
     itemId: item.id,
     organizationId,
     resumeProfile,
+    userId,
   });
   await assertBatchItemNotCancelled(batchRow.id, item.id);
-  if (dedupSnapshot) {
-    return {
-      dedupSnapshot,
-      isDuplicateSkip: true,
-      succeededPoolItemId: null,
-      succeededRecordId: null,
-    };
-  }
 
   if (batchRow.target === "resume_pool") {
     let { poolItemId } = item;
@@ -461,9 +456,14 @@ async function fetchAndParse(
       organizationId,
       poolItemId,
     });
+    await replaceDuplicateMatchesForSource({
+      matches: duplicateMatches,
+      organizationId,
+      sourceId: poolItemId,
+      sourceType: "resume_pool_item",
+    });
     return {
-      dedupSnapshot: null,
-      isDuplicateSkip: false,
+      duplicateMatches,
       succeededPoolItemId: poolItemId,
       succeededRecordId: null,
     };
@@ -535,9 +535,14 @@ async function fetchAndParse(
     resumeText,
     userId,
   });
+  await replaceDuplicateMatchesForSource({
+    matches: duplicateMatches,
+    organizationId,
+    sourceId: succeededRecordId,
+    sourceType: "studio_interview",
+  });
   return {
-    dedupSnapshot: null,
-    isDuplicateSkip: false,
+    duplicateMatches,
     succeededPoolItemId: null,
     succeededRecordId,
   };
@@ -549,9 +554,7 @@ async function writeOutcome(
   item: NonNullable<ItemRow>,
   batchId: string,
   outcome: {
-    dedupSnapshot: unknown;
     errorMessage: string | null;
-    isDuplicateSkip: boolean;
     succeededPoolItemId: string | null;
     succeededRecordId: string | null;
   },
@@ -560,8 +563,6 @@ async function writeOutcome(
   let outcomeStatus = "succeeded";
   if (outcome.errorMessage) {
     outcomeStatus = "failed";
-  } else if (outcome.isDuplicateSkip) {
-    outcomeStatus = "duplicate_skipped";
   }
   logStep("outcome.write.start", {
     batchId,
@@ -594,23 +595,6 @@ async function writeOutcome(
       await tx
         .update(resumeUploadBatchItem)
         .set({ errorMessage: outcome.errorMessage, finishedAt: now, status: "failed" })
-        .where(eq(resumeUploadBatchItem.id, item.id));
-    } else if (outcome.isDuplicateSkip) {
-      if (item.resumeRecordId) {
-        await tx.delete(studioInterview).where(eq(studioInterview.id, item.resumeRecordId));
-      }
-      if (item.poolItemId) {
-        await tx.delete(resumePoolItem).where(eq(resumePoolItem.id, item.poolItemId));
-      }
-      await tx
-        .update(resumeUploadBatchItem)
-        .set({
-          dedupMatchSnapshot: outcome.dedupSnapshot as never,
-          finishedAt: now,
-          poolItemId: null,
-          resumeRecordId: null,
-          status: "duplicate_skipped",
-        })
         .where(eq(resumeUploadBatchItem.id, item.id));
     } else {
       await tx
@@ -679,15 +663,11 @@ async function processClaimedItem(
     target: batchRow.target,
   });
   let outcome: {
-    dedupSnapshot: unknown;
     errorMessage: string | null;
-    isDuplicateSkip: boolean;
     succeededPoolItemId: string | null;
     succeededRecordId: string | null;
   } = {
-    dedupSnapshot: null,
     errorMessage: null,
-    isDuplicateSkip: false,
     succeededPoolItemId: null,
     succeededRecordId: null,
   };

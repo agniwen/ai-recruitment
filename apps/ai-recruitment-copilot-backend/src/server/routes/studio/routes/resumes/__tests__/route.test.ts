@@ -216,6 +216,13 @@ describeWithDatabase("resume detail route database behavior", () => {
   });
 });
 
+describe("resume duplicate match details route", () => {
+  it("exposes duplicate match details for badge clicks", () => {
+    expect(routeSource).toContain('"/:id/duplicate-matches"');
+    expect(routeSource).toContain("listDuplicateMatchesForSource");
+  });
+});
+
 describeWithDatabase("resolveResumeUploadStorage", () => {
   it("stores only the uploaded object when the client already sent resumePayload", async () => {
     const { resolveResumeUploadStorage } =
@@ -249,10 +256,21 @@ describeWithDatabase("resolveResumeUploadStorage", () => {
 describe("resume semantic index cleanup", () => {
   it("cleans semantic indexes after single and bulk resume-library deletion", () => {
     expect(routeSource).toContain("deleteResumeSemanticIndexBestEffort");
+    expect(routeSource).toContain("deleteDuplicateMatchesForSource");
     expect(routeSource).toContain('sourceType: "studio_interview"');
     expect(routeSource).toContain("sourceId: id");
     expect(routeSource).toContain("for (const deletedId of result)");
     expect(routeSource).toContain("sourceId: deletedId.id");
+  });
+});
+
+describe("resume library create duplicate handling", () => {
+  it("persists duplicate matches after creating the resume instead of returning conflict", () => {
+    expect(routeSource).toContain("replaceDuplicateMatchesForSource");
+    expect(routeSource).toContain("const dedupMatches = await findSemanticResumeDuplicates");
+    expect(routeSource).toContain("sourceId: recordId");
+    expect(routeSource).toContain('sourceType: "studio_interview"');
+    expect(routeSource).not.toContain("return c.json(dedupConflict, 409)");
   });
 });
 

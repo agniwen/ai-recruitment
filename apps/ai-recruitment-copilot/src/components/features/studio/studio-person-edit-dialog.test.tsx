@@ -118,6 +118,7 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     creatorImage: null,
     creatorName: null,
     creatorOrganizationName: null,
+    duplicateMatch: null,
     hasInterviewRounds: false,
     hasResumeFile: true,
     hiringUnitId: "hu-1",

@@ -8,6 +8,7 @@ import {
   makePaginationSchema,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
+import { listActiveDuplicateMatchCounts } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
 import { intersectRequestedCreatorIds } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import {
@@ -37,6 +38,7 @@ import type {
   ResumeLibraryListRecord,
   ResumeStageProgress,
 } from "@arc/shared/studio-resumes";
+import type { ResumeDuplicateMatchSummary } from "@arc/shared/resume-duplicates";
 import { normalizeSkill } from "./skills";
 
 const SORT_COLUMNS = ["createdAt", "candidateName", "updatedAt"] as const;
@@ -258,6 +260,12 @@ const EMPTY_DERIVED_FIELDS: ResumeDerivedFields = {
   stageProgress: EMPTY_STAGE_PROGRESS,
 };
 
+function toDuplicateMatchSummary(
+  value: { count: number; highestLevel: "high" | "low" | "medium" | null } | undefined,
+): ResumeDuplicateMatchSummary | null {
+  return value && value.count > 0 ? { count: value.count, highestLevel: value.highestLevel } : null;
+}
+
 function serializeStageProgressTimestamp(value: Date | string | null): string | null {
   if (value === null) {
     return null;
@@ -452,7 +460,11 @@ async function loadResumeDerivedFields(
   return result;
 }
 
-function toRecord(row: Row, derived?: ResumeDerivedFields): ResumeLibraryListRecord {
+function toRecord(
+  row: Row,
+  derived?: ResumeDerivedFields,
+  duplicateMatch?: ResumeDuplicateMatchSummary | null,
+): ResumeLibraryListRecord {
   const resolvedDerived = derived ?? EMPTY_DERIVED_FIELDS;
   return {
     candidateEmail: row.candidateEmail,
@@ -467,6 +479,7 @@ function toRecord(row: Row, derived?: ResumeDerivedFields): ResumeLibraryListRec
     creatorImage: row.creatorImage,
     creatorName: row.creatorName,
     creatorOrganizationName: row.creatorOrganizationName,
+    duplicateMatch: duplicateMatch ?? null,
     hasInterviewRounds: resolvedDerived.hasInterviewRounds,
     hasResumeFile: Boolean(row.resumeStorageKey),
     hiringUnitId: row.hiringUnitId,
@@ -537,12 +550,26 @@ export async function queryPaginatedResumeRecords(
     db.select({ count: count() }).from(studioInterview).where(where),
   ]);
 
-  const derivedFields = await loadResumeDerivedFields(rows.map((row) => row.id));
+  const recordIds = rows.map((row) => row.id);
+  const [derivedFields, duplicateMatches] = await Promise.all([
+    loadResumeDerivedFields(recordIds),
+    listActiveDuplicateMatchCounts({
+      organizationId,
+      sourceIds: recordIds,
+      sourceType: "studio_interview",
+    }),
+  ]);
   const total = countRow?.count ?? 0;
   return {
     page: parsedPagination.page,
     pageSize: parsedPagination.pageSize,
-    records: rows.map((row) => toRecord(row, derivedFields.get(row.id))),
+    records: rows.map((row) =>
+      toRecord(
+        row,
+        derivedFields.get(row.id),
+        toDuplicateMatchSummary(duplicateMatches.get(row.id)),
+      ),
+    ),
     total,
     totalPages: calcTotalPages(total, parsedPagination.pageSize),
   };
@@ -625,9 +652,20 @@ export async function loadResumeDetail(
   }
 
   const { resumeProfile, interviewQuestions, ...rest } = row;
-  const derivedFields = await loadResumeDerivedFields([rest.id]);
+  const [derivedFields, duplicateMatches] = await Promise.all([
+    loadResumeDerivedFields([rest.id]),
+    listActiveDuplicateMatchCounts({
+      organizationId,
+      sourceIds: [rest.id],
+      sourceType: "studio_interview",
+    }),
+  ]);
   return {
-    ...toRecord(rest, derivedFields.get(rest.id)),
+    ...toRecord(
+      rest,
+      derivedFields.get(rest.id),
+      toDuplicateMatchSummary(duplicateMatches.get(rest.id)),
+    ),
     interviewQuestions: interviewQuestions ?? [],
     resumeProfile,
   };

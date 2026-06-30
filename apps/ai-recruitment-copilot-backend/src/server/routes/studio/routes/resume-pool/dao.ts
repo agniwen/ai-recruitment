@@ -21,11 +21,17 @@ import type {
   ResumePoolProfileHighlights,
   ResumePoolSourceChannel,
 } from "@arc/shared/resume-pool";
+import type { ResumeDuplicateMatchSummary } from "@arc/shared/resume-duplicates";
 import {
   formatResumeEducationItems,
   formatResumeEducationLines,
 } from "@arc/shared/resume-education";
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
+import {
+  deleteDuplicateMatchesForSource,
+  listActiveDuplicateMatchCounts,
+  replaceDuplicateMatchesForSource,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
 import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle";
 import { cloneResumeSemanticIndexFromPoolToInterview } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone";
@@ -212,6 +218,7 @@ function toListRecord(
   importRow?: { importedAt: Date; resumeRecordId: string } | null,
   uploaderMeta: PoolUploaderMeta = EMPTY_UPLOADER_META,
   sourceChannel: ResumePoolSourceChannel | null = null,
+  duplicateMatch: ResumeDuplicateMatchSummary | null = null,
 ): ResumePoolListRecord {
   return {
     candidateEmail: row.candidateEmail,
@@ -219,6 +226,7 @@ function toListRecord(
     candidatePhone: row.candidatePhone,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
+    duplicateMatch,
     id: row.id,
     importedAt: importRow ? importRow.importedAt.toISOString() : null,
     importedResumeRecordId: importRow?.resumeRecordId ?? null,
@@ -257,9 +265,10 @@ function toDetail(
   importRow?: { importedAt: Date; resumeRecordId: string } | null,
   uploaderMeta: PoolUploaderMeta = EMPTY_UPLOADER_META,
   sourceChannel: ResumePoolSourceChannel | null = null,
+  duplicateMatch: ResumeDuplicateMatchSummary | null = null,
 ): ResumePoolDetail {
   return {
-    ...toListRecord(row, importRow, uploaderMeta, sourceChannel),
+    ...toListRecord(row, importRow, uploaderMeta, sourceChannel, duplicateMatch),
     resumeProfile: row.resumeProfile,
   };
 }
@@ -543,6 +552,33 @@ async function loadSourceChannels(
   );
 }
 
+function toDuplicateMatchSummary(
+  value: { count: number; highestLevel: "high" | "low" | "medium" | null } | undefined,
+): ResumeDuplicateMatchSummary | null {
+  return value && value.count > 0 ? { count: value.count, highestLevel: value.highestLevel } : null;
+}
+
+async function loadPoolDuplicateMatches(input: {
+  organizationId: string;
+  rows: PoolListRow[];
+}): Promise<Map<string, ResumeDuplicateMatchSummary>> {
+  const sourceIds = input.rows
+    .filter((row) => row.organizationId === input.organizationId)
+    .map((row) => row.id);
+  const counts = await listActiveDuplicateMatchCounts({
+    organizationId: input.organizationId,
+    sourceIds,
+    sourceType: "resume_pool_item",
+  });
+  return new Map(
+    [...counts.entries()]
+      .map(([id, value]) => [id, toDuplicateMatchSummary(value)] as const)
+      .filter(
+        (entry): entry is readonly [string, ResumeDuplicateMatchSummary] => entry[1] !== null,
+      ),
+  );
+}
+
 async function buildJobDescriptionReviewContext(
   organizationId: string,
   jobDescriptionId: string | null,
@@ -620,9 +656,13 @@ export async function queryResumePoolItems(
     .orderBy(desc(resumePoolItem.createdAt))
     .limit(100);
   const poolItemIds = rows.map((row) => row.item.id);
-  const [imports, sourceChannels] = await Promise.all([
+  const [imports, sourceChannels, duplicateMatches] = await Promise.all([
     loadImportsForOrg(poolItemIds, input.organizationId),
     loadSourceChannels(poolItemIds),
+    loadPoolDuplicateMatches({
+      organizationId: input.organizationId,
+      rows: rows.map((row) => row.item),
+    }),
   ]);
   return {
     records: rows.map((row) =>
@@ -631,6 +671,7 @@ export async function queryResumePoolItems(
         imports.get(row.item.id) ?? null,
         uploaderMetaFromRow(row),
         sourceChannels.get(row.item.id) ?? null,
+        duplicateMatches.get(row.item.id) ?? null,
       ),
     ),
     total: totalRow?.total ?? 0,
@@ -646,12 +687,22 @@ export async function loadResumePoolItem(input: {
   if (!row) {
     return null;
   }
-  const [importRow, uploaderMeta] = await Promise.all([
+  const [importRow, uploaderMeta, duplicateMatches] = await Promise.all([
     loadImportForOrg(row.id, input.organizationId),
     loadUploaderMeta(row.id),
+    loadPoolDuplicateMatches({
+      organizationId: input.organizationId,
+      rows: [row],
+    }),
   ]);
   const sourceChannels = await loadSourceChannels([row.id]);
-  return toDetail(row, importRow, uploaderMeta, sourceChannels.get(row.id) ?? null);
+  return toDetail(
+    row,
+    importRow,
+    uploaderMeta,
+    sourceChannels.get(row.id) ?? null,
+    duplicateMatches.get(row.id) ?? null,
+  );
 }
 
 export async function publishPrivatePoolItem(
@@ -752,12 +803,6 @@ export async function importPoolItemToResumeLibrary(
     phone: poolItem.candidatePhone ?? poolItem.resumeProfile?.phone ?? null,
     resumeProfile: poolItem.resumeProfile,
   });
-  if (input.dedupPolicy === "check" && matches.length > 0) {
-    return {
-      matches,
-      status: "duplicate_found",
-    };
-  }
 
   const importedAt = new Date();
   const reviewResult = await generateResumeReviewForPoolImport({
@@ -809,6 +854,12 @@ export async function importPoolItemToResumeLibrary(
       poolItemId: poolItem.id,
       type: "imported",
     });
+    await replaceDuplicateMatchesForSource({
+      matches,
+      organizationId: input.organizationId,
+      sourceId: resumeRecordId,
+      sourceType: "studio_interview",
+    });
   });
 
   try {
@@ -836,6 +887,11 @@ export async function importPoolItemToResumeLibrary(
       sourceId: resumeRecordId,
       sourceType: "studio_interview",
     });
+    await deleteDuplicateMatchesForSource({
+      organizationId: input.organizationId,
+      sourceId: resumeRecordId,
+      sourceType: "studio_interview",
+    });
     throw error;
   }
   return { resumeRecordId, status: "imported" };
@@ -858,6 +914,11 @@ export async function deleteOwnPoolItem(input: DeleteOwnPoolItemInput): Promise<
     throw new Error("简历不存在或无权删除");
   }
   await deleteResumeSemanticIndexBestEffort({
+    sourceId: input.poolItemId,
+    sourceType: "resume_pool_item",
+  });
+  await deleteDuplicateMatchesForSource({
+    organizationId: input.organizationId,
     sourceId: input.poolItemId,
     sourceType: "resume_pool_item",
   });
