@@ -6,7 +6,6 @@ import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-ro
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { useStore, useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import {
   IconLoader2 as LoaderCircleIcon,
   IconPencil as PencilIcon,
@@ -68,6 +67,8 @@ interface StudioPersonEditDialogProps {
   recordId: string | null;
   /** 保存成功后回调。Callback on success. */
   onUpdated?: () => void;
+  /** 面试模式下打开候选人资料编辑。Open candidate profile editing from interview mode. */
+  onEditResumeRecord?: (recordId: string) => void;
 }
 
 function ResumeEditSkeleton() {
@@ -536,9 +537,9 @@ function InterviewEditBody({
   onOpenChange,
   recordId,
   onUpdated,
+  onEditResumeRecord,
 }: Omit<StudioPersonEditDialogProps, "mode">) {
   const slug = useWorkspaceSlug();
-  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
@@ -664,14 +665,7 @@ function InterviewEditBody({
                 {round?.candidate.id ? (
                   <Button
                     className="shrink-0"
-                    onClick={() => {
-                      void navigate({
-                        params: { slug },
-                        search: { recordId: round.candidate.id },
-                        to: "/w/$slug/studio/resumes",
-                      });
-                      onOpenChange(false);
-                    }}
+                    onClick={() => onEditResumeRecord?.(round.candidate.id)}
                     size="sm"
                     type="button"
                     variant="outline"
