@@ -1,20 +1,21 @@
 // End-to-end deterministic resume parsing pipeline.
 // Runs Qwen-VL OCR on every page of the PDF, then extracts structured
-// candidate info via a schema-constrained generateText call.
+// candidate info via a schema-constrained Mastra agent call.
 
 import { setTimeout as delay } from "node:timers/promises";
-import { generateText, Output } from "ai";
 import { XMLParser } from "fast-xml-parser";
 import { convert as htmlToText } from "html-to-text";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 import pLimit from "p-limit";
 import pRetry from "p-retry";
-import { createAlibabaProvider } from "@arc/ai-recruitment-copilot-backend/server/agents/provider";
+import {
+  generateStructuredWithMastraAgent,
+  resumeStructuredAgent,
+} from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/simple-generators";
 import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
 import type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
 import { getResumeDocumentKind } from "@arc/shared/resume-documents";
-import { getRequiredEnv } from "./env";
 import { convertLegacyOfficeToOoxml } from "./office-conversion";
 import { rasterizePdfWithMeta } from "./pdf-rasterize";
 import { isQwenOcrConfigured, qwenVlOcr } from "./qwen-ocr";
@@ -27,6 +28,7 @@ const DEFAULT_OCR_RETRY_DELAY_MS = 1000;
 const OFFICE_TEXT_MAX_CHARS = 80_000;
 const XLSX_MAX_SHEETS = 8;
 const XLSX_MAX_ROWS_PER_SHEET = 200;
+const OCR_PAGE_TEXT_PREVIEW_MAX_CHARS = 300;
 
 const STRUCTURED_INSTRUCTIONS = `你是一名简历解析助手。给你一段简历文本，请严格按照下方 JSON 结构输出结构化候选人档案。
 
@@ -102,6 +104,7 @@ export interface ResumeDocumentInput {
   bytes: Uint8Array;
   fileName?: string;
   mediaType?: string;
+  onProgress?: (event: ResumeParseProgressEvent) => void;
 }
 
 export interface ParsedResumeOcr {
@@ -113,6 +116,31 @@ export interface ParsedResumeOcr {
 export interface ParsedResumeFast extends ParsedResumeOcr {
   structured: ResumeParserStructured;
 }
+
+export type ResumeParseProgressEvent =
+  | {
+      renderedPages: number;
+      totalPages: number;
+      type: "document.pages.ready";
+    }
+  | {
+      page: number;
+      totalPages: number;
+      type: "ocr.page.started";
+    }
+  | {
+      charCount: number;
+      page: number;
+      textPreview: string;
+      totalPages: number;
+      type: "ocr.page.completed";
+    }
+  | {
+      outputChars: number;
+      renderedPages: number;
+      totalPages: number;
+      type: "ocr.completed";
+    };
 
 const xmlParser = new XMLParser({
   attributeNamePrefix: "@_",
@@ -146,6 +174,17 @@ function normalizeExtractedText(text: string): string {
       .filter(Boolean)
       .join("\n"),
   );
+}
+
+function emitResumeParseProgress(
+  onProgress: ResumeDocumentInput["onProgress"] | undefined,
+  event: ResumeParseProgressEvent,
+) {
+  onProgress?.(event);
+}
+
+function toOcrTextPreview(text: string) {
+  return text.trim().replaceAll(/\s+/g, " ").slice(0, OCR_PAGE_TEXT_PREVIEW_MAX_CHARS);
 }
 
 function inferImageMediaType(input: { fileName?: string; mediaType?: string }): string {
@@ -616,7 +655,24 @@ async function extractImageText(input: ResumeDocumentInput): Promise<ParsedResum
 
   const mediaType = inferImageMediaType(input);
   const startedAt = nowMs();
+  emitResumeParseProgress(input.onProgress, {
+    renderedPages: 1,
+    totalPages: 1,
+    type: "document.pages.ready",
+  });
+  emitResumeParseProgress(input.onProgress, {
+    page: 1,
+    totalPages: 1,
+    type: "ocr.page.started",
+  });
   const text = await qwenVlOcrWithRetry(Buffer.from(input.bytes), 1, mediaType);
+  emitResumeParseProgress(input.onProgress, {
+    charCount: text.length,
+    page: 1,
+    textPreview: toOcrTextPreview(text),
+    totalPages: 1,
+    type: "ocr.page.completed",
+  });
   devOcrLog("image ocr completed", {
     bytes: input.bytes.byteLength,
     duration: formatDuration(startedAt),
@@ -628,39 +684,36 @@ async function extractImageText(input: ResumeDocumentInput): Promise<ParsedResum
     throw new Error("Qwen OCR returned empty text for the image resume.");
   }
 
+  emitResumeParseProgress(input.onProgress, {
+    outputChars: text.length,
+    renderedPages: 1,
+    totalPages: 1,
+    type: "ocr.completed",
+  });
   return { pageCount: 1, text, textSource: "qwen-ocr" };
 }
 
 export async function generateResumeStructured(text: string): Promise<ResumeParserStructured> {
   const startedAt = nowMs();
-  const provider = createAlibabaProvider({ enableThinking: false });
-  const modelId = getRequiredEnv("ALIBABA_STRUCTURED_MODEL");
   devOcrLog("structured start", {
-    baseUrl: getRequiredEnv("ALIBABA_BASE_URL"),
     inputChars: text.length,
-    model: modelId,
   });
-  const { output, text: rawOutput } = await generateText({
+  const output = await generateStructuredWithMastraAgent({
+    agent: resumeStructuredAgent,
     // 中文简历每字约 1 token，加上 projectExperiences/workExperiences 等结构开销，
     // 项目/经历较多的简历输出会很长，给到 16384 留足余量避免 summary 中途截断。
     // Chinese resumes use ~1 token per character; with verbose project / work
     // experience summaries the output can be very long, so allow 16384 to leave
     // headroom and avoid truncating mid-string.
     maxOutputTokens: 16_384,
-    model: provider(modelId),
-    output: Output.object({
-      description: "结构化候选人简历档案",
-      name: "resume_profile",
-      schema: structuredSchema,
-    }),
     prompt: `${STRUCTURED_INSTRUCTIONS}\n\n简历文本：\n${clipForStructured(text)}`,
+    schema: structuredSchema,
     temperature: 0,
   });
   devOcrLog("structured completed", {
     duration: formatDuration(startedAt),
     inputChars: text.length,
-    model: modelId,
-    outputChars: rawOutput.length,
+    outputChars: JSON.stringify(output).length,
   });
   return output;
 }
@@ -672,7 +725,10 @@ export async function generateResumeStructured(text: string): Promise<ResumePars
  * OCR-only path: rasterize + Qwen-VL OCR. Returns plain text & page count;
  * callers run structured extraction separately when they actually need it.
  */
-export async function parseResumeOcrOnly(bytes: Uint8Array): Promise<ParsedResumeOcr> {
+export async function parseResumeOcrOnly(
+  bytes: Uint8Array,
+  options: { onProgress?: ResumeDocumentInput["onProgress"] } = {},
+): Promise<ParsedResumeOcr> {
   const totalStartedAt = nowMs();
   if (!isQwenOcrConfigured()) {
     throw new Error("Qwen OCR is not configured (missing ALIBABA_API_KEY).");
@@ -686,6 +742,11 @@ export async function parseResumeOcrOnly(bytes: Uint8Array): Promise<ParsedResum
     pageCount,
     renderedPages: pages.length,
     renderedSizes: pages.map((page) => page.byteLength),
+  });
+  emitResumeParseProgress(options.onProgress, {
+    renderedPages: pages.length,
+    totalPages: pageCount,
+    type: "document.pages.ready",
   });
 
   if (pages.length === 0) {
@@ -702,12 +763,24 @@ export async function parseResumeOcrOnly(bytes: Uint8Array): Promise<ParsedResum
     pages.map((png, index) =>
       limitOcrPage(async () => {
         const pageStartedAt = nowMs();
+        emitResumeParseProgress(options.onProgress, {
+          page: index + 1,
+          totalPages: pageCount,
+          type: "ocr.page.started",
+        });
         const text = await qwenVlOcrWithRetry(png, index + 1);
         devOcrLog("page completed", {
           chars: text.length,
           duration: formatDuration(pageStartedAt),
           page: index + 1,
           pngBytes: png.byteLength,
+        });
+        emitResumeParseProgress(options.onProgress, {
+          charCount: text.length,
+          page: index + 1,
+          textPreview: toOcrTextPreview(text),
+          totalPages: pageCount,
+          type: "ocr.page.completed",
         });
         return text;
       }),
@@ -718,6 +791,12 @@ export async function parseResumeOcrOnly(bytes: Uint8Array): Promise<ParsedResum
     duration: formatDuration(ocrStartedAt),
     outputChars: text.length,
     pages: pages.length,
+  });
+  emitResumeParseProgress(options.onProgress, {
+    outputChars: text.length,
+    renderedPages: pages.length,
+    totalPages: pageCount,
+    type: "ocr.completed",
   });
 
   if (text.trim().length === 0) {
@@ -741,7 +820,7 @@ export function extractResumeDocumentText(input: ResumeDocumentInput): Promise<P
 
   switch (kind) {
     case "pdf": {
-      return parseResumeOcrOnly(input.bytes);
+      return parseResumeOcrOnly(input.bytes, { onProgress: input.onProgress });
     }
     case "doc": {
       return convertLegacyOfficeToOoxml({

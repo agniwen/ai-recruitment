@@ -4,24 +4,31 @@ import type { ResumeProfile } from "@arc/db-schema/interview/types";
 const mocks = vi.hoisted(() => ({
   buildAttachmentKeyByHash: vi.fn(),
   createAttachment: vi.fn(),
-  createResumeAgent: vi.fn(),
+  extractResumeDocumentText: vi.fn(),
   findAttachmentByContentHash: vi.fn(),
   generateResumeStructured: vi.fn(),
+  generateStructuredWithMastraAgent: vi.fn(),
+  interviewQuestionAgent: { id: "interview-question-agent" },
   parseResumeFast: vi.fn(),
   putObjectBytes: vi.fn(),
   sha256HexOfBytes: vi.fn(),
   updateStructuredByHash: vi.fn(),
 }));
 
-vi.mock("../resume-agent", () => ({
-  createResumeAgent: mocks.createResumeAgent,
-}));
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/simple-generators",
+  () => ({
+    generateStructuredWithMastraAgent: mocks.generateStructuredWithMastraAgent,
+    interviewQuestionAgent: mocks.interviewQuestionAgent,
+  }),
+);
 vi.mock("@arc/shared/file-hash", () => ({ sha256HexOfBytes: mocks.sha256HexOfBytes }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   buildAttachmentKeyByHash: mocks.buildAttachmentKeyByHash,
   putObjectBytes: mocks.putObjectBytes,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline", () => ({
+  extractResumeDocumentText: mocks.extractResumeDocumentText,
   generateResumeStructured: mocks.generateResumeStructured,
   parseResumeFast: mocks.parseResumeFast,
 }));
@@ -53,7 +60,7 @@ const PROFILE: ResumeProfile = {
   workYears: 5,
 };
 
-function questionDifficulty(index: number): "easy" | "medium" | "hard" {
+function questionDifficulty(index: number): "easy" | "hard" | "medium" {
   if (index < 3) {
     return "easy";
   }
@@ -80,30 +87,31 @@ const QUESTIONS_OUTPUT = {
   })),
 };
 
-async function* streamStartStep() {
-  yield { type: "start-step" };
-}
-
 async function readStreamEvents(stream: ReadableStream<Uint8Array>) {
   const text = await new Response(stream).text();
   return text
-    .trim()
-    .split("\n")
+    .split("\n\n")
+    .map((frame) => frame.trim())
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as { type: string; data?: unknown; index?: number });
+    .map((frame) => {
+      const data = frame
+        .split("\n")
+        .find((line) => line.startsWith("data: "))
+        ?.slice("data: ".length);
+      if (!data) {
+        throw new Error(`Missing SSE data frame: ${frame}`);
+      }
+      return JSON.parse(data) as { type: string; output?: unknown; stepId?: string };
+    });
 }
 
 describe("resume interview question generation", () => {
   beforeEach(() => {
-    mocks.createResumeAgent.mockReset();
-    process.env.ALIBABA_STRUCTURED_MODEL = "qwen-test";
+    mocks.generateStructuredWithMastraAgent.mockReset();
+    mocks.generateStructuredWithMastraAgent.mockResolvedValue(QUESTIONS_OUTPUT);
   });
 
   it("uses structured output for blocking question generation", async () => {
-    mocks.createResumeAgent.mockReturnValueOnce({
-      generate: vi.fn().mockResolvedValue({ output: QUESTIONS_OUTPUT, text: "{}" }),
-    });
-
     const result = await generateInterviewQuestionsForProfile(PROFILE);
 
     expect(result).toHaveLength(10);
@@ -111,22 +119,19 @@ describe("resume interview question generation", () => {
       { difficulty: "easy", order: 1, question: "请介绍一个你负责的前端项目。" },
       { difficulty: "easy", order: 2, question: "你如何设计组件状态管理？" },
     ]);
-    expect(mocks.createResumeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ output: expect.any(Object) }),
+    expect(mocks.generateStructuredWithMastraAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: mocks.interviewQuestionAgent,
+        schema: expect.any(Object),
+        temperature: 0.3,
+      }),
     );
   });
 
   it("uses structured output for streaming question generation", async () => {
-    mocks.createResumeAgent.mockReturnValueOnce({
-      stream: vi.fn().mockResolvedValue({
-        output: Promise.resolve(QUESTIONS_OUTPUT),
-        stream: streamStartStep(),
-      }),
-    });
-
     const events = await readStreamEvents(streamGenerateInterviewQuestions(PROFILE));
 
-    const result = events.find((event) => event.type === "result")?.data as {
+    const result = events.find((event) => event.type === "run.completed")?.output as {
       interviewQuestions?: unknown[];
     };
     expect(result.interviewQuestions).toHaveLength(10);
@@ -134,8 +139,16 @@ describe("resume interview question generation", () => {
       { difficulty: "easy", order: 1, question: "请介绍一个你负责的前端项目。" },
       { difficulty: "easy", order: 2, question: "你如何设计组件状态管理？" },
     ]);
-    expect(mocks.createResumeAgent).toHaveBeenCalledWith(
-      expect.objectContaining({ output: expect.any(Object) }),
+    expect(mocks.generateStructuredWithMastraAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: mocks.interviewQuestionAgent,
+        schema: expect.any(Object),
+        temperature: 0.3,
+      }),
     );
+    expect(events.some((event) => event.type === "result" || event.type === "text-delta")).toBe(
+      false,
+    );
+    expect(events.some((event) => event.type === "step.started")).toBe(true);
   });
 });

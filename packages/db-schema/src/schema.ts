@@ -1,6 +1,6 @@
 /* oxlint-disable no-inline-comments -- `/* @__PURE__ *\/` is a bundler annotation, not a human comment. */
 
-import type { UIMessage } from "ai";
+import type { ArcMessage, ArcMessageRole } from "./ai-message";
 import type {
   CandidateFormDisplayMode,
   CandidateFormOption,
@@ -1600,7 +1600,7 @@ export const chatConversation = pgTable(
 export const chatMessage = pgTable(
   "chat_message",
   {
-    content: jsonb("content").$type<UIMessage>().notNull(),
+    content: jsonb("content").$type<ArcMessage>().notNull(),
     conversationId: text("conversation_id")
       .notNull()
       .references(() => chatConversation.id, { onDelete: "cascade" }),
@@ -1611,7 +1611,7 @@ export const chatMessage = pgTable(
       .references(() => organization.id, {
         onDelete: "cascade",
       }),
-    role: text("role").$type<UIMessage["role"]>().notNull(),
+    role: text("role").$type<ArcMessageRole>().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
