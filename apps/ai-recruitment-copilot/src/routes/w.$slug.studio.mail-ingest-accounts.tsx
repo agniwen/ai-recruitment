@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { IconInbox as InboxIcon } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
@@ -8,7 +8,11 @@ import type { DataGridFetchParams, DataGridFetchResult } from "@/components/data
 import { MemberCell } from "@/components/data-grid/cells/member-cell";
 import { TimeDisplay } from "@/components/features/display/time-display";
 import { PageHeader } from "@/components/features/studio/page-header";
-import { getWorkspaceRoleLabel } from "@/components/features/studio/members/role-display";
+import {
+  WORKSPACE_ROLES,
+  buildWorkspaceRoleOptions,
+} from "@/components/features/studio/members/role-display";
+import type { DynamicWorkspaceRoleDisplay } from "@/components/features/studio/members/role-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { authClient } from "@/lib/client/auth-client";
 import { rpcFetch } from "@/lib/client/api";
 import { useHasPermission } from "@/hooks/use-has-permission";
 import {
@@ -53,7 +58,7 @@ import {
 } from "@/lib/client/mail-ingest-providers";
 import type { MailIngestProviderId } from "@/lib/client/mail-ingest-providers";
 import { rpc } from "@/lib/client/rpc";
-import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { useWorkspaceId, useWorkspaceSlug } from "@/lib/client/workspace-context";
 
 const DEFAULT_MAIL_INGEST_PROVIDER = getMailIngestProvider(DEFAULT_MAIL_INGEST_PROVIDER_ID);
 const DEFAULT_FORM = {
@@ -96,7 +101,6 @@ interface ManagedMailIngestRow {
     image: string | null;
     name: string;
     role: string;
-    roleName: string | null;
   };
 }
 
@@ -126,10 +130,6 @@ function buildNewForm(user: ManagedMailIngestRow["user"]): MailIngestFormState {
     userId: user.id,
     username: user.email,
   };
-}
-
-function getRoleLabel(user: ManagedMailIngestRow["user"]) {
-  return user.roleName ?? getWorkspaceRoleLabel(user.role);
 }
 
 function buildInitialForm(row: ManagedMailIngestRow): MailIngestFormState {
@@ -414,8 +414,23 @@ function MailIngestAccountDialog({
 
 function ManagedMailIngestPage() {
   const slug = useWorkspaceSlug();
+  const workspaceId = useWorkspaceId();
   const canManageMailIngestAccounts = useHasPermission("mailIngestAccount", "manage");
   const [editingRow, setEditingRow] = useState<ManagedMailIngestRow | null>(null);
+  const { data: dynamicWorkspaceRoles = [] } = useQuery({
+    enabled: canManageMailIngestAccounts,
+    queryFn: async () => {
+      const { data, error } = await authClient.organization.listRoles({
+        query: { organizationId: workspaceId },
+      });
+      if (error) {
+        throw new Error(error.message ?? "加载自定义角色失败");
+      }
+      return (data ?? []) as DynamicWorkspaceRoleDisplay[];
+    },
+    queryKey: ["workspace-dynamic-roles", workspaceId],
+    refetchOnWindowFocus: false,
+  });
 
   function fetchMailIngestRows(
     params: DataGridFetchParams<Record<string, never>>,
@@ -440,6 +455,17 @@ function ManagedMailIngestPage() {
     queryFn: fetchMailIngestRows,
     queryKeyBase: ["managed-mail-ingest-accounts", slug],
   });
+  const roleLabelByValue = useMemo(() => {
+    const roles = [...WORKSPACE_ROLES, ...dynamicWorkspaceRoles.map((role) => role.role)].filter(
+      (role, index, list) => list.indexOf(role) === index,
+    );
+    return new Map(
+      buildWorkspaceRoleOptions(roles, dynamicWorkspaceRoles).map((role) => [
+        role.value,
+        role.label,
+      ]),
+    );
+  }, [dynamicWorkspaceRoles]);
 
   const columns = useMemo(
     () => [
@@ -465,17 +491,25 @@ function ManagedMailIngestPage() {
       }),
       customColumn<ManagedMailIngestRow>({
         cell: (row) => (
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={row.user.role === "owner" ? "default" : "outline"}>
-              {getRoleLabel(row.user)}
-            </Badge>
-            {row.account ? (
-              <Badge variant={row.account.enabled ? "success" : "outline"}>
-                {row.account.enabled ? "启用" : "停用"}
-              </Badge>
-            ) : null}
-          </div>
+          <Badge variant={row.user.role === "owner" ? "default" : "outline"}>
+            {roleLabelByValue.get(row.user.role) ?? row.user.role}
+          </Badge>
         ),
+        key: "role",
+        title: "角色",
+      }),
+      customColumn<ManagedMailIngestRow>({
+        cell: (row) => {
+          let statusLabel = "未配置";
+          if (row.account?.enabled) {
+            statusLabel = "启用";
+          } else if (row.account) {
+            statusLabel = "停用";
+          }
+          return (
+            <Badge variant={row.account?.enabled ? "success" : "outline"}>{statusLabel}</Badge>
+          );
+        },
         key: "status",
         title: "状态",
       }),
@@ -538,11 +572,11 @@ function ManagedMailIngestPage() {
         ],
       }),
     ],
-    [canManageMailIngestAccounts],
+    [canManageMailIngestAccounts, roleLabelByValue],
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="container mx-auto max-w-7xl flex flex-col gap-6">
       <PageHeader
         title="邮箱监听"
         description="管理员查看全工作区配置，其他成员仅查看和维护自己的监听账号。"

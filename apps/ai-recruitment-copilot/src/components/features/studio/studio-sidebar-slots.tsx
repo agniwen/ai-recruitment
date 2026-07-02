@@ -234,7 +234,7 @@ export function StudioSidebarSlots() {
     <>
       <SidebarBodyPortalContent>
         {navGroups.map((group) => (
-          <SidebarGroup className="hidden has-[li]:flex" key={group.label}>
+          <SidebarGroup className="hidden has-[[data-sidebar=menu-item]]:flex" key={group.label}>
             <SidebarGroupLabel className="select-none">{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>

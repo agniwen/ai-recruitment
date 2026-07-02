@@ -21,16 +21,17 @@ describe("ResumePoolPage masonry layout", () => {
     expect(publicTabIndex).toBeLessThan(privateTabIndex);
   });
 
-  it("uses sparse small-width breakpoints while skipping a five-column layout", () => {
+  it("uses sparse breakpoints capped at four columns inside the page container", () => {
     expect(source).toContain('from "react-responsive-masonry"');
     expect(source).toContain("const RESUME_POOL_MASONRY_COLUMNS = {");
     expect(source).toContain("0: 1");
     expect(source).toContain("1024: 2");
     expect(source).toContain("1280: 3");
     expect(source).toContain("1440: 4");
+    expect(source).toContain("container mx-auto max-w-7xl");
     expect(source).not.toContain("1536: 5");
-    expect(source).toContain("1920: 6");
-    expect(source).toContain("2560: 7");
+    expect(source).not.toContain("1920: 6");
+    expect(source).not.toContain("2560: 7");
     expect(source).toContain("columnsCountBreakPoints={RESUME_POOL_MASONRY_COLUMNS}");
   });
 
@@ -94,7 +95,7 @@ describe("ResumePoolPage masonry layout", () => {
       source.indexOf("function ResumePoolCard({"),
       source.indexOf("function ResumePoolLoadingState"),
     );
-    const cardActionsSource = source.slice(
+    const actionsSource = source.slice(
       source.indexOf("function ResumePoolCardActions"),
       source.indexOf("function ResumePoolCard({"),
     );
@@ -115,8 +116,9 @@ describe("ResumePoolPage masonry layout", () => {
     expect(cardSource).toContain(
       "const importActionState = getResumePoolImportActionState(record);",
     );
-    expect(cardActionsSource).toContain("disabled={importActionState.disabled}");
-    expect(cardActionsSource).toContain("{importActionState.label}");
+    expect(cardSource).toContain("importActionState={importActionState}");
+    expect(actionsSource).toContain("disabled={importActionState.disabled}");
+    expect(actionsSource).toContain("{importActionState.label}");
     expect(cardSource).not.toContain("resumeParseStatusBadge(record)");
     expect(cardSource).not.toContain('<Badge variant="secondary">未入库</Badge>');
     expect(source).not.toContain('<CardFooter className="flex-col items-stretch gap-2 px-3">');
@@ -206,7 +208,7 @@ describe("ResumePoolPage masonry layout", () => {
     expect(source).toContain("record.uploaderName");
     expect(detailSource).toContain('label="来源"');
     expect(detailSource).toContain('label="上传组织"');
-    expect(detailSource).toContain('label="上传人"');
+    expect(detailSource).toContain("sourceActorLabel(detail)");
     expect(detailSource).toContain('label="创建时间"');
     expect(cardSource).not.toContain("sourceLabel(record)");
     expect(cardSource).not.toContain("record.createdAt");
@@ -217,6 +219,46 @@ describe("ResumePoolPage masonry layout", () => {
     expect(source).toContain("uploaderOrganizationLabel(record)");
     expect(source).toContain("record.uploaderImage");
     expect(source).toContain("MemberCell");
+  });
+
+  it("marks referral records and labels their uploader as referrer", () => {
+    const cardSource = source.slice(
+      source.indexOf("function ResumePoolCard({"),
+      source.indexOf("function ResumePoolLoadingState"),
+    );
+    const uploaderMetaSource = source.slice(
+      source.indexOf("function ResumePoolCardUploaderMeta"),
+      source.indexOf("function ResumePoolDetailDialog"),
+    );
+
+    expect(source).toContain('record.sourceChannel === "referral"');
+    expect(source).toContain('return record.sourceChannel === "referral" ? "内推人" : "上传人";');
+    expect(source).toContain('return "内推";');
+    expect(cardSource).toContain('<Badge variant="secondary">内推</Badge>');
+    expect(uploaderMetaSource).toContain("const actorLabel = sourceActorLabel(record);");
+    expect(uploaderMetaSource).toContain("{actorLabel}");
+  });
+
+  it("adds a source type dropdown that intersects with existing resume pool filters", () => {
+    const filterSource = source.slice(
+      source.indexOf("function filterPoolRecords"),
+      source.indexOf("function useJobDescriptions"),
+    );
+    const filtersConfigSource = source.slice(
+      source.indexOf("const filtersConfig = useMemo"),
+      source.indexOf("let loadMoreStatusText"),
+    );
+
+    expect(source).toContain('sourceType: "all"');
+    expect(filtersConfigSource).toContain("clearable: false");
+    expect(filtersConfigSource).toContain('key: "sourceType" as const');
+    expect(filtersConfigSource).toContain('{ label: "全部", value: "all" }');
+    expect(filtersConfigSource).toContain('{ label: "内推", value: "referral" }');
+    expect(filtersConfigSource).toContain('{ label: "非内推", value: "non_referral" }');
+    expect(filterSource).toContain("input.filters.parseStatus");
+    expect(filterSource).toContain('input.filters.sourceType === "referral"');
+    expect(filterSource).toContain('input.filters.sourceType === "non_referral"');
+    expect(filterSource).toContain('input.filters.importStatus === "imported"');
   });
 
   it("hides candidate contact information on resume pool cards", () => {
@@ -254,26 +296,25 @@ describe("ResumePoolPage masonry layout", () => {
     expect(source).toContain("function canDeletePoolRecord");
     expect(source).toContain("record.organizationId === currentOrganizationId");
     expect(source).toContain("record.createdBy === currentUserId");
-    expect(source).toContain("const canDelete =");
-    expect(source).toContain("canDeletePoolRecord(record,");
+    expect(source).toContain("canDeletePoolRecord(record, {");
     expect(source).toContain("canDelete={canDelete}");
   });
 
   it("keeps public delete, private publish, and private delete as icon-only card actions", () => {
-    const cardActionsSource = source.slice(
+    const actionsSource = source.slice(
       source.indexOf("function ResumePoolCardActions"),
       source.indexOf("function ResumePoolCard({"),
     );
 
-    expect(cardActionsSource).toContain("canDelete ? (");
-    expect(cardActionsSource).toContain(
+    expect(actionsSource).toContain("canDelete ? (");
+    expect(actionsSource).toContain(
       'aria-label={scope === "private" ? "删除私有简历" : "删除简历"}',
     );
-    expect(cardActionsSource).toContain('aria-label="推送到简历广场"');
-    expect(cardActionsSource).toContain('"删除私有简历"');
-    expect(cardActionsSource).toContain('"删除简历"');
-    expect(cardActionsSource).toContain('size="icon-sm"');
-    expect(cardActionsSource).not.toContain('className="flex justify-end gap-1"');
+    expect(actionsSource).toContain('aria-label="推送到简历广场"');
+    expect(actionsSource).toContain('"删除私有简历"');
+    expect(actionsSource).toContain('"删除简历"');
+    expect(actionsSource).toContain('size="icon-sm"');
+    expect(actionsSource).not.toContain('className="flex justify-end gap-1"');
   });
 
   it("adds selectable private cards with a bulk delete action beside upload", () => {

@@ -64,4 +64,41 @@ describe("TanStack Start platform route migration", () => {
     expect(gridSource).toContain('columnPinning={{ right: ["actions"] }}');
     expect(gridSource).toContain('type: "search"');
   });
+
+  it("splits platform mail ingest account role and status into separate columns", () => {
+    const source = readSource(
+      "components/features/platform/mail-ingest-accounts/mail-ingest-accounts-grid.tsx",
+    );
+    const roleColumnSource = source.slice(
+      source.indexOf('key: "role"'),
+      source.indexOf('key: "status"'),
+    );
+    const statusColumnSource = source.slice(
+      source.indexOf('key: "status"'),
+      source.indexOf('key: "imapHost"'),
+    );
+
+    expect(roleColumnSource).toContain('title: "角色"');
+    expect(source).toContain("roleLabel(row.user.role)");
+    expect(statusColumnSource).toContain('title: "状态"');
+    expect(source).toContain('let statusLabel = "未配置";');
+    expect(source).toContain('statusLabel = "启用";');
+    expect(source).toContain('statusLabel = "停用";');
+    expect(statusColumnSource).not.toContain("roleLabel");
+  });
+
+  it("wraps every platform leaf page in a page-level container", () => {
+    const leafRouteFiles = [
+      "routes/platform.mail-ingest-accounts.tsx",
+      "routes/platform.organizations.tsx",
+      "routes/platform.queues.tsx",
+      "routes/platform.users.tsx",
+    ];
+    const layoutSource = readSource("routes/platform.tsx");
+
+    expect(layoutSource).not.toContain("container mx-auto max-w-7xl");
+    for (const file of leafRouteFiles) {
+      expect(readSource(file)).toContain("container mx-auto max-w-7xl");
+    }
+  });
 });
