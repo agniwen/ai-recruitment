@@ -6,6 +6,7 @@ import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { hiringUnit, studioInterview, studioInterviewSchedule } from "@arc/db-schema/schema";
+import { canApplyCandidatePipelineEvent } from "@arc/shared/candidate-pipeline-machine";
 import { parseCsvParam } from "@arc/shared/csv";
 import { resumeReviewSchema } from "@arc/shared/resume-review";
 import type { ResumeReview } from "@arc/shared/resume-review";
@@ -558,14 +559,13 @@ export const resumeLibraryRouter = factory
         return c.json({ error: "记录不存在。" }, 404);
       }
 
-      // 阶段守卫：已结案候选人必须先「重新激活」才能再走 AI 面试，避免：
-      // 1) 强行写回 ai_interview 后旧的 closedMeta / closedAt / closedReason 没被清。
-      // 2) 绕过 reactivate 既定流程造成审计断层。
-      // Stage guard: closed candidates must reactivate first. Otherwise we'd:
-      // 1) leak stale closedMeta/closedAt/closedReason into the active record;
-      // 2) bypass the reactivate audit path.
-      if (existing.pipelineStage === "closed") {
-        return c.json({ error: "候选人已结案，请先「重新激活」后再发起 AI 面试。" }, 409);
+      if (
+        !canApplyCandidatePipelineEvent(
+          { humanInterviewReadyForOffer: false, stage: existing.pipelineStage },
+          { type: "START_AI_INTERVIEW" },
+        )
+      ) {
+        return c.json({ error: "候选人已进入后续招聘阶段，不能再发起 AI 面试。" }, 409);
       }
       if (!canLaunchInterviewFromResume(existing.resumeParseStatus)) {
         return c.json({ error: "简历解析完成后才能发起 AI 面试。" }, 409);

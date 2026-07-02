@@ -642,9 +642,23 @@ describe("offer drafts DAO", () => {
     expect(sortedById.get(v2.id)?.status).toBe("sent");
   });
 
-  it("maybeAdvanceToOffer 仅在第一版 + 早期阶段时生效", async () => {
+  it("maybeAdvanceToOffer 仅在第一版 + 真人复面评价完整时生效", async () => {
     await clearSubtables();
     await resetCandidateStage("human_interview");
+    const round = await createHumanInterviewRound({
+      input: { format: "online", interviewerIds: [INTERVIEWER_A], label: "终面" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+    await db
+      .update(studioHumanInterviewRound)
+      .set({
+        completedAt: new Date(),
+        feedback: "候选人表达清晰，岗位匹配度高。",
+        outcome: "pass",
+        status: "completed",
+      })
+      .where(eq(studioHumanInterviewRound.id, round.id));
     await createOfferDraft({
       input: { baseSalary: 30_000, position: "测试岗" },
       interviewRecordId: RECORD_ID,

@@ -487,12 +487,7 @@ export async function maybeAdvanceToOffer(
       and(
         eq(studioInterview.id, interviewRecordId),
         eq(studioInterview.organizationId, organizationId),
-        inArray(studioInterview.pipelineStage, [
-          "screening",
-          "written_test",
-          "ai_interview",
-          "human_interview",
-        ]),
+        eq(studioInterview.pipelineStage, "human_interview"),
         eq(studioInterview.outcome, "in_pipeline"),
       ),
     );
