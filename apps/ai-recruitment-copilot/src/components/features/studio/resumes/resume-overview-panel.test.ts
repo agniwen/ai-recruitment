@@ -44,7 +44,7 @@ describe("ResumeOverviewPanel visual density", () => {
       source.indexOf("function ExpandableMarkdownSummary"),
     );
 
-    expect(reviewSource).toContain("max-w-5xl space-y-8");
+    expect(reviewSource).toContain("mx-auto space-y-8");
     expect(reviewSource).toContain("ReviewSectionHeader");
     expect(reviewSource).toContain("divide-y divide-border/50");
     expect(reviewSource).not.toContain("grid gap-5 lg:grid-cols-2");

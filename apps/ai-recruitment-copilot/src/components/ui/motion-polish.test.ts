@@ -58,7 +58,7 @@ describe("motion polish", () => {
   });
 
   it("keeps resume-library document hover feedback subtle", () => {
-    const source = readSource("../../routes/w.$slug.studio.resumes.tsx");
+    const source = readSource("../features/studio/resumes/resume-library-card.tsx");
 
     expect(source).not.toContain("group-hover/pdf:scale-105");
     expect(source).toContain("group-hover/pdf:scale-[1.03]");

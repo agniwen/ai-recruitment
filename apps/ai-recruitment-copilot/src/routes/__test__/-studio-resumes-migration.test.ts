@@ -30,13 +30,15 @@ describe("TanStack Start studio resumes migration", () => {
   });
 
   it("shows a tooltip on unsupported resume preview file icons", () => {
-    const source = readSource("routes/w.$slug.studio.resumes.tsx");
+    const source = readSource("components/features/studio/resumes/resume-library-card.tsx");
 
     expect(source).toContain("UnsupportedResumeDocumentPreviewTooltip");
   });
 
   it("adds a permission-scoped copy detail link action to resume-library rows", () => {
-    const source = readSource("routes/w.$slug.studio.resumes.tsx");
+    const routeSource = readSource("routes/w.$slug.studio.resumes.tsx");
+    const cardSource = readSource("components/features/studio/resumes/resume-library-card.tsx");
+    const source = `${routeSource}\n${cardSource}`;
 
     expect(source).toContain("copyResumeDetailLink");
     expect(source).toContain("复制详情链接");

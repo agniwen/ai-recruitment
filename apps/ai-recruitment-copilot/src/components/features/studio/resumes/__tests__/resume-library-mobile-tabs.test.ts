@@ -8,7 +8,7 @@ const source = readFileSync(
 
 describe("ResumeLibraryPage mobile stage tabs", () => {
   it("makes pipeline stage tabs fill the mobile viewport width", () => {
-    expect(source).toContain("grid w-full grid-cols-2");
+    expect(source).toContain("grid h-auto w-full grid-cols-2");
     expect(source).toContain("sm:inline-flex");
     expect(source).toContain("w-full flex-col");
   });

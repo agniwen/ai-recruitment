@@ -185,6 +185,7 @@ const SELECTED_COLUMNS = {
   resumeParseError: studioInterview.resumeParseError,
   resumeParseStatus: studioInterview.resumeParseStatus,
   resumeParsedAt: studioInterview.resumeParsedAt,
+  resumeProfile: studioInterview.resumeProfile,
   resumeReview: studioInterview.resumeReview,
   resumeStorageKey: studioInterview.resumeStorageKey,
   status: studioInterview.status,
@@ -502,6 +503,7 @@ function toRecord(
     resumeParseError: row.resumeParseError,
     resumeParseStatus: row.resumeParseStatus,
     resumeParsedAt: serializeDate(row.resumeParsedAt),
+    resumeProfile: row.resumeProfile,
     resumeReview: row.resumeReview,
     stageProgress: resolvedDerived.stageProgress,
     status: row.status,
@@ -651,20 +653,20 @@ export async function loadResumeDetail(
     return null;
   }
 
-  const { resumeProfile, interviewQuestions, ...rest } = row;
+  const { resumeProfile, interviewQuestions } = row;
   const [derivedFields, duplicateMatches] = await Promise.all([
-    loadResumeDerivedFields([rest.id]),
+    loadResumeDerivedFields([row.id]),
     listActiveDuplicateMatchCounts({
       organizationId,
-      sourceIds: [rest.id],
+      sourceIds: [row.id],
       sourceType: "studio_interview",
     }),
   ]);
   return {
     ...toRecord(
-      rest,
-      derivedFields.get(rest.id),
-      toDuplicateMatchSummary(duplicateMatches.get(rest.id)),
+      row,
+      derivedFields.get(row.id),
+      toDuplicateMatchSummary(duplicateMatches.get(row.id)),
     ),
     interviewQuestions: interviewQuestions ?? [],
     resumeProfile,

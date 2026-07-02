@@ -1,7 +1,9 @@
 export interface ResumeEducationLineInput {
   degree?: string | null;
   educationLevel?: string | null;
+  graduationYear?: string | null;
   major?: string | null;
+  period?: string | null;
   school?: string | null;
 }
 
