@@ -626,7 +626,7 @@ async function loadResumePeopleFields(
   }
   const candidateIds = uniq(rows.map((row) => row.id).filter(Boolean));
   const jobDescriptionIds = uniq(
-    rows.map((row) => row.jobDescriptionId).filter((id): id is string => Boolean(id)),
+    rows.map((row) => row.jobDescriptionId).filter((id): id is string => id !== null),
   );
   if (candidateIds.length === 0) {
     return result;

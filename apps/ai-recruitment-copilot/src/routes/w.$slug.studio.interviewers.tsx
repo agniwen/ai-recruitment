@@ -43,11 +43,16 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { getMinimaxVoiceMeta } from "@arc/db-schema/minimax-voices";
 import { ScopedJobDescriptionsModal } from "@/components/features/studio/scoped-job-descriptions-modal";
 import { InterviewerFormDialog } from "@/components/features/studio/interviewers/interviewer-form-dialog";
+import { useHasPermission } from "@/hooks/use-has-permission";
 
 function InterviewerManagementPage({ departments }: { departments: DepartmentRecord[] }) {
   const slug = useWorkspaceSlug();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const canCreateInterviewer = useHasPermission("interviewer", "create");
+  const canUpdateInterviewer = useHasPermission("interviewer", "update");
+  const canDeleteInterviewer = useHasPermission("interviewer", "delete");
+  const canReadJobDescriptions = useHasPermission("jd", "read");
 
   const fetchInterviewers = useMemo(
     () =>
@@ -160,8 +165,8 @@ function InterviewerManagementPage({ departments }: { departments: DepartmentRec
           // 详情弹窗，里面允许删除某条岗位。
           // Zero references stay as a plain badge (nothing to open); positive
           // counts become a link button that opens the JD detail modal.
-          if (r.jobDescriptionCount === 0) {
-            return "0个岗位";
+          if (r.jobDescriptionCount === 0 || !canReadJobDescriptions) {
+            return `${r.jobDescriptionCount} 个岗位`;
           }
           return (
             <Button
@@ -188,19 +193,21 @@ function InterviewerManagementPage({ departments }: { departments: DepartmentRec
             onClick: (r) => {
               void crud.openEdit(r);
             },
+            show: () => canUpdateInterviewer,
           },
         ],
         menu: [
           {
             label: "删除",
             onClick: (r) => crud.setDeleteRecord(r),
+            show: () => canDeleteInterviewer,
             variant: "destructive",
           },
         ],
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- columns 不应跟着 crud 引用变化重建
-    [],
+    [canDeleteInterviewer, canReadJobDescriptions, canUpdateInterviewer],
   );
 
   const filtersConfig = useMemo(
@@ -250,37 +257,43 @@ function InterviewerManagementPage({ departments }: { departments: DepartmentRec
                     新建一个面试官，配置 prompt 和音色后即可供在招岗位引用。
                   </EmptyDescription>
                 </EmptyHeader>
-                <EmptyContent>
-                  <Button onClick={crud.openCreate}>
-                    <PlusIcon className="size-4" />
-                    新建面试官
-                  </Button>
-                </EmptyContent>
+                {canCreateInterviewer ? (
+                  <EmptyContent>
+                    <Button onClick={crud.openCreate}>
+                      <PlusIcon className="size-4" />
+                      新建面试官
+                    </Button>
+                  </EmptyContent>
+                ) : null}
               </Empty>
             )
           }
           filters={filtersConfig}
           getRowId={(r) => r.id}
           toolbarRight={
-            <Button
-              className="flex-1 sm:flex-none"
-              disabled={noDepartments}
-              onClick={crud.openCreate}
-            >
-              <PlusIcon className="size-4" />
-              新建面试官
-            </Button>
+            canCreateInterviewer ? (
+              <Button
+                className="flex-1 sm:flex-none"
+                disabled={noDepartments}
+                onClick={crud.openCreate}
+              >
+                <PlusIcon className="size-4" />
+                新建面试官
+              </Button>
+            ) : null
           }
         />
       </div>
 
-      <InterviewerFormDialog
-        departments={departments}
-        onOpenChange={crud.onFormOpenChange}
-        onSaved={invalidateInterviewerData}
-        open={crud.formDialogOpen}
-        record={crud.editingRecord}
-      />
+      {(crud.editingRecord ? canUpdateInterviewer : canCreateInterviewer) ? (
+        <InterviewerFormDialog
+          departments={departments}
+          onOpenChange={crud.onFormOpenChange}
+          onSaved={invalidateInterviewerData}
+          open={crud.formDialogOpen}
+          record={crud.editingRecord}
+        />
+      ) : null}
 
       <EntityDeleteDialog
         description={(record) =>
@@ -290,7 +303,7 @@ function InterviewerManagementPage({ departments }: { departments: DepartmentRec
         }
         onClose={() => crud.setDeleteRecord(null)}
         onConfirm={crud.handleDelete}
-        record={crud.deleteRecord}
+        record={canDeleteInterviewer ? crud.deleteRecord : null}
         title="确认删除这个面试官？"
       />
 
@@ -303,7 +316,7 @@ function InterviewerManagementPage({ departments }: { departments: DepartmentRec
             setReferencedInterviewer(null);
           }
         }}
-        open={referencedInterviewer !== null}
+        open={canReadJobDescriptions && referencedInterviewer !== null}
         scope={
           referencedInterviewer
             ? {

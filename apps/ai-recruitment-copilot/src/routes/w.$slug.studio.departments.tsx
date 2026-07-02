@@ -51,6 +51,8 @@ function DepartmentManagementPage() {
   const canCreateDepartment = useHasPermission("department", "create");
   const canUpdateDepartment = useHasPermission("department", "update");
   const canDeleteDepartment = useHasPermission("department", "delete");
+  const canReadInterviewers = useHasPermission("interviewer", "read");
+  const canReadJobDescriptions = useHasPermission("jd", "read");
 
   const fetchDepartments = useMemo(
     () =>
@@ -145,8 +147,8 @@ function DepartmentManagementPage() {
             // 只读的面试官列表弹窗。
             // Zero → plain text (matches the interviewer page style); positive →
             // link button opening the read-only interviewers modal.
-            if (r.interviewerCount === 0) {
-              return "0 位面试官";
+            if (r.interviewerCount === 0 || !canReadInterviewers) {
+              return `${r.interviewerCount} 位面试官`;
             }
             return (
               <Button
@@ -167,8 +169,8 @@ function DepartmentManagementPage() {
             // 0 引用时纯文本；>0 时 link 按钮，打开"删除/查看"语义的 JD 弹窗。
             // Zero → plain text; positive → link button opening the JD scope
             // modal which also supports row-level deletes.
-            if (r.jobDescriptionCount === 0) {
-              return "0 个岗位";
+            if (r.jobDescriptionCount === 0 || !canReadJobDescriptions) {
+              return `${r.jobDescriptionCount} 个岗位`;
             }
             return (
               <Button
@@ -215,7 +217,7 @@ function DepartmentManagementPage() {
       return baseColumns;
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- columns 不应每次 crud 引用变化都重建
-    [canDeleteDepartment, canUpdateDepartment],
+    [canDeleteDepartment, canReadInterviewers, canReadJobDescriptions, canUpdateDepartment],
   );
 
   const filtersConfig = useMemo(
@@ -275,7 +277,7 @@ function DepartmentManagementPage() {
         />
       </div>
 
-      {canCreateDepartment || canUpdateDepartment ? (
+      {(crud.editingRecord ? canUpdateDepartment : canCreateDepartment) ? (
         <DepartmentFormDialog
           onOpenChange={crud.onFormOpenChange}
           onSaved={invalidateDepartmentData}
@@ -284,19 +286,17 @@ function DepartmentManagementPage() {
         />
       ) : null}
 
-      {canDeleteDepartment ? (
-        <EntityDeleteDialog
-          description={(record) =>
-            record.interviewerCount > 0 || record.jobDescriptionCount > 0
-              ? "该部门下仍有面试官或在招岗位，将无法删除。"
-              : `即将删除部门：${record.name}，删除后无法恢复。`
-          }
-          onClose={() => crud.setDeleteRecord(null)}
-          onConfirm={crud.handleDelete}
-          record={crud.deleteRecord}
-          title="确认删除这个部门？"
-        />
-      ) : null}
+      <EntityDeleteDialog
+        description={(record) =>
+          record.interviewerCount > 0 || record.jobDescriptionCount > 0
+            ? "该部门下仍有面试官或在招岗位，将无法删除。"
+            : `即将删除部门：${record.name}，删除后无法恢复。`
+        }
+        onClose={() => crud.setDeleteRecord(null)}
+        onConfirm={crud.handleDelete}
+        record={canDeleteDepartment ? crud.deleteRecord : null}
+        title="确认删除这个部门？"
+      />
 
       <ScopedInterviewersModal
         departmentId={interviewersModalDept?.id ?? null}
@@ -309,7 +309,7 @@ function DepartmentManagementPage() {
             setInterviewersModalDept(null);
           }
         }}
-        open={interviewersModalDept !== null}
+        open={canReadInterviewers && interviewersModalDept !== null}
       />
 
       <ScopedJobDescriptionsModal
@@ -321,7 +321,7 @@ function DepartmentManagementPage() {
             setJobDescriptionsModalDept(null);
           }
         }}
-        open={jobDescriptionsModalDept !== null}
+        open={canReadJobDescriptions && jobDescriptionsModalDept !== null}
         scope={
           jobDescriptionsModalDept
             ? {

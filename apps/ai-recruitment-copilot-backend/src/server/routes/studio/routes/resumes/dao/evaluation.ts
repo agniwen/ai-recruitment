@@ -20,7 +20,7 @@ async function loadJobDescriptionNames(
   ids: (string | null)[],
   organizationId: string,
 ): Promise<Map<string, string>> {
-  const uniqueIds = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  const uniqueIds = [...new Set(ids.filter((id): id is string => id !== null))];
   if (uniqueIds.length === 0) {
     return new Map();
   }

@@ -133,6 +133,17 @@ const TARGET_ROLE_MAX_LENGTH = 120;
 const NOTES_MAX_LENGTH = 2000;
 const RECOMMENDATION_MAX_LENGTH = 2000;
 
+function ResumeFileRequirementMarker({ required }: { required: boolean }) {
+  if (required) {
+    return (
+      <span aria-hidden className="ml-1 text-destructive">
+        *
+      </span>
+    );
+  }
+  return "（可选）";
+}
+
 function describeResumeFileLabel({
   newFile,
   existingName,
@@ -282,13 +293,7 @@ export function CandidateFormFields({
       <Field>
         <FieldLabel htmlFor="candidate-resume-single-upload">
           简历文件
-          {requireResumeFile ? (
-            <span aria-hidden className="ml-1 text-destructive">
-              *
-            </span>
-          ) : (
-            "（可选）"
-          )}
+          <ResumeFileRequirementMarker required={requireResumeFile} />
         </FieldLabel>
         <FieldContent className="gap-2">
           <FileUpload

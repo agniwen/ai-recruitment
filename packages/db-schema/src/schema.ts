@@ -435,7 +435,6 @@ export const studioInterview = pgTable(
       onDelete: "set null",
     }),
     notes: text("notes"),
-    recommendationText: text("recommendation_text"),
     // ⚠️ DEPRECATED — Offer 信息现在落到 studioOfferDraft 子表（多版本 + 议价历史）。
     // Superseded by studioOfferDraft subtable; not written anymore.
     offerAcceptedAt: timestamp("offer_accepted_at", { withTimezone: true }),
@@ -453,6 +452,7 @@ export const studioInterview = pgTable(
     // default 让 prod 旧 INSERT 路径不传值时也能写入。
     // Stage axis; default lets pre-migration INSERTs succeed.
     pipelineStage: text("pipeline_stage").$type<PipelineStage>().notNull().default("screening"),
+    recommendationText: text("recommendation_text"),
     resumeContentHash: text("resume_content_hash"),
     resumeEvaluationStatus: text("resume_evaluation_status").$type<ResumeEvaluationStatus>(),
     resumeFileName: text("resume_file_name"),

@@ -1024,11 +1024,10 @@ export const resumeLibraryRouter = factory
       });
       const nextJobDescriptionId = input.data.jobDescriptionId || null;
       const jobDescriptionChanged = nextJobDescriptionId !== existing.jobDescriptionId;
-      const nextResumeEvaluationStatus = jobDescriptionChanged
-        ? null
-        : (input.data.resumeEvaluationStatus === "unreviewed"
-          ? null
-          : input.data.resumeEvaluationStatus);
+      let nextResumeEvaluationStatus: "fail" | "pass" | null = null;
+      if (!(jobDescriptionChanged || input.data.resumeEvaluationStatus === "unreviewed")) {
+        nextResumeEvaluationStatus = input.data.resumeEvaluationStatus;
+      }
       if (jobDescriptionChanged) {
         await recordResumeJobDescriptionChange({
           id,
