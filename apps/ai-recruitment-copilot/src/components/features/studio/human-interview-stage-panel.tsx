@@ -184,6 +184,10 @@ export function HumanInterviewStagePanel({ candidateId, candidateName, disabled 
     queryFn: () => listHumanInterviewMeetings(slug, { interviewRecordId: candidateId }),
     queryKey: humanInterviewKeys.meetings(slug, candidateId),
   });
+  const missingFeedbackRounds = rounds.filter(
+    (round) => round.status === "completed" && !round.feedback?.trim(),
+  );
+  const hasMissingCompletedRoundFeedback = missingFeedbackRounds.length > 0;
 
   function invalidateRounds() {
     void invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug });
@@ -281,15 +285,26 @@ export function HumanInterviewStagePanel({ candidateId, candidateName, disabled 
       {roundsContent}
 
       {disabled ? null : (
-        <div className="flex justify-end w-full">
+        <div className="flex w-full flex-col items-end gap-1.5">
           <Button
+            className="w-full"
+            disabled={hasMissingCompletedRoundFeedback}
             onClick={() => dispatchDialog({ open: true, type: "scheduleOpenChanged" })}
             size="lg"
-            className="w-full"
+            title={
+              hasMissingCompletedRoundFeedback
+                ? "请先填写已完成轮次的面试评价，再安排下一轮。"
+                : undefined
+            }
           >
             <PlusIcon className="size-4" />
             安排真人复面
           </Button>
+          {hasMissingCompletedRoundFeedback ? (
+            <p className="text-muted-foreground text-xs">
+              请先填写已完成轮次的面试评价，再安排下一轮。
+            </p>
+          ) : null}
         </div>
       )}
 
@@ -439,6 +454,7 @@ function RoundScheduledAtControl({
   onRescheduled: () => void;
 }) {
   const slug = useWorkspaceSlug();
+  const { data: members } = useWorkspaceMembers();
   const [editing, setEditing] = useState(false);
   const [scheduledAt, setScheduledAt] = useState(() =>
     toDateTimeLocalInputValue(round.scheduledAt),
@@ -446,22 +462,31 @@ function RoundScheduledAtControl({
   const [validUntil, setValidUntil] = useState(() =>
     toDateTimeLocalInputValue(meeting?.validUntil ?? addOneHourToIsoString(round.scheduledAt)),
   );
+  const [interviewerIds, setInterviewerIds] = useState(() =>
+    round.interviewers.map((interviewer) => interviewer.id),
+  );
   const canReschedule = canRescheduleHumanInterviewRound(round, meeting, disabled);
   const inputId = `human-round-${round.id}-scheduled-at`;
   const validUntilInputId = `human-round-${round.id}-valid-until`;
+  const interviewerInputId = `human-round-${round.id}-interviewers`;
   const mutation = useMutation({
     mutationFn: () =>
       patchHumanInterviewRound(slug, round.interviewRecordId, round.id, {
+        interviewerIds,
         scheduledAt: dateTimeLocalInputToISOString(scheduledAt),
         validUntil: dateTimeLocalInputToISOString(validUntil),
       }),
-    onError: (e) => toast.error(e instanceof Error ? e.message : "调整时间失败"),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "更新真人复面安排失败"),
     onSuccess: () => {
-      toast.success("面试时间已调整");
+      toast.success("真人复面安排已更新");
       setEditing(false);
       onRescheduled();
     },
   });
+  const memberOptions = (members?.records ?? []).map((m) => ({
+    label: m.name,
+    value: m.id,
+  }));
 
   function startEditing() {
     if (!canReschedule) {
@@ -471,6 +496,7 @@ function RoundScheduledAtControl({
     setValidUntil(
       toDateTimeLocalInputValue(meeting?.validUntil ?? addOneHourToIsoString(round.scheduledAt)),
     );
+    setInterviewerIds(round.interviewers.map((interviewer) => interviewer.id));
     setEditing(true);
   }
 
@@ -479,6 +505,7 @@ function RoundScheduledAtControl({
     setValidUntil(
       toDateTimeLocalInputValue(meeting?.validUntil ?? addOneHourToIsoString(round.scheduledAt)),
     );
+    setInterviewerIds(round.interviewers.map((interviewer) => interviewer.id));
     setEditing(false);
   }
 
@@ -520,12 +547,28 @@ function RoundScheduledAtControl({
           type="datetime-local"
           value={validUntil}
         />
-        <Button
-          aria-label="保存面试时间"
-          className="h-7 w-7 p-0"
+        <Label className="sr-only" htmlFor={interviewerInputId}>
+          面试官
+        </Label>
+        <SearchableMultiSelect
           disabled={mutation.isPending}
+          emptyMessage="找不到匹配的成员"
+          id={interviewerInputId}
+          onChange={setInterviewerIds}
+          options={memberOptions}
+          placeholder="选择面试官"
+          searchPlaceholder="搜索成员…"
+          selectedFormat={(count) => `已选 ${count} 位面试官`}
+          selectedPreviewLimit={2}
+          triggerClassName="h-7 min-h-7 w-[13.5rem] text-xs"
+          value={interviewerIds}
+        />
+        <Button
+          aria-label="保存真人复面安排"
+          className="h-7 w-7 p-0"
+          disabled={mutation.isPending || interviewerIds.length === 0}
           size="icon"
-          title="保存面试时间"
+          title="保存真人复面安排"
           type="submit"
         >
           {mutation.isPending ? (
@@ -535,12 +578,12 @@ function RoundScheduledAtControl({
           )}
         </Button>
         <Button
-          aria-label="取消调整时间"
+          aria-label="取消编辑真人复面安排"
           className="h-7 w-7 p-0"
           disabled={mutation.isPending}
           onClick={cancelEditing}
           size="icon"
-          title="取消调整时间"
+          title="取消编辑真人复面安排"
           type="button"
           variant="outline"
         >
@@ -566,11 +609,11 @@ function RoundScheduledAtControl({
       ) : null}
       {canReschedule ? (
         <Button
-          aria-label="调整面试时间"
+          aria-label="编辑真人复面安排"
           className="h-6 w-6 p-0"
           onClick={startEditing}
           size="icon"
-          title="调整面试时间"
+          title="编辑真人复面安排"
           variant="ghost"
         >
           <PencilIcon className="size-3.5" />
@@ -1213,8 +1256,12 @@ function CompleteRoundDialog({
       ) {
         throw new Error("评分需为 0-100 的数字");
       }
+      const trimmedFeedback = feedback.trim();
+      if (!trimmedFeedback) {
+        throw new Error("请填写面试评价");
+      }
       return completeHumanInterviewRound(slug, candidateId, round.id, {
-        feedback: feedback.trim() || null,
+        feedback: trimmedFeedback,
         outcome,
         score: parsedScore,
       });
@@ -1276,13 +1323,14 @@ function CompleteRoundDialog({
 
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="round-feedback">
-              反馈（可选）
+              面试评价
             </Label>
             <Textarea
               id="round-feedback"
               maxLength={5000}
               onChange={(e) => setFeedback(e.target.value)}
               placeholder="对候选人的评价、亮点、不足……"
+              required
               rows={4}
               value={feedback}
             />
@@ -1297,7 +1345,10 @@ function CompleteRoundDialog({
           >
             取消
           </Button>
-          <Button disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+          <Button
+            disabled={mutation.isPending || !feedback.trim()}
+            onClick={() => mutation.mutate()}
+          >
             {mutation.isPending ? "保存中…" : "确认完成"}
           </Button>
         </DialogFooter>

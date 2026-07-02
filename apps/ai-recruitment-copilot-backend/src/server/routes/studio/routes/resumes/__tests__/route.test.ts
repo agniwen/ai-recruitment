@@ -375,6 +375,12 @@ describe("resume review detail route", () => {
     expect(timelineDaoSource).toContain("actorImage:");
     expect(timelineDaoSource).not.toContain("，可预约时间：");
   });
+
+  it("shows reactivation reason from candidate transition audit logs", () => {
+    expect(timelineDaoSource).toContain("reactivationReason");
+    expect(timelineDaoSource).toContain("重新激活原因");
+    expect(timelineDaoSource).toContain("，原因：");
+  });
 });
 
 describe("resume review v3 chain coverage", () => {

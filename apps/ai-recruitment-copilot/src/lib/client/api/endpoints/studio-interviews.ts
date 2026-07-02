@@ -308,6 +308,7 @@ export interface TransitionInterviewInput {
   // closedMeta partial：仅在 pipelineStage='closed' 时允许传；previousStage 由服务端写。
   // Partial closedMeta; previousStage is server-controlled.
   closedMeta?: Omit<Partial<ClosedMeta>, "previousStage">;
+  reactivationReason?: string;
 }
 
 export async function transitionInterviewRecord(
@@ -495,7 +496,7 @@ export function completeHumanInterviewRound(
   slug: string,
   candidateId: string,
   roundId: string,
-  input: { outcome: HumanInterviewRoundOutcome; score?: number | null; feedback?: string | null },
+  input: { outcome: HumanInterviewRoundOutcome; score?: number | null; feedback: string },
 ): Promise<HumanInterviewRoundRecord> {
   return rpcFetch<HumanInterviewRoundRecord>(
     rpc.api.w[":slug"].studio.interviews[":id"]["human-interview-rounds"][

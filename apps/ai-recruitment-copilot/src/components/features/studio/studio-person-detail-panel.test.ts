@@ -174,6 +174,17 @@ describe("StudioPersonDetailPanel visual density", () => {
     expect(actionBarSource).toContain("canManageOffer={canManageOffer}");
   });
 
+  it("makes the human interview panel read-only after entering offer stage", () => {
+    const humanInterviewTabSource = sourceBetween(
+      '<TabsContent value="human-interview">',
+      '<TabsContent value="offer">',
+    );
+
+    expect(humanInterviewTabSource).toContain(
+      'disabled={record.pipelineStage === "closed" || record.pipelineStage === "offer"}',
+    );
+  });
+
   it("renders resume AI parsing in its own tab instead of the overview", () => {
     const overviewSource = sourceBetween('<TabsContent value="overview">', "{/* 轮次概览");
     const aiAnalysisSource = sourceBetween(

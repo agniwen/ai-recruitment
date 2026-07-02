@@ -21,6 +21,10 @@ import type {
   PipelineStage,
 } from "@arc/db-schema/studio-interviews";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import {
+  getHumanInterviewOfferReadinessError,
+  loadHumanInterviewRoundReadiness,
+} from "./human-interview-rounds";
 
 export type { OfferDraftRecord };
 
@@ -455,6 +459,22 @@ export async function maybeAdvanceToOffer(
     .limit(2);
   if (drafts.length !== 1) {
     return;
+  }
+  const [candidate] = await db
+    .select({ pipelineStage: studioInterview.pipelineStage })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, interviewRecordId),
+        eq(studioInterview.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  if (candidate?.pipelineStage === "human_interview") {
+    const readiness = await loadHumanInterviewRoundReadiness(interviewRecordId, organizationId);
+    if (getHumanInterviewOfferReadinessError(readiness)) {
+      return;
+    }
   }
   // 同 maybeAdvanceToHumanInterview：把守卫推到 UPDATE 的 WHERE 上，避免与
   // 并发 close 之间的 TOCTOU 触发 DB CHECK 约束。

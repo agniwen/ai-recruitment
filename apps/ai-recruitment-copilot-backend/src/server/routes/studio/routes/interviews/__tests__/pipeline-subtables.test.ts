@@ -12,6 +12,7 @@ import {
   member,
   organization,
   studioHumanInterviewMeeting,
+  studioHumanInterviewMeetingInterviewer,
   studioHumanInterviewRound,
   studioHumanInterviewRoundInterviewer,
   studioInterview,
@@ -243,11 +244,51 @@ describe("human interview rounds DAO", () => {
     // 已完成轮次再次 complete 应被拒。
     await expect(
       completeHumanInterviewRound({
+        feedback: "二次完成应被拒",
         organizationId: ORG,
         outcome: "fail",
         roundId: round.id,
       }),
     ).rejects.toBeInstanceOf(EditRoundError);
+  });
+
+  it("completeHumanInterviewRound 要求填写面试评价", async () => {
+    await clearSubtables();
+    const round = await createHumanInterviewRound({
+      input: { format: "phone", interviewerIds: [INTERVIEWER_A], label: "电话面" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+
+    await expect(
+      completeHumanInterviewRound({
+        feedback: "   ",
+        organizationId: ORG,
+        outcome: "pass",
+        roundId: round.id,
+      }),
+    ).rejects.toThrow("请填写面试评价");
+  });
+
+  it("存在已完成但未填写评价的真人复面时不能新建下一轮", async () => {
+    await clearSubtables();
+    const round = await createHumanInterviewRound({
+      input: { format: "online", interviewerIds: [INTERVIEWER_A], label: "一面" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+    await db
+      .update(studioHumanInterviewRound)
+      .set({ completedAt: new Date(), feedback: null, outcome: "pass", status: "completed" })
+      .where(eq(studioHumanInterviewRound.id, round.id));
+
+    await expect(
+      createHumanInterviewRound({
+        input: { format: "online", interviewerIds: [INTERVIEWER_B], label: "二面" },
+        interviewRecordId: RECORD_ID,
+        organizationId: ORG,
+      }),
+    ).rejects.toThrow("请先填写已完成真人面试轮次的面试评价");
   });
 
   it("cancelHumanInterviewRound 仅作用于 pending；completed 的不可取消", async () => {
@@ -286,6 +327,7 @@ describe("human interview rounds DAO", () => {
       organizationId: ORG,
     });
     await completeHumanInterviewRound({
+      feedback: "完成后用于取消守卫",
       organizationId: ORG,
       outcome: "pass",
       roundId: round2.id,
@@ -360,6 +402,50 @@ describe("human interview rounds DAO", () => {
         roundId: round.id,
       }),
     ).rejects.toBeInstanceOf(EditRoundError);
+  });
+
+  it("editHumanInterviewRound 待开始轮次可修改面试官并同步待开始会议", async () => {
+    await clearSubtables();
+    const round = await createHumanInterviewRound({
+      input: {
+        format: "online",
+        interviewerIds: [INTERVIEWER_A],
+        label: "可改面试官",
+        scheduledAt: "2026-05-30T10:00:00.000Z",
+      },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+    const meeting = await createHumanInterviewMeeting({
+      createdBy: HR_USER,
+      input: {
+        interviewerIds: [INTERVIEWER_A],
+        roundIds: [round.id],
+        scheduledAt: "2026-05-30T10:00:00.000Z",
+        title: "可改面试官",
+      },
+      organizationId: ORG,
+    });
+
+    const updated = await editHumanInterviewRound({
+      input: { interviewerIds: [INTERVIEWER_B] },
+      organizationId: ORG,
+      roundId: round.id,
+    });
+
+    expect(updated.interviewers.map((item) => item.id)).toEqual([INTERVIEWER_B]);
+
+    const roundInterviewerRows = await db
+      .select({ userId: studioHumanInterviewRoundInterviewer.userId })
+      .from(studioHumanInterviewRoundInterviewer)
+      .where(eq(studioHumanInterviewRoundInterviewer.roundId, round.id));
+    expect(roundInterviewerRows.map((item) => item.userId)).toEqual([INTERVIEWER_B]);
+
+    const meetingInterviewerRows = await db
+      .select({ userId: studioHumanInterviewMeetingInterviewer.userId })
+      .from(studioHumanInterviewMeetingInterviewer)
+      .where(eq(studioHumanInterviewMeetingInterviewer.meetingId, meeting.id));
+    expect(meetingInterviewerRows.map((item) => item.userId)).toEqual([INTERVIEWER_B]);
   });
 });
 
@@ -476,6 +562,7 @@ describe("human interview meetings DAO", () => {
       organizationId: ORG,
     });
     await completeHumanInterviewRound({
+      feedback: "完成后不可创建会议",
       organizationId: ORG,
       outcome: "pass",
       roundId: round.id,
@@ -569,6 +656,33 @@ describe("offer drafts DAO", () => {
       .from(studioInterview)
       .where(eq(studioInterview.id, RECORD_ID));
     expect(row?.pipelineStage).toBe("offer");
+  });
+
+  it("maybeAdvanceToOffer 在真人复面缺少评价时不会推进", async () => {
+    await clearSubtables();
+    await resetCandidateStage("human_interview");
+    const round = await createHumanInterviewRound({
+      input: { format: "online", interviewerIds: [INTERVIEWER_A], label: "终面" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+    await db
+      .update(studioHumanInterviewRound)
+      .set({ completedAt: new Date(), feedback: null, outcome: "pass", status: "completed" })
+      .where(eq(studioHumanInterviewRound.id, round.id));
+    await createOfferDraft({
+      input: { baseSalary: 30_000, position: "测试岗" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+
+    await maybeAdvanceToOffer(RECORD_ID, ORG);
+
+    const [row] = await db
+      .select({ pipelineStage: studioInterview.pipelineStage })
+      .from(studioInterview)
+      .where(eq(studioInterview.id, RECORD_ID));
+    expect(row?.pipelineStage).toBe("human_interview");
   });
 
   it("editOfferDraft 仅 draft 时允许；sent 后只能用 respond/cancel", async () => {

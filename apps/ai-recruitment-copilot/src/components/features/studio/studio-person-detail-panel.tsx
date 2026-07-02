@@ -1667,6 +1667,12 @@ function useStudioPersonDetailPanel({
           resumeRecord.stageProgress.humanInterview.totalRounds > 0 &&
           resumeRecord.stageProgress.humanInterview.activeRound === null,
         )}
+        humanInterviewFeedbackComplete={Boolean(
+          resumeRecord?.stageProgress.humanInterview &&
+          resumeRecord.stageProgress.humanInterview.totalRounds > 0 &&
+          resumeRecord.stageProgress.humanInterview.activeRound === null &&
+          (resumeRecord.stageProgress.humanInterview.completedRoundsMissingFeedback ?? 0) === 0,
+        )}
         canManageHumanInterview={canManageHumanInterview}
         canManageOffer={canManageOffer}
         onAdvance={(target) => {
@@ -2375,7 +2381,7 @@ function useStudioPersonDetailPanel({
               <HumanInterviewStagePanel
                 candidateId={record.id}
                 candidateName={record.candidateName}
-                disabled={record.pipelineStage === "closed"}
+                disabled={record.pipelineStage === "closed" || record.pipelineStage === "offer"}
               />
             </TabsContent>
           ) : null}

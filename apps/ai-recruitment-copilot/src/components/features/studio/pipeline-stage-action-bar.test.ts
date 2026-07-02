@@ -93,4 +93,29 @@ describe("PipelineStageActionBar compact stage rail", () => {
     expect(source).toContain("if (canAdvanceToOffer) {");
     expect(source).toContain("if (canManageHumanInterview) {");
   });
+
+  it("disables advancing to offer until human interview feedback is complete", () => {
+    expect(source).toContain("humanInterviewFeedbackComplete?: boolean;");
+    expect(source).toContain("humanInterviewFeedbackComplete = true");
+    expect(source).toContain("resolveOfferAdvanceDisabledReason");
+    expect(source).toContain("aria-disabled={Boolean(disabledReason)}");
+    expect(source).toContain("请先完成所有真人面试轮次，并补全每轮面试评价");
+  });
+
+  it("shows a tooltip for the disabled offer advance without breaking button group styling", () => {
+    const humanStageSource = source.slice(
+      source.indexOf('case "human_interview"'),
+      source.indexOf('case "offer"'),
+    );
+    const offerButtonSource = source.slice(source.indexOf("function OfferAdvanceButton"));
+
+    expect(source).toContain('from "@/components/ui/tooltip"');
+    expect(humanStageSource).toContain("const offerAdvanceDisabledReason");
+    expect(offerButtonSource).toContain("<Tooltip");
+    expect(offerButtonSource).toContain("<TooltipTrigger asChild>");
+    expect(offerButtonSource).toContain("aria-disabled={Boolean(disabledReason)}");
+    expect(offerButtonSource).toContain("if (disabledReason) {");
+    expect(offerButtonSource).toContain("<TooltipContent>{disabledReason}</TooltipContent>");
+    expect(offerButtonSource).not.toContain('data-slot="button-group"');
+  });
 });

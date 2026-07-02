@@ -14,6 +14,7 @@ export interface CandidateTransitionInput {
   closedReason?: string | null;
   outcome?: CandidateOutcome;
   pipelineStage: PipelineStage;
+  reactivationReason?: string;
 }
 
 export interface CandidateTransitionPatch {
@@ -37,6 +38,7 @@ export interface CandidateTransitionAuditDetail {
   fromOutcome: CandidateOutcome;
   fromStage: PipelineStage;
   reason: string | null;
+  reactivationReason: string | null;
   toOutcome: CandidateOutcome;
   toStage: PipelineStage;
 }
@@ -111,6 +113,7 @@ export function resolveCandidateTransitionPatch({
       closedMeta: closedMeta ?? null,
       fromOutcome: existing.outcome,
       fromStage: existing.pipelineStage,
+      reactivationReason: wasClosed && !isClosing ? (input.reactivationReason ?? null) : null,
       reason: input.closedReason ?? null,
       toOutcome: outcome,
       toStage: input.pipelineStage,

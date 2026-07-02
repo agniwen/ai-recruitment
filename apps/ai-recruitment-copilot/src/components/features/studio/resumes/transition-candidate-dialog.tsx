@@ -394,10 +394,22 @@ function ReactivateDialog({
   });
   const targetStage: PipelineStage = resume?.closedMeta?.previousStage ?? "ai_interview";
 
+  const [reactivationReason, setReactivationReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setReactivationReason("");
+    }
+  }, [open]);
 
   async function handleConfirm() {
     if (!candidate) {
+      return;
+    }
+    const trimmedReason = reactivationReason.trim();
+    if (!trimmedReason) {
+      toast.error("请填写重新激活原因");
       return;
     }
     setSubmitting(true);
@@ -405,6 +417,7 @@ function ReactivateDialog({
       await transitionInterviewRecord(slug, candidate.id, {
         outcome: "in_pipeline",
         pipelineStage: targetStage,
+        reactivationReason: trimmedReason,
       });
       toast.success(`已重新激活，回到「${pipelineStageMeta[targetStage].label}」`);
       await queryClient.invalidateQueries({
@@ -444,11 +457,29 @@ function ReactivateDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="grid gap-1.5 py-2">
+          <Label className="text-sm" htmlFor="reactivation-reason">
+            激活原因
+          </Label>
+          <Textarea
+            id="reactivation-reason"
+            maxLength={500}
+            onChange={(event) => setReactivationReason(event.target.value)}
+            placeholder="说明为什么需要重新进入招聘流程"
+            required
+            rows={3}
+            value={reactivationReason}
+          />
+        </div>
+
         <DialogFooter>
           <Button disabled={submitting} onClick={() => onOpenChange(false)} variant="outline">
             取消
           </Button>
-          <Button disabled={submitting || isLoading || !candidate} onClick={handleConfirm}>
+          <Button
+            disabled={submitting || isLoading || !candidate || !reactivationReason.trim()}
+            onClick={handleConfirm}
+          >
             {submitting ? "处理中…" : "确认重新激活"}
           </Button>
         </DialogFooter>

@@ -22,6 +22,7 @@ import { pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@arc/shared/utils";
 
 export interface PipelineStageActionBarProps {
@@ -36,6 +37,7 @@ export interface PipelineStageActionBarProps {
   // 真人复面是否全部 completed。
   // Whether all human interview rounds are done.
   humanInterviewDone?: boolean;
+  humanInterviewFeedbackComplete?: boolean;
   // 推进到指定阶段的回调（仅 stage 跳变，无元数据）。
   // Advance to a target stage (no metadata).
   onAdvance: (target: PipelineStage) => void;
@@ -55,6 +57,7 @@ export function PipelineStageActionBar({
   canManageOffer = true,
   aiInterviewDone,
   humanInterviewDone,
+  humanInterviewFeedbackComplete = true,
   onAdvance,
   onRequestClose,
   onRequestReactivate,
@@ -64,6 +67,7 @@ export function PipelineStageActionBar({
     canManageHumanInterview,
     canManageOffer,
     humanInterviewDone,
+    humanInterviewFeedbackComplete,
     onAdvance,
     onRequestClose,
     onRequestReactivate,
@@ -167,6 +171,7 @@ function getStageActions(props: {
   aiInterviewDone?: boolean;
   canManageHumanInterview: boolean;
   canManageOffer: boolean;
+  humanInterviewFeedbackComplete?: boolean;
   humanInterviewDone?: boolean;
   onAdvance: (target: PipelineStage) => void;
   onRequestClose: () => void;
@@ -177,6 +182,7 @@ function getStageActions(props: {
     aiInterviewDone,
     canManageHumanInterview,
     canManageOffer,
+    humanInterviewFeedbackComplete = true,
     humanInterviewDone,
     onAdvance,
     onRequestClose,
@@ -295,18 +301,18 @@ function getStageActions(props: {
       // 真人复面阶段：推进到 Offer / 退回 AI 面试（万一 HR 误推进）。
       // Human interview stage: advance to offer, or step back to AI interview.
       if (canAdvanceToOffer) {
+        const offerAdvanceDisabledReason = resolveOfferAdvanceDisabledReason(
+          humanInterviewDone,
+          humanInterviewFeedbackComplete,
+        );
         buttons.push({
           key: "to-offer",
           node: (
-            <Button
-              key="to-offer"
-              onClick={() => onAdvance("offer")}
-              size="sm"
-              variant={humanInterviewDone ? "default" : "outline"}
-            >
-              <IconArrowRight className="size-4" />
-              推进到 Offer
-            </Button>
+            <OfferAdvanceButton
+              disabledReason={offerAdvanceDisabledReason}
+              humanInterviewDone={humanInterviewDone}
+              onAdvance={onAdvance}
+            />
           ),
           side: "right",
         });
@@ -382,4 +388,53 @@ function getStageActions(props: {
     ],
     right: buttons.filter((button) => button.side === "right").map((button) => button.node),
   };
+}
+
+function resolveOfferAdvanceDisabledReason(
+  humanInterviewDone: boolean | undefined,
+  humanInterviewFeedbackComplete: boolean | undefined,
+): string | null {
+  return humanInterviewDone && humanInterviewFeedbackComplete
+    ? null
+    : "请先完成所有真人面试轮次，并补全每轮面试评价";
+}
+
+function OfferAdvanceButton({
+  disabledReason,
+  humanInterviewDone,
+  onAdvance,
+}: {
+  disabledReason: string | null;
+  humanInterviewDone: boolean | undefined;
+  onAdvance: (target: PipelineStage) => void;
+}) {
+  const button = (
+    <Button
+      aria-disabled={Boolean(disabledReason)}
+      className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none aria-disabled:active:scale-100"
+      key="to-offer"
+      onClick={() => {
+        if (disabledReason) {
+          return;
+        }
+        onAdvance("offer");
+      }}
+      size="sm"
+      variant={humanInterviewDone ? "default" : "outline"}
+    >
+      <IconArrowRight className="size-4" />
+      推进到 Offer
+    </Button>
+  );
+
+  if (!disabledReason) {
+    return button;
+  }
+
+  return (
+    <Tooltip key="to-offer">
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent>{disabledReason}</TooltipContent>
+    </Tooltip>
+  );
 }

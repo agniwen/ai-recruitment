@@ -5,11 +5,12 @@
 // round row and its interviewer junction stay consistent. Route handlers do
 // auth + zod validation, then call into these helpers.
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   studioHumanInterviewMeeting,
+  studioHumanInterviewMeetingInterviewer,
   studioHumanInterviewMeetingRound,
   studioHumanInterviewRound,
   studioHumanInterviewRoundInterviewer,
@@ -28,13 +29,35 @@ export type { HumanInterviewRoundRecord };
 // Inner-transaction type; drops the $client field that's on the top-level db.
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const DEFAULT_VALID_DURATION_MS = 60 * 60 * 1000;
+const HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE = "请填写面试评价";
+export const COMPLETED_HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE =
+  "请先填写已完成真人面试轮次的面试评价。";
+export const HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE =
+  "请先完成所有真人面试轮次，并补全每轮面试评价。";
 
 type HumanInterviewRoundEditInput = Partial<HumanInterviewRoundInput> & {
   validUntil?: string | null;
 };
 
+export class EditRoundError extends Error {
+  readonly status: 400 | 404;
+  constructor(message: string, status: 400 | 404) {
+    super(message);
+    this.name = "EditRoundError";
+    this.status = status;
+  }
+}
+
 function serializeDate(value: Date | null): string | null {
   return value ? value.toISOString() : null;
+}
+
+function normalizeRequiredFeedback(value: string | null | undefined): string {
+  const feedback = value?.trim() ?? "";
+  if (!feedback) {
+    throw new EditRoundError(HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE, 400);
+  }
+  return feedback;
 }
 
 // 把 query 结果（含 interviewer rows 数组）拍平成 DTO。
@@ -113,6 +136,64 @@ export async function listHumanInterviewRounds(
   return rounds.map((round) => toRecord({ interviewers: byRound.get(round.id) ?? [], round }));
 }
 
+export interface HumanInterviewRoundReadiness {
+  completedRoundsMissingFeedback: { id: string; label: string }[];
+  pendingRounds: { id: string; label: string }[];
+  totalRounds: number;
+}
+
+export async function loadHumanInterviewRoundReadiness(
+  interviewRecordId: string,
+  organizationId: string,
+): Promise<HumanInterviewRoundReadiness> {
+  const rounds = await db
+    .select({
+      feedback: studioHumanInterviewRound.feedback,
+      id: studioHumanInterviewRound.id,
+      label: studioHumanInterviewRound.label,
+      status: studioHumanInterviewRound.status,
+    })
+    .from(studioHumanInterviewRound)
+    .where(
+      and(
+        eq(studioHumanInterviewRound.interviewRecordId, interviewRecordId),
+        eq(studioHumanInterviewRound.organizationId, organizationId),
+        ne(studioHumanInterviewRound.status, "cancelled"),
+      ),
+    );
+
+  return {
+    completedRoundsMissingFeedback: rounds
+      .filter((round) => round.status === "completed" && !round.feedback?.trim())
+      .map((round) => ({ id: round.id, label: round.label })),
+    pendingRounds: rounds
+      .filter((round) => round.status === "pending")
+      .map((round) => ({ id: round.id, label: round.label })),
+    totalRounds: rounds.length,
+  };
+}
+
+export async function assertCompletedHumanInterviewRoundsHaveFeedback(
+  interviewRecordId: string,
+  organizationId: string,
+): Promise<void> {
+  const readiness = await loadHumanInterviewRoundReadiness(interviewRecordId, organizationId);
+  if (readiness.completedRoundsMissingFeedback.length > 0) {
+    throw new EditRoundError(COMPLETED_HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE, 400);
+  }
+}
+
+export function getHumanInterviewOfferReadinessError({
+  completedRoundsMissingFeedback,
+  pendingRounds,
+  totalRounds,
+}: HumanInterviewRoundReadiness): string | null {
+  if (totalRounds === 0 || pendingRounds.length > 0 || completedRoundsMissingFeedback.length > 0) {
+    return HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE;
+  }
+  return null;
+}
+
 // 候选人下一个可用的 sortOrder：max(existing) + 1，没有时返回 0。
 // 包含 cancelled 的轮次，避免取消后新轮和旧轮重号引起列表错乱。
 // Next available sortOrder; counts cancelled rounds too so re-creating after
@@ -173,6 +254,8 @@ export async function createHumanInterviewRound({
   organizationId,
   input,
 }: CreateRoundOptions): Promise<HumanInterviewRoundRecord> {
+  await assertCompletedHumanInterviewRoundsHaveFeedback(interviewRecordId, organizationId);
+
   const id = crypto.randomUUID();
   const now = new Date();
   const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
@@ -223,15 +306,6 @@ export interface EditRoundOptions {
   roundId: string;
   organizationId: string;
   input: HumanInterviewRoundEditInput;
-}
-
-export class EditRoundError extends Error {
-  readonly status: 400 | 404;
-  constructor(message: string, status: 400 | 404) {
-    super(message);
-    this.name = "EditRoundError";
-    this.status = status;
-  }
 }
 
 function resolveScheduledAtInput(
@@ -339,6 +413,56 @@ async function syncLinkedScheduledMeetingWindow({
     );
 }
 
+async function syncLinkedScheduledMeetingInterviewers({
+  tx,
+  roundId,
+  organizationId,
+  interviewerIds,
+}: {
+  tx: Tx;
+  roundId: string;
+  organizationId: string;
+  interviewerIds: string[];
+}) {
+  const linkedMeetings = await tx
+    .select({
+      id: studioHumanInterviewMeeting.id,
+      status: studioHumanInterviewMeeting.status,
+    })
+    .from(studioHumanInterviewMeetingRound)
+    .innerJoin(
+      studioHumanInterviewMeeting,
+      eq(studioHumanInterviewMeetingRound.meetingId, studioHumanInterviewMeeting.id),
+    )
+    .where(
+      and(
+        eq(studioHumanInterviewMeetingRound.roundId, roundId),
+        eq(studioHumanInterviewMeeting.organizationId, organizationId),
+      ),
+    );
+
+  if (linkedMeetings.some((meeting) => meeting.status !== "scheduled")) {
+    throw new EditRoundError("已开始、已结束或已取消的会议不能调整面试官", 400);
+  }
+
+  const meetingIds = uniq(linkedMeetings.map((meeting) => meeting.id));
+  if (meetingIds.length === 0) {
+    return;
+  }
+
+  await tx
+    .delete(studioHumanInterviewMeetingInterviewer)
+    .where(inArray(studioHumanInterviewMeetingInterviewer.meetingId, meetingIds));
+  await tx.insert(studioHumanInterviewMeetingInterviewer).values(
+    meetingIds.flatMap((meetingId) =>
+      interviewerIds.map((userId) => ({
+        meetingId,
+        userId,
+      })),
+    ),
+  );
+}
+
 export async function editHumanInterviewRound({
   roundId,
   organizationId,
@@ -370,12 +494,13 @@ export async function editHumanInterviewRound({
     }
 
     if (existing.status === "completed") {
+      const feedback = normalizeRequiredFeedback(input.feedback ?? existing.feedback);
       // completed：只允许修订 feedback / score。
       // completed → feedback + score only.
       await tx
         .update(studioHumanInterviewRound)
         .set({
-          feedback: input.feedback ?? existing.feedback,
+          feedback,
           score: input.score ?? existing.score,
           updatedAt: now,
         })
@@ -415,12 +540,19 @@ export async function editHumanInterviewRound({
       .where(eq(studioHumanInterviewRound.id, roundId));
 
     if (input.interviewerIds && input.interviewerIds.length > 0) {
+      const interviewerIds = uniq(input.interviewerIds);
+      await syncLinkedScheduledMeetingInterviewers({
+        interviewerIds,
+        organizationId,
+        roundId,
+        tx,
+      });
       await tx
         .delete(studioHumanInterviewRoundInterviewer)
         .where(eq(studioHumanInterviewRoundInterviewer.roundId, roundId));
       await tx
         .insert(studioHumanInterviewRoundInterviewer)
-        .values(input.interviewerIds.map((userId) => ({ roundId, userId })));
+        .values(interviewerIds.map((userId) => ({ roundId, userId })));
     }
   });
 
@@ -438,7 +570,7 @@ export interface CompleteRoundOptions {
   organizationId: string;
   outcome: HumanInterviewRoundOutcome;
   score?: number | null;
-  feedback?: string | null;
+  feedback: string;
 }
 
 export async function completeHumanInterviewRound({
@@ -455,12 +587,13 @@ export async function completeHumanInterviewRound({
   if (existing.status !== "pending") {
     throw new EditRoundError("只有 pending 状态的轮次可以标记完成", 400);
   }
+  const normalizedFeedback = normalizeRequiredFeedback(feedback);
   const now = new Date();
   await db
     .update(studioHumanInterviewRound)
     .set({
       completedAt: now,
-      feedback: feedback ?? null,
+      feedback: normalizedFeedback,
       outcome,
       score: score ?? null,
       status: "completed",

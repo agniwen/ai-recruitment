@@ -468,6 +468,7 @@ async function loadResumeDerivedFields(
       ),
     db
       .select({
+        feedback: studioHumanInterviewRound.feedback,
         id: studioHumanInterviewRound.id,
         interviewRecordId: studioHumanInterviewRound.interviewRecordId,
         label: studioHumanInterviewRound.label,
@@ -564,6 +565,9 @@ async function loadResumeDerivedFields(
           }
         : null,
       completedRounds: countedRows.filter((row) => row.status === "completed").length,
+      completedRoundsMissingFeedback: countedRows.filter(
+        (row) => row.status === "completed" && !row.feedback?.trim(),
+      ).length,
       failedRounds: countedRows.filter(
         (row) => row.status === "completed" && row.outcome === "fail",
       ).length,
