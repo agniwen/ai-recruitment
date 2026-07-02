@@ -26,6 +26,7 @@ const createFromStorageSource = readFileSync(
   "utf-8",
 );
 const evaluationDaoSource = readFileSync(new URL("../dao/evaluation.ts", import.meta.url), "utf-8");
+const timelineDaoSource = readFileSync(new URL("../dao/timeline.ts", import.meta.url), "utf-8");
 const resumePoolDaoSource = readFileSync(
   new URL("../../resume-pool/dao.ts", import.meta.url),
   "utf-8",
@@ -328,9 +329,14 @@ describe("resume library list DTO", () => {
     expect(detailRecordSource).toContain("resumeProfile: ResumeProfile | null;");
     expect(detailRecordSource).toContain("resumeReview: ResumeReview | null;");
     expect(resumeDaoSource).toContain("resumeProfile: studioInterview.resumeProfile");
+    expect(resumeDaoSource).toContain("function createEmptyPeopleFields");
+    expect(resumeDaoSource).toContain("result.set(row.id, createEmptyPeopleFields())");
+    expect(resumeDaoSource).toContain('ne(studioHumanInterviewRound.status, "cancelled")');
     expect(toRecordSource).toContain("resumeSkills:");
     expect(toRecordSource).toContain("resumeSummary:");
     expect(toRecordSource).toContain("resumeProfileSnapshot:");
+    expect(listRecordSource).toContain("humanInterviewers:");
+    expect(toRecordSource).toContain("humanInterviewers:");
     expect(toRecordSource).not.toContain("resumeProfile: row.resumeProfile");
     expect(toRecordSource).not.toContain("resumeReview: row.resumeReview");
   });
@@ -351,8 +357,23 @@ describe("resume review detail route", () => {
   it("records audit logs for reviewer submission and admin edits", () => {
     expect(evaluationDaoSource).toContain("resume_evaluation_submitted");
     expect(evaluationDaoSource).toContain("resume_evaluation_updated");
+    expect(evaluationDaoSource).toContain("resume_evaluation_reset_for_job_change");
+    expect(evaluationDaoSource).toContain("resume_job_description_changed");
+    expect(evaluationDaoSource).toContain("previousJobDescriptionName");
+    expect(evaluationDaoSource).toContain("nextJobDescriptionName");
+    expect(evaluationDaoSource).toContain("availableTimeSlots");
+    expect(evaluationDaoSource).toContain("reason");
     expect(evaluationDaoSource).toContain("fromStatus");
     expect(evaluationDaoSource).toContain("toStatus");
+    expect(routeSource).toContain("recordResumeJobDescriptionChange");
+    expect(routeSource).toContain("resetResumeEvaluationForJobChange");
+    expect(timelineDaoSource).toContain("readResumeEvaluationTimeSlots");
+    expect(timelineDaoSource).toContain("关联岗位已变更");
+    expect(timelineDaoSource).toContain("jobDescriptionAuditLabel");
+    expect(timelineDaoSource).toContain("关联岗位：");
+    expect(timelineDaoSource).toContain("availableTimeSlots:");
+    expect(timelineDaoSource).toContain("actorImage:");
+    expect(timelineDaoSource).not.toContain("，可预约时间：");
   });
 });
 

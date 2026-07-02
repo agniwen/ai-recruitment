@@ -390,6 +390,7 @@ export const resumePoolRouter = factory
           jobDescriptionId: input.jobDescriptionId,
           organizationId: activeOrg.id,
           poolItemId: c.req.param("id"),
+          recommendationText: input.recommendationText,
         });
         return c.json(result, result.status === "imported" ? 201 : 409);
       } catch (error) {

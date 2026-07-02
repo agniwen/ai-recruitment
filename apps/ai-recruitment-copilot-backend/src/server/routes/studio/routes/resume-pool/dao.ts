@@ -141,6 +141,7 @@ export interface ImportPoolItemInput {
   jobDescriptionId: string | null;
   organizationId: string;
   poolItemId: string;
+  recommendationText?: string | null;
 }
 
 export interface DeleteOwnPoolItemInput {
@@ -823,6 +824,7 @@ export async function importPoolItemToResumeLibrary(
         jobDescriptionId: input.jobDescriptionId,
         notes: reviewResult?.review ?? poolItem.notes,
         organizationId: input.organizationId,
+        recommendationText: input.recommendationText ?? null,
         resumeFileName: poolItem.resumeFileName,
         resumeProfile: poolItem.resumeProfile,
         resumeReview: reviewResult?.structuredReview ?? null,

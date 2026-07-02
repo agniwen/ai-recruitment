@@ -8,6 +8,7 @@ import { MarkdownEditor } from "@/components/features/markdown-editor";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import type {
   ResumeEvaluationStatusFormValue,
@@ -130,6 +131,7 @@ const EMAIL_MAX_LENGTH = 200;
 const PHONE_MAX_LENGTH = 40;
 const TARGET_ROLE_MAX_LENGTH = 120;
 const NOTES_MAX_LENGTH = 2000;
+const RECOMMENDATION_MAX_LENGTH = 2000;
 
 function describeResumeFileLabel({
   newFile,
@@ -436,6 +438,32 @@ export function CandidateFormFields({
             visible={showResumeEvaluationStatus}
           />
         </FieldGroup>
+      ) : null}
+
+      {showDetails ? (
+        <form.Field name="recommendationText">
+          {(field) => {
+            const errors = toFieldErrors(field.state.meta.errors);
+            return (
+              <Field>
+                <FieldLabel htmlFor={field.name}>推荐语</FieldLabel>
+                <FieldContent className="gap-2">
+                  <Textarea
+                    disabled={disabled}
+                    id={field.name}
+                    maxLength={RECOMMENDATION_MAX_LENGTH}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    placeholder="维护绑定岗位时给业务方或面试官看的推荐理由"
+                    rows={3}
+                    value={field.state.value}
+                  />
+                  <FieldError errors={errors} />
+                </FieldContent>
+              </Field>
+            );
+          }}
+        </form.Field>
       ) : null}
 
       {showDetails ? (

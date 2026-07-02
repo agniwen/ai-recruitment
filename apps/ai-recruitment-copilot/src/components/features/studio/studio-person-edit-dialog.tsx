@@ -128,6 +128,7 @@ function getFirstResumeEditErrorMessage(meta: Record<string, { errors?: unknown[
     "targetRole",
     "jobDescriptionId",
     "resumeEvaluationStatus",
+    "recommendationText",
     "notes",
   ];
   for (const field of fieldOrder) {
@@ -225,6 +226,7 @@ function createResumeEditFormValues(
     hiringUnitId: detail.hiringUnitId,
     jobDescriptionId: detail.jobDescriptionId ?? "",
     notes: detail.notes ?? "",
+    recommendationText: detail.recommendationText ?? "",
     resumeEvaluationStatus: detail.resumeEvaluationStatus ?? "unreviewed",
     targetRole: detail.targetRole ?? "",
   };
@@ -318,6 +320,7 @@ function ResumeEditBody({
       formData.append("targetRole", value.targetRole);
       formData.append("jobDescriptionId", value.jobDescriptionId);
       formData.append("notes", value.notes);
+      formData.append("recommendationText", value.recommendationText);
       formData.append("resumeEvaluationStatus", value.resumeEvaluationStatus);
       if (resumeFile) {
         formData.append("resume", resumeFile);

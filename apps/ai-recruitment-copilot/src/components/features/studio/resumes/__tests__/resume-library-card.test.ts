@@ -28,4 +28,20 @@ describe("ResumeLibraryCard", () => {
       actionsSource.indexOf('label="查看"'),
     );
   });
+
+  it("surfaces interviewer and evaluator metadata on the card", () => {
+    expect(source).toContain("formatResumeCardAiInterviewers");
+    expect(source).toContain("formatResumeCardHumanInterviewers");
+    expect(source).toContain("grid grid-cols-1 gap-x-5 gap-y-1.5");
+    expect(source).not.toContain("ResumeCardMetaSeparator");
+    expect(source).not.toContain("关联岗位：");
+    expect(source).toContain("record.jobDescriptionInterviewers");
+    expect(source).toContain("record.humanInterviewers");
+    expect(source).toContain("record.resumeEvaluatorName");
+    expect(source).toContain("describeResumeEvaluationStatus(record.resumeEvaluationStatus)");
+    expect(source).toContain("评估：");
+    expect(source).toContain("评估人：");
+    expect(source).toContain("AI 面试官：");
+    expect(source).toContain("真人面试官：");
+  });
 });

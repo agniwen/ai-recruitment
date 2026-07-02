@@ -76,6 +76,7 @@ import { Modal } from "@/components/ui/modal";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -130,6 +131,7 @@ const RESUME_POOL_MASONRY_COLUMNS = {
   1280: 3,
   1440: 4,
 } as const;
+const RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH = 2000;
 
 function normalizeScope(value: unknown): ResumePoolScope {
   return value === "private" ? "private" : "public";
@@ -596,6 +598,7 @@ function ImportResumePoolDialog({
   const [mode, setMode] = useState<"none" | "bind">("none");
   const [hiringUnitId, setHiringUnitId] = useState("");
   const [jobDescriptionId, setJobDescriptionId] = useState("");
+  const [recommendationText, setRecommendationText] = useState("");
   const [duplicates, setDuplicates] = useState<ResumePoolImportDuplicateResult | null>(null);
 
   useEffect(() => {
@@ -603,6 +606,7 @@ function ImportResumePoolDialog({
       setMode("none");
       setHiringUnitId("");
       setJobDescriptionId("");
+      setRecommendationText("");
       setDuplicates(null);
       return;
     }
@@ -613,6 +617,7 @@ function ImportResumePoolDialog({
     setMode(canUseSourceJd ? "bind" : "none");
     setHiringUnitId("");
     setJobDescriptionId(canUseSourceJd ? (item.jobDescriptionId ?? "") : "");
+    setRecommendationText("");
     setDuplicates(null);
   }, [item, jobDescriptions]);
 
@@ -629,6 +634,7 @@ function ImportResumePoolDialog({
         hiringUnitId,
         jobDescriptionId: mode === "bind" ? jobDescriptionId : null,
         jobDescriptionMode: mode,
+        recommendationText,
       });
     },
     onError: (error) => {
@@ -745,6 +751,20 @@ function ImportResumePoolDialog({
                 placeholder="请选择入库组织"
                 searchPlaceholder="搜索用人组织..."
                 value={hiringUnitId || null}
+              />
+            </FieldContent>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="resume-pool-import-recommendation">推荐理由</FieldLabel>
+            <FieldContent>
+              <Textarea
+                disabled={isPending}
+                id="resume-pool-import-recommendation"
+                maxLength={RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH}
+                onChange={(event) => setRecommendationText(event.target.value)}
+                placeholder="填写推荐给业务方或面试官参考的理由"
+                rows={3}
+                value={recommendationText}
               />
             </FieldContent>
           </Field>

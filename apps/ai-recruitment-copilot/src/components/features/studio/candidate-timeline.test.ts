@@ -15,4 +15,20 @@ describe("CandidateTimeline visual density", () => {
     expect(source).not.toContain("rounded-xl border border-border bg-background");
     expect(source).not.toContain("border border-border/70 bg-muted/30");
   });
+
+  it("renders available time slots as a small TimeDisplay list", () => {
+    expect(source).toContain("function TimelineAvailableTimeSlots");
+    expect(source).toContain("event.availableTimeSlots");
+    expect(source).toContain('<ul className="space-y-1 text-xs">');
+    expect(source).toContain("value={slot.startAt}");
+    expect(source).toContain("value={slot.endAt}");
+    expect(source).toContain("<TimelineAvailableTimeSlots event={event} />");
+  });
+
+  it("renders timeline actors with avatar and nickname", () => {
+    expect(source).toContain("event.actorImage");
+    expect(source).toContain("<AvatarImage");
+    expect(source).toContain("<AvatarFallback>");
+    expect(source).toContain("getActorInitial");
+  });
 });

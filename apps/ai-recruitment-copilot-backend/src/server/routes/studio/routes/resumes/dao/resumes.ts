@@ -1,4 +1,4 @@
-import { and, arrayContains, asc, count, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, arrayContains, asc, count, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -14,9 +14,13 @@ import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-back
 import {
   department,
   hiringUnit,
+  interviewer,
   interviewConversation,
+  interviewAuditLog,
   jobDescription,
+  jobDescriptionInterviewer,
   studioHumanInterviewRound,
+  studioHumanInterviewRoundInterviewer,
   studioInterview,
   studioInterviewSchedule,
   studioOfferDraft,
@@ -180,6 +184,7 @@ const SELECTED_COLUMNS = {
   offerSentAt: studioInterview.offerSentAt,
   outcome: studioInterview.outcome,
   pipelineStage: studioInterview.pipelineStage,
+  recommendationText: studioInterview.recommendationText,
   resumeContentHash: studioInterview.resumeContentHash,
   resumeEducationGraduationYear: sql<
     string | null
@@ -295,11 +300,29 @@ interface ResumeDerivedFields {
   stageProgress: ResumeStageProgress;
 }
 
+interface ResumePeopleFields {
+  humanInterviewers: { id: string; image: string | null; name: string }[];
+  jobDescriptionInterviewers: { id: string; name: string }[];
+  resumeEvaluatorId: string | null;
+  resumeEvaluatorImage: string | null;
+  resumeEvaluatorName: string | null;
+}
+
 const EMPTY_DERIVED_FIELDS: ResumeDerivedFields = {
   hasInterviewRounds: false,
   lastInterviewAt: null,
   stageProgress: EMPTY_STAGE_PROGRESS,
 };
+
+function createEmptyPeopleFields(): ResumePeopleFields {
+  return {
+    humanInterviewers: [],
+    jobDescriptionInterviewers: [],
+    resumeEvaluatorId: null,
+    resumeEvaluatorImage: null,
+    resumeEvaluatorName: null,
+  };
+}
 
 function toDuplicateMatchSummary(
   value: { count: number; highestLevel: "high" | "low" | "medium" | null } | undefined,
@@ -593,12 +616,134 @@ async function loadResumeDerivedFields(
   return result;
 }
 
+async function loadResumePeopleFields(
+  rows: Row[],
+  organizationId: string,
+): Promise<Map<string, ResumePeopleFields>> {
+  const result = new Map<string, ResumePeopleFields>();
+  for (const row of rows) {
+    result.set(row.id, createEmptyPeopleFields());
+  }
+  const candidateIds = uniq(rows.map((row) => row.id).filter(Boolean));
+  const jobDescriptionIds = uniq(
+    rows.map((row) => row.jobDescriptionId).filter((id): id is string => Boolean(id)),
+  );
+  if (candidateIds.length === 0) {
+    return result;
+  }
+
+  const [interviewerRows, humanInterviewerRows, evaluatorRows] = await Promise.all([
+    jobDescriptionIds.length === 0
+      ? Promise.resolve([])
+      : db
+          .select({
+            id: interviewer.id,
+            jobDescriptionId: jobDescriptionInterviewer.jobDescriptionId,
+            name: interviewer.name,
+          })
+          .from(jobDescriptionInterviewer)
+          .innerJoin(interviewer, eq(jobDescriptionInterviewer.interviewerId, interviewer.id))
+          .where(inArray(jobDescriptionInterviewer.jobDescriptionId, jobDescriptionIds))
+          .orderBy(asc(jobDescriptionInterviewer.jobDescriptionId), asc(interviewer.name)),
+    db
+      .select({
+        image: user.image,
+        interviewRecordId: studioHumanInterviewRound.interviewRecordId,
+        name: user.name,
+        userId: user.id,
+      })
+      .from(studioHumanInterviewRound)
+      .innerJoin(
+        studioHumanInterviewRoundInterviewer,
+        eq(studioHumanInterviewRoundInterviewer.roundId, studioHumanInterviewRound.id),
+      )
+      .innerJoin(user, eq(studioHumanInterviewRoundInterviewer.userId, user.id))
+      .where(
+        and(
+          inArray(studioHumanInterviewRound.interviewRecordId, candidateIds),
+          eq(studioHumanInterviewRound.organizationId, organizationId),
+          ne(studioHumanInterviewRound.status, "cancelled"),
+        ),
+      )
+      .orderBy(asc(studioHumanInterviewRound.interviewRecordId), asc(user.name)),
+    db
+      .select({
+        action: interviewAuditLog.action,
+        createdAt: interviewAuditLog.createdAt,
+        interviewRecordId: interviewAuditLog.interviewRecordId,
+        operatorId: interviewAuditLog.operatorId,
+        operatorImage: user.image,
+        operatorName: user.name,
+      })
+      .from(interviewAuditLog)
+      .leftJoin(user, eq(interviewAuditLog.operatorId, user.id))
+      .where(
+        and(
+          inArray(interviewAuditLog.interviewRecordId, candidateIds),
+          eq(interviewAuditLog.organizationId, organizationId),
+          inArray(interviewAuditLog.action, [
+            "resume_evaluation_submitted",
+            "resume_evaluation_updated",
+          ]),
+        ),
+      )
+      .orderBy(asc(interviewAuditLog.interviewRecordId), desc(interviewAuditLog.createdAt)),
+  ]);
+
+  const interviewersByJobDescription = new Map<string, { id: string; name: string }[]>();
+  for (const row of interviewerRows) {
+    const current = interviewersByJobDescription.get(row.jobDescriptionId) ?? [];
+    current.push({ id: row.id, name: row.name });
+    interviewersByJobDescription.set(row.jobDescriptionId, current);
+  }
+
+  for (const row of rows) {
+    const people = result.get(row.id);
+    if (people && row.jobDescriptionId) {
+      people.jobDescriptionInterviewers =
+        interviewersByJobDescription.get(row.jobDescriptionId) ?? [];
+    }
+  }
+
+  const seenHumanInterviewerKeys = new Set<string>();
+  for (const row of humanInterviewerRows) {
+    const people = result.get(row.interviewRecordId);
+    if (!people) {
+      continue;
+    }
+    const key = `${row.interviewRecordId}:${row.userId}`;
+    if (seenHumanInterviewerKeys.has(key)) {
+      continue;
+    }
+    seenHumanInterviewerKeys.add(key);
+    people.humanInterviewers.push({
+      id: row.userId,
+      image: row.image,
+      name: row.name ?? "未命名",
+    });
+  }
+
+  for (const row of evaluatorRows) {
+    const people = result.get(row.interviewRecordId);
+    if (!people || people.resumeEvaluatorId !== null) {
+      continue;
+    }
+    people.resumeEvaluatorId = row.operatorId;
+    people.resumeEvaluatorImage = row.operatorImage;
+    people.resumeEvaluatorName = row.operatorName;
+  }
+
+  return result;
+}
+
 function toRecord(
   row: Row,
   derived?: ResumeDerivedFields,
+  people?: ResumePeopleFields,
   duplicateMatch?: ResumeDuplicateMatchSummary | null,
 ): ResumeLibraryListRecord {
   const resolvedDerived = derived ?? EMPTY_DERIVED_FIELDS;
+  const resolvedPeople = people ?? createEmptyPeopleFields();
   return {
     candidateEmail: row.candidateEmail,
     candidateExpectationsMeta: row.candidateExpectationsMeta,
@@ -619,9 +764,11 @@ function toRecord(
     hiringUnitName: row.hiringUnitName,
     humanInterviewScheduledAt: serializeDate(row.humanInterviewScheduledAt),
     humanInterviewerId: row.humanInterviewerId,
+    humanInterviewers: resolvedPeople.humanInterviewers,
     id: row.id,
     jobDescriptionDepartmentName: row.jobDescriptionDepartmentName,
     jobDescriptionId: row.jobDescriptionId,
+    jobDescriptionInterviewers: resolvedPeople.jobDescriptionInterviewers,
     jobDescriptionName: row.jobDescriptionName,
     lastInterviewAt: resolvedDerived.lastInterviewAt,
     notes: row.notes,
@@ -629,8 +776,12 @@ function toRecord(
     offerSentAt: serializeDate(row.offerSentAt),
     outcome: row.outcome,
     pipelineStage: row.pipelineStage,
+    recommendationText: row.recommendationText,
     resumeContentHash: row.resumeContentHash,
     resumeEvaluationStatus: row.resumeEvaluationStatus,
+    resumeEvaluatorId: resolvedPeople.resumeEvaluatorId,
+    resumeEvaluatorImage: resolvedPeople.resumeEvaluatorImage,
+    resumeEvaluatorName: resolvedPeople.resumeEvaluatorName,
     resumeFileName: row.resumeFileName,
     resumeParseError: row.resumeParseError,
     resumeParseStatus: row.resumeParseStatus,
@@ -686,8 +837,9 @@ export async function queryPaginatedResumeRecords(
   ]);
 
   const recordIds = rows.map((row) => row.id);
-  const [derivedFields, duplicateMatches] = await Promise.all([
+  const [derivedFields, peopleFields, duplicateMatches] = await Promise.all([
     loadResumeDerivedFields(recordIds),
+    loadResumePeopleFields(rows, organizationId),
     listActiveDuplicateMatchCounts({
       organizationId,
       sourceIds: recordIds,
@@ -702,6 +854,7 @@ export async function queryPaginatedResumeRecords(
       toRecord(
         row,
         derivedFields.get(row.id),
+        peopleFields.get(row.id),
         toDuplicateMatchSummary(duplicateMatches.get(row.id)),
       ),
     ),
@@ -788,8 +941,9 @@ export async function loadResumeDetail(
   }
 
   const { resumeProfile, resumeReview, interviewQuestions } = row;
-  const [derivedFields, duplicateMatches] = await Promise.all([
+  const [derivedFields, peopleFields, duplicateMatches] = await Promise.all([
     loadResumeDerivedFields([row.id]),
+    loadResumePeopleFields([row], organizationId),
     listActiveDuplicateMatchCounts({
       organizationId,
       sourceIds: [row.id],
@@ -800,6 +954,7 @@ export async function loadResumeDetail(
     ...toRecord(
       row,
       derivedFields.get(row.id),
+      peopleFields.get(row.id),
       toDuplicateMatchSummary(duplicateMatches.get(row.id)),
     ),
     interviewQuestions: interviewQuestions ?? [],

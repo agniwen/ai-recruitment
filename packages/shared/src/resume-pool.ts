@@ -23,6 +23,7 @@ export const resumePoolImportSchema = z.object({
   hiringUnitId: z.preprocess((value) => value ?? "", z.string().trim().min(1, "请选择入库组织")),
   jobDescriptionId: z.string().trim().min(1).nullable().optional(),
   jobDescriptionMode: z.enum(["none", "bind"]).default("none"),
+  recommendationText: z.string().trim().max(2000, "推荐理由不能超过 2000 字").default(""),
 });
 
 export type ResumePoolCreateInput = z.infer<typeof resumePoolCreateSchema>;

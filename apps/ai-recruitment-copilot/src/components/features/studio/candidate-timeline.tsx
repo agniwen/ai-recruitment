@@ -20,6 +20,7 @@ import {
 import type { ComponentProps, ComponentType, SVGProps } from "react";
 import { MarkdownView } from "@/components/features/display/markdown-view";
 import { DATE_TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display/time-display";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   Empty,
@@ -101,6 +102,10 @@ function shouldRenderDescriptionAsMarkdown(event: CandidateTimelineEvent) {
   return event.title === "AI 报告同步";
 }
 
+function getActorInitial(name: string | null | undefined) {
+  return name?.trim().slice(0, 1).toUpperCase() || "?";
+}
+
 function TimelineDescription({
   density,
   event,
@@ -134,6 +139,43 @@ function TimelineDescription({
     >
       {event.description}
     </p>
+  );
+}
+
+function TimelineAvailableTimeSlots({ event }: { event: CandidateTimelineEvent }) {
+  const slots = event.availableTimeSlots ?? [];
+  if (slots.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 min-w-0 rounded-lg bg-background/70 px-3 py-2">
+      <p className="mb-1.5 font-medium text-muted-foreground text-xs">可预约时间</p>
+      <ul className="space-y-1 text-xs">
+        {slots.map((slot, index) => (
+          <li
+            className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-muted-foreground"
+            key={`${slot.startAt}-${slot.endAt}-${index}`}
+          >
+            <TimeDisplay
+              as="span"
+              className="text-xs"
+              options={DATE_TIME_DISPLAY_OPTIONS}
+              value={slot.startAt}
+            />
+            <span aria-hidden className="text-muted-foreground/70">
+              -
+            </span>
+            <TimeDisplay
+              as="span"
+              className="text-xs"
+              options={DATE_TIME_DISPLAY_OPTIONS}
+              value={slot.endAt}
+            />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -216,12 +258,21 @@ function TimelineEventItem({
             />
           </div>
           {event.actorName ? (
-            <span className="shrink-0 text-muted-foreground text-xs">
-              操作人：{event.actorName}
+            <span className="inline-flex shrink-0 items-center gap-1.5 text-muted-foreground text-xs">
+              <Avatar size="sm" className="size-5!">
+                {event.actorImage ? (
+                  <AvatarImage alt={event.actorName} src={event.actorImage} />
+                ) : null}
+                <AvatarFallback>{getActorInitial(event.actorName)}</AvatarFallback>
+              </Avatar>
+              <span className="max-w-32 truncate" title={event.actorName}>
+                {event.actorName}
+              </span>
             </span>
           ) : null}
         </div>
         <TimelineDescription density={density} event={event} />
+        <TimelineAvailableTimeSlots event={event} />
         {metadata.length > 0 ? (
           <dl className="mt-3 flex min-w-0 max-w-full flex-wrap gap-2 overflow-hidden">
             {metadata.map((item) => (

@@ -34,6 +34,8 @@ import {
   queryPaginatedResumeRecords,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import {
+  recordResumeJobDescriptionChange,
+  resetResumeEvaluationForJobChange,
   submitResumeEvaluationOnce,
   updateResumeEvaluationStatus,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
@@ -127,6 +129,7 @@ function parseResumeLibraryFormData(
     hiringUnitId: toNullableString(formData.get("hiringUnitId")),
     jobDescriptionId: toNullableString(formData.get("jobDescriptionId")) ?? "",
     notes: toNullableString(formData.get("notes")) ?? "",
+    recommendationText: toNullableString(formData.get("recommendationText")) ?? "",
     resumeEvaluationStatus:
       toNullableString(formData.get("resumeEvaluationStatus")) ?? "unreviewed",
     targetRole: toNullableString(formData.get("targetRole")) ?? "",
@@ -488,9 +491,11 @@ export const resumeLibraryRouter = factory
       }
       const input = c.req.valid("json");
       const result = await submitResumeEvaluationOnce({
+        availableTimeSlots: input.availableTimeSlots ?? [],
         id,
         operatorId: c.var.user?.id ?? null,
         organizationId: activeOrg.id,
+        reason: input.reason,
         status: input.status,
       });
       if (result.status === "already_evaluated") {
@@ -805,6 +810,7 @@ export const resumeLibraryRouter = factory
         jobDescriptionId: input.data.jobDescriptionId || null,
         notes: input.data.notes || null,
         organizationId: activeOrg.id,
+        recommendationText: input.data.recommendationText || null,
         resumeFileName: parsedFileName,
         resumeProfile,
         resumeReview,
@@ -993,6 +999,7 @@ export const resumeLibraryRouter = factory
         hiringUnitId: input.data.hiringUnitId,
         jobDescriptionId: input.data.jobDescriptionId || null,
         notes: input.data.notes || null,
+        recommendationText: input.data.recommendationText || null,
         resumeReview: nextResumeReview,
         targetRole: input.data.targetRole || resumeProfile?.targetRoles[0] || null,
         updatedAt: new Date(),
@@ -1015,11 +1022,32 @@ export const resumeLibraryRouter = factory
           });
         }
       });
-      const nextResumeEvaluationStatus =
-        input.data.resumeEvaluationStatus === "unreviewed"
+      const nextJobDescriptionId = input.data.jobDescriptionId || null;
+      const jobDescriptionChanged = nextJobDescriptionId !== existing.jobDescriptionId;
+      const nextResumeEvaluationStatus = jobDescriptionChanged
+        ? null
+        : (input.data.resumeEvaluationStatus === "unreviewed"
           ? null
-          : input.data.resumeEvaluationStatus;
-      if (nextResumeEvaluationStatus !== existing.resumeEvaluationStatus) {
+          : input.data.resumeEvaluationStatus);
+      if (jobDescriptionChanged) {
+        await recordResumeJobDescriptionChange({
+          id,
+          nextJobDescriptionId,
+          operatorId: c.var.user?.id ?? null,
+          organizationId: activeOrg.id,
+          previousJobDescriptionId: existing.jobDescriptionId,
+        });
+      }
+      if (jobDescriptionChanged && existing.resumeEvaluationStatus) {
+        await resetResumeEvaluationForJobChange({
+          id,
+          nextJobDescriptionId,
+          operatorId: c.var.user?.id ?? null,
+          organizationId: activeOrg.id,
+          previousJobDescriptionId: existing.jobDescriptionId,
+          previousStatus: existing.resumeEvaluationStatus,
+        });
+      } else if (nextResumeEvaluationStatus !== existing.resumeEvaluationStatus) {
         await updateResumeEvaluationStatus({
           id,
           operatorId: c.var.user?.id ?? null,

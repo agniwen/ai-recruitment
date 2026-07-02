@@ -410,6 +410,7 @@ export function ResumeImportButton({
             hiringUnitId: null,
             jobDescriptionId,
             notes: "",
+            recommendationText: "",
             resumeEvaluationStatus: "unreviewed",
             targetRole: "",
           },

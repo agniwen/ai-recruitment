@@ -280,6 +280,7 @@ export function formValuesFromResumeProfile(
     hiringUnitId: null,
     jobDescriptionId: "",
     notes: "",
+    recommendationText: "",
     resumeEvaluationStatus: "unreviewed",
     targetRole: resumeProfile.targetRoles[0] ?? "",
     ...overrides,
@@ -294,6 +295,7 @@ function appendCandidateFields(fd: FormData, value: ResumeLibraryFormValues) {
   fd.append("targetRole", value.targetRole);
   fd.append("jobDescriptionId", value.jobDescriptionId);
   fd.append("notes", value.notes);
+  fd.append("recommendationText", value.recommendationText);
   fd.append("resumeEvaluationStatus", value.resumeEvaluationStatus);
 }
 

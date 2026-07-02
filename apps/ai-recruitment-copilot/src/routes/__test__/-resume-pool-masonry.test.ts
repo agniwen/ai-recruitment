@@ -398,6 +398,18 @@ describe("ResumePoolPage masonry layout", () => {
     expect(importDialogSource).not.toContain('contentSide="top"');
   });
 
+  it("collects a recommendation reason when importing pool resumes", () => {
+    const importDialogSource = source.slice(
+      source.indexOf("function ImportResumePoolDialog"),
+      source.indexOf("function ResumePoolDetailSummaryPanel"),
+    );
+
+    expect(importDialogSource).toContain("recommendationText");
+    expect(importDialogSource).toContain('id="resume-pool-import-recommendation"');
+    expect(importDialogSource).toContain("推荐理由");
+    expect(importDialogSource).toContain("RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH");
+  });
+
   it("shows profile highlight labels above full content", () => {
     const highlightSource = source.slice(
       source.indexOf("function ResumePoolHighlightRow"),

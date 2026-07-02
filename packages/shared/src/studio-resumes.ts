@@ -115,9 +115,15 @@ export interface ResumeLibraryListRecord {
   jobDescriptionId: string | null;
   jobDescriptionDepartmentName: string | null;
   jobDescriptionName: string | null;
+  jobDescriptionInterviewers: { id: string; name: string }[];
+  humanInterviewers: { id: string; image: string | null; name: string }[];
   resumeFileName: string | null;
   resumeContentHash: string | null;
   resumeEvaluationStatus: ResumeEvaluationStatus | null;
+  resumeEvaluatorId: string | null;
+  resumeEvaluatorImage: string | null;
+  resumeEvaluatorName: string | null;
+  recommendationText: string | null;
   resumeSummary: string | null;
   resumeParsedAt: string | null;
   resumeParseError: string | null;
@@ -366,9 +372,58 @@ export const resumeEvaluationStatusFormValueSchema = z.union([
   resumeEvaluationStatusSchema,
   z.literal("unreviewed"),
 ]);
-export const resumeEvaluationStatusSubmitSchema = z.object({
-  status: resumeEvaluationStatusSchema,
-});
+export const resumeEvaluationAvailableTimeSlotSchema = z
+  .object({
+    endAt: z.string().trim().min(1, "请填写结束时间"),
+    startAt: z.string().trim().min(1, "请填写开始时间"),
+  })
+  .superRefine((value, ctx) => {
+    const start = Date.parse(value.startAt);
+    const end = Date.parse(value.endAt);
+    if (Number.isNaN(start)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "开始时间无效",
+        path: ["startAt"],
+      });
+    }
+    if (Number.isNaN(end)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "结束时间无效",
+        path: ["endAt"],
+      });
+    }
+    if (!Number.isNaN(start) && !Number.isNaN(end) && end <= start) {
+      ctx.addIssue({
+        code: "custom",
+        message: "结束时间必须晚于开始时间",
+        path: ["endAt"],
+      });
+    }
+  });
+
+export const resumeEvaluationStatusSubmitSchema = z
+  .object({
+    availableTimeSlots: z
+      .array(resumeEvaluationAvailableTimeSlotSchema)
+      .max(10, "可预约时间最多 10 段")
+      .optional(),
+    reason: z.string().trim().min(1, "请填写评估原因").max(2000, "评估原因不能超过 2000 字"),
+    status: resumeEvaluationStatusSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.status !== "pass") {
+      return;
+    }
+    if (!value.availableTimeSlots || value.availableTimeSlots.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "评估通过时请至少填写 1 段可预约时间",
+        path: ["availableTimeSlots"],
+      });
+    }
+  });
 export const resumeEvaluationUpdateSchema = z.object({
   status: resumeEvaluationStatusSchema.nullable(),
 });
@@ -411,6 +466,11 @@ export interface CandidateTimelineEventMeta {
   value: string;
 }
 
+export interface CandidateTimelineTimeSlot {
+  endAt: string;
+  startAt: string;
+}
+
 export interface CandidateTimelineEvent {
   id: string;
   kind: CandidateTimelineEventKind;
@@ -419,7 +479,9 @@ export interface CandidateTimelineEvent {
   description: string | null;
   occurredAt: string;
   actorName: string | null;
+  actorImage: string | null;
   metadata: CandidateTimelineEventMeta[];
+  availableTimeSlots?: CandidateTimelineTimeSlot[];
 }
 
 export interface CandidateTimelineResponse {
@@ -477,6 +539,7 @@ export const resumeLibraryFormSchema = z.object({
   hiringUnitId: resumeLibraryOptionalHiringUnitIdSchema,
   jobDescriptionId: z.string().trim().min(1, "请选择关联在招岗位").max(100, "关联在招岗位无效"),
   notes: z.string().trim().max(2000, "备注不能超过 2000 字"),
+  recommendationText: z.string().trim().max(2000, "推荐语不能超过 2000 字"),
   resumeEvaluationStatus: resumeEvaluationStatusFormValueSchema,
   targetRole: z.string().trim().max(120, "目标岗位不能超过 120 个字符"),
 });
@@ -500,6 +563,7 @@ export function createResumeLibraryFormValues(): ResumeLibraryFormValues {
     hiringUnitId: null,
     jobDescriptionId: "",
     notes: "",
+    recommendationText: "",
     resumeEvaluationStatus: "unreviewed",
     targetRole: "",
   };

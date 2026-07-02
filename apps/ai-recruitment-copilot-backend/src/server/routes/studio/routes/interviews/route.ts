@@ -336,6 +336,7 @@ export const studioInterviewsRouter = factory
       const parsedScheduleEntries = parseScheduleEntriesInput(formData.get("scheduleEntries"));
       const parsedResumePayload = parseResumePayloadInput(formData.get("resumePayload"));
       const manualQuestionsRaw = toNullableString(formData.get("manualInterviewQuestions"));
+      const recommendationText = toNullableString(formData.get("recommendationText"));
       const manualInterviewQuestions = manualQuestionsRaw
         ? (JSON.parse(
             manualQuestionsRaw,
@@ -433,6 +434,7 @@ export const studioInterviewsRouter = factory
         jobDescriptionId: input.data.jobDescriptionId || null,
         notes: input.data.notes || null,
         organizationId: activeOrg.id,
+        recommendationText,
         // 从 AI 面试页面直接创建：起步就在 ai_interview 阶段。
         // Created from the AI interview page → record starts at ai_interview.
         pipelineStage: "ai_interview" as const,

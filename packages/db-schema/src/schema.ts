@@ -435,6 +435,7 @@ export const studioInterview = pgTable(
       onDelete: "set null",
     }),
     notes: text("notes"),
+    recommendationText: text("recommendation_text"),
     // ⚠️ DEPRECATED — Offer 信息现在落到 studioOfferDraft 子表（多版本 + 议价历史）。
     // Superseded by studioOfferDraft subtable; not written anymore.
     offerAcceptedAt: timestamp("offer_accepted_at", { withTimezone: true }),

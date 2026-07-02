@@ -95,7 +95,8 @@ function translatedLabel(value: string | null | undefined, labels: Record<string
 
 function addEvent(
   events: CandidateTimelineEvent[],
-  input: Omit<CandidateTimelineEvent, "metadata" | "occurredAt"> & {
+  input: Omit<CandidateTimelineEvent, "actorImage" | "metadata" | "occurredAt"> & {
+    actorImage?: string | null;
     metadata?: CandidateTimelineEventMeta[];
     occurredAt: TimeValue;
   },
@@ -105,7 +106,9 @@ function addEvent(
     return;
   }
   events.push({
+    actorImage: input.actorImage ?? null,
     actorName: input.actorName,
+    availableTimeSlots: input.availableTimeSlots,
     description: input.description,
     id: input.id,
     kind: input.kind,
@@ -140,6 +143,38 @@ function resumeEvaluationLabel(value: unknown): string {
   return isResumeEvaluationStatus(value) ? describeResumeEvaluationStatus(value).label : "未知状态";
 }
 
+function jobDescriptionAuditLabel(nameValue: unknown, idValue: unknown): string {
+  if (typeof nameValue === "string" && nameValue.trim()) {
+    return nameValue;
+  }
+  if (typeof idValue === "string" && idValue.trim()) {
+    return idValue;
+  }
+  return "未关联岗位";
+}
+
+interface ResumeEvaluationTimelineTimeSlot {
+  endAt: string;
+  startAt: string;
+}
+
+function isResumeEvaluationTimelineTimeSlot(
+  value: unknown,
+): value is ResumeEvaluationTimelineTimeSlot {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const slot = value as Partial<ResumeEvaluationTimelineTimeSlot>;
+  return typeof slot.startAt === "string" && typeof slot.endAt === "string";
+}
+
+function readResumeEvaluationTimeSlots(value: unknown): ResumeEvaluationTimelineTimeSlot[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isResumeEvaluationTimelineTimeSlot);
+}
+
 function auditDescription(detail: Record<string, unknown>, action: string): string | null {
   if (action === "candidate_transition") {
     const from = stageLabel(detail.fromStage);
@@ -156,10 +191,23 @@ function auditDescription(detail: Record<string, unknown>, action: string): stri
     return turnCount === null ? "AI 面试报告已同步" : `AI 面试报告已同步，共 ${turnCount} 条转写`;
   }
   if (action === "resume_evaluation_submitted") {
-    return `评估结果：${resumeEvaluationLabel(detail.toStatus)}`;
+    const reason =
+      typeof detail.reason === "string" && detail.reason ? `，原因：${detail.reason}` : "";
+    return `评估结果：${resumeEvaluationLabel(detail.toStatus)}${reason}`;
   }
   if (action === "resume_evaluation_updated") {
     return `评估状态：${resumeEvaluationLabel(detail.fromStatus)} -> ${resumeEvaluationLabel(detail.toStatus)}`;
+  }
+  if (action === "resume_evaluation_reset_for_job_change") {
+    return `岗位已变更，评估状态从 ${resumeEvaluationLabel(detail.fromStatus)} 重置为待评估`;
+  }
+  if (action === "resume_job_description_changed") {
+    const from = jobDescriptionAuditLabel(
+      detail.previousJobDescriptionName,
+      detail.previousJobDescriptionId,
+    );
+    const to = jobDescriptionAuditLabel(detail.nextJobDescriptionName, detail.nextJobDescriptionId);
+    return `关联岗位：${from} -> ${to}`;
   }
   return null;
 }
@@ -181,6 +229,12 @@ function auditTitle(action: string): string {
     case "resume_evaluation_updated": {
       return "简历评估状态变更";
     }
+    case "resume_evaluation_reset_for_job_change": {
+      return "简历评估已重置";
+    }
+    case "resume_job_description_changed": {
+      return "关联岗位已变更";
+    }
     default: {
       return "系统操作";
     }
@@ -201,6 +255,12 @@ function auditTone(action: string): CandidateTimelineEventTone {
     return "info";
   }
   if (action === "resume_evaluation_updated") {
+    return "info";
+  }
+  if (action === "resume_evaluation_reset_for_job_change") {
+    return "info";
+  }
+  if (action === "resume_job_description_changed") {
     return "info";
   }
   return "muted";
@@ -342,6 +402,7 @@ function loadTimelineRows(interviewRecordId: string, organizationId: string) {
     db
       .select({
         action: interviewAuditLog.action,
+        actorImage: user.image,
         actorName: user.name,
         createdAt: interviewAuditLog.createdAt,
         detail: interviewAuditLog.detail,
@@ -691,8 +752,14 @@ export async function loadCandidateTimeline(
     if (!description) {
       continue;
     }
+    const availableTimeSlots =
+      log.action === "resume_evaluation_submitted"
+        ? readResumeEvaluationTimeSlots(log.detail?.availableTimeSlots)
+        : undefined;
     addEvent(events, {
+      actorImage: log.actorImage,
       actorName: log.actorName,
+      availableTimeSlots,
       description,
       id: `audit:${log.id}`,
       kind: "audit",

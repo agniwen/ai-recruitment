@@ -17,6 +17,7 @@ export interface CreateResumeRecordFromStorageInput {
   jobDescriptionId: string | null;
   notes: string | null;
   organizationId: string;
+  recommendationText?: string | null;
   resumeFileName: string | null;
   resumeProfile: ResumeProfile | null;
   resumeReview?: ResumeReview | null;
@@ -61,6 +62,7 @@ export async function createResumeRecordFromStorage(
       jobDescriptionId: input.jobDescriptionId,
       notes: input.notes,
       organizationId: input.organizationId,
+      recommendationText: input.recommendationText ?? null,
       resumeContentHash: input.contentHash,
       resumeFileName: input.resumeFileName,
       resumeParseError: null,

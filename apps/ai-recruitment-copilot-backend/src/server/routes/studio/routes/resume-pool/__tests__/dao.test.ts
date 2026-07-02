@@ -408,18 +408,23 @@ describe("queryResumePoolItems", () => {
       jobDescriptionId: null,
       organizationId: ORG_A,
       poolItemId,
+      recommendationText: "推荐理由：项目经历匹配业务需求",
     });
 
     if (result.status !== "imported") {
       throw new Error("expected import success");
     }
     const [record] = await db
-      .select({ hiringUnitId: studioInterview.hiringUnitId })
+      .select({
+        hiringUnitId: studioInterview.hiringUnitId,
+        recommendationText: studioInterview.recommendationText,
+      })
       .from(studioInterview)
       .where(eq(studioInterview.id, result.resumeRecordId))
       .limit(1);
 
     expect(record?.hiringUnitId).toBe(HIRING_UNIT_A);
+    expect(record?.recommendationText).toBe("推荐理由：项目经历匹配业务需求");
   });
 
   it("generates v2 resume review when importing into the resume library", async () => {

@@ -60,6 +60,12 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(libraryGroup).not.toContain('path: "/studio/hiring-units"');
   });
 
+  it("wraps hiring unit management in the standard studio page container", () => {
+    const source = readSource("routes/w.$slug.studio.hiring-units.tsx");
+
+    expect(source).toContain('className="container mx-auto max-w-7xl space-y-6"');
+  });
+
   it("shows recruiting group hiring unit selections by item names inside the select only", () => {
     const membersSource = readSource("routes/w.$slug.studio.members.tsx");
     const hiringUnitSelectIndex = membersSource.indexOf('placeholder="负责用人组织"');
@@ -83,6 +89,8 @@ describe("TanStack Start studio CRUD route migration", () => {
 
     expect(resumePoolSource).toContain('["hiring-units"].selectable.$get');
     expect(importDialogSource).toContain("入库组织");
+    expect(importDialogSource).toContain("推荐理由");
+    expect(importDialogSource).toContain("recommendationText");
     expect(importDialogSource).not.toContain("入库组织（可选）");
     expect(jobDescriptionIndex).toBeGreaterThanOrEqual(0);
     expect(hiringUnitIndex).toBeGreaterThanOrEqual(0);

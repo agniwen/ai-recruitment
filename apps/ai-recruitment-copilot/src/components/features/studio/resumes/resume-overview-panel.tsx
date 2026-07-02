@@ -315,6 +315,15 @@ export function ResumeOverviewPanel({ detail }: { detail: ResumeLibraryDetail })
           </div>
         </div>
 
+        {detail.recommendationText ? (
+          <div className="rounded-2xl border border-muted/60 bg-muted/20 p-4">
+            <p className="mb-2 font-medium text-sm">推荐语</p>
+            <p className="whitespace-pre-wrap text-muted-foreground text-sm leading-6">
+              {detail.recommendationText}
+            </p>
+          </div>
+        ) : null}
+
         <dl className="grid gap-x-8 gap-y-4 md:grid-cols-5">
           <SummaryItem label="目标岗位" value={detail.targetRole} />
           <SummaryItem label="关联岗位" value={detail.jobDescriptionName} />

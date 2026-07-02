@@ -245,11 +245,15 @@ export function launchInterviewFromResume(
 export function submitResumeReviewEvaluation(
   slug: string,
   id: string,
-  status: ResumeEvaluationStatus,
+  input: {
+    availableTimeSlots?: { endAt: string; startAt: string }[];
+    reason: string;
+    status: ResumeEvaluationStatus;
+  },
 ): Promise<ResumeLibraryDetail> {
   return rpcFetch<ResumeLibraryDetail>(
     rpc.api.w[":slug"].studio.resumes[":id"].review.evaluation.$post({
-      json: { status },
+      json: input,
       param: { id, slug },
     }),
     "提交评估失败",

@@ -34,10 +34,12 @@ describe("resumePoolImportInputSchema", () => {
       hiringUnitId: "hu_resume_pool_import",
       jobDescriptionId: "jd_should_be_ignored",
       jobDescriptionMode: "none",
+      recommendationText: "  推荐给业务方重点关注项目经历  ",
     });
 
     expect(result.hiringUnitId).toBe("hu_resume_pool_import");
     expect(result.jobDescriptionId).toBeNull();
+    expect(result.recommendationText).toBe("推荐给业务方重点关注项目经历");
   });
 });
 
