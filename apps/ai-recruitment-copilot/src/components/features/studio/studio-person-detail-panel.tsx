@@ -1565,6 +1565,7 @@ function useStudioPersonDetailPanel({
       : canLaunchInterviewFromResume(record.resumeParseStatus));
   const showLaunchButton =
     mode === "resume" &&
+    record?.pipelineStage === "screening" &&
     canLaunchResumeModeRecord &&
     !isRoundsLoading &&
     candidateRounds.length === 0;

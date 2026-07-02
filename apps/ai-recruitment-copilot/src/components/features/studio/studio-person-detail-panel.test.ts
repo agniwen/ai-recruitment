@@ -228,6 +228,17 @@ describe("StudioPersonDetailPanel visual density", () => {
     expect(source).not.toContain(">编辑</Button>");
   });
 
+  it("hides resume-mode AI launch actions after the candidate enters human interview", () => {
+    const launchConditionSource = sourceBetween(
+      "const showLaunchButton =",
+      "const launchResumeModeDisabledReason =",
+    );
+
+    expect(launchConditionSource).toContain('record?.pipelineStage === "screening"');
+    expect(launchConditionSource).not.toContain('record.pipelineStage === "human_interview"');
+    expect(launchConditionSource).not.toContain('record.pipelineStage === "offer"');
+  });
+
   it("uses a consistent framed surface for expanded interview report items", () => {
     const reportsSource = sourceBetween(
       '<TabsContent value="reports">',
