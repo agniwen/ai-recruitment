@@ -20,6 +20,7 @@ import type { loadResumeDetail as loadResumeDetailFn } from "@arc/ai-recruitment
 import type { parseResumeLibraryEditFormInput as parseResumeLibraryEditFormInputFn } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/route";
 
 const routeSource = readFileSync(new URL("../route.ts", import.meta.url), "utf-8");
+const resumeDaoSource = readFileSync(new URL("../dao/resumes.ts", import.meta.url), "utf-8");
 const createFromStorageSource = readFileSync(
   new URL("../utils/create-from-storage.ts", import.meta.url),
   "utf-8",
@@ -302,6 +303,36 @@ describe("resume OCR text persistence", () => {
     expect(createFromStorageSource).toContain("resumeText: input.resumeText");
     expect(resumePoolDaoSource).not.toContain("resumeText: row.resumeText");
     expect(resumePoolDaoSource).not.toContain("resumeText: row.item.resumeText");
+  });
+});
+
+describe("resume library list DTO", () => {
+  it("exposes card-ready summary fields instead of full resume JSON blobs", () => {
+    const listRecordSource = sharedStudioResumesSource.slice(
+      sharedStudioResumesSource.indexOf("export interface ResumeLibraryListRecord"),
+      sharedStudioResumesSource.indexOf("export interface ResumeLibraryDetail"),
+    );
+    const detailRecordSource = sharedStudioResumesSource.slice(
+      sharedStudioResumesSource.indexOf("export interface ResumeLibraryDetail"),
+    );
+    const toRecordSource = resumeDaoSource.slice(
+      resumeDaoSource.indexOf("function toRecord("),
+      resumeDaoSource.indexOf("export async function queryPaginatedResumeRecords("),
+    );
+
+    expect(listRecordSource).toContain("resumeSkills: string[];");
+    expect(listRecordSource).toContain("resumeSummary: string | null;");
+    expect(listRecordSource).toContain("resumeProfileSnapshot: ResumeLibraryProfileSnapshot;");
+    expect(listRecordSource).not.toContain("resumeProfile: ResumeProfile | null;");
+    expect(listRecordSource).not.toContain("resumeReview: ResumeReview | null;");
+    expect(detailRecordSource).toContain("resumeProfile: ResumeProfile | null;");
+    expect(detailRecordSource).toContain("resumeReview: ResumeReview | null;");
+    expect(resumeDaoSource).toContain("resumeProfile: studioInterview.resumeProfile");
+    expect(toRecordSource).toContain("resumeSkills:");
+    expect(toRecordSource).toContain("resumeSummary:");
+    expect(toRecordSource).toContain("resumeProfileSnapshot:");
+    expect(toRecordSource).not.toContain("resumeProfile: row.resumeProfile");
+    expect(toRecordSource).not.toContain("resumeReview: row.resumeReview");
   });
 });
 
