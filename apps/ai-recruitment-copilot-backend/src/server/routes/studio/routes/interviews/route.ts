@@ -50,13 +50,12 @@ import {
   autoBindApplicableTemplates,
   ensureApplicableBindings,
   loadInterviewQuestionTemplateBindings,
-  refreshInterviewBindingsToLatest,
   replaceInterviewBindings,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interview-questions/dao/bindings";
 import {
   createInterviewContextSnapshot,
   flattenPresetQuestionsFromContextSnapshot,
-  loadOrCreateActiveInterviewContextSnapshot,
+  loadActiveInterviewContextSnapshot,
   refreshInterviewContextSnapshot,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/context-snapshots";
 import {
@@ -912,12 +911,10 @@ export const studioInterviewsRouter = factory
       return c.json({ error: "记录不存在。" }, 404);
     }
 
-    const contextSnapshot = await loadOrCreateActiveInterviewContextSnapshot({
-      createdBy: c.var.user?.id ?? null,
-      interviewRecordId: candidateId,
-      reason: "create",
-      scheduleEntryId: id,
-    });
+    const contextSnapshot = await loadActiveInterviewContextSnapshot(candidateId);
+    if (!contextSnapshot) {
+      return c.json({ error: "面试上下文尚未创建，请先发起 AI 面试。" }, 404);
+    }
     const snapshotPayload = contextSnapshot.payload;
     const jobDescriptionPresetQuestions =
       flattenPresetQuestionsFromContextSnapshot(snapshotPayload);
@@ -1334,9 +1331,15 @@ export const studioInterviewsRouter = factory
           .where(eq(studioInterview.id, candidateId));
       }
 
-      // 重置即「以当下为准」：把题库模板绑定的快照刷新到最新版本。
-      // Reset = "snapshot to now": refresh template bindings to the latest version.
-      await refreshInterviewBindingsToLatest(tx, candidateId, candidateRow.jobDescriptionId);
+      // 重置即「以当下为准」：刷新题库模板绑定并创建新版 runtime context snapshot。
+      // Reset = "snapshot to now": refresh bindings and freeze a new runtime context.
+      const refreshedSnapshot = await refreshInterviewContextSnapshot(tx, {
+        createdAt: now,
+        createdBy: operatorId,
+        interviewRecordId: candidateId,
+        reason: "reset",
+        scheduleEntryId: roundId,
+      });
 
       await tx.insert(interviewAuditLog).values({
         action: "round_reset",
@@ -1345,6 +1348,8 @@ export const studioInterviewsRouter = factory
           previousConversationId,
           previousStatus,
           roundLabel: scheduleRow.roundLabel,
+          snapshotId: refreshedSnapshot.id,
+          snapshotVersion: refreshedSnapshot.version,
         },
         id: crypto.randomUUID(),
         interviewRecordId: candidateId,
