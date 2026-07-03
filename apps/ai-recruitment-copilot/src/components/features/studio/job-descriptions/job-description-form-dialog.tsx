@@ -227,19 +227,21 @@ function DateOnlyPickerField({
       <FieldContent className="gap-2">
         <div className="flex gap-2">
           <Popover onOpenChange={setOpen} open={open}>
-            <PopoverTrigger asChild>
-              <Button
-                aria-invalid={invalid || undefined}
-                className="flex-1 justify-start font-normal"
-                id={id}
-                onBlur={onBlur}
-                type="button"
-                variant="outline"
-              >
-                <CalendarDaysIcon data-icon="inline-start" />
-                {value || "选择日期"}
-              </Button>
-            </PopoverTrigger>
+            <PopoverTrigger
+              render={
+                <Button
+                  aria-invalid={invalid || undefined}
+                  className="flex-1 justify-start font-normal"
+                  id={id}
+                  onBlur={onBlur}
+                  type="button"
+                  variant="outline"
+                >
+                  <CalendarDaysIcon data-icon="inline-start" />
+                  {value || "选择日期"}
+                </Button>
+              }
+            />
             <PopoverContent align="start" className="w-auto p-0">
               <Calendar
                 mode="single"
@@ -1345,12 +1347,17 @@ function LinkedFormsList({
             候选人进入面试前需要填写下列表单；全局面试表单在「面试表单」菜单中维护。
           </p>
         </div>
-        <Button asChild size="sm" type="button" variant="outline">
-          <a href={newTemplateHref} target="_blank" rel="noreferrer">
-            <ExternalLinkIcon className="size-3.5" />
-            管理表单
-          </a>
-        </Button>
+        <Button
+          nativeButton={false}
+          render={
+            <a href={newTemplateHref} target="_blank" rel="noreferrer">
+              <ExternalLinkIcon className="size-3.5" />
+              管理表单
+            </a>
+          }
+          size="sm"
+          variant="outline"
+        />
       </div>
 
       {isLoading ? (
@@ -1424,12 +1431,17 @@ function LinkedInterviewQuestionTemplatesList({
             面试创建时会自动绑定到下列面试题的最新版本；全局面试题在「面试题」菜单中维护。
           </p>
         </div>
-        <Button asChild size="sm" type="button" variant="outline">
-          <a href={newTemplateHref} target="_blank" rel="noreferrer">
-            <ExternalLinkIcon className="size-3.5" />
-            管理模版
-          </a>
-        </Button>
+        <Button
+          nativeButton={false}
+          render={
+            <a href={newTemplateHref} target="_blank" rel="noreferrer">
+              <ExternalLinkIcon className="size-3.5" />
+              管理模版
+            </a>
+          }
+          size="sm"
+          variant="outline"
+        />
       </div>
 
       {isLoading ? (

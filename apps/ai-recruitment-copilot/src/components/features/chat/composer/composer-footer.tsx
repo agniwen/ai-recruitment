@@ -1,14 +1,15 @@
 "use client";
 
+import {
+  IconFileText,
+  IconPhoto,
+  IconSettings,
+  IconSparkles,
+  IconTrash,
+} from "@tabler/icons-react";
 import type { ChatStatus } from "ai";
 import { useAtom } from "jotai";
-import {
-  IconFileText as FileTextIcon,
-  IconPhoto as ImageIcon,
-  IconSettings as SettingsIcon,
-  IconSparkles as SparklesIcon,
-  IconTrash as Trash2Icon,
-} from "@tabler/icons-react";
+
 import { useEffect, useRef, useState } from "react";
 import { ConversationDownload } from "@/components/ai-elements/conversation";
 import {
@@ -32,10 +33,8 @@ import { useChatActionsContext, useChatMessagesContext } from "../chat-runtime-c
 import { useComposerInputContext } from "../composer-input-context";
 import { ModelPicker } from "./model-picker";
 
-const focusTextareaOnMenuClose = (event: Event) => {
-  event.preventDefault();
-  document.querySelector<HTMLTextAreaElement>('textarea[name="message"]')?.focus();
-};
+const getTextareaAfterMenuClose = () =>
+  document.querySelector<HTMLTextAreaElement>('textarea[name="message"]') ?? true;
 
 function getComposerStatusLabel(
   status: ChatStatus,
@@ -60,14 +59,14 @@ function ThinkingModeMenuItem() {
 
   return (
     <PromptInputActionMenuItem
-      onSelect={(event) => {
+      closeOnClick={false}
+      onClick={() => {
         // Toggle on click but keep the menu open so the user can see the new
         // state without re-opening.
-        event.preventDefault();
         setEnabled(!enabled);
       }}
     >
-      <SparklesIcon className="mr-2 size-4" />
+      <IconSparkles className="mr-2 size-4" />
       深度思考
       <Switch
         // Purely presentational — the parent menu item owns the click.
@@ -91,16 +90,18 @@ function ConversationDownloadButton() {
   const downloadable = messages.map(toDownloadMessage);
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <ConversationDownload
-          aria-label="导出聊天记录"
-          className="static rounded-md border-0 bg-transparent shadow-none hover:bg-accent"
-          disabled={downloadable.length === 0}
-          messages={downloadable}
-          size="icon-sm"
-          variant="ghost"
-        />
-      </TooltipTrigger>
+      <TooltipTrigger
+        render={
+          <ConversationDownload
+            aria-label="导出聊天记录"
+            className="static rounded-md border-0 bg-transparent shadow-none hover:bg-accent"
+            disabled={downloadable.length === 0}
+            messages={downloadable}
+            size="icon-sm"
+            variant="ghost"
+          />
+        }
+      />
       <TooltipContent side="top">导出聊天记录</TooltipContent>
     </Tooltip>
   );
@@ -146,25 +147,25 @@ export function ComposerFooter({
       <PromptInputTools>
         <PromptInputActionMenu onOpenChange={setUploadMenuOpen} open={uploadMenuOpen}>
           <PromptInputActionMenuTrigger id="prompt-actions-menu-trigger" tooltip="更多输入操作" />
-          <PromptInputActionMenuContent onCloseAutoFocus={focusTextareaOnMenuClose}>
+          <PromptInputActionMenuContent finalFocus={getTextareaAfterMenuClose}>
             <PromptInputActionMenuItem
-              onSelect={(event) => {
-                event.preventDefault();
+              closeOnClick={false}
+              onClick={() => {
                 setUploadMenuOpen(false);
                 attachments.openFileDialog();
               }}
             >
-              <ImageIcon className="mr-2 size-4" />
+              <IconPhoto className="mr-2 size-4" />
               上传简历文件
             </PromptInputActionMenuItem>
             <PromptInputActionMenuItem
-              onSelect={(event) => {
-                event.preventDefault();
+              closeOnClick={false}
+              onClick={() => {
                 setUploadMenuOpen(false);
                 attachments.clear();
               }}
             >
-              <Trash2Icon className="mr-2 size-4" />
+              <IconTrash className="mr-2 size-4" />
               清空附件
             </PromptInputActionMenuItem>
           </PromptInputActionMenuContent>
@@ -172,26 +173,26 @@ export function ComposerFooter({
 
         <PromptInputActionMenu>
           <PromptInputActionMenuTrigger id="prompt-job-settings-menu-trigger" tooltip="岗位设置">
-            <SettingsIcon className="size-4" />
+            <IconSettings className="size-4" />
           </PromptInputActionMenuTrigger>
-          <PromptInputActionMenuContent onCloseAutoFocus={focusTextareaOnMenuClose}>
+          <PromptInputActionMenuContent finalFocus={getTextareaAfterMenuClose}>
             <PromptInputActionMenuItem
-              onSelect={(event) => {
-                event.preventDefault();
+              closeOnClick={false}
+              onClick={() => {
                 onOpenJobDescriptionSettings();
               }}
             >
-              <FileTextIcon className="mr-2 size-4" />
+              <IconFileText className="mr-2 size-4" />
               设置在招岗位信息
             </PromptInputActionMenuItem>
             <PromptInputActionMenuItem
+              closeOnClick={false}
               disabled={!hasJobDescription}
-              onSelect={(event) => {
-                event.preventDefault();
+              onClick={() => {
                 onClearJobDescription();
               }}
             >
-              <Trash2Icon className="mr-2 size-4" />
+              <IconTrash className="mr-2 size-4" />
               清空在招岗位信息
             </PromptInputActionMenuItem>
             <DropdownMenuSeparator />

@@ -1,8 +1,9 @@
 "use client";
 
+import { IconPlus, IconSelector } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { IconPlus as Plus, IconSelector as SelectChevronsUpDownIcon } from "@tabler/icons-react";
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,12 +65,14 @@ export function WorkspaceSwitcher() {
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button className="gap-2 font-normal" size="sm" variant="ghost">
-            <span className="truncate">{label}</span>
-            <SelectChevronsUpDownIcon className="h-4 w-4 opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger
+          render={
+            <Button className="gap-2 font-normal" size="sm" variant="ghost">
+              <span className="truncate">{label}</span>
+              <IconSelector className="h-4 w-4 opacity-60" />
+            </Button>
+          }
+        />
         <DropdownMenuContent align="end" className="w-56">
           {orgs.length === 0 ? (
             <DropdownMenuItem disabled>暂无可切换的工作区</DropdownMenuItem>
@@ -77,9 +80,10 @@ export function WorkspaceSwitcher() {
             orgs.map((o) => (
               <DropdownMenuItem
                 className={o.slug === currentSlug ? "bg-accent" : ""}
+                closeOnClick={false}
                 disabled={switching}
                 key={o.id}
-                onSelect={(e) => {
+                onClick={() => {
                   if (o.slug === currentSlug) {
                     return;
                   }
@@ -95,7 +99,6 @@ export function WorkspaceSwitcher() {
                   // session — manifests as "the page lags one switch behind".
                   // Awaiting setActive here makes the next request carry the new
                   // active-id, so the server resolves the right org on first read.
-                  e.preventDefault();
                   setSwitching(true);
                   void (async () => {
                     try {
@@ -119,14 +122,13 @@ export function WorkspaceSwitcher() {
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onSelect={(e) => {
-              // 阻止默认关闭,等 dropdown 自然收起后再让 Dialog 接管焦点。
-              // Prevent the default close so Radix doesn't fight Dialog for focus.
-              e.preventDefault();
+            closeOnClick={false}
+            onClick={() => {
+              // Keep menu focus from competing with the dialog while it takes over.
               setCreateOpen(true);
             }}
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <IconPlus className="mr-2 h-4 w-4" />
             创建新工作区
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -1,3 +1,4 @@
+import { IconChevronDown, IconListCheck, IconPlus, IconSparkles } from "@tabler/icons-react";
 import { HydrationBoundary, useQueryClient } from "@tanstack/react-query";
 import type { DehydratedState } from "@tanstack/react-query";
 import {
@@ -24,12 +25,7 @@ import type {
   InterviewQuestionTemplateScope,
 } from "@arc/db-schema/interview-question-templates";
 import type { PaginatedInterviewQuestionTemplateResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interview-questions/dao/queries";
-import {
-  IconChevronDown as ChevronDownIcon,
-  IconListCheck as ListChecksIcon,
-  IconPlus as PlusIcon,
-  IconSparkles as SparklesIcon,
-} from "@tabler/icons-react";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -450,7 +446,7 @@ function InterviewQuestionTemplateManagementPage({
             <Empty className="border-border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <ListChecksIcon className="size-5" />
+                  <IconListCheck className="size-5" />
                 </EmptyMedia>
                 <EmptyTitle>还没有面试题</EmptyTitle>
                 <EmptyDescription>
@@ -466,7 +462,7 @@ function InterviewQuestionTemplateManagementPage({
                         crud.openCreate();
                       }}
                     >
-                      <PlusIcon className="size-4" />
+                      <IconPlus className="size-4" />
                       新建面试题
                     </Button>
                     <Button
@@ -476,7 +472,7 @@ function InterviewQuestionTemplateManagementPage({
                       title="AI 创建面试题"
                       type="button"
                     >
-                      <SparklesIcon className="size-4" />
+                      <IconSparkles className="size-4" />
                     </Button>
                   </ButtonGroup>
                 </EmptyContent>
@@ -486,12 +482,14 @@ function InterviewQuestionTemplateManagementPage({
           filters={filtersConfig}
           filtersExtra={
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline">
-                  {archivedFilterLabel}
-                  <ChevronDownIcon className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
+              <DropdownMenuTrigger
+                render={
+                  <Button type="button" variant="outline">
+                    {archivedFilterLabel}
+                    <IconChevronDown className="size-4" />
+                  </Button>
+                }
+              />
               <DropdownMenuContent align="start">
                 <DropdownMenuRadioGroup
                   onValueChange={(v) => grid.setFilter("archivedFilter", v)}
@@ -515,7 +513,7 @@ function InterviewQuestionTemplateManagementPage({
                     crud.openCreate();
                   }}
                 >
-                  <PlusIcon className="size-4" />
+                  <IconPlus className="size-4" />
                   新建面试题
                 </Button>
                 <Button
@@ -525,7 +523,7 @@ function InterviewQuestionTemplateManagementPage({
                   title="AI 创建面试题"
                   type="button"
                 >
-                  <SparklesIcon className="size-4" />
+                  <IconSparkles className="size-4" />
                 </Button>
               </ButtonGroup>
             ) : null

@@ -1,7 +1,8 @@
 "use client";
 
+import { IconSearch } from "@tabler/icons-react";
 import { Command as CommandPrimitive } from "cmdk";
-import { IconSearch as SearchIcon } from "@tabler/icons-react";
+
 import * as React from "react";
 
 import {
@@ -39,6 +40,7 @@ function CommandDialog({
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
+  children: React.ReactNode;
   title?: string;
   description?: string;
   className?: string;
@@ -81,7 +83,7 @@ function CommandInput({
           ),
       )}
     >
-      <SearchIcon className="relative z-10 size-4 shrink-0 opacity-50" />
+      <IconSearch className="relative z-10 size-4 shrink-0 opacity-50" />
       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(

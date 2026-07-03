@@ -653,11 +653,14 @@ function InterviewManagementPage() {
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button asChild>
-                  <Link params={{ slug }} to="/w/$slug/studio/resumes">
-                    前往简历库
-                  </Link>
-                </Button>
+                <Button
+                  nativeButton={false}
+                  render={
+                    <Link params={{ slug }} to="/w/$slug/studio/resumes">
+                      前往简历库
+                    </Link>
+                  }
+                />
               </EmptyContent>
             </Empty>
           }

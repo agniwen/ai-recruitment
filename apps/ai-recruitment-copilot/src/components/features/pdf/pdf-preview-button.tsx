@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  IconDownload as DownloadIcon,
-  IconEye as EyeIcon,
-  IconX as XIcon,
-} from "@tabler/icons-react";
+import { IconDownload, IconEye, IconX } from "@tabler/icons-react";
 import { Component, Suspense, lazy, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import type { PdfPreviewDialogProps } from "@/components/features/pdf/pdf-preview-dialog";
@@ -91,12 +87,17 @@ function PdfPreviewFallbackDialog({
       title={filename ?? "简历预览"}
       headerExtra={
         <div className="flex items-center gap-2">
-          <Button asChild size="sm" type="button" variant="outline">
-            <a aria-label="下载原文件" download={resolvedDownloadFileName} href={url}>
-              <DownloadIcon className="size-4" />
-              下载
-            </a>
-          </Button>
+          <Button
+            nativeButton={false}
+            render={
+              <a aria-label="下载原文件" download={resolvedDownloadFileName} href={url}>
+                <IconDownload className="size-4" />
+                下载
+              </a>
+            }
+            size="sm"
+            variant="outline"
+          />
           <Button
             aria-label="关闭"
             onClick={() => onOpenChange(false)}
@@ -104,7 +105,7 @@ function PdfPreviewFallbackDialog({
             type="button"
             variant="ghost"
           >
-            <XIcon className="size-4" />
+            <IconX className="size-4" />
           </Button>
         </div>
       }
@@ -133,7 +134,7 @@ export function PdfPreviewButton({
         type="button"
         variant="outline"
       >
-        <EyeIcon className="size-3.5" />
+        <IconEye className="size-3.5" />
         {label}
       </Button>
       {open && !disabled ? (

@@ -1,11 +1,8 @@
 "use client";
 
+import { IconCheck, IconChevronDown, IconX } from "@tabler/icons-react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
-import {
-  IconCheck as CheckIcon,
-  IconChevronDown as SelectChevronDownIcon,
-  IconX as XIcon,
-} from "@tabler/icons-react";
+
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -39,7 +36,7 @@ function ComboboxTrigger({ className, children, ...props }: ComboboxPrimitive.Tr
       {...props}
     >
       {children}
-      <SelectChevronDownIcon
+      <IconChevronDown
         data-slot="combobox-trigger-icon"
         className="pointer-events-none relative z-10 size-4 text-muted-foreground"
       />
@@ -55,7 +52,7 @@ function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
       className={cn(className)}
       {...props}
     >
-      <XIcon className="pointer-events-none relative z-10" />
+      <IconX className="pointer-events-none relative z-10" />
     </ComboboxPrimitive.Clear>
   );
 }
@@ -79,13 +76,11 @@ function ComboboxInput({
           <InputGroupButton
             size="icon-xs"
             variant="ghost"
-            asChild
             data-slot="input-group-button"
             className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
             disabled={disabled}
-          >
-            <ComboboxTrigger />
-          </InputGroupButton>
+            render={<ComboboxTrigger />}
+          />
         )}
         {showClear && <ComboboxClear disabled={disabled} />}
       </InputGroupAddon>
@@ -165,7 +160,7 @@ function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.
           <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
         }
       >
-        <CheckIcon className="pointer-events-none size-4 pointer-coarse:size-5" />
+        <IconCheck className="pointer-events-none size-4 pointer-coarse:size-5" />
       </ComboboxPrimitive.ItemIndicator>
     </ComboboxPrimitive.Item>
   );
@@ -258,7 +253,7 @@ function ComboboxChip({
           className="-ml-1 opacity-50 hover:opacity-100"
           data-slot="combobox-chip-remove"
         >
-          <XIcon className="pointer-events-none relative z-10" />
+          <IconX className="pointer-events-none relative z-10" />
         </ComboboxPrimitive.ChipRemove>
       )}
     </ComboboxPrimitive.Chip>
