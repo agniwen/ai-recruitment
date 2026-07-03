@@ -445,6 +445,16 @@ export function describeResumeEvaluationStatus(status: ResumeEvaluationStatus | 
   return resumeEvaluationStatusMeta[status];
 }
 
+export function getResumeInterviewGateReason(status: ResumeEvaluationStatus | null): string | null {
+  if (status === "pass") {
+    return null;
+  }
+  if (status === "fail") {
+    return "简历评估未通过，不能推进面试。";
+  }
+  return "请先完成简历评估，通过后才能推进面试。";
+}
+
 export type CandidateTimelineEventKind =
   | "candidate"
   | "stage"

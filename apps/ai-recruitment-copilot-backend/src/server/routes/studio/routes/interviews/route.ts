@@ -44,6 +44,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { resolveCandidateQuestionGenerationEnabled } from "@arc/shared/interview/candidate-question-generation-config";
+import { getResumeInterviewGateReason } from "@arc/shared/studio-resumes";
 import { loadSubmissionsByInterview } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/forms/dao/submissions";
 import {
   autoBindApplicableTemplates,
@@ -1389,6 +1390,7 @@ export const studioInterviewsRouter = factory
             jobDescriptionId: studioInterview.jobDescriptionId,
             outcome: studioInterview.outcome,
             pipelineStage: studioInterview.pipelineStage,
+            resumeEvaluationStatus: studioInterview.resumeEvaluationStatus,
           })
           .from(studioInterview)
           .where(
@@ -1408,6 +1410,20 @@ export const studioInterviewsRouter = factory
           !input.reactivationReason
         ) {
           return { kind: "missing_reactivation_reason" as const };
+        }
+        if (
+          existing.pipelineStage !== input.pipelineStage &&
+          (input.pipelineStage === "ai_interview" || input.pipelineStage === "human_interview")
+        ) {
+          const resumeInterviewGateReason = getResumeInterviewGateReason(
+            existing.resumeEvaluationStatus,
+          );
+          if (resumeInterviewGateReason) {
+            return {
+              kind: "resume_evaluation_required" as const,
+              message: resumeInterviewGateReason,
+            };
+          }
         }
         let humanInterviewOfferReadinessError: string | null = null;
         let humanInterviewReadyForOffer = false;
@@ -1464,6 +1480,9 @@ export const studioInterviewsRouter = factory
       }
       if (result.kind === "missing_reactivation_reason") {
         return c.json({ error: "请填写重新激活原因。" }, 400);
+      }
+      if (result.kind === "resume_evaluation_required") {
+        return c.json({ error: result.message }, 409);
       }
       if (result.kind === "invalid_stage_transition") {
         return c.json({ error: result.message }, 400);
@@ -1560,7 +1579,11 @@ export const studioInterviewsRouter = factory
       // 候选人必须存在、归属当前组织、且未结案（已结案需先重新激活）。
       // Candidate must exist, belong to active org, and not be closed.
       const [candidate] = await db
-        .select({ id: studioInterview.id, pipelineStage: studioInterview.pipelineStage })
+        .select({
+          id: studioInterview.id,
+          pipelineStage: studioInterview.pipelineStage,
+          resumeEvaluationStatus: studioInterview.resumeEvaluationStatus,
+        })
         .from(studioInterview)
         .where(
           and(eq(studioInterview.id, recordId), eq(studioInterview.organizationId, activeOrg.id)),
@@ -1574,6 +1597,12 @@ export const studioInterviewsRouter = factory
       }
       if (candidate.pipelineStage === "offer") {
         return c.json({ error: "候选人已进入 Offer 阶段，不能再新建真人面试轮次。" }, 400);
+      }
+      const resumeInterviewGateReason = getResumeInterviewGateReason(
+        candidate.resumeEvaluationStatus,
+      );
+      if (resumeInterviewGateReason) {
+        return c.json({ error: resumeInterviewGateReason }, 409);
       }
 
       const input = c.req.valid("json");

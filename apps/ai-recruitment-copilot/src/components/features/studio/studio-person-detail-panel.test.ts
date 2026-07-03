@@ -193,6 +193,15 @@ describe("StudioPersonDetailPanel visual density", () => {
     expect(actionBarSource).toContain("canManageOffer={canManageOffer}");
   });
 
+  it("requires passed resume evaluation before advancing into interview stages", () => {
+    const actionBarSource = sourceBetween("const actionBar =", "let headerExtra");
+
+    expect(source).toContain("getResumeInterviewGateReason");
+    expect(actionBarSource).toContain('target === "ai_interview"');
+    expect(actionBarSource).toContain('target === "human_interview"');
+    expect(actionBarSource).toContain("resumeRecord?.resumeEvaluationStatus");
+  });
+
   it("makes the human interview panel read-only after entering offer stage", () => {
     const humanInterviewTabSource = sourceBetween(
       '<TabsContent value="human-interview">',
@@ -245,6 +254,40 @@ describe("StudioPersonDetailPanel visual density", () => {
     expect(source).not.toContain("const resumeModeFooter =");
     expect(source).not.toContain("<IconPencil");
     expect(source).not.toContain(">编辑</Button>");
+  });
+
+  it("keeps the detail modal open when resume evaluation blocks AI launch", () => {
+    const launchSource = sourceBetween(
+      "const launchResumeModeButtonContent = showLaunchButton ?",
+      "const title =",
+    );
+
+    const gateIndex = launchSource.indexOf("getResumeInterviewGateReason");
+    const launchIndex = launchSource.indexOf("onLaunchInterview({");
+    const closeIndex = launchSource.indexOf("onClose?.();");
+
+    expect(gateIndex).toBeGreaterThanOrEqual(0);
+    expect(launchIndex).toBeGreaterThan(gateIndex);
+    expect(closeIndex).toBeGreaterThan(launchIndex);
+  });
+
+  it("locks resume-mode AI launch after passing validation", () => {
+    const launchSource = sourceBetween(
+      "const launchResumeModeButtonContent = showLaunchButton ?",
+      "const title =",
+    );
+
+    expect(source).toContain("const launchResumeModeActionPendingRef = useRef(false);");
+    expect(source).toContain(
+      "const [isLaunchResumeModeActionPending, setIsLaunchResumeModeActionPending] = useState(false);",
+    );
+    expect(launchSource).toContain("disabled={isLaunchResumeModeActionPending}");
+    expect(launchSource).toContain("if (isLaunchResumeModeActionPending) {");
+    expect(launchSource).toContain("launchResumeModeActionPendingRef.current = true;");
+    expect(launchSource).toContain("setIsLaunchResumeModeActionPending(true);");
+    expect(launchSource).toContain(
+      'void navigate({ params: { slug }, to: "/w/$slug/studio/interviews" });',
+    );
   });
 
   it("hides resume-mode AI launch actions after the candidate enters human interview", () => {

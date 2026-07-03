@@ -7,6 +7,7 @@ import {
   createResumeLibraryFormValues,
   describeResumeEvaluationStatus,
   describeResumeProgress,
+  getResumeInterviewGateReason,
   resumeEvaluationStatusSchema,
   resumeEvaluationUpdateSchema,
   resumeLibraryEditFormSchema,
@@ -100,6 +101,12 @@ describe("resume evaluation status", () => {
       label: "不通过",
       tone: "danger",
     });
+  });
+
+  it("requires a passed resume evaluation before interview progression", () => {
+    expect(getResumeInterviewGateReason("pass")).toBeNull();
+    expect(getResumeInterviewGateReason(null)).toBe("请先完成简历评估，通过后才能推进面试。");
+    expect(getResumeInterviewGateReason("fail")).toBe("简历评估未通过，不能推进面试。");
   });
 });
 

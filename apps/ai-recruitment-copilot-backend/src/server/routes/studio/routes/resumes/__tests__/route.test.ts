@@ -103,6 +103,8 @@ describe("resume launch interview route source", () => {
     expect(launchInterviewSource).toContain("humanInterviewReadyForOffer: false");
     expect(launchInterviewSource).toContain("stage: existing.pipelineStage");
     expect(launchInterviewSource).toContain("候选人已进入后续招聘阶段，不能再发起 AI 面试。");
+    expect(launchInterviewSource).toContain("getResumeInterviewGateReason");
+    expect(launchInterviewSource).toContain("existing.resumeEvaluationStatus");
   });
 });
 

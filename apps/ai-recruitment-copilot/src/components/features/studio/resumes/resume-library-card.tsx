@@ -47,6 +47,7 @@ import {
   canLaunchInterviewFromResume,
   describeResumeEvaluationStatus,
   describeResumeProgress,
+  getResumeInterviewGateReason,
 } from "@arc/shared/studio-resumes";
 import type {
   ResumeLibraryListRecord,
@@ -568,10 +569,12 @@ function ResumeLibraryCardActions({
 }: ResumeLibraryCardActionsProps) {
   const canEdit = canUpdateResumeLibrary && canEditResumeRecord(record.resumeParseStatus);
   const canDelete = canDeleteResumeLibrary && canDeleteResumeRecord(record.resumeParseStatus);
+  const resumeInterviewGateReason = getResumeInterviewGateReason(record.resumeEvaluationStatus);
   const previewable = isPreviewableResumeDocumentInput({ fileName: record.resumeFileName });
   const canLaunchInterview =
     canCreateInterview &&
     canLaunchInterviewFromResume(record.resumeParseStatus) &&
+    resumeInterviewGateReason === null &&
     !record.hasInterviewRounds &&
     record.pipelineStage !== "closed";
   const canLaunchChat = canCreateChat && canLaunchInterviewFromResume(record.resumeParseStatus);

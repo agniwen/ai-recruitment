@@ -25,6 +25,7 @@ import {
   canDeleteResumeRecord,
   canLaunchInterviewFromResume,
   getResumeActionLockedReason,
+  getResumeInterviewGateReason,
 } from "@arc/shared/studio-resumes";
 import type {
   PaginatedResumeLibraryResult,
@@ -958,6 +959,11 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
       toast.error("简历解析完成后才能发起 AI 面试");
       return;
     }
+    const resumeInterviewGateReason = getResumeInterviewGateReason(record.resumeEvaluationStatus);
+    if (resumeInterviewGateReason) {
+      toast.error(resumeInterviewGateReason);
+      return;
+    }
     setLaunchingRecord({ candidateName: record.candidateName ?? null, id: record.id });
   }
 
@@ -1209,6 +1215,15 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
                 if (row && !canLaunchInterviewFromResume(row.resumeParseStatus)) {
                   toast.error("简历解析完成后才能发起 AI 面试");
                   return;
+                }
+                if (row) {
+                  const resumeInterviewGateReason = getResumeInterviewGateReason(
+                    row.resumeEvaluationStatus,
+                  );
+                  if (resumeInterviewGateReason) {
+                    toast.error(resumeInterviewGateReason);
+                    return;
+                  }
                 }
                 if (row && !row.jobDescriptionId) {
                   toast.error("请先绑定在招岗位后再发起 AI 面试");

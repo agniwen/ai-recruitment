@@ -45,4 +45,9 @@ describe("ResumeLibraryCard", () => {
     expect(source).toContain("AI 面试官：");
     expect(source).toContain("真人面试官：");
   });
+
+  it("requires passed resume evaluation before showing the AI interview action", () => {
+    expect(source).toContain("getResumeInterviewGateReason(record.resumeEvaluationStatus)");
+    expect(source).toContain("resumeInterviewGateReason === null");
+  });
 });

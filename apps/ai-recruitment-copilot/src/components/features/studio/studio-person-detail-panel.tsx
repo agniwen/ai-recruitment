@@ -21,7 +21,10 @@ import Markdown from "react-markdown";
 import type { CandidateFormSubmissionWithSnapshot } from "@arc/db-schema/candidate-forms";
 import type { StudioInterviewConversationReport } from "@arc/db-schema/interview-session";
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
-import { canLaunchInterviewFromResume } from "@arc/shared/studio-resumes";
+import {
+  canLaunchInterviewFromResume,
+  getResumeInterviewGateReason,
+} from "@arc/shared/studio-resumes";
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import { DIFFICULTY_LABEL } from "@arc/shared/interview-question-difficulty";
 import { cn } from "@arc/shared/utils";
@@ -1178,6 +1181,8 @@ function useStudioPersonDetailPanel({
   } = uiState;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const launchResumeModeActionPendingRef = useRef(false);
+  const [isLaunchResumeModeActionPending, setIsLaunchResumeModeActionPending] = useState(false);
 
   useEffect(() => {
     setActiveTab(defaultTab ?? "overview");
@@ -1573,14 +1578,30 @@ function useStudioPersonDetailPanel({
     <Button
       aria-disabled={Boolean(launchResumeModeDisabledReason)}
       className={cn(launchResumeModeDisabledReason && "opacity-50")}
+      disabled={isLaunchResumeModeActionPending}
       size="sm"
       onClick={() => {
+        if (isLaunchResumeModeActionPending) {
+          return;
+        }
+        if (launchResumeModeActionPendingRef.current) {
+          return;
+        }
         if (!record) {
           return;
         }
         if (launchResumeModeDisabledReason) {
           return;
         }
+        const resumeInterviewGateReason = getResumeInterviewGateReason(
+          resumeRecord?.resumeEvaluationStatus ?? null,
+        );
+        if (resumeInterviewGateReason) {
+          toast.error(resumeInterviewGateReason);
+          return;
+        }
+        launchResumeModeActionPendingRef.current = true;
+        setIsLaunchResumeModeActionPending(true);
         if (onLaunchInterview) {
           // 简历库详情入口：交给外层 LaunchInterviewDialog 处理；关闭本面板
           // 让 modal 切换显得自然。
@@ -1670,25 +1691,32 @@ function useStudioPersonDetailPanel({
         canManageHumanInterview={canManageHumanInterview}
         canManageOffer={canManageOffer}
         hasJobDescription={Boolean(resumeRecord?.jobDescriptionId)}
-        onAdvance={(target) => {
+        onAdvance={async (target) => {
+          if (target === "ai_interview" || target === "human_interview") {
+            const resumeInterviewGateReason = getResumeInterviewGateReason(
+              resumeRecord?.resumeEvaluationStatus ?? null,
+            );
+            if (resumeInterviewGateReason) {
+              toast.error(resumeInterviewGateReason);
+              return;
+            }
+          }
           // 行内推进（不带元数据）：直接调 transition API，刷新缓存。
           // Inline advance: call transition + invalidate so the bar/tabs update.
-          void (async () => {
-            const error = await advancePipelineStage({
-              queryClient,
-              recordId: record.id,
-              slug,
-              target,
-            });
-            if (error) {
-              toast.error(error);
-            } else {
-              toast.success(`已推进到「${pipelineStageMeta[target].label}」`);
-              setOptimisticPipelineStage(target);
-              setActiveTab(tabForPipelineStage(target));
-              onUpdated?.();
-            }
-          })();
+          const error = await advancePipelineStage({
+            queryClient,
+            recordId: record.id,
+            slug,
+            target,
+          });
+          if (error) {
+            toast.error(error);
+          } else {
+            toast.success(`已推进到「${pipelineStageMeta[target].label}」`);
+            setOptimisticPipelineStage(target);
+            setActiveTab(tabForPipelineStage(target));
+            onUpdated?.();
+          }
         }}
         onRequestClose={() =>
           onRequestClose?.({ candidateName: record.candidateName, id: record.id })

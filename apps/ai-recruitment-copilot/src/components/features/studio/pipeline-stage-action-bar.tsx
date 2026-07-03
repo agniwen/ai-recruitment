@@ -8,8 +8,9 @@ import { IconArrowBackUp, IconArrowRight, IconCircleOff, IconUsers } from "@tabl
 //
 // Stage-aware "next action" bar for the candidate detail view. Each button
 // fires a callback supplied by the parent (resume library page); this
-// component is presentation-only and stateless.
+// component keeps only the local pending lock for duplicate-click prevention.
 
+import { useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
@@ -19,6 +20,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { CandidatePipelineEvent } from "@arc/shared/candidate-pipeline-machine";
 import { canApplyCandidatePipelineEvent } from "@arc/shared/candidate-pipeline-machine";
 import { cn } from "@arc/shared/utils";
+
+type MaybePromise = void | Promise<void>;
+type FlowActionRunner = (key: string, action: () => MaybePromise) => Promise<void>;
 
 export interface PipelineStageActionBarProps {
   pipelineStage: PipelineStage;
@@ -35,13 +39,13 @@ export interface PipelineStageActionBarProps {
   humanInterviewFeedbackComplete?: boolean;
   // 推进到指定阶段的回调（仅 stage 跳变，无元数据）。
   // Advance to a target stage (no metadata).
-  onAdvance: (target: PipelineStage) => void;
+  onAdvance: (target: PipelineStage) => MaybePromise;
   // 打开「标记结案」dialog。
   // Open the close dialog.
-  onRequestClose: () => void;
+  onRequestClose: () => MaybePromise;
   // 打开「重新激活」dialog（仅 pipelineStage='closed' 时使用）。
   // Open the reactivate dialog.
-  onRequestReactivate: () => void;
+  onRequestReactivate: () => MaybePromise;
 }
 
 export function PipelineStageActionBar({
@@ -57,16 +61,34 @@ export function PipelineStageActionBar({
   onRequestClose,
   onRequestReactivate,
 }: PipelineStageActionBarProps) {
+  const pendingFlowActionRef = useRef<string | null>(null);
+  const [pendingFlowAction, setPendingFlowAction] = useState<string | null>(null);
+  const runFlowAction: FlowActionRunner = async (key, action) => {
+    if (pendingFlowActionRef.current) {
+      return;
+    }
+    pendingFlowActionRef.current = key;
+    setPendingFlowAction(key);
+    try {
+      await action();
+    } finally {
+      pendingFlowActionRef.current = null;
+      setPendingFlowAction(null);
+    }
+  };
+  const isFlowActionPending = pendingFlowAction !== null;
   const actions = getStageActions({
     canManageHumanInterview,
     canManageOffer,
     hasJobDescription,
     humanInterviewDone,
     humanInterviewFeedbackComplete,
+    isFlowActionPending,
     onAdvance,
     onRequestClose,
     onRequestReactivate,
     pipelineStage,
+    runFlowAction,
   });
   const routeSteps = getRouteSteps(pipelineStage, showAiInterviewStep);
   const groupedPrimaryAction = pipelineStage === "closed" ? null : primaryAction;
@@ -168,9 +190,11 @@ function getStageActions(props: {
   hasJobDescription: boolean;
   humanInterviewFeedbackComplete?: boolean;
   humanInterviewDone?: boolean;
-  onAdvance: (target: PipelineStage) => void;
-  onRequestClose: () => void;
-  onRequestReactivate: () => void;
+  isFlowActionPending: boolean;
+  onAdvance: (target: PipelineStage) => MaybePromise;
+  onRequestClose: () => MaybePromise;
+  onRequestReactivate: () => MaybePromise;
+  runFlowAction: FlowActionRunner;
 }): { left: ReactNode[]; right: ReactNode[] } {
   const {
     pipelineStage,
@@ -179,9 +203,11 @@ function getStageActions(props: {
     hasJobDescription,
     humanInterviewFeedbackComplete,
     humanInterviewDone,
+    isFlowActionPending,
     onAdvance,
     onRequestClose,
     onRequestReactivate,
+    runFlowAction,
   } = props;
 
   // closed：唯一行动是重新激活。
@@ -190,7 +216,15 @@ function getStageActions(props: {
     return {
       left: [],
       right: [
-        <Button key="reactivate" onClick={onRequestReactivate} size="sm" variant="outline">
+        <Button
+          disabled={isFlowActionPending}
+          key="reactivate"
+          onClick={() => {
+            void runFlowAction("reactivate", onRequestReactivate);
+          }}
+          size="sm"
+          variant="outline"
+        >
           <IconArrowBackUp className="size-4" />
           重新激活
         </Button>,
@@ -201,7 +235,15 @@ function getStageActions(props: {
   // 所有非 closed 阶段都能直接结案。
   // Every non-closed stage can be closed.
   const closeBtn: ReactNode = (
-    <Button key="close" onClick={onRequestClose} size="sm" variant="outline">
+    <Button
+      disabled={isFlowActionPending}
+      key="close"
+      onClick={() => {
+        void runFlowAction("close", onRequestClose);
+      }}
+      size="sm"
+      variant="outline"
+    >
       <IconCircleOff className="size-4" />
       标记结案
     </Button>
@@ -229,8 +271,10 @@ function getStageActions(props: {
                 hasJobDescription,
                 canAdvanceToHumanInterview,
               )}
+              isFlowActionPending={isFlowActionPending}
               key="to-human"
               onAdvance={onAdvance}
+              runFlowAction={runFlowAction}
             />
           ),
           side: "right",
@@ -254,8 +298,10 @@ function getStageActions(props: {
                 hasJobDescription,
                 canAdvanceToHumanInterview,
               )}
+              isFlowActionPending={isFlowActionPending}
               key="to-human"
               onAdvance={onAdvance}
+              runFlowAction={runFlowAction}
             />
           ),
           side: "right",
@@ -279,8 +325,10 @@ function getStageActions(props: {
             <OfferAdvanceButton
               disabledReason={disabledReason}
               humanInterviewDone={humanInterviewDone}
+              isFlowActionPending={isFlowActionPending}
               key="to-offer"
               onAdvance={onAdvance}
+              runFlowAction={runFlowAction}
             />
           ),
           side: "right",
@@ -301,7 +349,14 @@ function getStageActions(props: {
       buttons.push({
         key: "to-ai",
         node: (
-          <Button key="to-ai" onClick={() => onAdvance("ai_interview")} size="sm">
+          <Button
+            disabled={isFlowActionPending}
+            key="to-ai"
+            onClick={() => {
+              void runFlowAction("to-ai", () => onAdvance("ai_interview"));
+            }}
+            size="sm"
+          >
             <IconArrowRight className="size-4" />
             推进到 AI 面试
           </Button>
@@ -346,11 +401,15 @@ function resolveOfferAdvanceDisabledReason(
 
 function HumanInterviewAdvanceButton({
   disabledReason,
+  isFlowActionPending,
   onAdvance,
+  runFlowAction,
   variant = "default",
 }: {
   disabledReason: string | null;
-  onAdvance: (target: PipelineStage) => void;
+  isFlowActionPending: boolean;
+  onAdvance: (target: PipelineStage) => MaybePromise;
+  runFlowAction: FlowActionRunner;
   variant?: ComponentProps<typeof Button>["variant"];
 }) {
   const targetStage: PipelineStage = "human_interview";
@@ -358,12 +417,13 @@ function HumanInterviewAdvanceButton({
     <Button
       aria-disabled={Boolean(disabledReason)}
       className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none aria-disabled:active:scale-100"
+      disabled={isFlowActionPending}
       key="to-human"
       onClick={() => {
-        if (disabledReason) {
+        if (disabledReason || isFlowActionPending) {
           return;
         }
-        onAdvance(targetStage);
+        void runFlowAction("to-human", () => onAdvance(targetStage));
       }}
       size="sm"
       variant={variant}
@@ -388,23 +448,28 @@ function HumanInterviewAdvanceButton({
 function OfferAdvanceButton({
   disabledReason,
   humanInterviewDone,
+  isFlowActionPending,
   onAdvance,
+  runFlowAction,
 }: {
   disabledReason: string | null;
   humanInterviewDone?: boolean;
-  onAdvance: (target: PipelineStage) => void;
+  isFlowActionPending: boolean;
+  onAdvance: (target: PipelineStage) => MaybePromise;
+  runFlowAction: FlowActionRunner;
 }) {
   const targetStage: PipelineStage = "offer";
   const button = (
     <Button
       aria-disabled={Boolean(disabledReason)}
       className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none aria-disabled:active:scale-100"
+      disabled={isFlowActionPending}
       key="to-offer"
       onClick={() => {
-        if (disabledReason) {
+        if (disabledReason || isFlowActionPending) {
           return;
         }
-        onAdvance(targetStage);
+        void runFlowAction("to-offer", () => onAdvance(targetStage));
       }}
       size="sm"
       variant={humanInterviewDone ? "default" : "outline"}

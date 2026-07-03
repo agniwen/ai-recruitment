@@ -16,6 +16,7 @@ import {
   canDeleteResumeRecord,
   canEditResumeRecord,
   canLaunchInterviewFromResume,
+  getResumeInterviewGateReason,
   resumeEvaluationStatusSubmitSchema,
   resumeEvaluationUpdateSchema,
   resumeLibraryEditFormSchema,
@@ -557,6 +558,12 @@ export const resumeLibraryRouter = factory
       const existing = await loadResumeDetail(id, activeOrg.id, visibilityScope);
       if (!existing) {
         return c.json({ error: "记录不存在。" }, 404);
+      }
+      const resumeInterviewGateReason = getResumeInterviewGateReason(
+        existing.resumeEvaluationStatus,
+      );
+      if (resumeInterviewGateReason) {
+        return c.json({ error: resumeInterviewGateReason }, 409);
       }
 
       if (

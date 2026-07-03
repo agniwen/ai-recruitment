@@ -132,4 +132,26 @@ describe("PipelineStageActionBar compact stage rail", () => {
     expect(source).toContain("<TooltipTrigger asChild>{button}</TooltipTrigger>");
     expect(source).toContain("humanInterviewFeedbackComplete");
   });
+
+  it("locks flow action buttons while an async transition is pending", () => {
+    expect(source).toContain('import { useRef, useState } from "react";');
+    expect(source).toContain('import type { ComponentProps, ReactNode } from "react";');
+    expect(source).toContain("type MaybePromise = void | Promise<void>;");
+    expect(source).toContain(
+      "type FlowActionRunner = (key: string, action: () => MaybePromise) => Promise<void>;",
+    );
+    expect(source).toContain("const pendingFlowActionRef = useRef<string | null>(null);");
+    expect(source).toContain(
+      "const [pendingFlowAction, setPendingFlowAction] = useState<string | null>(null);",
+    );
+    expect(source).toContain("if (pendingFlowActionRef.current) {");
+    expect(source).toContain("await action();");
+    expect(source).toContain("const isFlowActionPending = pendingFlowAction !== null;");
+    expect(source).toContain("disabled={isFlowActionPending}");
+    expect(source).toContain('void runFlowAction("to-human", () => onAdvance(targetStage));');
+    expect(source).toContain('void runFlowAction("to-offer", () => onAdvance(targetStage));');
+    expect(source).toContain('void runFlowAction("close", onRequestClose);');
+    expect(source).toContain('void runFlowAction("reactivate", onRequestReactivate);');
+    expect(source).toContain("onAdvance: (target: PipelineStage) => MaybePromise;");
+  });
 });
