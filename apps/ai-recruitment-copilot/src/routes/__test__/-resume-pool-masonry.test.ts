@@ -82,7 +82,7 @@ describe("ResumePoolPage masonry layout", () => {
   });
 
   it("keeps a bottom refresh action as an unframed breathing area", () => {
-    expect(source).toContain("刷新简历广场");
+    expect(source).toContain("刷新公共简历池");
     expect(source).toContain("已显示全部简历");
     expect(source).toContain(
       'className="flex flex-col items-center gap-3 px-2 pt-5 pb-10 text-center text-muted-foreground text-sm"',
@@ -308,10 +308,10 @@ describe("ResumePoolPage masonry layout", () => {
 
     expect(actionsSource).toContain("canDelete ? (");
     expect(actionsSource).toContain(
-      'aria-label={scope === "private" ? "删除私有简历" : "删除简历"}',
+      'aria-label={scope === "private" ? "删除私有简历池" : "删除简历"}',
     );
-    expect(actionsSource).toContain('aria-label="推送到简历广场"');
-    expect(actionsSource).toContain('"删除私有简历"');
+    expect(actionsSource).toContain('aria-label="推送到公共简历池"');
+    expect(actionsSource).toContain('"删除私有简历池"');
     expect(actionsSource).toContain('"删除简历"');
     expect(actionsSource).toContain('size="icon-sm"');
     expect(actionsSource).not.toContain('className="flex justify-end gap-1"');

@@ -121,12 +121,12 @@ describe("workspace role permission helpers", () => {
     expect(chatPage?.description).toContain("Chat");
     expect(chatPage?.description).toContain("禁用");
     expect(chatPage?.description).toContain("404");
-    expect(resumePoolPage?.description).toContain("访问「简历广场」页面");
-    expect(resumePoolPage?.description).toContain("数据接口仍受「简历广场」业务权限控制");
+    expect(resumePoolPage?.description).toContain("访问「公共简历池」页面");
+    expect(resumePoolPage?.description).toContain("数据接口仍受「公共简历池」业务权限控制");
     expect(resumePoolPage?.description).toContain("404");
     expect(resumeLibraryRead?.description).toContain("「简历库」列表、详情、时间线");
     expect(resumeLibraryRead?.description).toContain("推荐候选人接口");
-    expect(resumePoolRead?.description).toContain("「简历广场」列表、详情、简历文件");
+    expect(resumePoolRead?.description).toContain("「公共简历池」列表、详情、简历文件");
     expect(jobDescriptionPage?.description).toContain("推荐候选人还需要「简历库」查看权限");
     expect(jdRead?.description).toContain("推荐候选人接口还同时需要「简历库」查看权限");
   });

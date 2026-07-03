@@ -52,7 +52,7 @@ export const STUDIO_PAGE_PERMISSION_LABELS = {
   me: "我的信息",
   members: "工作区管理",
   permissions: "权限管理",
-  resumePool: "简历广场",
+  resumePool: "公共简历池",
   resumes: "简历库",
 } as const;
 

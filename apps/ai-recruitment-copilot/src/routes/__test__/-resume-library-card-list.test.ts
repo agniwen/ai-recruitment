@@ -62,10 +62,10 @@ describe("ResumeLibraryPage card list", () => {
     expect(cardSource).toContain("decoration-transparent");
     expect(cardSource).toContain("hover:decoration-foreground/40");
     expect(cardSource).toContain("jobDescriptionTextClass");
-    expect(cardSource).toContain("关联岗位：未绑定");
+    expect(cardSource).toContain("未绑定");
     expect(cardSource).not.toContain("pointer-events-none text-muted-foreground no-underline");
     expect(cardSource).not.toContain("record.targetRole");
-    expect(cardSource).toContain("ResumeCardMetaSeparator");
+    expect(cardSource).not.toContain("ResumeCardMetaSeparator");
     expect(cardSource).toContain("ResumeCardCreatorMeta");
     expect(cardSource).toContain("record.creatorImage");
     expect(cardSource).toContain('label="用人组织"');
@@ -82,11 +82,10 @@ describe("ResumeLibraryPage card list", () => {
     expect(cardSource).toContain("record.resumeSummary");
     expect(cardSource).not.toContain("record.resumeProfile?.");
     expect(cardSource).not.toContain("record.resumeReview");
-    expect(cardSourceFile).toContain("ml-22");
-    expect(cardSourceFile).toContain("xl:ml-0");
+    expect(cardSourceFile).toContain("workHasMore");
+    expect(cardSourceFile).toContain("educationHasMore");
     expect(cardSourceFile).toContain("content-start");
-    expect(cardSourceFile).toContain("xl:self-start");
-    expect(cardSourceFile).toContain("xl:pt-8.5");
+    expect(cardSourceFile).toContain("renderResumeCardProfileSnapshotMoreRow");
     expect(cardSourceFile).not.toContain("content-center");
     expect(cardSourceFile).not.toContain("xl:self-center");
     expect(cardSourceFile).toContain("text-[11px]");
@@ -101,6 +100,8 @@ describe("ResumeLibraryPage card list", () => {
     expect(cardSource).not.toContain("getResumeCardScoreLabel(record)");
     expect(cardSource).not.toContain("record.lastInterviewAt");
     expect(actionSource).toContain("ResumeLibraryIconActionButton");
+    expect(cardSourceFile).toContain("function ResumeLibraryCardMoreMenu");
+    expect(cardSourceFile).toContain("const canLaunchChat =");
     expect(actionSource).not.toContain("<ButtonGroup");
     expect(actionSource).toContain(
       "flex items-center justify-end gap-1 xl:flex-col xl:items-center",
@@ -110,7 +111,7 @@ describe("ResumeLibraryPage card list", () => {
     expect(actionButtonSource).toContain("delayDuration={700}");
     expect(actionButtonSource).toContain("aria-label={label}");
     expect(actionSource).toContain("发起 AI 面试");
-    expect(actionSource).toContain("更多操作");
+    expect(actionSource).toContain("ResumeLibraryCardMoreMenu");
   });
 
   it("reuses toolbar selection around the infinite virtual card list", () => {
@@ -185,5 +186,23 @@ describe("ResumeLibraryPage card list", () => {
     expect(tabsSource).toContain("onValueChange={(value) => {");
     expect(tabsSource).toContain("setRowSelection({});");
     expect(tabsSource).toContain('grid.setFilter("stage", value === "all" ? "" : value);');
+  });
+
+  it("routes single-file uploads through the background batch flow", () => {
+    const singleUploadHandlerSource = source.slice(
+      source.indexOf("function handleSingleUploadFilePicked("),
+      source.indexOf("function handleMultipleUploadFilesPicked("),
+    );
+    const dialogSource = source.slice(
+      source.indexOf("<ResumeUploadEntryDialog"),
+      source.indexOf("<BulkUploadConfirmDialog"),
+    );
+
+    expect(singleUploadHandlerSource).toContain("setPendingFiles([file]);");
+    expect(singleUploadHandlerSource).toContain("setConfirmOpen(true);");
+    expect(singleUploadHandlerSource).not.toContain("setSingleUploadFile");
+    expect(singleUploadHandlerSource).not.toContain("setCreateDialogOpen(true)");
+    expect(dialogSource).not.toContain("<CreateResumeRecordDialog");
+    expect(source).not.toContain("upload-resume-dialog");
   });
 });

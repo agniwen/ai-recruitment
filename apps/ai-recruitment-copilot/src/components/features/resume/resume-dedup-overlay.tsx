@@ -77,7 +77,7 @@ function isStudioInterviewStatus(
 }
 
 function sourceTypeLabel(match: DedupMatchRecord) {
-  return match.sourceType === "resume_pool_item" ? "私有简历" : "简历库";
+  return match.sourceType === "resume_pool_item" ? "私有简历池" : "简历库";
 }
 
 function ResumePoolMatchDetailDialog({
@@ -96,7 +96,7 @@ function ResumePoolMatchDetailDialog({
     queryKey: ["resume-pool", "dedup-match-detail", slug, recordId],
   });
   const detail = detailQuery.data ?? null;
-  let content: ReactNode = <p className="text-muted-foreground text-sm">未找到这份私有简历。</p>;
+  let content: ReactNode = <p className="text-muted-foreground text-sm">未找到这份私有简历池。</p>;
   if (detailQuery.isLoading) {
     content = (
       <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -136,7 +136,9 @@ function ResumePoolMatchDetailDialog({
       onOpenChange={onOpenChange}
       open={open}
       size="2xl"
-      title={detail ? formatResumeCandidateTitle(detail.candidateName, detail.id) : "私有简历详情"}
+      title={
+        detail ? formatResumeCandidateTitle(detail.candidateName, detail.id) : "私有简历池详情"
+      }
     >
       {content}
     </Modal>

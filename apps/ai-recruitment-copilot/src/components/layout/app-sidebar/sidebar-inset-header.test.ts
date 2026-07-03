@@ -27,7 +27,7 @@ function expectHeaderInsideScrollArea(source: string, header: string) {
 
 describe("SidebarInsetHeader translucent sticky layout", () => {
   it("uses a translucent blurred sticky background by default", () => {
-    expect(headerSource).toContain("sticky top-0 z-10");
+    expect(headerSource).toContain("sticky top-0 z-11");
     expect(headerSource).toContain("bg-background/60");
     expect(headerSource).toContain("backdrop-blur-md");
   });

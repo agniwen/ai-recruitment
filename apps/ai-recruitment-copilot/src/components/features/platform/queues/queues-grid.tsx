@@ -459,7 +459,7 @@ function UploadTaskStatusPanel({
         <DetailField label="目标岗位" value={detail.targetRole} />
         <DetailField
           label="目标位置"
-          value={detail.batch.target === "resume_pool" ? "简历广场" : "简历库"}
+          value={detail.batch.target === "resume_pool" ? "公共简历池" : "简历库"}
         />
       </div>
 

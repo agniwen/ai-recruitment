@@ -10,6 +10,7 @@ import {
   IconMessage2,
   IconPhone,
   IconSparkles,
+  IconUpload,
   IconUserCheck,
   IconUsers,
 } from "@tabler/icons-react";
@@ -49,7 +50,7 @@ import {
 } from "@arc/shared/studio-resumes";
 import type {
   ResumeLibraryListRecord,
-  ResumeLibraryProfileSnapshotLine,
+  ResumeLibraryProfileSnapshot,
 } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
 
@@ -276,7 +277,7 @@ function ResumeCardMetaItem({
   return (
     <div
       className={cn(
-        "flex min-h-6 min-w-0 items-center gap-1.5 text-muted-foreground text-xs",
+        "flex min-h-6 w-full min-w-0 items-center gap-1.5 text-muted-foreground text-xs",
         className,
       )}
     >
@@ -284,7 +285,7 @@ function ResumeCardMetaItem({
         {icon}
       </span>
       <span className="sr-only">{label}</span>
-      <span className="min-w-0 truncate">{children}</span>
+      <span className="min-w-0 flex-1 truncate">{children}</span>
     </div>
   );
 }
@@ -293,49 +294,62 @@ function ResumeCardCreatorMeta({ image, name }: { image: string | null; name: st
   const displayName = textOrDash(name);
 
   return (
-    <div className="flex min-h-6 min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
-      <Avatar size="sm" className="size-4!">
+    <span className="flex h-6 w-full min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+      <IconUpload aria-hidden className="size-3.5 shrink-0 text-muted-foreground/70" />
+      <span className="shrink-0">创建人</span>
+      <Avatar size="sm" className="size-4! shrink-0">
         {image ? <AvatarImage alt={displayName} src={image} /> : null}
         <AvatarFallback>{getCreatorInitial(name)}</AvatarFallback>
       </Avatar>
-      <span className="shrink-0">创建人：</span>
-      <span className="min-w-0 truncate">{displayName}</span>
-    </div>
+      <span className="min-w-0 flex-1 truncate">{displayName}</span>
+    </span>
   );
 }
 
-function ResumeCardProfileSnapshot({
-  snapshot,
-}: {
-  snapshot: {
-    education: ResumeLibraryProfileSnapshotLine | null;
-    work: ResumeLibraryProfileSnapshotLine | null;
-  };
-}) {
-  if (!(snapshot.work || snapshot.education)) {
+function renderResumeCardProfileSnapshotLine(line: ResumeLibraryProfileSnapshot["work"][number]) {
+  return (
+    <p
+      className="flex min-w-0 items-baseline gap-2"
+      key={`${line.primary}-${line.secondary ?? ""}-${line.period ?? ""}`}
+      title={[line.period, line.primary, line.secondary].filter(Boolean).join(" · ")}
+    >
+      {line.period ? (
+        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{line.period}</span>
+      ) : null}
+      <span className="min-w-0 truncate text-foreground text-sm">
+        {[line.primary, line.secondary].filter(Boolean).join(" · ")}
+      </span>
+    </p>
+  );
+}
+
+function renderResumeCardProfileSnapshotMoreRow(key: string) {
+  return (
+    <p className="flex min-w-0 items-center text-muted-foreground text-sm" key={key}>
+      {"..."}
+    </p>
+  );
+}
+
+function ResumeCardProfileSnapshot({ snapshot }: { snapshot: ResumeLibraryProfileSnapshot }) {
+  const workLines = snapshot.work.slice(0, 3);
+  const educationLines = snapshot.education.slice(0, 3);
+  const hasWorkGroup = workLines.length > 0 || snapshot.workHasMore;
+  const hasEducationGroup = educationLines.length > 0 || snapshot.educationHasMore;
+
+  if (!(hasWorkGroup || hasEducationGroup)) {
     return <div className="hidden xl:block" />;
   }
 
   return (
-    <div className="ml-22 grid min-w-0 content-start gap-1 text-sm xl:ml-0 xl:max-w-sm xl:self-start xl:pt-8.5">
-      {[snapshot.work, snapshot.education].map((line) =>
-        line ? (
-          <p
-            className="flex min-w-0 items-baseline gap-2"
-            key={`${line.primary}-${line.secondary ?? ""}-${line.period ?? ""}`}
-            title={[line.period, line.primary, line.secondary].filter(Boolean).join(" · ")}
-          >
-            {line.period ? (
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                {line.period}
-              </span>
-            ) : null}
-            <span className="min-w-0 truncate text-foreground text-sm">
-              {[line.primary, line.secondary].filter(Boolean).join(" · ")}
-            </span>
-          </p>
-        ) : null,
-      )}
+    <div className="grid min-w-0 content-start gap-1 text-sm xl:max-w-sm">
+      {workLines.map(renderResumeCardProfileSnapshotLine)}
+      {snapshot.workHasMore ? renderResumeCardProfileSnapshotMoreRow("work-more") : null}
+      {hasWorkGroup && hasEducationGroup ? (
+        <div className="my-0.5 border-border/60 border-t" />
+      ) : null}
+      {educationLines.map(renderResumeCardProfileSnapshotLine)}
+      {snapshot.educationHasMore ? renderResumeCardProfileSnapshotMoreRow("education-more") : null}
     </div>
   );
 }
@@ -458,6 +472,84 @@ function ResumeLibraryPreviewAction({
   );
 }
 
+function ResumeLibraryCardMoreMenu({
+  canClose,
+  canCopyLink,
+  canDelete,
+  canLaunchChat,
+  canPreviewFromMenu,
+  canReactivate,
+  onCopyDetailLink,
+  onDelete,
+  onLaunchChat,
+  onPreviewResume,
+  onTransition,
+  record,
+}: Pick<
+  ResumeLibraryCardProps,
+  "onCopyDetailLink" | "onDelete" | "onLaunchChat" | "onPreviewResume" | "onTransition" | "record"
+> & {
+  canClose: boolean;
+  canCopyLink: boolean;
+  canDelete: boolean;
+  canLaunchChat: boolean;
+  canPreviewFromMenu: boolean;
+  canReactivate: boolean;
+}) {
+  return (
+    <DropdownMenu modal={false}>
+      <Tooltip delayDuration={700}>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button aria-label="更多操作" size="icon" type="button" variant="ghost">
+              <IconDots className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top">更多操作</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuLabel>更多操作</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {canCopyLink ? (
+          <DropdownMenuItem onSelect={() => onCopyDetailLink(record)}>
+            复制详情链接
+          </DropdownMenuItem>
+        ) : null}
+        {canLaunchChat ? (
+          <DropdownMenuItem onSelect={() => onLaunchChat(record)}>
+            <IconMessage2 className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
+            发起 AI Chat
+          </DropdownMenuItem>
+        ) : null}
+        {canPreviewFromMenu ? (
+          <DropdownMenuItem onSelect={() => onPreviewResume(record)}>查看简历</DropdownMenuItem>
+        ) : null}
+        {canClose ? (
+          <DropdownMenuItem onSelect={() => onTransition(record, "close")}>
+            <IconCircleOff className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
+            标记结案
+          </DropdownMenuItem>
+        ) : null}
+        {canReactivate ? (
+          <DropdownMenuItem onSelect={() => onTransition(record, "reactivate")}>
+            <IconArrowBackUp className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
+            重新激活
+          </DropdownMenuItem>
+        ) : null}
+        {canDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onDelete(record)} variant="destructive">
+              删除
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function ResumeLibraryCardActions({
   canCopyLink,
   canCreateChat,
@@ -482,6 +574,7 @@ function ResumeLibraryCardActions({
     canLaunchInterviewFromResume(record.resumeParseStatus) &&
     !record.hasInterviewRounds &&
     record.pipelineStage !== "closed";
+  const canLaunchChat = canCreateChat && canLaunchInterviewFromResume(record.resumeParseStatus);
   const canPreviewFromMenu =
     !canEditResumeRecord(record.resumeParseStatus) && record.hasResumeFile && previewable;
   const canClose =
@@ -516,56 +609,20 @@ function ResumeLibraryCardActions({
             <IconSparkles className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
           </ResumeLibraryIconActionButton>
         ) : null}
-        <DropdownMenu modal={false}>
-          <Tooltip delayDuration={700}>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button aria-label="更多操作" size="icon" type="button" variant="ghost">
-                  <IconDots className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="top">更多操作</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuLabel>更多操作</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {canCopyLink ? (
-              <DropdownMenuItem onSelect={() => onCopyDetailLink(record)}>
-                复制详情链接
-              </DropdownMenuItem>
-            ) : null}
-            {canCreateChat ? (
-              <DropdownMenuItem onSelect={() => onLaunchChat(record)}>
-                <IconMessage2 className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-                发起 AI Chat
-              </DropdownMenuItem>
-            ) : null}
-            {canPreviewFromMenu ? (
-              <DropdownMenuItem onSelect={() => onPreviewResume(record)}>查看简历</DropdownMenuItem>
-            ) : null}
-            {canClose ? (
-              <DropdownMenuItem onSelect={() => onTransition(record, "close")}>
-                <IconCircleOff className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-                标记结案
-              </DropdownMenuItem>
-            ) : null}
-            {canReactivate ? (
-              <DropdownMenuItem onSelect={() => onTransition(record, "reactivate")}>
-                <IconArrowBackUp className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-                重新激活
-              </DropdownMenuItem>
-            ) : null}
-            {canDelete ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => onDelete(record)} variant="destructive">
-                  删除
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ResumeLibraryCardMoreMenu
+          canClose={canClose}
+          canCopyLink={canCopyLink}
+          canDelete={canDelete}
+          canLaunchChat={canLaunchChat}
+          canPreviewFromMenu={canPreviewFromMenu}
+          canReactivate={canReactivate}
+          onCopyDetailLink={onCopyDetailLink}
+          onDelete={onDelete}
+          onLaunchChat={onLaunchChat}
+          onPreviewResume={onPreviewResume}
+          onTransition={onTransition}
+          record={record}
+        />
       </div>
     </div>
   );
@@ -601,7 +658,7 @@ function ResumeLibraryCardComponent({
   const summary = record.resumeSummary;
   const canCopyLink = canCopyResumeDetailLink({ currentMemberRole, currentUserId, record });
   const jobDescriptionTextClass =
-    "min-w-0 truncate text-left underline decoration-transparent underline-offset-2 transition-colors hover:decoration-foreground/40";
+    "block w-full max-w-full min-w-0 truncate text-left underline decoration-transparent underline-offset-2 transition-colors hover:decoration-foreground/40";
 
   return (
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
@@ -617,7 +674,7 @@ function ResumeLibraryCardComponent({
         onOpenDetail(record, "overview");
       }}
     >
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(16rem,0.7fr)_auto] xl:items-start">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
         <div className="flex min-w-0 gap-3">
           <Checkbox
             aria-label={`选择 ${record.candidateName}`}
@@ -630,118 +687,129 @@ function ResumeLibraryCardComponent({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <button
-                className="min-w-0 truncate text-left font-semibold text-base underline decoration-transparent underline-offset-4 transition-colors hover:decoration-foreground/40"
-                onClick={() => onOpenDetail(record, "overview")}
-                type="button"
-              >
-                {record.candidateName}
-              </button>
-              {duplicateMatchBadge(record, () => onShowDuplicateMatches(record))}
-              <ResumeLifecycleBadge
-                className="max-w-full"
-                detailLabel={lifecycle.detailLabel}
-                fullLabel={lifecycle.fullLabel}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenDetail(record, lifecycleTargetTab(record));
-                }}
-                stageLabel={lifecycle.stageLabel}
-                tone={lifecycle.tone}
-              />
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-1.5 sm:grid-cols-2 2xl:grid-cols-3">
-              <ResumeCardMetaItem
-                className="sm:col-span-2 2xl:col-span-1"
-                icon={<IconBriefcase className="size-3.5" />}
-                label="关联岗位"
-              >
-                {jobDescriptionId && jobDescriptionLabel ? (
-                  <button
-                    className={jobDescriptionTextClass}
-                    onClick={() => {
-                      if (!jobDescriptionId) {
-                        return;
-                      }
-                      onViewJobDescription(jobDescriptionId);
-                    }}
-                    type="button"
-                  >
-                    {jobDescriptionLabel}
-                  </button>
-                ) : (
-                  <span className={cn(jobDescriptionTextClass, "text-muted-foreground")}>
-                    未绑定
-                  </span>
-                )}
-              </ResumeCardMetaItem>
-              <ResumeCardCreatorMeta image={record.creatorImage} name={record.creatorName} />
-              <ResumeCardMetaItem icon={<IconUserCheck className="size-3.5" />} label="评估状态">
-                <span className="inline-flex min-w-0 items-center gap-1">
-                  <span className="shrink-0">评估：</span>
-                  <Badge
-                    className="h-5 max-w-20 truncate px-1.5 text-[11px]"
-                    variant={resumeEvaluation.tone}
-                  >
-                    {resumeEvaluation.label}
-                  </Badge>
-                </span>
-              </ResumeCardMetaItem>
-              <ResumeCardMetaItem icon={<IconUserCheck className="size-3.5" />} label="评估人">
-                评估人：{formatResumeCardContact(record.resumeEvaluatorName, "未评估")}
-              </ResumeCardMetaItem>
-              <ResumeCardMetaItem icon={<IconBuilding className="size-3.5" />} label="用人组织">
-                用人组织：{formatResumeCardContact(record.hiringUnitName, "未分配用人组织")}
-              </ResumeCardMetaItem>
-              <ResumeCardMetaItem
-                className="sm:col-span-2 2xl:col-span-1"
-                icon={<IconUsers className="size-3.5" />}
-                label="AI 面试官"
-              >
-                AI 面试官：{formatResumeCardAiInterviewers(record)}
-              </ResumeCardMetaItem>
-              <ResumeCardMetaItem
-                className="sm:col-span-2 2xl:col-span-1"
-                icon={<IconUsers className="size-3.5" />}
-                label="真人面试官"
-              >
-                真人面试官：{formatResumeCardHumanInterviewers(record)}
-              </ResumeCardMetaItem>
-              <div className="flex min-h-6 min-w-0 items-center text-muted-foreground text-xs">
-                <TimeDisplay
-                  as="span"
-                  className="[&_svg]:text-muted-foreground/70"
-                  emptyText="—"
-                  value={record.createdAt}
+            <div className="grid min-w-0 gap-x-4 gap-y-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(16rem,0.7fr)]">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 xl:col-span-2">
+                <button
+                  className="min-w-0 truncate text-left font-semibold text-base underline decoration-transparent underline-offset-4 transition-colors hover:decoration-foreground/40"
+                  onClick={() => onOpenDetail(record, "overview")}
+                  type="button"
+                >
+                  {record.candidateName}
+                </button>
+                {duplicateMatchBadge(record, () => onShowDuplicateMatches(record))}
+                <ResumeLifecycleBadge
+                  className="max-w-full"
+                  detailLabel={lifecycle.detailLabel}
+                  fullLabel={lifecycle.fullLabel}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenDetail(record, lifecycleTargetTab(record));
+                  }}
+                  stageLabel={lifecycle.stageLabel}
+                  tone={lifecycle.tone}
                 />
               </div>
-              <ResumeCardMetaItem icon={<IconMail className="size-3.5" />} label="邮箱">
-                {formatResumeCardContact(record.candidateEmail, "未填写邮箱")}
-              </ResumeCardMetaItem>
-              <ResumeCardMetaItem icon={<IconPhone className="size-3.5" />} label="电话">
-                {formatResumeCardContact(record.candidatePhone, "未填写电话")}
-              </ResumeCardMetaItem>
-            </div>
 
-            {summary ? (
-              <p className="mt-3 line-clamp-2 text-muted-foreground text-sm leading-6">{summary}</p>
-            ) : null}
+              <div className="min-w-0">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 2xl:grid-cols-3">
+                  <ResumeCardMetaItem
+                    className="sm:col-span-2 2xl:col-span-1"
+                    icon={<IconBriefcase className="size-3.5" />}
+                    label="关联岗位"
+                  >
+                    {jobDescriptionId && jobDescriptionLabel ? (
+                      <button
+                        className={jobDescriptionTextClass}
+                        onClick={() => {
+                          if (!jobDescriptionId) {
+                            return;
+                          }
+                          onViewJobDescription(jobDescriptionId);
+                        }}
+                        type="button"
+                      >
+                        {jobDescriptionLabel}
+                      </button>
+                    ) : (
+                      <span className={cn(jobDescriptionTextClass, "text-muted-foreground")}>
+                        未绑定
+                      </span>
+                    )}
+                  </ResumeCardMetaItem>
+                  <div className="min-w-0">
+                    <ResumeCardCreatorMeta image={record.creatorImage} name={record.creatorName} />
+                  </div>
+                  <ResumeCardMetaItem
+                    icon={<IconUserCheck className="size-3.5" />}
+                    label="评估状态"
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-1">
+                      <span className="shrink-0">评估：</span>
+                      <Badge
+                        className="h-5 max-w-20 truncate px-1.5 text-[11px]"
+                        variant={resumeEvaluation.tone}
+                      >
+                        {resumeEvaluation.label}
+                      </Badge>
+                    </span>
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem icon={<IconUserCheck className="size-3.5" />} label="评估人">
+                    评估人：{formatResumeCardContact(record.resumeEvaluatorName, "未评估")}
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem icon={<IconBuilding className="size-3.5" />} label="用人组织">
+                    用人组织：{formatResumeCardContact(record.hiringUnitName, "未分配用人组织")}
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem
+                    className="sm:col-span-2 2xl:col-span-1"
+                    icon={<IconUsers className="size-3.5" />}
+                    label="AI 面试官"
+                  >
+                    AI 面试官：{formatResumeCardAiInterviewers(record)}
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem
+                    className="sm:col-span-2 2xl:col-span-1"
+                    icon={<IconUsers className="size-3.5" />}
+                    label="真人面试官"
+                  >
+                    真人面试官：{formatResumeCardHumanInterviewers(record)}
+                  </ResumeCardMetaItem>
+                  <span className="inline-flex min-h-6 min-w-0 items-center text-muted-foreground text-xs">
+                    <TimeDisplay
+                      as="span"
+                      className="[&_svg]:text-muted-foreground/70"
+                      emptyText="—"
+                      value={record.createdAt}
+                    />
+                  </span>
+                  <ResumeCardMetaItem icon={<IconMail className="size-3.5" />} label="邮箱">
+                    {formatResumeCardContact(record.candidateEmail, "未填写邮箱")}
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem icon={<IconPhone className="size-3.5" />} label="电话">
+                    {formatResumeCardContact(record.candidatePhone, "未填写电话")}
+                  </ResumeCardMetaItem>
+                </div>
 
-            {skills.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {skills.map((item) => (
-                  <Badge className="max-w-52 truncate" key={item} variant="secondary">
-                    {item}
-                  </Badge>
-                ))}
+                {summary ? (
+                  <p className="mt-3 line-clamp-2 text-muted-foreground text-sm leading-6">
+                    {summary}
+                  </p>
+                ) : null}
+
+                {skills.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {skills.map((item) => (
+                      <Badge className="max-w-52 truncate" key={item} variant="secondary">
+                        {item}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+
+              <ResumeCardProfileSnapshot snapshot={profileSnapshot} />
+            </div>
           </div>
         </div>
-
-        <ResumeCardProfileSnapshot snapshot={profileSnapshot} />
 
         <ResumeLibraryCardActions
           canCopyLink={canCopyLink}

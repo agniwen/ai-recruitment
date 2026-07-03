@@ -32,9 +32,10 @@ describe("ResumeLibraryCard", () => {
   it("surfaces interviewer and evaluator metadata on the card", () => {
     expect(source).toContain("formatResumeCardAiInterviewers");
     expect(source).toContain("formatResumeCardHumanInterviewers");
-    expect(source).toContain("grid grid-cols-1 gap-x-5 gap-y-1.5");
+    expect(source).toContain("grid grid-cols-1 gap-x-4 gap-y-1.5");
     expect(source).not.toContain("ResumeCardMetaSeparator");
     expect(source).not.toContain("关联岗位：");
+    expect(source).toContain("ResumeLibraryCardMoreMenu");
     expect(source).toContain("record.jobDescriptionInterviewers");
     expect(source).toContain("record.humanInterviewers");
     expect(source).toContain("record.resumeEvaluatorName");

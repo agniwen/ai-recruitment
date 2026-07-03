@@ -300,7 +300,7 @@ function sourceLabel(record: ResumePoolListRecord) {
   if (record.scope === "private") {
     return "—";
   }
-  return record.sourcePoolItemId ? "私有简历推送" : "公共上传";
+  return record.sourcePoolItemId ? "私有简历池推送" : "公共上传";
 }
 
 function uploaderOrganizationLabel(record: ResumePoolListRecord) {
@@ -334,7 +334,7 @@ function canDeletePoolRecord(
 }
 
 function deletePoolRecordLabel(record: ResumePoolListRecord | null) {
-  return record?.scope === "public" ? "简历广场简历" : "私有简历";
+  return record?.scope === "public" ? "公共简历池简历" : "私有简历池简历";
 }
 
 function sessionUserId(session: { user?: { id?: string | null } } | null | undefined) {
@@ -541,7 +541,7 @@ function PrivateResumePoolUploadPolicyDialog({
 }) {
   return (
     <Modal
-      description="命中疑似重复时仍会加入私有简历，并在列表中标记“疑似重复”。"
+      description="命中疑似重复时仍会加入私有简历池，并在列表中标记“疑似重复”。"
       footer={
         <>
           <Button onClick={() => onOpenChange(false)} variant="outline">
@@ -1174,12 +1174,12 @@ function ResumePoolCardActions({
       ) : null}
       {showPublishAction ? (
         <Button
-          aria-label="推送到简历广场"
+          aria-label="推送到公共简历池"
           className="shrink-0"
           disabled={publishing}
           onClick={() => onPublish(record)}
           size="icon-sm"
-          title="推送到简历广场"
+          title="推送到公共简历池"
           variant="outline"
         >
           <SendIcon className="size-4" />
@@ -1187,12 +1187,12 @@ function ResumePoolCardActions({
       ) : null}
       {canDelete ? (
         <Button
-          aria-label={scope === "private" ? "删除私有简历" : "删除简历"}
+          aria-label={scope === "private" ? "删除私有简历池" : "删除简历"}
           className="shrink-0"
           disabled={deleting}
           onClick={() => onDelete(record)}
           size="icon-sm"
-          title={scope === "private" ? "删除私有简历" : "删除简历"}
+          title={scope === "private" ? "删除私有简历池" : "删除简历"}
           variant="outline"
         >
           <Trash2Icon className="size-4" />
@@ -1805,7 +1805,7 @@ function ResumePoolPage() {
     mutationFn: (record: ResumePoolListRecord) => publishResumePoolItem(slug, record.id),
     onError: (error) => toast.error(error instanceof Error ? error.message : "推送失败"),
     onSuccess: () => {
-      toast.success("已推送到简历广场");
+      toast.success("已推送到公共简历池");
       invalidatePool();
     },
   });
@@ -1827,13 +1827,13 @@ function ResumePoolPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "批量删除失败"),
     onSettled: invalidatePool,
     onSuccess: (deletedCount) => {
-      toast.success(`已删除 ${deletedCount} 份私有简历`);
+      toast.success(`已删除 ${deletedCount} 份私有简历池简历`);
       setSelectedPrivateResumeIds(new Set());
     },
   });
   const isDeletingPoolRecords = deleteMutation.isPending || bulkDeleteMutation.isPending;
 
-  const emptyTitle = scope === "private" ? "暂无私有简历" : "简历广场暂无简历";
+  const emptyTitle = scope === "private" ? "暂无私有简历池简历" : "公共简历池暂无简历";
   const filtersConfig = useMemo(
     () => [
       {
@@ -1980,7 +1980,7 @@ function ResumePoolPage() {
                 variant="outline"
               >
                 <RefreshCwIcon className={`size-4 ${isPoolBusy ? "animate-spin" : ""}`} />
-                刷新简历广场
+                刷新公共简历池
               </Button>
             </div>
           ) : null}
@@ -1999,7 +1999,7 @@ function ResumePoolPage() {
       <ResumeUploadEntryDialog
         description="选择 1 份或多份 PDF，都会进入后台解析队列。"
         fileUploadDescription="可选择 1 份或多份 PDF，上传后在后台异步解析。"
-        fileUploadTitle="请选择要加入简历广场的简历文件"
+        fileUploadTitle="请选择要加入简历池的简历文件"
         onMultipleFilesPicked={(files) => handleQueuedUploadFilesPicked(files, uploadScope)}
         onOpenChange={setUploadEntryOpen}
         onSingleFilePicked={(file) => handleQueuedUploadFilesPicked([file], uploadScope)}

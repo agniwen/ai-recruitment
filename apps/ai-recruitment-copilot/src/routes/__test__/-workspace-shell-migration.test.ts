@@ -95,7 +95,13 @@ describe("TanStack Start workspace shell migration", () => {
   it("hides studio sidebar groups when none of their menu items render", () => {
     const studioSidebarSlots = readSource("components/features/studio/studio-sidebar-slots.tsx");
 
-    expect(studioSidebarSlots).toContain('className="hidden has-[li]:flex"');
+    expect(studioSidebarSlots).toContain('className="hidden has-[[data-sidebar=menu-item]]:flex"');
+  });
+
+  it("keeps the legacy resume plaza label in the studio sidebar menu", () => {
+    const studioSidebarSlots = readSource("components/features/studio/studio-sidebar-slots.tsx");
+
+    expect(studioSidebarSlots).toContain('title: "简历广场"');
   });
 
   it("uses typed router navigation for chat session URL changes", () => {
