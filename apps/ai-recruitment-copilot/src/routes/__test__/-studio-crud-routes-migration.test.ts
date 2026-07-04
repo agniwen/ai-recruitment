@@ -80,6 +80,19 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(hiringUnitSelectSource).not.toContain("showBadges");
   });
 
+  it("filters the recruiting group member pool by name or email on the client", () => {
+    const membersSource = readSource("routes/w.$slug.studio.members.tsx");
+    const panelIndex = membersSource.indexOf("function RecruitingGroupsPanel");
+    const panelSource = membersSource.slice(panelIndex, panelIndex + 7000);
+
+    expect(panelSource).toContain("memberPoolSearch");
+    expect(panelSource).toContain("filteredMemberPoolRows");
+    expect(panelSource).toContain("row.name.toLowerCase()");
+    expect(panelSource).toContain("row.email.toLowerCase()");
+    expect(panelSource).toContain('placeholder="搜索成员名称或邮箱"');
+    expect(panelSource).toContain("filteredMemberPoolRows.map");
+  });
+
   it("prompts for selectable hiring unit before importing resume pool items", () => {
     const resumePoolSource = readSource("routes/w.$slug.studio.resume-pool.tsx");
     const importDialogIndex = resumePoolSource.indexOf("function ImportResumePoolDialog");

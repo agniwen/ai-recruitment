@@ -58,4 +58,17 @@ describe("TanStack Start public route migration", () => {
     expect(source).toContain("Outlet");
     expect(source).toContain("<Outlet />");
   });
+
+  it("keeps human interview voice effects limited to original and clear phone audio", () => {
+    const source = readSource("components/features/human-interview/human-meeting-room.tsx");
+    const optionsStart = source.indexOf("const voiceEffectOptions = [");
+    const optionsSource = source.slice(optionsStart, source.indexOf("] satisfies", optionsStart));
+
+    expect(optionsSource).toContain('{ id: "none", label: "原声" }');
+    expect(optionsSource).toContain('{ id: "phoneClear", label: "清晰电话音" }');
+    expect(optionsSource).not.toContain("轻微低沉");
+    expect(optionsSource).not.toContain("稳重低沉");
+    expect(optionsSource).not.toContain("轻机器人");
+    expect(optionsSource).not.toContain("卡通高音");
+  });
 });

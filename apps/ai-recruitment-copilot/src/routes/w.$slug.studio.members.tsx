@@ -374,10 +374,22 @@ function RecruitingGroupsPanel({
   setNewGroupName,
 }: RecruitingGroupsPanelProps) {
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const [memberPoolSearch, setMemberPoolSearch] = useState("");
   const activeRow = useMemo(
     () => allRows.find((row) => row.userId === activeUserId) ?? null,
     [activeUserId, allRows],
   );
+  const filteredMemberPoolRows = useMemo(() => {
+    const keyword = memberPoolSearch.trim().toLowerCase();
+    if (!keyword) {
+      return allRows;
+    }
+    return allRows.filter((row) => {
+      const name = row.name.toLowerCase();
+      const email = row.email.toLowerCase();
+      return name.includes(keyword) || email.includes(keyword);
+    });
+  }, [allRows, memberPoolSearch]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
@@ -460,16 +472,34 @@ function RecruitingGroupsPanel({
         sensors={sensors}
       >
         <div className="min-w-0 rounded-lg border bg-background p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="font-medium text-sm">成员池</p>
-            <Badge variant="outline">{allRows.length} 人</Badge>
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-sm">成员池</p>
+              <Badge variant="outline">
+                {filteredMemberPoolRows.length}
+                {memberPoolSearch.trim() ? ` / ${allRows.length}` : ""} 人
+              </Badge>
+            </div>
+            <Input
+              aria-label="过滤成员池"
+              className="h-9 sm:w-72"
+              onChange={(event) => setMemberPoolSearch(event.target.value)}
+              placeholder="搜索成员名称或邮箱"
+              value={memberPoolSearch}
+            />
           </div>
-          <div className="grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {allRows.map((row) => (
-              // eslint-disable-next-line no-use-before-define -- 同文件卡片组件，保持面板主结构先出现
-              <MemberPoolCard canUpdate={canUpdate} key={row.userId} row={row} />
-            ))}
-          </div>
+          {filteredMemberPoolRows.length > 0 ? (
+            <div className="grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredMemberPoolRows.map((row) => (
+                // eslint-disable-next-line no-use-before-define -- 同文件卡片组件，保持面板主结构先出现
+                <MemberPoolCard canUpdate={canUpdate} key={row.userId} row={row} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed p-6 text-center text-muted-foreground text-sm">
+              没有匹配的成员
+            </div>
+          )}
         </div>
         <div className="min-w-0 max-w-full">
           <div className="flex max-w-full gap-4 overflow-x-auto overscroll-x-contain px-px pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

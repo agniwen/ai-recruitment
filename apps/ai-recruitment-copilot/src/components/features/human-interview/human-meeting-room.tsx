@@ -128,11 +128,7 @@ const interviewerRoleLabel = {
 } as const;
 const voiceEffectOptions = [
   { id: "none", label: "原声" },
-  { id: "warmLight", label: "轻微低沉" },
-  { id: "warmDeep", label: "稳重低沉" },
   { id: "phoneClear", label: "清晰电话音" },
-  { id: "robotLight", label: "轻机器人" },
-  { id: "cartoonHigh", label: "卡通高音" },
 ] satisfies { id: VoiceEffectId; label: string }[];
 const EARLY_JOIN_WINDOW_MS = 5 * 60 * 1000;
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
