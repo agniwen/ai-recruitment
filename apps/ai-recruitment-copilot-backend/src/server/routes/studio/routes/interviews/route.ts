@@ -189,14 +189,14 @@ const transitionInputSchema = z
 async function canManageStageTransition(headers: Headers, target: string): Promise<boolean> {
   if (target === "human_interview") {
     const result = await auth.api.hasPermission({
-      body: { permissions: { humanInterview: ["manage"] } },
+      body: { permissions: { humanInterview: ["create"] } },
       headers,
     });
     return result.success;
   }
   if (target === "offer") {
     const result = await auth.api.hasPermission({
-      body: { permissions: { offer: ["manage"] } },
+      body: { permissions: { offer: ["create"] } },
       headers,
     });
     return result.success;
@@ -562,7 +562,7 @@ export const studioInterviewsRouter = factory
   // Static routes must stay before `/:id`; otherwise Hono treats the segment as a roundId.
   .get(
     "/human-interview-meetings",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "read"),
     zValidator(
       "query",
       z.object({
@@ -585,7 +585,7 @@ export const studioInterviewsRouter = factory
   )
   .post(
     "/human-interview-meetings",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "create"),
     zValidator(
       "json",
       humanInterviewMeetingInputSchema,
@@ -614,7 +614,7 @@ export const studioInterviewsRouter = factory
   )
   .post(
     "/human-interview-meetings/:meetingId/links",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "read"),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
@@ -636,7 +636,7 @@ export const studioInterviewsRouter = factory
   )
   .post(
     "/human-interview-meetings/:meetingId/livekit-token",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "read"),
     zValidator("json", humanMeetingTokenInputSchema, jsonValidatorError("会议入场参数无效。")),
     async (c) => {
       const { activeOrg, user } = c.var;
@@ -709,7 +709,7 @@ export const studioInterviewsRouter = factory
   )
   .post(
     "/human-interview-meetings/:meetingId/end",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "update"),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
@@ -739,7 +739,7 @@ export const studioInterviewsRouter = factory
   )
   .delete(
     "/human-interview-meetings/:meetingId",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "delete"),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
@@ -769,7 +769,7 @@ export const studioInterviewsRouter = factory
   )
   .get(
     "/human-interview-meetings/:meetingId",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "read"),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
@@ -1558,7 +1558,7 @@ export const studioInterviewsRouter = factory
   // 历史遗留——下次重构时统一改成 `/:recordId/...`。
   // Note: `:id` here = interview record id (candidate-level), unlike `/:id/reset`
   // which treats `:id` as roundId. Historical mismatch; clean up next refactor.
-  .get("/:id/human-interview-rounds", requirePermission("humanInterview", "manage"), async (c) => {
+  .get("/:id/human-interview-rounds", requirePermission("humanInterview", "read"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
@@ -1569,7 +1569,7 @@ export const studioInterviewsRouter = factory
   })
   .post(
     "/:id/human-interview-rounds",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "create"),
     zValidator(
       "json",
       humanInterviewRoundInputSchema,
@@ -1631,7 +1631,7 @@ export const studioInterviewsRouter = factory
   )
   .patch(
     "/:id/human-interview-rounds/:roundId",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "update"),
     zValidator(
       "json",
       humanInterviewRoundInputSchema
@@ -1664,7 +1664,7 @@ export const studioInterviewsRouter = factory
   )
   .post(
     "/:id/human-interview-rounds/:roundId/complete",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "update"),
     zValidator("json", completeHumanRoundSchema, jsonValidatorError("标记完成参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -1708,7 +1708,7 @@ export const studioInterviewsRouter = factory
   )
   .post(
     "/:id/human-interview-rounds/:roundId/cancel",
-    requirePermission("humanInterview", "manage"),
+    requirePermission("humanInterview", "delete"),
     zValidator("json", cancelHumanRoundSchema, jsonValidatorError("取消参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -1745,7 +1745,7 @@ export const studioInterviewsRouter = factory
   )
   // ── Offer 草稿 endpoints ──
   // `:id` 同上：interviewRecordId（候选人级）。/ `:id` = candidate id.
-  .get("/:id/offer-drafts", requirePermission("offer", "manage"), async (c) => {
+  .get("/:id/offer-drafts", requirePermission("offer", "read"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
@@ -1756,7 +1756,7 @@ export const studioInterviewsRouter = factory
   })
   .post(
     "/:id/offer-drafts",
-    requirePermission("offer", "manage"),
+    requirePermission("offer", "create"),
     zValidator(
       "json",
       offerDraftInputSchema.extend({
@@ -1806,7 +1806,7 @@ export const studioInterviewsRouter = factory
   )
   .patch(
     "/:id/offer-drafts/:draftId",
-    requirePermission("offer", "manage"),
+    requirePermission("offer", "update"),
     zValidator("json", offerDraftInputSchema.partial(), jsonValidatorError("Offer 参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -1831,7 +1831,7 @@ export const studioInterviewsRouter = factory
       }
     },
   )
-  .post("/:id/offer-drafts/:draftId/send", requirePermission("offer", "manage"), async (c) => {
+  .post("/:id/offer-drafts/:draftId/send", requirePermission("offer", "update"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
@@ -1850,7 +1850,7 @@ export const studioInterviewsRouter = factory
   })
   .post(
     "/:id/offer-drafts/:draftId/respond",
-    requirePermission("offer", "manage"),
+    requirePermission("offer", "update"),
     zValidator("json", offerResponseInputSchema, jsonValidatorError("响应参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -1876,7 +1876,7 @@ export const studioInterviewsRouter = factory
       }
     },
   )
-  .post("/:id/offer-drafts/:draftId/cancel", requirePermission("offer", "manage"), async (c) => {
+  .post("/:id/offer-drafts/:draftId/cancel", requirePermission("offer", "delete"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
