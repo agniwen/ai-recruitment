@@ -20,6 +20,7 @@ describe("candidate transition route source", () => {
     expect(routeSource).toContain("existing.resumeEvaluationStatus");
     expect(routeSource).toContain('input.pipelineStage === "ai_interview"');
     expect(routeSource).toContain('input.pipelineStage === "human_interview"');
+    expect(routeSource).toContain('existing.pipelineStage !== "closed"');
     expect(routeSource).toContain("candidate.resumeEvaluationStatus");
   });
 });

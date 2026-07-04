@@ -1,5 +1,10 @@
 import type { studioInterview } from "@arc/db-schema/schema";
-import type { CandidateOutcome, ClosedMeta, PipelineStage } from "@arc/db-schema/studio-interviews";
+import type {
+  CandidateOutcome,
+  ClosedMeta,
+  PipelineStage,
+  ResumeEvaluationStatus,
+} from "@arc/db-schema/studio-interviews";
 import {
   canApplyCandidatePipelineEvent,
   getCandidatePipelineEventForTargetStage,
@@ -31,6 +36,7 @@ export interface CandidateTransitionPatch {
   offerSentAt?: Date | null;
   outcome: CandidateOutcome;
   pipelineStage: PipelineStage;
+  resumeEvaluationStatus?: ResumeEvaluationStatus | null;
   status?: LegacyCandidateStatus;
   updatedAt: Date;
   writtenTestScheduledAt?: Date | null;
@@ -144,6 +150,7 @@ export function resolveCandidateTransitionPatch({
     offerSentAt,
     outcome,
     pipelineStage: input.pipelineStage,
+    resumeEvaluationStatus: wasClosed && !isClosing ? null : undefined,
     status: legacyStatus,
     updatedAt: now,
     writtenTestScheduledAt,

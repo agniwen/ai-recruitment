@@ -76,6 +76,7 @@ describe("resolveCandidateTransitionPatch", () => {
       offerSentAt: null,
       outcome: "in_pipeline",
       pipelineStage: "human_interview",
+      resumeEvaluationStatus: null,
       status: "ready",
       updatedAt: now,
       writtenTestScheduledAt: null,

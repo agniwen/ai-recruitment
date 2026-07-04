@@ -1417,6 +1417,7 @@ export const studioInterviewsRouter = factory
           return { kind: "missing_reactivation_reason" as const };
         }
         if (
+          existing.pipelineStage !== "closed" &&
           existing.pipelineStage !== input.pipelineStage &&
           (input.pipelineStage === "ai_interview" || input.pipelineStage === "human_interview")
         ) {
