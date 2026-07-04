@@ -23,6 +23,7 @@ import type { StudioInterviewConversationReport } from "@arc/db-schema/interview
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
 import {
   canLaunchInterviewFromResume,
+  describeResumeReviewStatus,
   getResumeInterviewGateReason,
 } from "@arc/shared/studio-resumes";
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
@@ -451,6 +452,52 @@ function compactText(value: string | null | undefined, fallback: string, limit =
     return fallback;
   }
   return value.length > limit ? `${value.slice(0, limit)}...` : value;
+}
+
+function ResumeAiAnalysisPlaceholder({
+  resumeRecord,
+}: {
+  resumeRecord: ResumeLibraryDetail | null | undefined;
+}) {
+  const status = resumeRecord?.resumeReviewStatus ?? "idle";
+  const statusMeta = describeResumeReviewStatus(status);
+
+  if (status === "queued" || status === "processing") {
+    return (
+      <section className="space-y-3 rounded-2xl border border-muted/60 bg-muted/20 p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-medium text-sm">简历筛选 · 分析中</h3>
+          <Badge variant={statusMeta.tone}>{statusMeta.label}</Badge>
+        </div>
+        <p className="text-muted-foreground text-sm leading-6">
+          系统正在基于绑定岗位生成 AI 分析，完成后会自动展示在这里。
+        </p>
+      </section>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <section className="space-y-3 rounded-2xl border border-muted/60 bg-muted/20 p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-medium text-sm">AI 解析失败</h3>
+          <Badge variant={statusMeta.tone}>{statusMeta.label}</Badge>
+        </div>
+        <p className="text-muted-foreground text-sm leading-6">
+          {resumeRecord?.resumeReviewError ?? "AI 分析生成失败，请稍后重试。"}
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-muted/60 bg-muted/20 p-5">
+      <h3 className="font-medium text-sm">AI 解析</h3>
+      <div className="text-muted-foreground text-sm leading-6">
+        <Markdown>{truncateText(resumeRecord?.notes) || "暂无 AI 解析结果"}</Markdown>
+      </div>
+    </section>
+  );
 }
 
 function resolveDisplayTurnStats(
@@ -2038,12 +2085,7 @@ function useStudioPersonDetailPanel({
               {resumeRecord?.resumeReview ? (
                 <ResumeReviewStructuredView review={resumeRecord.resumeReview} />
               ) : (
-                <section className="space-y-3 rounded-2xl border border-muted/60 bg-muted/20 p-5">
-                  <h3 className="font-medium text-sm">AI 解析</h3>
-                  <div className="text-muted-foreground text-sm leading-6">
-                    <Markdown>{truncateText(resumeRecord?.notes) || "暂无 AI 解析结果"}</Markdown>
-                  </div>
-                </section>
+                <ResumeAiAnalysisPlaceholder resumeRecord={resumeRecord} />
               )}
             </TabsContent>
           ) : null}

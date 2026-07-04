@@ -35,6 +35,10 @@ const resumePoolRouteSource = readFileSync(
   new URL("../../resume-pool/route.ts", import.meta.url),
   "utf-8",
 );
+const resumeReviewWorkerSource = readFileSync(
+  new URL("../utils/review-worker.ts", import.meta.url),
+  "utf-8",
+);
 const resumeAgentToolsSource = readFileSync(
   new URL("../../../../resume/utils/agent-tools.ts", import.meta.url),
   "utf-8",
@@ -121,6 +125,31 @@ describe("resume launch interview route source", () => {
     expect(launchInterviewSource).toContain("interviewRecordId: id");
     expect(launchInterviewSource).toContain('reason: "create"');
     expect(launchInterviewSource).toContain("scheduleEntryId: scheduleRow.id");
+  });
+});
+
+describe("resume review generation queue source", () => {
+  it("queues AI analysis only after resume-pool imports with a bound job description", () => {
+    const importRouteSource = resumePoolRouteSource.slice(
+      resumePoolRouteSource.indexOf('/:id/import"'),
+      resumePoolRouteSource.indexOf(
+        'return c.json({ error: error instanceof Error ? error.message : "入库失败。" }, 400);',
+        resumePoolRouteSource.indexOf('/:id/import"'),
+      ),
+    );
+
+    expect(resumePoolRouteSource).toContain("enqueueResumeReviewGenerationForRecordBestEffort");
+    expect(importRouteSource).toContain('result.status === "imported" && input.jobDescriptionId');
+    expect(importRouteSource).toContain('source: "resume_pool_import"');
+    expect(importRouteSource).toContain('poolItemId: c.req.param("id")');
+  });
+
+  it("keeps review worker idempotent and status-driven", () => {
+    expect(resumeReviewWorkerSource).toContain('resumeReviewStatus: "processing"');
+    expect(resumeReviewWorkerSource).toContain("if (record.resumeReview)");
+    expect(resumeReviewWorkerSource).toContain('resumeReviewStatus: "ready"');
+    expect(resumeReviewWorkerSource).toContain('resumeReviewStatus: "failed"');
+    expect(resumeReviewWorkerSource).toContain("generateResumeReviewBestEffort");
   });
 });
 
@@ -436,10 +465,10 @@ describe("resume review v3 chain coverage", () => {
     expect(resumeAgentToolsSource).not.toContain("稳定性评估");
   });
 
-  it("generates structured resume review for resume-pool imports", () => {
-    expect(resumePoolDaoSource).toContain("generateResumeReview");
-    expect(resumePoolDaoSource).toContain("resumeReview: reviewResult?.structuredReview ?? null");
-    expect(resumePoolDaoSource).toContain("notes: reviewResult?.review ?? poolItem.notes");
+  it("does not generate structured resume review synchronously for resume-pool imports", () => {
+    expect(resumePoolDaoSource).not.toContain("generateResumeReview");
+    expect(resumePoolDaoSource).not.toContain("reviewResult?.structuredReview");
+    expect(resumePoolDaoSource).toContain("notes: poolItem.notes");
   });
 
   it("generates a V3 resume review on create when the client did not provide one", () => {

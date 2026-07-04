@@ -29,7 +29,6 @@ import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-cop
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle";
 import { cloneResumeSemanticIndexFromPoolToInterview } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone";
-import { generateResumeReview } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 
 vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 });
 
@@ -47,10 +46,6 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycl
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone", () => ({
   cloneResumeSemanticIndexFromPoolToInterview: vi.fn(),
-}));
-
-vi.mock("@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent", () => ({
-  generateResumeReview: vi.fn(),
 }));
 
 const ORG_A = "resume_pool_org_a";
@@ -108,34 +103,6 @@ const PROFILE_WITH_HIGHLIGHTS: ResumeProfile = {
       summary: "历史经历。",
     },
   ],
-};
-
-const STRUCTURED_REVIEW = {
-  biasScan: { items: [] },
-  dimensions: {
-    educationBackground: { rationale: "背景匹配", score: 80 },
-    experienceRelevance: { rationale: "经历相关", score: 78 },
-    potential: { rationale: "潜力明确", score: 76 },
-    projectMatch: { rationale: "项目匹配", score: 80 },
-    skillMatch: { rationale: "技能匹配", score: 80 },
-    stability: { rationale: "稳定性可接受", score: 75 },
-  },
-  levelRecommendation: { level: "中级", rationale: "经验匹配" },
-  nextStep: {
-    action: "interview" as const,
-    disclaimer: "以上为初步结论" as const,
-    interviewFocus: ["项目贡献"],
-    rationale: "建议面试",
-  },
-  overall: {
-    baseScore: 79,
-    conclusion: "候选人匹配。",
-    scoreRationale: "基于六维度按 35/25/15/10/8/7 加权得出基础分 79（不含历史面试加权）",
-  },
-  schemaVersion: 4 as const,
-  strengths: [{ evidence: "简历证据", impact: "匹配岗位", point: "经验匹配" }],
-  teamPositioning: { rationale: "经历集中", suggestion: "业务团队" },
-  weaknesses: [{ evidence: null, impact: "需核实", point: "细节不足" }],
 };
 
 async function cleanup() {
@@ -218,10 +185,6 @@ beforeEach(() => {
   vi.mocked(findSemanticResumeDuplicates).mockResolvedValue([]);
   vi.mocked(deleteResumeSemanticIndexBestEffort).mockClear();
   vi.mocked(cloneResumeSemanticIndexFromPoolToInterview).mockResolvedValue();
-  vi.mocked(generateResumeReview).mockResolvedValue({
-    review: "新六维度简历评价",
-    structuredReview: STRUCTURED_REVIEW,
-  });
 });
 
 function basePoolInput(overrides: Partial<Parameters<typeof createResumePoolItem>[0]> = {}) {
@@ -427,7 +390,7 @@ describe("queryResumePoolItems", () => {
     expect(record?.recommendationText).toBe("推荐理由：项目经历匹配业务需求");
   });
 
-  it("generates v2 resume review when importing into the resume library", async () => {
+  it("does not generate resume review synchronously when importing into the resume library", async () => {
     const poolItemId = await createResumePoolItem(
       basePoolInput({
         contentHash: "hash-resume-pool-import-review",
@@ -451,17 +414,15 @@ describe("queryResumePoolItems", () => {
       .select({
         notes: studioInterview.notes,
         resumeReview: studioInterview.resumeReview,
+        resumeReviewStatus: studioInterview.resumeReviewStatus,
       })
       .from(studioInterview)
       .where(eq(studioInterview.id, result.resumeRecordId))
       .limit(1);
 
-    expect(generateResumeReview).toHaveBeenCalledWith({
-      jobDescription: null,
-      resumeProfile: PROFILE,
-    });
-    expect(record?.notes).toBe("新六维度简历评价");
-    expect(record?.resumeReview).toEqual(STRUCTURED_REVIEW);
+    expect(record?.notes).toBe("简历池备注");
+    expect(record?.resumeReview).toBeNull();
+    expect(record?.resumeReviewStatus).toBe("idle");
   });
 
   it("marks pool items created from mail ingest as email push source", async () => {

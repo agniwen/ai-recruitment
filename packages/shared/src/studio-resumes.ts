@@ -6,6 +6,7 @@ import {
   resumeEvaluationStatusMeta,
   resumeEvaluationStatusSchema,
   resumeParseStatusMeta,
+  resumeReviewStatusMeta,
 } from "@arc/db-schema/studio-interviews";
 import type {
   CandidateExpectationsMeta,
@@ -17,6 +18,7 @@ import type {
   PipelineStage,
   ResumeEvaluationStatus,
   ResumeParseStatus,
+  ResumeReviewStatus,
   ScheduleEntryStatus,
   StudioInterviewStatus,
 } from "@arc/db-schema/studio-interviews";
@@ -123,6 +125,10 @@ export interface ResumeLibraryListRecord {
   resumeFileName: string | null;
   resumeContentHash: string | null;
   resumeEvaluationStatus: ResumeEvaluationStatus | null;
+  resumeReviewError: string | null;
+  resumeReviewGeneratedAt: string | null;
+  resumeReviewQueuedAt: string | null;
+  resumeReviewStatus: ResumeReviewStatus;
   resumeEvaluatorId: string | null;
   resumeEvaluatorImage: string | null;
   resumeEvaluatorName: string | null;
@@ -290,13 +296,20 @@ export function describeResumeProgress(record: {
   pipelineStage: PipelineStage;
   outcome: CandidateOutcome;
   resumeParseStatus?: ResumeParseStatus;
+  resumeReviewStatus?: ResumeReviewStatus;
   stageProgress: ResumeStageProgress;
 }): { label: string; tone: "success" | "warning" | "info" | "outline" } {
-  const { pipelineStage, outcome, resumeParseStatus, stageProgress } = record;
+  const { pipelineStage, outcome, resumeParseStatus, resumeReviewStatus, stageProgress } = record;
 
   if (resumeParseStatus && resumeParseStatus !== "ready") {
     const meta = resumeParseStatusMeta[resumeParseStatus];
     return { label: meta.label, tone: meta.tone };
+  }
+  if (
+    pipelineStage === "screening" &&
+    (resumeReviewStatus === "queued" || resumeReviewStatus === "processing")
+  ) {
+    return { label: "简历筛选 · 分析中", tone: "warning" };
   }
 
   // closed 阶段：用 outcome 决定标签和色调。
@@ -443,6 +456,10 @@ export function describeResumeEvaluationStatus(status: ResumeEvaluationStatus | 
     return { label: "未评估", tone: "outline" };
   }
   return resumeEvaluationStatusMeta[status];
+}
+
+export function describeResumeReviewStatus(status: ResumeReviewStatus) {
+  return resumeReviewStatusMeta[status];
 }
 
 export function getResumeInterviewGateReason(status: ResumeEvaluationStatus | null): string | null {
