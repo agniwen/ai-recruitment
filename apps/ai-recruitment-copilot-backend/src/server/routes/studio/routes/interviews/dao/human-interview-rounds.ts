@@ -22,6 +22,7 @@ import type {
   HumanInterviewRoundOutcome,
 } from "@arc/db-schema/studio-interviews";
 import type { HumanInterviewRoundRecord } from "@arc/shared/studio-pipeline-stages";
+import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
 
 export type { HumanInterviewRoundRecord };
 
@@ -255,6 +256,11 @@ export async function createHumanInterviewRound({
   input,
 }: CreateRoundOptions): Promise<HumanInterviewRoundRecord> {
   await assertCompletedHumanInterviewRoundsHaveFeedback(interviewRecordId, organizationId);
+  await assertWorkspaceInterviewers({
+    makeError: (message) => new EditRoundError(message, 400),
+    organizationId,
+    userIds: input.interviewerIds,
+  });
 
   const id = crypto.randomUUID();
   const now = new Date();
@@ -469,6 +475,13 @@ export async function editHumanInterviewRound({
   input,
 }: EditRoundOptions): Promise<HumanInterviewRoundRecord> {
   const now = new Date();
+  if (input.interviewerIds && input.interviewerIds.length > 0) {
+    await assertWorkspaceInterviewers({
+      makeError: (message) => new EditRoundError(message, 400),
+      organizationId,
+      userIds: input.interviewerIds,
+    });
+  }
 
   // 事务 + FOR UPDATE：读 existing → 校验 status → 计算 merge → 写。
   // 防止两个 HR 同时编辑同一轮次时 (input ?? existing) merge 互相覆盖。

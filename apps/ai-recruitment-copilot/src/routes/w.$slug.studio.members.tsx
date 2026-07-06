@@ -60,6 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { rpc } from "@/lib/client/rpc";
 import { authClient } from "@/lib/client/auth-client";
@@ -123,15 +124,27 @@ function getActiveWorkspaceOrganization<T extends { id: string }>(
   return activeOrganization;
 }
 
+function getMemberCreatedAtTime(value: string | Date): number {
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
 interface MemberRow {
   id: string;
   userId: string;
   email: string;
   name: string;
   image: string | null;
+  isInterviewer: boolean;
   role: string;
   createdAt: string | Date;
   lastActiveAt: string | null;
+}
+
+interface WorkspaceMemberMeta {
+  id: string;
+  isInterviewer: boolean;
 }
 
 interface DynamicWorkspaceRole {
@@ -838,6 +851,7 @@ function GroupMemberCard({
   );
 }
 
+// oxlint-disable-next-line complexity -- Page-level state coordinates members, roles, groups, drag/drop, and local filters.
 function MembersManagementPage() {
   const slug = useWorkspaceSlug();
   const workspaceId = useWorkspaceId();
@@ -856,6 +870,7 @@ function MembersManagementPage() {
   const [pending, setPending] = useState<string | null>(null);
   const [groupNameDrafts, setGroupNameDrafts] = useState<Record<string, string>>({});
   const [newGroupName, setNewGroupName] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
 
   // 「最近活跃」按 userId 索引：服务端取 COALESCE(MAX(session.updatedAt),
   // user.lastActiveAt)——前者给当前活跃 session 5 分钟级的滚动更新，后者
@@ -883,6 +898,25 @@ function MembersManagementPage() {
       ) as Record<string, string | null>;
     },
     queryKey: ["workspace-member-last-actives", slug, workspaceId],
+    refetchOnWindowFocus: false,
+  });
+  const { data: workspaceMemberMeta = [], refetch: refetchWorkspaceMembers } = useQuery({
+    enabled: Boolean(workspaceId),
+    queryFn: async () => {
+      const response = await rpc.api.w[":slug"].studio.workspace.members.$get({
+        param: { slug },
+      });
+      const payload = (await response.json()) as
+        | { records: WorkspaceMemberMeta[] }
+        | { message?: string };
+      if (!response.ok || !("records" in payload)) {
+        const message =
+          "message" in payload ? (payload.message ?? "加载成员列表失败") : "加载成员列表失败";
+        throw new Error(message);
+      }
+      return payload.records;
+    },
+    queryKey: ["workspace-members", slug, workspaceId],
     refetchOnWindowFocus: false,
   });
   const { data: groups = EMPTY_RECRUITING_GROUPS, refetch: refetchGroups } = useQuery({
@@ -934,6 +968,10 @@ function MembersManagementPage() {
   const canUpdateWorkspace = useHasPermission("organization", "update");
   const { data: session } = authClient.useSession();
   const { data: dynamicWorkspaceRoles = [] } = useDynamicWorkspaceRoles(workspaceId, canUpdate);
+  const workspaceMemberMetaByUserId = useMemo(
+    () => new Map(workspaceMemberMeta.map((row) => [row.id, row])),
+    [workspaceMemberMeta],
+  );
 
   function handleTabChange(value: string) {
     const tab = parseWorkspaceManagementTab(value);
@@ -962,22 +1000,39 @@ function MembersManagementPage() {
 
   const allRows: MemberRow[] = useMemo(() => {
     const list = org?.members ?? [];
-    return list.map((m) => {
-      const { user } = m as {
-        user?: { email?: string; name?: string; image?: string | null };
-      };
-      return {
-        createdAt: m.createdAt as string | Date,
-        email: user?.email ?? "—",
-        id: m.id,
-        image: user?.image ?? null,
-        lastActiveAt: lastActiveMap[m.userId] ?? null,
-        name: user?.name ?? user?.email ?? "—",
-        role: m.role,
-        userId: m.userId,
-      };
+    return list
+      .map((m) => {
+        const { user } = m as {
+          user?: { email?: string; name?: string; image?: string | null };
+        };
+        return {
+          createdAt: m.createdAt as string | Date,
+          email: user?.email ?? "—",
+          id: m.id,
+          image: user?.image ?? null,
+          isInterviewer: workspaceMemberMetaByUserId.get(m.userId)?.isInterviewer ?? false,
+          lastActiveAt: lastActiveMap[m.userId] ?? null,
+          name: user?.name ?? user?.email ?? "—",
+          role: m.role,
+          userId: m.userId,
+        };
+      })
+      .toSorted(
+        (a, b) => getMemberCreatedAtTime(b.createdAt) - getMemberCreatedAtTime(a.createdAt),
+      );
+  }, [org?.members, lastActiveMap, workspaceMemberMetaByUserId]);
+  const normalizedMemberSearch = memberSearch.trim().toLowerCase();
+  const hasMemberSearch = normalizedMemberSearch.length > 0;
+  const filteredRows = useMemo(() => {
+    if (!hasMemberSearch) {
+      return allRows;
+    }
+    return allRows.filter((row) => {
+      const email = row.email.toLowerCase();
+      const name = row.name.toLowerCase();
+      return email.includes(normalizedMemberSearch) || name.includes(normalizedMemberSearch);
     });
-  }, [org?.members, lastActiveMap]);
+  }, [allRows, hasMemberSearch, normalizedMemberSearch]);
 
   useEffect(() => {
     setGroupNameDrafts((current) => {
@@ -999,12 +1054,12 @@ function MembersManagementPage() {
   // 成员列表来自 authClient.useActiveOrganization() 内存数据,这里做客户端切片
   // 让分页 UI 跟其他 studio 页面 (服务端分页) 视觉一致。
   // total <= pageSize 时 totalPages 仍是 1, DataGrid 会隐藏页码控件。
-  const total = allRows.length;
+  const total = filteredRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
   const rows = useMemo(
-    () => allRows.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [allRows, safePage, pageSize],
+    () => filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredRows, safePage, pageSize],
   );
 
   async function createGroup() {
@@ -1203,6 +1258,32 @@ function MembersManagementPage() {
     }
   }
 
+  async function changeMemberInterviewer(row: MemberRow, isInterviewer: boolean) {
+    if (row.isInterviewer === isInterviewer) {
+      return;
+    }
+    const pendingKey = `interviewer:${row.userId}`;
+    setPending(pendingKey);
+    try {
+      const response = await rpc.api.w[":slug"].studio.workspace.members[
+        ":userId"
+      ].interviewer.$patch({
+        json: { isInterviewer },
+        param: { slug, userId: row.userId },
+      });
+      if (!response.ok) {
+        toast.error(await readErrorMessage(response, "更新面试官身份失败"));
+        return;
+      }
+      await refetchWorkspaceMembers();
+      toast.success(isInterviewer ? "已设为真人面试官" : "已取消真人面试官身份");
+    } catch {
+      toast.error("更新面试官身份失败");
+    } finally {
+      setPending(null);
+    }
+  }
+
   async function changeWorkspaceRole(row: MemberRow, role: string) {
     if (row.role === role) {
       return;
@@ -1255,6 +1336,7 @@ function MembersManagementPage() {
           />
         ),
         key: "name",
+        size: 620,
         title: "成员",
       }),
       customColumn<MemberRow>({
@@ -1283,7 +1365,7 @@ function MembersManagementPage() {
               }}
               value={r.role}
             >
-              <SelectTrigger className="w-36" size="sm">
+              <SelectTrigger className="w-full min-w-0" size="sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1297,8 +1379,27 @@ function MembersManagementPage() {
           );
         },
         key: "role",
-        size: 150,
+        size: 180,
         title: "工作区角色",
+      }),
+      customColumn<MemberRow>({
+        cell: (r) => {
+          const pendingKey = `interviewer:${r.userId}`;
+          return (
+            <div className="flex justify-center">
+              <Switch
+                aria-label={`设置 ${r.name} 为真人面试官`}
+                checked={r.isInterviewer}
+                disabled={!canUpdate || pending === pendingKey}
+                onCheckedChange={(checked) => void changeMemberInterviewer(r, checked)}
+                size="sm"
+              />
+            </div>
+          );
+        },
+        key: "isInterviewer",
+        size: 140,
+        title: "真人面试官",
       }),
       customColumn<MemberRow>({
         cell: (r) => (
@@ -1307,6 +1408,7 @@ function MembersManagementPage() {
           </span>
         ),
         key: "createdAt",
+        size: 190,
         title: "加入时间",
       }),
       customColumn<MemberRow>({
@@ -1319,6 +1421,7 @@ function MembersManagementPage() {
             <span className="text-muted-foreground text-sm">从未登录</span>
           ),
         key: "lastActiveAt",
+        size: 190,
         title: "最近活跃",
       }),
       actionsColumn<MemberRow>({
@@ -1331,6 +1434,7 @@ function MembersManagementPage() {
               },
             ]
           : [],
+        size: 96,
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 列定义只依赖权限值，剧场切换时无需重建
@@ -1374,29 +1478,49 @@ function MembersManagementPage() {
                   <EmptyMedia variant="icon">
                     <UsersIcon className="size-5" />
                   </EmptyMedia>
-                  <EmptyTitle>暂无成员</EmptyTitle>
+                  <EmptyTitle>{hasMemberSearch ? "没有匹配的成员" : "暂无成员"}</EmptyTitle>
                   <EmptyDescription>
-                    邀请同事加入这个工作区，再到招聘组看板里分配组内身份。
+                    {hasMemberSearch
+                      ? "调整邮箱或姓名关键词后重试。"
+                      : "邀请同事加入这个工作区，再到招聘组看板里分配组内身份。"}
                   </EmptyDescription>
                 </EmptyHeader>
-                <EmptyContent>
-                  <PermissionGate action="create" resource="invitation">
-                    <InviteDialog
-                      assignableRoleOptions={assignableRoleOptions}
-                      assignableRoles={assignableRoles}
-                      trigger={
-                        <Button>
-                          <UserPlusIcon className="size-4" />
-                          邀请成员
-                        </Button>
-                      }
-                    />
-                  </PermissionGate>
-                </EmptyContent>
+                {hasMemberSearch ? null : (
+                  <EmptyContent>
+                    <PermissionGate action="create" resource="invitation">
+                      <InviteDialog
+                        assignableRoleOptions={assignableRoleOptions}
+                        assignableRoles={assignableRoles}
+                        trigger={
+                          <Button>
+                            <UserPlusIcon className="size-4" />
+                            邀请成员
+                          </Button>
+                        }
+                      />
+                    </PermissionGate>
+                  </EmptyContent>
+                )}
               </Empty>
             }
+            filterValues={{ search: memberSearch }}
+            filters={[
+              {
+                key: "search",
+                minWidth: "20rem",
+                placeholder: "搜索邮箱或姓名",
+                type: "search",
+              },
+            ]}
             getRowId={(r) => r.id}
             loading={isPending}
+            onFilterChange={(key, value) => {
+              if (key !== "search") {
+                return;
+              }
+              setMemberSearch(value);
+              setPage(1);
+            }}
             pagination={{
               onPageChange: setPage,
               onPageSizeChange: (size) => {

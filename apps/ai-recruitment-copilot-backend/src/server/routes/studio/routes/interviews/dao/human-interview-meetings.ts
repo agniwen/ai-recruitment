@@ -20,6 +20,7 @@ import type {
   PublicHumanInterviewInterviewerPreview,
   PublicHumanInterviewMeetingPreview,
 } from "@arc/shared/studio-pipeline-stages";
+import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
 
 type MeetingRow = typeof studioHumanInterviewMeeting.$inferSelect;
 const INVITE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -355,6 +356,11 @@ export async function createHumanInterviewMeeting({
 }): Promise<HumanInterviewMeetingRecord> {
   const uniqueRoundIds = uniq(input.roundIds);
   const uniqueInterviewerIds = uniq(input.interviewerIds);
+  await assertWorkspaceInterviewers({
+    makeError: (message) => new HumanInterviewMeetingError(message, 400),
+    organizationId,
+    userIds: uniqueInterviewerIds,
+  });
   const rounds = await db
     .select({
       id: studioHumanInterviewRound.id,

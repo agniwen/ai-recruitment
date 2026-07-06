@@ -14,6 +14,7 @@ import {
   removeRecruitingGroupMember,
   updateRecruitingGroupMemberRole,
   updateRecruitingGroupHiringUnits,
+  updateWorkspaceMemberInterviewer,
 } from "./dao";
 import { inviteLinksRouter } from "./routes/invite-links/route";
 import {
@@ -21,6 +22,7 @@ import {
   recruitingGroupMemberRoleInputSchema,
   recruitingGroupHiringUnitsInputSchema,
   recruitingGroupInputSchema,
+  memberInterviewerInputSchema,
   workspaceUpdateSchema,
 } from "./schema";
 
@@ -57,6 +59,26 @@ export const workspaceRouter = factory
     const records = await listWorkspaceMembers(activeOrg.id);
     return c.json({ records }, 200);
   })
+  .patch(
+    "/members/:userId/interviewer",
+    requirePermission("member", "update"),
+    zValidator("json", memberInterviewerInputSchema, jsonValidatorError("成员面试官参数无效。")),
+    async (c) => {
+      const { activeOrg } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const status = await updateWorkspaceMemberInterviewer({
+        isInterviewer: c.req.valid("json").isInterviewer,
+        organizationId: activeOrg.id,
+        userId: c.req.param("userId"),
+      });
+      if (status === "missing") {
+        return c.json({ error: "成员不存在。" }, 404);
+      }
+      return c.json({ success: true }, 200);
+    },
+  )
   .get("/groups", async (c) => {
     const { activeOrg, user } = c.var;
     if (!activeOrg) {

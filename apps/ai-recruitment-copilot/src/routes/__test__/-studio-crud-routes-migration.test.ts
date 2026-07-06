@@ -93,6 +93,44 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(panelSource).toContain("filteredMemberPoolRows.map");
   });
 
+  it("filters workspace members by name or email on the client", () => {
+    const membersSource = readSource("routes/w.$slug.studio.members.tsx");
+    const pageIndex = membersSource.indexOf("function MembersManagementPage");
+    const pageSource = membersSource.slice(pageIndex, pageIndex + 25_000);
+
+    expect(pageSource).toContain("memberSearch");
+    expect(pageSource).toContain("filteredRows");
+    expect(pageSource).toContain("row.name.toLowerCase()");
+    expect(pageSource).toContain("row.email.toLowerCase()");
+    expect(pageSource).toContain('placeholder: "搜索邮箱或姓名"');
+    expect(pageSource).toContain("filterValues={{ search: memberSearch }}");
+    expect(pageSource).toContain("setPage(1)");
+  });
+
+  it("lets workspace admins mark members as human interviewers", () => {
+    const membersSource = readSource("routes/w.$slug.studio.members.tsx");
+    const pageIndex = membersSource.indexOf("function MembersManagementPage");
+    const pageSource = membersSource.slice(pageIndex, pageIndex + 30_000);
+
+    expect(membersSource).toContain('import { Switch } from "@/components/ui/switch";');
+    expect(pageSource).toContain("changeMemberInterviewer");
+    expect(pageSource).toContain('title: "真人面试官"');
+    expect(pageSource).toContain("<Switch");
+    expect(pageSource).toContain("studio.workspace.members[");
+    expect(pageSource).toContain("].interviewer.$patch");
+    expect(pageSource).toContain("isInterviewer");
+  });
+
+  it("sorts workspace member rows by newest creation time first", () => {
+    const membersSource = readSource("routes/w.$slug.studio.members.tsx");
+    const pageIndex = membersSource.indexOf("function MembersManagementPage");
+    const pageSource = membersSource.slice(pageIndex, pageIndex + 25_000);
+
+    expect(membersSource).toContain("function getMemberCreatedAtTime");
+    expect(pageSource).toContain("getMemberCreatedAtTime(b.createdAt)");
+    expect(pageSource).toContain("getMemberCreatedAtTime(a.createdAt)");
+  });
+
   it("prompts for selectable hiring unit before importing resume pool items", () => {
     const resumePoolSource = readSource("routes/w.$slug.studio.resume-pool.tsx");
     const importDialogIndex = resumePoolSource.indexOf("function ImportResumePoolDialog");

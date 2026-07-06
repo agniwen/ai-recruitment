@@ -45,6 +45,7 @@ export interface RecruitingGroupBoardRow {
 // Lightweight member DTO for interviewer multi-select pickers.
 export interface WorkspaceMemberRow {
   id: string;
+  isInterviewer: boolean;
   name: string;
   email: string;
   image: string | null;
@@ -56,6 +57,7 @@ export async function listWorkspaceMembers(organizationId: string): Promise<Work
       email: user.email,
       id: user.id,
       image: user.image,
+      isInterviewer: member.isInterviewer,
       name: user.name,
     })
     .from(member)
@@ -66,8 +68,26 @@ export async function listWorkspaceMembers(organizationId: string): Promise<Work
     email: row.email,
     id: row.id,
     image: row.image,
+    isInterviewer: row.isInterviewer,
     name: row.name ?? "未命名",
   }));
+}
+
+export async function updateWorkspaceMemberInterviewer({
+  isInterviewer,
+  organizationId,
+  userId,
+}: {
+  isInterviewer: boolean;
+  organizationId: string;
+  userId: string;
+}): Promise<"updated" | "missing"> {
+  const rows = await db
+    .update(member)
+    .set({ isInterviewer })
+    .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)))
+    .returning({ userId: member.userId });
+  return rows.length > 0 ? "updated" : "missing";
 }
 
 export function ensureDefaultRecruitingGroupForWorkspace({

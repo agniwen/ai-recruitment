@@ -258,6 +258,7 @@ export const member = pgTable(
     inviteLinkId: text("invite_link_id").references(() => workspaceInviteLink.id, {
       onDelete: "set null",
     }),
+    isInterviewer: boolean("is_interviewer").default(false).notNull(),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),

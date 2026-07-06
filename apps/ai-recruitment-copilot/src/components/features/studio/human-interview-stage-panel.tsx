@@ -27,7 +27,7 @@ import {
   IconX as XIcon,
 } from "@tabler/icons-react";
 import type { FormEvent, MouseEvent, ReactNode } from "react";
-import { useReducer, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { toast } from "sonner";
 import {
   humanInterviewFormatMeta,
@@ -101,6 +101,7 @@ import { Textarea } from "@/components/ui/textarea";
 // Workspace members for the interviewer multi-select.
 interface WorkspaceMember {
   id: string;
+  isInterviewer: boolean;
   name: string;
   email: string;
   image: string | null;
@@ -511,10 +512,16 @@ function RoundScheduledAtControl({
       onRescheduled();
     },
   });
-  const memberOptions = (members?.records ?? []).map((m) => ({
-    label: m.name,
-    value: m.id,
-  }));
+  const interviewerMemberOptions = useMemo(
+    () =>
+      (members?.records ?? [])
+        .filter((member) => member.isInterviewer)
+        .map((member) => ({
+          label: member.name,
+          value: member.id,
+        })),
+    [members?.records],
+  );
 
   function startEditing() {
     if (!canReschedule) {
@@ -580,10 +587,10 @@ function RoundScheduledAtControl({
         </Label>
         <SearchableMultiSelect
           disabled={mutation.isPending}
-          emptyMessage="找不到匹配的成员"
+          emptyMessage="暂无可选面试官"
           id={interviewerInputId}
           onChange={setInterviewerIds}
-          options={memberOptions}
+          options={interviewerMemberOptions}
           placeholder="选择面试官"
           searchPlaceholder="搜索成员…"
           selectedFormat={(count) => `已选 ${count} 位面试官`}
@@ -1138,10 +1145,16 @@ function ScheduleRoundDialog({
     },
   });
 
-  const memberOptions = (members?.records ?? []).map((m) => ({
-    label: m.name,
-    value: m.id,
-  }));
+  const interviewerMemberOptions = useMemo(
+    () =>
+      (members?.records ?? [])
+        .filter((member) => member.isInterviewer)
+        .map((member) => ({
+          label: member.name,
+          value: member.id,
+        })),
+    [members?.records],
+  );
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -1195,9 +1208,9 @@ function ScheduleRoundDialog({
           <div className="grid gap-1.5">
             <Label className="text-sm">面试官</Label>
             <SearchableMultiSelect
-              emptyMessage="找不到匹配的成员"
+              emptyMessage="暂无可选面试官"
               onChange={setInterviewerIds}
-              options={memberOptions}
+              options={interviewerMemberOptions}
               placeholder="选择面试官（可多选）"
               searchPlaceholder="搜索成员…"
               selectedFormat={(count) => `已选 ${count} 位面试官`}

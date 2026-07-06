@@ -15,6 +15,13 @@ describe("HumanInterviewStagePanel editing gates", () => {
     expect(source).toContain("disabled={mutation.isPending || interviewerIds.length === 0}");
   });
 
+  it("only offers members marked as interviewers in human interview selectors", () => {
+    expect(source).toContain("isInterviewer: boolean;");
+    expect(source).toContain("member.isInterviewer");
+    expect(source).toContain("interviewerMemberOptions");
+    expect(source).toContain('emptyMessage="暂无可选面试官"');
+  });
+
   it("requires feedback before completing a human interview round", () => {
     expect(source).toContain("const trimmedFeedback = feedback.trim();");
     expect(source).toContain("请填写面试评价");

@@ -12,6 +12,10 @@ export const memberRecruitingGroupInputSchema = z.object({
   groupId: z.string().trim().min(1).nullable(),
 });
 
+export const memberInterviewerInputSchema = z.object({
+  isInterviewer: z.boolean(),
+});
+
 export const recruitingGroupRoleSchema = z.enum([
   "recruitingSupervisor",
   "recruitingLead",
