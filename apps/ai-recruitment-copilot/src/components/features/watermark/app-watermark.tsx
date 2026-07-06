@@ -1,33 +1,45 @@
 import { useEffect, useMemo } from "react";
+import { env } from "@/env/client";
 import { authClient } from "@/lib/client/auth-client";
 
 interface WatermarkUser {
   email?: string | null;
+  id: string;
   name?: string | null;
 }
 
-export function buildWatermarkContent(user: WatermarkUser): [string, string] | null {
-  const email = user.email?.trim();
-  if (!email) {
-    return null;
+const MAX_VISIBLE_USER_ID_LENGTH = 16;
+
+export function maskWatermarkUserId(userId: string): string {
+  const normalized = userId.trim().slice(0, MAX_VISIBLE_USER_ID_LENGTH);
+
+  if (normalized.length <= 8) {
+    return normalized;
   }
 
-  return [user.name?.trim() || "用户", email];
+  return `${normalized.slice(0, 4)}****${normalized.slice(-4)}`;
 }
 
-export function AppWatermark() {
+export function buildWatermarkContent(user: WatermarkUser): [string, string] {
+  const nickname = user.name?.trim() || user.email?.trim() || "用户";
+
+  return [nickname, `ID: ${maskWatermarkUserId(user.id)}`];
+}
+
+function EnabledAppWatermark() {
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
   const content = useMemo(() => {
-    if (isPending || !user) {
+    if (!(user?.id && !isPending)) {
       return null;
     }
 
     return buildWatermarkContent({
       email: user.email,
+      id: user.id,
       name: user.name,
     });
-  }, [isPending, user]);
+  }, [isPending, user?.email, user?.id, user?.name]);
 
   useEffect(() => {
     if (!content) {
@@ -76,4 +88,12 @@ export function AppWatermark() {
   }, [content]);
 
   return null;
+}
+
+export function AppWatermark() {
+  if (!env.NEXT_PUBLIC_ENABLE_WATERMARK) {
+    return null;
+  }
+
+  return <EnabledAppWatermark />;
 }

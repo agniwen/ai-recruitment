@@ -1,17 +1,23 @@
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { NO_ACCESS_WORKSPACE_ROLE } from "@arc/shared/permissions";
 import { getActiveOrganizationState } from "@/lib/start/auth-session";
-import { resolveWorkspaceLandingHref } from "@/lib/start/workspace-landing";
 import HomeShell from "@/components/features/home/home-shell";
 
-type GotoTarget = "chat" | "studio";
+type GotoTarget = "agent" | "chat" | "studio";
 
 interface HomeSearch {
   goto?: GotoTarget;
 }
 
 function resolveGoto(value: unknown): GotoTarget | undefined {
-  return value === "chat" || value === "studio" ? value : undefined;
+  return value === "agent" || value === "chat" || value === "studio" ? value : undefined;
+}
+
+function buildWorkspaceDestination(slug: string, goto: GotoTarget | undefined): string {
+  if (goto === "agent" || goto === "chat") {
+    return `/w/${slug}/agent`;
+  }
+  return `/w/${slug}/studio/resumes`;
 }
 
 function HomeRoute() {
@@ -35,16 +41,8 @@ export const Route = createFileRoute("/")({
       throw redirect({ href: "/wait" });
     }
 
-    const href = await resolveWorkspaceLandingHref({
-      preferredArea: deps.goto ?? "studio",
-      slug: state.workspace.slug,
-    });
-    if (!href) {
-      throw notFound();
-    }
-
     throw redirect({
-      href,
+      href: buildWorkspaceDestination(state.workspace.slug, deps.goto),
     });
   },
   loaderDeps: ({ search }) => ({ goto: (search as HomeSearch).goto }),

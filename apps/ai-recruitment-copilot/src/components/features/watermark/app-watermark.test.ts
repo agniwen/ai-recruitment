@@ -2,30 +2,33 @@ import { describe, expect, it } from "vitest";
 import { buildWatermarkContent } from "./app-watermark";
 
 describe("app watermark content", () => {
-  it("uses name as the first line and full email as the second line", () => {
+  it("uses name as the first line and masked id as the second line", () => {
     expect(
       buildWatermarkContent({
         email: "user.name+hr@example.com",
+        id: "user_1234567890",
         name: "王小明",
       }),
-    ).toEqual(["王小明", "user.name+hr@example.com"]);
+    ).toEqual(["王小明", "ID: user****7890"]);
   });
 
-  it("falls back to user when name is blank", () => {
+  it("falls back to email when name is blank", () => {
     expect(
       buildWatermarkContent({
         email: "fallback@example.com",
+        id: "user_1",
         name: " ",
       }),
-    ).toEqual(["用户", "fallback@example.com"]);
+    ).toEqual(["fallback@example.com", "ID: user_1"]);
   });
 
-  it("does not render content without an email", () => {
+  it("falls back to user when name and email are blank", () => {
     expect(
       buildWatermarkContent({
         email: " ",
-        name: "王小明",
+        id: "user_2",
+        name: " ",
       }),
-    ).toBeNull();
+    ).toEqual(["用户", "ID: user_2"]);
   });
 });

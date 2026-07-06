@@ -143,14 +143,17 @@ function resumeEvaluationLabel(value: unknown): string {
   return isResumeEvaluationStatus(value) ? describeResumeEvaluationStatus(value).label : "未知状态";
 }
 
-function jobDescriptionAuditLabel(nameValue: unknown, idValue: unknown): string {
-  if (typeof nameValue === "string" && nameValue.trim()) {
-    return nameValue;
+function jobDescriptionChangeLabel(
+  detail: Record<string, unknown>,
+  idKey: "fromJobDescriptionId" | "toJobDescriptionId",
+  nameKey: "fromJobDescriptionName" | "toJobDescriptionName",
+) {
+  const name = typeof detail[nameKey] === "string" ? detail[nameKey].trim() : "";
+  if (name) {
+    return name;
   }
-  if (typeof idValue === "string" && idValue.trim()) {
-    return idValue;
-  }
-  return "未关联岗位";
+  const id = typeof detail[idKey] === "string" ? detail[idKey].trim() : "";
+  return id || "未绑定岗位";
 }
 
 interface ResumeEvaluationTimelineTimeSlot {
@@ -197,23 +200,26 @@ function auditDescription(detail: Record<string, unknown>, action: string): stri
     return turnCount === null ? "AI 面试报告已同步" : `AI 面试报告已同步，共 ${turnCount} 条转写`;
   }
   if (action === "resume_evaluation_submitted") {
-    const reason =
-      typeof detail.reason === "string" && detail.reason ? `，原因：${detail.reason}` : "";
-    return `评估结果：${resumeEvaluationLabel(detail.toStatus)}${reason}`;
+    return `评估结果：${resumeEvaluationLabel(detail.toStatus)}`;
   }
   if (action === "resume_evaluation_updated") {
     return `评估状态：${resumeEvaluationLabel(detail.fromStatus)} -> ${resumeEvaluationLabel(detail.toStatus)}`;
   }
   if (action === "resume_evaluation_reset_for_job_change") {
-    return `岗位已变更，评估状态从 ${resumeEvaluationLabel(detail.fromStatus)} 重置为待评估`;
+    return typeof detail.reason === "string" ? detail.reason : "岗位变更后需重新评估";
   }
-  if (action === "resume_job_description_changed") {
-    const from = jobDescriptionAuditLabel(
-      detail.previousJobDescriptionName,
-      detail.previousJobDescriptionId,
+  if (action === "job_description_changed") {
+    const from = jobDescriptionChangeLabel(
+      detail,
+      "fromJobDescriptionId",
+      "fromJobDescriptionName",
     );
-    const to = jobDescriptionAuditLabel(detail.nextJobDescriptionName, detail.nextJobDescriptionId);
-    return `关联岗位：${from} -> ${to}`;
+    const to = jobDescriptionChangeLabel(detail, "toJobDescriptionId", "toJobDescriptionName");
+    return `${from} -> ${to}`;
+  }
+  if (action === "interview_questions_drafted") {
+    const count = typeof detail.questionCount === "number" ? detail.questionCount : null;
+    return count === null ? "面试题草稿已生成" : `已生成 ${count} 道面试题草稿`;
   }
   return null;
 }
@@ -238,8 +244,11 @@ function auditTitle(action: string): string {
     case "resume_evaluation_reset_for_job_change": {
       return "简历评估已重置";
     }
-    case "resume_job_description_changed": {
+    case "job_description_changed": {
       return "关联岗位已变更";
+    }
+    case "interview_questions_drafted": {
+      return "面试题草稿已生成";
     }
     default: {
       return "系统操作";
@@ -264,10 +273,13 @@ function auditTone(action: string): CandidateTimelineEventTone {
     return "info";
   }
   if (action === "resume_evaluation_reset_for_job_change") {
+    return "warning";
+  }
+  if (action === "job_description_changed") {
     return "info";
   }
-  if (action === "resume_job_description_changed") {
-    return "info";
+  if (action === "interview_questions_drafted") {
+    return "success";
   }
   return "muted";
 }

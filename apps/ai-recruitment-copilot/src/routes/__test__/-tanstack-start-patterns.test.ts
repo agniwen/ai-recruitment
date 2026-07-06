@@ -60,7 +60,7 @@ describe("TanStack Start migration patterns", () => {
     const router = readSource("src/router.tsx");
     const pendingOutlet = readSource("src/components/layout/pending-outlet.tsx");
     const studioLayout = readSource("src/routes/w.$slug.studio.tsx");
-    const chatLayout = readSource("src/routes/w.$slug.chat.tsx");
+    const agentLayout = readSource("src/routes/w.$slug.agent.tsx");
     const platformLayout = readSource("src/routes/platform.tsx");
     const pendingView = readSource("src/components/layout/route-pending-view.tsx");
     const globalsCss = readSource("src/styles/globals.css");
@@ -74,10 +74,12 @@ describe("TanStack Start migration patterns", () => {
     expect(pendingOutlet).toContain("state.isLoading || state.isTransitioning");
     expect(pendingOutlet).toContain("opacity-70");
     expect(studioLayout).toContain("PendingOutlet");
-    expect(chatLayout).toContain("PendingOutlet");
+    expect(agentLayout).toContain("PendingOutlet");
     expect(platformLayout).toContain("PendingOutlet");
     expect(rootRoute).not.toContain("pointer-events-none opacity-70");
     expect(pendingView).toContain("正在加载");
+    expect(pendingView).toContain("bg-primary");
+    expect(pendingView).not.toContain("bg-foreground/55");
     expect(globalsCss).toContain("@keyframes route-pending");
   });
 
@@ -100,12 +102,12 @@ describe("TanStack Start migration patterns", () => {
     );
   });
 
-  it("configures TanStack Start to prerender the public home page", () => {
+  it("keeps TanStack Start prerender disabled for the dynamic home page", () => {
     const viteConfig = readSource("vite.config.ts");
 
     expect(viteConfig).toContain("prerender:");
     expect(viteConfig).toContain('path: "/"');
-    expect(viteConfig).toContain("prerender: { enabled: true");
+    expect(viteConfig).toContain("prerender: { enabled: false");
   });
 
   it("prebundles Better Auth React hooks with TanStack store in dev", () => {
@@ -207,7 +209,6 @@ describe("TanStack Start migration patterns", () => {
       "src/routes/w.$slug.studio.departments.tsx",
       "src/routes/w.$slug.studio.forms.tsx",
       "src/routes/w.$slug.studio.global-config.tsx",
-      "src/routes/w.$slug.studio.hiring-units.tsx",
       "src/routes/w.$slug.studio.interview-questions.tsx",
       "src/routes/w.$slug.studio.interviewers.tsx",
       "src/routes/w.$slug.studio.interviews.tsx",
@@ -229,7 +230,6 @@ describe("TanStack Start migration patterns", () => {
       "src/lib/start/studio/departments.functions.ts",
       "src/lib/start/studio/forms.functions.ts",
       "src/lib/start/studio/global-config.functions.ts",
-      "src/lib/start/studio/hiring-units.functions.ts",
       "src/lib/start/studio/interview-questions.functions.ts",
       "src/lib/start/studio/interviewers.functions.ts",
       "src/lib/start/studio/interviews.functions.ts",
@@ -300,13 +300,13 @@ describe("TanStack Start migration patterns", () => {
   it("applies pending opacity to nested app outlets instead of the root shell", () => {
     const rootRoute = readSource("src/routes/__root.tsx");
     const studioLayoutRoute = readSource("src/routes/w.$slug.studio.tsx");
-    const chatLayoutRoute = readSource("src/routes/w.$slug.chat.tsx");
+    const agentLayoutRoute = readSource("src/routes/w.$slug.agent.tsx");
     const platformLayoutRoute = readSource("src/routes/platform.tsx");
 
     expect(rootRoute).not.toContain("opacity-70");
     expect(rootRoute).not.toContain("isTransitioning");
     expect(studioLayoutRoute).toContain("PendingOutlet");
-    expect(chatLayoutRoute).toContain("PendingOutlet");
+    expect(agentLayoutRoute).toContain("PendingOutlet");
     expect(platformLayoutRoute).toContain("PendingOutlet");
   });
 
