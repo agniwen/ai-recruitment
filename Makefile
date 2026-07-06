@@ -62,10 +62,10 @@ agent-shell: ## 进入激活了 venv 的子 shell (手动调 python/pytest 等)
 # ---------- deploy ----------
 
 agent-deploy: ## 构建并部署 agent 到 LiveKit Cloud (代码+环境变量)
-	cd $(AGENT_DIR) && lk agent deploy --secrets-file .env.secrets --project resume
+	cd $(AGENT_DIR) && lk agent deploy --secrets-file .env.secrets --project interview
 
 agent-update-secrets: ## 仅更新 agent 环境变量并重启 (不重新构建)
-	cd $(AGENT_DIR) && lk agent update-secrets --secrets-file .env.secrets --project resume
+	cd $(AGENT_DIR) && lk agent update-secrets --secrets-file .env.secrets --project interview
 
 # ---------- clean ----------
 
