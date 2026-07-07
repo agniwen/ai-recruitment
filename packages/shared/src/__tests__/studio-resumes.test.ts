@@ -132,6 +132,28 @@ describe("describeResumeProgress", () => {
     ).toEqual({ label: "简历筛选 · 分析中", tone: "warning" });
   });
 
+  it("screening with passed resume evaluation → 简历筛选 · 通过", () => {
+    expect(
+      describeResumeProgress({
+        outcome: "in_pipeline",
+        pipelineStage: "screening",
+        resumeEvaluationStatus: "pass",
+        stageProgress: EMPTY,
+      }),
+    ).toEqual({ label: "简历筛选 · 通过", tone: "success" });
+  });
+
+  it("screening with failed resume evaluation → 简历筛选 · 不通过", () => {
+    expect(
+      describeResumeProgress({
+        outcome: "in_pipeline",
+        pipelineStage: "screening",
+        resumeEvaluationStatus: "fail",
+        stageProgress: EMPTY,
+      }),
+    ).toEqual({ label: "简历筛选 · 不通过", tone: "danger" });
+  });
+
   it("ai_interview 无排期 → 未排期", () => {
     expect(
       describeResumeProgress({

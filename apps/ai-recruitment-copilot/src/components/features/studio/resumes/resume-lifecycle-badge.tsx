@@ -5,9 +5,10 @@ import { IconChevronRight as ChevronRightIcon } from "@tabler/icons-react";
 import { badgeVariants } from "@/components/ui/badge";
 import { cn } from "@arc/shared/utils";
 
-type ResumeLifecycleBadgeTone = "success" | "warning" | "info" | "outline";
+type ResumeLifecycleBadgeTone = "success" | "warning" | "info" | "outline" | "danger";
 
 const lifecycleHoverRingClass: Record<ResumeLifecycleBadgeTone, string> = {
+  danger: "hover:ring-rose-500/10",
   info: "hover:ring-sky-500/10",
   outline: "hover:ring-muted/70 dark:hover:ring-muted/50",
   success: "hover:ring-emerald-500/10",

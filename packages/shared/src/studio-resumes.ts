@@ -206,7 +206,7 @@ export interface ResumeLibraryDetail extends ResumeLibraryListRecord {
 
 interface Description {
   label: string;
-  tone: "success" | "warning" | "info" | "outline";
+  tone: "success" | "warning" | "info" | "outline" | "danger";
 }
 
 function describeAiInterview(p: AiInterviewProgress | null): Description {
@@ -295,11 +295,19 @@ function describeOffer(p: OfferProgress | null): Description {
 export function describeResumeProgress(record: {
   pipelineStage: PipelineStage;
   outcome: CandidateOutcome;
+  resumeEvaluationStatus?: ResumeEvaluationStatus | null;
   resumeParseStatus?: ResumeParseStatus;
   resumeReviewStatus?: ResumeReviewStatus;
   stageProgress: ResumeStageProgress;
-}): { label: string; tone: "success" | "warning" | "info" | "outline" } {
-  const { pipelineStage, outcome, resumeParseStatus, resumeReviewStatus, stageProgress } = record;
+}): { label: string; tone: "success" | "warning" | "info" | "outline" | "danger" } {
+  const {
+    pipelineStage,
+    outcome,
+    resumeEvaluationStatus,
+    resumeParseStatus,
+    resumeReviewStatus,
+    stageProgress,
+  } = record;
 
   if (resumeParseStatus && resumeParseStatus !== "ready") {
     const meta = resumeParseStatusMeta[resumeParseStatus];
@@ -310,6 +318,10 @@ export function describeResumeProgress(record: {
     (resumeReviewStatus === "queued" || resumeReviewStatus === "processing")
   ) {
     return { label: "简历筛选 · 分析中", tone: "warning" };
+  }
+  if (pipelineStage === "screening" && resumeEvaluationStatus) {
+    const meta = resumeEvaluationStatusMeta[resumeEvaluationStatus];
+    return { label: `简历筛选 · ${meta.label}`, tone: meta.tone };
   }
 
   // closed 阶段：用 outcome 决定标签和色调。
