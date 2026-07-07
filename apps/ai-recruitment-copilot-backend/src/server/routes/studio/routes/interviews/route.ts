@@ -204,7 +204,7 @@ async function canManageStageTransition(headers: Headers, target: string): Promi
   return true;
 }
 
-// 真人复面：「标记完成」的 input。outcome + feedback 必填，score 可选。
+// 真人复面：「面试评价」的 input。outcome + feedback 必填，score 可选。
 // Human interview "mark complete" input. Outcome + feedback required.
 const completeHumanRoundSchema = z.object({
   feedback: z.string().trim().min(1, "请填写面试评价").max(5000),
@@ -1665,7 +1665,7 @@ export const studioInterviewsRouter = factory
   .post(
     "/:id/human-interview-rounds/:roundId/complete",
     requirePermission("humanInterview", "update"),
-    zValidator("json", completeHumanRoundSchema, jsonValidatorError("标记完成参数无效。")),
+    zValidator("json", completeHumanRoundSchema, jsonValidatorError("面试评价参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {

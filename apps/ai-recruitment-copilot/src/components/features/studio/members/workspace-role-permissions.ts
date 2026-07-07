@@ -237,7 +237,7 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
     create: "允许将候选人推进到真人复面，并新建真人复面轮次或视频会议。",
     delete: "允许取消真人复面轮次，或删除尚未开始的真人复面会议。",
     read: "允许查看真人复面阶段页签、轮次、会议和入场链接。",
-    update: "允许调整真人复面时间、结束会议、标记完成并录入面试评价。",
+    update: "允许调整真人复面时间、结束会议、面试评价并录入面试评价。",
   },
   interview: {
     create: "允许在「AI 面试」页面创建面试记录或从候选人流程发起新的 AI 面试。",

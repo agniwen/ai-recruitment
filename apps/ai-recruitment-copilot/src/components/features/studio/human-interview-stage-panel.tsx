@@ -4,7 +4,7 @@
 // 真人复面阶段的详情面板内容：
 //   - 列出所有轮次（含 cancelled），按 sortOrder 升序
 //   - 「新建一轮」打开 schedule dialog
-//   - pending 轮次可以「标记完成」/「取消」
+//   - pending 轮次可以「面试评价」/「取消」
 //   - completed 轮次只读展示（评分 + 反馈）
 // 数据 + dialog 全部聚在这个文件里，便于一处迭代。
 //
@@ -724,7 +724,7 @@ function RoundCardActions({
       {canCompleteRound ? (
         <Button onClick={onComplete} size="sm" variant="outline">
           <CheckCircle2Icon className="size-4" />
-          标记完成
+          面试评价
         </Button>
       ) : null}
       {canCancelRound ? (
@@ -1254,7 +1254,7 @@ function ScheduleRoundDialog({
   );
 }
 
-// ── 标记完成 dialog ──
+// ── 面试评价 dialog ──
 // Complete-round dialog.
 
 interface CompleteDialogProps {
@@ -1307,9 +1307,9 @@ function CompleteRoundDialog({
         score: parsedScore,
       });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "标记完成失败"),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "面试评价失败"),
     onSuccess: () => {
-      toast.success("已标记完成");
+      toast.success("已面试评价");
       void invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug });
       onCompleted();
       handleOpenChange(false);
@@ -1320,7 +1320,7 @@ function CompleteRoundDialog({
     <Dialog onOpenChange={handleOpenChange} open={round !== null}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>标记完成：{round?.label}</DialogTitle>
+          <DialogTitle>面试评价：{round?.label}</DialogTitle>
           <DialogDescription>
             录入面试结果。完成后会自动结束该轮次下的会议，且只能修改评分和反馈。
           </DialogDescription>
@@ -1444,7 +1444,7 @@ function CancelRoundDialog({ round, candidateId, onOpenChange, onCancelled }: Ca
         <DialogHeader>
           <DialogTitle>取消轮次：{round?.label}</DialogTitle>
           <DialogDescription>
-            取消后该轮不会算入复面统计，关联的视频会议也会一并删除；如想保留为「已完成」请改走「标记完成」流程。
+            取消后该轮不会算入复面统计，关联的视频会议也会一并删除；如想保留为「已完成」请改走「面试评价」流程。
           </DialogDescription>
         </DialogHeader>
 

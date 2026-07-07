@@ -576,7 +576,7 @@ export async function editHumanInterviewRound({
   return updated;
 }
 
-// 标记完成：仅 pending → completed；带 outcome / 可选 score / feedback。
+// 面试评价：仅 pending → completed；带 outcome / 可选 score / feedback。
 // Mark a pending round as completed; outcome required, score/feedback optional.
 export interface CompleteRoundOptions {
   roundId: string;
@@ -598,7 +598,7 @@ export async function completeHumanInterviewRound({
     throw new EditRoundError("轮次不存在", 404);
   }
   if (existing.status !== "pending") {
-    throw new EditRoundError("只有 pending 状态的轮次可以标记完成", 400);
+    throw new EditRoundError("只有 pending 状态的轮次可以面试评价", 400);
   }
   const normalizedFeedback = normalizeRequiredFeedback(feedback);
   const now = new Date();

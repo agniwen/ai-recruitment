@@ -505,7 +505,7 @@ export function completeHumanInterviewRound(
       json: input,
       param: { id: candidateId, roundId, slug },
     }),
-    "标记完成失败",
+    "面试评价失败",
   );
 }
 
