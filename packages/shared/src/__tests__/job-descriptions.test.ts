@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jobDescriptionFormSchema } from "../job-descriptions";
+import { createDefaultResumeScreeningPolicy, jobDescriptionFormSchema } from "../job-descriptions";
 
 const baseJobDescription = {
   allowCrossDepartmentInterviewers: false,
@@ -8,6 +8,7 @@ const baseJobDescription = {
   interviewerIds: ["interviewer-1"],
   name: "前端工程师",
   prompt: "岗位职责和任职要求",
+  resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
 };
 
 describe("jobDescriptionFormSchema salary fields", () => {

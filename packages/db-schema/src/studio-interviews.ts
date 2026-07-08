@@ -134,6 +134,10 @@ export const resumeReviewStatusMeta: Record<
   ready: { label: "已分析", tone: "success" },
 };
 
+export const resumeScreeningStatusValues = ["idle", "processing", "ready", "failed"] as const;
+export const resumeScreeningStatusSchema = z.enum(resumeScreeningStatusValues);
+export type ResumeScreeningStatus = z.infer<typeof resumeScreeningStatusSchema>;
+
 // ── 真人复面阶段 / Human Interview Stage ──
 
 // 单轮状态：pending（已排期/未排期）→ completed / cancelled（终态）。
@@ -471,6 +475,8 @@ export const studioInterviewUpdateSchema = studioInterviewFormSchema;
 
 export const studioInterviewQuestionClientSchema = z.object({
   difficulty: z.enum(["easy", "medium", "hard"]),
+  evaluationFocus: z.string().trim().max(500, "考核点不能超过 500 字").nullable().optional(),
+  followUpDirections: z.string().trim().max(1000, "追问方向不能超过 1000 字").nullable().optional(),
   order: z.number().int().min(1),
   question: z.string().trim().min(1, "题目内容不能为空").max(1000, "单道题目不能超过 1000 字"),
 });

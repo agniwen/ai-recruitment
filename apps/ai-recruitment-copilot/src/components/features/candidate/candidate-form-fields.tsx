@@ -131,6 +131,7 @@ const EMAIL_MAX_LENGTH = 200;
 const PHONE_MAX_LENGTH = 40;
 const TARGET_ROLE_MAX_LENGTH = 120;
 const NOTES_MAX_LENGTH = 2000;
+const HR_RESUME_ASSESSMENT_MAX_LENGTH = 2000;
 const RECOMMENDATION_MAX_LENGTH = 2000;
 
 function ResumeFileRequirementMarker({ required }: { required: boolean }) {
@@ -242,6 +243,7 @@ function ResumeEvaluationStatusField({
   );
 }
 
+// oxlint-disable-next-line complexity -- shared form renders upload, parsed identity, assessment, and optional edit-only fields.
 export function CandidateFormFields({
   form,
   resumeFile,
@@ -443,6 +445,32 @@ export function CandidateFormFields({
             visible={showResumeEvaluationStatus}
           />
         </FieldGroup>
+      ) : null}
+
+      {showDetails ? (
+        <form.Field name="hrResumeAssessment">
+          {(field) => {
+            const errors = toFieldErrors(field.state.meta.errors);
+            return (
+              <Field>
+                <FieldLabel htmlFor={field.name}>HR 简历评价</FieldLabel>
+                <FieldContent className="gap-2">
+                  <Textarea
+                    disabled={disabled}
+                    id={field.name}
+                    maxLength={HR_RESUME_ASSESSMENT_MAX_LENGTH}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    placeholder="记录 HR 对简历的筛选判断、疑点或补充说明"
+                    rows={3}
+                    value={field.state.value}
+                  />
+                  <FieldError errors={errors} />
+                </FieldContent>
+              </Field>
+            );
+          }}
+        </form.Field>
       ) : null}
 
       {showDetails ? (

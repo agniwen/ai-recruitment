@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { jobDescription, jobDescriptionInterviewer, studioInterview } from "@arc/db-schema/schema";
 import { jobDescriptionFormSchema, jobDescriptionUpdateSchema } from "@arc/shared/job-descriptions";
+import { computeResumeScreeningPolicyHash } from "@arc/shared/resume-screening";
 import { validateJobDescriptionInterviewerDepartments } from "@arc/shared/job-description-interviewers";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
@@ -18,6 +19,7 @@ import { loadDepartmentById } from "@arc/ai-recruitment-copilot-backend/server/r
 import { listAllInterviewers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviewers/dao";
 import { cacheTags, safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { generateJobDescriptionFromPrompt } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/ai-job-description-generate";
+import { generateResumeScreeningPolicyFromJobDescription } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/resume-screening-policy-generate";
 import {
   buildJobDescriptionCodeCandidates,
   pickAvailableJobDescriptionCode,
@@ -29,6 +31,12 @@ const generateJobDescriptionBodySchema = z.object({
   departmentName: z.string().trim().max(120).optional(),
   jobName: z.string().trim().max(120).optional(),
   prompt: z.string().trim().min(1, "请填写 AI 填写指令").max(2000),
+});
+
+const generateResumeScreeningPolicyBodySchema = z.object({
+  description: z.string().trim().max(500).optional(),
+  name: z.string().trim().max(120).optional(),
+  prompt: z.string().trim().min(1, "请先填写岗位 Prompt").max(10_000),
 });
 
 async function validateReferences(
@@ -190,6 +198,35 @@ export const jobDescriptionsRouter = factory
     return c.json({ code }, 200);
   })
   .post(
+    "/generate-screening-policy",
+    requirePermission("jd", "update"),
+    zValidator(
+      "json",
+      generateResumeScreeningPolicyBodySchema,
+      jsonValidatorError("请求参数无效。"),
+    ),
+    async (c) => {
+      const { activeOrg } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const input = c.req.valid("json");
+      try {
+        const policy = await generateResumeScreeningPolicyFromJobDescription({
+          description: input.description ?? null,
+          name: input.name ?? null,
+          prompt: input.prompt,
+        });
+        return c.json({ policy }, 200);
+      } catch (error) {
+        return c.json(
+          { error: error instanceof Error ? error.message : "筛选规则生成失败。" },
+          500,
+        );
+      }
+    },
+  )
+  .post(
     "/",
     requirePermission("jd", "create"),
     zValidator("json", jobDescriptionFormSchema, jsonValidatorError("表单校验失败。")),
@@ -199,6 +236,9 @@ export const jobDescriptionsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
+      const resumeScreeningPolicyHash = computeResumeScreeningPolicyHash(
+        input.resumeScreeningPolicy,
+      );
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
       if (interviewerIds.length === 0) {
         return c.json({ error: "请至少选择一位面试官。" }, 400);
@@ -257,6 +297,9 @@ export const jobDescriptionsRouter = factory
           requestedDate: nullableText(input.requestedDate),
           requester: nullableText(input.requester),
           resumeContact: nullableText(input.resumeContact),
+          resumeScreeningPolicy: input.resumeScreeningPolicy,
+          resumeScreeningPolicyHash,
+          resumeScreeningPolicyVersion: input.resumeScreeningPolicy.version,
           salaryCurrency: nullableText(input.salaryCurrency),
           salaryMaxAmount: input.salaryMaxAmount ?? null,
           salaryMinAmount: input.salaryMinAmount ?? null,
@@ -352,6 +395,7 @@ export const jobDescriptionsRouter = factory
     "/:id",
     requirePermission("jd", "update"),
     zValidator("json", jobDescriptionUpdateSchema, jsonValidatorError("表单校验失败。")),
+    // oxlint-disable-next-line complexity -- update path validates references, interviewer links, and screening-policy versioning together.
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
@@ -366,6 +410,14 @@ export const jobDescriptionsRouter = factory
       }
 
       const input = c.req.valid("json");
+      const nextPolicyHash = computeResumeScreeningPolicyHash(input.resumeScreeningPolicy);
+      const existingPolicyHash =
+        existing.resumeScreeningPolicyHash ??
+        computeResumeScreeningPolicyHash(existing.resumeScreeningPolicy);
+      const policyChanged = nextPolicyHash !== existingPolicyHash;
+      const nextPolicyVersion = policyChanged
+        ? existing.resumeScreeningPolicyVersion + 1
+        : existing.resumeScreeningPolicyVersion;
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
       if (interviewerIds.length === 0) {
         return c.json({ error: "请至少选择一位面试官。" }, 400);
@@ -404,6 +456,12 @@ export const jobDescriptionsRouter = factory
         requestedDate: nullableText(input.requestedDate),
         requester: nullableText(input.requester),
         resumeContact: nullableText(input.resumeContact),
+        resumeScreeningPolicy: {
+          ...input.resumeScreeningPolicy,
+          version: nextPolicyVersion,
+        },
+        resumeScreeningPolicyHash: nextPolicyHash,
+        resumeScreeningPolicyVersion: nextPolicyVersion,
         salaryCurrency: nullableText(input.salaryCurrency),
         salaryMaxAmount: input.salaryMaxAmount ?? null,
         salaryMinAmount: input.salaryMinAmount ?? null,

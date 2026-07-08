@@ -4,6 +4,10 @@ import type {
   JobDescriptionMetrics,
   JobDescriptionRecord,
 } from "@arc/shared/job-descriptions";
+import {
+  createDefaultResumeScreeningPolicy,
+  resumeScreeningPolicySchema,
+} from "@arc/shared/resume-screening";
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
 import type { SQL } from "drizzle-orm";
 import { and, asc, count, desc, eq, ilike, inArray, notInArray, or, sql } from "drizzle-orm";
@@ -50,6 +54,11 @@ const jobDescriptionPaginationSchema = makePaginationSchema(SORT_COLUMNS);
 export type JobDescriptionPaginationParams = PaginationParams<SortColumn>;
 
 export type PaginatedJobDescriptionResult = PaginatedResult<JobDescriptionListRecord>;
+
+function parseResumeScreeningPolicy(value: unknown) {
+  const parsedPolicy = resumeScreeningPolicySchema.safeParse(value);
+  return parsedPolicy.success ? parsedPolicy.data : createDefaultResumeScreeningPolicy();
+}
 
 function buildWhereConditions({
   organizationId,
@@ -173,6 +182,9 @@ function listJobDescriptionRows({
       requestedDate: jobDescription.requestedDate,
       requester: jobDescription.requester,
       resumeContact: jobDescription.resumeContact,
+      resumeScreeningPolicy: jobDescription.resumeScreeningPolicy,
+      resumeScreeningPolicyHash: jobDescription.resumeScreeningPolicyHash,
+      resumeScreeningPolicyVersion: jobDescription.resumeScreeningPolicyVersion,
       salaryCurrency: jobDescription.salaryCurrency,
       salaryMaxAmount: jobDescription.salaryMaxAmount,
       salaryMinAmount: jobDescription.salaryMinAmount,
@@ -308,6 +320,7 @@ function toJobDescriptionListRecord(
   interviewers: JobDescriptionInterviewerSummary[],
   resumeCount: number,
 ): JobDescriptionListRecord {
+  const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
   return {
     allowCrossDepartmentInterviewers: row.allowCrossDepartmentInterviewers,
     code: row.code,
@@ -337,6 +350,9 @@ function toJobDescriptionListRecord(
     requester: row.requester,
     resumeContact: row.resumeContact,
     resumeCount,
+    resumeScreeningPolicy,
+    resumeScreeningPolicyHash: row.resumeScreeningPolicyHash,
+    resumeScreeningPolicyVersion: row.resumeScreeningPolicyVersion,
     salaryCurrency: row.salaryCurrency,
     salaryMaxAmount: row.salaryMaxAmount,
     salaryMinAmount: row.salaryMinAmount,
@@ -527,6 +543,9 @@ export async function loadJobDescriptionById(
       departmentId: jobDescription.departmentId,
       description: jobDescription.description,
       expectedOnboardDate: jobDescription.expectedOnboardDate,
+      feishuChatBoundAt: jobDescription.feishuChatBoundAt,
+      feishuChatBoundBy: jobDescription.feishuChatBoundBy,
+      feishuChatId: jobDescription.feishuChatId,
       gapCount: jobDescription.gapCount,
       headcount: jobDescription.headcount,
       id: jobDescription.id,
@@ -536,6 +555,7 @@ export async function loadJobDescriptionById(
       notes: jobDescription.notes,
       offeredPendingOnboardCount: jobDescription.offeredPendingOnboardCount,
       onboardedCount: jobDescription.onboardedCount,
+      organizationId: jobDescription.organizationId,
       presetQuestions: jobDescription.presetQuestions,
       priority: jobDescription.priority,
       prompt: jobDescription.prompt,
@@ -543,6 +563,9 @@ export async function loadJobDescriptionById(
       requestedDate: jobDescription.requestedDate,
       requester: jobDescription.requester,
       resumeContact: jobDescription.resumeContact,
+      resumeScreeningPolicy: jobDescription.resumeScreeningPolicy,
+      resumeScreeningPolicyHash: jobDescription.resumeScreeningPolicyHash,
+      resumeScreeningPolicyVersion: jobDescription.resumeScreeningPolicyVersion,
       salaryCurrency: jobDescription.salaryCurrency,
       salaryMaxAmount: jobDescription.salaryMaxAmount,
       salaryMinAmount: jobDescription.salaryMinAmount,
@@ -560,40 +583,11 @@ export async function loadJobDescriptionById(
   }
   const interviewersMap = await loadInterviewersForJobDescriptions([id]);
   const interviewers = interviewersMap.get(id) ?? [];
-  return {
-    allowCrossDepartmentInterviewers: row.allowCrossDepartmentInterviewers,
-    code: row.code,
-    controlCategory: row.controlCategory,
-    createdAt: serializeDate(row.createdAt),
-    createdBy: row.createdBy,
-    departmentId: row.departmentId,
-    description: row.description,
-    expectedOnboardDate: row.expectedOnboardDate,
-    gapCount: row.gapCount,
-    headcount: row.headcount,
-    id: row.id,
-    interviewerIds: interviewers.map((item) => item.id),
-    jobLevel: row.jobLevel,
-    jobSeries: row.jobSeries,
-    name: row.name,
-    notes: row.notes,
-    offeredPendingOnboardCount: row.offeredPendingOnboardCount,
-    onboardedCount: row.onboardedCount,
-    presetQuestions: row.presetQuestions ?? [],
-    priority: row.priority,
-    prompt: row.prompt,
-    recruitmentStatus: row.recruitmentStatus,
-    requestedDate: row.requestedDate,
-    requester: row.requester,
-    resumeContact: row.resumeContact,
-    salaryCurrency: row.salaryCurrency,
-    salaryMaxAmount: row.salaryMaxAmount,
-    salaryMinAmount: row.salaryMinAmount,
-    serviceUnit: row.serviceUnit,
-    sourceSheet: row.sourceSheet,
-    updatedAt: serializeDate(row.updatedAt),
-    workLocation: row.workLocation,
-  };
+  // eslint-disable-next-line no-use-before-define -- kept near public load functions for readability.
+  return serializeJobDescription(
+    row,
+    interviewers.map((item) => item.id),
+  );
 }
 
 // =========================================================================
@@ -767,6 +761,7 @@ export function serializeJobDescription(
   row: typeof jobDescription.$inferSelect,
   interviewerIds: string[],
 ): JobDescriptionRecord {
+  const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
   return {
     allowCrossDepartmentInterviewers: row.allowCrossDepartmentInterviewers,
     code: row.code,
@@ -793,6 +788,9 @@ export function serializeJobDescription(
     requestedDate: row.requestedDate,
     requester: row.requester,
     resumeContact: row.resumeContact,
+    resumeScreeningPolicy,
+    resumeScreeningPolicyHash: row.resumeScreeningPolicyHash,
+    resumeScreeningPolicyVersion: row.resumeScreeningPolicyVersion,
     salaryCurrency: row.salaryCurrency,
     salaryMaxAmount: row.salaryMaxAmount,
     salaryMinAmount: row.salaryMinAmount,

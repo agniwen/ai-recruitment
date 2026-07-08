@@ -129,6 +129,7 @@ function getFirstResumeEditErrorMessage(meta: Record<string, { errors?: unknown[
     "jobDescriptionId",
     "resumeEvaluationStatus",
     "recommendationText",
+    "hrResumeAssessment",
     "notes",
   ];
   for (const field of fieldOrder) {
@@ -224,6 +225,7 @@ function createResumeEditFormValues(
     candidateName: detail.candidateName,
     candidatePhone: detail.candidatePhone ?? "",
     hiringUnitId: detail.hiringUnitId,
+    hrResumeAssessment: detail.hrResumeAssessment ?? "",
     jobDescriptionId: detail.jobDescriptionId ?? "",
     notes: detail.notes ?? "",
     recommendationText: detail.recommendationText ?? "",
@@ -319,6 +321,7 @@ function ResumeEditBody({
       formData.append("hiringUnitId", value.hiringUnitId ?? "");
       formData.append("targetRole", value.targetRole);
       formData.append("jobDescriptionId", value.jobDescriptionId);
+      formData.append("hrResumeAssessment", value.hrResumeAssessment);
       formData.append("notes", value.notes);
       formData.append("recommendationText", value.recommendationText);
       formData.append("resumeEvaluationStatus", value.resumeEvaluationStatus);
@@ -525,7 +528,7 @@ function ResumeEditBody({
             disabled={isSubmitting || isResumeLocked}
             existingResumeFileName={query.data?.resumeFileName ?? null}
             form={form}
-            notesDisabled={isReviewGenerating}
+            notesDisabled
             notesEditorLeadingContent={
               isReviewGenerating ? (
                 <ResumeReviewGenerationProgress
@@ -634,10 +637,11 @@ function InterviewEditBody({
     setFormValues(createInterviewRoundFormValues(round));
   }, [round]);
 
-  // 当前轮次状态决定 allowTextInput 是否可改 + 重置按钮是否展示。
-  // The current round status gates whether allowTextInput is editable and
-  // whether the reset button is visible.
+  // 当前轮次状态决定 allowTextInput 是否可改；AI 面试阶段内均可重置轮次。
+  // The current round status gates whether allowTextInput is editable; reset
+  // is available throughout the AI interview pipeline stage.
   const isRoundCompleted = round?.status === "completed";
+  const canResetRound = round?.candidate.pipelineStage === "ai_interview";
   const statusMeta = round ? scheduleEntryStatusMeta[round.status] : null;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -687,7 +691,7 @@ function InterviewEditBody({
         footer={
           isLoading ? undefined : (
             <div className="flex w-full flex-wrap items-center justify-end gap-2">
-              {isRoundCompleted ? (
+              {canResetRound ? (
                 <Button
                   disabled={isResetting || isSubmitting}
                   onClick={() => setResetConfirmOpen(true)}
@@ -802,7 +806,7 @@ function InterviewEditBody({
           <AlertDialogHeader>
             <AlertDialogTitle>重置这轮 AI 面试？</AlertDialogTitle>
             <AlertDialogDescription>
-              轮次会回到待开始状态，候选人需要重新进入面试。请确认当前报告和对话记录不再作为本轮结果使用。
+              轮次会回到待开始状态，当前会话锚点和题目快照会重新生成，候选人需要重新进入面试。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

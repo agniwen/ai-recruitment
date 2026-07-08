@@ -46,6 +46,7 @@ import type {
   ResumeEvaluationStatus,
   ResumeParseStatus,
   ResumeReviewStatus,
+  ResumeScreeningStatus,
   ScheduleEntryStatus,
   StudioInterviewStatus,
 } from "./studio-interviews";
@@ -420,6 +421,13 @@ export const studioInterview = pgTable(
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
     hiringUnitId: text("hiring_unit_id").references(() => hiringUnit.id, { onDelete: "set null" }),
+    hrResumeAssessment: text("hr_resume_assessment"),
+    hrResumeAssessmentUpdatedAt: timestamp("hr_resume_assessment_updated_at", {
+      withTimezone: true,
+    }),
+    hrResumeAssessmentUpdatedBy: text("hr_resume_assessment_updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     // ⚠️ DEPRECATED — 真人复面信息现在落到 studioHumanInterviewRound 子表（多轮 + 多面试官）。
     // 这两列留着兜底但应用层不再写入。
     // Superseded by studioHumanInterviewRound subtable; not written anymore.
@@ -471,6 +479,13 @@ export const studioInterview = pgTable(
     resumeReviewQueuedAt: timestamp("resume_review_queued_at", { withTimezone: true }),
     resumeReviewStatus: text("resume_review_status")
       .$type<ResumeReviewStatus>()
+      .notNull()
+      .default("idle"),
+    resumeScreeningError: text("resume_screening_error"),
+    resumeScreeningEvaluatedAt: timestamp("resume_screening_evaluated_at", { withTimezone: true }),
+    resumeScreeningResult: jsonb("resume_screening_result").$type<Record<string, unknown> | null>(),
+    resumeScreeningStatus: text("resume_screening_status")
+      .$type<ResumeScreeningStatus>()
       .notNull()
       .default("idle"),
     // 简历进入简历库的来源。直传 / 我的简历池 / 公共简历池 / 聊天入库 / API 入库。
@@ -774,6 +789,9 @@ export const jobDescription = pgTable(
     requestedDate: text("requested_date"),
     requester: text("requester"),
     resumeContact: text("resume_contact"),
+    resumeScreeningPolicy: jsonb("resume_screening_policy").$type<Record<string, unknown> | null>(),
+    resumeScreeningPolicyHash: text("resume_screening_policy_hash"),
+    resumeScreeningPolicyVersion: integer("resume_screening_policy_version").notNull().default(1),
     salaryCurrency: text("salary_currency"),
     salaryMaxAmount: integer("salary_max_amount"),
     salaryMinAmount: integer("salary_min_amount"),
@@ -1935,6 +1953,8 @@ export const interviewQuestionTemplateQuestion = pgTable(
       .$type<InterviewQuestionTemplateDifficulty>()
       .notNull()
       .default("easy"),
+    evaluationFocus: text("evaluation_focus"),
+    followUpDirections: text("follow_up_directions"),
     id: text("id").primaryKey(),
     sortOrder: integer("sort_order").notNull(),
     templateId: text("template_id")

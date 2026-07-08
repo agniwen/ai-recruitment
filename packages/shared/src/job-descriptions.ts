@@ -1,6 +1,11 @@
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
 import { z } from "zod";
 import type { ResumeParseStatus } from "@arc/db-schema/studio-interviews";
+import {
+  createDefaultResumeScreeningPolicy,
+  resumeScreeningPolicySchema,
+} from "./resume-screening";
+import type { ResumeScreeningPolicy } from "./resume-screening";
 import type { ResumePoolProfileHighlights } from "./resume-pool";
 
 export const jobDescriptionCodeSchema = z
@@ -62,6 +67,7 @@ export const jobDescriptionBaseSchema = z
     requestedDate: nullableDateStringSchema("提需日期"),
     requester: nullableTextSchema(120, "需求发起人"),
     resumeContact: nullableTextSchema(120, "简历对接人"),
+    resumeScreeningPolicy: resumeScreeningPolicySchema,
     salaryCurrency: nullableSalaryCurrencySchema,
     salaryMaxAmount: nullableSalaryAmountSchema,
     salaryMinAmount: nullableSalaryAmountSchema,
@@ -119,6 +125,8 @@ export const jobDescriptionUpdateSchema = jobDescriptionBaseSchema;
 export type JobDescriptionFormValues = z.infer<typeof jobDescriptionFormSchema>;
 export type JobDescriptionUpdateValues = z.infer<typeof jobDescriptionUpdateSchema>;
 
+export { createDefaultResumeScreeningPolicy };
+
 export interface JobDescriptionInterviewerSummary {
   id: string;
   name: string;
@@ -156,6 +164,9 @@ export interface JobDescriptionRecord {
   serviceUnit: string | null;
   sourceSheet: string | null;
   workLocation: string | null;
+  resumeScreeningPolicy: ResumeScreeningPolicy;
+  resumeScreeningPolicyHash: string | null;
+  resumeScreeningPolicyVersion: number;
   createdBy: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;

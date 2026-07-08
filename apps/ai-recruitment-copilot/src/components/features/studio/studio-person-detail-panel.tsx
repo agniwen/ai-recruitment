@@ -5,6 +5,7 @@ import {
   IconExternalLink,
   IconEye,
   IconInfoCircle,
+  IconLoader2,
   IconMessage2,
   IconRobot,
 } from "@tabler/icons-react";
@@ -257,10 +258,8 @@ interface CollectedCandidateInfoItem {
   answers: string[];
   id: string;
   kind: "form" | "interview";
-  meta: string | null;
   question: string;
   sequence: number;
-  sourceLabel: string;
 }
 
 type ReportSnapshotMetadata = NonNullable<StudioInterviewConversationReport["snapshotMetadata"]>;
@@ -311,24 +310,23 @@ function getCollectedCandidateInfoItems({
   evaluation: Record<string, unknown> | null | undefined;
   formSubmissions: CandidateFormSubmissionWithSnapshot[];
 }) {
-  const items: CollectedCandidateInfoItem[] = [];
+  const formItems: CollectedCandidateInfoItem[] = [];
 
   for (const submission of formSubmissions) {
     for (const question of submission.snapshot.questions) {
       const answer = formatFormAnswer(question, submission.answers[question.id]);
-      items.push({
+      formItems.push({
         analysis: null,
         answers: answer ? [answer] : [],
         id: `form-${submission.id}-${question.id}`,
         kind: "form",
-        meta: submission.snapshot.title,
         question: question.label,
-        sequence: items.length + 1,
-        sourceLabel: "表单",
+        sequence: formItems.length + 1,
       });
     }
   }
 
+  const interviewItems: CollectedCandidateInfoItem[] = [];
   const questions = Array.isArray(evaluation?.questions) ? evaluation.questions : [];
 
   for (const [index, rawQuestion] of questions.entries()) {
@@ -354,26 +352,30 @@ function getCollectedCandidateInfoItems({
       return quote ? [quote] : [];
     });
 
-    items.push({
+    interviewItems.push({
       analysis,
       answers,
       id: `interview-${order}-${question}`,
       kind: "interview",
-      meta: null,
       question,
-      sequence: items.length + 1,
-      sourceLabel: "面试",
+      sequence: interviewItems.length + 1,
     });
   }
 
-  return items;
+  return { formItems, interviewItems };
 }
 
-function CollectedCandidateInfoList({ items }: { items: CollectedCandidateInfoItem[] }) {
+function CollectedCandidateInfoList({
+  items,
+  emptyLabel,
+}: {
+  items: CollectedCandidateInfoItem[];
+  emptyLabel: string;
+}) {
   if (items.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-muted-foreground text-sm">
-        暂无可展示的收集信息。
+        {emptyLabel}
       </div>
     );
   }
@@ -390,15 +392,7 @@ function CollectedCandidateInfoList({ items }: { items: CollectedCandidateInfoIt
               {item.sequence}.
             </span>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="h-5 px-1.5 font-normal text-[10px]" variant="outline">
-                  {item.sourceLabel}
-                </Badge>
-                {item.meta ? (
-                  <span className="text-muted-foreground text-xs leading-5">{item.meta}</span>
-                ) : null}
-              </div>
-              <div className="mt-3 space-y-1">
+              <div className="space-y-1">
                 <div className="font-medium text-[11px] text-muted-foreground">问题</div>
                 <p className="font-medium text-foreground leading-normal">{item.question}</p>
               </div>
@@ -500,6 +494,120 @@ function ResumeAiAnalysisPlaceholder({
   );
 }
 
+type ResumeScreeningRuleResult = NonNullable<
+  ResumeLibraryDetail["resumeScreeningResult"]
+>["ruleResults"][number];
+
+function getResumeScreeningRuleStatusMeta(status: ResumeScreeningRuleResult["status"]) {
+  if (status === "pass") {
+    return { label: "满足", variant: "success" as const };
+  }
+  if (status === "fail") {
+    return { label: "未满足", variant: "destructive" as const };
+  }
+  return { label: "待核实", variant: "warning" as const };
+}
+
+function getResumeScreeningRuleSeverityLabel(severity: ResumeScreeningRuleResult["severity"]) {
+  if (severity === "blocking") {
+    return "阻断";
+  }
+  if (severity === "warning") {
+    return "提醒";
+  }
+  return "信息";
+}
+
+function ResumeScreeningResultPanel({
+  onReassess,
+  reassessing,
+  resumeRecord,
+}: {
+  onReassess?: () => void;
+  reassessing?: boolean;
+  resumeRecord: ResumeLibraryDetail | null | undefined;
+}) {
+  const result = resumeRecord?.resumeScreeningResult;
+  const recommendationMeta = {
+    flag: { label: "需人工核实", variant: "warning" as const },
+    hold: { label: "暂缓推进", variant: "destructive" as const },
+    pass: { label: "通过", variant: "success" as const },
+  };
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-muted/60 bg-muted/20 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-medium text-sm">简历筛选结果</h3>
+          {result ? (
+            <Badge variant={recommendationMeta[result.recommendation].variant}>
+              {recommendationMeta[result.recommendation].label}
+            </Badge>
+          ) : (
+            <Badge variant="outline">未生成</Badge>
+          )}
+          {resumeRecord?.resumeScreeningStale ? <Badge variant="warning">规则已更新</Badge> : null}
+        </div>
+        {onReassess ? (
+          <Button
+            disabled={reassessing}
+            onClick={onReassess}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {reassessing ? (
+              <IconLoader2 className="size-3.5 animate-spin" />
+            ) : (
+              <IconArrowBackUp className="size-3.5" />
+            )}
+            重新评估
+          </Button>
+        ) : null}
+      </div>
+      {resumeRecord?.resumeScreeningError ? (
+        <p className="text-destructive text-sm">{resumeRecord.resumeScreeningError}</p>
+      ) : null}
+      {resumeRecord?.resumeScreeningStale ? (
+        <p className="text-muted-foreground text-sm leading-6">
+          当前筛选结果基于旧版岗位规则生成，重新评估会同时更新筛选结果和系统简历评价。
+        </p>
+      ) : null}
+      {result?.ruleResults.length ? (
+        <div className="space-y-2">
+          {result.ruleResults.map((rule) => (
+            <div className="rounded-md border bg-background px-3 py-2" key={rule.ruleId}>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={getResumeScreeningRuleStatusMeta(rule.status).variant}>
+                  {getResumeScreeningRuleStatusMeta(rule.status).label}
+                </Badge>
+                <Badge variant="outline">
+                  {getResumeScreeningRuleSeverityLabel(rule.severity)}
+                </Badge>
+                <span className="font-medium text-sm">{rule.label}</span>
+              </div>
+              <p className="mt-1 text-muted-foreground text-sm leading-6">{rule.reason}</p>
+              {rule.evidence.length > 0 ? (
+                <ul className="mt-2 space-y-1 text-muted-foreground text-xs">
+                  {rule.evidence.slice(0, 2).map((evidence, index) => (
+                    <li key={`${rule.ruleId}-${index}`}>
+                      {evidence.quote ? `“${evidence.quote}”` : evidence.explanation}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-sm leading-6">
+          {result?.policyEmpty ? "该岗位未启用具体筛选规则。" : "暂无筛选结果。"}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function resolveDisplayTurnStats(
   report: { agentTurnCount: number; turnCount: number; userTurnCount: number },
   stats: ReturnType<typeof countDisplayInterviewTurns> | undefined,
@@ -526,6 +634,12 @@ async function resetInterviewFormSubmission({
     await deleteStudioInterviewFormSubmission(slug, effectiveRoundId, submissionId);
     await queryClient.invalidateQueries({
       queryKey: ["studio-interview-round-form-submissions", slug, effectiveRoundId],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ["studio-interview-agent-instructions", slug, effectiveRoundId],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ["interview-question-bindings", slug, effectiveRoundId],
     });
     return null;
   } catch (error) {
@@ -1228,6 +1342,7 @@ function useStudioPersonDetailPanel({
   const [optimisticPipelineStage, setOptimisticPipelineStage] = useState<PipelineStage | null>(
     null,
   );
+  const [isReassessingResume, setIsReassessingResume] = useState(false);
   const tabContentRootRef = useRef<HTMLDivElement>(null);
   const {
     pendingResetSubmissionId,
@@ -1306,6 +1421,37 @@ function useStudioPersonDetailPanel({
     },
     queryKey: ["studio-resumes", slug, "detail", effectiveRecordId, accessMode] as const,
   });
+
+  async function handleReassessResume() {
+    if (!(slug && effectiveRecordId) || !canUseManagementActions) {
+      return;
+    }
+    setIsReassessingResume(true);
+    try {
+      const response = await fetch(
+        `/api/w/${encodeURIComponent(slug)}/studio/resumes/${encodeURIComponent(effectiveRecordId)}/reassess`,
+        { method: "POST" },
+      );
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "重新评估失败");
+      }
+      toast.success("已重新评估");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["studio-resumes"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["studio-resumes", slug, "detail", effectiveRecordId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["studio-resumes", slug, "timeline", effectiveRecordId],
+        }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "重新评估失败");
+    } finally {
+      setIsReassessingResume(false);
+    }
+  }
 
   // 面试报告与表单仅面试模式查询 / Reports and form submissions only in interview mode
   const { data: reports = [], isLoading: isReportsLoading } = useQuery({
@@ -1602,11 +1748,13 @@ function useStudioPersonDetailPanel({
   const latestEvaluationSummary = getEvaluationSummary(
     latestReport?.evaluationCriteriaResults as Record<string, unknown> | undefined,
   );
-  const collectedCandidateInfoItems = getCollectedCandidateInfoItems({
+  const { formItems, interviewItems } = getCollectedCandidateInfoItems({
     evaluation: latestReport?.evaluationCriteriaResults as Record<string, unknown> | undefined,
     formSubmissions,
   });
   const isRoundCompleted = record?.roundStatus === "completed";
+  const canResetAiRound =
+    Boolean(record?.roundId) && !isPublic && record?.pipelineStage === "ai_interview";
   const isRoundLive =
     record?.roundStatus === "in_progress" || record?.roundStatus === "interrupted";
   const roundActionLockedReason = isRoundLive ? "面试正在进行中，结束后才能发送或复制链接。" : null;
@@ -2042,12 +2190,11 @@ function useStudioPersonDetailPanel({
                               void handleToggleAllowTextInput(record.roundId as string, next)
                             }
                           />
-                          {record.roundStatus === "completed" ? (
+                          {canResetAiRound ? (
                             <Button
-                              disabled={resettingRoundId === record.roundId || isAiStageLocked}
+                              disabled={resettingRoundId === record.roundId}
                               onClick={() => void handleResetRound(record.roundId as string)}
                               size="sm"
-                              title={aiStageLockedReason ?? undefined}
                               type="button"
                               variant="outline"
                             >
@@ -2062,24 +2209,36 @@ function useStudioPersonDetailPanel({
                 </section>
               ) : null}
 
-              <section className="xl:col-span-2 border-border/50 border-t pt-6">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
+              {mode === "interview" ? (
+                <section className="xl:col-span-2 border-border/50 border-t pt-6">
+                  <div className="mb-4">
                     <h3 className="font-medium text-sm">候选人收集信息</h3>
-                    <p className="mt-1 text-muted-foreground text-xs">
-                      按表单、面试题顺序展示候选人提供的信息。
-                    </p>
                   </div>
-                  {collectedCandidateInfoItems.length > 0 ? (
-                    <Badge variant="outline">{collectedCandidateInfoItems.length} 条信息</Badge>
-                  ) : null}
-                </div>
-                {isFormSubmissionsLoading || isReportsLoading ? (
-                  <FormsSkeleton />
-                ) : (
-                  <CollectedCandidateInfoList items={collectedCandidateInfoItems} />
-                )}
-              </section>
+                  {isFormSubmissionsLoading || isReportsLoading ? (
+                    <FormsSkeleton />
+                  ) : (
+                    <div className="grid gap-x-6 gap-y-8 md:grid-cols-2">
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <h4 className="font-medium text-sm">表单题</h4>
+                          <Badge variant="outline">共{formItems.length}题</Badge>
+                        </div>
+                        <CollectedCandidateInfoList emptyLabel="暂无表单答复" items={formItems} />
+                      </div>
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <h4 className="font-medium text-sm">面试题</h4>
+                          <Badge variant="outline">共{interviewItems.length}题</Badge>
+                        </div>
+                        <CollectedCandidateInfoList
+                          emptyLabel="暂无面试题"
+                          items={interviewItems}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </section>
+              ) : null}
 
               {mode === "interview" ? (
                 <section className="space-y-3 border-t border-border/50 pt-6">
@@ -2094,11 +2253,18 @@ function useStudioPersonDetailPanel({
 
           {mode === "resume" ? (
             <TabsContent value="ai-analysis">
-              {resumeRecord?.resumeReview ? (
-                <ResumeReviewStructuredView review={resumeRecord.resumeReview} />
-              ) : (
-                <ResumeAiAnalysisPlaceholder resumeRecord={resumeRecord} />
-              )}
+              <div className="space-y-5">
+                <ResumeScreeningResultPanel
+                  onReassess={canUseManagementActions ? handleReassessResume : undefined}
+                  reassessing={isReassessingResume}
+                  resumeRecord={resumeRecord}
+                />
+                {resumeRecord?.resumeReview ? (
+                  <ResumeReviewStructuredView review={resumeRecord.resumeReview} />
+                ) : (
+                  <ResumeAiAnalysisPlaceholder resumeRecord={resumeRecord} />
+                )}
+              </div>
             </TabsContent>
           ) : null}
 

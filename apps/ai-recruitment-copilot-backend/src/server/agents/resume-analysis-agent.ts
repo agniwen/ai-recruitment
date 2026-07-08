@@ -5,7 +5,10 @@ import type {
 } from "@arc/db-schema/interview/types";
 import { uniq } from "lodash-es";
 import { z } from "zod";
-import { generatedInterviewQuestionsSchema } from "@arc/db-schema/interview/types";
+import {
+  generatedInterviewQuestionSchema,
+  generatedInterviewQuestionsSchema,
+} from "@arc/db-schema/interview/types";
 import { generateResumeStructured } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
 import {
   getResumeDocumentExtension,
@@ -25,6 +28,7 @@ import {
   resumeReviewMarkdownAgent,
   resumeReviewQualitativeAgent,
   resumeReviewScoringAgent,
+  resumeScreeningEvidenceAgent,
   streamTextWithMastraAgent,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/simple-generators";
 import { createAiRunEventStream } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/adapters/ai-run-stream";
@@ -48,6 +52,17 @@ import type { ResumeParserStructured } from "./resume-parser-agent";
 
 import type { AiRunEvent } from "@arc/shared/ai-run-events";
 import type { ResumeReview } from "@arc/shared/resume-review";
+import {
+  evaluateResumeScreening,
+  resumeScreeningEvidenceResultSchema,
+} from "@arc/shared/resume-screening";
+import type {
+  ResumeScreeningEvidenceResult,
+  ResumeScreeningPolicy,
+  ResumeScreeningResult,
+  ResumeScreeningSemanticRule,
+  ResumeScreeningSkillRule,
+} from "@arc/shared/resume-screening";
 import {
   RESUME_REVIEW_DIMENSIONS,
   RESUME_REVIEW_SCHEMA_VERSION,
@@ -316,6 +331,8 @@ export function normalizeResumeProfile(profile: ResumeProfile): ResumeProfile {
 function normalizeInterviewQuestions(questions: GeneratedInterviewQuestion[]) {
   return questions.map((question, index) => ({
     difficulty: question.difficulty,
+    evaluationFocus: question.evaluationFocus?.trim() || null,
+    followUpDirections: question.followUpDirections?.trim() || null,
     order: index + 1,
     question: question.question.trim(),
   }));
@@ -360,7 +377,12 @@ const QUESTION_INSTRUCTIONS = `你是一名技术面试出题助手。请基于�
 
 {
   "interviewQuestions": [
-    { "difficulty": "easy" | "medium" | "hard", "question": string }
+    {
+      "difficulty": "easy" | "medium" | "hard",
+      "evaluationFocus": string,
+      "followUpDirections": string,
+      "question": string
+    }
   ]
 }
 
@@ -374,8 +396,21 @@ const QUESTION_INSTRUCTIONS = `你是一名技术面试出题助手。请基于�
    - 第 4-7 题为 medium，聚焦项目细节、技术选型、实现思路、问题排查。
    - 第 8-10 题为 hard，聚焦复杂场景、权衡取舍、系统设计、难点复盘。
 4. 优先围绕简历中真实出现过的项目经历、工作经历、技能栈来提问，不要输出泛泛而谈的空洞题目。
-5. 题目语言以候选人的主要语言为主：根据简历、目标岗位和岗位说明中占主导的语言判断；如果无法判断，默认使用中文。
-6. 不要给答案，不要输出解释，不要重复题目。`;
+5. 每道题必须给出 evaluationFocus，说明本题要验证的能力点、真实性风险或岗位匹配点。
+6. 每道题必须给出 followUpDirections，说明面试官可以顺着候选人回答继续深挖的方向；不要写标准答案。
+7. 题目语言以候选人的主要语言为主：根据简历、目标岗位和岗位说明中占主导的语言判断；如果无法判断，默认使用中文。
+8. 不要给答案，不要输出解释，不要重复题目。`;
+
+const generatedInterviewQuestionsWithGuidanceSchema = generatedInterviewQuestionsSchema.extend({
+  interviewQuestions: z
+    .array(
+      generatedInterviewQuestionSchema.extend({
+        evaluationFocus: z.string().trim().min(1).max(500),
+        followUpDirections: z.string().trim().min(1).max(1000),
+      }),
+    )
+    .length(10),
+});
 
 export interface ResumeParseResult {
   fileName: string;
@@ -664,7 +699,7 @@ export async function generateInterviewQuestionsForProfile(
     const parsed = await generateStructuredWithMastraAgent({
       agent: interviewQuestionAgent,
       prompt: `${QUESTION_INSTRUCTIONS}\n\n候选人信息：\n${JSON.stringify(resumeProfile, null, 2)}`,
-      schema: generatedInterviewQuestionsSchema,
+      schema: generatedInterviewQuestionsWithGuidanceSchema,
       temperature: 0.3,
     });
 
@@ -908,6 +943,113 @@ export async function runResumeReviewHardFilter(
   };
 }
 
+function activeAiEvidenceRules(policy: ResumeScreeningPolicy | null): {
+  semanticRules: ResumeScreeningSemanticRule[];
+  skillRules: ResumeScreeningSkillRule[];
+} {
+  if (!policy?.enabled) {
+    return { semanticRules: [], skillRules: [] };
+  }
+  return {
+    semanticRules: policy.rules.filter(
+      (rule): rule is ResumeScreeningSemanticRule => rule.type === "semantic",
+    ),
+    skillRules: policy.rules.filter(
+      (rule): rule is ResumeScreeningSkillRule => rule.type === "skill",
+    ),
+  };
+}
+
+function buildResumeScreeningEvidencePrompt(input: {
+  resumeProfile: ResumeProfile;
+  resumeText?: string | null;
+  semanticRules: ResumeScreeningSemanticRule[];
+  skillRules: ResumeScreeningSkillRule[];
+}) {
+  const resumeTextBlock = input.resumeText?.trim()
+    ? `简历原文：\n${input.resumeText.trim().slice(0, 12_000)}`
+    : "简历原文：（未提供，仅使用结构化简历判断）";
+  return `${buildResumeReviewTimeContext()}
+
+你只负责判断已确认筛选规则在候选人简历中的证据，不要新增规则，不要修改规则，不要给最终结论。
+
+判断要求：
+- 技能可以基于同义表达、项目技术栈、职责描述做语义判断；无法确认时输出 unknown，不要强行判不匹配。
+- 语义要求必须找到明确支持证据才输出 evidence_found；没有明确证据输出 evidence_missing；信息不足输出 unknown。
+- evidence.quote 只能摘录简历中的短句；若证据来自结构化字段且没有原文短句，可省略 quote。
+- 所有 explanation 使用中文。
+
+技能规则：
+${JSON.stringify(input.skillRules, null, 2)}
+
+语义规则：
+${JSON.stringify(input.semanticRules, null, 2)}
+
+候选人结构化简历：
+${JSON.stringify(input.resumeProfile, null, 2)}
+
+${resumeTextBlock}`;
+}
+
+export async function generateResumeScreeningEvidence(input: {
+  resumeProfile: ResumeProfile;
+  resumeText?: string | null;
+  semanticRules: ResumeScreeningSemanticRule[];
+  skillRules: ResumeScreeningSkillRule[];
+}): Promise<ResumeScreeningEvidenceResult> {
+  if (input.skillRules.length === 0 && input.semanticRules.length === 0) {
+    return {};
+  }
+  return await generateStructuredWithMastraAgent({
+    agent: resumeScreeningEvidenceAgent,
+    prompt: buildResumeScreeningEvidencePrompt(input),
+    schema: resumeScreeningEvidenceResultSchema,
+    temperature: 0,
+  });
+}
+
+export async function generateResumeScreeningResult(input: {
+  policy: ResumeScreeningPolicy | null;
+  resumeProfile: ResumeProfile;
+  resumeText?: string | null;
+}): Promise<ResumeScreeningResult> {
+  const { semanticRules, skillRules } = activeAiEvidenceRules(input.policy);
+  const evidence =
+    semanticRules.length > 0 || skillRules.length > 0
+      ? await generateResumeScreeningEvidence({
+          resumeProfile: input.resumeProfile,
+          resumeText: input.resumeText,
+          semanticRules,
+          skillRules,
+        })
+      : undefined;
+  return evaluateResumeScreening({
+    evidence,
+    policy: input.policy,
+    resumeProfile: input.resumeProfile,
+  });
+}
+
+function formatResumeScreeningForPrompt(result?: ResumeScreeningResult | null) {
+  if (!result || result.policyEmpty || !result.policyEnabled) {
+    return "";
+  }
+  const recommendationLabel: Record<ResumeScreeningResult["recommendation"], string> = {
+    flag: "需人工核实",
+    hold: "建议暂缓推进",
+    pass: "未发现筛选风险",
+  };
+  const ruleLines = result.ruleResults.map((rule, index) => {
+    const evidence = rule.evidence
+      .map((item) => item.quote || item.explanation)
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("；");
+    return `${index + 1}. [${rule.severity}/${rule.status}] ${rule.label}：${rule.reason}${evidence ? `（证据：${evidence}）` : ""}`;
+  });
+  return `\n\n已确认的简历筛选结果（只作为风险提示，不得自动淘汰候选人）：\n总体建议：${recommendationLabel[result.recommendation]}\n${ruleLines.join("\n")}`;
+}
+
 // Agent 1 prompt —— 只输出定性内容，不出现任何 score 字段。
 const REVIEW_QUALITATIVE_INSTRUCTIONS = `你是一名招聘评估助手。根据候选人简历和在招岗位（如有），输出一份结构化的定性评价。
 本阶段只输出文字结论与归因，不要输出任何分数、等级或数字评分；评分由下游处理。
@@ -1087,6 +1229,7 @@ export type ResumeReviewScoring = z.infer<typeof resumeScoringSchema>;
 function buildResumeReviewPrompt(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
   semanticRequirements?: string[] | null;
 }) {
   const jdBlock = input.jobDescription?.trim()
@@ -1097,13 +1240,15 @@ function buildResumeReviewPrompt(input: {
     input.semanticRequirements && input.semanticRequirements.length > 0
       ? `\n\nJD 中的语义硬性要求（无法用规则匹配，请在偏差扫描中判断候选人是否满足，不满足时标注为 hard_gap）：\n${input.semanticRequirements.map((req, i) => `${i + 1}. ${req}`).join("\n")}`
       : "";
+  const screeningBlock = formatResumeScreeningForPrompt(input.screeningResult);
 
-  return `${buildResumeReviewTimeContext()}\n\n${jdBlock}${semanticBlock}\n\n候选人简历（结构化 JSON）：\n${JSON.stringify(input.resumeProfile, null, 2)}`;
+  return `${buildResumeReviewTimeContext()}\n\n${jdBlock}${semanticBlock}${screeningBlock}\n\n候选人简历（结构化 JSON）：\n${JSON.stringify(input.resumeProfile, null, 2)}`;
 }
 
 function buildResumeReviewMarkdownPrompt(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
 }) {
   return buildResumeReviewPrompt(input);
 }
@@ -1111,6 +1256,7 @@ function buildResumeReviewMarkdownPrompt(input: {
 function buildResumeReviewFromMarkdownPrompt(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
   reviewMarkdown: string;
 }) {
   return [
@@ -1122,6 +1268,7 @@ function buildResumeReviewFromMarkdownPrompt(input: {
 function buildResumeScoringPrompt(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
   qualitative: ResumeQualitativeReview;
   reviewMarkdown?: string | null;
 }) {
@@ -1131,9 +1278,10 @@ function buildResumeScoringPrompt(input: {
   const parts = [
     buildResumeReviewTimeContext(),
     jdBlock,
+    formatResumeScreeningForPrompt(input.screeningResult).trim(),
     `候选人简历（结构化 JSON）：\n${JSON.stringify(input.resumeProfile, null, 2)}`,
     `定性评价（Step 1 输出，已在内容上与岗位比对过，请保持打分方向一致）：\n${JSON.stringify(input.qualitative, null, 2)}`,
-  ];
+  ].filter(Boolean);
   if (input.reviewMarkdown?.trim()) {
     parts.push(
       `已展示给用户的 Markdown 简历评价（打分方向必须与此文本一致）：\n${input.reviewMarkdown.trim()}`,
@@ -1145,6 +1293,7 @@ function buildResumeScoringPrompt(input: {
 export async function generateResumeQualitativeReview(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
   semanticRequirements?: string[] | null;
 }): Promise<ResumeQualitativeReview> {
   return await generateStructuredWithMastraAgent({
@@ -1158,6 +1307,7 @@ export async function generateResumeQualitativeReview(input: {
 function generateResumeReviewMarkdown(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
 }): AsyncIterable<string> {
   return streamTextWithMastraAgent({
     agent: resumeReviewMarkdownAgent,
@@ -1170,6 +1320,7 @@ function generateResumeReviewMarkdown(input: {
 export async function generateResumeQualitativeReviewFromMarkdown(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
   reviewMarkdown: string;
 }): Promise<ResumeQualitativeReview> {
   return await generateStructuredWithMastraAgent({
@@ -1183,6 +1334,7 @@ export async function generateResumeQualitativeReviewFromMarkdown(input: {
 export async function generateResumeReviewScoring(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
   qualitative: ResumeQualitativeReview;
   reviewMarkdown?: string | null;
 }): Promise<ResumeReviewScoring> {
@@ -1255,6 +1407,7 @@ function composeResumeReviewFromMarkdown(
 export function streamGenerateResumeReview(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
 }): ReadableStream<Uint8Array> {
   const runId = crypto.randomUUID();
   return createAiRunEventStream({
@@ -1277,6 +1430,7 @@ export function streamGenerateResumeReview(input: {
 export function streamGenerateResumeReviewMarkdownFirst(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
 }): ReadableStream<Uint8Array> {
   const runId = crypto.randomUUID();
   const workflowId = "resume-review-markdown-first-workflow";
@@ -1323,6 +1477,7 @@ export function streamGenerateResumeReviewMarkdownFirst(input: {
         jobDescription: input.jobDescription,
         resumeProfile: input.resumeProfile,
         reviewMarkdown: review,
+        screeningResult: input.screeningResult,
       });
       emit({
         output: { qualitative },
@@ -1342,6 +1497,7 @@ export function streamGenerateResumeReviewMarkdownFirst(input: {
         qualitative,
         resumeProfile: input.resumeProfile,
         reviewMarkdown: review,
+        screeningResult: input.screeningResult,
       });
       emit({
         artifactType: "resume.review.scoring",
@@ -1379,6 +1535,7 @@ export function streamGenerateResumeReviewMarkdownFirst(input: {
 export async function generateResumeReview(input: {
   resumeProfile: ResumeProfile;
   jobDescription?: string | null;
+  screeningResult?: ResumeScreeningResult | null;
 }): Promise<ResumeReviewGenerationResult> {
   const { runResumeReviewWorkflow } =
     await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/resume-review-workflow");

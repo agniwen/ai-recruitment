@@ -184,6 +184,9 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     hasResumeFile: true,
     hiringUnitId: "hu-1",
     hiringUnitName: "华东事业部",
+    hrResumeAssessment: null,
+    hrResumeAssessmentUpdatedAt: null,
+    hrResumeAssessmentUpdatedBy: null,
     humanInterviewScheduledAt: null,
     humanInterviewerId: null,
     humanInterviewers: [],
@@ -221,6 +224,11 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     resumeReviewGeneratedAt: null,
     resumeReviewQueuedAt: null,
     resumeReviewStatus: "idle",
+    resumeScreeningError: null,
+    resumeScreeningEvaluatedAt: null,
+    resumeScreeningResult: null,
+    resumeScreeningStale: false,
+    resumeScreeningStatus: "idle",
     resumeSkills: [],
     resumeSummary: null,
     stageProgress: {
@@ -375,6 +383,24 @@ describe("StudioPersonEditDialog", () => {
     expect(onEditResumeRecord).toHaveBeenCalledWith("resume-1");
     expect(routerMocks.navigate).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    act(() => {
+      root.unmount();
+    });
+    queryClient.clear();
+  });
+
+  it("shows reset in interview edit mode before the round is completed", async () => {
+    apiMocks.fetchStudioInterviewRound.mockResolvedValue(
+      makeRoundDetail({
+        status: "in_progress",
+      }),
+    );
+    const { queryClient, root } = renderInterviewDialog();
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain("重置面试");
+    });
 
     act(() => {
       root.unmount();

@@ -10,9 +10,11 @@ import type { ProcessNextResult } from "@arc/shared/bulk-resume-upload";
 import { getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
   generateResumeReview,
+  generateResumeScreeningResult,
   parseResumeBytesToProfile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import type { ResumeReviewGenerationResult } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import type { ResumeScreeningPolicy, ResumeScreeningResult } from "@arc/shared/resume-screening";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
 import {
   claimNextPendingItem,
@@ -210,6 +212,7 @@ async function upsertParsedResumeRecord({
   notes,
   organizationId,
   resumeReview,
+  resumeScreeningResult,
   resumeProfile,
   resumeText,
   userId,
@@ -219,6 +222,7 @@ async function upsertParsedResumeRecord({
   notes: string | null;
   organizationId: string;
   resumeReview: ResumeReviewGenerationResult["structuredReview"] | null;
+  resumeScreeningResult: ResumeScreeningResult | null;
   resumeProfile: ParsedResume["resumeProfile"];
   resumeText: string | null;
   userId: string;
@@ -240,6 +244,7 @@ async function upsertParsedResumeRecord({
       resumeFileName: item.originalFileName,
       resumeProfile,
       resumeReview,
+      resumeScreeningResult,
       resumeText,
       storageKey: item.storageKey,
       targetRole: null,
@@ -271,6 +276,10 @@ async function upsertParsedResumeRecord({
         resumeParsedAt: now,
         resumeProfile,
         resumeReview,
+        resumeScreeningError: null,
+        resumeScreeningEvaluatedAt: resumeScreeningResult ? now : null,
+        resumeScreeningResult,
+        resumeScreeningStatus: resumeScreeningResult ? "ready" : "idle",
         resumeStorageKey: item.storageKey,
         resumeText,
         targetRole: resumeProfile?.targetRoles?.[0] ?? null,
@@ -297,21 +306,22 @@ async function buildJobDescriptionReviewContext(
   organizationId: string,
   jobDescriptionId: string | null,
   actorUserId: string,
-): Promise<string | null> {
+): Promise<{ jobDescription: string | null; screeningPolicy: ResumeScreeningPolicy | null }> {
   if (!jobDescriptionId) {
-    return null;
+    return { jobDescription: null, screeningPolicy: null };
   }
   const jd = await loadJobDescriptionById(organizationId, jobDescriptionId, { actorUserId });
   if (!jd) {
-    return null;
+    return { jobDescription: null, screeningPolicy: null };
   }
-  return [
+  const jobDescription = [
     `岗位名称：${jd.name}`,
     jd.description ? `岗位描述：${jd.description}` : null,
     `岗位 Prompt：\n${jd.prompt}`,
   ]
     .filter(Boolean)
     .join("\n\n");
+  return { jobDescription, screeningPolicy: jd.resumeScreeningPolicy };
 }
 
 async function generateReviewForParsedResume(input: {
@@ -319,29 +329,36 @@ async function generateReviewForParsedResume(input: {
   jobDescriptionId: string | null;
   organizationId: string;
   resumeProfile: ParsedResume["resumeProfile"];
+  resumeText: string | null;
   userId: string;
-}): Promise<ResumeReviewGenerationResult | null> {
+}): Promise<(ResumeReviewGenerationResult & { screeningResult: ResumeScreeningResult }) | null> {
   try {
     const startedAt = Date.now();
     logStep("review.generate.start", {
       hasJobDescription: Boolean(input.jobDescriptionId),
       itemId: input.itemId,
     });
-    const jobDescription = await buildJobDescriptionReviewContext(
+    const context = await buildJobDescriptionReviewContext(
       input.organizationId,
       input.jobDescriptionId,
       input.userId,
     );
-    const review = await generateResumeReview({
-      jobDescription,
+    const screeningResult = await generateResumeScreeningResult({
+      policy: context.screeningPolicy,
       resumeProfile: input.resumeProfile,
+      resumeText: input.resumeText,
+    });
+    const review = await generateResumeReview({
+      jobDescription: context.jobDescription,
+      resumeProfile: input.resumeProfile,
+      screeningResult,
     });
     logStep("review.generate.done", {
       durationMs: elapsed(startedAt),
       itemId: input.itemId,
       reviewChars: review.review.length,
     });
-    return review.review ? review : null;
+    return review.review ? { ...review, screeningResult } : null;
   } catch (error) {
     console.error("[bulk-upload] resume review generation failed:", error);
     logStep("review.generate.error", {
@@ -385,6 +402,7 @@ async function findDuplicateMatches(input: {
 
 // S3 から PDF を取得してパースし、作成すべき studio_interview の情報を返す。
 // Fetch PDF from S3, parse it, and return the info needed to create a studio_interview.
+// oxlint-disable-next-line complexity -- batch parsing coordinates dedup, JD matching, review generation, and persistence.
 async function fetchAndParse(
   item: NonNullable<ItemRow>,
   batchRow: BatchRow,
@@ -522,6 +540,7 @@ async function fetchAndParse(
     jobDescriptionId,
     organizationId,
     resumeProfile,
+    resumeText,
     userId,
   });
   await assertBatchItemNotCancelled(batchRow.id, item.id);
@@ -532,6 +551,7 @@ async function fetchAndParse(
     organizationId,
     resumeProfile,
     resumeReview: reviewResult?.structuredReview ?? null,
+    resumeScreeningResult: reviewResult?.screeningResult ?? null,
     resumeText,
     userId,
   });

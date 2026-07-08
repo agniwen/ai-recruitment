@@ -408,6 +408,7 @@ export function ResumeImportButton({
             candidateName: "",
             candidatePhone: "",
             hiringUnitId: null,
+            hrResumeAssessment: "",
             jobDescriptionId,
             notes: "",
             recommendationText: "",

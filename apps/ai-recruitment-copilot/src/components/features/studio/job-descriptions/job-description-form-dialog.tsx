@@ -4,9 +4,18 @@ import type { CandidateFormTemplateListRecord } from "@arc/db-schema/candidate-f
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import type { InterviewQuestionTemplateListRecord } from "@arc/db-schema/interview-question-templates";
-import { jobDescriptionFormSchema } from "@arc/shared/job-descriptions";
+import {
+  createDefaultResumeScreeningPolicy,
+  jobDescriptionFormSchema,
+} from "@arc/shared/job-descriptions";
 import type { JobDescriptionFormValues, JobDescriptionRecord } from "@arc/shared/job-descriptions";
 import { dateOnlyStringToLocalDate, localDateToDateOnlyString } from "@arc/shared/date-only";
+import type {
+  ResumeScreeningFieldRule,
+  ResumeScreeningPolicy,
+  ResumeScreeningRuleSeverity,
+  ResumeScreeningSkillRule,
+} from "@arc/shared/resume-screening";
 import {
   buildJobDescriptionInterviewerOptions,
   filterInterviewerIdsByDepartment,
@@ -22,6 +31,7 @@ import {
   IconExternalLink as ExternalLinkIcon,
   IconListCheck as ListChecksIcon,
   IconLoader2 as LoaderCircleIcon,
+  IconSparkles as SparklesIcon,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -52,6 +62,10 @@ import { hasFieldErrors, toFieldErrors } from "../interviews/interview-form";
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
 const PROMPT_MAX_LENGTH = 10_000;
+const SCREENING_TEXTAREA_MAX_LENGTH = 2000;
+const MIN_EDUCATION_RULE_ID = "minimum-education";
+const MIN_WORK_YEARS_RULE_ID = "minimum-work-years";
+const REQUIRED_SKILLS_RULE_ID = "required-skills";
 const SALARY_CURRENCY_OPTIONS = [
   { label: "CNY · 人民币", value: "CNY" },
   { label: "TWD · 新台币", value: "TWD" },
@@ -60,6 +74,10 @@ const SALARY_CURRENCY_OPTIONS = [
   { label: "SGD · 新加坡元", value: "SGD" },
   { label: "JPY · 日元", value: "JPY" },
 ] as const;
+
+type JobDescriptionFormTab = "basic" | "screening" | "interview-questions" | "forms";
+type MinimumEducationRule = Extract<ResumeScreeningFieldRule, { field: "minimumEducation" }>;
+type MinimumWorkYearsRule = Extract<ResumeScreeningFieldRule, { field: "minimumWorkYears" }>;
 
 export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
   return {
@@ -84,6 +102,7 @@ export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
     requestedDate: null,
     requester: null,
     resumeContact: null,
+    resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
     salaryCurrency: null,
     salaryMaxAmount: null,
     salaryMinAmount: null,
@@ -116,6 +135,7 @@ function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
     requestedDate: record.requestedDate,
     requester: record.requester,
     resumeContact: record.resumeContact,
+    resumeScreeningPolicy: record.resumeScreeningPolicy,
     salaryCurrency: record.salaryCurrency,
     salaryMaxAmount: record.salaryMaxAmount,
     salaryMinAmount: record.salaryMinAmount,
@@ -192,6 +212,7 @@ function toSubmitBody(value: JobDescriptionFormValues) {
     requestedDate: normalizeOptionalText(value.requestedDate),
     requester: normalizeOptionalText(value.requester),
     resumeContact: normalizeOptionalText(value.resumeContact),
+    resumeScreeningPolicy: value.resumeScreeningPolicy,
     salaryCurrency: normalizeOptionalText(value.salaryCurrency),
     salaryMaxAmount: value.salaryMaxAmount ?? null,
     salaryMinAmount: value.salaryMinAmount ?? null,
@@ -265,6 +286,305 @@ function DateOnlyPickerField({
   );
 }
 
+function splitRuleLines(value: string): string[] {
+  return value
+    .split(/[\n,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function joinRuleLines(values: string[]) {
+  return values.join("\n");
+}
+
+function upsertRule<TRule extends ResumeScreeningPolicy["rules"][number]>(
+  rules: ResumeScreeningPolicy["rules"],
+  nextRule: TRule,
+) {
+  return [...rules.filter((rule) => rule.id !== nextRule.id), nextRule];
+}
+
+function removeRule(
+  rules: ResumeScreeningPolicy["rules"],
+  id: string,
+): ResumeScreeningPolicy["rules"] {
+  return rules.filter((rule) => rule.id !== id);
+}
+
+function getMinimumEducationRule(policy: ResumeScreeningPolicy) {
+  return policy.rules.find(
+    (rule): rule is MinimumEducationRule =>
+      rule.type === "field" && rule.field === "minimumEducation",
+  );
+}
+
+function getMinimumWorkYearsRule(policy: ResumeScreeningPolicy) {
+  return policy.rules.find(
+    (rule): rule is MinimumWorkYearsRule =>
+      rule.type === "field" && rule.field === "minimumWorkYears",
+  );
+}
+
+function getRequiredSkillsRule(policy: ResumeScreeningPolicy) {
+  return policy.rules.find((rule): rule is ResumeScreeningSkillRule => rule.type === "skill");
+}
+
+const SCREENING_SEVERITY_OPTIONS = [
+  { label: "暂缓推进", value: "blocking" },
+  { label: "需核实", value: "warning" },
+  { label: "仅记录", value: "info" },
+];
+
+function ResumeScreeningPolicyFields({
+  isGenerating,
+  onGenerateFromJobDescription,
+  onChange,
+  policy,
+}: {
+  isGenerating: boolean;
+  onGenerateFromJobDescription: () => void;
+  onChange: (policy: ResumeScreeningPolicy) => void;
+  policy: ResumeScreeningPolicy;
+}) {
+  const minimumEducationRule = getMinimumEducationRule(policy);
+  const minimumWorkYearsRule = getMinimumWorkYearsRule(policy);
+  const requiredSkillsRule = getRequiredSkillsRule(policy);
+  const semanticRules = policy.rules.filter((rule) => rule.type === "semantic");
+  const skillSeverity = requiredSkillsRule?.severity ?? "warning";
+  const semanticSeverity = semanticRules[0]?.severity ?? "warning";
+
+  function patchPolicy(next: Partial<ResumeScreeningPolicy>) {
+    onChange({ ...policy, ...next });
+  }
+
+  function setMinimumEducation(level: MinimumEducationRule["level"]) {
+    patchPolicy({
+      rules: upsertRule(policy.rules, {
+        field: "minimumEducation",
+        id: MIN_EDUCATION_RULE_ID,
+        level,
+        severity: minimumEducationRule?.severity ?? "blocking",
+        type: "field",
+      }),
+    });
+  }
+
+  function setMinimumWorkYears(value: string) {
+    const years = Number.parseInt(value, 10);
+    if (!Number.isFinite(years) || years <= 0) {
+      patchPolicy({ rules: removeRule(policy.rules, MIN_WORK_YEARS_RULE_ID) });
+      return;
+    }
+    patchPolicy({
+      rules: upsertRule(policy.rules, {
+        field: "minimumWorkYears",
+        id: MIN_WORK_YEARS_RULE_ID,
+        severity: minimumWorkYearsRule?.severity ?? "blocking",
+        type: "field",
+        years,
+      }),
+    });
+  }
+
+  function setRequiredSkills(value: string) {
+    const requiredSkills = splitRuleLines(value);
+    if (requiredSkills.length === 0) {
+      patchPolicy({ rules: removeRule(policy.rules, REQUIRED_SKILLS_RULE_ID) });
+      return;
+    }
+    patchPolicy({
+      rules: upsertRule(policy.rules, {
+        id: REQUIRED_SKILLS_RULE_ID,
+        matchMode: requiredSkillsRule?.matchMode ?? { type: "all" },
+        requiredSkills,
+        severity: skillSeverity,
+        type: "skill",
+      }),
+    });
+  }
+
+  function setSemanticRules(value: string) {
+    const requirements = splitRuleLines(value);
+    const nonSemanticRules = policy.rules.filter((rule) => rule.type !== "semantic");
+    patchPolicy({
+      rules: [
+        ...nonSemanticRules,
+        ...requirements.map((requirement, index) => ({
+          id: `semantic-${index + 1}`,
+          requirement,
+          severity: semanticSeverity,
+          type: "semantic" as const,
+        })),
+      ],
+    });
+  }
+
+  return (
+    <FieldGroup className="mt-4 gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="font-medium text-sm">筛选规则草稿</p>
+          <p className="text-muted-foreground text-xs">
+            用于简历筛选阶段生成通过、需核实或暂缓推进建议。
+          </p>
+        </div>
+        <Button
+          disabled={isGenerating}
+          onClick={onGenerateFromJobDescription}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          {isGenerating ? (
+            <LoaderCircleIcon className="size-4 animate-spin" />
+          ) : (
+            <SparklesIcon data-icon="inline-start" />
+          )}
+          从 JD 生成
+        </Button>
+      </div>
+
+      <Card className="gap-0 rounded-lg py-0">
+        <CardContent className="flex items-center justify-between gap-4 px-3 py-2.5">
+          <div className="space-y-0.5">
+            <FieldLabel htmlFor="resume-screening-enabled">启用简历筛选规则</FieldLabel>
+            <p className="text-muted-foreground text-xs">关闭后仅保留规则草稿，不参与筛选。</p>
+          </div>
+          <Switch
+            checked={policy.enabled}
+            id="resume-screening-enabled"
+            onCheckedChange={(enabled) => patchPolicy({ enabled })}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <Field>
+          <FieldLabel>最低学历</FieldLabel>
+          <FieldContent className="gap-2">
+            <SearchableSelect
+              onChange={(value) =>
+                setMinimumEducation((value ?? "none") as MinimumEducationRule["level"])
+              }
+              options={["none", "专科", "本科", "硕士", "博士"].map((value) => ({
+                label: value === "none" ? "不限" : value,
+                value,
+              }))}
+              placeholder="不限"
+              value={minimumEducationRule?.level ?? "none"}
+            />
+            <SearchableSelect
+              disabled={!minimumEducationRule}
+              onChange={(value) => {
+                if (minimumEducationRule) {
+                  patchPolicy({
+                    rules: upsertRule(policy.rules, {
+                      ...minimumEducationRule,
+                      severity: (value ?? "blocking") as ResumeScreeningRuleSeverity,
+                    }),
+                  });
+                }
+              }}
+              options={SCREENING_SEVERITY_OPTIONS}
+              placeholder="暂缓推进"
+              value={minimumEducationRule?.severity ?? "blocking"}
+            />
+          </FieldContent>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="minimum-work-years">最低工作年限</FieldLabel>
+          <FieldContent className="gap-2">
+            <Input
+              id="minimum-work-years"
+              min={0}
+              onChange={(event) => setMinimumWorkYears(event.target.value)}
+              placeholder="不限"
+              type="number"
+              value={minimumWorkYearsRule?.years ?? ""}
+            />
+            <SearchableSelect
+              disabled={!minimumWorkYearsRule}
+              onChange={(value) => {
+                if (minimumWorkYearsRule) {
+                  patchPolicy({
+                    rules: upsertRule(policy.rules, {
+                      ...minimumWorkYearsRule,
+                      severity: (value ?? "blocking") as ResumeScreeningRuleSeverity,
+                    }),
+                  });
+                }
+              }}
+              options={SCREENING_SEVERITY_OPTIONS}
+              placeholder="暂缓推进"
+              value={minimumWorkYearsRule?.severity ?? "blocking"}
+            />
+          </FieldContent>
+        </Field>
+      </div>
+
+      <Field>
+        <FieldLabel htmlFor="required-skills">必备技能</FieldLabel>
+        <FieldContent className="gap-3">
+          <Textarea
+            className="min-h-24"
+            id="required-skills"
+            maxLength={SCREENING_TEXTAREA_MAX_LENGTH}
+            onChange={(event) => setRequiredSkills(event.target.value)}
+            placeholder="每行一个技能，例如 React、TypeScript、Node.js"
+            value={joinRuleLines(requiredSkillsRule?.requiredSkills ?? [])}
+          />
+          <SearchableSelect
+            disabled={!requiredSkillsRule}
+            onChange={(value) => {
+              if (requiredSkillsRule) {
+                patchPolicy({
+                  rules: upsertRule(policy.rules, {
+                    ...requiredSkillsRule,
+                    severity: (value ?? "warning") as ResumeScreeningRuleSeverity,
+                  }),
+                });
+              }
+            }}
+            options={SCREENING_SEVERITY_OPTIONS}
+            placeholder="需核实"
+            value={skillSeverity}
+          />
+        </FieldContent>
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="semantic-screening-rules">其他语义要求</FieldLabel>
+        <FieldContent className="gap-3">
+          <Textarea
+            className="min-h-28"
+            id="semantic-screening-rules"
+            maxLength={SCREENING_TEXTAREA_MAX_LENGTH}
+            onChange={(event) => setSemanticRules(event.target.value)}
+            placeholder="每行一个要求，例如：有复杂项目从 0 到 1 搭建经验"
+            value={joinRuleLines(semanticRules.map((rule) => rule.requirement))}
+          />
+          <SearchableSelect
+            disabled={semanticRules.length === 0}
+            onChange={(value) =>
+              patchPolicy({
+                rules: policy.rules.map((rule) =>
+                  rule.type === "semantic"
+                    ? { ...rule, severity: (value ?? "warning") as ResumeScreeningRuleSeverity }
+                    : rule,
+                ),
+              })
+            }
+            options={SCREENING_SEVERITY_OPTIONS}
+            placeholder="需核实"
+            value={semanticSeverity}
+          />
+        </FieldContent>
+      </Field>
+    </FieldGroup>
+  );
+}
+
 // oxlint-disable-next-line complexity -- Dialog hosts tabs, queries, validation, and form submission together.
 export function JobDescriptionFormDialog({
   initialDraft,
@@ -287,7 +607,8 @@ export function JobDescriptionFormDialog({
   const isEdit = record !== null;
   const codeLocked = Boolean(record?.code);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
-  const [activeTab, setActiveTab] = useState<"basic" | "interview-questions" | "forms">("basic");
+  const [isGeneratingScreeningPolicy, setIsGeneratingScreeningPolicy] = useState(false);
+  const [activeTab, setActiveTab] = useState<JobDescriptionFormTab>("basic");
   const resolvedInitialValues = useMemo(() => {
     if (record) {
       return toDepartmentScopedFormValues(record, interviewers);
@@ -405,8 +726,11 @@ export function JobDescriptionFormDialog({
         "salaryMinAmount",
       ];
       const hasBasicError = basicFields.some((key) => (meta[key]?.errors?.length ?? 0) > 0);
+      const hasScreeningError = (meta.resumeScreeningPolicy?.errors?.length ?? 0) > 0;
       if (hasBasicError) {
         setActiveTab("basic");
+      } else if (hasScreeningError) {
+        setActiveTab("screening");
       }
     },
     validators: { onSubmit: jobDescriptionFormSchema },
@@ -458,11 +782,43 @@ export function JobDescriptionFormDialog({
     }
   }
 
+  async function handleGenerateScreeningPolicy() {
+    const { values } = form.store.state;
+    if (!values.prompt.trim()) {
+      toast.error("请先填写岗位 Prompt");
+      return;
+    }
+    setIsGeneratingScreeningPolicy(true);
+    try {
+      const response = await rpc.api.w[":slug"].studio["job-descriptions"][
+        "generate-screening-policy"
+      ].$post({
+        json: {
+          description: values.description?.trim() || undefined,
+          name: values.name.trim() || undefined,
+          prompt: values.prompt.trim(),
+        },
+        param: { slug },
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        policy?: ResumeScreeningPolicy;
+      } | null;
+      if (!response.ok || !payload?.policy) {
+        toast.error(payload?.error ?? "筛选规则生成失败");
+        return;
+      }
+      form.setFieldValue("resumeScreeningPolicy", payload.policy);
+      toast.success(
+        payload.policy.rules.length > 0 ? "已生成筛选规则草稿" : "JD 中未发现明确筛选规则",
+      );
+    } finally {
+      setIsGeneratingScreeningPolicy(false);
+    }
+  }
+
   return (
-    <Tabs
-      onValueChange={(value) => setActiveTab(value as "basic" | "interview-questions" | "forms")}
-      value={activeTab}
-    >
+    <Tabs onValueChange={(value) => setActiveTab(value as JobDescriptionFormTab)} value={activeTab}>
       <Modal
         open={open}
         onOpenChange={onOpenChange}
@@ -472,6 +828,7 @@ export function JobDescriptionFormDialog({
         headerExtra={
           <TabsList className="mt-2">
             <TabsTrigger value="basic">基本信息</TabsTrigger>
+            <TabsTrigger value="screening">筛选规则</TabsTrigger>
             {isEdit ? <TabsTrigger value="interview-questions">面试题</TabsTrigger> : null}
             {isEdit ? <TabsTrigger value="forms">面试表单</TabsTrigger> : null}
           </TabsList>
@@ -1298,6 +1655,18 @@ export function JobDescriptionFormDialog({
                   }}
                 </form.Field>
               </FieldGroup>
+            </TabsContent>
+            <TabsContent value="screening">
+              <form.Field name="resumeScreeningPolicy">
+                {(field) => (
+                  <ResumeScreeningPolicyFields
+                    isGenerating={isGeneratingScreeningPolicy}
+                    onChange={field.handleChange}
+                    onGenerateFromJobDescription={handleGenerateScreeningPolicy}
+                    policy={field.state.value}
+                  />
+                )}
+              </form.Field>
             </TabsContent>
             {isEdit ? (
               <TabsContent value="interview-questions">

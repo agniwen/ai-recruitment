@@ -273,17 +273,22 @@ export function formValuesFromResumeProfile(
   resumeProfile: ResumeProfile,
   overrides: Partial<ResumeLibraryFormValues> = {},
 ): ResumeLibraryFormValues {
-  return {
+  const values = {
     candidateEmail: resumeProfile.email ?? "",
     candidateName: resumeProfile.name || "未命名候选人",
     candidatePhone: resumeProfile.phone ?? "",
     hiringUnitId: null,
+    hrResumeAssessment: "",
     jobDescriptionId: "",
     notes: "",
     recommendationText: "",
-    resumeEvaluationStatus: "unreviewed",
+    resumeEvaluationStatus: "unreviewed" as const,
     targetRole: resumeProfile.targetRoles[0] ?? "",
     ...overrides,
+  };
+  return {
+    ...values,
+    hrResumeAssessment: values.hrResumeAssessment ?? "",
   };
 }
 

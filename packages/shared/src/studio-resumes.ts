@@ -19,9 +19,11 @@ import type {
   ResumeEvaluationStatus,
   ResumeParseStatus,
   ResumeReviewStatus,
+  ResumeScreeningStatus,
   ScheduleEntryStatus,
   StudioInterviewStatus,
 } from "@arc/db-schema/studio-interviews";
+import type { ResumeScreeningResult } from "./resume-screening";
 
 /**
  * AI 面试阶段的派生进度：从 studio_interview_schedule 聚合。
@@ -117,6 +119,9 @@ export interface ResumeLibraryListRecord {
   candidatePhone: string | null;
   targetRole: string | null;
   notes: string | null;
+  hrResumeAssessment: string | null;
+  hrResumeAssessmentUpdatedAt: string | null;
+  hrResumeAssessmentUpdatedBy: string | null;
   jobDescriptionId: string | null;
   jobDescriptionDepartmentName: string | null;
   jobDescriptionName: string | null;
@@ -133,6 +138,11 @@ export interface ResumeLibraryListRecord {
   resumeEvaluatorImage: string | null;
   resumeEvaluatorName: string | null;
   recommendationText: string | null;
+  resumeScreeningError: string | null;
+  resumeScreeningEvaluatedAt: string | null;
+  resumeScreeningResult: ResumeScreeningResult | null;
+  resumeScreeningStatus: ResumeScreeningStatus;
+  resumeScreeningStale: boolean;
   resumeSummary: string | null;
   resumeParsedAt: string | null;
   resumeParseError: string | null;
@@ -579,6 +589,7 @@ export const resumeLibraryFormSchema = z.object({
   candidateName: z.string().trim().max(120, "候选人姓名不能超过 120 个字符"),
   candidatePhone: z.string().trim().max(40, "联系电话不能超过 40 个字符"),
   hiringUnitId: resumeLibraryOptionalHiringUnitIdSchema,
+  hrResumeAssessment: z.string().trim().max(2000, "HR 评价不能超过 2000 字"),
   jobDescriptionId: z.string().trim().min(1, "请选择关联在招岗位").max(100, "关联在招岗位无效"),
   notes: z.string().trim().max(2000, "备注不能超过 2000 字"),
   recommendationText: z.string().trim().max(2000, "推荐语不能超过 2000 字"),
@@ -603,6 +614,7 @@ export function createResumeLibraryFormValues(): ResumeLibraryFormValues {
     candidateName: "",
     candidatePhone: "",
     hiringUnitId: null,
+    hrResumeAssessment: "",
     jobDescriptionId: "",
     notes: "",
     recommendationText: "",

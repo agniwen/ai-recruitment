@@ -143,7 +143,7 @@ function resumeEvaluationLabel(value: unknown): string {
   return isResumeEvaluationStatus(value) ? describeResumeEvaluationStatus(value).label : "未知状态";
 }
 
-function jobDescriptionChangeLabel(
+function jobDescriptionAuditLabel(
   detail: Record<string, unknown>,
   idKey: "fromJobDescriptionId" | "toJobDescriptionId",
   nameKey: "fromJobDescriptionName" | "toJobDescriptionName",
@@ -209,12 +209,8 @@ function auditDescription(detail: Record<string, unknown>, action: string): stri
     return typeof detail.reason === "string" ? detail.reason : "岗位变更后需重新评估";
   }
   if (action === "job_description_changed") {
-    const from = jobDescriptionChangeLabel(
-      detail,
-      "fromJobDescriptionId",
-      "fromJobDescriptionName",
-    );
-    const to = jobDescriptionChangeLabel(detail, "toJobDescriptionId", "toJobDescriptionName");
+    const from = jobDescriptionAuditLabel(detail, "fromJobDescriptionId", "fromJobDescriptionName");
+    const to = jobDescriptionAuditLabel(detail, "toJobDescriptionId", "toJobDescriptionName");
     return `${from} -> ${to}`;
   }
   if (action === "interview_questions_drafted") {
