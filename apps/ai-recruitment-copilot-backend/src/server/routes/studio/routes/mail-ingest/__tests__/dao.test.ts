@@ -4,17 +4,22 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { encryptMailIngestSecret } from "@arc/ai-recruitment-copilot-backend/lib/server/mail-ingest-crypto";
 import {
   mailIngestAccount,
+  mailIngestMessage,
   member,
   organization,
-  organizationRole,
   user,
 } from "@arc/db-schema/schema";
 import {
+  claimMailIngestMessageForProcessing,
   createMailIngestAccount,
   finishMailIngestAccountRun,
+  getMailIngestAccountLoginConfig,
   listWorkspaceMailIngestAccounts,
+  mailIngestAccountExistsInOrg,
+  markMailIngestMessageSkipped,
   queryPaginatedPlatformMailIngestAccounts,
   queryPaginatedWorkspaceMailIngestAccounts,
+  updateMailIngestMessageResult,
 } from "../dao";
 
 const ORG = "test_mail_ingest_org";
@@ -31,8 +36,6 @@ async function cleanup() {
   await db.delete(mailIngestAccount).where(eq(mailIngestAccount.organizationId, OTHER_ORG));
   await db.delete(member).where(eq(member.organizationId, ORG));
   await db.delete(member).where(eq(member.organizationId, OTHER_ORG));
-  await db.delete(organizationRole).where(eq(organizationRole.organizationId, ORG));
-  await db.delete(organizationRole).where(eq(organizationRole.organizationId, OTHER_ORG));
   await db.delete(organization).where(eq(organization.id, ORG));
   await db.delete(organization).where(eq(organization.id, OTHER_ORG));
   await db.delete(user).where(eq(user.id, OWNER));
@@ -78,15 +81,6 @@ describe("mail ingest workspace administration dao", () => {
         slug: "other-mail-ingest-org",
       },
     ]);
-    await db.insert(organizationRole).values({
-      createdAt: NOW,
-      id: "mail_ingest_custom_role",
-      name: "邮箱管理员",
-      organizationId: ORG,
-      permission: JSON.stringify({ page: ["mailIngestAccounts"] }),
-      role: "mail-admin",
-      updatedAt: NOW,
-    });
     await db.insert(member).values([
       {
         createdAt: NOW,
@@ -99,7 +93,7 @@ describe("mail ingest workspace administration dao", () => {
         createdAt: NOW,
         id: "m_mail_ingest_member",
         organizationId: ORG,
-        role: "mail-admin",
+        role: "member",
         userId: MEMBER,
       },
       {
@@ -160,10 +154,6 @@ describe("mail ingest workspace administration dao", () => {
       "owner@mail-ingest.test",
       "member@mail-ingest.test",
     ]);
-    expect(rows[1]?.user).toMatchObject({
-      role: "mail-admin",
-      roleName: "邮箱管理员",
-    });
     expect(rows[0]?.account).toMatchObject({
       emailAddress: "owner-listener@mail-ingest.test",
       enabled: true,
@@ -280,7 +270,7 @@ describe("mail ingest workspace administration dao", () => {
     error.responseStatus = "NO";
     error.responseText = "Too many simultaneous connections";
 
-    await finishMailIngestAccountRun("mail_ingest_owner_account", error);
+    await finishMailIngestAccountRun("mail_ingest_owner_account", { error });
 
     const [row] = await db
       .select({ lastError: mailIngestAccount.lastError })
@@ -291,5 +281,236 @@ describe("mail ingest workspace administration dao", () => {
     expect(row?.lastError).toContain("Command failed");
     expect(row?.lastError).toContain("NO");
     expect(row?.lastError).toContain("Too many simultaneous connections");
+  }, 30_000);
+
+  it("getMailIngestAccountLoginConfig rejects an account owned by a different user in the same org", async () => {
+    const asDifferentUser = await getMailIngestAccountLoginConfig({
+      id: "mail_ingest_owner_account",
+      organizationId: ORG,
+      userId: MEMBER,
+    });
+    expect(asDifferentUser).toBeNull();
+
+    const asOwner = await getMailIngestAccountLoginConfig({
+      id: "mail_ingest_owner_account",
+      organizationId: ORG,
+      userId: OWNER,
+    });
+    expect(asOwner).not.toBeNull();
+    expect(asOwner?.username).toBe("owner-listener@mail-ingest.test");
+
+    const wrongOrg = await getMailIngestAccountLoginConfig({
+      id: "mail_ingest_owner_account",
+      organizationId: OTHER_ORG,
+      userId: OWNER,
+    });
+    expect(wrongOrg).toBeNull();
+  }, 30_000);
+
+  it("mailIngestAccountExistsInOrg: true same-org, false cross-org/missing", async () => {
+    await expect(
+      mailIngestAccountExistsInOrg({ id: "mail_ingest_owner_account", organizationId: ORG }),
+    ).resolves.toBe(true);
+    await expect(
+      mailIngestAccountExistsInOrg({ id: "mail_ingest_owner_account", organizationId: OTHER_ORG }),
+    ).resolves.toBe(false);
+    await expect(
+      mailIngestAccountExistsInOrg({ id: "does_not_exist", organizationId: ORG }),
+    ).resolves.toBe(false);
+  }, 30_000);
+});
+
+describe("mail ingest observability writers", () => {
+  const OBS_ORG = "test_mail_ingest_obs_org";
+  const OBS_USER = "test_mail_ingest_obs_user";
+
+  async function obsCleanup() {
+    await db.delete(mailIngestAccount).where(eq(mailIngestAccount.organizationId, OBS_ORG));
+    await db.delete(member).where(eq(member.organizationId, OBS_ORG));
+    await db.delete(organization).where(eq(organization.id, OBS_ORG));
+    await db.delete(user).where(eq(user.id, OBS_USER));
+    await db.delete(user).where(eq(user.id, "obs_noacct_user"));
+  }
+
+  beforeEach(obsCleanup, 30_000);
+  afterEach(obsCleanup, 30_000);
+
+  async function insertTestAccount(): Promise<string> {
+    await db.insert(user).values({
+      createdAt: NOW,
+      email: "obs-user@mail-ingest.test",
+      emailVerified: true,
+      id: OBS_USER,
+      name: "Obs User",
+      updatedAt: NOW,
+    });
+    await db.insert(organization).values({
+      createdAt: NOW,
+      id: OBS_ORG,
+      name: "Obs Org",
+      slug: "obs-org",
+    });
+    await db.insert(member).values({
+      createdAt: NOW,
+      id: "m_mail_ingest_obs_member",
+      organizationId: OBS_ORG,
+      role: "owner",
+      userId: OBS_USER,
+    });
+    const account = await createMailIngestAccount({
+      input: {
+        emailAddress: "obs-listener@mail-ingest.test",
+        enabled: true,
+        failedMailbox: "ARC-Failed",
+        imapHost: "imap.mail-ingest.test",
+        imapPort: 993,
+        imapSecure: true,
+        mailbox: "INBOX",
+        password: "obs-password",
+        processedMailbox: "ARC-Processed",
+        subjectKeyword: "boss直聘",
+        username: "obs-listener@mail-ingest.test",
+      },
+      organizationId: OBS_ORG,
+      userId: OBS_USER,
+    });
+    return account.id;
+  }
+
+  it("updateMailIngestMessageResult persists observability fields", async () => {
+    const accountId = await insertTestAccount();
+    const claim = await claimMailIngestMessageForProcessing({
+      accountId,
+      fromAddress: null,
+      mailbox: "INBOX",
+      messageId: null,
+      receivedAt: new Date(),
+      subject: "s",
+      uid: "1",
+      uidValidity: "1",
+    });
+    await updateMailIngestMessageResult(claim.id, {
+      attachmentCount: 2,
+      batchId: null,
+      boundJobDescriptionId: null,
+      extractedJobCodes: ["AUR0001"],
+      jdBindStatus: "bound",
+      resumeAttachmentCount: 1,
+      status: "queued",
+    });
+    const [row] = await db
+      .select()
+      .from(mailIngestMessage)
+      .where(eq(mailIngestMessage.id, claim.id));
+    expect(row.status).toBe("queued");
+    expect(row.jdBindStatus).toBe("bound");
+    expect(row.extractedJobCodes).toEqual(["AUR0001"]);
+    expect(row.resumeAttachmentCount).toBe(1);
+    expect(row.attachmentCount).toBe(2);
+  }, 30_000);
+
+  it("markMailIngestMessageSkipped writes skipped + reason", async () => {
+    const accountId = await insertTestAccount();
+    const claim = await claimMailIngestMessageForProcessing({
+      accountId,
+      fromAddress: null,
+      mailbox: "INBOX",
+      messageId: null,
+      receivedAt: new Date(),
+      subject: "s",
+      uid: "2",
+      uidValidity: "1",
+    });
+    await markMailIngestMessageSkipped(claim.id, "no_supported_attachment", {
+      attachmentCount: 3,
+      resumeAttachmentCount: 0,
+    });
+    const [row] = await db
+      .select()
+      .from(mailIngestMessage)
+      .where(eq(mailIngestMessage.id, claim.id));
+    expect(row.status).toBe("skipped");
+    expect(row.skipReason).toBe("no_supported_attachment");
+    expect(row.resumeAttachmentCount).toBe(0);
+  }, 30_000);
+
+  it("finishMailIngestAccountRun persists last-run counts", async () => {
+    const accountId = await insertTestAccount();
+    await finishMailIngestAccountRun(accountId, {
+      counts: { failed: 1, matched: 3, queued: 2, received: 5, subjectSkipped: 2 },
+    });
+    const [row] = await db
+      .select()
+      .from(mailIngestAccount)
+      .where(eq(mailIngestAccount.id, accountId));
+    expect(row.lastRunReceived).toBe(5);
+    expect(row.lastRunSubjectSkipped).toBe(2);
+    expect(row.lastRunQueued).toBe(2);
+  }, 30_000);
+
+  it("projects messageCount/problemCount/lastRun* on workspace rows", async () => {
+    const accountId = await insertTestAccount();
+    await finishMailIngestAccountRun(accountId, {
+      counts: { failed: 1, matched: 3, queued: 2, received: 5, subjectSkipped: 2 },
+    });
+    await db.insert(mailIngestMessage).values([
+      { accountId, id: "m_ok_1", mailbox: "INBOX", status: "queued", uid: "1", uidValidity: "1" },
+      { accountId, id: "m_ok_2", mailbox: "INBOX", status: "queued", uid: "2", uidValidity: "1" },
+      { accountId, id: "m_fail", mailbox: "INBOX", status: "failed", uid: "3", uidValidity: "1" },
+      { accountId, id: "m_skip", mailbox: "INBOX", status: "skipped", uid: "4", uidValidity: "1" },
+    ]);
+
+    const { records } = await queryPaginatedWorkspaceMailIngestAccounts(OBS_ORG);
+    const row = records.find((r) => r.account?.id === accountId);
+
+    expect(row?.messageCount).toBe(4);
+    expect(row?.problemCount).toBe(2);
+    expect(row?.lastRunReceived).toBe(5);
+    expect(row?.lastRunFailed).toBe(1);
+    expect(row?.lastRunMatched).toBe(3);
+  }, 30_000);
+
+  it("returns account===null member rows with messageCount 0", async () => {
+    // insertTestAccount 建了 OBS_ORG + OBS_USER(owner)。再加一个无账号成员：
+    await insertTestAccount();
+    await db.insert(user).values({
+      createdAt: NOW,
+      email: "obs-noacct@mail-ingest.test",
+      emailVerified: true,
+      id: "obs_noacct_user",
+      name: "No Account",
+      updatedAt: NOW,
+    });
+    await db.insert(member).values({
+      createdAt: NOW,
+      id: "m_obs_noacct",
+      organizationId: OBS_ORG,
+      role: "member",
+      userId: "obs_noacct_user",
+    });
+
+    const { records } = await queryPaginatedWorkspaceMailIngestAccounts(OBS_ORG);
+    const noAcct = records.find((r) => r.user.id === "obs_noacct_user");
+
+    expect(noAcct?.account).toBeNull();
+    expect(noAcct?.messageCount).toBe(0);
+  }, 30_000);
+
+  it("platform rows also carry the new counts (mapper type parity)", async () => {
+    const accountId = await insertTestAccount();
+    await db.insert(mailIngestMessage).values([
+      {
+        accountId,
+        id: "mp_fail",
+        mailbox: "INBOX",
+        status: "failed",
+        uid: "9",
+        uidValidity: "1",
+      },
+    ]);
+    const { records } = await queryPaginatedPlatformMailIngestAccounts();
+    const row = records.find((r) => r.account?.id === accountId);
+    expect(row?.messageCount).toBe(1);
+    expect(row?.problemCount).toBe(1);
   }, 30_000);
 });

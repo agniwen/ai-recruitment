@@ -1,64 +1,24 @@
-import {
-  IconArrowBackUp,
-  IconBriefcase,
-  IconBuilding,
-  IconCircleOff,
-  IconDots,
-  IconEdit,
-  IconEye,
-  IconMail,
-  IconMessage2,
-  IconPhone,
-  IconSparkles,
-  IconUpload,
-  IconUserCheck,
-  IconUsers,
-} from "@tabler/icons-react";
+import { IconBriefcase, IconMail, IconPhone, IconUpload } from "@tabler/icons-react";
 import AvvvatarsModule from "avvvatars-react";
 import { memo } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 import { TimeDisplay } from "@/components/features/display/time-display";
-import {
-  UnsupportedResumeDocumentPreviewTooltip,
-  isPreviewableResumeDocumentInput,
-} from "@/components/features/resume/resume-document-preview-button";
-import {
-  ResumeDocumentFileIcon,
-  getResumeDocumentFileIconKind,
-} from "@/components/features/resume/resume-document-file-icon";
 import { ResumeLifecycleBadge } from "@/components/features/studio/resumes/resume-lifecycle-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import {
-  canDeleteResumeRecord,
-  canEditResumeRecord,
-  canLaunchInterviewFromResume,
-  describeResumeEvaluationStatus,
-  describeResumeProgress,
-  getResumeInterviewGateReason,
-} from "@arc/shared/studio-resumes";
+import { describeResumeProgress } from "@arc/shared/studio-resumes";
 import type {
   ResumeLibraryListRecord,
   ResumeLibraryProfileSnapshot,
+  ResumeLibraryProfileSnapshotLine,
 } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
+import { ResumeLibraryCardActions } from "./resume-library-card-actions";
+import type { ResumeDetailDefaultTab, ResumeLibraryCardProps } from "./resume-library-card.types";
 
-export type ResumeDetailDefaultTab = "overview" | "rounds" | "human-interview" | "offer";
-
-const RESUME_LIBRARY_ACTION_ICON_CLASS = "size-4";
+export type { ResumeDetailDefaultTab, ResumeLibraryCardProps } from "./resume-library-card.types";
 
 const Avvvatars =
   typeof AvvvatarsModule === "function"
@@ -204,20 +164,6 @@ function getResumeLibraryJobDescriptionLabel(record: ResumeLibraryListRecord) {
     : null;
 }
 
-function formatResumeCardAiInterviewers(record: ResumeLibraryListRecord) {
-  if (record.jobDescriptionInterviewers.length === 0) {
-    return "未配置 AI 面试官";
-  }
-  return record.jobDescriptionInterviewers.map((item) => item.name).join("、");
-}
-
-function formatResumeCardHumanInterviewers(record: ResumeLibraryListRecord) {
-  if (record.humanInterviewers.length === 0) {
-    return "未安排真人面试官";
-  }
-  return record.humanInterviewers.map((item) => item.name).join("、");
-}
-
 function canCopyResumeDetailLink({
   currentMemberRole,
   currentUserId,
@@ -302,7 +248,7 @@ function ResumeCardCreatorMeta({ image, name }: { image: string | null; name: st
   return (
     <span className="flex h-6 w-full min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
       <IconUpload aria-hidden className="size-3.5 shrink-0 text-muted-foreground/70" />
-      <span className="shrink-0">创建人</span>
+      <span className="shrink-0">上传人</span>
       <Avatar size="sm" className="size-4! shrink-0">
         {image ? <AvatarImage alt={displayName} src={image} /> : null}
         <AvatarFallback>{getCreatorInitial(name)}</AvatarFallback>
@@ -312,7 +258,7 @@ function ResumeCardCreatorMeta({ image, name }: { image: string | null; name: st
   );
 }
 
-function renderResumeCardProfileSnapshotLine(line: ResumeLibraryProfileSnapshot["work"][number]) {
+function renderResumeCardProfileSnapshotLine(line: ResumeLibraryProfileSnapshotLine) {
   return (
     <p
       className="flex min-w-0 items-baseline gap-2"
@@ -360,296 +306,6 @@ function ResumeCardProfileSnapshot({ snapshot }: { snapshot: ResumeLibraryProfil
   );
 }
 
-export interface ResumeLibraryCardProps {
-  canCreateChat: boolean;
-  canCreateInterview: boolean;
-  canDeleteResumeLibrary: boolean;
-  canUpdateResumeLibrary: boolean;
-  currentMemberRole: string;
-  currentUserId: string | null;
-  onCopyDetailLink: (record: ResumeLibraryListRecord) => void;
-  onDelete: (record: ResumeLibraryListRecord) => void;
-  onEdit: (record: ResumeLibraryListRecord) => void;
-  onLaunchChat: (record: ResumeLibraryListRecord) => void;
-  onLaunchInterview: (record: ResumeLibraryListRecord) => void;
-  onOpenDetail: (record: ResumeLibraryListRecord, tab?: ResumeDetailDefaultTab) => void;
-  onPreviewResume: (record: ResumeLibraryListRecord) => void;
-  onSelectChange: (checked: boolean) => void;
-  onShowDuplicateMatches: (record: ResumeLibraryListRecord) => void;
-  onTransition: (record: ResumeLibraryListRecord, mode: "close" | "reactivate") => void;
-  onViewJobDescription: (id: string) => void;
-  record: ResumeLibraryListRecord;
-  selected: boolean;
-}
-
-type ResumeLibraryCardActionsProps = Pick<
-  ResumeLibraryCardProps,
-  | "canCreateChat"
-  | "canCreateInterview"
-  | "canDeleteResumeLibrary"
-  | "canUpdateResumeLibrary"
-  | "onCopyDetailLink"
-  | "onDelete"
-  | "onEdit"
-  | "onLaunchChat"
-  | "onLaunchInterview"
-  | "onOpenDetail"
-  | "onPreviewResume"
-  | "onTransition"
-  | "record"
-> & {
-  canCopyLink: boolean;
-};
-
-function ResumeLibraryIconActionButton({
-  children,
-  label,
-  onClick,
-}: {
-  children: ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <TooltipProvider delay={700}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button aria-label={label} onClick={onClick} size="icon" type="button" variant="ghost">
-              {children}
-            </Button>
-          }
-        />
-        <TooltipContent side="top">{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-function ResumeLibraryPreviewAction({
-  onPreviewResume,
-  record,
-}: Pick<ResumeLibraryCardProps, "onPreviewResume" | "record">) {
-  const documentKind = getResumeDocumentFileIconKind({ fileName: record.resumeFileName });
-  const previewable = isPreviewableResumeDocumentInput({ fileName: record.resumeFileName });
-  const canPreview = record.hasResumeFile && previewable;
-  const previewLabel = record.resumeFileName ?? "查看简历";
-
-  if (canPreview) {
-    return (
-      <TooltipProvider delay={700}>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-label={previewLabel}
-                className="group/pdf"
-                onClick={() => onPreviewResume(record)}
-                size="icon"
-                title={previewLabel}
-                type="button"
-                variant="ghost"
-              >
-                <ResumeDocumentFileIcon
-                  className={cn(
-                    RESUME_LIBRARY_ACTION_ICON_CLASS,
-                    "transition-transform duration-200 group-hover/pdf:scale-[1.03] motion-reduce:group-hover/pdf:scale-100",
-                  )}
-                  kind={documentKind}
-                />
-              </Button>
-            }
-          />
-          <TooltipContent side="top">查看简历</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
-
-  const disabledIcon = (
-    <span
-      aria-disabled="true"
-      aria-label={record.hasResumeFile ? "该格式不支持预览" : "暂无可预览简历"}
-      className="inline-flex size-9 shrink-0 items-center justify-center rounded-md opacity-45 grayscale"
-      title={record.hasResumeFile ? undefined : "暂无可预览简历"}
-    >
-      <ResumeDocumentFileIcon className={RESUME_LIBRARY_ACTION_ICON_CLASS} kind={documentKind} />
-    </span>
-  );
-
-  return record.hasResumeFile ? (
-    <UnsupportedResumeDocumentPreviewTooltip>
-      {disabledIcon}
-    </UnsupportedResumeDocumentPreviewTooltip>
-  ) : (
-    disabledIcon
-  );
-}
-
-function ResumeLibraryCardMoreMenu({
-  canClose,
-  canCopyLink,
-  canDelete,
-  canLaunchChat,
-  canPreviewFromMenu,
-  canReactivate,
-  onCopyDetailLink,
-  onDelete,
-  onLaunchChat,
-  onPreviewResume,
-  onTransition,
-  record,
-}: Pick<
-  ResumeLibraryCardProps,
-  "onCopyDetailLink" | "onDelete" | "onLaunchChat" | "onPreviewResume" | "onTransition" | "record"
-> & {
-  canClose: boolean;
-  canCopyLink: boolean;
-  canDelete: boolean;
-  canLaunchChat: boolean;
-  canPreviewFromMenu: boolean;
-  canReactivate: boolean;
-}) {
-  return (
-    <DropdownMenu modal={false}>
-      <TooltipProvider delay={700}>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <DropdownMenuTrigger
-                render={
-                  <Button aria-label="更多操作" size="icon" type="button" variant="ghost">
-                    <IconDots className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-                  </Button>
-                }
-              />
-            }
-          />
-          <TooltipContent side="top">更多操作</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>更多操作</DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        {canCopyLink ? (
-          <DropdownMenuItem onClick={() => onCopyDetailLink(record)}>复制详情链接</DropdownMenuItem>
-        ) : null}
-        {canLaunchChat ? (
-          <DropdownMenuItem onClick={() => onLaunchChat(record)}>
-            <IconMessage2 className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-            发起 AI Chat
-          </DropdownMenuItem>
-        ) : null}
-        {canPreviewFromMenu ? (
-          <DropdownMenuItem onClick={() => onPreviewResume(record)}>查看简历</DropdownMenuItem>
-        ) : null}
-        {canClose ? (
-          <DropdownMenuItem onClick={() => onTransition(record, "close")}>
-            <IconCircleOff className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-            标记结案
-          </DropdownMenuItem>
-        ) : null}
-        {canReactivate ? (
-          <DropdownMenuItem onClick={() => onTransition(record, "reactivate")}>
-            <IconArrowBackUp className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-            重新激活
-          </DropdownMenuItem>
-        ) : null}
-        {canDelete ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onDelete(record)} variant="destructive">
-              删除
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function ResumeLibraryCardActions({
-  canCopyLink,
-  canCreateChat,
-  canCreateInterview,
-  canDeleteResumeLibrary,
-  canUpdateResumeLibrary,
-  onCopyDetailLink,
-  onDelete,
-  onEdit,
-  onLaunchChat,
-  onLaunchInterview,
-  onOpenDetail,
-  onPreviewResume,
-  onTransition,
-  record,
-}: ResumeLibraryCardActionsProps) {
-  const canEdit = canUpdateResumeLibrary && canEditResumeRecord(record.resumeParseStatus);
-  const canDelete = canDeleteResumeLibrary && canDeleteResumeRecord(record.resumeParseStatus);
-  const resumeInterviewGateReason = getResumeInterviewGateReason(record.resumeEvaluationStatus);
-  const previewable = isPreviewableResumeDocumentInput({ fileName: record.resumeFileName });
-  const canLaunchInterview =
-    canCreateInterview &&
-    canLaunchInterviewFromResume(record.resumeParseStatus) &&
-    resumeInterviewGateReason === null &&
-    !record.hasInterviewRounds &&
-    record.pipelineStage !== "closed";
-  const canLaunchChat = canCreateChat && canLaunchInterviewFromResume(record.resumeParseStatus);
-  const canPreviewFromMenu =
-    !canEditResumeRecord(record.resumeParseStatus) && record.hasResumeFile && previewable;
-  const canClose =
-    canUpdateResumeLibrary &&
-    canEditResumeRecord(record.resumeParseStatus) &&
-    record.pipelineStage !== "closed";
-  const canReactivate =
-    canUpdateResumeLibrary &&
-    canEditResumeRecord(record.resumeParseStatus) &&
-    record.pipelineStage === "closed";
-
-  return (
-    <div className="flex justify-end self-center">
-      <div className="flex items-center justify-end gap-1 xl:flex-col xl:items-center">
-        <ResumeLibraryPreviewAction onPreviewResume={onPreviewResume} record={record} />
-        <ResumeLibraryIconActionButton
-          label="查看"
-          onClick={() => onOpenDetail(record, "overview")}
-        >
-          <IconEye className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-        </ResumeLibraryIconActionButton>
-        {canEdit ? (
-          <ResumeLibraryIconActionButton label="编辑" onClick={() => onEdit(record)}>
-            <IconEdit className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-          </ResumeLibraryIconActionButton>
-        ) : null}
-        {canLaunchInterview ? (
-          <ResumeLibraryIconActionButton
-            label="发起 AI 面试"
-            onClick={() => onLaunchInterview(record)}
-          >
-            <IconSparkles className={RESUME_LIBRARY_ACTION_ICON_CLASS} />
-          </ResumeLibraryIconActionButton>
-        ) : null}
-        <ResumeLibraryCardMoreMenu
-          canClose={canClose}
-          canCopyLink={canCopyLink}
-          canDelete={canDelete}
-          canLaunchChat={canLaunchChat}
-          canPreviewFromMenu={canPreviewFromMenu}
-          canReactivate={canReactivate}
-          onCopyDetailLink={onCopyDetailLink}
-          onDelete={onDelete}
-          onLaunchChat={onLaunchChat}
-          onPreviewResume={onPreviewResume}
-          onTransition={onTransition}
-          record={record}
-        />
-      </div>
-    </div>
-  );
-}
-
 function ResumeLibraryCardComponent({
   canCreateChat,
   canCreateInterview,
@@ -672,13 +328,12 @@ function ResumeLibraryCardComponent({
   selected,
 }: ResumeLibraryCardProps) {
   const jobDescriptionLabel = getResumeLibraryJobDescriptionLabel(record);
-  const { jobDescriptionId } = record;
   const lifecycle = describeLifecycleCell(record);
-  const resumeEvaluation = describeResumeEvaluationStatus(record.resumeEvaluationStatus);
   const profileSnapshot = record.resumeProfileSnapshot;
   const skills = record.resumeSkills;
   const summary = record.resumeSummary;
   const canCopyLink = canCopyResumeDetailLink({ currentMemberRole, currentUserId, record });
+  const { jobDescriptionId } = record;
   const jobDescriptionTextClass =
     "block w-full max-w-full min-w-0 truncate text-left underline decoration-transparent underline-offset-2 transition-colors hover:decoration-foreground/40";
   const toggleSelected = () => onSelectChange(!selected);
@@ -771,54 +426,15 @@ function ResumeLibraryCardComponent({
                       </button>
                     ) : (
                       <span className={cn(jobDescriptionTextClass, "text-muted-foreground")}>
-                        未绑定
+                        未绑定岗位
                       </span>
                     )}
                   </ResumeCardMetaItem>
                   <div className="min-w-0">
                     <ResumeCardCreatorMeta image={record.creatorImage} name={record.creatorName} />
                   </div>
-                  <ResumeCardMetaItem
-                    icon={<IconUserCheck className="size-3.5" />}
-                    label="评估状态"
-                  >
-                    <span className="inline-flex min-w-0 items-center gap-1">
-                      <span className="shrink-0">评估：</span>
-                      <Badge
-                        className="h-5 max-w-20 truncate px-1.5 text-[11px]"
-                        variant={resumeEvaluation.tone}
-                      >
-                        {resumeEvaluation.label}
-                      </Badge>
-                    </span>
-                  </ResumeCardMetaItem>
-                  <ResumeCardMetaItem icon={<IconUserCheck className="size-3.5" />} label="评估人">
-                    评估人：{formatResumeCardContact(record.resumeEvaluatorName, "未评估")}
-                  </ResumeCardMetaItem>
-                  <ResumeCardMetaItem icon={<IconBuilding className="size-3.5" />} label="用人组织">
-                    用人组织：{formatResumeCardContact(record.hiringUnitName, "未分配用人组织")}
-                  </ResumeCardMetaItem>
-                  <ResumeCardMetaItem
-                    className="sm:col-span-2 2xl:col-span-1"
-                    icon={<IconUsers className="size-3.5" />}
-                    label="AI 面试官"
-                  >
-                    AI 面试官：{formatResumeCardAiInterviewers(record)}
-                  </ResumeCardMetaItem>
-                  <ResumeCardMetaItem
-                    className="sm:col-span-2 2xl:col-span-1"
-                    icon={<IconUsers className="size-3.5" />}
-                    label="真人面试官"
-                  >
-                    真人面试官：{formatResumeCardHumanInterviewers(record)}
-                  </ResumeCardMetaItem>
                   <span className="inline-flex min-h-6 min-w-0 items-center text-muted-foreground text-xs">
-                    <TimeDisplay
-                      as="span"
-                      className="[&_svg]:text-muted-foreground/70"
-                      emptyText="—"
-                      value={record.createdAt}
-                    />
+                    <TimeDisplay as="span" emptyText="—" value={record.createdAt} />
                   </span>
                   <ResumeCardMetaItem icon={<IconMail className="size-3.5" />} label="邮箱">
                     {formatResumeCardContact(record.candidateEmail, "未填写邮箱")}

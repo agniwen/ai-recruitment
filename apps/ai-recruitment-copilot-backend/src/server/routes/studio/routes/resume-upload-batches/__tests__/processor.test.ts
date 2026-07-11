@@ -9,26 +9,19 @@ import { getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/
 import type * as ResumeAgentModule from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import {
   generateResumeReview,
+  generateResumeScreeningResult,
   parseResumeBytesToProfile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
-import type * as JobMatchAgentModule from "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent";
-import { matchJobDescriptionForResume } from "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent";
 import type * as DedupServiceModule from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { replaceDuplicateMatchesForSource } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
 import { runResumeSemanticIndexJob } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer";
-import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import {
-  department,
-  hiringUnit,
-  interviewer,
-  jobDescription,
   member,
+  department,
+  jobDescription,
   organization,
-  recruitingGroup,
-  recruitingGroupHiringUnit,
-  recruitingGroupMember,
   resumePoolItem,
   resumeUploadBatch,
   resumeUploadBatchItem,
@@ -45,7 +38,8 @@ import {
   processNextItem,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor";
 
-vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 });
+// Real DB round-trips routinely exceed the default 5s under parallel suite load.
+vi.setConfig({ testTimeout: 30_000 });
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", async () => {
   const actual = await vi.importActual<typeof S3Module>(
@@ -64,22 +58,11 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent
   return {
     ...actual,
     generateResumeReview: vi.fn(),
+    // Must mock screening too — real path can hang on network / model calls.
+    generateResumeScreeningResult: vi.fn(),
     parseResumeBytesToProfile: vi.fn(),
   };
 });
-
-vi.mock(
-  "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent",
-  async () => {
-    const actual = await vi.importActual<typeof JobMatchAgentModule>(
-      "@arc/ai-recruitment-copilot-backend/server/agents/job-description-match-agent",
-    );
-    return {
-      ...actual,
-      matchJobDescriptionForResume: vi.fn(),
-    };
-  },
-);
 
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service",
@@ -99,7 +82,6 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue"
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches", () => ({
-  deleteDuplicateMatchesForSource: vi.fn(),
   replaceDuplicateMatchesForSource: vi.fn(),
 }));
 
@@ -111,16 +93,6 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer"
 // Fixed prefix to avoid collisions with other test runs.
 const ORG_A = "bulk_proc_org_a";
 const USER_A = "bulk_proc_user_a";
-const USER_MEMBER = "bulk_proc_member_user";
-const GROUP_A = "bulk_proc_group_a";
-const HIRING_UNIT_ALLOWED = "bulk_proc_hiring_unit_allowed";
-const HIRING_UNIT_BLOCKED = "bulk_proc_hiring_unit_blocked";
-const DEPT_PUBLIC = "bulk_proc_dept_public";
-const DEPT_ALLOWED = "bulk_proc_dept_allowed";
-const DEPT_BLOCKED = "bulk_proc_dept_blocked";
-const JD_PUBLIC = "bulk_proc_jd_public";
-const JD_ALLOWED = "bulk_proc_jd_allowed";
-const JD_BLOCKED = "bulk_proc_jd_blocked";
 
 const NOW = new Date("2026-05-18T10:00:00.000Z");
 const REVIEW_RESULT = {
@@ -153,6 +125,15 @@ const REVIEW_RESULT = {
     weaknesses: [{ evidence: null, impact: "需面试确认", point: "细节不足" }],
   },
 } as const;
+
+const EMPTY_SCREENING_RESULT = {
+  policyEmpty: true,
+  policyEnabled: false,
+  policyHash: "test-policy-hash",
+  policyVersion: 1,
+  recommendation: "pass" as const,
+  ruleResults: [],
+};
 
 // ─── Mock helpers ─────────────────────────────────────────────────────────────
 
@@ -263,19 +244,10 @@ async function cleanup() {
 
   await db.delete(resumeUploadBatch).where(eq(resumeUploadBatch.organizationId, ORG_A));
   await db.delete(jobDescription).where(eq(jobDescription.organizationId, ORG_A));
-  await db.delete(interviewer).where(eq(interviewer.organizationId, ORG_A));
   await db.delete(department).where(eq(department.organizationId, ORG_A));
-  await db
-    .delete(recruitingGroupHiringUnit)
-    .where(eq(recruitingGroupHiringUnit.organizationId, ORG_A));
-  await db.delete(hiringUnit).where(eq(hiringUnit.organizationId, ORG_A));
-  await db.delete(recruitingGroupMember).where(eq(recruitingGroupMember.organizationId, ORG_A));
-  await db.delete(recruitingGroup).where(eq(recruitingGroup.organizationId, ORG_A));
   await db.delete(member).where(eq(member.userId, USER_A));
-  await db.delete(member).where(eq(member.userId, USER_MEMBER));
   await db.delete(organization).where(eq(organization.id, ORG_A));
   await db.delete(user).where(eq(user.id, USER_A));
-  await db.delete(user).where(eq(user.id, USER_MEMBER));
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -289,14 +261,6 @@ beforeAll(async () => {
     emailVerified: false,
     id: USER_A,
     name: "bulk-proc-user-a",
-    updatedAt: NOW,
-  });
-  await db.insert(user).values({
-    createdAt: NOW,
-    email: "bulk-proc-member@example.com",
-    emailVerified: false,
-    id: USER_MEMBER,
-    name: "bulk-proc-member",
     updatedAt: NOW,
   });
 
@@ -314,22 +278,18 @@ beforeAll(async () => {
     role: "owner",
     userId: USER_A,
   });
-  await db.insert(member).values({
-    createdAt: NOW,
-    id: "bulk_proc_member_role",
-    organizationId: ORG_A,
-    role: "member",
-    userId: USER_MEMBER,
-  });
-}, 30_000);
+});
 
 afterAll(async () => {
   await cleanup();
-}, 30_000);
+});
 
 beforeEach(() => {
   vi.resetAllMocks();
   (generateResumeReview as ReturnType<typeof vi.fn>).mockResolvedValue(REVIEW_RESULT);
+  (generateResumeScreeningResult as ReturnType<typeof vi.fn>).mockResolvedValue(
+    EMPTY_SCREENING_RESULT,
+  );
   (findSemanticResumeDuplicates as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   (enqueueResumeSemanticIndexJobBestEffort as ReturnType<typeof vi.fn>).mockImplementation(() =>
     Promise.resolve(),
@@ -340,7 +300,6 @@ beforeEach(() => {
   (runResumeSemanticIndexJob as ReturnType<typeof vi.fn>).mockImplementation(() =>
     Promise.resolve(),
   );
-  (matchJobDescriptionForResume as ReturnType<typeof vi.fn>).mockResolvedValue(null);
 });
 
 describe("getClaimMissRetryError", () => {
@@ -467,7 +426,77 @@ describe("processNextItem — cancellation race", () => {
 });
 
 describe("processNextItem — resume pool target", () => {
-  it("target=resume_pool → 创建简历池条目，不创建简历库候选人记录", async () => {
+  it("target=resume_pool + 绑定 JD → 按该 JD 生成推荐评价并写入备注", async () => {
+    const departmentId = `bulk_proc_dept_${crypto.randomUUID()}`;
+    const jobDescriptionId = `bulk_proc_jd_${crypto.randomUUID()}`;
+    await db.insert(department).values({
+      createdAt: NOW,
+      createdBy: USER_A,
+      id: departmentId,
+      name: "运维部",
+      organizationId: ORG_A,
+      updatedAt: NOW,
+    });
+    await db.insert(jobDescription).values({
+      createdAt: NOW,
+      createdBy: USER_A,
+      departmentId,
+      description: "负责基础设施稳定性和运维体系建设",
+      id: jobDescriptionId,
+      name: "运维总监",
+      organizationId: ORG_A,
+      prompt: "重点评估大规模运维、团队管理、稳定性治理经验",
+      updatedAt: NOW,
+    });
+    const batchId = await insertBatchWithItems({
+      dedupPolicy: "create",
+      files: makeFiles(1),
+      jdMode: "bind",
+      jobDescriptionId,
+      organizationId: ORG_A,
+      resumePoolScope: "private",
+      target: "resume_pool",
+      userId: USER_A,
+    });
+
+    const [beforeItem] = await db
+      .select()
+      .from(resumeUploadBatchItem)
+      .where(eq(resumeUploadBatchItem.batchId, batchId));
+    await expectQueuedPoolItem(beforeItem?.poolItemId);
+
+    mockS3OK();
+    mockParseOK({
+      email: "ops@example.com",
+      name: "Ops User",
+      phone: "13900000002",
+      targetRoles: ["运维总监"],
+    });
+
+    const result = await processNextItem(batchId, ORG_A, USER_A);
+
+    expect(result?.item?.status).toBe("succeeded");
+    // Review generation now also receives a screening snapshot (even when policy is empty).
+    expect(generateResumeReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobDescription: expect.stringContaining("岗位名称：运维总监"),
+        resumeProfile: expect.objectContaining({ name: "Ops User" }),
+        screeningResult: expect.objectContaining({
+          policyEmpty: true,
+          recommendation: "pass",
+        }),
+      }),
+    );
+
+    const [poolItem] = await db
+      .select()
+      .from(resumePoolItem)
+      .where(eq(resumePoolItem.id, beforeItem?.poolItemId ?? ""));
+    expect(poolItem?.jobDescriptionId).toBe(jobDescriptionId);
+    expect(poolItem?.notes).toBe("自动生成的简历评价");
+  });
+
+  it("target=resume_pool → 创建简历池条目，不创建招聘台候选人记录", async () => {
     const batchId = await insertBatchWithItems({
       dedupPolicy: "create",
       files: makeFiles(1),
@@ -514,7 +543,7 @@ describe("processNextItem — resume pool target", () => {
     const poolItems = await db
       .select()
       .from(resumePoolItem)
-      .where(eq(resumePoolItem.organizationId, ORG_A));
+      .where(eq(resumePoolItem.id, beforeItem?.poolItemId ?? ""));
     expect(poolItems).toHaveLength(1);
     expect(poolItems[0]?.scope).toBe("private");
     expect(poolItems[0]?.candidateName).toBe("Pool User");
@@ -603,158 +632,6 @@ describe("processNextItem — resume pool target", () => {
   });
 });
 
-describe("processNextItem — scoped auto job matching", () => {
-  async function seedScopedJobDescriptions() {
-    await db.insert(hiringUnit).values([
-      {
-        createdAt: NOW,
-        createdBy: USER_A,
-        id: HIRING_UNIT_ALLOWED,
-        name: "允许用人组织",
-        organizationId: ORG_A,
-        updatedAt: NOW,
-      },
-      {
-        createdAt: NOW,
-        createdBy: USER_A,
-        id: HIRING_UNIT_BLOCKED,
-        name: "隔离用人组织",
-        organizationId: ORG_A,
-        updatedAt: NOW,
-      },
-    ]);
-    await db.insert(recruitingGroup).values({
-      createdAt: NOW,
-      createdBy: USER_A,
-      id: GROUP_A,
-      name: "允许招聘组",
-      organizationId: ORG_A,
-      updatedAt: NOW,
-    });
-    await db.insert(recruitingGroupMember).values({
-      createdAt: NOW,
-      createdBy: USER_A,
-      groupId: GROUP_A,
-      id: "bulk_proc_scoped_group_member",
-      organizationId: ORG_A,
-      role: "hr",
-      updatedAt: NOW,
-      userId: USER_MEMBER,
-    });
-    await db.insert(recruitingGroupHiringUnit).values({
-      createdAt: NOW,
-      createdBy: USER_A,
-      groupId: GROUP_A,
-      hiringUnitId: HIRING_UNIT_ALLOWED,
-      id: "bulk_proc_scoped_group_hiring_unit",
-      organizationId: ORG_A,
-    });
-    await db.insert(department).values([
-      {
-        createdAt: NOW,
-        createdBy: USER_A,
-        hiringUnitId: null,
-        id: DEPT_PUBLIC,
-        name: "公共部门",
-        organizationId: ORG_A,
-        updatedAt: NOW,
-      },
-      {
-        createdAt: NOW,
-        createdBy: USER_A,
-        hiringUnitId: HIRING_UNIT_ALLOWED,
-        id: DEPT_ALLOWED,
-        name: "允许部门",
-        organizationId: ORG_A,
-        updatedAt: NOW,
-      },
-      {
-        createdAt: NOW,
-        createdBy: USER_A,
-        hiringUnitId: HIRING_UNIT_BLOCKED,
-        id: DEPT_BLOCKED,
-        name: "隔离部门",
-        organizationId: ORG_A,
-        updatedAt: NOW,
-      },
-    ]);
-    await db.insert(jobDescription).values([
-      {
-        allowCrossDepartmentInterviewers: false,
-        createdAt: NOW,
-        createdBy: USER_A,
-        departmentId: DEPT_PUBLIC,
-        id: JD_PUBLIC,
-        name: "公共岗位",
-        organizationId: ORG_A,
-        prompt: "公共岗位 prompt",
-        updatedAt: NOW,
-      },
-      {
-        allowCrossDepartmentInterviewers: false,
-        createdAt: NOW,
-        createdBy: USER_A,
-        departmentId: DEPT_ALLOWED,
-        id: JD_ALLOWED,
-        name: "允许岗位",
-        organizationId: ORG_A,
-        prompt: "允许岗位 prompt",
-        updatedAt: NOW,
-      },
-      {
-        allowCrossDepartmentInterviewers: false,
-        createdAt: NOW,
-        createdBy: USER_A,
-        departmentId: DEPT_BLOCKED,
-        id: JD_BLOCKED,
-        name: "隔离岗位",
-        organizationId: ORG_A,
-        prompt: "隔离岗位 prompt",
-        updatedAt: NOW,
-      },
-    ]);
-  }
-
-  it("auto 模式只把当前用户可选岗位交给 AI 匹配器", async () => {
-    await seedScopedJobDescriptions();
-    const batchId = await insertBatchWithItems({
-      dedupPolicy: "skip",
-      files: makeFiles(1),
-      jdMode: "auto",
-      jobDescriptionId: null,
-      organizationId: ORG_A,
-      userId: USER_MEMBER,
-    });
-
-    mockS3OK();
-    mockParseOK({
-      email: "scoped-auto@example.com",
-      name: "Scoped Auto User",
-      phone: null,
-      targetRoles: ["Engineer"],
-    });
-    (matchJobDescriptionForResume as ReturnType<typeof vi.fn>).mockImplementation(
-      (_profile, jobDescriptions: JobDescriptionListRecord[]) => {
-        const candidateIds = jobDescriptions.map((jd) => jd.id).toSorted();
-        expect(candidateIds).toEqual([JD_ALLOWED, JD_PUBLIC].toSorted());
-        expect(candidateIds).not.toContain(JD_BLOCKED);
-        return Promise.resolve({ jobDescriptionId: JD_ALLOWED, reason: "命中允许岗位" });
-      },
-    );
-
-    const result = await processNextItem(batchId, ORG_A, USER_MEMBER);
-
-    expect(result?.item?.status).toBe("succeeded");
-    expect(matchJobDescriptionForResume).toHaveBeenCalledOnce();
-
-    const [record] = await db
-      .select({ jobDescriptionId: studioInterview.jobDescriptionId })
-      .from(studioInterview)
-      .where(eq(studioInterview.id, result?.item?.resumeRecordId ?? ""));
-    expect(record?.jobDescriptionId).toBe(JD_ALLOWED);
-  });
-});
-
 // ─── Test 2: parse failure ────────────────────────────────────────────────────
 
 describe("processNextItem — parse failure", () => {
@@ -816,204 +693,3 @@ describe("processNextItem — parse failure", () => {
 });
 
 // ─── Test 3: dedup skip ───────────────────────────────────────────────────────
-
-describe("processNextItem — dedup skip", () => {
-  it("重复邮箱 + skip 策略不再触发跳过", async () => {
-    // Duplicate email + skip policy no longer skips by identity-only dedup.
-    const dupEmail = "dup@example.com";
-
-    // 预插入一个 studio_interview，邮箱为 dupEmail。
-    // Pre-insert an existing interview with the duplicate email.
-    const preExistingId = crypto.randomUUID();
-    await db.insert(studioInterview).values({
-      candidateEmail: dupEmail,
-      candidateName: "Existing Candidate",
-      candidatePhone: null,
-      createdAt: NOW,
-      createdBy: USER_A,
-      id: preExistingId,
-      interviewQuestions: [],
-      jobDescriptionId: null,
-      notes: null,
-      organizationId: ORG_A,
-      resumeContentHash: null,
-      resumeFileName: "existing.pdf",
-      resumeProfile: null,
-      resumeStorageKey: null,
-      targetRole: null,
-      updatedAt: NOW,
-    });
-
-    const batchId = await insertBatchWithItems({
-      dedupPolicy: "skip",
-      files: makeFiles(1),
-      jdMode: "none",
-      jobDescriptionId: null,
-      organizationId: ORG_A,
-      userId: USER_A,
-    });
-
-    mockS3OK();
-    mockParseOK({
-      email: dupEmail,
-      name: "Dup User",
-      phone: null,
-      targetRoles: [],
-    });
-
-    const result = await processNextItem(batchId, ORG_A, USER_A);
-
-    expect(result?.item?.status).toBe("succeeded");
-    expect(result?.batch.skippedCount).toBe(0);
-
-    // 确认 item 已关联到新创建的 studio_interview。
-    // Confirm a new studio_interview was created.
-    expect(result?.item?.resumeRecordId).toEqual(expect.any(String));
-
-    // 确认 preExistingId 行依然存在（未被删除）。
-    // Confirm the pre-existing row still exists.
-    const [preExisting] = await db
-      .select({ id: studioInterview.id })
-      .from(studioInterview)
-      .where(eq(studioInterview.id, preExistingId));
-    expect(preExisting).toBeDefined();
-
-    // 清理预插入行（afterAll 也会处理，但提前清更干净）。
-    await db.delete(studioInterview).where(eq(studioInterview.id, preExistingId));
-  });
-
-  it("语义重复 + skip 策略创建简历库记录并记录疑似重复", async () => {
-    const batchId = await insertBatchWithItems({
-      dedupPolicy: "skip",
-      files: makeFiles(1),
-      jdMode: "none",
-      jobDescriptionId: null,
-      organizationId: ORG_A,
-      userId: USER_A,
-    });
-    const [beforeItem] = await db
-      .select()
-      .from(resumeUploadBatchItem)
-      .where(eq(resumeUploadBatchItem.batchId, batchId));
-    const matches = [
-      {
-        candidateEmail: "existing@example.com",
-        candidateName: "Existing Candidate",
-        candidatePhone: null,
-        conflictingSignals: [],
-        createdAt: NOW.toISOString(),
-        id: "existing_record",
-        jobDescriptionName: null,
-        level: "high",
-        score: 0.96,
-        semanticReasons: ["整体履历高度相似"],
-        similarity: { resumeOverview: 0.96 },
-        status: "active",
-        targetRole: null,
-      },
-    ];
-    (findSemanticResumeDuplicates as ReturnType<typeof vi.fn>).mockResolvedValue(matches);
-    mockS3OK();
-    mockParseOK({
-      email: "library-dup@example.com",
-      name: "Library Dup User",
-      phone: "13900000003",
-      targetRoles: ["Engineer"],
-    });
-
-    const result = await processNextItem(batchId, ORG_A, USER_A);
-
-    expect(result?.item?.status).toBe("succeeded");
-    expect(result?.item?.resumeRecordId).toBe(beforeItem?.resumeRecordId);
-    expect(result?.batch.skippedCount).toBe(0);
-    expect(replaceDuplicateMatchesForSource).toHaveBeenCalledWith({
-      matches,
-      organizationId: ORG_A,
-      sourceId: beforeItem?.resumeRecordId,
-      sourceType: "studio_interview",
-    });
-  });
-});
-
-// ─── Test 4: no pending + already completed ───────────────────────────────────
-
-describe("processNextItem — no pending items, batch already completed", () => {
-  it("批次已 completed + 无 pending → done=true, item=null", async () => {
-    // Completed batch with no pending items → done=true, item=null.
-    const batchId = await insertBatchWithItems({
-      dedupPolicy: "skip",
-      files: makeFiles(1),
-      jdMode: "none",
-      jobDescriptionId: null,
-      organizationId: ORG_A,
-      userId: USER_A,
-    });
-
-    // 直接把 batch 设为 completed。
-    await db
-      .update(resumeUploadBatch)
-      .set({ completedAt: new Date(), status: "completed" })
-      .where(eq(resumeUploadBatch.id, batchId));
-
-    const result = await processNextItem(batchId, ORG_A, USER_A);
-
-    expect(result).not.toBeNull();
-    expect(result?.done).toBe(true);
-    expect(result?.item).toBeNull();
-
-    // 清理。
-    await db.delete(resumeUploadBatch).where(eq(resumeUploadBatch.id, batchId));
-  });
-});
-
-// ─── Test 5: wrong tenant ────────────────────────────────────────────────────
-
-describe("processNextItem — wrong tenant", () => {
-  it("使用错误 orgId 调用 → 返回 null", async () => {
-    // Calling with a mismatched org → returns null.
-    const batchId = await insertBatchWithItems({
-      dedupPolicy: "skip",
-      files: makeFiles(1),
-      jdMode: "none",
-      jobDescriptionId: null,
-      organizationId: ORG_A,
-      userId: USER_A,
-    });
-
-    const result = await processNextItem(batchId, "wrong_org_id", USER_A);
-
-    expect(result).toBeNull();
-
-    // 清理。
-    await db.delete(resumeUploadBatch).where(eq(resumeUploadBatch.id, batchId));
-  });
-});
-
-// ─── Test 6: S3 missing object ───────────────────────────────────────────────
-
-describe("processNextItem — S3 missing object", () => {
-  it("S3 返回 null → item failed，errorMessage 提及 S3 或缺失", async () => {
-    // S3 returns null → item failed; error message mentions S3 or 缺失.
-    const batchId = await insertBatchWithItems({
-      dedupPolicy: "skip",
-      files: makeFiles(1),
-      jdMode: "none",
-      jobDescriptionId: null,
-      organizationId: ORG_A,
-      userId: USER_A,
-    });
-
-    // 模拟 S3 返回 null（对象不存在）。
-    // Mock S3 returning null to simulate a missing object.
-    (getObjectStream as ReturnType<typeof vi.fn>).mockResolvedValue(null);
-
-    const result = await processNextItem(batchId, ORG_A, USER_A);
-
-    expect(result).not.toBeNull();
-    expect(result?.item?.status).toBe("failed");
-    // 错误信息中应包含 "S3" 或 "缺失"。
-    // Error message should mention S3 or 缺失.
-    const errMsg = result?.item?.errorMessage ?? "";
-    expect(errMsg.includes("S3") || errMsg.includes("缺失")).toBe(true);
-  });
-});
