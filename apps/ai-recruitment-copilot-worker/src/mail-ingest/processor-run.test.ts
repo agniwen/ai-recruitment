@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   errorListenerCount: 0,
   finishMailIngestAccountRun: vi.fn(),
   listEnabledMailIngestAccounts: vi.fn(),
+  markMailIngestMessageSkipped: vi.fn(),
 }));
 
 vi.mock("imapflow", () => ({
@@ -52,11 +53,19 @@ vi.mock(
   }),
 );
 
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao",
+  () => ({
+    fetchJobDescriptionsByCodes: vi.fn(),
+  }),
+);
+
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/mail-ingest/dao", () => ({
   claimMailIngestAccount: mocks.claimMailIngestAccount,
   claimMailIngestMessageForProcessing: vi.fn(),
   finishMailIngestAccountRun: mocks.finishMailIngestAccountRun,
   listEnabledMailIngestAccounts: mocks.listEnabledMailIngestAccounts,
+  markMailIngestMessageSkipped: mocks.markMailIngestMessageSkipped,
   updateMailIngestMessageResult: vi.fn(),
 }));
 
@@ -98,6 +107,7 @@ describe("runMailIngestOnce", () => {
     mocks.listEnabledMailIngestAccounts.mockResolvedValue([account()]);
     mocks.claimMailIngestAccount.mockResolvedValue(true);
     mocks.finishMailIngestAccountRun.mockImplementation(() => Promise.resolve());
+    mocks.markMailIngestMessageSkipped.mockImplementation(() => Promise.resolve());
   });
 
   it("attaches an IMAP error listener so socket errors do not crash the worker process", async () => {
@@ -105,6 +115,9 @@ describe("runMailIngestOnce", () => {
 
     expect(mocks.errorListenerCount).toBeGreaterThan(0);
     expect(result).toMatchObject({ accounts: 1, messagesFailed: 1 });
-    expect(mocks.finishMailIngestAccountRun).toHaveBeenCalledWith("account_1", expect.any(Error));
+    expect(mocks.finishMailIngestAccountRun).toHaveBeenCalledWith(
+      "account_1",
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
   });
 });

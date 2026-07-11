@@ -1,4 +1,18 @@
-import { and, asc, count, desc, eq, ilike, isNull, lt, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -10,14 +24,23 @@ import type {
   PaginationParams,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import {
+  jobDescription,
   mailIngestAccount,
   mailIngestMessage,
   member,
   organization,
   organizationRole,
+  resumePoolItem,
+  resumeUploadBatchItem,
   user as userTable,
 } from "@arc/db-schema/schema";
-import type { MailIngestMessageStatus } from "@arc/db-schema/schema";
+import type {
+  MailIngestJdBindStatus,
+  MailIngestMessageStatus,
+  MailIngestSkipReason,
+} from "@arc/db-schema/schema";
+import type { ResumeParseStatus } from "@arc/db-schema/studio-interviews";
+import { listActiveDuplicateMatchCounts } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
 import {
   decryptMailIngestSecret,
   encryptMailIngestSecret,
@@ -29,6 +52,7 @@ import type { z } from "zod";
 const MAIL_INGEST_ACCOUNT_LEASE_MS = 14 * 60 * 1000;
 const MAIL_INGEST_MESSAGE_PROCESSING_STALE_MS = 30 * 60 * 1000;
 const ERROR_MESSAGE_MAX = 500;
+const MAIL_MESSAGE_ERROR_DISPLAY_MAX = 300;
 const WORKSPACE_MAIL_INGEST_SORT_COLUMNS = [
   "userName",
   "userEmail",
@@ -77,6 +101,13 @@ export interface MailIngestAccountDto {
 
 export interface WorkspaceMailIngestAccountRow {
   account: MailIngestAccountDto | null;
+  lastRunFailed: number | null;
+  lastRunMatched: number | null;
+  lastRunQueued: number | null;
+  lastRunReceived: number | null;
+  lastRunSubjectSkipped: number | null;
+  messageCount: number;
+  problemCount: number;
   user: {
     email: string;
     id: string;
@@ -377,8 +408,15 @@ function listWorkspaceMailIngestAccountRows({
       accountSubjectKeyword: mailIngestAccount.subjectKeyword,
       accountUpdatedAt: mailIngestAccount.updatedAt,
       accountUsername: mailIngestAccount.username,
+      lastRunFailed: mailIngestAccount.lastRunFailed,
+      lastRunMatched: mailIngestAccount.lastRunMatched,
+      lastRunQueued: mailIngestAccount.lastRunQueued,
+      lastRunReceived: mailIngestAccount.lastRunReceived,
+      lastRunSubjectSkipped: mailIngestAccount.lastRunSubjectSkipped,
       memberRole: member.role,
       memberRoleName: organizationRole.name,
+      messageCount: sql<number>`(select count(*)::int from mail_ingest_message where account_id = ${mailIngestAccount.id})`,
+      problemCount: sql<number>`(select count(*)::int from mail_ingest_message where account_id = ${mailIngestAccount.id} and status in ('failed','skipped'))`,
       userEmail: userTable.email,
       userId: userTable.id,
       userImage: userTable.image,
@@ -447,11 +485,18 @@ function listPlatformMailIngestAccountRows({
       accountSubjectKeyword: mailIngestAccount.subjectKeyword,
       accountUpdatedAt: mailIngestAccount.updatedAt,
       accountUsername: mailIngestAccount.username,
+      lastRunFailed: mailIngestAccount.lastRunFailed,
+      lastRunMatched: mailIngestAccount.lastRunMatched,
+      lastRunQueued: mailIngestAccount.lastRunQueued,
+      lastRunReceived: mailIngestAccount.lastRunReceived,
+      lastRunSubjectSkipped: mailIngestAccount.lastRunSubjectSkipped,
       memberRole: member.role,
       memberRoleName: organizationRole.name,
+      messageCount: sql<number>`(select count(*)::int from mail_ingest_message where account_id = ${mailIngestAccount.id})`,
       organizationId: organization.id,
       organizationName: organization.name,
       organizationSlug: organization.slug,
+      problemCount: sql<number>`(select count(*)::int from mail_ingest_message where account_id = ${mailIngestAccount.id} and status in ('failed','skipped'))`,
       userEmail: userTable.email,
       userId: userTable.id,
       userImage: userTable.image,
@@ -540,6 +585,13 @@ function toWorkspaceMailIngestAccountRow(
 ): WorkspaceMailIngestAccountRow {
   return {
     account: toNullableAccountDto(row),
+    lastRunFailed: row.lastRunFailed,
+    lastRunMatched: row.lastRunMatched,
+    lastRunQueued: row.lastRunQueued,
+    lastRunReceived: row.lastRunReceived,
+    lastRunSubjectSkipped: row.lastRunSubjectSkipped,
+    messageCount: row.messageCount,
+    problemCount: row.problemCount,
     user: {
       email: row.userEmail,
       id: row.userId,
@@ -709,6 +761,21 @@ export async function getMailIngestAccountLoginConfig({
   return row ? toLoginConfig(row) : null;
 }
 
+export async function mailIngestAccountExistsInOrg({
+  id,
+  organizationId,
+}: {
+  id: string;
+  organizationId: string;
+}): Promise<boolean> {
+  const [row] = await db
+    .select({ id: mailIngestAccount.id })
+    .from(mailIngestAccount)
+    .where(and(eq(mailIngestAccount.id, id), eq(mailIngestAccount.organizationId, organizationId)))
+    .limit(1);
+  return Boolean(row);
+}
+
 function buildAccountUpdateValues(input: UpdateAccountInput) {
   const updateValues: Partial<typeof mailIngestAccount.$inferInsert> = {
     updatedAt: new Date(),
@@ -847,16 +914,49 @@ export async function claimMailIngestAccount(accountId: string): Promise<boolean
 
 export async function finishMailIngestAccountRun(
   accountId: string,
-  error?: unknown,
+  opts?:
+    | {
+        error?: unknown;
+        counts?: {
+          failed: number;
+          matched: number;
+          queued: number;
+          received: number;
+          subjectSkipped: number;
+        };
+      }
+    | unknown,
 ): Promise<void> {
+  const result =
+    opts && typeof opts === "object" && ("error" in opts || "counts" in opts)
+      ? (opts as {
+          error?: unknown;
+          counts?: {
+            failed: number;
+            matched: number;
+            queued: number;
+            received: number;
+            subjectSkipped: number;
+          };
+        })
+      : { error: opts };
   const now = new Date();
   await db
     .update(mailIngestAccount)
     .set({
       lastCheckedAt: now,
-      lastError: error ? truncateError(error) : null,
+      lastError: result.error ? truncateError(result.error) : null,
       pollingStartedAt: null,
       updatedAt: now,
+      ...(result.counts
+        ? {
+            lastRunFailed: result.counts.failed,
+            lastRunMatched: result.counts.matched,
+            lastRunQueued: result.counts.queued,
+            lastRunReceived: result.counts.received,
+            lastRunSubjectSkipped: result.counts.subjectSkipped,
+          }
+        : {}),
     })
     .where(eq(mailIngestAccount.id, accountId));
 }
@@ -965,15 +1065,265 @@ export async function claimMailIngestMessageForProcessing(input: {
 
 export async function updateMailIngestMessageResult(
   id: string,
-  result: { batchId?: string | null; error?: unknown; status: MailIngestMessageStatus },
+  result: {
+    attachmentCount?: number | null;
+    batchId?: string | null;
+    boundJobDescriptionId?: string | null;
+    error?: unknown;
+    extractedJobCodes?: string[] | null;
+    jdBindStatus?: MailIngestJdBindStatus | null;
+    resumeAttachmentCount?: number | null;
+    status: MailIngestMessageStatus;
+  },
 ): Promise<void> {
   await db
     .update(mailIngestMessage)
     .set({
+      attachmentCount: result.attachmentCount ?? null,
       batchId: result.batchId ?? null,
+      boundJobDescriptionId: result.boundJobDescriptionId ?? null,
       errorMessage: result.error ? truncateError(result.error) : null,
+      extractedJobCodes: result.extractedJobCodes ?? null,
+      jdBindStatus: result.jdBindStatus ?? null,
       processedAt: new Date(),
+      resumeAttachmentCount: result.resumeAttachmentCount ?? null,
       status: result.status,
     })
     .where(eq(mailIngestMessage.id, id));
+}
+
+export async function markMailIngestMessageSkipped(
+  id: string,
+  skipReason: MailIngestSkipReason,
+  extra?: { attachmentCount?: number | null; resumeAttachmentCount?: number | null },
+): Promise<void> {
+  await db
+    .update(mailIngestMessage)
+    .set({
+      attachmentCount: extra?.attachmentCount ?? null,
+      processedAt: new Date(),
+      resumeAttachmentCount: extra?.resumeAttachmentCount ?? null,
+      skipReason,
+      status: "skipped",
+    })
+    .where(eq(mailIngestMessage.id, id));
+}
+
+const POOL_SUMMARY_TERMINAL_READY: ResumeParseStatus = "ready";
+const POOL_SUMMARY_TERMINAL_FAILED: ResumeParseStatus = "failed";
+
+export interface MailMessageLogAttachment {
+  fileName: string;
+  hasDuplicate: boolean;
+  poolItemId: string | null;
+  resumeParseError: string | null;
+  resumeParseStatus: ResumeParseStatus | null;
+  resumeRecordId: string | null;
+}
+
+export interface MailMessageLogRecord {
+  attachmentCount: number | null;
+  attachments: MailMessageLogAttachment[];
+  boundJobDescriptionName: string | null;
+  errorMessage: string | null;
+  fromAddress: string | null;
+  id: string;
+  jdBindStatus: MailIngestJdBindStatus | null;
+  poolSummary: "all_failed" | "all_pooled" | "parsing" | "partial_failed" | null;
+  receivedAt: string | null;
+  resumeAttachmentCount: number | null;
+  skipReason: MailIngestSkipReason | null;
+  status: MailIngestMessageStatus;
+  subject: string | null;
+}
+
+function truncateErrorForDisplay(message: string | null): string | null {
+  if (!message) {
+    return null;
+  }
+  const oneLine = message.replaceAll(/\s+/g, " ").trim();
+  return oneLine.length > MAIL_MESSAGE_ERROR_DISPLAY_MAX
+    ? `${oneLine.slice(0, MAIL_MESSAGE_ERROR_DISPLAY_MAX)}...`
+    : oneLine;
+}
+
+function summarizePool(
+  attachments: MailMessageLogAttachment[],
+): MailMessageLogRecord["poolSummary"] {
+  if (attachments.length === 0) {
+    return null;
+  }
+  if (
+    attachments.some(
+      (attachment) =>
+        attachment.resumeParseStatus !== POOL_SUMMARY_TERMINAL_READY &&
+        attachment.resumeParseStatus !== POOL_SUMMARY_TERMINAL_FAILED,
+    )
+  ) {
+    return "parsing";
+  }
+  if (
+    attachments.every((attachment) => attachment.resumeParseStatus === POOL_SUMMARY_TERMINAL_READY)
+  ) {
+    return "all_pooled";
+  }
+  if (
+    attachments.every((attachment) => attachment.resumeParseStatus === POOL_SUMMARY_TERMINAL_FAILED)
+  ) {
+    return "all_failed";
+  }
+  return "partial_failed";
+}
+
+async function loadMailMessageAttachments(organizationId: string, batchIds: string[]) {
+  const rows = await db
+    .select({
+      batchId: resumeUploadBatchItem.batchId,
+      fileName: resumeUploadBatchItem.originalFileName,
+      orderIndex: resumeUploadBatchItem.orderIndex,
+      poolItemId: resumeUploadBatchItem.poolItemId,
+      resumeParseError: resumePoolItem.resumeParseError,
+      resumeParseStatus: resumePoolItem.resumeParseStatus,
+      resumeRecordId: resumeUploadBatchItem.resumeRecordId,
+    })
+    .from(resumeUploadBatchItem)
+    .leftJoin(
+      resumePoolItem,
+      and(
+        eq(resumeUploadBatchItem.poolItemId, resumePoolItem.id),
+        eq(resumePoolItem.organizationId, organizationId),
+      ),
+    )
+    .where(inArray(resumeUploadBatchItem.batchId, batchIds))
+    .orderBy(asc(resumeUploadBatchItem.batchId), asc(resumeUploadBatchItem.orderIndex));
+  const poolItemIds = rows.map((row) => row.poolItemId).filter((id): id is string => id !== null);
+  const duplicateCounts = await listActiveDuplicateMatchCounts({
+    organizationId,
+    sourceIds: poolItemIds,
+    sourceType: "resume_pool_item",
+  });
+  const attachmentsByBatch = new Map<string, MailMessageLogAttachment[]>();
+  for (const row of rows) {
+    const attachment: MailMessageLogAttachment = {
+      fileName: row.fileName,
+      hasDuplicate: row.poolItemId ? (duplicateCounts.get(row.poolItemId)?.count ?? 0) > 0 : false,
+      poolItemId: row.poolItemId,
+      resumeParseError: row.resumeParseError,
+      resumeParseStatus: row.resumeParseStatus,
+      resumeRecordId: row.resumeRecordId,
+    };
+    attachmentsByBatch.set(row.batchId, [
+      ...(attachmentsByBatch.get(row.batchId) ?? []),
+      attachment,
+    ]);
+  }
+  return attachmentsByBatch;
+}
+
+function buildMailMessageLogWhere(input: {
+  accountId: string;
+  jdBindStatus?: MailIngestJdBindStatus;
+  keyword?: string;
+  receivedFrom?: Date;
+  receivedTo?: Date;
+  skipReason?: MailIngestSkipReason;
+  status?: MailIngestMessageStatus;
+}) {
+  return and(
+    eq(mailIngestMessage.accountId, input.accountId),
+    ...(input.status ? [eq(mailIngestMessage.status, input.status)] : []),
+    ...(input.skipReason ? [eq(mailIngestMessage.skipReason, input.skipReason)] : []),
+    ...(input.jdBindStatus ? [eq(mailIngestMessage.jdBindStatus, input.jdBindStatus)] : []),
+    ...(input.keyword
+      ? [
+          or(
+            ilike(mailIngestMessage.subject, `%${input.keyword}%`),
+            ilike(mailIngestMessage.fromAddress, `%${input.keyword}%`),
+          ),
+        ]
+      : []),
+    ...(input.receivedFrom ? [gte(mailIngestMessage.receivedAt, input.receivedFrom)] : []),
+    ...(input.receivedTo ? [lte(mailIngestMessage.receivedAt, input.receivedTo)] : []),
+  );
+}
+
+export async function listAccountMailMessages(input: {
+  accountId: string;
+  jdBindStatus?: MailIngestJdBindStatus;
+  keyword?: string;
+  organizationId: string;
+  page: number;
+  pageSize: number;
+  receivedFrom?: Date;
+  receivedTo?: Date;
+  skipReason?: MailIngestSkipReason;
+  status?: MailIngestMessageStatus;
+}): Promise<{ records: MailMessageLogRecord[]; total: number }> {
+  const where = buildMailMessageLogWhere(input);
+  const [[{ count: total } = { count: 0 }], rows] = await Promise.all([
+    db
+      .select({ count: count() })
+      .from(mailIngestMessage)
+      .innerJoin(
+        mailIngestAccount,
+        and(
+          eq(mailIngestMessage.accountId, mailIngestAccount.id),
+          eq(mailIngestAccount.organizationId, input.organizationId),
+        ),
+      )
+      .where(where),
+    db
+      .select({
+        attachmentCount: mailIngestMessage.attachmentCount,
+        batchId: mailIngestMessage.batchId,
+        boundJobDescriptionName: jobDescription.name,
+        errorMessage: mailIngestMessage.errorMessage,
+        fromAddress: mailIngestMessage.fromAddress,
+        id: mailIngestMessage.id,
+        jdBindStatus: mailIngestMessage.jdBindStatus,
+        receivedAt: mailIngestMessage.receivedAt,
+        resumeAttachmentCount: mailIngestMessage.resumeAttachmentCount,
+        skipReason: mailIngestMessage.skipReason,
+        status: mailIngestMessage.status,
+        subject: mailIngestMessage.subject,
+      })
+      .from(mailIngestMessage)
+      .innerJoin(
+        mailIngestAccount,
+        and(
+          eq(mailIngestMessage.accountId, mailIngestAccount.id),
+          eq(mailIngestAccount.organizationId, input.organizationId),
+        ),
+      )
+      .leftJoin(jobDescription, eq(mailIngestMessage.boundJobDescriptionId, jobDescription.id))
+      .where(where)
+      .orderBy(sql`${mailIngestMessage.receivedAt} DESC NULLS LAST`, desc(mailIngestMessage.id))
+      .limit(input.pageSize)
+      .offset((input.page - 1) * input.pageSize),
+  ]);
+  const batchIds = rows.map((row) => row.batchId).filter((id): id is string => id !== null);
+  const attachmentsByBatch = batchIds.length
+    ? await loadMailMessageAttachments(input.organizationId, batchIds)
+    : new Map<string, MailMessageLogAttachment[]>();
+  return {
+    records: rows.map((row) => {
+      const attachments = row.batchId ? (attachmentsByBatch.get(row.batchId) ?? []) : [];
+      return {
+        attachmentCount: row.attachmentCount,
+        attachments,
+        boundJobDescriptionName: row.boundJobDescriptionName,
+        errorMessage: truncateErrorForDisplay(row.errorMessage),
+        fromAddress: row.fromAddress,
+        id: row.id,
+        jdBindStatus: row.jdBindStatus,
+        poolSummary: summarizePool(attachments),
+        receivedAt: row.receivedAt?.toISOString() ?? null,
+        resumeAttachmentCount: row.resumeAttachmentCount,
+        skipReason: row.skipReason,
+        status: row.status,
+        subject: row.subject,
+      };
+    }),
+    total,
+  };
 }
