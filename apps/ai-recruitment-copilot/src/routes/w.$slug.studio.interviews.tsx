@@ -8,6 +8,8 @@ import {
   redirect,
   useLoaderData,
   useNavigate,
+  useParams,
+  useRouterState,
   useSearch,
 } from "@tanstack/react-router";
 import type { DataGridQueryState } from "@/components/data-grid/query-contract";
@@ -825,12 +827,14 @@ function StudioInterviewsRoute() {
   const state = useLoaderData({
     from: "/w/$slug/studio/interviews",
   }) as unknown as StudioInterviewsState;
+  const { slug } = useParams({ from: "/w/$slug/studio/interviews" });
+  const pathname = useRouterState({ select: (routerState) => routerState.location.pathname });
 
   if (state.status !== "ready") {
     return null;
   }
 
-  if (!state.isListRoute) {
+  if (pathname !== `/w/${slug}/studio/interviews`) {
     return <Outlet />;
   }
 
@@ -851,6 +855,7 @@ export const Route = createFileRoute("/w/$slug/studio/interviews")({
       location: { pathname: string; search: SearchParamsRecord };
       params: { slug: string };
     };
+    const isListRoute = location.pathname === `/w/${params.slug}/studio/interviews`;
     const query = parseInterviewQuery(location.search);
     await requireStudioPageAccess({
       action: "interviews",
@@ -858,7 +863,7 @@ export const Route = createFileRoute("/w/$slug/studio/interviews")({
       slug: params.slug,
     });
     const state = (await loadStudioInterviewsState({
-      data: { query, slug: params.slug },
+      data: { prefetchList: isListRoute, query, slug: params.slug },
     })) as StudioInterviewsState;
     if (state.status === "unauthenticated") {
       throw redirect({
@@ -868,10 +873,7 @@ export const Route = createFileRoute("/w/$slug/studio/interviews")({
     if (state.status === "not_found") {
       throw notFound();
     }
-    return {
-      ...state,
-      isListRoute: location.pathname === `/w/${params.slug}/studio/interviews`,
-    };
+    return state;
   },
   shouldReload: false,
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),

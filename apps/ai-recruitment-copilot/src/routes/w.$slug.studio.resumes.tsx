@@ -1,5 +1,11 @@
 import { IconHistory, IconUsers } from "@tabler/icons-react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  HydrationBoundary,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type { DehydratedState } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ReactVirtualizer, VirtualItem } from "@tanstack/react-virtual";
 import {
@@ -15,15 +21,20 @@ import {
   useRouterState,
   useSearch,
 } from "@tanstack/react-router";
-import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
+import {
+  buildInfiniteDataGridQueryKey,
+  parseDataGridSearchParams,
+} from "@/components/data-grid/query-contract";
 import { loadStudioResumesState } from "@/lib/start/studio/resumes.functions";
-import type { StudioResumesState } from "@/lib/start/studio/resumes.functions";
+import type { ResumeFilters, StudioResumesState } from "@/lib/start/studio/resumes.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import { parseCsvParam } from "@arc/shared/csv";
 import {
+  RESUME_LIBRARY_INFINITE_PAGE_SIZE,
   canDeleteResumeRecord,
   canLaunchInterviewFromResume,
   getResumeInterviewGateReason,
+  resumeLibrarySortIds,
 } from "@arc/shared/studio-resumes";
 import type {
   PaginatedResumeLibraryResult,
@@ -121,17 +132,9 @@ const ResumeDocumentPreviewDialog = lazy(async () => {
 // skills = candidate must have ALL selected skills (intersection / AND);
 // jdIds = candidate's linked JD is one of the selection (OR — a resume can
 //          link to only one JD, so AND would always be empty for >1).
-interface ResumeFilters extends Record<string, string> {
-  creatorIds: string;
-  skills: string;
-  jdIds: string;
-  stage: string;
-}
 const EMPTY_FILTERS: ResumeFilters = { creatorIds: "", jdIds: "", skills: "", stage: "" };
 const RESUME_LIBRARY_FILTER_KEYS = Object.keys(EMPTY_FILTERS) as (keyof ResumeFilters & string)[];
-const RESUME_LIBRARY_ALLOWED_SORT_IDS = ["createdAt", "candidateName", "updatedAt"] as const;
 const RESUME_LIBRARY_DEFAULT_SORTING = [{ desc: true, id: "createdAt" }];
-const RESUME_LIBRARY_INFINITE_PAGE_SIZE = 20;
 const RESUME_LIBRARY_CARD_ESTIMATED_SIZE = 240;
 
 interface ResumeLibraryScrollRestoreSnapshot {
@@ -393,7 +396,7 @@ function coerceSearchParams(search: Record<string, unknown>): SearchParamsRecord
 
 function parseResumeQuery(searchParams: SearchParamsRecord): ResumeLibraryQueryState {
   return parseDataGridSearchParams(searchParams, {
-    allowedSortIds: RESUME_LIBRARY_ALLOWED_SORT_IDS,
+    allowedSortIds: resumeLibrarySortIds,
     defaultPageSize: RESUME_LIBRARY_INFINITE_PAGE_SIZE,
     defaultSorting: RESUME_LIBRARY_DEFAULT_SORTING,
     initialFilters: EMPTY_FILTERS,
@@ -995,17 +998,12 @@ function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }) {
         sortBy: activeSort?.id,
         sortOrder: activeSortOrder,
       }),
-    queryKey: [
-      "studio-resumes",
-      slug,
-      "infinite",
-      {
-        filters: grid.filters,
-        search: grid.deferredSearch,
-        sortBy: activeSort?.id,
-        sortOrder: activeSortOrder,
-      },
-    ],
+    queryKey: buildInfiniteDataGridQueryKey(["studio-resumes", slug], {
+      filters: grid.filters,
+      search: grid.deferredSearch,
+      sortBy: activeSort?.id,
+      sortOrder: activeSortOrder,
+    }),
     staleTime: 30_000,
   });
   const loadedResumeRecords = useMemo(
@@ -1572,10 +1570,10 @@ function StudioResumesRoute() {
   }
 
   return (
-    <>
+    <HydrationBoundary state={state.dehydratedState as unknown as DehydratedState}>
       <ResumeLibraryPage metrics={state.metrics} />
       <StudioResumeFloatingChat />
-    </>
+    </HydrationBoundary>
   );
 }
 
@@ -1589,6 +1587,7 @@ export const Route = createFileRoute("/w/$slug/studio/resumes")({
       location: { pathname: string; search: SearchParamsRecord };
       params: { slug: string };
     };
+    const isListRoute = location.pathname === `/w/${params.slug}/studio/resumes`;
     const query = parseResumeQuery(location.search);
     await requireStudioPageAccess({
       action: "resumes",
@@ -1596,7 +1595,7 @@ export const Route = createFileRoute("/w/$slug/studio/resumes")({
       slug: params.slug,
     });
     const state = (await loadStudioResumesState({
-      data: { query, slug: params.slug },
+      data: { prefetchList: isListRoute, query, slug: params.slug },
     })) as StudioResumesState;
     if (state.status === "unauthenticated") {
       throw redirect({
