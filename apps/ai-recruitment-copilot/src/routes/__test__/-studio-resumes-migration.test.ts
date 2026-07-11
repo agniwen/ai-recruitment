@@ -17,7 +17,7 @@ describe("TanStack Start studio resumes migration", () => {
     const routeTree = readSource("routeTree.gen.ts");
 
     expect(routeTree).toContain("'/resume-review/$slug/$recordId'");
-    expect(routeTree).not.toContain("'/w/$slug/studio/resumes/$recordId'");
+    expect(routeTree).toContain("'/w/$slug/studio/resumes/$recordId'");
   });
 
   it("keeps the migrated resumes route and page free of Next runtime imports", () => {

@@ -56,6 +56,7 @@ import { Route as WSlugStudioDashboardRouteImport } from './routes/w.$slug.studi
 import { Route as WSlugStudioAgentDebugRouteImport } from './routes/w.$slug.studio.agent-debug'
 import { Route as WSlugChatSessionIdRouteImport } from './routes/w.$slug.chat.$sessionId'
 import { Route as WSlugAgentSessionIdRouteImport } from './routes/w.$slug.agent.$sessionId'
+import { Route as WSlugStudioResumesRecordIdRouteImport } from './routes/w.$slug.studio.resumes.$recordId'
 import { Route as WSlugStudioInterviewsRoundIdRouteImport } from './routes/w.$slug.studio.interviews.$roundId'
 
 const WaitRoute = WaitRouteImport.update({
@@ -300,6 +301,12 @@ const WSlugAgentSessionIdRoute = WSlugAgentSessionIdRouteImport.update({
   path: '/$sessionId',
   getParentRoute: () => WSlugAgentRoute,
 } as any)
+const WSlugStudioResumesRecordIdRoute =
+  WSlugStudioResumesRecordIdRouteImport.update({
+    id: '/$recordId',
+    path: '/$recordId',
+    getParentRoute: () => WSlugStudioResumesRoute,
+  } as any)
 const WSlugStudioInterviewsRoundIdRoute =
   WSlugStudioInterviewsRoundIdRouteImport.update({
     id: '/$roundId',
@@ -352,10 +359,11 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
-  '/w/$slug/studio/resumes': typeof WSlugStudioResumesRoute
+  '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/w/$slug/agent/': typeof WSlugAgentIndexRoute
   '/w/$slug/chat/': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
+  '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -400,10 +408,11 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
-  '/w/$slug/studio/resumes': typeof WSlugStudioResumesRoute
+  '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/w/$slug/agent': typeof WSlugAgentIndexRoute
   '/w/$slug/chat': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
+  '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -451,10 +460,11 @@ export interface FileRoutesById {
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
-  '/w/$slug/studio/resumes': typeof WSlugStudioResumesRoute
+  '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/w/$slug/agent/': typeof WSlugAgentIndexRoute
   '/w/$slug/chat/': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
+  '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -507,6 +517,7 @@ export interface FileRouteTypes {
     | '/w/$slug/agent/'
     | '/w/$slug/chat/'
     | '/w/$slug/studio/interviews/$roundId'
+    | '/w/$slug/studio/resumes/$recordId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -555,6 +566,7 @@ export interface FileRouteTypes {
     | '/w/$slug/agent'
     | '/w/$slug/chat'
     | '/w/$slug/studio/interviews/$roundId'
+    | '/w/$slug/studio/resumes/$recordId'
   id:
     | '__root__'
     | '/'
@@ -605,6 +617,7 @@ export interface FileRouteTypes {
     | '/w/$slug/agent/'
     | '/w/$slug/chat/'
     | '/w/$slug/studio/interviews/$roundId'
+    | '/w/$slug/studio/resumes/$recordId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -959,6 +972,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugAgentSessionIdRouteImport
       parentRoute: typeof WSlugAgentRoute
     }
+    '/w/$slug/studio/resumes/$recordId': {
+      id: '/w/$slug/studio/resumes/$recordId'
+      path: '/$recordId'
+      fullPath: '/w/$slug/studio/resumes/$recordId'
+      preLoaderRoute: typeof WSlugStudioResumesRecordIdRouteImport
+      parentRoute: typeof WSlugStudioResumesRoute
+    }
     '/w/$slug/studio/interviews/$roundId': {
       id: '/w/$slug/studio/interviews/$roundId'
       path: '/$roundId'
@@ -1052,6 +1072,17 @@ const WSlugStudioInterviewsRouteWithChildren =
     WSlugStudioInterviewsRouteChildren,
   )
 
+interface WSlugStudioResumesRouteChildren {
+  WSlugStudioResumesRecordIdRoute: typeof WSlugStudioResumesRecordIdRoute
+}
+
+const WSlugStudioResumesRouteChildren: WSlugStudioResumesRouteChildren = {
+  WSlugStudioResumesRecordIdRoute: WSlugStudioResumesRecordIdRoute,
+}
+
+const WSlugStudioResumesRouteWithChildren =
+  WSlugStudioResumesRoute._addFileChildren(WSlugStudioResumesRouteChildren)
+
 interface WSlugStudioRouteChildren {
   WSlugStudioAgentDebugRoute: typeof WSlugStudioAgentDebugRoute
   WSlugStudioDashboardRoute: typeof WSlugStudioDashboardRoute
@@ -1068,7 +1099,7 @@ interface WSlugStudioRouteChildren {
   WSlugStudioMembersRoute: typeof WSlugStudioMembersRoute
   WSlugStudioPermissionsRoute: typeof WSlugStudioPermissionsRoute
   WSlugStudioResumePoolRoute: typeof WSlugStudioResumePoolRoute
-  WSlugStudioResumesRoute: typeof WSlugStudioResumesRoute
+  WSlugStudioResumesRoute: typeof WSlugStudioResumesRouteWithChildren
 }
 
 const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
@@ -1087,7 +1118,7 @@ const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
   WSlugStudioMembersRoute: WSlugStudioMembersRoute,
   WSlugStudioPermissionsRoute: WSlugStudioPermissionsRoute,
   WSlugStudioResumePoolRoute: WSlugStudioResumePoolRoute,
-  WSlugStudioResumesRoute: WSlugStudioResumesRoute,
+  WSlugStudioResumesRoute: WSlugStudioResumesRouteWithChildren,
 }
 
 const WSlugStudioRouteWithChildren = WSlugStudioRoute._addFileChildren(

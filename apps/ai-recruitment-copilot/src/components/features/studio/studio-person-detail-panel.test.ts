@@ -39,8 +39,10 @@ describe("StudioPersonDetailPanel visual density", () => {
   });
 
   it("uses the candidate name and linked job in the resume header", () => {
-    expect(source).toContain('const resumeTitleParts = ["候选人详情",');
-    expect(source).toContain('resumeTitleParts.join(" · ")');
+    expect(source).toContain("findCachedResumeCandidateName(queryClient, effectiveRecordId)");
+    expect(source).toContain(
+      'record?.candidateName?.trim() || cachedResumeCandidateName || "候选人详情"',
+    );
     expect(source).toContain("linkedJobDescriptionName");
     expect(source).toContain("关联岗位：");
     expect(source).toContain('"暂未关联岗位"');
