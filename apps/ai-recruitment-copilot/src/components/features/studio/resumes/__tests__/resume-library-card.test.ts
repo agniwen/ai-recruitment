@@ -29,6 +29,13 @@ describe("ResumeLibraryCard", () => {
     );
   });
 
+  it("keeps the left selection strip from opening the detail view", () => {
+    expect(source).toContain("const toggleSelected = () => onSelectChange(!selected);");
+    expect(source).toContain('className="absolute inset-y-0 left-0 z-10 w-12');
+    expect(source).toContain('data-resume-card-interactive="true"');
+    expect(source).toContain("event.stopPropagation();");
+  });
+
   it("surfaces interviewer and evaluator metadata on the card", () => {
     expect(source).toContain("formatResumeCardAiInterviewers");
     expect(source).toContain("formatResumeCardHumanInterviewers");
