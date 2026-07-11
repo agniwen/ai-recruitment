@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
-import type { ResumeEmbeddingChunk } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/vector-store";
-import { recommendCandidatesForJobDescription } from "./recommendations";
+import type {
+  ResumeSemanticChunkType,
+  ResumeSemanticTextChunk,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/text-builders";
+import {
+  recommendCandidatesForJobDescription,
+  scoreCandidatesForJobDescription,
+} from "./recommendations";
 
 const candidateProfile: ResumeProfile = {
   age: null,
@@ -198,14 +204,8 @@ const depsWith = (
   search: (a: { chunkType: string }) => number,
   candidates: ReturnType<typeof rec>[],
 ) => ({
-  embed: vi.fn(({ chunks }: { chunks: { chunkType: string; text: string }[] }) =>
-    Promise.resolve(
-      chunks.map((c) => ({
-        ...c,
-        chunkType: c.chunkType as ResumeEmbeddingChunk["chunkType"],
-        embedding: [1, 2],
-      })),
-    ),
+  embed: vi.fn(({ chunks }: { chunks: ResumeSemanticTextChunk[] }) =>
+    Promise.resolve(chunks.map((c) => ({ ...c, embedding: [1, 2] }))),
   ),
   embeddingConfig: { apiKey: "k", baseUrl: "b", dimensions: 2, model: "m" },
   enabled: true,
@@ -213,10 +213,10 @@ const depsWith = (
   vectorStore: {
     deleteResumeEmbeddings: vi.fn(() => Promise.resolve()),
     ensureCollection: vi.fn(() => Promise.resolve()),
-    searchSimilarResumes: vi.fn(({ chunkType }: { chunkType: string }) =>
+    searchSimilarResumes: vi.fn(({ chunkType }: { chunkType: ResumeSemanticChunkType }) =>
       Promise.resolve(
         candidates.map((c) => ({
-          chunkType: chunkType as ResumeEmbeddingChunk["chunkType"],
+          chunkType,
           score: search({ chunkType }),
           sourceId: c.id,
           sourceType: "studio_interview" as const,
@@ -311,5 +311,35 @@ describe("recommendCandidatesForJobDescription — disabled", () => {
       candidates: [],
       status: "disabled",
     });
+  });
+});
+
+describe("scoreCandidatesForJobDescription — 打分内核", () => {
+  it("内核返回完整排序和诊断中间量，不套阈值或截断", async () => {
+    const ensureCollection = vi.fn(() => Promise.resolve());
+    const deps = {
+      ...depsWith(() => 0.2, [rec("low")]),
+      vectorStore: {
+        deleteResumeEmbeddings: vi.fn(() => Promise.resolve()),
+        ensureCollection,
+        searchSimilarResumes: vi.fn(({ chunkType }: { chunkType: ResumeSemanticChunkType }) =>
+          Promise.resolve([
+            { chunkType, score: 0.2, sourceId: "low", sourceType: "studio_interview" as const },
+          ]),
+        ),
+        upsertResumeEmbeddings: vi.fn(() => Promise.resolve()),
+      },
+    };
+
+    const core = await scoreCandidatesForJobDescription(
+      { jobDescription: jd, organizationId: "org" },
+      deps,
+    );
+
+    expect(core.ranked).toHaveLength(1);
+    expect(core.ranked[0].candidateId).toBe("low");
+    expect(core.retrievedIds.has("low")).toBe(true);
+    expect(core.loadedIds.has("low")).toBe(true);
+    expect(ensureCollection).not.toHaveBeenCalled();
   });
 });
