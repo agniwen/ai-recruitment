@@ -8,6 +8,9 @@ const createOgImageResponse = vi.fn(
 const createServerApp = vi.fn(() => ({
   fetch: honoFetch,
 }));
+const pingDatabase = vi.fn(() => Promise.resolve());
+const getResumeParseQueueStats = vi.fn(() => Promise.resolve({ waiting: 0 }));
+const isResumeParseQueueConfigured = vi.fn(() => false);
 
 vi.mock("@tanstack/react-start/server-entry", () => ({
   createServerEntry: (entry: unknown) => entry,
@@ -18,6 +21,12 @@ vi.mock("@tanstack/react-start/server-entry", () => ({
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/app", () => ({
   createServerApp,
+}));
+
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({ pingDatabase }));
+vi.mock("@arc/resume-parse-queue/resume-parse", () => ({
+  getResumeParseQueueStats,
+  isResumeParseQueueConfigured,
 }));
 
 vi.mock("./lib/server/og-image", () => ({
@@ -56,6 +65,39 @@ describe("TanStack Start server entry", () => {
     expect(honoFetch).toHaveBeenCalledWith(request);
     expect(createServerApp).toHaveBeenCalledTimes(1);
     expect(startFetch).not.toHaveBeenCalled();
+  });
+
+  it("reports ready after required dependencies are available", async () => {
+    const serverModule = await import("./server");
+    const entry = serverModule.default;
+    const response = await entry.fetch(new Request("https://example.test/api/ready"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(createServerApp).toHaveBeenCalledTimes(1);
+    expect(pingDatabase).toHaveBeenCalledTimes(1);
+    expect(getResumeParseQueueStats).not.toHaveBeenCalled();
+  });
+
+  it("checks the queue when resume parsing is configured", async () => {
+    isResumeParseQueueConfigured.mockReturnValueOnce(true);
+    const serverModule = await import("./server");
+    const entry = serverModule.default;
+    const response = await entry.fetch(new Request("https://example.test/api/ready"));
+
+    expect(response.status).toBe(200);
+    expect(getResumeParseQueueStats).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose readiness dependency errors", async () => {
+    pingDatabase.mockRejectedValueOnce(new Error("secret database error"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const serverModule = await import("./server");
+    const entry = serverModule.default;
+    const response = await entry.fetch(new Request("https://example.test/api/ready"));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ ok: false });
   });
 
   it("serves the Open Graph image before loading API routers", async () => {

@@ -303,7 +303,7 @@ export const interviewRouter = factory
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     const serverUrl = process.env.LIVEKIT_URL;
-    const agentName = process.env.AGENT_NAME;
+    const agentName = process.env.AGENT_NAME?.trim() || "giaogiao";
 
     if (!apiKey || !apiSecret || !serverUrl) {
       return c.json(buildTokenErrorResponse(), 500);
@@ -489,11 +489,9 @@ export const interviewRouter = factory
         roomJoin: true,
       });
 
-      if (agentName) {
-        at.roomConfig = new RoomConfiguration({
-          agents: [new RoomAgentDispatch({ agentName })],
-        });
-      }
+      at.roomConfig = new RoomConfiguration({
+        agents: [new RoomAgentDispatch({ agentName })],
+      });
 
       const participantToken = await at.toJwt();
 
