@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
 import type {
   JobDescriptionTalentRecommendation,
   JobDescriptionTalentRecommendationResult,
@@ -363,9 +363,23 @@ export function createDefaultRecommendationDeps(): RecommendationDeps {
   };
 }
 
-async function loadRecommendationCandidates(
+export function recommendationCandidateWhere(
   organizationId: string,
   ids: string[],
+  includeClosed: boolean,
+) {
+  return and(
+    eq(studioInterview.organizationId, organizationId),
+    inArray(studioInterview.id, ids),
+    notInArray(studioInterview.status, ["archived"]),
+    includeClosed ? undefined : ne(studioInterview.pipelineStage, "closed"),
+  );
+}
+
+export async function loadRecommendationCandidates(
+  organizationId: string,
+  ids: string[],
+  opts: { includeClosed?: boolean } = {},
 ): Promise<RecommendationCandidateRecord[]> {
   if (ids.length === 0) {
     return [];
@@ -394,13 +408,7 @@ async function loadRecommendationCandidates(
         eq(jobDescription.organizationId, studioInterview.organizationId),
       ),
     )
-    .where(
-      and(
-        eq(studioInterview.organizationId, organizationId),
-        inArray(studioInterview.id, ids),
-        notInArray(studioInterview.status, ["archived"]),
-      ),
-    );
+    .where(recommendationCandidateWhere(organizationId, ids, opts.includeClosed ?? false));
 
   return rows.map((row) => ({
     ...row,
