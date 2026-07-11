@@ -21,6 +21,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { interviewConversation, minimaxVoicePreview, studioInterview } from "@arc/db-schema/schema";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
+import { createInternalErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/error-handler";
 import { buildTokenErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/routes/interview/utils";
 import { loadSubmissionsByInterview } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/forms/dao/submissions";
 import { queryInterviewConversationReportsByRound } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/interview-conversations";
@@ -142,10 +143,12 @@ export const publicRouter = factory
         return c.json(buildTokenErrorResponse(), 500);
       }
       return c.json(
-        {
-          detail: error instanceof Error ? error.message : "Unknown error",
-          error: "Failed to sign LiveKit token.",
-        },
+        createInternalErrorResponse({
+          context: { meetingId: scope.meetingId },
+          error,
+          operation: "public-candidate-livekit-token",
+          publicMessage: "Failed to sign LiveKit token.",
+        }),
         500,
       );
     }
@@ -228,10 +231,12 @@ export const publicRouter = factory
         return c.json(buildTokenErrorResponse(), 500);
       }
       return c.json(
-        {
-          detail: error instanceof Error ? error.message : "Unknown error",
-          error: "Failed to sign LiveKit token.",
-        },
+        createInternalErrorResponse({
+          context: { meetingId: scope.meetingId },
+          error,
+          operation: "public-interviewer-livekit-token",
+          publicMessage: "Failed to sign LiveKit token.",
+        }),
         500,
       );
     }
@@ -326,10 +331,12 @@ export const publicRouter = factory
       return c.json({ expiresInSeconds: 600, url }, 200);
     } catch (error) {
       return c.json(
-        {
-          detail: error instanceof Error ? error.message : "Unknown error",
-          error: "无法生成录像访问链接。",
-        },
+        createInternalErrorResponse({
+          context: { conversationId, roundId: scope.roundId },
+          error,
+          operation: "public-recording-presign",
+          publicMessage: "无法生成录像访问链接。",
+        }),
         500,
       );
     }
