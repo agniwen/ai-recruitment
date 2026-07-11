@@ -20,6 +20,22 @@ describe("TanStack Start studio resumes migration", () => {
     expect(routeTree).toContain("'/w/$slug/studio/resumes/$recordId'");
   });
 
+  it("restores the recruiter resume list after closing a workspace detail page", () => {
+    const detailSource = readSource("routes/w.$slug.studio.resumes.$recordId.tsx");
+    const listSource = readSource("routes/w.$slug.studio.resumes.tsx");
+    const studioShellSource = readSource("routes/w.$slug.studio.tsx");
+
+    expect(detailSource).toContain("locationState.fromRecruiterResumeList");
+    expect(detailSource).toContain("router.history.canGoBack()");
+    expect(detailSource).toContain("router.history.back();");
+    expect(listSource).toContain("useElementScrollRestoration");
+    expect(listSource).toContain("STUDIO_MAIN_SCROLL_RESTORATION_ID");
+    expect(listSource).toContain("initialOffset: studioScrollEntry?.scrollY");
+    expect(listSource).toContain("fromRecruiterResumeList: true");
+    expect(studioShellSource).toContain("STUDIO_MAIN_SCROLL_RESTORATION_ID");
+    expect(studioShellSource).toContain('"data-scroll-restoration-id"');
+  });
+
   it("keeps the migrated resumes route and page free of Next runtime imports", () => {
     const sources = [
       readSource("routes/w.$slug.studio.resumes.tsx"),
