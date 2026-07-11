@@ -114,16 +114,6 @@ function buildWorkspaceManagementSearch(
   return { ...previous, tab };
 }
 
-function getActiveWorkspaceOrganization<T extends { id: string }>(
-  activeOrganization: T | null | undefined,
-  workspaceId: string,
-): T | null {
-  if (activeOrganization?.id !== workspaceId) {
-    return null;
-  }
-  return activeOrganization;
-}
-
 function getMemberCreatedAtTime(value: string | Date): number {
   const date = value instanceof Date ? value : new Date(value);
   const time = date.getTime();
@@ -860,12 +850,21 @@ function MembersManagementPage() {
   const navigate = useNavigate({ from: "/w/$slug/studio/members" });
   const activeTab = parseWorkspaceManagementTab(routeSearch.tab);
   const {
-    data: activeOrganization,
+    data: org,
     refetch,
-    isPending: isActiveOrganizationPending,
-  } = authClient.useActiveOrganization();
-  const org = getActiveWorkspaceOrganization(activeOrganization, workspaceId);
-  const isPending = isActiveOrganizationPending || !org;
+    isPending,
+  } = useQuery({
+    queryFn: async () => {
+      const { data, error } = await authClient.organization.getFullOrganization({
+        query: { organizationId: workspaceId },
+      });
+      if (error || !data) {
+        throw new Error(error?.message ?? "加载工作区成员失败");
+      }
+      return data;
+    },
+    queryKey: ["workspace-organization", workspaceId],
+  });
   const groupsQueryKey = ["workspace-recruiting-groups", slug, workspaceId] as const;
   const [pending, setPending] = useState<string | null>(null);
   const [groupNameDrafts, setGroupNameDrafts] = useState<Record<string, string>>({});
@@ -1051,7 +1050,7 @@ function MembersManagementPage() {
     });
   }, [groups]);
 
-  // 成员列表来自 authClient.useActiveOrganization() 内存数据,这里做客户端切片
+  // 成员列表按显式 workspaceId 拉取，这里做客户端切片
   // 让分页 UI 跟其他 studio 页面 (服务端分页) 视觉一致。
   // total <= pageSize 时 totalPages 仍是 1, DataGrid 会隐藏页码控件。
   const total = filteredRows.length;
@@ -1291,6 +1290,7 @@ function MembersManagementPage() {
     setPending(row.id);
     const { error } = await authClient.organization.updateMemberRole({
       memberId: row.id,
+      organizationId: workspaceId,
       role: role as "admin" | "member",
     });
     setPending(null);
@@ -1310,6 +1310,7 @@ function MembersManagementPage() {
           setPending(row.id);
           const { error } = await authClient.organization.removeMember({
             memberIdOrEmail: row.id,
+            organizationId: workspaceId,
           });
           setPending(null);
           if (error) {

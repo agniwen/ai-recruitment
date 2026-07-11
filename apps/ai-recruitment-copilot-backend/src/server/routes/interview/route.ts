@@ -15,8 +15,8 @@ import { buildCandidateFormAnswersSchema } from "@arc/db-schema/candidate-forms"
 import { RECONNECT_GRACE_MS } from "@arc/db-schema/studio-interviews";
 import {
   streamGenerateInterviewQuestions,
-  streamGenerateResumeReviewMarkdownFirst,
   streamGenerateResumeReview,
+  streamGenerateResumeReviewMarkdownFirst,
   streamParseResumeProfile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { zValidator } from "@hono/zod-validator";
@@ -55,17 +55,8 @@ export const interviewRouter = factory
       return c.json({ error: "缺少简历文件。" }, 400);
     }
 
-    // 把 userId + activeOrganizationId 透传给流式解析器；缺任意一个就跳过缓存写入。
-    // 这里不挂 workspace 中间件，所以从 session 直接读 activeOrganizationId（与
-    // resume chat 路由的取法保持一致）。
-    // Forward userId + activeOrganizationId so the streamer can populate the
-    // chat_attachment registry on cache miss. We read activeOrganizationId off
-    // the session directly (no workspace middleware on this route), matching
-    // how the resume chat router resolves it.
     const userId = c.var.user?.id;
-    const organizationId =
-      (c.var.session as { activeOrganizationId?: string | null } | null)?.activeOrganizationId ??
-      null;
+    const organizationId = null;
     const context = userId ? { organizationId, userId } : undefined;
 
     try {
@@ -113,11 +104,6 @@ export const interviewRouter = factory
     async (c) => {
       const { interviewRecordId, resumeProfile } = c.req.valid("json");
 
-      // 优先用 interviewRecord 解析 orgId(候选人场景),否则回退到 session.activeOrganizationId(chat 内点匹配)。
-      // 两者都没有就拒——说明请求脱离了任何 workspace 上下文。
-      // Prefer the interview record (candidate-side); fall back to
-      // session.activeOrganizationId (chat-side). Reject when neither is
-      // available — the request has no workspace context.
       let orgId: string | null = null;
       if (interviewRecordId) {
         const [row] = await db
@@ -126,11 +112,6 @@ export const interviewRouter = factory
           .where(eq(studioInterview.id, interviewRecordId))
           .limit(1);
         orgId = row?.organizationId ?? null;
-      }
-      if (!orgId) {
-        orgId =
-          (c.var.session as { activeOrganizationId?: string | null } | null)
-            ?.activeOrganizationId ?? null;
       }
       if (!orgId) {
         return c.json({ error: "No active workspace" }, 400);
@@ -193,18 +174,14 @@ export const interviewRouter = factory
     async (c) => {
       const { jobDescriptionId, resumeProfile } = c.req.valid("json");
 
-      // 取 JD prompt 作为评价上下文。jobDescriptionId 来自前端 JD 匹配阶段的回填,
-      // org scope 用当前 session 的 activeOrganizationId（generate-review 跟在
-      // JD 匹配后调用，那时 active org 已经定）；查不到 JD 静默退化为无 JD 评价。
+      // 取 JD prompt 作为评价上下文；工作区调用由 URL scoped analysis router 处理。
       // Resolve the JD prompt as review context. The id comes from the
-      // pipeline's match-job-description step; org scoping uses the active
-      // organization on the session. Silently fall back to a JD-less review if
+      // pipeline's match-job-description step. Workspace-scoped callers use
+      // the analysis router; this legacy endpoint falls back to a JD-less review if
       // the id resolves to nothing (org-mismatch / freshly-deleted JD / etc.).
       let jobDescriptionText: string | null = null;
       if (jobDescriptionId) {
-        const orgId =
-          (c.var.session as { activeOrganizationId?: string | null } | null)
-            ?.activeOrganizationId ?? null;
+        const orgId: string | null = null;
         if (orgId) {
           const jd = await loadJobDescriptionById(orgId, jobDescriptionId, {
             actorUserId: c.var.user?.id,
@@ -252,9 +229,7 @@ export const interviewRouter = factory
 
       let jobDescriptionText: string | null = null;
       if (jobDescriptionId) {
-        const orgId =
-          (c.var.session as { activeOrganizationId?: string | null } | null)
-            ?.activeOrganizationId ?? null;
+        const orgId: string | null = null;
         if (orgId) {
           const jd = await loadJobDescriptionById(orgId, jobDescriptionId);
           if (jd) {

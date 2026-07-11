@@ -67,13 +67,14 @@ interface LaunchInterviewDialogProps {
 }
 
 /**
- * 流式调 /api/interview/generate-questions，等到 result 事件取出 questions。
+ * 流式调工作区范围内的 generate-questions，等到 result 事件取出 questions。
  * 失败时抛 Error 让调用方统一 toast。
- * Stream /api/interview/generate-questions and pluck `interviewQuestions` from
+ * Stream the workspace-scoped generate-questions route and pluck `interviewQuestions` from
  * the terminal result event; throws on stream-side errors so the caller can
  * toast uniformly.
  */
 async function streamGenerateQuestions(
+  slug: string,
   resumeProfile: ResumeProfile,
   signal: AbortSignal,
 ): Promise<InterviewQuestion[] | null> {
@@ -81,8 +82,8 @@ async function streamGenerateQuestions(
   // body 自己 await 拿 Response 后用 readAiRunEventStream 读流（rpcFetch 会消费整个 body）。
   // Streaming via hc: URL + body types come from the zValidator schema. Consume
   // the stream manually because rpcFetch would parse the whole body.
-  const response = await rpc.api.interview["generate-questions"].$post(
-    { json: { resumeProfile } },
+  const response = await rpc.api.w[":slug"].interview["generate-questions"].$post(
+    { json: { resumeProfile }, param: { slug } },
     { init: { signal } },
   );
   if (!response.ok) {
@@ -197,7 +198,7 @@ export function LaunchInterviewDialog({
         }
 
         setIsGenerating(true);
-        const questions = await streamGenerateQuestions(profile, abortController.signal);
+        const questions = await streamGenerateQuestions(slug, profile, abortController.signal);
         if (cancelled || abortController.signal.aborted) {
           return;
         }
