@@ -1910,6 +1910,7 @@ export const studioInterviewsRouter = factory
       await recordCandidateActivity({
         action: "offer_draft_created",
         detail: {
+          draftId: created.id,
           position: created.position,
           sentImmediately: Boolean(sendImmediately),
           version: created.version,
@@ -1942,6 +1943,7 @@ export const studioInterviewsRouter = factory
         await recordCandidateActivity({
           action: "offer_draft_updated",
           detail: {
+            draftId: updated.id,
             position: updated.position,
             version: updated.version,
           },
@@ -1970,6 +1972,7 @@ export const studioInterviewsRouter = factory
       await recordCandidateActivity({
         action: "offer_draft_sent",
         detail: {
+          draftId: updated.id,
           position: updated.position,
           version: updated.version,
         },
@@ -2007,6 +2010,7 @@ export const studioInterviewsRouter = factory
         await recordCandidateActivity({
           action: "offer_draft_responded",
           detail: {
+            draftId: updated.id,
             response,
             version: updated.version,
           },
@@ -2035,6 +2039,7 @@ export const studioInterviewsRouter = factory
       await recordCandidateActivity({
         action: "offer_draft_cancelled",
         detail: {
+          draftId: updated.id,
           position: updated.position,
           version: updated.version,
         },

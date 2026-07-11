@@ -461,6 +461,20 @@ describe("resume review detail route", () => {
   });
 });
 
+describe("candidate timeline audit deduplication", () => {
+  it("prefers operator audit entries over duplicate system entity events", () => {
+    expect(timelineDaoSource).toContain("buildOperatorAuditedActionKeys");
+    expect(timelineDaoSource).toContain("if (!log.actorName)");
+    expect(timelineDaoSource).toContain(
+      '!hasOperatorAuditedAction(operatorAuditedActionKeys, "candidate_transition", "closed")',
+    );
+    expect(timelineDaoSource).toContain('detail.toStage === "closed"');
+    expect(timelineDaoSource).toContain("候选人结案");
+    expect(timelineDaoSource).toContain('"human_interview_round_created"');
+    expect(timelineDaoSource).toContain('"offer_draft_created"');
+  });
+});
+
 describe("resume review v3 chain coverage", () => {
   it("uses the shared five-dimension framework in resume chat tools", () => {
     expect(resumeAgentToolsSource).toContain("getResumeReviewFramework");
