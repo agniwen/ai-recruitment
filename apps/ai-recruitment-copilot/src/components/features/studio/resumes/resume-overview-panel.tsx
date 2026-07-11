@@ -24,6 +24,9 @@ import {
 } from "@arc/shared/resume-review";
 import { truncateText } from "@/components/features/studio/interviews/interview-detail/helpers";
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
+import { DataField } from "@/components/features/display/data-field";
+import { DataFields } from "@/components/features/display/data-fields";
+import { EmptyValue } from "@/components/features/display/empty-value";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@arc/shared/utils";
@@ -32,22 +35,6 @@ import type { ReactNode } from "react";
 import Markdown from "react-markdown";
 
 const SUMMARY_COLLAPSE_THRESHOLD = 180;
-
-function textOrDash(value: string | number | null | undefined) {
-  if (value === null || value === undefined || value === "") {
-    return "—";
-  }
-  return String(value);
-}
-
-function SummaryItem({ label, value }: { label: string; value: string | number | null }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
-      <dd className="mt-1 min-w-0 truncate font-medium text-sm leading-6">{textOrDash(value)}</dd>
-    </div>
-  );
-}
 
 const DIMENSION_LABELS = RESUME_REVIEW_DIMENSIONS;
 
@@ -152,7 +139,7 @@ export function ResumeReviewStructuredView({ review }: { review: ResumeReviewLoo
           </div>
           <div className="shrink-0 md:text-right">
             <div className="font-semibold text-5xl tabular-nums leading-none">
-              {baseScore ?? "—"}
+              {baseScore ?? <EmptyValue />}
             </div>
             <div className="mt-1 text-muted-foreground text-xs">综合评分 / 100</div>
           </div>
@@ -324,13 +311,22 @@ export function ResumeOverviewPanel({ detail }: { detail: ResumeLibraryDetail })
           </div>
         ) : null}
 
-        <dl className="grid gap-x-8 gap-y-4 md:grid-cols-5">
-          <SummaryItem label="目标岗位" value={detail.targetRole} />
-          <SummaryItem label="关联岗位" value={detail.jobDescriptionName} />
-          <SummaryItem label="用人组织" value={detail.hiringUnitName} />
-          <SummaryItem label="简历评估" value={resumeEvaluation.label} />
-          <SummaryItem label="工作年限" value={detail.resumeProfile?.workYears ?? null} />
-        </dl>
+        <DataFields columns={3} density="compact" label="候选人信息">
+          <DataField label="姓名" value={detail.resumeProfile?.name} />
+          <DataField label="目标岗位" value={detail.targetRole} valueClassName="font-medium" />
+          <DataField
+            label="关联岗位"
+            value={detail.jobDescriptionName}
+            valueClassName="font-medium"
+          />
+          <DataField label="用人组织" value={detail.hiringUnitName} />
+          <DataField label="简历评估" value={resumeEvaluation.label} valueClassName="font-medium" />
+          <DataField kind="number" label="工作年限" value={detail.resumeProfile?.workYears} />
+          <DataField label="性别" value={detail.resumeProfile?.gender} />
+          <DataField kind="number" label="年龄" value={detail.resumeProfile?.age} />
+          <DataField kind="email" label="邮箱" value={detail.resumeProfile?.email} />
+          <DataField kind="phone" label="电话" value={detail.resumeProfile?.phone} />
+        </DataFields>
 
         {skills.length > 0 || strengths.length > 0 ? (
           <div className="grid gap-5 border-border/50 border-t pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)]">

@@ -5,9 +5,8 @@ const source = readFileSync(new URL("resume-overview-panel.tsx", import.meta.url
 
 describe("ResumeOverviewPanel visual density", () => {
   it("matches the airy resume detail pattern without nested bordered cards", () => {
-    expect(source).toContain("function SummaryItem");
-    expect(source).toContain("<dt");
-    expect(source).toContain("<dd");
+    expect(source).toContain("<DataFields");
+    expect(source).toContain("<DataField");
     expect(source).toContain('className="space-y-8"');
     expect(source).toContain('className="space-y-6"');
     expect(source).toContain("rounded-2xl border border-muted/60 bg-muted/20 p-5");
@@ -27,7 +26,7 @@ describe("ResumeOverviewPanel visual density", () => {
     const overviewBody = source.slice(source.indexOf("export function ResumeOverviewPanel"));
 
     expect(overviewBody).toContain("describeResumeEvaluationStatus");
-    expect(overviewBody).toContain('<SummaryItem label="简历评估"');
+    expect(overviewBody).toContain('<DataField label="简历评估"');
     expect(overviewBody).not.toContain("<Select");
     expect(overviewBody).not.toContain("onValueChange");
   });

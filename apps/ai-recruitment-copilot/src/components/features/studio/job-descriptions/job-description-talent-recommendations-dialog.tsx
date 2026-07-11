@@ -94,7 +94,7 @@ function CandidateHighlight({
         <Icon className="size-3.5 shrink-0" />
         <span className="text-xs">{label}</span>
       </div>
-      <div className="mt-1 whitespace-pre-wrap break-words text-foreground leading-5">
+      <div className="mt-1 whitespace-pre-wrap wrap-break-word text-foreground leading-5">
         {children}
       </div>
     </div>
@@ -144,7 +144,7 @@ function CandidateRecommendationReasons({
           {reasons.map((reason) => (
             <li className="flex min-w-0 gap-2" key={reason}>
               <span className="mt-2 size-1 shrink-0 rounded-full bg-primary/70" />
-              <span className="min-w-0 break-words">{reason}</span>
+              <span className="min-w-0 wrap-break-word">{reason}</span>
             </li>
           ))}
         </ul>
@@ -180,7 +180,7 @@ function CandidateRecommendationCard({
             <div className="min-w-0 flex-1">
               <CardTitle className="text-sm leading-5">
                 <button
-                  className="line-clamp-2 max-w-full break-words text-left font-medium underline decoration-foreground/20 underline-offset-4 hover:decoration-foreground/60"
+                  className="line-clamp-2 max-w-full wrap-break-word text-left font-medium underline decoration-foreground/20 underline-offset-4 hover:decoration-foreground/60"
                   onClick={() => onView(candidate.id)}
                   title="点击姓名查看详情"
                   type="button"
@@ -232,7 +232,7 @@ function CandidateRecommendationCard({
             ) : null}
 
             {note ? (
-              <p className="line-clamp-3 px-3 break-words text-muted-foreground leading-5">
+              <p className="line-clamp-3 px-3 wrap-break-word text-muted-foreground leading-5">
                 {note}
               </p>
             ) : null}
