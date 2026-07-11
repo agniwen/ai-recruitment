@@ -1,7 +1,7 @@
 /* oxlint-disable no-explicit-any no-nested-ternary complexity -- tab body has explicit loading/empty/content branches. */
 "use client";
 
-import { IconArrowBackUp, IconEye, IconMessage2 } from "@tabler/icons-react";
+import { IconArrowBackUp, IconEye, IconLoader2, IconMessage2 } from "@tabler/icons-react";
 import Markdown from "react-markdown";
 import { cn } from "@arc/shared/utils";
 import { env } from "@/env/client";
@@ -88,6 +88,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
     canResetAiRound,
     canUpdateHumanInterview,
     canUpdateOffer,
+    canUseManagementActions,
     canUseTimelineRailScroll,
     canViewReportMetadata,
     candidateRounds,
@@ -98,6 +99,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
     enabled,
     formItems,
     formSubmissions,
+    handleReassessResume,
     handleResetRound,
     handleToggleAllowTextInput,
     interviewItems,
@@ -105,6 +107,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
     isFormSubmissionsLoading,
     isLoading,
     isPublic,
+    isReassessingResume,
     isReportsLoading,
     isRoundCompleted,
     isRoundsLoading,
@@ -126,6 +129,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
     roundActionLockedReason,
     roundEmailSummary,
     selectedEvidence,
+    setActiveTab,
     setMetadataReport,
     showTimelineRail,
     slug,
@@ -149,7 +153,10 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
               Resume mode: defer to ResumeOverviewPanel so the
               launch-interview dialog and this view stay in sync. */}
               {mode === "resume" && resumeRecord ? (
-                <ResumeOverviewPanel detail={resumeRecord} />
+                <ResumeOverviewPanel
+                  detail={resumeRecord}
+                  onViewAiScore={() => setActiveTab("ai-analysis")}
+                />
               ) : (
                 <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
                   {isReportsLoading ? (
@@ -359,7 +366,28 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
             <TabsContent value="ai-analysis">
               <div className="space-y-6">
                 {resumeRecord?.resumeReview ? (
-                  <ResumeReviewStructuredView review={resumeRecord.resumeReview} />
+                  <ResumeReviewStructuredView
+                    review={resumeRecord.resumeReview}
+                    screeningResultSlot={<ResumeScreeningResultPanel resumeRecord={resumeRecord} />}
+                    summaryAction={
+                      canUseManagementActions ? (
+                        <Button
+                          disabled={isReassessingResume}
+                          onClick={handleReassessResume}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          {isReassessingResume ? (
+                            <IconLoader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <IconArrowBackUp className="size-3.5" />
+                          )}
+                          重新评估
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <>
                     <ResumeAiAnalysisPlaceholder resumeRecord={resumeRecord} />
