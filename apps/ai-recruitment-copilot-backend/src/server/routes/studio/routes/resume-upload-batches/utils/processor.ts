@@ -647,6 +647,17 @@ async function writeOutcome(
   });
 }
 
+function isBatchItemCancelledError(error: unknown): error is BatchItemCancelledError {
+  return (
+    error instanceof BatchItemCancelledError ||
+    (error instanceof Error && error.name === "BatchItemCancelledError")
+  );
+}
+
+function isTerminalBatchStatus(status: string): boolean {
+  return status === "completed" || status === "cancelled";
+}
+
 async function loadCancelledProcessResult(
   item: NonNullable<ItemRow>,
   batchRow: BatchRow,
@@ -666,7 +677,7 @@ async function loadCancelledProcessResult(
   });
   return {
     batch: detail.batch,
-    done: detail.batch.status === "completed" || detail.batch.status === "cancelled",
+    done: isTerminalBatchStatus(detail.batch.status),
     item: updatedItem,
   };
 }
@@ -697,7 +708,7 @@ async function processClaimedItem(
     await assertBatchItemNotCancelled(batchRow.id, item.id);
     outcome = { ...outcome, ...result };
   } catch (error) {
-    if (error instanceof BatchItemCancelledError) {
+    if (isBatchItemCancelledError(error)) {
       return loadCancelledProcessResult(item, batchRow, startedAt);
     }
     outcome.errorMessage = truncate(error instanceof Error ? error.message : String(error));
@@ -706,6 +717,12 @@ async function processClaimedItem(
       errorMessage: outcome.errorMessage,
       itemId: item.id,
     });
+  }
+
+  // Cancel can land after parse/error handling but before outcome write — never
+  // overwrite cancelled items with succeeded/failed, and signal the worker to stop.
+  if (await isBatchItemCancelled(batchRow.id, item.id)) {
+    return loadCancelledProcessResult(item, batchRow, startedAt);
   }
 
   await writeOutcome(item, batchRow.id, outcome);
@@ -733,7 +750,8 @@ async function processClaimedItem(
   });
   return {
     batch: detail.batch,
-    done: detail.batch.status === "completed",
+    // cancelled batches are also terminal — worker must not keep polling items.
+    done: isTerminalBatchStatus(detail.batch.status),
     item: updatedItem,
   };
 }
@@ -840,7 +858,11 @@ export async function processNextItem(
       const fresh = await loadBatchDetail(batchId, organizationId, userId);
       return { batch: fresh?.batch ?? detail.batch, done: true, item: null };
     }
-    return { batch: detail.batch, done: detail.batch.status === "completed", item: null };
+    return {
+      batch: detail.batch,
+      done: isTerminalBatchStatus(detail.batch.status),
+      item: null,
+    };
   }
 
   return processClaimedItem(claimed.item, claimed.batchRow);
