@@ -178,6 +178,7 @@ function readResumeEvaluationTimeSlots(value: unknown): ResumeEvaluationTimeline
   return value.filter(isResumeEvaluationTimelineTimeSlot);
 }
 
+// oxlint-disable-next-line complexity -- Timeline audit copy is intentionally centralized by action.
 function auditDescription(detail: Record<string, unknown>, action: string): string | null {
   if (action === "candidate_transition") {
     const from = stageLabel(detail.fromStage);
@@ -194,6 +195,10 @@ function auditDescription(detail: Record<string, unknown>, action: string): stri
   if (action === "round_reset") {
     const roundLabel = typeof detail.roundLabel === "string" ? detail.roundLabel : "AI 面试轮次";
     return `${roundLabel} 已重置为待开始`;
+  }
+  if (action === "ai_interview_launched") {
+    const roundLabel = typeof detail.roundLabel === "string" ? detail.roundLabel : "AI 面试轮次";
+    return `${roundLabel} 已发起`;
   }
   if (action === "agent_report_received") {
     const turnCount = typeof detail.turnCount === "number" ? detail.turnCount : null;
@@ -217,6 +222,50 @@ function auditDescription(detail: Record<string, unknown>, action: string): stri
     const count = typeof detail.questionCount === "number" ? detail.questionCount : null;
     return count === null ? "面试题草稿已生成" : `已生成 ${count} 道面试题草稿`;
   }
+  if (action === "human_interview_round_created") {
+    const label = typeof detail.roundLabel === "string" ? detail.roundLabel : "真人复面";
+    return `创建真人复面：${label}`;
+  }
+  if (action === "human_interview_round_updated") {
+    const label = typeof detail.roundLabel === "string" ? detail.roundLabel : "真人复面";
+    return `更新真人复面：${label}`;
+  }
+  if (action === "human_interview_round_completed") {
+    const label = typeof detail.roundLabel === "string" ? detail.roundLabel : "真人复面";
+    const outcome = typeof detail.outcome === "string" ? detail.outcome : null;
+    return outcome ? `完成真人复面：${label}，结果：${outcome}` : `完成真人复面：${label}`;
+  }
+  if (action === "human_interview_round_cancelled") {
+    const label = typeof detail.roundLabel === "string" ? detail.roundLabel : "真人复面";
+    const reason =
+      typeof detail.reason === "string" && detail.reason ? `，原因：${detail.reason}` : "";
+    return `取消真人复面：${label}${reason}`;
+  }
+  if (action === "offer_draft_created") {
+    const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
+    const position = typeof detail.position === "string" ? detail.position : "Offer";
+    return `创建 Offer${version}：${position}`;
+  }
+  if (action === "offer_draft_updated") {
+    const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
+    return `更新 Offer${version}`;
+  }
+  if (action === "offer_draft_sent") {
+    const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
+    return `发送 Offer${version}`;
+  }
+  if (action === "offer_draft_responded") {
+    const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
+    const response = typeof detail.response === "string" ? detail.response : "已响应";
+    return `记录候选人 Offer${version} 回复：${response}`;
+  }
+  if (action === "offer_draft_cancelled") {
+    const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
+    return `撤回 Offer${version}`;
+  }
+  if (action === "context_snapshot_refresh") {
+    return "刷新 AI 面试上下文";
+  }
   return null;
 }
 
@@ -227,6 +276,9 @@ function auditTitle(action: string): string {
     }
     case "round_reset": {
       return "AI 面试轮次重置";
+    }
+    case "ai_interview_launched": {
+      return "发起 AI 面试";
     }
     case "agent_report_received": {
       return "AI 报告已接收";
@@ -246,6 +298,36 @@ function auditTitle(action: string): string {
     case "interview_questions_drafted": {
       return "面试题草稿已生成";
     }
+    case "human_interview_round_created": {
+      return "创建真人复面";
+    }
+    case "human_interview_round_updated": {
+      return "更新真人复面";
+    }
+    case "human_interview_round_completed": {
+      return "真人复面完成";
+    }
+    case "human_interview_round_cancelled": {
+      return "真人复面取消";
+    }
+    case "offer_draft_created": {
+      return "创建 Offer";
+    }
+    case "offer_draft_updated": {
+      return "更新 Offer";
+    }
+    case "offer_draft_sent": {
+      return "Offer 已发送";
+    }
+    case "offer_draft_responded": {
+      return "候选人回复 Offer";
+    }
+    case "offer_draft_cancelled": {
+      return "Offer 已撤回";
+    }
+    case "context_snapshot_refresh": {
+      return "上下文已刷新";
+    }
     default: {
       return "系统操作";
     }
@@ -258,6 +340,9 @@ function auditTone(action: string): CandidateTimelineEventTone {
   }
   if (action === "round_reset") {
     return "warning";
+  }
+  if (action === "ai_interview_launched") {
+    return "info";
   }
   if (action === "agent_report_received") {
     return "success";
@@ -277,6 +362,24 @@ function auditTone(action: string): CandidateTimelineEventTone {
   if (action === "interview_questions_drafted") {
     return "success";
   }
+  if (action === "human_interview_round_completed") {
+    return "success";
+  }
+  if (action === "human_interview_round_cancelled") {
+    return "muted";
+  }
+  if (action.startsWith("human_interview_round_")) {
+    return "info";
+  }
+  if (action === "offer_draft_cancelled") {
+    return "warning";
+  }
+  if (action.startsWith("offer_draft_")) {
+    return "info";
+  }
+  if (action === "context_snapshot_refresh") {
+    return "info";
+  }
   return "muted";
 }
 
@@ -286,6 +389,8 @@ function loadTimelineRows(interviewRecordId: string, organizationId: string) {
       .select({
         allowTextInput: studioInterviewSchedule.allowTextInput,
         createdAt: studioInterviewSchedule.createdAt,
+        creatorImage: user.image,
+        creatorName: user.name,
         disconnectedAt: studioInterviewSchedule.disconnectedAt,
         id: studioInterviewSchedule.id,
         roundLabel: studioInterviewSchedule.roundLabel,
@@ -296,6 +401,7 @@ function loadTimelineRows(interviewRecordId: string, organizationId: string) {
         updatedAt: studioInterviewSchedule.updatedAt,
       })
       .from(studioInterviewSchedule)
+      .leftJoin(user, eq(studioInterviewSchedule.createdBy, user.id))
       .where(
         and(
           eq(studioInterviewSchedule.interviewRecordId, interviewRecordId),
@@ -480,6 +586,7 @@ export async function loadCandidateTimeline(
   const events: CandidateTimelineEvent[] = [];
 
   addEvent(events, {
+    actorImage: candidate.creatorImage,
     actorName: candidate.creatorName,
     description:
       candidate.jobDescriptionName || candidate.targetRole
@@ -498,6 +605,7 @@ export async function loadCandidateTimeline(
 
   if (candidate.closedAt) {
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: candidate.closedReason,
       id: `candidate:${candidate.id}:closed`,
@@ -520,7 +628,8 @@ export async function loadCandidateTimeline(
   for (const round of aiRounds) {
     const statusMeta = scheduleEntryStatusMeta[round.status];
     addEvent(events, {
-      actorName: null,
+      actorImage: round.creatorImage,
+      actorName: round.creatorName,
       description: `${round.roundLabel} 已创建，当前状态：${statusMeta.label}`,
       id: `ai-round:${round.id}:created`,
       kind: "ai_interview",
@@ -534,6 +643,7 @@ export async function loadCandidateTimeline(
       tone: "info",
     });
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: `${round.roundLabel} 已设置候选人进场时间`,
       id: `ai-round:${round.id}:scheduled`,
@@ -544,6 +654,7 @@ export async function loadCandidateTimeline(
       tone: "info",
     });
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: `${round.roundLabel} 候选人已进入语音面试`,
       id: `ai-round:${round.id}:started`,
@@ -555,6 +666,7 @@ export async function loadCandidateTimeline(
     });
     if (round.status === "completed") {
       addEvent(events, {
+        actorImage: null,
         actorName: null,
         description: `${round.roundLabel} 已结束`,
         id: `ai-round:${round.id}:completed`,
@@ -567,6 +679,7 @@ export async function loadCandidateTimeline(
     }
     if (round.status === "interrupted") {
       addEvent(events, {
+        actorImage: null,
         actorName: null,
         description: `${round.roundLabel} 出现断连或中断`,
         id: `ai-round:${round.id}:interrupted`,
@@ -581,6 +694,7 @@ export async function loadCandidateTimeline(
 
   for (const conversation of conversations) {
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: "候选人与 AI 面试官开始通话",
       id: `conversation:${conversation.conversationId}:started`,
@@ -594,6 +708,7 @@ export async function loadCandidateTimeline(
       tone: "warning",
     });
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: conversation.transcriptSummary ?? "AI 面试通话与报告已同步",
       id: `conversation:${conversation.conversationId}:synced`,
@@ -611,6 +726,7 @@ export async function loadCandidateTimeline(
 
   for (const submission of formSubmissions) {
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: submission.title ? `表单：${submission.title}` : "候选人提交了面试前表单",
       id: `form:${submission.id}`,
@@ -624,6 +740,7 @@ export async function loadCandidateTimeline(
 
   for (const round of humanRounds) {
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: `${round.label} 已创建`,
       id: `human-round:${round.id}:created`,
@@ -637,6 +754,7 @@ export async function loadCandidateTimeline(
       tone: "info",
     });
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: `${round.label} 已设置面试时间`,
       id: `human-round:${round.id}:scheduled`,
@@ -648,6 +766,7 @@ export async function loadCandidateTimeline(
     });
     if (round.completedAt) {
       addEvent(events, {
+        actorImage: null,
         actorName: null,
         description: round.outcome
           ? `${round.label} 完成，结果：${humanInterviewRoundOutcomeMeta[round.outcome].label}`
@@ -669,6 +788,7 @@ export async function loadCandidateTimeline(
     }
     if (round.cancelledAt) {
       addEvent(events, {
+        actorImage: null,
         actorName: null,
         description: `${round.label} 已取消`,
         id: `human-round:${round.id}:cancelled`,
@@ -684,6 +804,7 @@ export async function loadCandidateTimeline(
   for (const draft of offerDrafts) {
     const statusMeta = offerDraftStatusMeta[draft.status];
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: `${draft.position} Offer v${draft.version} 已创建`,
       id: `offer:${draft.id}:created`,
@@ -698,6 +819,7 @@ export async function loadCandidateTimeline(
       tone: "info",
     });
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: `Offer v${draft.version} 已发送，当前状态：${statusMeta.label}`,
       id: `offer:${draft.id}:sent`,
@@ -712,6 +834,7 @@ export async function loadCandidateTimeline(
       tone: "info",
     });
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: `候选人对 Offer v${draft.version} 的反馈：${statusMeta.label}`,
       id: `offer:${draft.id}:response`,
@@ -729,6 +852,7 @@ export async function loadCandidateTimeline(
 
   for (const log of emailLogs) {
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: log.status === "sent" ? log.subject : (log.errorMessage ?? "邮件发送失败"),
       id: `email:${log.id}`,
@@ -746,6 +870,7 @@ export async function loadCandidateTimeline(
 
   for (const notification of notifications) {
     addEvent(events, {
+      actorImage: null,
       actorName: null,
       description: notification.error ?? "AI 面试报告通知状态更新",
       id: `notification:${notification.id}`,

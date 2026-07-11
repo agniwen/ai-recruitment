@@ -5,7 +5,12 @@ import { z } from "zod";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
-import { hiringUnit, studioInterview, studioInterviewSchedule } from "@arc/db-schema/schema";
+import {
+  hiringUnit,
+  interviewAuditLog,
+  studioInterview,
+  studioInterviewSchedule,
+} from "@arc/db-schema/schema";
 import { canApplyCandidatePipelineEvent } from "@arc/shared/candidate-pipeline-machine";
 import { parseCsvParam } from "@arc/shared/csv";
 import { resumeReviewSchema } from "@arc/shared/resume-review";
@@ -692,6 +697,20 @@ export const resumeLibraryRouter = factory
               and(eq(studioInterview.id, id), eq(studioInterview.organizationId, activeOrg.id)),
             );
           await tx.insert(studioInterviewSchedule).values(scheduleRow);
+          await tx.insert(interviewAuditLog).values({
+            action: "ai_interview_launched",
+            createdAt: now,
+            detail: {
+              questionCount: interviewQuestions.length,
+              roundId: scheduleRow.id,
+              roundLabel: scheduleRow.roundLabel,
+            },
+            id: crypto.randomUUID(),
+            interviewRecordId: id,
+            operatorId: c.var.user?.id ?? null,
+            organizationId: activeOrg.id,
+            scheduleEntryId: scheduleRow.id,
+          });
           await autoBindApplicableTemplates(tx, id, existing.jobDescriptionId);
         });
         await loadOrCreateActiveInterviewContextSnapshot({

@@ -69,7 +69,7 @@ function badgeVariantForTone(tone: CandidateTimelineEventTone): BadgeVariant {
   }
 }
 
-function TimelineSkeleton({ className }: { className?: string }) {
+export function CandidateTimelineSkeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
@@ -302,7 +302,7 @@ export function CandidateTimeline({
   const canUseInternalScroll = isRail && scrollMode === "internal";
 
   if (isLoading) {
-    return <TimelineSkeleton className={className} />;
+    return <CandidateTimelineSkeleton className={className} />;
   }
 
   const events = data?.events ?? [];
@@ -318,7 +318,7 @@ export function CandidateTimeline({
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="font-medium text-sm">候选人时间线</h3>
+          <h3 className="font-medium text-sm">活动记录</h3>
         </div>
       </div>
 
