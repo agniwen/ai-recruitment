@@ -8,6 +8,7 @@ import { jobDescriptionFormSchema, jobDescriptionUpdateSchema } from "@arc/share
 import { computeResumeScreeningPolicyHash } from "@arc/shared/resume-screening";
 import { validateJobDescriptionInterviewerDepartments } from "@arc/shared/job-description-interviewers";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
+import { createInternalErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/error-handler";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import {
   listAllJobDescriptions,
@@ -128,7 +129,15 @@ export const jobDescriptionsRouter = factory
         });
         return c.json(result, 200);
       } catch (error) {
-        return c.json({ error: error instanceof Error ? error.message : "AI 生成失败。" }, 500);
+        return c.json(
+          createInternalErrorResponse({
+            context: { organizationId: activeOrg.id },
+            error,
+            operation: "job-description-ai-generate",
+            publicMessage: "AI 生成失败。",
+          }),
+          500,
+        );
       }
     },
   )
@@ -220,7 +229,12 @@ export const jobDescriptionsRouter = factory
         return c.json({ policy }, 200);
       } catch (error) {
         return c.json(
-          { error: error instanceof Error ? error.message : "筛选规则生成失败。" },
+          createInternalErrorResponse({
+            context: { organizationId: activeOrg.id },
+            error,
+            operation: "job-description-screening-policy-generate",
+            publicMessage: "筛选规则生成失败。",
+          }),
           500,
         );
       }

@@ -112,6 +112,7 @@ import {
 import { recordingsRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/routes/recordings/route";
 import { reportsRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/routes/reports/route";
 import { roundEmailsRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/routes/round-emails/route";
+import { recordCandidateActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
 import {
   buildTokenErrorResponse,
   buildScheduleRows,
@@ -269,33 +270,6 @@ async function resetOrphanedAiInterviewParents(
         ),
       ),
     );
-}
-
-async function recordCandidateActivity({
-  action,
-  detail = {},
-  interviewRecordId,
-  operatorId,
-  organizationId,
-  scheduleEntryId = null,
-}: {
-  action: string;
-  detail?: Record<string, unknown>;
-  interviewRecordId: string;
-  operatorId: string | null;
-  organizationId: string;
-  scheduleEntryId?: string | null;
-}) {
-  await db.insert(interviewAuditLog).values({
-    action,
-    createdAt: new Date(),
-    detail,
-    id: crypto.randomUUID(),
-    interviewRecordId,
-    operatorId,
-    organizationId,
-    scheduleEntryId,
-  });
 }
 
 export const studioInterviewsRouter = factory
