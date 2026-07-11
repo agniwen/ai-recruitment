@@ -269,7 +269,7 @@ describe("StudioPersonDetailPanel visual density", () => {
     expect(modalSizeSource).toContain('"3xl"');
   });
 
-  it("moves resume launch actions into the pipeline action bar without a footer", () => {
+  it("keeps modal resume actions in the header and moves page actions into a floating bar", () => {
     const launchSource = sourceBetween(
       "const launchResumeModeButtonContent = showLaunchButton ?",
       "const title =",
@@ -286,6 +286,11 @@ describe("StudioPersonDetailPanel visual density", () => {
       "<TooltipContent>{launchResumeModeDisabledReason}</TooltipContent>",
     );
     expect(actionBarSource).toContain("primaryAction={launchResumeModeButton}");
+    expect(source).toContain('const headerActionBar = layoutMode === "modal" ? actionBar : null;');
+    expect(source).toContain('const floatingActionBar = layoutMode === "page" ? actionBar : null;');
+    expect(source).toContain("DETAIL_PAGE_FLOATING_ACTION_CLASS");
+    expect(source).toContain("{headerActionBar}");
+    expect(source).toContain("{floatingActionBar}");
     expect(source).toContain("const footer = null;");
     expect(source).not.toContain("const resumeModeFooter =");
     expect(source).not.toContain("<IconPencil");
