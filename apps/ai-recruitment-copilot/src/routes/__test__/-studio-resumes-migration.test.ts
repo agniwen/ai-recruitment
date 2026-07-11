@@ -33,7 +33,7 @@ describe("TanStack Start studio resumes migration", () => {
     expect(listSource).toContain("initialOffset: studioScrollEntry?.scrollY");
     expect(listSource).toContain("fromRecruiterResumeList: true");
     expect(studioShellSource).toContain("STUDIO_MAIN_SCROLL_RESTORATION_ID");
-    expect(studioShellSource).toContain('"data-scroll-restoration-id"');
+    expect(studioShellSource).toContain("scrollRestorationId={STUDIO_MAIN_SCROLL_RESTORATION_ID}");
   });
 
   it("keeps the migrated resumes route and page free of Next runtime imports", () => {
