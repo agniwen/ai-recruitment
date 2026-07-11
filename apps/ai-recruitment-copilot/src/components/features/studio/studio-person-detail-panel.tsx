@@ -1843,9 +1843,10 @@ function useStudioPersonDetailPanel({
       launchResumeModeButtonContent
     );
 
+  const resumeTitleParts = ["候选人详情", record?.candidateName?.trim() || null].filter(Boolean);
   const title =
     mode === "resume" ? (
-      "候选人详情"
+      <span className="break-words">{resumeTitleParts.join(" · ")}</span>
     ) : (
       <span className="flex flex-wrap items-center gap-3">
         <span className="break-words">{record?.candidateName ?? "候选人详情"}</span>
@@ -1857,10 +1858,13 @@ function useStudioPersonDetailPanel({
       </span>
     );
 
-  const description =
-    mode === "resume"
-      ? "查看候选人基础信息与结构化简历。"
-      : renderHeaderDescription({ isLoading, round });
+  let description: ReactNode = renderHeaderDescription({ isLoading, round });
+  if (mode === "resume") {
+    const linkedJobDescriptionName = record?.jobDescriptionName?.trim();
+    description = linkedJobDescriptionName
+      ? `关联岗位：${linkedJobDescriptionName}`
+      : "暂未关联岗位";
+  }
   const resumePreviewUrl = (() => {
     if (!record?.hasResumeFile) {
       return "";

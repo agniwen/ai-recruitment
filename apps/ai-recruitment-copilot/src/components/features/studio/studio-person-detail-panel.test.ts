@@ -38,6 +38,15 @@ describe("StudioPersonDetailPanel visual density", () => {
     expect(source).toContain('"min-w-0 flex flex-col gap-8"');
   });
 
+  it("uses the candidate name and linked job in the resume header", () => {
+    expect(source).toContain('const resumeTitleParts = ["候选人详情",');
+    expect(source).toContain('resumeTitleParts.join(" · ")');
+    expect(source).toContain("linkedJobDescriptionName");
+    expect(source).toContain("关联岗位：");
+    expect(source).toContain('"暂未关联岗位"');
+    expect(source).not.toContain("查看候选人基础信息与结构化简历。");
+  });
+
   it("keeps the AI interview overview free of nested bordered cards", () => {
     const overviewSource = sourceBetween(
       '<TabsContent value="overview">',
