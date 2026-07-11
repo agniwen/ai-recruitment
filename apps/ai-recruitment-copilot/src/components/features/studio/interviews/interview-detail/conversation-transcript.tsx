@@ -1,8 +1,7 @@
 "use client";
 
-import { IconMessage2 } from "@tabler/icons-react";
 import type { PersistedInterviewTurn } from "@arc/db-schema/interview-session";
-
+import { IconMessage as MessageSquareTextIcon } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef } from "react";
 import {
   Conversation,
@@ -45,7 +44,7 @@ export function ConversationTranscript({
       <ConversationEmptyState
         className={className}
         description="本次面试还未收到对话内容。"
-        icon={<IconMessage2 className="size-6" />}
+        icon={<MessageSquareTextIcon className="size-6" />}
         title="暂无对话记录"
       />
     );
