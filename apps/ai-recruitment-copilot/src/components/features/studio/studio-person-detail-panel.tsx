@@ -89,6 +89,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -2337,7 +2338,7 @@ function useStudioPersonDetailPanel({
                               key={report.conversationId}
                               value={report.conversationId}
                             >
-                              <AccordionTrigger className="rounded-none px-5 py-4 hover:no-underline data-panel-open:border-border/60 data-panel-open:border-b data-panel-open:bg-background/70">
+                              <AccordionTrigger className="group rounded-none px-5 py-4 hover:no-underline data-panel-open:border-border/60 data-panel-open:border-b data-panel-open:bg-background/70">
                                 <div className="min-w-0 flex-1 text-left">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <TimeDisplay
@@ -2352,7 +2353,7 @@ function useStudioPersonDetailPanel({
                                       <Badge variant="outline">{report.callSuccessful}</Badge>
                                     ) : null}
                                   </div>
-                                  <div className="mt-2 h-20 line-clamp-4 text-muted-foreground text-sm leading-5 [&_p]:m-0">
+                                  <div className="mt-2 h-20 line-clamp-4 text-muted-foreground text-sm leading-5 group-data-[panel-open]:hidden [&_p]:m-0">
                                     <Markdown>
                                       {report.transcriptSummary ??
                                         report.latestError ??
@@ -2375,6 +2376,27 @@ function useStudioPersonDetailPanel({
                                         surface="section"
                                       />
                                     ) : null}
+
+                                    <InterviewMetricsPanel
+                                      metrics={report.metrics ?? {}}
+                                      surface="section"
+                                    />
+
+                                    <section className="rounded-xl border border-border/60 bg-background p-4 shadow-sm">
+                                      <h4 className="font-medium text-sm">评估指标</h4>
+                                      <ScrollArea className="mt-4 max-h-[420px] pr-1">
+                                        <EvaluationResults
+                                          data={
+                                            (report.evaluationCriteriaResults as Record<
+                                              string,
+                                              unknown
+                                            >) ?? {}
+                                          }
+                                          onEvidenceSelect={handleEvidenceSelect}
+                                        />
+                                      </ScrollArea>
+                                    </section>
+
                                     <section className="rounded-xl border border-border/60 bg-background p-4 shadow-sm">
                                       <div className="flex flex-wrap items-center justify-between gap-3">
                                         <h4 className="font-medium text-sm">会话概览</h4>
@@ -2467,26 +2489,6 @@ function useStudioPersonDetailPanel({
                                       />
                                     </section>
                                   </div>
-
-                                  <section className="rounded-xl border border-border/60 bg-background p-4 shadow-sm">
-                                    <h4 className="font-medium text-sm">评估指标</h4>
-                                    <div className="mt-4 max-h-[420px] overflow-y-auto pr-1">
-                                      <EvaluationResults
-                                        data={
-                                          (report.evaluationCriteriaResults as Record<
-                                            string,
-                                            unknown
-                                          >) ?? {}
-                                        }
-                                        onEvidenceSelect={handleEvidenceSelect}
-                                      />
-                                    </div>
-                                  </section>
-
-                                  <InterviewMetricsPanel
-                                    metrics={report.metrics ?? {}}
-                                    surface="section"
-                                  />
                                 </div>
                               </AccordionContent>
                             </AccordionItem>
