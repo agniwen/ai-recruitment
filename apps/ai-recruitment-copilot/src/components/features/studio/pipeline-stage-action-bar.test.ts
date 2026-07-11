@@ -3,49 +3,34 @@ import { describe, expect, it } from "vitest";
 
 const source = readFileSync(new URL("pipeline-stage-action-bar.tsx", import.meta.url), "utf-8");
 
-describe("PipelineStageActionBar compact stage rail", () => {
-  it("renders a compact rail without per-step status captions", () => {
-    const railSource = source.slice(
-      source.indexOf("<ol"),
-      source.indexOf('<div className="flex flex-wrap items-center justify-end gap-2'),
-    );
-
-    expect(source).toContain("aria-label={`招聘流程，当前阶段：");
+describe("PipelineStageActionBar floating actions", () => {
+  it("renders compact current-stage actions for the shared floating surface", () => {
+    expect(source).toContain("aria-label={`当前招聘阶段：");
     expect(source).toContain("pipelineStageMeta[pipelineStage].label");
-    expect(source).toContain("grid list-none overflow-x-auto rounded-xl bg-muted/30 p-2");
-    expect(source).toContain("rounded-full px-2.5 py-1.5");
-    expect(source).toContain("{pipelineStageMeta[stage].label}");
-    expect(railSource).not.toContain("getStepCaption");
-    expect(railSource).not.toContain("已完成");
-    expect(railSource).not.toContain("下一步");
-    expect(railSource).not.toContain("待进行");
+    expect(source).toContain("<RecruitmentStageHoverCard");
+    expect(source).toContain("完整招聘流程");
+    expect(source).toContain('className="flex flex-wrap items-center justify-end gap-2"');
+    expect(source).not.toContain("grid list-none overflow-x-auto");
   });
 
-  it("only highlights the current step and keeps other steps muted", () => {
-    const railSource = source.slice(
-      source.indexOf("<ol"),
-      source.indexOf('<div className="flex flex-wrap items-center justify-end gap-2'),
+  it("shows current and completed stages in the hover flow", () => {
+    const hoverSource = source.slice(
+      source.indexOf("function RecruitmentStageHoverCard"),
+      source.indexOf("interface StageButton"),
     );
 
-    expect(railSource).toContain("const isCurrent = stage === pipelineStage;");
-    expect(railSource).toContain("isCurrent");
-    expect(railSource).toContain('"bg-primary text-primary-foreground shadow-xs"');
-    expect(railSource).toContain(': "bg-background text-muted-foreground ring-1 ring-border/60"');
-    expect(railSource).not.toContain('status === "done" && "border-primary');
-    expect(railSource).not.toContain('status === "next" && "border-primary');
+    expect(hoverSource).toContain("const isCurrent = stage === pipelineStage;");
+    expect(hoverSource).toContain("const isDone = currentIndex !== -1 && index < currentIndex;");
+    expect(hoverSource).toContain("当前");
   });
 
   it("groups the primary resume actions together", () => {
-    const actionsSource = source.slice(
-      source.indexOf('<div className="flex flex-wrap items-center justify-end gap-2'),
-      source.indexOf("</div>", source.indexOf("actions.right.length > 0")),
-    );
-
     expect(source).toContain("primaryAction?: ReactNode;");
     expect(source).toContain('import { ButtonGroup } from "@/components/ui/button-group";');
-    expect(actionsSource).toContain("<ButtonGroup");
-    expect(actionsSource).toContain("{groupedPrimaryAction}");
-    expect(actionsSource).toContain("groupedPrimaryAction || actions.right.length > 0");
+    expect(source).toContain("<ButtonGroup");
+    expect(source).toContain("{groupedPrimaryAction}");
+    expect(source).toContain("const hasPrimaryActions =");
+    expect(source).toContain("Boolean(groupedPrimaryAction)");
     expect(source).toContain("安排真人面试");
     expect(source).toContain('key: "to-offer"');
     expect(source).not.toContain(
@@ -56,29 +41,26 @@ describe("PipelineStageActionBar compact stage rail", () => {
   it("suppresses external primary actions after the candidate is closed", () => {
     const renderSource = source.slice(
       source.indexOf("const actions = getStageActions"),
-      source.indexOf("const DEFAULT_ROUTE_STEPS"),
+      source.indexOf("const DEFAULT_FLOW_STEPS"),
     );
     const closedSource = source.slice(
       source.indexOf('if (pipelineStage === "closed")'),
-      source.indexOf("// 所有非 closed 阶段都能直接结案。"),
+      source.indexOf("const buttons: StageButton[]"),
     );
 
     expect(renderSource).toContain(
       'const groupedPrimaryAction = pipelineStage === "closed" ? null : primaryAction;',
     );
-    expect(renderSource).toContain("groupedPrimaryAction || actions.right.length > 0");
+    expect(renderSource).toContain("Boolean(groupedPrimaryAction)");
     expect(renderSource).toContain("{groupedPrimaryAction}");
     expect(closedSource).toContain('key="reactivate"');
     expect(closedSource).not.toContain("primaryAction");
   });
 
-  it("can hide the AI interview step while resumes are still parsing", () => {
-    expect(source).toContain("showAiInterviewStep?: boolean;");
-    expect(source).toContain("showAiInterviewStep = true");
-    expect(source).toContain("const DEFAULT_ROUTE_STEPS_WITHOUT_AI");
-    expect(source).toContain(
-      "showAiInterviewStep ? DEFAULT_ROUTE_STEPS : DEFAULT_ROUTE_STEPS_WITHOUT_AI",
-    );
+  it("shows the complete recruitment flow from the current-stage hover card", () => {
+    expect(source).toContain("const DEFAULT_FLOW_STEPS");
+    expect(source).toContain("const WRITTEN_TEST_FLOW_STEPS");
+    expect(source).toContain("getHoverFlowSteps");
   });
 
   it("gates human interview and offer stage actions by create permissions", () => {
@@ -133,25 +115,11 @@ describe("PipelineStageActionBar compact stage rail", () => {
     expect(source).toContain("humanInterviewFeedbackComplete");
   });
 
-  it("locks flow action buttons while an async transition is pending", () => {
-    expect(source).toContain('import { useRef, useState } from "react";');
-    expect(source).toContain('import type { ComponentProps, ReactNode } from "react";');
-    expect(source).toContain("type MaybePromise = void | Promise<void>;");
-    expect(source).toContain(
-      "type FlowActionRunner = (key: string, action: () => MaybePromise) => Promise<void>;",
-    );
-    expect(source).toContain("const pendingFlowActionRef = useRef<string | null>(null);");
-    expect(source).toContain(
-      "const [pendingFlowAction, setPendingFlowAction] = useState<string | null>(null);",
-    );
-    expect(source).toContain("if (pendingFlowActionRef.current) {");
-    expect(source).toContain("await action();");
-    expect(source).toContain("const isFlowActionPending = pendingFlowAction !== null;");
-    expect(source).toContain("disabled={isFlowActionPending}");
-    expect(source).toContain('void runFlowAction("to-human", () => onAdvance(targetStage));');
-    expect(source).toContain('void runFlowAction("to-offer", () => onAdvance(targetStage));');
-    expect(source).toContain('void runFlowAction("close", onRequestClose);');
-    expect(source).toContain('void runFlowAction("reactivate", onRequestReactivate);');
-    expect(source).toContain("onAdvance: (target: PipelineStage) => MaybePromise;");
+  it("keeps the action component presentation-only", () => {
+    expect(source).toContain("component is presentation-only and stateless");
+    expect(source).toContain("onAdvance(targetStage);");
+    expect(source).toContain("onClick={onRequestClose}");
+    expect(source).toContain("onClick={onRequestReactivate}");
+    expect(source).not.toContain("pendingFlowActionRef");
   });
 });

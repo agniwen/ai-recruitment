@@ -1,6 +1,12 @@
 "use client";
 
-import { IconArrowBackUp, IconArrowRight, IconCircleOff, IconUsers } from "@tabler/icons-react";
+import {
+  IconArrowBackUp,
+  IconArrowRight,
+  IconCircleOff,
+  IconInfoCircle,
+  IconUsers,
+} from "@tabler/icons-react";
 /* oxlint-disable no-use-before-define -- helper defined below the export */
 // 候选人详情顶部「下一步操作」action bar。
 // 按候选人当前 pipelineStage + outcome 决定显示哪些按钮。所有写动作都是
@@ -8,14 +14,16 @@ import { IconArrowBackUp, IconArrowRight, IconCircleOff, IconUsers } from "@tabl
 //
 // Stage-aware "next action" bar for the candidate detail view. Each button
 // fires a callback supplied by the parent (resume library page); this
-// component keeps only the local pending lock for duplicate-click prevention.
+// component is presentation-only and stateless.
 
-import { useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
+import { useState } from "react";
 import { pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage, ScheduleEntryStatus } from "@arc/db-schema/studio-interviews";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
   Popover,
   PopoverContent,
@@ -29,13 +37,9 @@ import type { CandidatePipelineEvent } from "@arc/shared/candidate-pipeline-mach
 import { canApplyCandidatePipelineEvent } from "@arc/shared/candidate-pipeline-machine";
 import { cn } from "@arc/shared/utils";
 
-type MaybePromise = void | Promise<void>;
-type FlowActionRunner = (key: string, action: () => MaybePromise) => Promise<void>;
-
 export interface PipelineStageActionBarProps {
   pipelineStage: PipelineStage;
   primaryAction?: ReactNode;
-  showAiInterviewStep?: boolean;
   canCreateHumanInterview?: boolean;
   canCreateOffer?: boolean;
   hasJobDescription?: boolean;
@@ -53,109 +57,79 @@ export interface PipelineStageActionBarProps {
   };
   // 推进到指定阶段的回调（仅 stage 跳变，无元数据）。
   // Advance to a target stage (no metadata).
-  onAdvance: (target: PipelineStage) => MaybePromise;
+  onAdvance: (target: PipelineStage) => void;
+  // 查看当前阶段对应内容；不对应独立 tab 时由上层回到概览。
+  // View content for the current stage; parent falls back to overview when no stage tab exists.
+  onViewCurrentStage: () => void;
   // 打开「标记结案」dialog。
   // Open the close dialog.
-  onRequestClose: () => MaybePromise;
+  onRequestClose: () => void;
   // 打开「重新激活」dialog（仅 pipelineStage='closed' 时使用）。
   // Open the reactivate dialog.
-  onRequestReactivate: () => MaybePromise;
+  onRequestReactivate: () => void;
 }
 
 export function PipelineStageActionBar({
-  aiRoundReset,
   pipelineStage,
   primaryAction,
-  showAiInterviewStep = true,
   canCreateHumanInterview = true,
   canCreateOffer = true,
   hasJobDescription = true,
   humanInterviewDone,
   humanInterviewFeedbackComplete,
+  aiRoundReset,
   onAdvance,
   onRequestClose,
   onRequestReactivate,
+  onViewCurrentStage,
 }: PipelineStageActionBarProps) {
-  const pendingFlowActionRef = useRef<string | null>(null);
-  const [pendingFlowAction, setPendingFlowAction] = useState<string | null>(null);
-  const runFlowAction: FlowActionRunner = async (key, action) => {
-    if (pendingFlowActionRef.current) {
-      return;
-    }
-    pendingFlowActionRef.current = key;
-    setPendingFlowAction(key);
-    try {
-      await action();
-    } finally {
-      pendingFlowActionRef.current = null;
-      setPendingFlowAction(null);
-    }
-  };
-  const isFlowActionPending = pendingFlowAction !== null;
   const actions = getStageActions({
     canCreateHumanInterview,
     canCreateOffer,
     hasJobDescription,
     humanInterviewDone,
     humanInterviewFeedbackComplete,
-    isFlowActionPending,
     onAdvance,
-    onRequestClose,
     onRequestReactivate,
     pipelineStage,
-    runFlowAction,
   });
-  const routeSteps = getRouteSteps(pipelineStage, showAiInterviewStep);
   const groupedPrimaryAction = pipelineStage === "closed" ? null : primaryAction;
   const aiRoundResetAction =
     pipelineStage === "ai_interview" && aiRoundReset ? (
       <AiRoundResetAction {...aiRoundReset} />
     ) : null;
+  const hasPrimaryActions =
+    Boolean(groupedPrimaryAction) || Boolean(aiRoundResetAction) || actions.right.length > 0;
+  const canClose = pipelineStage !== "closed";
 
   return (
-    <div className="space-y-2 rounded-2xl border border-border bg-background p-3 shadow-xs">
-      <ol
-        aria-label={`招聘流程，当前阶段：${pipelineStageMeta[pipelineStage].label}`}
-        className="grid list-none overflow-x-auto rounded-xl bg-muted/30 p-2"
-        style={{ gridTemplateColumns: `repeat(${routeSteps.length}, minmax(6.5rem, 1fr))` }}
-      >
-        {routeSteps.map((stage, index) => {
-          const isCurrent = stage === pipelineStage;
-          const isLast = index === routeSteps.length - 1;
-          return (
-            <li className="relative flex min-w-[6.5rem] items-center px-1" key={stage}>
-              {isLast ? null : (
-                <span
-                  aria-hidden
-                  className="-translate-y-1/2 absolute top-1/2 left-1/2 h-px w-full bg-border"
-                />
-              )}
-              <span
-                className={cn(
-                  "relative z-10 inline-flex w-full items-center justify-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium text-xs",
-                  isCurrent
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "bg-background text-muted-foreground ring-1 ring-border/60",
-                )}
-              >
-                <span className="tabular-nums">{index + 1}</span>
-                <span className="truncate">{pipelineStageMeta[stage].label}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-
-      <div className="flex flex-wrap items-center justify-end gap-2 border-border border-t pt-2">
-        {actions.left.length > 0 ? actions.left : null}
-        {groupedPrimaryAction || aiRoundResetAction || actions.right.length > 0 ? (
-          <ButtonGroup className="flex-wrap justify-end">
-            {groupedPrimaryAction}
-            {aiRoundResetAction}
-            {actions.right}
-          </ButtonGroup>
-        ) : null}
-      </div>
+    <div
+      aria-label={`当前招聘阶段：${pipelineStageMeta[pipelineStage].label}`}
+      className="flex flex-wrap items-center justify-end gap-2"
+    >
+      <RecruitmentStageHoverCard
+        onViewCurrentStage={onViewCurrentStage}
+        pipelineStage={pipelineStage}
+      />
+      {hasPrimaryActions ? (
+        <ButtonGroup className="flex-wrap justify-end">
+          {groupedPrimaryAction}
+          {aiRoundResetAction}
+          {actions.right}
+        </ButtonGroup>
+      ) : null}
+      {canClose ? (
+        <Button
+          className="border-destructive/20 bg-destructive/8 text-destructive shadow-xs/5 hover:border-destructive/30 hover:bg-destructive/12 hover:text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/12 dark:hover:bg-destructive/18"
+          onClick={onRequestClose}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <IconCircleOff className="size-4" />
+          标记结案
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -188,6 +162,7 @@ function AiRoundResetAction({
       </Button>
     );
   }
+
   if (behavior === "disabled") {
     return (
       <Tooltip>
@@ -203,6 +178,7 @@ function AiRoundResetAction({
       </Tooltip>
     );
   }
+
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
@@ -242,7 +218,7 @@ function AiRoundResetAction({
   );
 }
 
-const DEFAULT_ROUTE_STEPS: PipelineStage[] = [
+const DEFAULT_FLOW_STEPS: PipelineStage[] = [
   "screening",
   "ai_interview",
   "human_interview",
@@ -250,14 +226,7 @@ const DEFAULT_ROUTE_STEPS: PipelineStage[] = [
   "closed",
 ];
 
-const DEFAULT_ROUTE_STEPS_WITHOUT_AI: PipelineStage[] = [
-  "screening",
-  "human_interview",
-  "offer",
-  "closed",
-];
-
-const ROUTE_WITH_WRITTEN_TEST: PipelineStage[] = [
+const WRITTEN_TEST_FLOW_STEPS: PipelineStage[] = [
   "screening",
   "written_test",
   "ai_interview",
@@ -266,17 +235,89 @@ const ROUTE_WITH_WRITTEN_TEST: PipelineStage[] = [
   "closed",
 ];
 
-function getRouteSteps(
-  pipelineStage: PipelineStage,
-  showAiInterviewStep: boolean,
-): PipelineStage[] {
-  if (pipelineStage === "written_test") {
-    return ROUTE_WITH_WRITTEN_TEST;
-  }
-  if (pipelineStage === "ai_interview") {
-    return DEFAULT_ROUTE_STEPS;
-  }
-  return showAiInterviewStep ? DEFAULT_ROUTE_STEPS : DEFAULT_ROUTE_STEPS_WITHOUT_AI;
+function getHoverFlowSteps(pipelineStage: PipelineStage): PipelineStage[] {
+  return pipelineStage === "written_test" ? WRITTEN_TEST_FLOW_STEPS : DEFAULT_FLOW_STEPS;
+}
+
+function RecruitmentStageHoverCard({
+  onViewCurrentStage,
+  pipelineStage,
+}: {
+  onViewCurrentStage: () => void;
+  pipelineStage: PipelineStage;
+}) {
+  const flowSteps = getHoverFlowSteps(pipelineStage);
+  const currentIndex = flowSteps.indexOf(pipelineStage);
+
+  return (
+    <HoverCard>
+      <HoverCardTrigger
+        render={
+          <Button
+            aria-label={`查看当前阶段：${pipelineStageMeta[pipelineStage].label}`}
+            className="h-8 px-3 font-medium"
+            onClick={onViewCurrentStage}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <IconInfoCircle className="size-4" />
+            当前阶段：{pipelineStageMeta[pipelineStage].label}
+          </Button>
+        }
+      />
+      <HoverCardContent align="end" className="w-72 p-4" side="bottom" sideOffset={8}>
+        <div className="space-y-3">
+          <div>
+            <p className="font-medium text-sm">完整招聘流程</p>
+            <p className="mt-1 text-muted-foreground text-xs">
+              当前处于「{pipelineStageMeta[pipelineStage].label}」
+            </p>
+          </div>
+          <ol className="space-y-0">
+            {flowSteps.map((stage, index) => {
+              const isCurrent = stage === pipelineStage;
+              const isDone = currentIndex !== -1 && index < currentIndex;
+              const isLast = index === flowSteps.length - 1;
+
+              return (
+                <li className="grid grid-cols-[1rem_minmax(0,1fr)] gap-2" key={stage}>
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={cn(
+                        "mt-1 size-2.5 rounded-full border",
+                        isCurrent && "border-primary bg-primary",
+                        isDone && !isCurrent && "border-primary/40 bg-primary/20",
+                        !isDone && !isCurrent && "border-border bg-background",
+                      )}
+                    />
+                    {isLast ? null : <span className="mt-1 h-6 w-px bg-border" />}
+                  </div>
+                  <div className="min-w-0 pb-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          "truncate text-sm",
+                          isCurrent ? "font-medium text-foreground" : "text-muted-foreground",
+                        )}
+                      >
+                        {pipelineStageMeta[stage].label}
+                      </span>
+                      {isCurrent ? (
+                        <Badge className="h-5 px-1.5 text-[10px]" variant="outline">
+                          当前
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
 }
 
 interface StageButton {
@@ -292,11 +333,8 @@ function getStageActions(props: {
   hasJobDescription: boolean;
   humanInterviewFeedbackComplete?: boolean;
   humanInterviewDone?: boolean;
-  isFlowActionPending: boolean;
-  onAdvance: (target: PipelineStage) => MaybePromise;
-  onRequestClose: () => MaybePromise;
-  onRequestReactivate: () => MaybePromise;
-  runFlowAction: FlowActionRunner;
+  onAdvance: (target: PipelineStage) => void;
+  onRequestReactivate: () => void;
 }): { left: ReactNode[]; right: ReactNode[] } {
   const {
     pipelineStage,
@@ -305,11 +343,8 @@ function getStageActions(props: {
     hasJobDescription,
     humanInterviewFeedbackComplete,
     humanInterviewDone,
-    isFlowActionPending,
     onAdvance,
-    onRequestClose,
     onRequestReactivate,
-    runFlowAction,
   } = props;
 
   // closed：唯一行动是重新激活。
@@ -318,38 +353,13 @@ function getStageActions(props: {
     return {
       left: [],
       right: [
-        <Button
-          disabled={isFlowActionPending}
-          key="reactivate"
-          onClick={() => {
-            void runFlowAction("reactivate", onRequestReactivate);
-          }}
-          size="sm"
-          variant="outline"
-        >
+        <Button key="reactivate" onClick={onRequestReactivate} size="sm" variant="outline">
           <IconArrowBackUp className="size-4" />
           重新激活
         </Button>,
       ],
     };
   }
-
-  // 所有非 closed 阶段都能直接结案。
-  // Every non-closed stage can be closed.
-  const closeBtn: ReactNode = (
-    <Button
-      disabled={isFlowActionPending}
-      key="close"
-      onClick={() => {
-        void runFlowAction("close", onRequestClose);
-      }}
-      size="sm"
-      variant="outline"
-    >
-      <IconCircleOff className="size-4" />
-      标记结案
-    </Button>
-  );
 
   const buttons: StageButton[] = [];
   const pipelineSnapshot = {
@@ -373,10 +383,8 @@ function getStageActions(props: {
                 hasJobDescription,
                 canAdvanceToHumanInterview,
               )}
-              isFlowActionPending={isFlowActionPending}
               key="to-human"
               onAdvance={onAdvance}
-              runFlowAction={runFlowAction}
             />
           ),
           side: "right",
@@ -400,10 +408,8 @@ function getStageActions(props: {
                 hasJobDescription,
                 canAdvanceToHumanInterview,
               )}
-              isFlowActionPending={isFlowActionPending}
               key="to-human"
               onAdvance={onAdvance}
-              runFlowAction={runFlowAction}
             />
           ),
           side: "right",
@@ -427,10 +433,8 @@ function getStageActions(props: {
             <OfferAdvanceButton
               disabledReason={disabledReason}
               humanInterviewDone={humanInterviewDone}
-              isFlowActionPending={isFlowActionPending}
               key="to-offer"
               onAdvance={onAdvance}
-              runFlowAction={runFlowAction}
             />
           ),
           side: "right",
@@ -451,14 +455,7 @@ function getStageActions(props: {
       buttons.push({
         key: "to-ai",
         node: (
-          <Button
-            disabled={isFlowActionPending}
-            key="to-ai"
-            onClick={() => {
-              void runFlowAction("to-ai", () => onAdvance("ai_interview"));
-            }}
-            size="sm"
-          >
+          <Button key="to-ai" onClick={() => onAdvance("ai_interview")} size="sm">
             <IconArrowRight className="size-4" />
             推进到 AI 面试
           </Button>
@@ -474,10 +471,7 @@ function getStageActions(props: {
   }
 
   return {
-    left: [
-      ...buttons.filter((button) => button.side === "left").map((button) => button.node),
-      closeBtn,
-    ],
+    left: buttons.filter((button) => button.side === "left").map((button) => button.node),
     right: buttons.filter((button) => button.side === "right").map((button) => button.node),
   };
 }
@@ -503,15 +497,11 @@ function resolveOfferAdvanceDisabledReason(
 
 function HumanInterviewAdvanceButton({
   disabledReason,
-  isFlowActionPending,
   onAdvance,
-  runFlowAction,
   variant = "default",
 }: {
   disabledReason: string | null;
-  isFlowActionPending: boolean;
-  onAdvance: (target: PipelineStage) => MaybePromise;
-  runFlowAction: FlowActionRunner;
+  onAdvance: (target: PipelineStage) => void;
   variant?: ComponentProps<typeof Button>["variant"];
 }) {
   const targetStage: PipelineStage = "human_interview";
@@ -519,13 +509,12 @@ function HumanInterviewAdvanceButton({
     <Button
       aria-disabled={Boolean(disabledReason)}
       className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none aria-disabled:active:scale-100"
-      disabled={isFlowActionPending}
       key="to-human"
       onClick={() => {
-        if (disabledReason || isFlowActionPending) {
+        if (disabledReason) {
           return;
         }
-        void runFlowAction("to-human", () => onAdvance(targetStage));
+        onAdvance(targetStage);
       }}
       size="sm"
       variant={variant}
@@ -550,28 +539,23 @@ function HumanInterviewAdvanceButton({
 function OfferAdvanceButton({
   disabledReason,
   humanInterviewDone,
-  isFlowActionPending,
   onAdvance,
-  runFlowAction,
 }: {
   disabledReason: string | null;
   humanInterviewDone?: boolean;
-  isFlowActionPending: boolean;
-  onAdvance: (target: PipelineStage) => MaybePromise;
-  runFlowAction: FlowActionRunner;
+  onAdvance: (target: PipelineStage) => void;
 }) {
   const targetStage: PipelineStage = "offer";
   const button = (
     <Button
       aria-disabled={Boolean(disabledReason)}
       className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none aria-disabled:active:scale-100"
-      disabled={isFlowActionPending}
       key="to-offer"
       onClick={() => {
-        if (disabledReason || isFlowActionPending) {
+        if (disabledReason) {
           return;
         }
-        void runFlowAction("to-offer", () => onAdvance(targetStage));
+        onAdvance(targetStage);
       }}
       size="sm"
       variant={humanInterviewDone ? "default" : "outline"}

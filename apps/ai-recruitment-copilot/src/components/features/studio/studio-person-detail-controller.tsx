@@ -625,6 +625,7 @@ export function useStudioPersonDetailController({
         onRequestReactivate={() =>
           onRequestReactivate?.({ candidateName: record.candidateName, id: record.id })
         }
+        onViewCurrentStage={() => setActiveTab(tabForPipelineStage(actionBarPipelineStage))}
         pipelineStage={actionBarPipelineStage}
         primaryAction={launchResumeModeButton}
       />
