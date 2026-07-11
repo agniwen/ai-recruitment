@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import type { ResumeReview } from "@arc/shared/resume-review";
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
@@ -15,7 +15,6 @@ import { StudioPersonEditDialog } from "./studio-person-edit-dialog";
 
 const apiMocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
-  fetchSelectableHiringUnits: vi.fn(),
   fetchStudioInterviewRound: vi.fn(),
   fetchStudioResume: vi.fn(),
 }));
@@ -37,7 +36,6 @@ const reviewRegenerationMocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/client/api", () => ({
   apiFetch: apiMocks.apiFetch,
-  fetchSelectableHiringUnits: apiMocks.fetchSelectableHiringUnits,
   fetchStudioInterviewRound: apiMocks.fetchStudioInterviewRound,
   fetchStudioResume: apiMocks.fetchStudioResume,
   resetStudioInterviewRound: vi.fn(),
@@ -182,19 +180,15 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     duplicateMatch: null,
     hasInterviewRounds: false,
     hasResumeFile: true,
-    hiringUnitId: "hu-1",
-    hiringUnitName: "华东事业部",
     hrResumeAssessment: null,
     hrResumeAssessmentUpdatedAt: null,
     hrResumeAssessmentUpdatedBy: null,
     humanInterviewScheduledAt: null,
     humanInterviewerId: null,
-    humanInterviewers: [],
     id: "resume-1",
     interviewQuestions: [],
     jobDescriptionDepartmentName: null,
     jobDescriptionId: "jd-1",
-    jobDescriptionInterviewers: [],
     jobDescriptionName: "前端工程师",
     lastInterviewAt: null,
     notes: "已有简历评价",
@@ -202,12 +196,8 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     offerSentAt: null,
     outcome: "in_pipeline",
     pipelineStage: "screening",
-    recommendationText: null,
     resumeContentHash: "hash",
     resumeEvaluationStatus: null,
-    resumeEvaluatorId: null,
-    resumeEvaluatorImage: null,
-    resumeEvaluatorName: null,
     resumeFileName: "resume.pdf",
     resumeParseError: null,
     resumeParseStatus: "ready",
@@ -279,6 +269,7 @@ function makeRoundDetail(
     hasReport: false,
     id: "round-1",
     interviewLink: "/interview/round-1",
+    jdRequiredSkills: [],
     notes: "轮次备注",
     roundLabel: "第一轮",
     scheduledAt: null,
@@ -357,10 +348,6 @@ afterEach(() => {
 });
 
 describe("StudioPersonEditDialog", () => {
-  beforeEach(() => {
-    apiMocks.fetchSelectableHiringUnits.mockResolvedValue([{ id: "hu-1", name: "华东事业部" }]);
-  });
-
   it("opens candidate profile editing inline from interview edit mode", async () => {
     apiMocks.fetchStudioInterviewRound.mockResolvedValue(makeRoundDetail());
     const onEditResumeRecord = vi.fn();
@@ -441,60 +428,6 @@ describe("StudioPersonEditDialog", () => {
     );
     expect(document.querySelector<HTMLInputElement>("#candidatePhone")?.value).toBe("13800138000");
     expect(document.querySelector<HTMLInputElement>("#targetRole")?.value).toBe("前端工程师");
-
-    act(() => {
-      root.unmount();
-    });
-    queryClient.clear();
-  });
-
-  it("shows and submits the selected hiring unit in resume edit mode", async () => {
-    apiMocks.fetchStudioResume.mockResolvedValue(makeDetail());
-    apiMocks.apiFetch.mockResolvedValue(makeDetail());
-    const { queryClient, root } = renderDialog();
-
-    await vi.waitFor(() => {
-      expect(document.body.textContent).toContain("用人组织");
-    });
-
-    const form = document.querySelector<HTMLFormElement>("#resume-edit-form");
-    expect(form).not.toBeNull();
-
-    act(() => {
-      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-
-    await vi.waitFor(() => {
-      expect(apiMocks.apiFetch).toHaveBeenCalled();
-    });
-    const [, options] = apiMocks.apiFetch.mock.calls[0] as [
-      string,
-      { body: FormData; method: string },
-    ];
-    expect(options.body.get("hiringUnitId")).toBe("hu-1");
-
-    act(() => {
-      root.unmount();
-    });
-    queryClient.clear();
-  });
-
-  it("requires a hiring unit before saving resume edits", async () => {
-    apiMocks.fetchStudioResume.mockResolvedValue({
-      ...makeDetail(),
-      hiringUnitId: null,
-      hiringUnitName: null,
-    });
-    const { queryClient, root } = renderDialog();
-
-    await vi.waitFor(() => {
-      expect(document.body.textContent).toContain("用人组织");
-    });
-
-    const saveButton = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
-      button.textContent?.includes("保存"),
-    );
-    expect(saveButton?.disabled).toBe(true);
 
     act(() => {
       root.unmount();
