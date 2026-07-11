@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, notInArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import type {
   JobDescriptionTalentRecommendation,
   JobDescriptionTalentRecommendationResult,
@@ -371,7 +371,6 @@ export function recommendationCandidateWhere(
   return and(
     eq(studioInterview.organizationId, organizationId),
     inArray(studioInterview.id, ids),
-    notInArray(studioInterview.status, ["archived"]),
     includeClosed ? undefined : ne(studioInterview.pipelineStage, "closed"),
   );
 }

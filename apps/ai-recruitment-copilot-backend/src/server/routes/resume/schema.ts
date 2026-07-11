@@ -3,6 +3,11 @@ import { z } from "zod";
 export const resumeChatRequestSchema = z.object({
   chatId: z.string().min(1).optional(),
   enableThinking: z.boolean().optional(),
+  focus: z
+    .object({ id: z.string().trim().min(1), kind: z.literal("resume_record") })
+    .strict()
+    .optional(),
+  id: z.string().min(1).optional(),
   jobDescription: z.string().optional(),
   /** Set when `trigger === "regenerate-message"`; identifies the assistant message to replace. */
   messageId: z.string().optional(),

@@ -10,7 +10,7 @@ import {
 } from "@arc/shared/resume-screening";
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
 import type { SQL } from "drizzle-orm";
-import { and, asc, count, desc, eq, ilike, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -299,7 +299,7 @@ async function loadResumeCountsForJobDescriptions(
     .where(
       and(
         inArray(studioInterview.jobDescriptionId, jobDescriptionIds),
-        notInArray(studioInterview.status, ["archived"]),
+        ne(studioInterview.pipelineStage, "closed"),
       ),
     )
     .groupBy(studioInterview.jobDescriptionId);
@@ -642,7 +642,7 @@ async function loadCandidatesByJd(organizationId: string, scopeCondition?: SQL) 
       and(
         eq(studioInterview.jobDescriptionId, jobDescription.id),
         eq(studioInterview.organizationId, organizationId),
-        notInArray(studioInterview.status, ["archived"]),
+        ne(studioInterview.pipelineStage, "closed"),
       ),
     )
     .where(and(eq(jobDescription.organizationId, organizationId), scopeCondition))
@@ -689,7 +689,7 @@ async function loadCompletionByJd(organizationId: string, scopeCondition?: SQL) 
     .where(
       and(
         eq(jobDescription.organizationId, organizationId),
-        notInArray(studioInterview.status, ["archived"]),
+        ne(studioInterview.pipelineStage, "closed"),
         scopeCondition,
       ),
     )
@@ -732,7 +732,7 @@ async function loadLoadByInterviewer(organizationId: string, scopeCondition?: SQ
       and(
         eq(studioInterview.jobDescriptionId, jobDescriptionInterviewer.jobDescriptionId),
         eq(studioInterview.organizationId, organizationId),
-        inArray(studioInterview.status, ["ready", "in_progress"]),
+        inArray(studioInterview.pipelineStage, ["ai_interview", "human_interview", "offer"]),
       ),
     )
     .where(and(eq(interviewer.organizationId, organizationId), scopeCondition))

@@ -113,7 +113,6 @@ beforeAll(async () => {
       interviewQuestions: [],
       organizationId: ORG,
       pipelineStage: "ai_interview",
-      status: "completed",
       updatedAt: NOW,
     },
     {
@@ -124,7 +123,6 @@ beforeAll(async () => {
       interviewQuestions: [],
       organizationId: ORG,
       pipelineStage: "human_interview",
-      status: "completed",
       updatedAt: NOW,
     },
   ]);

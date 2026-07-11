@@ -4,7 +4,6 @@ import { and, eq, inArray, notExists } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
-import { hasWorkspacePermission } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-permissions";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   candidateFormSubmission,
@@ -14,11 +13,7 @@ import {
 } from "@arc/db-schema/schema";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
-import {
-  buildAgentInstructions,
-  resolveClosingPrompt,
-  resolveOpeningPrompt,
-} from "@arc/shared/interview/agent-instructions";
+import { buildInterviewDispatchContract } from "@arc/shared/interview/dispatch-contract";
 import { parseCsvParam } from "@arc/shared/csv";
 import {
   candidateExpectationsMetaSchema,
@@ -65,11 +60,12 @@ import {
   createHumanInterviewRound,
   editHumanInterviewRound,
   EditRoundError,
-  getHumanInterviewOfferReadinessError,
   listHumanInterviewRounds,
   loadHumanInterviewRoundReadiness,
+  getHumanInterviewOfferReadinessError,
   maybeAdvanceToHumanInterview,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds";
+import { hasWorkspacePermission } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-permissions";
 import {
   createHumanInterviewMeeting,
   deleteHumanInterviewMeeting,
@@ -387,7 +383,6 @@ export const studioInterviewsRouter = factory
         jobDescriptionId: toNullableString(formData.get("jobDescriptionId")),
         notes: toNullableString(formData.get("notes")) ?? "",
         scheduleEntries: parsedScheduleEntries,
-        status: toNullableString(formData.get("status")) ?? "ready",
         targetRole: toNullableString(formData.get("targetRole")) ?? "",
       });
 
@@ -480,7 +475,6 @@ export const studioInterviewsRouter = factory
         resumeProfile: analysis?.resumeProfile ?? null,
         resumeStorageKey,
         resumeText,
-        status: input.data.status,
         targetRole: input.data.targetRole || analysis?.resumeProfile.targetRoles[0] || null,
         updatedAt: now,
       } satisfies typeof studioInterview.$inferInsert;
@@ -929,51 +923,42 @@ export const studioInterviewsRouter = factory
     const jobDescriptionPresetQuestions =
       flattenPresetQuestionsFromContextSnapshot(snapshotPayload);
 
-    const candidateName = snapshotPayload.candidate.candidateName?.trim() || "候选人";
-    const targetRole = snapshotPayload.jobDescription?.name?.trim() || "未指定岗位";
-    const openingPrompt = resolveOpeningPrompt(
-      snapshotPayload.globalConfig.openingInstructions ?? "",
-      candidateName,
-      targetRole,
-    );
-    const closingPrompt = resolveClosingPrompt(
-      snapshotPayload.globalConfig.closingInstructions ?? "",
-      candidateName,
-      targetRole,
-    );
-
     const baseContext = {
+      allowTextInput: false,
       candidateName: snapshotPayload.candidate.candidateName,
+      closingInstructions: snapshotPayload.globalConfig.closingInstructions,
       companyContext: snapshotPayload.globalConfig.companyContext ?? "",
       interviewQuestions: snapshotPayload.personalizedQuestions,
+      interviewRecordId: candidateId,
       jobDescriptionPresetQuestions,
       jobDescriptionPrompt: snapshotPayload.jobDescription?.prompt ?? null,
+      openingInstructions: snapshotPayload.globalConfig.openingInstructions,
+      recordingEnabled: false,
+      recordingFileKey: null,
       resumeProfile: snapshotPayload.candidate.resumeProfile,
+      roundId: id,
       targetRole: snapshotPayload.jobDescription?.name ?? null,
     } as const;
 
+    const buildVariant = (
+      selectedInterviewer: (typeof snapshotPayload.interviewers)[number] | null,
+    ) => {
+      const contract = buildInterviewDispatchContract({
+        ...baseContext,
+        selectedInterviewer,
+      });
+      return {
+        closingPrompt: contract.prompts.closing,
+        instructions: contract.prompts.system,
+        interviewerName: contract.selectedInterviewer?.name ?? null,
+        openingPrompt: contract.prompts.opening,
+      };
+    };
+
     const variants =
       snapshotPayload.interviewers.length > 0
-        ? snapshotPayload.interviewers.map((person) => ({
-            closingPrompt,
-            instructions: buildAgentInstructions({
-              ...baseContext,
-              interviewerPrompt: person.prompt,
-            }),
-            interviewerName: person.name,
-            openingPrompt,
-          }))
-        : [
-            {
-              closingPrompt,
-              instructions: buildAgentInstructions({
-                ...baseContext,
-                interviewerPrompt: null,
-              }),
-              interviewerName: null,
-              openingPrompt,
-            },
-          ];
+        ? snapshotPayload.interviewers.map(buildVariant)
+        : [buildVariant(null)];
 
     return c.json({ variants }, 200);
   })
@@ -1331,7 +1316,6 @@ export const studioInterviewsRouter = factory
       .select({
         jobDescriptionId: studioInterview.jobDescriptionId,
         pipelineStage: studioInterview.pipelineStage,
-        status: studioInterview.status,
       })
       .from(studioInterview)
       .where(eq(studioInterview.id, candidateId))
@@ -1368,13 +1352,6 @@ export const studioInterviewsRouter = factory
           updatedAt: now,
         })
         .where(eq(studioInterviewSchedule.id, roundId));
-
-      if (candidateRow.status === "completed") {
-        await tx
-          .update(studioInterview)
-          .set({ status: "in_progress", updatedAt: now })
-          .where(eq(studioInterview.id, candidateId));
-      }
 
       // 重置即「以当下为准」：刷新题库模板绑定并创建新版 runtime context snapshot。
       // Reset = "snapshot to now": refresh bindings and freeze a new runtime context.

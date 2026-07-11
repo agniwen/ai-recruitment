@@ -146,8 +146,9 @@ export interface HumanInterviewRoundReadiness {
 export async function loadHumanInterviewRoundReadiness(
   interviewRecordId: string,
   organizationId: string,
+  executor: Pick<Tx, "select"> = db,
 ): Promise<HumanInterviewRoundReadiness> {
-  const rounds = await db
+  const rounds = await executor
     .select({
       feedback: studioHumanInterviewRound.feedback,
       id: studioHumanInterviewRound.id,

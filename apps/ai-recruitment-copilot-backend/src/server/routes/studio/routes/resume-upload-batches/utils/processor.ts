@@ -8,13 +8,9 @@ import {
 } from "@arc/db-schema/schema";
 import type { ProcessNextResult } from "@arc/shared/bulk-resume-upload";
 import { getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
-import {
-  generateResumeReview,
-  generateResumeScreeningResult,
-  parseResumeBytesToProfile,
-} from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import { parseResumeBytesToProfile } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import type { ResumeReviewGenerationResult } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
-import type { ResumeScreeningPolicy, ResumeScreeningResult } from "@arc/shared/resume-screening";
+import type { ResumeScreeningResult } from "@arc/shared/resume-screening";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
 import {
   claimNextPendingItem,
@@ -36,7 +32,6 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import {
   createResumePoolItem,
-  markResumePoolItemSemanticIndexed,
   markResumePoolItemParsed,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao";
 import { createResumeRecordFromStorage } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/create-from-storage";
@@ -44,7 +39,8 @@ import { syncResumeSkills } from "@arc/ai-recruitment-copilot-backend/server/rou
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { replaceDuplicateMatchesForSource } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
-import { runResumeSemanticIndexJob } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer";
+import { generateResumeReviewBestEffort } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/review-generation";
+import { completeResumePoolReadinessWithDefaultAdapters } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/utils/readiness";
 
 const ERROR_MESSAGE_MAX = 500;
 
@@ -244,7 +240,11 @@ async function upsertParsedResumeRecord({
       resumeFileName: item.originalFileName,
       resumeProfile,
       resumeReview,
+      resumeReviewError: resumeReview ? null : "AI 分析生成失败。",
+      resumeReviewStatus: resumeReview ? "ready" : "failed",
+      resumeScreeningError: resumeScreeningResult ? null : "AI 分析生成失败。",
       resumeScreeningResult,
+      resumeScreeningStatus: resumeScreeningResult ? "ready" : "failed",
       resumeText,
       storageKey: item.storageKey,
       targetRole: null,
@@ -276,10 +276,13 @@ async function upsertParsedResumeRecord({
         resumeParsedAt: now,
         resumeProfile,
         resumeReview,
-        resumeScreeningError: null,
+        resumeReviewError: resumeReview ? null : "AI 分析生成失败。",
+        resumeReviewGeneratedAt: resumeReview ? now : null,
+        resumeReviewStatus: resumeReview ? "ready" : "failed",
+        resumeScreeningError: resumeScreeningResult ? null : "AI 分析生成失败。",
         resumeScreeningEvaluatedAt: resumeScreeningResult ? now : null,
         resumeScreeningResult,
-        resumeScreeningStatus: resumeScreeningResult ? "ready" : "idle",
+        resumeScreeningStatus: resumeScreeningResult ? "ready" : "failed",
         resumeStorageKey: item.storageKey,
         resumeText,
         targetRole: resumeProfile?.targetRoles?.[0] ?? null,
@@ -302,28 +305,6 @@ async function upsertParsedResumeRecord({
   return recordId;
 }
 
-async function buildJobDescriptionReviewContext(
-  organizationId: string,
-  jobDescriptionId: string | null,
-  actorUserId: string,
-): Promise<{ jobDescription: string | null; screeningPolicy: ResumeScreeningPolicy | null }> {
-  if (!jobDescriptionId) {
-    return { jobDescription: null, screeningPolicy: null };
-  }
-  const jd = await loadJobDescriptionById(organizationId, jobDescriptionId, { actorUserId });
-  if (!jd) {
-    return { jobDescription: null, screeningPolicy: null };
-  }
-  const jobDescription = [
-    `岗位名称：${jd.name}`,
-    jd.description ? `岗位描述：${jd.description}` : null,
-    `岗位 Prompt：\n${jd.prompt}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  return { jobDescription, screeningPolicy: jd.resumeScreeningPolicy };
-}
-
 async function generateReviewForParsedResume(input: {
   itemId: string;
   jobDescriptionId: string | null;
@@ -338,27 +319,22 @@ async function generateReviewForParsedResume(input: {
       hasJobDescription: Boolean(input.jobDescriptionId),
       itemId: input.itemId,
     });
-    const context = await buildJobDescriptionReviewContext(
-      input.organizationId,
-      input.jobDescriptionId,
-      input.userId,
-    );
-    const screeningResult = await generateResumeScreeningResult({
-      policy: context.screeningPolicy,
+    const review = await generateResumeReviewBestEffort({
+      jobDescriptionId: input.jobDescriptionId,
+      logPrefix: "[bulk-upload]",
+      organizationId: input.organizationId,
       resumeProfile: input.resumeProfile,
       resumeText: input.resumeText,
     });
-    const review = await generateResumeReview({
-      jobDescription: context.jobDescription,
-      resumeProfile: input.resumeProfile,
-      screeningResult,
-    });
+    if (!review) {
+      return null;
+    }
     logStep("review.generate.done", {
       durationMs: elapsed(startedAt),
       itemId: input.itemId,
       reviewChars: review.review.length,
     });
-    return review.review ? { ...review, screeningResult } : null;
+    return review;
   } catch (error) {
     console.error("[bulk-upload] resume review generation failed:", error);
     logStep("review.generate.error", {
@@ -465,20 +441,10 @@ async function fetchAndParse(
         targetRole: null,
       });
     }
-    await runResumeSemanticIndexJob({
-      organizationId,
-      sourceId: poolItemId,
-      sourceType: "resume_pool_item",
-    });
-    await markResumePoolItemSemanticIndexed({
+    await completeResumePoolReadinessWithDefaultAdapters({
+      duplicateMatches,
       organizationId,
       poolItemId,
-    });
-    await replaceDuplicateMatchesForSource({
-      matches: duplicateMatches,
-      organizationId,
-      sourceId: poolItemId,
-      sourceType: "resume_pool_item",
     });
     return {
       duplicateMatches,

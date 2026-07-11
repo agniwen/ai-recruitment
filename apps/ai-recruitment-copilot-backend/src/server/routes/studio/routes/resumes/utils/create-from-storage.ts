@@ -3,7 +3,11 @@ import { studioInterview } from "@arc/db-schema/schema";
 import type { StudioInterviewResumeSourceType } from "@arc/db-schema/schema";
 import type { InterviewQuestion, ResumeProfile } from "@arc/db-schema/interview/types";
 import type { ResumeReview } from "@arc/db-schema/resume-review";
-import type { ResumeReviewStatus, ResumeScreeningStatus } from "@arc/db-schema/studio-interviews";
+import type {
+  ResumeParseStatus,
+  ResumeReviewStatus,
+  ResumeScreeningStatus,
+} from "@arc/db-schema/studio-interviews";
 import type { ResumeScreeningResult } from "@arc/shared/resume-screening";
 import { syncResumeSkills } from "../dao/skills";
 
@@ -23,9 +27,12 @@ export interface CreateResumeRecordFromStorageInput {
   recommendationText?: string | null;
   resumeFileName: string | null;
   resumeProfile: ResumeProfile | null;
+  resumeParseStatus?: ResumeParseStatus;
   resumeReview?: ResumeReview | null;
+  resumeReviewError?: string | null;
   resumeReviewStatus?: ResumeReviewStatus;
   resumeScreeningResult?: ResumeScreeningResult | null;
+  resumeScreeningError?: string | null;
   resumeScreeningStatus?: ResumeScreeningStatus;
   resumeText?: string | null;
   storageKey: string | null;
@@ -75,15 +82,17 @@ export async function createResumeRecordFromStorage(
       resumeContentHash: input.contentHash,
       resumeFileName: input.resumeFileName,
       resumeParseError: null,
-      resumeParseStatus: input.storageKey && !input.resumeProfile ? "unparsed" : "ready",
+      resumeParseStatus:
+        input.resumeParseStatus ??
+        (input.storageKey && !input.resumeProfile ? "unparsed" : "ready"),
       resumeParsedAt: input.resumeProfile ? now : null,
       resumeProfile: input.resumeProfile,
       resumeReview: input.resumeReview ?? null,
-      resumeReviewError: null,
+      resumeReviewError: input.resumeReviewError ?? null,
       resumeReviewGeneratedAt: input.resumeReview ? now : null,
       resumeReviewQueuedAt: input.resumeReviewStatus === "queued" ? now : null,
       resumeReviewStatus: input.resumeReview ? "ready" : (input.resumeReviewStatus ?? "idle"),
-      resumeScreeningError: null,
+      resumeScreeningError: input.resumeScreeningError ?? null,
       resumeScreeningEvaluatedAt: input.resumeScreeningResult ? now : null,
       resumeScreeningResult: input.resumeScreeningResult ?? null,
       resumeScreeningStatus: input.resumeScreeningResult
@@ -95,7 +104,6 @@ export async function createResumeRecordFromStorage(
       resumeSourceType: input.source?.type ?? "direct_upload",
       resumeStorageKey: input.storageKey,
       resumeText: input.resumeText ?? null,
-      status: "draft" as const,
       targetRole: input.targetRole?.trim() || input.resumeProfile?.targetRoles?.[0] || null,
       updatedAt: now,
     });
