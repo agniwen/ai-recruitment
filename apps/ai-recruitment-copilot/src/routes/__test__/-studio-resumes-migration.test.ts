@@ -30,7 +30,14 @@ describe("TanStack Start studio resumes migration", () => {
     expect(detailSource).toContain("router.history.back();");
     expect(listSource).toContain("useElementScrollRestoration");
     expect(listSource).toContain("STUDIO_MAIN_SCROLL_RESTORATION_ID");
-    expect(listSource).toContain("initialOffset: studioScrollEntry?.scrollY");
+    expect(listSource).toContain("useResumeLibraryInitialScrollRestore");
+    expect(listSource).toContain("initialMeasurementsCache: canUseInitialMeasurements");
+    expect(listSource).toContain("measurements: virtualizer.takeSnapshot()");
+    expect(listSource).toContain("useResumeLibraryResizeScrollRestore({");
+    expect(listSource).toContain('virtualizer.scrollToIndex(recordIndex, { align: "start" })');
+    expect(listSource).toContain(
+      "virtualizer.scrollToOffset(scrollElement.scrollTop + correction)",
+    );
     expect(listSource).toContain("fromRecruiterResumeList: true");
     expect(studioShellSource).toContain("STUDIO_MAIN_SCROLL_RESTORATION_ID");
     expect(studioShellSource).toContain("scrollRestorationId={STUDIO_MAIN_SCROLL_RESTORATION_ID}");
