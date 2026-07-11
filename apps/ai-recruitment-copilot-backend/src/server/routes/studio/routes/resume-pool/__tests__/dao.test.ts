@@ -29,6 +29,7 @@ import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-cop
 import { findSemanticResumeDuplicates } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/dedup-service";
 import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle";
 import { cloneResumeSemanticIndexFromPoolToInterview } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone";
+import { deleteFixtureResumePoolItems } from "../../../../../../test-utils/db-fixture-cleanup";
 
 vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 });
 
@@ -116,8 +117,11 @@ async function cleanup() {
   await db.delete(resumeDuplicateMatch).where(eq(resumeDuplicateMatch.organizationId, ORG_B));
   await db.delete(resumePoolImport).where(eq(resumePoolImport.organizationId, ORG_A));
   await db.delete(resumePoolImport).where(eq(resumePoolImport.organizationId, ORG_B));
-  await db.delete(resumePoolItem).where(eq(resumePoolItem.organizationId, ORG_A));
-  await db.delete(resumePoolItem).where(eq(resumePoolItem.organizationId, ORG_B));
+  // Match pool rows by org/user before deleting parents (SET NULL FKs).
+  await deleteFixtureResumePoolItems({
+    organizationIds: [ORG_A, ORG_B],
+    userIds: [USER_A, USER_B],
+  });
   await db.delete(studioInterview).where(eq(studioInterview.organizationId, ORG_A));
   await db.delete(studioInterview).where(eq(studioInterview.organizationId, ORG_B));
   await db.delete(hiringUnit).where(eq(hiringUnit.organizationId, ORG_A));
