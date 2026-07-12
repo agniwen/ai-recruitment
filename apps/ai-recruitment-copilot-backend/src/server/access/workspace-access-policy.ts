@@ -15,7 +15,6 @@ export type WorkspaceAuthorizer = <R extends WorkspaceResource>(input: {
 
 const RECRUITING_GROUP_RESOURCES = new Set<WorkspaceResource>([
   "candidateForm",
-  "department",
   "globalConfig",
   "interview",
   "interviewer",
@@ -25,6 +24,10 @@ const RECRUITING_GROUP_RESOURCES = new Set<WorkspaceResource>([
   "resumeUploadBatch",
   "questionTemplate",
 ]);
+
+export function usesRecruitingGroupPermission(resource: WorkspaceResource): boolean {
+  return RECRUITING_GROUP_RESOURCES.has(resource);
+}
 
 function groupRoleAllows(role: string, action: string): boolean {
   if (action === "read") {
@@ -73,7 +76,7 @@ export function createRequestWorkspaceAuthorizer({
     if (isNoAccessWorkspaceRole(memberRole)) {
       return false;
     }
-    if (memberRole === "member" && RECRUITING_GROUP_RESOURCES.has(resource)) {
+    if (memberRole === "member" && usesRecruitingGroupPermission(resource)) {
       if (!userId) {
         return false;
       }

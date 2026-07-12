@@ -4,6 +4,7 @@ import type { CardToFeishuPayloadOptions } from "@arc/adapter-feishu";
 import { Chat } from "chat";
 import type { Adapter, AdapterPostableMessage, CardElement } from "chat";
 import type { FeishuProviderId } from "./provider";
+import { FEISHU_PROVIDER_IDS } from "./provider";
 import { routeDM, routeGroupMention } from "./router";
 
 // FeishuAdapter implements Adapter<FeishuThreadId, unknown>. encodeThreadId is in a
@@ -108,6 +109,31 @@ export function getFeishuBot(providerId: FeishuProviderId = "feishu"): FeishuBot
 
   cached.set(providerId, { adapter, bot });
   return bot;
+}
+
+async function ensureFeishuBotInitialized(providerId: FeishuProviderId): Promise<void> {
+  await getFeishuBot(providerId).initialize();
+}
+
+export async function shutdownFeishuBots(): Promise<void> {
+  const entries = [...cached.values()];
+  await Promise.all(entries.map(({ bot }) => bot.shutdown()));
+  cached.clear();
+}
+
+export async function initializeFeishuBots(): Promise<void> {
+  try {
+    await Promise.all(FEISHU_PROVIDER_IDS.map(ensureFeishuBotInitialized));
+  } catch (initializationError) {
+    try {
+      await shutdownFeishuBots();
+    } catch (shutdownError) {
+      throw new Error("Feishu bot initialization failed and rollback was incomplete.", {
+        cause: shutdownError,
+      });
+    }
+    throw initializationError;
+  }
 }
 
 export async function postFeishuDirectMessage(

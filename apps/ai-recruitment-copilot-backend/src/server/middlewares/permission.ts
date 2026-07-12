@@ -3,90 +3,44 @@
 // 资源-动作粒度的权限校验。工作区必须来自本次 URL 解析结果，不能回退到
 // 可被其他标签页修改的全局 session 状态。
 
-import type { statement } from "@arc/shared/permissions";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
-import { and, eq } from "drizzle-orm";
-import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { recruitingGroupMember } from "@arc/db-schema/schema";
-import { hasWorkspacePermission } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-permissions";
+import {
+  getWorkspaceRequestContext,
+  WorkspaceContextInvariantError,
+} from "@arc/ai-recruitment-copilot-backend/server/context/workspace-request-context";
+import {
+  createRequestWorkspaceAuthorizer,
+  usesRecruitingGroupPermission,
+} from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
+import type {
+  WorkspaceAction,
+  WorkspaceResource,
+} from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 
-type Resource = keyof typeof statement;
-type Action<R extends Resource> = (typeof statement)[R][number];
+export { usesRecruitingGroupPermission };
 
-const RECRUITING_GROUP_RESOURCES = new Set<Resource>([
-  "candidateForm",
-  "globalConfig",
-  "interview",
-  "interviewer",
-  "jd",
-  "resumeLibrary",
-  "resumePool",
-  "resumeUploadBatch",
-  "questionTemplate",
-]);
-
-export function usesRecruitingGroupPermission(resource: Resource) {
-  return RECRUITING_GROUP_RESOURCES.has(resource);
-}
-
-function groupRoleAllows(role: string, action: string) {
-  if (action === "read") {
-    return true;
-  }
-  return role === "hr" || role === "recruitingLead" || role === "recruitingSupervisor";
-}
-
-async function hasRecruitingGroupPermission({
-  action,
-  organizationId,
-  userId,
-}: {
-  action: string;
-  organizationId: string;
-  userId: string;
-}) {
-  const rows = await db
-    .select({ role: recruitingGroupMember.role })
-    .from(recruitingGroupMember)
-    .where(
-      and(
-        eq(recruitingGroupMember.organizationId, organizationId),
-        eq(recruitingGroupMember.userId, userId),
-      ),
-    );
-  return rows.some((row) => groupRoleAllows(row.role, action));
-}
-
-export function requirePermission<R extends Resource>(resource: R, action: Action<R>) {
+export function requirePermission<R extends WorkspaceResource>(
+  resource: R,
+  action: WorkspaceAction<R>,
+) {
   return factory.createMiddleware(async (c, next) => {
-    const activeMember = c.var.member;
-    if (activeMember?.role === "member" && usesRecruitingGroupPermission(resource)) {
-      const { activeOrg } = c.var;
-      const { user } = c.var;
-      const allowed =
-        activeOrg && user
-          ? await hasRecruitingGroupPermission({
-              action,
-              organizationId: activeOrg.id,
-              userId: user.id,
-            })
-          : false;
-      if (!allowed) {
+    let workspaceContext;
+    try {
+      workspaceContext = getWorkspaceRequestContext(c);
+    } catch (error) {
+      if (error instanceof WorkspaceContextInvariantError) {
         return c.json({ message: "Forbidden" }, 403);
       }
-      return next();
+      throw error;
     }
-
-    const { activeOrg } = c.var;
-    if (!activeOrg) {
-      return c.json({ message: "Forbidden" }, 403);
-    }
-    const allowed = await hasWorkspacePermission({
-      action,
+    const { member, organization, user } = workspaceContext;
+    const authorize = createRequestWorkspaceAuthorizer({
       headers: c.req.raw.headers,
-      organizationId: activeOrg.id,
-      resource,
+      memberRole: member.role,
+      organizationId: organization.id,
+      userId: user.id,
     });
+    const allowed = await authorize({ action, resource });
 
     if (!allowed) {
       return c.json({ message: "Forbidden" }, 403);
