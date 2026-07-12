@@ -1,4 +1,12 @@
-import { IconBriefcase, IconMail, IconPhone, IconUpload } from "@tabler/icons-react";
+import {
+  IconBriefcase,
+  IconBuilding,
+  IconMail,
+  IconPhone,
+  IconUpload,
+  IconUserCheck,
+  IconUsers,
+} from "@tabler/icons-react";
 import AvvvatarsModule from "avvvatars-react";
 import { memo } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
@@ -9,7 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardPanel } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { describeResumeProgress } from "@arc/shared/studio-resumes";
+import { describeResumeEvaluationStatus, describeResumeProgress } from "@arc/shared/studio-resumes";
 import type {
   ResumeLibraryListRecord,
   ResumeLibraryProfileSnapshot,
@@ -163,6 +171,20 @@ function getResumeLibraryJobDescriptionLabel(record: ResumeLibraryListRecord) {
   return record.jobDescriptionName
     ? [record.jobDescriptionDepartmentName, record.jobDescriptionName].filter(Boolean).join(" / ")
     : null;
+}
+
+function formatResumeCardAiInterviewers(record: ResumeLibraryListRecord) {
+  if (record.jobDescriptionInterviewers.length === 0) {
+    return "未安排";
+  }
+  return record.jobDescriptionInterviewers.map((item) => item.name).join("、");
+}
+
+function formatResumeCardHumanInterviewers(record: ResumeLibraryListRecord) {
+  if (record.humanInterviewers.length === 0) {
+    return "未安排";
+  }
+  return record.humanInterviewers.map((item) => item.name).join("、");
 }
 
 function canCopyResumeDetailLink({
@@ -330,6 +352,7 @@ function ResumeLibraryCardComponent({
 }: ResumeLibraryCardProps) {
   const jobDescriptionLabel = getResumeLibraryJobDescriptionLabel(record);
   const lifecycle = describeLifecycleCell(record);
+  const resumeEvaluation = describeResumeEvaluationStatus(record.resumeEvaluationStatus);
   const profileSnapshot = record.resumeProfileSnapshot;
   const skills = record.resumeSkills;
   const summary = record.resumeSummary;
@@ -366,7 +389,7 @@ function ResumeLibraryCardComponent({
         }}
         type="button"
       />
-      <CardPanel className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+      <CardPanel className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="flex min-w-0 gap-3">
           <Checkbox
             aria-label={`选择 ${record.candidateName}`}
@@ -407,9 +430,9 @@ function ResumeLibraryCardComponent({
               </div>
 
               <div className="min-w-0">
-                <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 2xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                   <ResumeCardMetaItem
-                    className="sm:col-span-2 2xl:col-span-1"
+                    className="sm:col-span-2 md:col-span-1"
                     icon={<IconBriefcase className="size-3.5" />}
                     label="关联岗位"
                   >
@@ -435,6 +458,40 @@ function ResumeLibraryCardComponent({
                   <div className="min-w-0">
                     <ResumeCardCreatorMeta image={record.creatorImage} name={record.creatorName} />
                   </div>
+                  <ResumeCardMetaItem
+                    icon={<IconUserCheck className="size-3.5" />}
+                    label="评估状态"
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-1">
+                      <span className="shrink-0">评估：</span>
+                      <Badge
+                        className="h-5 max-w-20 truncate px-1.5 text-[11px]"
+                        variant={resumeEvaluation.tone}
+                      >
+                        {resumeEvaluation.label}
+                      </Badge>
+                    </span>
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem icon={<IconUserCheck className="size-3.5" />} label="评估人">
+                    评估人：{formatResumeCardContact(record.resumeEvaluatorName, "未评估")}
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem icon={<IconBuilding className="size-3.5" />} label="用人组织">
+                    用人组织：{formatResumeCardContact(record.hiringUnitName, "未分配用人组织")}
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem
+                    className="sm:col-span-2 md:col-span-1"
+                    icon={<IconUsers className="size-3.5" />}
+                    label="AI 面试官"
+                  >
+                    AI 面试官：{formatResumeCardAiInterviewers(record)}
+                  </ResumeCardMetaItem>
+                  <ResumeCardMetaItem
+                    className="sm:col-span-2 md:col-span-1"
+                    icon={<IconUsers className="size-3.5" />}
+                    label="面试官"
+                  >
+                    面试官：{formatResumeCardHumanInterviewers(record)}
+                  </ResumeCardMetaItem>
                   <span className="inline-flex min-h-6 min-w-0 items-center text-muted-foreground text-xs">
                     <TimeDisplay as="span" emptyText="—" value={record.createdAt} />
                   </span>

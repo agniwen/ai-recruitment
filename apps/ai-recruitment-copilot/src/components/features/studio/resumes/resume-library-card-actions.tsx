@@ -264,7 +264,7 @@ export function ResumeLibraryCardActions({
 
   return (
     <div className="flex justify-end self-center">
-      <div className="flex items-center justify-end gap-1 xl:flex-col xl:items-center">
+      <div className="flex items-center justify-end gap-1 lg:flex-col lg:items-center">
         <PreviewAction onPreviewResume={onPreviewResume} record={record} />
         <IconActionButton label="查看" onClick={() => onOpenDetail(record, "overview")}>
           <IconEye className={ACTION_ICON_CLASS} />

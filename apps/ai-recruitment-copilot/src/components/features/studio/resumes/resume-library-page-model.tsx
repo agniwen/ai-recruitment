@@ -40,12 +40,12 @@ export const RESUME_LIBRARY_FILTER_KEYS = Object.keys(EMPTY_FILTERS) as (keyof R
   string)[];
 export const RESUME_LIBRARY_DEFAULT_SORTING = [{ desc: true, id: "createdAt" }];
 const RESUME_LIBRARY_CARD_HEIGHTS = {
-  base: 564,
+  base: 714,
   lg: 476,
-  md: 504,
-  sm: 476,
+  md: 534,
+  sm: 596,
   xl: 290,
-  xxl: 242,
+  xxl: 272,
 } as const;
 
 export function getResumeLibraryCardHeight(viewportWidth: number) {
