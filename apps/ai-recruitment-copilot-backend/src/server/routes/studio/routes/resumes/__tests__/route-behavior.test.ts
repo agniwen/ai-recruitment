@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   loadOrCreateActiveInterviewContextSnapshot: vi.fn(),
   loadResumeDetail: vi.fn(),
   loadResumeDetailForAuthenticatedReviewer: vi.fn(),
-  recordResumeJobDescriptionChange: vi.fn(),
+  queryPaginatedResumeRecords: vi.fn(),
   removeImportedInterviewFromConversations: vi.fn(),
   replaceDuplicateMatchesForSource: vi.fn(),
   resetResumeEvaluationForJobChange: vi.fn(),
@@ -72,13 +72,12 @@ vi.mock(
   () => ({
     loadResumeDetail: mocks.loadResumeDetail,
     loadResumeDetailForAuthenticatedReviewer: mocks.loadResumeDetailForAuthenticatedReviewer,
-    queryPaginatedResumeRecords: vi.fn(),
+    queryPaginatedResumeRecords: mocks.queryPaginatedResumeRecords,
   }),
 );
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation",
   () => ({
-    recordResumeJobDescriptionChange: mocks.recordResumeJobDescriptionChange,
     resetResumeEvaluationForJobChange: mocks.resetResumeEvaluationForJobChange,
     submitResumeEvaluationOnce: mocks.submitResumeEvaluationOnce,
     updateResumeEvaluationStatus: vi.fn(),
@@ -210,6 +209,13 @@ describe("resumeLibraryRouter behavior", () => {
     mocks.jobDescriptionIdsExist.mockResolvedValue(true);
     mocks.buildScheduleRows.mockReturnValue([SCHEDULE_ROW]);
     mocks.loadInterviewRoundDetail.mockResolvedValue({ id: SCHEDULE_ROW.id });
+    mocks.queryPaginatedResumeRecords.mockResolvedValue({
+      page: 2,
+      pageSize: 20,
+      records: [],
+      total: 1103,
+      totalPages: 56,
+    });
     // oxlint-disable-next-line promise/prefer-await-to-callbacks -- Drizzle transactions use a callback API.
     mocks.transaction.mockImplementation((callback) => {
       const tx = {
@@ -229,6 +235,19 @@ describe("resumeLibraryRouter behavior", () => {
       // oxlint-disable-next-line promise/prefer-await-to-callbacks -- invoke the supplied transaction callback.
       return callback(tx);
     });
+  });
+
+  it("passes a known total to later list pages", async () => {
+    const response = await makeApp().request("/resumes?page=2&pageSize=20&knownTotal=1103");
+
+    expect(response.status).toBe(200);
+    expect(mocks.queryPaginatedResumeRecords).toHaveBeenCalledWith(
+      ORGANIZATION_ID,
+      expect.any(Object),
+      expect.objectContaining({ page: "2", pageSize: "20" }),
+      { kind: "all" },
+      1103,
+    );
   });
 
   it("persists duplicate matches after creating a resume-library record", async () => {
@@ -369,10 +388,15 @@ describe("resumeLibraryRouter behavior", () => {
       method: "PATCH",
     });
     expect(response.status).toBe(200);
-    expect(mocks.recordResumeJobDescriptionChange).toHaveBeenCalledWith(
+    expect(mocks.insertedValues).toContainEqual(
       expect.objectContaining({
-        nextJobDescriptionId: "jd-new",
-        previousJobDescriptionId: "jd-old",
+        action: "job_description_changed",
+        detail: {
+          fromJobDescriptionId: "jd-old",
+          fromJobDescriptionName: "旧岗位",
+          toJobDescriptionId: "jd-new",
+          toJobDescriptionName: "新岗位",
+        },
       }),
     );
     expect(mocks.resetResumeEvaluationForJobChange).toHaveBeenCalledWith({
