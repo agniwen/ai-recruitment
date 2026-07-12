@@ -9,8 +9,8 @@ import {
   ConversationEmptyState,
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
-import Markdown from "react-markdown";
 import { Message, MessageContent } from "@/components/ai-elements/message";
+import { MarkdownView } from "@/components/features/display/markdown-view";
 import { DATE_TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display/time-display";
 import { coalescePersistedInterviewTurns } from "@arc/shared/interview-transcript-turns";
 import { cn } from "@arc/shared/utils";
@@ -93,7 +93,7 @@ export function ConversationTranscript({
                   {isUser ? (
                     <HighlightedText enabledCategories={enabledCategories} text={turn.message} />
                   ) : (
-                    <Markdown>{turn.message}</Markdown>
+                    <MarkdownView content={turn.message} />
                   )}
                 </MessageContent>
               </div>
