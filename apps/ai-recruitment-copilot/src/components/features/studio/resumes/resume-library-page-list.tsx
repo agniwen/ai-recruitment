@@ -208,7 +208,10 @@ export function ResumeLibraryCardList({
     listContent = (
       <div className="grid gap-3">
         {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton className="h-44 rounded-2xl" key={index} />
+          <Skeleton
+            className="h-[702px] rounded-2xl sm:h-[584px] md:h-[522px] lg:h-[464px] xl:h-[278px] 2xl:h-[260px]"
+            key={index}
+          />
         ))}
       </div>
     );

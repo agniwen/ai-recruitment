@@ -9,6 +9,7 @@ import { MemberCell } from "@/components/data-grid/cells/member-cell";
 import { TimeDisplay } from "@/components/features/display/time-display";
 import { MailIngestLogDrawer } from "@/components/features/studio/mail-ingest/mail-ingest-log-drawer";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { StudioTablePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import {
   WORKSPACE_ROLES,
   buildWorkspaceRoleOptions,
@@ -702,4 +703,5 @@ export const Route = createFileRoute("/w/$slug/studio/mail-ingest-accounts")({
   head: () => ({
     meta: [{ title: "邮箱监听" }],
   }),
+  pendingComponent: () => <StudioTablePageSkeleton label="邮箱监听" />,
 });

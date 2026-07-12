@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { PermissionGate } from "@/components/features/permission/permission-gate";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { ProfilePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { getWorkspaceRoleLabel } from "@/components/features/studio/members/role-display";
 import type { WorkspaceRole } from "@/components/features/studio/members/role-display";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -733,4 +734,5 @@ export const Route = createFileRoute("/w/$slug/studio/me")({
   head: () => ({
     meta: [{ title: "我的信息" }],
   }),
+  pendingComponent: ProfilePageSkeleton,
 });

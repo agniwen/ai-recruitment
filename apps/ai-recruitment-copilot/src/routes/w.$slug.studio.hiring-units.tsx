@@ -13,6 +13,7 @@ import { loadStudioHiringUnitsState } from "@/lib/start/studio/hiring-units.func
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import type { StudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { StudioTablePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type { HiringUnitListRecord, HiringUnitRecord } from "@arc/shared/hiring-units";
@@ -310,6 +311,7 @@ export const Route = createFileRoute("/w/$slug/studio/hiring-units")({
     }
     return state;
   },
+  pendingComponent: () => <StudioTablePageSkeleton label="用人组织管理" />,
   shouldReload: false,
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
 });

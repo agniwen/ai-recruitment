@@ -16,6 +16,7 @@ import { loadStudioJobDescriptionsState } from "@/lib/start/studio/job-descripti
 import type { StudioJobDescriptionsState } from "@/lib/start/studio/job-descriptions.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { JobDescriptionsPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type {
@@ -733,6 +734,7 @@ export const Route = createFileRoute("/w/$slug/studio/job-descriptions")({
     }
     return state;
   },
+  pendingComponent: JobDescriptionsPageSkeleton,
   shouldReload: false,
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
 });

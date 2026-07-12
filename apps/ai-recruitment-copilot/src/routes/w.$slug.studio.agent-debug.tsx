@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { IconAlertCircle as AlertCircleIcon } from "@tabler/icons-react";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { AgentDebugPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { FileUpload } from "@/components/ui/file-upload";
@@ -208,4 +209,5 @@ export const Route = createFileRoute("/w/$slug/studio/agent-debug")({
       slug: params.slug,
     });
   },
+  pendingComponent: AgentDebugPageSkeleton,
 });

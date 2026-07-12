@@ -14,6 +14,7 @@ import { loadStudioInterviewersState } from "@/lib/start/studio/interviewers.fun
 import type { StudioInterviewersState } from "@/lib/start/studio/interviewers.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { StudioTablePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type { InterviewerListRecord, InterviewerRecord } from "@arc/shared/interviewers";
@@ -411,6 +412,7 @@ export const Route = createFileRoute("/w/$slug/studio/interviewers")({
     }
     return state;
   },
+  pendingComponent: () => <StudioTablePageSkeleton label="面试官管理" />,
   shouldReload: false,
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
 });
