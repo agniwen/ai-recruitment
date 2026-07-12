@@ -48,13 +48,14 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(reviewSource).toContain("ReviewSectionHeader");
   });
 
-  it("adds muted borders to AI review background surfaces", () => {
+  it("uses unified frame surfaces for AI review sections", () => {
     const reviewSource = source.slice(
       source.indexOf("export function ResumeReviewStructuredView"),
       source.indexOf("export function ResumeOverviewPanel"),
     );
 
-    expect(reviewSource).toContain("border border-muted/60 bg-muted/20");
+    expect(reviewSource).toContain("<Frame>");
+    expect(reviewSource).toContain("<FramePanel");
     expect(reviewSource).not.toContain("rounded-2xl bg-muted/20");
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { IconLoader2, IconPlayerPlay } from "@tabler/icons-react";
 /**
  * 面试单轮录像回放组件.
  * 仅在用户点击"加载录像"时才请求预签名 URL, 避免列表打开就批量 sign 增加 S3 调用.
@@ -9,17 +10,16 @@
  * presign request per round.
  */
 
-import { IconLoader2 as Loader2Icon, IconPlayerPlay as PlayIcon } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardHeader, CardPanel, CardTitle } from "@/components/ui/card";
 import {
   fetchPublicInterviewRecordingUrl,
   fetchStudioInterviewRecordingUrl,
 } from "@/lib/client/api";
 import { ApiError } from "@/lib/client/api/errors";
 import { useOptionalWorkspaceSlug } from "@/lib/client/workspace-context";
-import { cn } from "@arc/shared/utils";
 import type { InterviewRecordingStatus } from "@arc/db-schema/db-enums";
 
 interface RecordingPlayerProps {
@@ -28,7 +28,6 @@ interface RecordingPlayerProps {
   status: InterviewRecordingStatus | null;
   durationSecs: number | null;
   seekToSecs?: number | null;
-  surface?: "card" | "section";
   /**
    * "authed"：走 /api/w/:slug/studio 路径（默认）。
    * "public"：走 /api/public 路径，无需 slug，用于 /r/[roundId] 等公开访问入口。
@@ -69,7 +68,6 @@ export function RecordingPlayer({
   status,
   durationSecs,
   seekToSecs,
-  surface = "card",
   accessMode = "authed",
 }: RecordingPlayerProps) {
   const slug = useOptionalWorkspaceSlug();
@@ -85,18 +83,15 @@ export function RecordingPlayer({
   }, [seekToSecs, url]);
 
   if (status !== "completed") {
-    const Component = surface === "card" ? "div" : "section";
     return (
-      <Component
-        className={cn(
-          surface === "card"
-            ? "rounded-2xl border border-border bg-background p-4"
-            : "rounded-xl bg-background/70 p-4",
-        )}
-      >
-        <h4 className="font-medium text-sm">面试录像</h4>
-        <p className="mt-2 text-muted-foreground text-sm">{statusLabel(status)}</p>
-      </Component>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">面试录像</CardTitle>
+        </CardHeader>
+        <CardPanel>
+          <p className="text-muted-foreground text-sm">{statusLabel(status)}</p>
+        </CardPanel>
+      </Card>
     );
   }
 
@@ -118,47 +113,43 @@ export function RecordingPlayer({
 
   const durationText = formatDuration(durationSecs);
 
-  const Component = surface === "card" ? "div" : "section";
-
   return (
-    <Component
-      className={cn(
-        surface === "card"
-          ? "rounded-2xl border border-border bg-background p-4"
-          : "rounded-xl bg-background/70 p-4",
-      )}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="font-medium text-sm">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">
           面试录像
           {durationText ? (
             <span className="ml-2 text-muted-foreground text-xs">时长 {durationText}</span>
           ) : null}
-        </h4>
-        {!url && (
-          <Button disabled={loading} onClick={loadUrl} size="sm" variant="outline">
-            {loading ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
-              <PlayIcon className="size-4" />
-            )}
-            <span className="ml-1">加载录像</span>
-          </Button>
+        </CardTitle>
+        <CardAction>
+          {!url && (
+            <Button disabled={loading} onClick={loadUrl} size="sm" variant="outline">
+              {loading ? (
+                <IconLoader2 className="size-4 animate-spin" />
+              ) : (
+                <IconPlayerPlay className="size-4" />
+              )}
+              <span className="ml-1">加载录像</span>
+            </Button>
+          )}
+        </CardAction>
+      </CardHeader>
+      <CardPanel>
+        {url ? (
+          // oxlint-disable-next-line jsx-a11y/media-has-caption -- 面试录像无字幕轨道可挂载；候选人音视频原始记录，不存在 captions 资源。
+          <video
+            aria-label="面试录像"
+            className="w-full rounded-xl border border-border"
+            controls
+            preload="metadata"
+            ref={videoRef}
+            src={url}
+          />
+        ) : (
+          <p className="text-muted-foreground text-sm">点击"加载录像"开始播放。</p>
         )}
-      </div>
-      {url ? (
-        // oxlint-disable-next-line jsx-a11y/media-has-caption -- 面试录像无字幕轨道可挂载；候选人音视频原始记录，不存在 captions 资源。
-        <video
-          aria-label="面试录像"
-          className="mt-3 w-full rounded-xl border border-border"
-          controls
-          preload="metadata"
-          ref={videoRef}
-          src={url}
-        />
-      ) : (
-        <p className="mt-2 text-muted-foreground text-sm">点击"加载录像"开始播放。</p>
-      )}
-    </Component>
+      </CardPanel>
+    </Card>
   );
 }

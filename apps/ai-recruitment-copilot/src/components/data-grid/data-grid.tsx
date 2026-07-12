@@ -1,15 +1,10 @@
 "use client";
 
-import type {
-  Column,
-  ColumnDef,
-  OnChangeFn,
-  RowSelectionState,
-  SortingState,
-} from "@tanstack/react-table";
-import type { CSSProperties, ReactNode } from "react";
+import type { ColumnDef, OnChangeFn, RowSelectionState, SortingState } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
+import { CardFrame } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -17,33 +12,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableRowDivider,
 } from "@/components/ui/table";
 import { cn } from "@arc/shared/utils";
 import { PaginationBar } from "./parts/pagination-bar";
-import {
-  getPinningStyles,
-  PINNED_CELL_CLASS,
-  PINNED_HEADER_CLASS,
-  STICKY_HEADER_CLASS,
-} from "./parts/pinned-cell";
+import { getPinningStyles, PINNED_HEADER_CLASS, STICKY_HEADER_CLASS } from "./parts/pinned-cell";
 import { Toolbar } from "./parts/toolbar";
 import type { ToolbarFilterConfig } from "./parts/toolbar";
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const;
-
-function getExplicitColumnSizeStyles<TData>(column: Column<TData, unknown>): CSSProperties {
-  if (typeof column.columnDef.size !== "number") {
-    return {};
-  }
-  const size = column.getSize();
-  return {
-    boxSizing: "border-box",
-    maxWidth: `${size}px`,
-    minWidth: `${size}px`,
-    width: `${size}px`,
-  };
-}
 
 export interface BulkActionContext<TData> {
   selectedIds: string[];
@@ -196,65 +172,52 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
       />
 
       {rows.length > 0 ? (
-        <Table
-          containerClassName={cn(maxHeight ? "overflow-auto" : undefined)}
-          containerStyle={maxHeight ? { maxHeight } : undefined}
-        >
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow className="h-7" key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  const pin = header.column.getIsPinned();
-                  return (
-                    <TableHead
-                      className={cn(
-                        "relative py-1 after:absolute after:inset-y-1.5 after:right-0 after:w-px after:bg-border after:content-[''] last:after:hidden",
-                        maxHeight && STICKY_HEADER_CLASS,
-                        pin && PINNED_HEADER_CLASS,
-                      )}
-                      key={header.id}
-                      style={{
-                        ...getExplicitColumnSizeStyles(header.column),
-                        ...getPinningStyles(header.column, {
+        <CardFrame className="w-full">
+          <Table
+            render={
+              <div
+                className={cn(maxHeight && "overflow-auto")}
+                style={maxHeight ? { maxHeight } : undefined}
+              />
+            }
+            variant="card"
+          >
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    const pin = header.column.getIsPinned();
+                    return (
+                      <TableHead
+                        className={cn(maxHeight && STICKY_HEADER_CLASS, pin && PINNED_HEADER_CLASS)}
+                        key={header.id}
+                        style={getPinningStyles(header.column, {
                           isHeader: true,
                           stickToTop: !!maxHeight,
-                        }),
-                      }}
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {rows.map((row, rowIndex) => (
-              <Fragment key={row.id}>
-                <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
-                  {row.getVisibleCells().map((cell) => {
-                    const pin = cell.column.getIsPinned();
-                    return (
-                      <TableCell
-                        className={cn(pin && PINNED_CELL_CLASS)}
-                        key={cell.id}
-                        style={{
-                          ...getExplicitColumnSizeStyles(cell.column),
-                          ...getPinningStyles(cell.column),
-                        }}
+                        })}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
                     );
                   })}
                 </TableRow>
-                {rowIndex < rows.length - 1 ? <TableRowDivider /> : null}
-              </Fragment>
-            ))}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} style={getPinningStyles(cell.column)}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardFrame>
       ) : (
         empty
       )}

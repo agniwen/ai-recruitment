@@ -1,13 +1,9 @@
+import { IconFileText, IconSearch, IconX } from "@tabler/icons-react";
 // 用途：process step 4 简化版 UI——「候选人详情」Modal (mode="interview", size="full") 叠在
 // AI 面试列表页之上；当前选中 tab：面试报告，对齐真实 EvaluationResults 的卡片结构。
 // Purpose: simplified UI of StudioPersonDetailDialog (mode="interview", size="full")
 // laid over the AI 面试 list page. Active tab "面试报告" mirrors EvaluationResults.
-import {
-  IconFileText as FileTextIcon,
-  IconSearch as SearchIcon,
-  IconX as XIcon,
-} from "@tabler/icons-react";
-import { Fragment } from "react";
+
 import { PdfFileIcon } from "@/components/features/pdf/pdf-file-icon";
 import {
   Table,
@@ -16,7 +12,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableRowDivider,
 } from "@/components/ui/table";
 import { AppShell, StudioNav } from "./_parts/app-shell";
 import type { BreadcrumbCrumb } from "./_parts/app-shell";
@@ -169,7 +164,7 @@ function InterviewListBackground() {
       <SummaryStats />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative min-w-[15rem]">
-          <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
+          <IconSearch className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
           <div className="flex h-9 w-full items-center rounded-md border border-input bg-transparent pr-3 pl-9 text-muted-foreground text-sm">
             搜索候选人、岗位、轮次或简历名
           </div>
@@ -178,7 +173,7 @@ function InterviewListBackground() {
           全部状态
         </span>
       </div>
-      <Table className="table-fixed">
+      <Table className="table-fixed" variant="card">
         <TableHeader>
           <TableRow>
             <TableHead className="w-[260px]">候选人</TableHead>
@@ -194,96 +189,91 @@ function InterviewListBackground() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {INTERVIEWS.map((r, index) => (
-            <Fragment key={r.candidate}>
-              <TableRow key={r.candidate}>
-                <TableCell aria-label={`候选人：${r.candidate}`}>
-                  <div className="flex min-w-0 items-start gap-2">
-                    {r.hasPdf ? (
-                      <span
-                        aria-label="查看简历 PDF"
-                        className="group/pdf mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-muted"
-                      >
-                        <PdfFileIcon className="size-8 opacity-80 transition-transform duration-200 group-hover/pdf:scale-105" />
-                      </span>
-                    ) : (
-                      <span
-                        aria-disabled="true"
-                        aria-label="暂无简历 PDF"
-                        className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md opacity-45 grayscale"
-                      >
-                        <PdfFileIcon className="size-8" />
-                      </span>
-                    )}
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{r.candidate}</div>
-                      <div className="truncate text-muted-foreground text-xs">{r.email}</div>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell aria-label={`在招岗位：${r.jobDepartment} / ${r.jobName}`}>
-                  <span className="block truncate underline decoration-foreground/20 underline-offset-4 hover:decoration-foreground/60">
-                    {r.jobDepartment} / {r.jobName}
-                  </span>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{r.round}</TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">
-                  {r.scheduledAt}
-                </TableCell>
-                <TableCell aria-label={`状态：${r.status.label}`}>
-                  <span
-                    className={`inline-flex items-center rounded-md px-1.5 py-0.5 font-medium text-xs ${TONE_CLASS[r.status.tone]}`}
-                  >
-                    {r.status.label}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {r.report ? (
-                    <span className="inline-flex items-center rounded-md border border-transparent bg-emerald-500/5 px-1.5 py-0.5 font-medium text-emerald-700/80 text-xs dark:text-emerald-300/80">
-                      已生成
+          {INTERVIEWS.map((r) => (
+            <TableRow key={r.candidate}>
+              <TableCell aria-label={`候选人：${r.candidate}`}>
+                <div className="flex min-w-0 items-start gap-2">
+                  {r.hasPdf ? (
+                    <span
+                      aria-label="查看简历 PDF"
+                      className="group/pdf mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+                    >
+                      <PdfFileIcon className="size-8 opacity-80 transition-transform duration-200 group-hover/pdf:scale-105" />
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <span
+                      aria-disabled="true"
+                      aria-label="暂无简历 PDF"
+                      className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md opacity-45 grayscale"
+                    >
+                      <PdfFileIcon className="size-8" />
+                    </span>
                   )}
-                </TableCell>
-                <TableCell aria-label={`创建人：${r.creator}`}>
-                  <div className="flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="size-5 rounded-full bg-gradient-to-br from-primary/15 to-primary/30"
-                    />
-                    <span>{r.creator}</span>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{r.candidate}</div>
+                    <div className="truncate text-muted-foreground text-xs">{r.email}</div>
                   </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">{r.createdAt}</TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">
-                  {r.lastInterviewAt}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-0.5">
-                    <span
-                      aria-label="查看面试记录"
-                      className="inline-flex h-7 items-center rounded-md px-2 text-muted-foreground text-xs"
-                    >
-                      查看
-                    </span>
-                    <span
-                      aria-label="编辑面试记录"
-                      className="inline-flex h-7 items-center rounded-md px-2 text-muted-foreground text-xs"
-                    >
-                      编辑
-                    </span>
-                    <span
-                      aria-label="更多面试记录操作"
-                      className="inline-flex h-7 items-center rounded-md px-2 text-muted-foreground text-xs"
-                    >
-                      更多
-                    </span>
-                  </div>
-                </TableCell>
-              </TableRow>
-              {index < INTERVIEWS.length - 1 ? <TableRowDivider /> : null}
-            </Fragment>
+                </div>
+              </TableCell>
+              <TableCell aria-label={`在招岗位：${r.jobDepartment} / ${r.jobName}`}>
+                <span className="block truncate underline decoration-foreground/20 underline-offset-4 hover:decoration-foreground/60">
+                  {r.jobDepartment} / {r.jobName}
+                </span>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{r.round}</TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">{r.scheduledAt}</TableCell>
+              <TableCell aria-label={`状态：${r.status.label}`}>
+                <span
+                  className={`inline-flex items-center rounded-md px-1.5 py-0.5 font-medium text-xs ${TONE_CLASS[r.status.tone]}`}
+                >
+                  {r.status.label}
+                </span>
+              </TableCell>
+              <TableCell>
+                {r.report ? (
+                  <span className="inline-flex items-center rounded-md border border-transparent bg-emerald-500/5 px-1.5 py-0.5 font-medium text-emerald-700/80 text-xs dark:text-emerald-300/80">
+                    已生成
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell aria-label={`创建人：${r.creator}`}>
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="size-5 rounded-full bg-gradient-to-br from-primary/15 to-primary/30"
+                  />
+                  <span>{r.creator}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">{r.createdAt}</TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">
+                {r.lastInterviewAt}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center justify-end gap-0.5">
+                  <span
+                    aria-label="查看面试记录"
+                    className="inline-flex h-7 items-center rounded-md px-2 text-muted-foreground text-xs"
+                  >
+                    查看
+                  </span>
+                  <span
+                    aria-label="编辑面试记录"
+                    className="inline-flex h-7 items-center rounded-md px-2 text-muted-foreground text-xs"
+                  >
+                    编辑
+                  </span>
+                  <span
+                    aria-label="更多面试记录操作"
+                    className="inline-flex h-7 items-center rounded-md px-2 text-muted-foreground text-xs"
+                  >
+                    更多
+                  </span>
+                </div>
+              </TableCell>
+            </TableRow>
           ))}
         </TableBody>
       </Table>
@@ -320,7 +310,7 @@ function ModalTabs() {
         ))}
       </div>
       <span className="flex h-9 items-center gap-1.5 rounded-md border border-input bg-transparent px-3 font-medium text-sm">
-        <FileTextIcon className="size-4" />
+        <IconFileText className="size-4" />
         预览简历
       </span>
     </div>
@@ -427,7 +417,7 @@ function DetailDialog() {
       <div className="relative flex max-h-[88vh] flex-col overflow-hidden rounded-3xl border bg-background shadow-lg">
         {/* Close button */}
         <span className="absolute top-4 right-4 grid size-7 place-items-center rounded-xs text-foreground/70 opacity-70">
-          <XIcon className="size-4" />
+          <IconX className="size-4" />
         </span>
 
         {/* Header (stack layout) */}
