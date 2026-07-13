@@ -1,11 +1,13 @@
 "use client";
 
-import { IconHome, IconLogout, IconUser } from "@tabler/icons-react";
+import { IconHome, IconLogout, IconRefresh, IconUser } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { FeishuSignInButton } from "@/components/features/auth/feishu-sign-in-button";
+import { useAppVersion } from "@/components/features/app-version/app-version-provider";
+import { TimeDisplay } from "@/components/features/display/time-display";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { authClient } from "@/lib/client/auth-client";
+import { BUILD_TIME } from "@/lib/client/build-info";
 
 const WHITESPACE_REGEX = /\s+/;
 
@@ -51,6 +54,8 @@ export function SidebarUserSection({
   const navigate = useNavigate();
   const isHydrated = useHydrated();
   const { data: session, isPending } = authClient.useSession();
+  const appVersion = useAppVersion();
+  const latestBuildTime = appVersion?.latestBuildTime ?? null;
 
   const handleSignOut = useCallback(async () => {
     await authClient.signOut();
@@ -98,9 +103,28 @@ export function SidebarUserSection({
               {organizationName ? (
                 <p className="truncate text-muted-foreground text-xs">{organizationName}</p>
               ) : null}
+              <p className="flex items-center gap-1 text-muted-foreground text-xs">
+                <span>更新于</span>
+                <TimeDisplay as="span" value={BUILD_TIME} />
+              </p>
             </DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
+          {latestBuildTime ? (
+            <>
+              <DropdownMenuItem onClick={appVersion?.requestRefresh}>
+                <IconRefresh className="mr-2 size-4" />
+                <div className="grid gap-0.5">
+                  <span>有新版本可用</span>
+                  <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                    <span>更新于</span>
+                    <TimeDisplay as="span" value={latestBuildTime} />
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {showHomeLink ? (
             <DropdownMenuItem
               render={
@@ -149,9 +173,28 @@ export function SidebarUserSection({
               {organizationName ? (
                 <p className="truncate text-muted-foreground text-xs">{organizationName}</p>
               ) : null}
+              <p className="flex items-center gap-1 text-muted-foreground text-xs">
+                <span>更新于</span>
+                <TimeDisplay as="span" value={BUILD_TIME} />
+              </p>
             </DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
+          {latestBuildTime ? (
+            <>
+              <DropdownMenuItem onClick={appVersion?.requestRefresh}>
+                <IconRefresh className="mr-2 size-4" />
+                <div className="grid gap-0.5">
+                  <span>有新版本可用</span>
+                  <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                    <span>更新于</span>
+                    <TimeDisplay as="span" value={latestBuildTime} />
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {showHomeLink ? (
             <DropdownMenuItem
               render={

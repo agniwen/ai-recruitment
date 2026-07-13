@@ -26,6 +26,7 @@ import { ResumeProfileView } from "@/components/features/resume/resume-profile-v
 import { DataField } from "@/components/features/display/data-field";
 import { DataFields } from "@/components/features/display/data-fields";
 import { EmptyValue } from "@/components/features/display/empty-value";
+import { JobDescriptionHoverCard } from "@/components/features/studio/job-descriptions/job-description-hover-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -517,7 +518,12 @@ export function ResumeOverviewPanel({
           <DataField label="目标岗位" value={detail.targetRole} valueClassName="font-medium" />
           <DataField
             label="关联岗位"
-            value={detail.jobDescriptionName}
+            value={
+              <JobDescriptionHoverCard
+                jobDescriptionId={detail.jobDescriptionId}
+                name={detail.jobDescriptionName}
+              />
+            }
             valueClassName="font-medium"
           />
           <DataField label="用人组织" value={detail.hiringUnitName} />

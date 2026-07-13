@@ -112,6 +112,18 @@ describe("TanStack Start server entry", () => {
     expect(startFetch).not.toHaveBeenCalled();
   });
 
+  it("routes /api/app-version to TanStack Start", async () => {
+    const serverModule = await import("./server");
+    const entry = serverModule.default;
+    const request = new Request("https://example.test/api/app-version");
+
+    const response = await entry.fetch(request);
+
+    expect(await response.text()).toBe("start");
+    expect(startFetch).toHaveBeenCalledWith(request);
+    expect(createServerApp).not.toHaveBeenCalled();
+  });
+
   it("routes /api requests to the Hono app", async () => {
     const serverModule = await import("./server");
     const entry = serverModule.default;
