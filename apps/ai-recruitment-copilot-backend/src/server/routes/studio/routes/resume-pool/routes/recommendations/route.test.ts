@@ -67,6 +67,7 @@ describe("POST /:id/recommendations", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(STUB_RESULT);
     expect(mocks.recommendJobDescriptionsForResume).toHaveBeenCalledWith({
+      actorUserId: USER_ID,
       organizationId: ORGANIZATION_ID,
       resume: {
         id: POOL_ITEM_ID,

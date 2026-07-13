@@ -6,9 +6,9 @@ import { resumeSemanticIndex } from "@arc/db-schema/schema";
 export async function enqueueJobDescriptionIndexJobBestEffort(input: {
   organizationId: string;
   jobDescriptionId: string | null | undefined;
-}): Promise<void> {
+}): Promise<boolean> {
   if (!(input.jobDescriptionId && isResumeSemanticIndexEnabled())) {
-    return;
+    return false;
   }
   const job = {
     organizationId: input.organizationId,
@@ -18,16 +18,18 @@ export async function enqueueJobDescriptionIndexJobBestEffort(input: {
   try {
     const { prepareJdSemanticIndexJob } = await import("./indexer");
     if (!(await prepareJdSemanticIndexJob(job))) {
-      return;
+      return false;
     }
     const { enqueueResumeSemanticIndexJobs } =
       await import("@arc/resume-parse-queue/resume-semantic-index");
     await enqueueResumeSemanticIndexJobs([job]);
+    return true;
   } catch (error) {
     console.warn("[jd-semantic-index] enqueue failed", {
       jobDescriptionId: input.jobDescriptionId,
       reason: error instanceof Error ? error.message : String(error),
     });
+    return false;
   }
 }
 

@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   dbWhere: vi.fn(),
   deleteResumeEmbeddings: vi.fn(),
+  enqueueJobs: vi.fn(),
   getConfig: vi.fn(),
   isEnabled: vi.fn(() => false),
+  prepareJob: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/embedding", () => ({
@@ -13,6 +15,14 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/embeddin
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer", () => ({
   getResumeSemanticIndexConfig: mocks.getConfig,
+}));
+
+vi.mock("./indexer", () => ({
+  prepareJdSemanticIndexJob: mocks.prepareJob,
+}));
+
+vi.mock("@arc/resume-parse-queue/resume-semantic-index", () => ({
+  enqueueResumeSemanticIndexJobs: mocks.enqueueJobs,
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/qdrant/resume-vector-store", () => ({
@@ -38,14 +48,28 @@ describe("enqueueJobDescriptionIndexJobBestEffort", () => {
         jobDescriptionId: "jd-1",
         organizationId: "org-1",
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 
   it("jobDescriptionId 为空 → 静默返回", async () => {
     const { enqueueJobDescriptionIndexJobBestEffort } = await import("./enqueue");
     await expect(
       enqueueJobDescriptionIndexJobBestEffort({ jobDescriptionId: null, organizationId: "org-1" }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
+  });
+
+  it("准备成功且队列写入完成 → 返回 true", async () => {
+    mocks.isEnabled.mockReturnValue(true);
+    mocks.prepareJob.mockResolvedValue(true);
+    mocks.enqueueJobs.mockImplementation(() => Promise.resolve());
+    const { enqueueJobDescriptionIndexJobBestEffort } = await import("./enqueue");
+
+    await expect(
+      enqueueJobDescriptionIndexJobBestEffort({
+        jobDescriptionId: "jd-1",
+        organizationId: "org-1",
+      }),
+    ).resolves.toBe(true);
   });
 });
 

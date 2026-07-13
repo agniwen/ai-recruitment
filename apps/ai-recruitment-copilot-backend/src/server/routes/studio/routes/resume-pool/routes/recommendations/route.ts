@@ -31,6 +31,7 @@ export const resumePoolRecommendationsRouter = factory
       }
       const { topN } = c.req.valid("json");
       const result = await recommendJobDescriptionsForResume({
+        actorUserId: user.id,
         organizationId: activeOrg.id,
         resume: {
           id: item.id,

@@ -6,9 +6,7 @@ import {
   notFound,
   redirect,
   useLoaderData,
-  useNavigate,
   useRouter,
-  useSearch,
 } from "@tanstack/react-router";
 import type { DataGridQueryState } from "@/components/data-grid/query-contract";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
@@ -36,7 +34,7 @@ import {
   IconPlus as PlusIcon,
   IconSparkles as SparklesIcon,
 } from "@tabler/icons-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
@@ -62,6 +60,7 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { JobDescriptionFormDialog } from "@/components/features/studio/job-descriptions/job-description-form-dialog";
 import { JobDescriptionAiCreateDialog } from "@/components/features/studio/job-descriptions/job-description-ai-create-dialog";
 import { JobDescriptionTalentRecommendationsDialog } from "@/components/features/studio/job-descriptions/job-description-talent-recommendations-dialog";
+import { useJobDescriptionDeepLink } from "@/components/features/studio/job-descriptions/use-job-description-deep-link";
 import { useHasPermission } from "@/hooks/use-has-permission";
 
 const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
@@ -198,28 +197,7 @@ function JobDescriptionManagementPage({
     },
   });
 
-  // 深链：其他页面（如简历详情的「关联岗位」）通过 ?jobDescriptionId=<id> 直接打开该岗位详情。
-  const deepLinkSearch = useSearch({ from: "/w/$slug/studio/job-descriptions" });
-  const navigate = useNavigate({ from: "/w/$slug/studio/job-descriptions" });
-  const openedDeepLinkRef = useRef<string | null>(null);
-  useEffect(() => {
-    const targetId = deepLinkSearch.jobDescriptionId;
-    if (typeof targetId !== "string" || targetId.length === 0) {
-      // 参数已清空：重置去重标记，允许之后再次深链到同一个岗位。
-      openedDeepLinkRef.current = null;
-      return;
-    }
-    if (openedDeepLinkRef.current === targetId) {
-      return;
-    }
-    openedDeepLinkRef.current = targetId;
-    void crud.openEdit({ id: targetId } as JobDescriptionListRecord);
-    // 打开后清掉 URL 参数，避免刷新/返回时重复弹窗。
-    void navigate({
-      replace: true,
-      search: (prev) => ({ ...prev, jobDescriptionId: undefined }),
-    });
-  }, [deepLinkSearch.jobDescriptionId, crud, navigate]);
+  useJobDescriptionDeepLink(crud.openEdit);
 
   function onFormOpenChange(next: boolean) {
     crud.onFormOpenChange(next);

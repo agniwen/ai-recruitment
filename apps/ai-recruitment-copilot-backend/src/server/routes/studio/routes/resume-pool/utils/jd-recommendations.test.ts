@@ -33,7 +33,8 @@ const depsWith = (opts: {
   enabled?: boolean;
   embed?: () => Promise<unknown>;
   indexedJdCount?: number;
-  queueConfigured?: boolean;
+  jdRecovery?: "empty" | "failed" | "queued";
+  reindexQueued?: boolean;
 }) => ({
   countIndexedJdVectors: vi.fn(() => Promise.resolve(opts.indexedJdCount ?? 1)),
   embed:
@@ -44,8 +45,8 @@ const depsWith = (opts: {
   embeddingConfig: { apiKey: "k", baseUrl: "b", dimensions: 2, model: "m" },
   embeddingVersion: "v1",
   enabled: opts.enabled ?? true,
-  enqueueResumeReindex: vi.fn(() => Promise.resolve()),
-  isReindexQueueConfigured: vi.fn(() => opts.queueConfigured ?? true),
+  enqueueJobDescriptionsReindex: vi.fn(() => Promise.resolve(opts.jdRecovery ?? "queued")),
+  enqueueResumeReindex: vi.fn(() => Promise.resolve(opts.reindexQueued ?? true)),
   loadJobDescriptionsForDisplay: vi.fn((_org: string, ids: string[]) =>
     Promise.resolve(ids.filter((id) => (opts.displayIds ?? ids).includes(id)).map(jdRow)),
   ),
@@ -78,6 +79,7 @@ const call = (
 ) =>
   recommendJobDescriptionsForResume(
     {
+      actorUserId: "user-1",
       organizationId: "org-1",
       resume: { id: "r-1", jobDescriptionId: over.jobDescriptionId ?? null, profile },
       topN: over.topN ?? 10,
@@ -129,6 +131,7 @@ describe("recommendJobDescriptionsForResume", () => {
     const res = await call(depsWith({ displayIds: ["jd-1"], hitIds: ["jd-1", "jd-gone"] }));
     expect(res.status).toBe("ready");
     expect(res.recommendations.map((r) => r.id)).toEqual(["jd-1"]);
+    expect(res.diagnostics.vectorHitCount).toBe(1);
   });
 
   it("已绑定 → already_matched，不检索", async () => {
@@ -187,35 +190,52 @@ describe("recommendJobDescriptionsForResume", () => {
     expect(res.recommendations[0]?.similarity.workProject).toBeUndefined();
   });
 
-  it("indexing(b)：0 命中 + countIndexedJdVectors=0 → indexing（本组织 JD 未回填）", async () => {
+  it("0 命中 + countIndexedJdVectors=0 + JD 回填已入队 → indexing", async () => {
     const deps = depsWith({ hitIds: [], indexedJdCount: 0 });
     const res = await call(deps);
-    expect(deps.countIndexedJdVectors).toHaveBeenCalledWith("org-1");
+    expect(deps.countIndexedJdVectors).toHaveBeenCalledWith("org-1", "user-1");
+    expect(deps.enqueueJobDescriptionsReindex).toHaveBeenCalledWith({
+      actorUserId: "user-1",
+      organizationId: "org-1",
+    });
     expect(res.status).toBe("indexing");
+    expect(res.recommendations).toEqual([]);
+  });
+
+  it("原始命中均被招聘组范围过滤 + 可见 JD 回填已入队 → indexing", async () => {
+    const deps = depsWith({ displayIds: [], hitIds: ["jd-out-of-scope"], indexedJdCount: 0 });
+    const res = await call(deps);
+
+    expect(deps.enqueueJobDescriptionsReindex).toHaveBeenCalled();
+    expect(res.status).toBe("indexing");
+    expect(res.diagnostics.vectorHitCount).toBe(0);
+  });
+
+  it("0 命中 + JD 回填入队失败 → disabled", async () => {
+    const res = await call(depsWith({ hitIds: [], indexedJdCount: 0, jdRecovery: "failed" }));
+    expect(res.status).toBe("disabled");
+  });
+
+  it("0 命中 + 当前范围没有 JD → ready 空", async () => {
+    const res = await call(depsWith({ hitIds: [], indexedJdCount: 0, jdRecovery: "empty" }));
+    expect(res.status).toBe("ready");
     expect(res.recommendations).toEqual([]);
   });
 
   it("indexing(b) 反例：0 命中 + countIndexedJdVectors>0 → ready 空（确实无匹配）", async () => {
     const deps = depsWith({ hitIds: [], indexedJdCount: 5 });
     const res = await call(deps);
-    expect(deps.countIndexedJdVectors).toHaveBeenCalledWith("org-1");
+    expect(deps.countIndexedJdVectors).toHaveBeenCalledWith("org-1", "user-1");
     expect(res.status).toBe("ready");
     expect(res.recommendations).toEqual([]);
   });
 
-  it("队列未配置 + embed 超时 → disabled（出口态收敛，不再死循环）", async () => {
+  it("补索引实际未入队 + embed 超时 → disabled（出口态收敛，不再死循环）", async () => {
     const deps = depsWith({
       chunks: [],
       embed: () => Promise.reject(new Error("timeout")),
-      queueConfigured: false,
+      reindexQueued: false,
     });
-    const res = await call(deps);
-    expect(res.status).toBe("disabled");
-    expect(res.recommendations).toEqual([]);
-  });
-
-  it("队列未配置 + indexing(b)（0 命中 + 本组织 JD 未回填）→ disabled", async () => {
-    const deps = depsWith({ hitIds: [], indexedJdCount: 0, queueConfigured: false });
     const res = await call(deps);
     expect(res.status).toBe("disabled");
     expect(res.recommendations).toEqual([]);

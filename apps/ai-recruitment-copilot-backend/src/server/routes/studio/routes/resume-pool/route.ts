@@ -406,26 +406,21 @@ export const resumePoolRouter = factory
       if (!item) {
         return c.json({ error: "记录不存在。" }, 404);
       }
-      const [jd] = await db
-        .select({ id: jobDescription.id })
-        .from(jobDescription)
-        .where(
-          and(
-            eq(jobDescription.id, jobDescriptionId),
-            eq(jobDescription.organizationId, activeOrg.id),
-          ),
-        )
-        .limit(1);
-      if (!jd) {
-        return c.json({ error: "所选在招岗位不存在。" }, 400);
-      }
-      const bound = await bindResumePoolItemJobDescription({
+      const hiringUnitScope = await resolveHiringUnitAccessScope({
+        actorUserId: user.id,
+        organizationId: activeOrg.id,
+      });
+      const bindResult = await bindResumePoolItemJobDescription({
         actorId: user.id,
+        hiringUnitScope,
         jobDescriptionId,
         organizationId: activeOrg.id,
         poolItemId: item.id,
       });
-      if (!bound) {
+      if (bindResult === "job_description_not_found") {
+        return c.json({ error: "所选在招岗位不存在。" }, 400);
+      }
+      if (bindResult === "already_bound") {
         return c.json({ error: "该简历已绑定岗位。" }, 409);
       }
       const updated = await loadResumePoolItem({

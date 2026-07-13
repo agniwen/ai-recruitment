@@ -14,7 +14,8 @@ import {
   isResumeSemanticIndexEnabled,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/embedding";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
-import { isResumeParseQueueConfigured } from "@arc/resume-parse-queue/resume-parse";
+import { enqueueJobDescriptionIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/jd-semantic/enqueue";
+import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import { getResumeSemanticIndexConfig } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer";
 import {
   SEARCH_LIMIT_BY_CHUNK,
@@ -45,6 +46,7 @@ export interface JobDescriptionDisplayRow {
 }
 
 export interface RecommendJdInput {
+  actorUserId: string;
   organizationId: string;
   resume: { id: string; jobDescriptionId: string | null; profile: ResumeProfile | null };
   topN: number;
@@ -56,6 +58,7 @@ interface ChunkEmbedding {
 }
 
 export interface ScoreJdCoreInput {
+  actorUserId: string;
   chunkEmbeddings: ChunkEmbedding[];
   organizationId: string;
 }
@@ -68,7 +71,7 @@ export interface JdRankedEntry {
 }
 
 export interface JdRecommendationDeps {
-  countIndexedJdVectors: (organizationId: string) => Promise<number>;
+  countIndexedJdVectors: (organizationId: string, actorUserId: string) => Promise<number>;
   embed: (input: {
     apiKey: string;
     baseUrl: string;
@@ -79,11 +82,15 @@ export interface JdRecommendationDeps {
   embeddingConfig: ReturnType<typeof getResumeEmbeddingConfig>;
   embeddingVersion: string;
   enabled: boolean;
-  enqueueResumeReindex: (input: { organizationId: string; sourceId: string }) => Promise<void>;
-  isReindexQueueConfigured: () => boolean;
+  enqueueJobDescriptionsReindex: (input: {
+    actorUserId: string;
+    organizationId: string;
+  }) => Promise<"empty" | "failed" | "queued">;
+  enqueueResumeReindex: (input: { organizationId: string; sourceId: string }) => Promise<boolean>;
   loadJobDescriptionsForDisplay: (
     organizationId: string,
     ids: string[],
+    actorUserId: string,
   ) => Promise<JobDescriptionDisplayRow[]>;
   loadResumeChunks: (input: {
     embeddingVersion: string;
@@ -170,15 +177,15 @@ function disabledResult(resumeId: string): JobDescriptionRecommendationResult {
 }
 
 // 出口态收敛：`indexing` 仅在补索引队列能真正落队时才是可自愈的等待态。
-// 队列未配置/不可达时后台补索引是 no-op，若仍回 indexing 用户会永久卡重试（无出口态）。
+// 队列未配置/不可达时后台补索引不会成功，若仍回 indexing 用户会永久卡重试（无出口态）。
 function pendingResult(
-  deps: Pick<JdRecommendationDeps, "isReindexQueueConfigured">,
   resumeId: string,
   reason: string,
+  recoveryQueued: boolean,
 ): JobDescriptionRecommendationResult {
-  if (!deps.isReindexQueueConfigured()) {
+  if (!recoveryQueued) {
     console.warn(
-      "[jd-recommendations] 语义补索引队列未配置，返回 disabled 而非 indexing（避免死循环）",
+      "[jd-recommendations] 语义补索引未成功入队，返回 disabled 而非 indexing（避免死循环）",
       { reason, resumeId },
     );
     return disabledResult(resumeId);
@@ -211,7 +218,8 @@ export async function scoreJobDescriptionsForResume(
 
   const rows = await deps.loadJobDescriptionsForDisplay(
     input.organizationId,
-    aboveThreshold.map((entry) => entry.jdId),
+    [...retrievedIds],
+    input.actorUserId,
   );
   const rowById = new Map(rows.map((row) => [row.id, row]));
   const loadedIds = new Set(rows.map((row) => row.id));
@@ -250,12 +258,12 @@ export async function recommendJobDescriptionsForResume(
 
   let chunkEmbeddings: ChunkEmbedding[];
   if (stored.length === 0) {
-    await deps.enqueueResumeReindex({
+    const recoveryQueued = await deps.enqueueResumeReindex({
       organizationId: input.organizationId,
       sourceId: input.resume.id,
     });
     if (!input.resume.profile) {
-      return pendingResult(deps, input.resume.id, "resume_unindexed_no_profile");
+      return pendingResult(input.resume.id, "resume_unindexed_no_profile", recoveryQueued);
     }
     try {
       const embedded = await withTimeout(
@@ -270,7 +278,7 @@ export async function recommendJobDescriptionsForResume(
         embedding: chunk.embedding,
       }));
     } catch {
-      return pendingResult(deps, input.resume.id, "resume_embed_timeout");
+      return pendingResult(input.resume.id, "resume_embed_timeout", recoveryQueued);
     }
   } else {
     chunkEmbeddings = stored.map((chunk) => ({
@@ -280,14 +288,33 @@ export async function recommendJobDescriptionsForResume(
   }
 
   const core = await scoreJobDescriptionsForResume(
-    { chunkEmbeddings, organizationId: input.organizationId },
+    {
+      actorUserId: input.actorUserId,
+      chunkEmbeddings,
+      organizationId: input.organizationId,
+    },
     deps,
   );
 
-  if (core.retrievedIds.size === 0) {
-    const indexedJdCount = await deps.countIndexedJdVectors(input.organizationId);
+  if (core.loadedIds.size === 0) {
+    const indexedJdCount = await deps.countIndexedJdVectors(
+      input.organizationId,
+      input.actorUserId,
+    );
     if (indexedJdCount === 0) {
-      return pendingResult(deps, input.resume.id, "jd_vectors_absent");
+      const recoveryStatus = await deps.enqueueJobDescriptionsReindex({
+        actorUserId: input.actorUserId,
+        organizationId: input.organizationId,
+      });
+      if (recoveryStatus === "empty") {
+        return {
+          diagnostics: { eligibleCount: 0, vectorHitCount: 0 },
+          recommendations: [],
+          resume: { id: input.resume.id },
+          status: "ready",
+        };
+      }
+      return pendingResult(input.resume.id, "jd_vectors_absent", recoveryStatus === "queued");
     }
     return {
       diagnostics: { eligibleCount: 0, vectorHitCount: 0 },
@@ -302,7 +329,7 @@ export async function recommendJobDescriptionsForResume(
   return {
     diagnostics: {
       eligibleCount: core.ranked.length,
-      vectorHitCount: core.retrievedIds.size,
+      vectorHitCount: core.loadedIds.size,
     },
     recommendations,
     resume: { id: input.resume.id },
@@ -310,15 +337,28 @@ export async function recommendJobDescriptionsForResume(
   };
 }
 
-async function countIndexedJdVectors(organizationId: string): Promise<number> {
+async function countIndexedJdVectors(organizationId: string, actorUserId: string): Promise<number> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId,
+    organizationId,
+  });
   const [row] = await db
     .select({ total: count() })
     .from(resumeSemanticIndex)
+    .innerJoin(
+      jobDescription,
+      and(
+        eq(resumeSemanticIndex.sourceId, jobDescription.id),
+        eq(jobDescription.organizationId, organizationId),
+      ),
+    )
+    .innerJoin(department, eq(jobDescription.departmentId, department.id))
     .where(
       and(
         eq(resumeSemanticIndex.organizationId, organizationId),
         eq(resumeSemanticIndex.sourceType, "job_description"),
         eq(resumeSemanticIndex.status, "indexed"),
+        scopeCondition,
       ),
     );
   return row?.total ?? 0;
@@ -327,10 +367,15 @@ async function countIndexedJdVectors(organizationId: string): Promise<number> {
 async function loadJobDescriptionsForDisplay(
   organizationId: string,
   ids: string[],
+  actorUserId: string,
 ): Promise<JobDescriptionDisplayRow[]> {
   if (ids.length === 0) {
     return [];
   }
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId,
+    organizationId,
+  });
   const rows = await db
     .select({
       departmentName: department.name,
@@ -340,8 +385,38 @@ async function loadJobDescriptionsForDisplay(
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
-    .where(and(eq(jobDescription.organizationId, organizationId), inArray(jobDescription.id, ids)));
+    .where(
+      and(
+        eq(jobDescription.organizationId, organizationId),
+        inArray(jobDescription.id, ids),
+        scopeCondition,
+      ),
+    );
   return rows.map((row) => ({ ...row, departmentName: row.departmentName ?? null }));
+}
+
+async function enqueueVisibleJobDescriptionsForReindex(input: {
+  actorUserId: string;
+  organizationId: string;
+}): Promise<"empty" | "failed" | "queued"> {
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition(input);
+  const rows = await db
+    .select({ id: jobDescription.id })
+    .from(jobDescription)
+    .innerJoin(department, eq(jobDescription.departmentId, department.id))
+    .where(and(eq(jobDescription.organizationId, input.organizationId), scopeCondition));
+  if (rows.length === 0) {
+    return "empty";
+  }
+  const results = await Promise.all(
+    rows.map((row) =>
+      enqueueJobDescriptionIndexJobBestEffort({
+        jobDescriptionId: row.id,
+        organizationId: input.organizationId,
+      }),
+    ),
+  );
+  return results.some(Boolean) ? "queued" : "failed";
 }
 
 export function createDefaultJdRecommendationDeps(): JdRecommendationDeps {
@@ -362,13 +437,13 @@ export function createDefaultJdRecommendationDeps(): JdRecommendationDeps {
       isResumeSemanticIndexEnabled() &&
       Boolean(semanticConfig.qdrantUrl) &&
       Boolean(embeddingConfig.apiKey),
+    enqueueJobDescriptionsReindex: enqueueVisibleJobDescriptionsForReindex,
     enqueueResumeReindex: (input) =>
       enqueueResumeSemanticIndexJobBestEffort({
         organizationId: input.organizationId,
         sourceId: input.sourceId,
         sourceType: "resume_pool_item",
       }),
-    isReindexQueueConfigured: isResumeParseQueueConfigured,
     loadJobDescriptionsForDisplay,
     loadResumeChunks: (loadInput) => vectorStore.loadResumeEmbeddings(loadInput),
     vectorStore,

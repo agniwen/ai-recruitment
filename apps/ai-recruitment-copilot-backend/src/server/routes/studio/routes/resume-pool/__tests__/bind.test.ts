@@ -19,6 +19,8 @@ import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { createResumePoolItem } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao";
 import { deleteFixtureResumePoolItems } from "../../../../../../test-utils/db-fixture-cleanup";
 
+vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 });
+
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
   requirePermission: () => (_c: unknown, next: () => Promise<void>) => next(),
 }));
@@ -185,8 +187,9 @@ beforeAll(async () => {
 afterAll(cleanup);
 
 describe("POST /:id/bind", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    await db.update(member).set({ role: "owner" }).where(eq(member.userId, USER_A));
   });
 
   it("returns 400 when the job description does not exist", async () => {
@@ -206,6 +209,19 @@ describe("POST /:id/bind", () => {
 
     const response = await client[":id"].bind.$post({
       json: { jobDescriptionId: JD_B },
+      param: { id: poolItemId },
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "所选在招岗位不存在。" });
+  });
+
+  it("returns 400 when the job description is outside the recruiter's hiring-unit scope", async () => {
+    await db.update(member).set({ role: "member" }).where(eq(member.userId, USER_A));
+    const poolItemId = await seedPoolItem({ contentHash: "hash-bind-out-of-scope-jd" });
+
+    const response = await client[":id"].bind.$post({
+      json: { jobDescriptionId: JD_A },
       param: { id: poolItemId },
     });
 

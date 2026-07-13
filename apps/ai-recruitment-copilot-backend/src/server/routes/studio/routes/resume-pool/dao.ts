@@ -1,7 +1,6 @@
-import { and, count, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
-  jobDescription,
   mailIngestMessage,
   organization,
   resumePoolEvent,
@@ -33,12 +32,16 @@ import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot
 import { cloneResumeSemanticIndexFromPoolToInterview } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone";
 import { createResumeRecordFromStorage } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/create-from-storage";
 import { normalizeSkill } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills";
-import { loadBoundJobDescriptionName } from "./dao/job-description-name";
+import {
+  loadBoundJobDescriptionName,
+  loadBoundJobDescriptionNames,
+} from "./dao/job-description-name";
 import { EMPTY_UPLOADER_META, toResumePoolDetail, toResumePoolListRecord } from "./dao/presenters";
 import type { PoolUploaderMeta } from "./dao/presenters";
 import { admitResumePoolItem } from "./utils/admission";
 
 export { buildMasteredSkills, buildProfileHighlights } from "./dao/presenters";
+export { bindResumePoolItemJobDescription } from "./dao/bind-job-description";
 
 type PoolRow = typeof resumePoolItem.$inferSelect;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -105,13 +108,6 @@ export interface DeleteOwnPoolItemInput {
   organizationId: string;
   poolItemId: string;
   userId: string;
-}
-
-export interface BindResumePoolItemJobDescriptionInput {
-  actorId: string | null;
-  jobDescriptionId: string;
-  organizationId: string;
-  poolItemId: string;
 }
 
 function normalizeSkills(skills: readonly string[] | null | undefined): string[] {
@@ -415,7 +411,6 @@ export async function queryResumePoolItems(
   const rows = await db
     .select({
       item: resumePoolItem,
-      jobDescriptionName: jobDescription.name,
       uploaderEmail: user.email,
       uploaderImage: user.image,
       uploaderName: user.name,
@@ -424,25 +419,21 @@ export async function queryResumePoolItems(
     .from(resumePoolItem)
     .leftJoin(organization, eq(resumePoolItem.organizationId, organization.id))
     .leftJoin(user, eq(resumePoolItem.createdBy, user.id))
-    .leftJoin(
-      jobDescription,
-      and(
-        eq(resumePoolItem.jobDescriptionId, jobDescription.id),
-        eq(jobDescription.organizationId, input.organizationId),
-      ),
-    )
     .where(where)
     .orderBy(desc(resumePoolItem.createdAt))
     .limit(100);
-  const imports = await Promise.all(
-    rows.map((row) => loadImportForOrg(row.item.id, input.organizationId)),
-  );
-  const [sourceChannels, duplicateMatches] = await Promise.all([
+  const [imports, sourceChannels, duplicateMatches, jobDescriptionNames] = await Promise.all([
+    Promise.all(rows.map((row) => loadImportForOrg(row.item.id, input.organizationId))),
     loadSourceChannels(rows.map((row) => row.item.id)),
     loadPoolDuplicateMatches({
       organizationId: input.organizationId,
       rows: rows.map((row) => row.item),
     }),
+    loadBoundJobDescriptionNames(
+      rows.flatMap((row) => (row.item.jobDescriptionId ? [row.item.jobDescriptionId] : [])),
+      input.organizationId,
+      input.userId,
+    ),
   ]);
   return {
     records: rows.map((row, index) =>
@@ -452,7 +443,9 @@ export async function queryResumePoolItems(
         uploaderMetaFromRow(row),
         sourceChannels.get(row.item.id) ?? null,
         duplicateMatches.get(row.item.id) ?? null,
-        row.jobDescriptionName ?? null,
+        row.item.jobDescriptionId
+          ? (jobDescriptionNames.get(row.item.jobDescriptionId) ?? null)
+          : null,
       ),
     ),
     total: totalRow?.total ?? 0,
@@ -475,7 +468,7 @@ export async function loadResumePoolItem(input: {
       organizationId: input.organizationId,
       rows: [row],
     }),
-    loadBoundJobDescriptionName(row.jobDescriptionId, input.organizationId),
+    loadBoundJobDescriptionName(row.jobDescriptionId, input.organizationId, input.userId),
   ]);
   const sourceChannels = await loadSourceChannels([row.id]);
   return toResumePoolDetail(
@@ -759,39 +752,5 @@ export async function deleteOwnPoolItem(input: DeleteOwnPoolItemInput): Promise<
     organizationId: input.organizationId,
     sourceId: input.poolItemId,
     sourceType: "resume_pool_item",
-  });
-}
-
-/**
- * Bind a pool item to a job description exactly once. The WHERE clause only
- * matches rows that are not yet bound, so concurrent calls race on the same
- * UPDATE: the first writer wins and the second updates zero rows.
- */
-export async function bindResumePoolItemJobDescription(
-  input: BindResumePoolItemJobDescriptionInput,
-): Promise<boolean> {
-  return await db.transaction(async (tx) => {
-    const updated = await tx
-      .update(resumePoolItem)
-      .set({ jobDescriptionId: input.jobDescriptionId, updatedAt: new Date() })
-      .where(
-        and(
-          eq(resumePoolItem.id, input.poolItemId),
-          eq(resumePoolItem.organizationId, input.organizationId),
-          isNull(resumePoolItem.jobDescriptionId),
-        ),
-      )
-      .returning({ id: resumePoolItem.id });
-    if (updated.length === 0) {
-      return false;
-    }
-    await writeResumePoolEvent(tx, {
-      actorId: input.actorId,
-      organizationId: input.organizationId,
-      payload: { jobDescriptionId: input.jobDescriptionId },
-      poolItemId: input.poolItemId,
-      type: "bound",
-    });
-    return true;
   });
 }
