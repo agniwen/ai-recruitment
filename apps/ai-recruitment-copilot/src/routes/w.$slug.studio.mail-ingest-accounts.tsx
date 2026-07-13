@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import {
+  Outlet,
+  createFileRoute,
+  useNavigate,
+  useParams,
+  useRouterState,
+} from "@tanstack/react-router";
 import { IconInbox as InboxIcon } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -7,7 +13,6 @@ import { actionsColumn, customColumn, DataGrid, useDataGridState } from "@/compo
 import type { DataGridFetchParams, DataGridFetchResult } from "@/components/data-grid";
 import { MemberCell } from "@/components/data-grid/cells/member-cell";
 import { TimeDisplay } from "@/components/features/display/time-display";
-import { MailIngestLogDrawer } from "@/components/features/studio/mail-ingest/mail-ingest-log-drawer";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { StudioTablePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import {
@@ -449,6 +454,7 @@ function MailIngestAccountDialog({
 
 function ManagedMailIngestPage() {
   const slug = useWorkspaceSlug();
+  const navigate = useNavigate();
   const workspaceId = useWorkspaceId();
   const canManageMailIngestAccounts = useHasPermission("mailIngestAccount", "manage");
   const [editingRow, setEditingRow] = useState<ManagedMailIngestRow | null>(null);
@@ -491,26 +497,6 @@ function ManagedMailIngestPage() {
     queryFn: fetchMailIngestRows,
     queryKeyBase: ["managed-mail-ingest-accounts", slug],
   });
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-
-  const selectedRow =
-    selectedAccountId === null
-      ? null
-      : (grid.data.records.find((r) => r.account?.id === selectedAccountId) ?? null);
-
-  const selectedLogAccount = selectedRow?.account
-    ? {
-        emailAddress: selectedRow.account.emailAddress,
-        id: selectedRow.account.id,
-        lastCheckedAt: selectedRow.account.lastCheckedAt,
-        lastError: selectedRow.account.lastError,
-        lastRunFailed: selectedRow.lastRunFailed,
-        lastRunMatched: selectedRow.lastRunMatched,
-        lastRunQueued: selectedRow.lastRunQueued,
-        lastRunReceived: selectedRow.lastRunReceived,
-        lastRunSubjectSkipped: selectedRow.lastRunSubjectSkipped,
-      }
-    : null;
   const roleLabelByValue = useMemo(() => {
     const roles = [...WORKSPACE_ROLES, ...dynamicWorkspaceRoles.map((role) => role.role)].filter(
       (role, index, list) => list.indexOf(role) === index,
@@ -570,7 +556,13 @@ function ManagedMailIngestPage() {
         title: "状态",
       }),
       customColumn<ManagedMailIngestRow>({
-        cell: (row) => renderMessageBadge(row, setSelectedAccountId),
+        cell: (row) =>
+          renderMessageBadge(row, (id) => {
+            void navigate({
+              params: { id, slug },
+              to: "/w/$slug/studio/mail-ingest-accounts/$id",
+            });
+          }),
         key: "messageLog",
         title: "入库记录",
       }),
@@ -621,6 +613,19 @@ function ManagedMailIngestPage() {
       actionsColumn<ManagedMailIngestRow>({
         inline: [
           {
+            label: "查看",
+            onClick: (row) => {
+              if (!row.account) {
+                return;
+              }
+              void navigate({
+                params: { id: row.account.id, slug },
+                to: "/w/$slug/studio/mail-ingest-accounts/$id",
+              });
+            },
+            show: (row) => Boolean(row.account),
+          },
+          {
             label: "编辑",
             onClick: (row) => setEditingRow(row),
             show: (row) => canManageMailIngestAccounts && Boolean(row.account),
@@ -633,7 +638,7 @@ function ManagedMailIngestPage() {
         ],
       }),
     ],
-    [canManageMailIngestAccounts, roleLabelByValue],
+    [canManageMailIngestAccounts, navigate, roleLabelByValue, slug],
   );
 
   return (
@@ -673,18 +678,6 @@ function ManagedMailIngestPage() {
         getRowId={(row) => `${row.user.id}:${row.account?.id ?? "empty"}`}
       />
 
-      <MailIngestLogDrawer
-        account={selectedLogAccount}
-        key={selectedAccountId ?? "none"}
-        onOpenChange={(next) => {
-          if (!next) {
-            setSelectedAccountId(null);
-          }
-        }}
-        open={selectedAccountId !== null && selectedLogAccount !== null}
-        slug={slug}
-      />
-
       <MailIngestAccountDialog
         onOpenChange={(open) => {
           if (!open) {
@@ -698,8 +691,19 @@ function ManagedMailIngestPage() {
   );
 }
 
+export function shouldRenderMailIngestOutlet(pathname: string, slug: string) {
+  return pathname !== `/w/${slug}/studio/mail-ingest-accounts`;
+}
+
+function ManagedMailIngestRoute() {
+  const { slug } = useParams({ from: "/w/$slug/studio/mail-ingest-accounts" });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+  return shouldRenderMailIngestOutlet(pathname, slug) ? <Outlet /> : <ManagedMailIngestPage />;
+}
+
 export const Route = createFileRoute("/w/$slug/studio/mail-ingest-accounts")({
-  component: ManagedMailIngestPage,
+  component: ManagedMailIngestRoute,
   head: () => ({
     meta: [{ title: "邮箱监听" }],
   }),

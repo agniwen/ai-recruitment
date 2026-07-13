@@ -57,6 +57,7 @@ import { Route as WSlugStudioAgentDebugRouteImport } from './routes/w.$slug.stud
 import { Route as WSlugChatSessionIdRouteImport } from './routes/w.$slug.chat.$sessionId'
 import { Route as WSlugAgentSessionIdRouteImport } from './routes/w.$slug.agent.$sessionId'
 import { Route as WSlugStudioResumesRecordIdRouteImport } from './routes/w.$slug.studio.resumes.$recordId'
+import { Route as WSlugStudioMailIngestAccountsIdRouteImport } from './routes/w.$slug.studio.mail-ingest-accounts.$id'
 import { Route as WSlugStudioInterviewsRoundIdRouteImport } from './routes/w.$slug.studio.interviews.$roundId'
 
 const WaitRoute = WaitRouteImport.update({
@@ -307,6 +308,12 @@ const WSlugStudioResumesRecordIdRoute =
     path: '/$recordId',
     getParentRoute: () => WSlugStudioResumesRoute,
   } as any)
+const WSlugStudioMailIngestAccountsIdRoute =
+  WSlugStudioMailIngestAccountsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => WSlugStudioMailIngestAccountsRoute,
+  } as any)
 const WSlugStudioInterviewsRoundIdRoute =
   WSlugStudioInterviewsRoundIdRouteImport.update({
     id: '/$roundId',
@@ -354,7 +361,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/interviewers': typeof WSlugStudioInterviewersRoute
   '/w/$slug/studio/interviews': typeof WSlugStudioInterviewsRouteWithChildren
   '/w/$slug/studio/job-descriptions': typeof WSlugStudioJobDescriptionsRoute
-  '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRoute
+  '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRouteWithChildren
   '/w/$slug/studio/me': typeof WSlugStudioMeRoute
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
@@ -363,6 +370,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/agent/': typeof WSlugAgentIndexRoute
   '/w/$slug/chat/': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
+  '/w/$slug/studio/mail-ingest-accounts/$id': typeof WSlugStudioMailIngestAccountsIdRoute
   '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
 }
 export interface FileRoutesByTo {
@@ -403,7 +411,7 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/interviewers': typeof WSlugStudioInterviewersRoute
   '/w/$slug/studio/interviews': typeof WSlugStudioInterviewsRouteWithChildren
   '/w/$slug/studio/job-descriptions': typeof WSlugStudioJobDescriptionsRoute
-  '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRoute
+  '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRouteWithChildren
   '/w/$slug/studio/me': typeof WSlugStudioMeRoute
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
@@ -412,6 +420,7 @@ export interface FileRoutesByTo {
   '/w/$slug/agent': typeof WSlugAgentIndexRoute
   '/w/$slug/chat': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
+  '/w/$slug/studio/mail-ingest-accounts/$id': typeof WSlugStudioMailIngestAccountsIdRoute
   '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
 }
 export interface FileRoutesById {
@@ -455,7 +464,7 @@ export interface FileRoutesById {
   '/w/$slug/studio/interviewers': typeof WSlugStudioInterviewersRoute
   '/w/$slug/studio/interviews': typeof WSlugStudioInterviewsRouteWithChildren
   '/w/$slug/studio/job-descriptions': typeof WSlugStudioJobDescriptionsRoute
-  '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRoute
+  '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRouteWithChildren
   '/w/$slug/studio/me': typeof WSlugStudioMeRoute
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
@@ -464,6 +473,7 @@ export interface FileRoutesById {
   '/w/$slug/agent/': typeof WSlugAgentIndexRoute
   '/w/$slug/chat/': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
+  '/w/$slug/studio/mail-ingest-accounts/$id': typeof WSlugStudioMailIngestAccountsIdRoute
   '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
 }
 export interface FileRouteTypes {
@@ -517,6 +527,7 @@ export interface FileRouteTypes {
     | '/w/$slug/agent/'
     | '/w/$slug/chat/'
     | '/w/$slug/studio/interviews/$roundId'
+    | '/w/$slug/studio/mail-ingest-accounts/$id'
     | '/w/$slug/studio/resumes/$recordId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -566,6 +577,7 @@ export interface FileRouteTypes {
     | '/w/$slug/agent'
     | '/w/$slug/chat'
     | '/w/$slug/studio/interviews/$roundId'
+    | '/w/$slug/studio/mail-ingest-accounts/$id'
     | '/w/$slug/studio/resumes/$recordId'
   id:
     | '__root__'
@@ -617,6 +629,7 @@ export interface FileRouteTypes {
     | '/w/$slug/agent/'
     | '/w/$slug/chat/'
     | '/w/$slug/studio/interviews/$roundId'
+    | '/w/$slug/studio/mail-ingest-accounts/$id'
     | '/w/$slug/studio/resumes/$recordId'
   fileRoutesById: FileRoutesById
 }
@@ -979,6 +992,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugStudioResumesRecordIdRouteImport
       parentRoute: typeof WSlugStudioResumesRoute
     }
+    '/w/$slug/studio/mail-ingest-accounts/$id': {
+      id: '/w/$slug/studio/mail-ingest-accounts/$id'
+      path: '/$id'
+      fullPath: '/w/$slug/studio/mail-ingest-accounts/$id'
+      preLoaderRoute: typeof WSlugStudioMailIngestAccountsIdRouteImport
+      parentRoute: typeof WSlugStudioMailIngestAccountsRoute
+    }
     '/w/$slug/studio/interviews/$roundId': {
       id: '/w/$slug/studio/interviews/$roundId'
       path: '/$roundId'
@@ -1072,6 +1092,20 @@ const WSlugStudioInterviewsRouteWithChildren =
     WSlugStudioInterviewsRouteChildren,
   )
 
+interface WSlugStudioMailIngestAccountsRouteChildren {
+  WSlugStudioMailIngestAccountsIdRoute: typeof WSlugStudioMailIngestAccountsIdRoute
+}
+
+const WSlugStudioMailIngestAccountsRouteChildren: WSlugStudioMailIngestAccountsRouteChildren =
+  {
+    WSlugStudioMailIngestAccountsIdRoute: WSlugStudioMailIngestAccountsIdRoute,
+  }
+
+const WSlugStudioMailIngestAccountsRouteWithChildren =
+  WSlugStudioMailIngestAccountsRoute._addFileChildren(
+    WSlugStudioMailIngestAccountsRouteChildren,
+  )
+
 interface WSlugStudioResumesRouteChildren {
   WSlugStudioResumesRecordIdRoute: typeof WSlugStudioResumesRecordIdRoute
 }
@@ -1094,7 +1128,7 @@ interface WSlugStudioRouteChildren {
   WSlugStudioInterviewersRoute: typeof WSlugStudioInterviewersRoute
   WSlugStudioInterviewsRoute: typeof WSlugStudioInterviewsRouteWithChildren
   WSlugStudioJobDescriptionsRoute: typeof WSlugStudioJobDescriptionsRoute
-  WSlugStudioMailIngestAccountsRoute: typeof WSlugStudioMailIngestAccountsRoute
+  WSlugStudioMailIngestAccountsRoute: typeof WSlugStudioMailIngestAccountsRouteWithChildren
   WSlugStudioMeRoute: typeof WSlugStudioMeRoute
   WSlugStudioMembersRoute: typeof WSlugStudioMembersRoute
   WSlugStudioPermissionsRoute: typeof WSlugStudioPermissionsRoute
@@ -1113,7 +1147,8 @@ const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
   WSlugStudioInterviewersRoute: WSlugStudioInterviewersRoute,
   WSlugStudioInterviewsRoute: WSlugStudioInterviewsRouteWithChildren,
   WSlugStudioJobDescriptionsRoute: WSlugStudioJobDescriptionsRoute,
-  WSlugStudioMailIngestAccountsRoute: WSlugStudioMailIngestAccountsRoute,
+  WSlugStudioMailIngestAccountsRoute:
+    WSlugStudioMailIngestAccountsRouteWithChildren,
   WSlugStudioMeRoute: WSlugStudioMeRoute,
   WSlugStudioMembersRoute: WSlugStudioMembersRoute,
   WSlugStudioPermissionsRoute: WSlugStudioPermissionsRoute,

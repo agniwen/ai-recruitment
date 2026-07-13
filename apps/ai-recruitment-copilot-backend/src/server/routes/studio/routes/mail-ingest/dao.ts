@@ -131,15 +131,20 @@ export async function listMailIngestAccounts(
 }
 
 function buildWorkspaceMailIngestFilters({
+  accountId,
   organizationId,
   search,
   userId,
 }: {
+  accountId?: string;
   organizationId: string;
   search?: string;
   userId?: string;
 }) {
   const filters: SQL[] = [eq(member.organizationId, organizationId)];
+  if (accountId) {
+    filters.push(eq(mailIngestAccount.id, accountId));
+  }
   if (userId) {
     filters.push(eq(member.userId, userId));
   }
@@ -196,6 +201,7 @@ function buildWorkspaceMailIngestOrderBy(
 }
 
 function listWorkspaceMailIngestAccountRows({
+  accountId,
   limit,
   offset,
   organizationId,
@@ -204,6 +210,7 @@ function listWorkspaceMailIngestAccountRows({
   sortOrder = "asc",
   userId,
 }: {
+  accountId?: string;
   limit?: number;
   offset?: number;
   organizationId: string;
@@ -212,7 +219,7 @@ function listWorkspaceMailIngestAccountRows({
   sortOrder?: "asc" | "desc";
   userId?: string;
 }) {
-  const where = buildWorkspaceMailIngestFilters({ organizationId, search, userId });
+  const where = buildWorkspaceMailIngestFilters({ accountId, organizationId, search, userId });
   let query = db
     .select({
       accountCreatedAt: mailIngestAccount.createdAt,
@@ -439,6 +446,15 @@ export async function listWorkspaceMailIngestAccounts(
   });
 
   return rows.map(toWorkspaceMailIngestAccountRow);
+}
+
+export async function getWorkspaceMailIngestAccount(
+  organizationId: string,
+  accountId: string,
+): Promise<WorkspaceMailIngestAccountRow | null> {
+  const rows = await listWorkspaceMailIngestAccountRows({ accountId, limit: 1, organizationId });
+  const [row] = rows;
+  return row ? toWorkspaceMailIngestAccountRow(row) : null;
 }
 
 export async function queryPaginatedWorkspaceMailIngestAccounts(
