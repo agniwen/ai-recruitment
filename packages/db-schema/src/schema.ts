@@ -1092,6 +1092,7 @@ export type ResumePoolEventType =
   | "parsed"
   | "published"
   | "imported"
+  | "bound"
   | "archived"
   | "restored";
 
@@ -1305,7 +1306,7 @@ export type MailIngestMessageStatus = "processing" | "queued" | "skipped" | "fai
 export type MailIngestSkipReason = "no_supported_attachment";
 export type MailIngestJdBindStatus = "bound" | "unmatched" | "ambiguous" | "fallback";
 
-export type ResumeSemanticSourceType = "resume_pool_item" | "studio_interview";
+export type ResumeSemanticSourceType = "resume_pool_item" | "studio_interview" | "job_description";
 export type ResumeSemanticIndexStatus = "failed" | "indexed" | "pending" | "skipped" | "stale";
 export type ResumeSemanticDuplicateLevel = "high" | "low" | "medium";
 export type ResumeDuplicateMatchStatus = "active" | "confirmed" | "dismissed";

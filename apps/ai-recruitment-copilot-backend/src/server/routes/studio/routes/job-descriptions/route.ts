@@ -19,6 +19,10 @@ import {
 import { loadDepartmentById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 import { listAllInterviewers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviewers/dao";
 import { cacheTags, safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
+import {
+  deleteJobDescriptionSemanticIndexBestEffort,
+  enqueueJobDescriptionIndexJobBestEffort,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/jd-semantic/enqueue";
 import { generateJobDescriptionFromPrompt } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/ai-job-description-generate";
 import { generateResumeScreeningPolicyFromJobDescription } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/resume-screening-policy-generate";
 import {
@@ -338,6 +342,11 @@ export const jobDescriptionsRouter = factory
           safeUpdateTag(`job-descriptions:${activeOrg.id}`);
           safeUpdateTag(`interviewers:${activeOrg.id}`);
 
+          await enqueueJobDescriptionIndexJobBestEffort({
+            jobDescriptionId: record.id,
+            organizationId: activeOrg.id,
+          });
+
           return c.json(serializeJobDescription(record, interviewerIds), 201);
         } catch (insertError) {
           if (!isJobCodeConflict(insertError)) {
@@ -512,6 +521,11 @@ export const jobDescriptionsRouter = factory
 
       safeUpdateTag(`job-descriptions:${activeOrg.id}`);
       safeUpdateTag(`interviewers:${activeOrg.id}`);
+      await enqueueJobDescriptionIndexJobBestEffort({
+        jobDescriptionId: id,
+        organizationId: activeOrg.id,
+      });
+
       const updated = await loadJobDescriptionById(activeOrg.id, id, {
         actorUserId: c.var.user?.id,
       });
@@ -559,5 +573,11 @@ export const jobDescriptionsRouter = factory
     safeUpdateTag(`job-descriptions:${activeOrg.id}`);
     safeUpdateTag(cacheTags.studioInterviews(activeOrg.id));
     safeUpdateTag(`interviewers:${activeOrg.id}`);
+
+    await deleteJobDescriptionSemanticIndexBestEffort({
+      jobDescriptionId: id,
+      organizationId: activeOrg.id,
+    });
+
     return c.json({ success: true }, 200);
   });
