@@ -55,7 +55,7 @@ describe("TanStack Start workspace shell migration", () => {
 
   it("clears one-shot studio query params through router search state", () => {
     const interviews = readSource("routes/w.$slug.studio.interviews.tsx");
-    const resumes = readSource("routes/w.$slug.studio.resumes.tsx");
+    const resumes = readSource("components/features/studio/resumes/resume-library-page.tsx");
 
     expect(`${interviews}\n${resumes}`).not.toContain("window.history.replaceState");
     expect(interviews).toContain('to: "/w/$slug/studio/interviews"');
@@ -65,10 +65,11 @@ describe("TanStack Start workspace shell migration", () => {
   });
 
   it("keeps workspace management tab state in router search", () => {
-    const members = readSource("routes/w.$slug.studio.members.tsx");
+    const membersRoute = readSource("routes/w.$slug.studio.members.tsx");
+    const members = readSource("components/features/studio/members/members-page.tsx");
 
     expect(members).toContain('useSearch({ from: "/w/$slug/studio/members" })');
-    expect(members).toContain("validateSearch");
+    expect(membersRoute).toContain("validateSearch");
     expect(members).toContain("value={activeTab}");
     expect(members).not.toContain('defaultValue="members"');
   });
@@ -85,18 +86,14 @@ describe("TanStack Start workspace shell migration", () => {
     expect(skeleton).toContain("aria-hidden");
   });
 
-  it("scopes Glimm transitions to Agent and Studio sidebar tab switches", () => {
+  it("keeps Agent and Studio sidebar tab switches free of Glimm", () => {
     const packageJson = readSource("../package.json");
     const workspaceRoute = readSource("routes/w.$slug.tsx");
     const sidebarTabs = readSource("components/layout/app-sidebar/sidebar-tabs.tsx");
 
-    expect(packageJson).toContain('"glimm"');
-    expect(workspaceRoute).toContain('import { GlimmProvider } from "glimm/react"');
-    expect(workspaceRoute).toContain("<GlimmProvider");
-    expect(sidebarTabs).toContain('import { useGlimm } from "glimm/react"');
-    expect(sidebarTabs).toContain("const { sweep } = useGlimm();");
-    expect(sidebarTabs).toContain("void sweep(");
+    expect(packageJson).not.toContain('"glimm"');
+    expect(workspaceRoute).not.toContain("glimm");
+    expect(sidebarTabs).not.toContain("glimm");
     expect(sidebarTabs).toContain("navigate({ to: target });");
-    expect(sidebarTabs).not.toContain("InterceptLinks");
   });
 });

@@ -13,7 +13,7 @@ describe("TanStack navigation migration", () => {
     const sources = [
       readSource("features/auth/email-password-sign-in-form.tsx"),
       readSource("features/chat/background-stream-toaster.tsx"),
-      readSource("features/home/use-protected-navigation.ts"),
+      readSource("features/home/home-shell.tsx"),
       readSource("features/join/join-client.tsx"),
       readSource("features/select-workspace/user-menu.tsx"),
       readSource("features/workspace/create-workspace-dialog.tsx"),

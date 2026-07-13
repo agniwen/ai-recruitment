@@ -11,7 +11,14 @@ import { eq } from "drizzle-orm";
 import { testClient } from "hono/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { department, interviewer, jobDescription, organization, user } from "@arc/db-schema/schema";
+import {
+  department,
+  interviewer,
+  jobDescription,
+  member,
+  organization,
+  user,
+} from "@arc/db-schema/schema";
 import { createDefaultResumeScreeningPolicy } from "@arc/shared/resume-screening";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 
@@ -79,6 +86,12 @@ async function seedFixtures() {
     id: ORG_ID,
     name: "钩子测试公司",
     slug: "index-hooks-org",
+  });
+  await db.insert(member).values({
+    id: "index_hooks_member",
+    organizationId: ORG_ID,
+    role: "owner",
+    userId: USER_ID,
   });
   await db.insert(department).values({
     createdAt: NOW,
