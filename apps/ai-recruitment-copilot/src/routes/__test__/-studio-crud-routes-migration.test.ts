@@ -67,7 +67,7 @@ describe("TanStack Start studio CRUD route migration", () => {
   });
 
   it("shows recruiting group hiring unit selections by item names inside the select only", () => {
-    const membersSource = readSource("routes/w.$slug.studio.members.tsx");
+    const membersSource = readSource("components/features/studio/members/members-groups.tsx");
     const hiringUnitSelectIndex = membersSource.indexOf('placeholder="负责用人组织"');
     const hiringUnitSelectSource = membersSource.slice(
       hiringUnitSelectIndex,
@@ -78,6 +78,19 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(hiringUnitSelectSource).not.toContain('selectedDisplay="count"');
     expect(hiringUnitSelectSource).not.toMatch(/负责 \$\{count\} 个用人组织/u);
     expect(hiringUnitSelectSource).not.toContain("showBadges");
+  });
+
+  it("loads and saves recruiting group hiring unit scope through typed RPC", () => {
+    const membersPageSource = readSource("components/features/studio/members/members-page.tsx");
+    const saveStart = membersPageSource.indexOf("async function changeGroupHiringUnits");
+    const saveEnd = membersPageSource.indexOf("async function changeWorkspaceRole", saveStart);
+    const saveSource = membersPageSource.slice(saveStart, saveEnd);
+
+    expect(membersPageSource).toContain('studio["hiring-units"].all.$get');
+    expect(membersPageSource).toContain("rpcFetch<{ records:");
+    expect(saveSource).toContain('["hiring-units"].$put');
+    expect(saveSource).toContain("json: { hiringUnitIds }");
+    expect(saveSource).toContain("await refetchGroups()");
   });
 
   it("filters the recruiting group member pool by name or email on the client", () => {

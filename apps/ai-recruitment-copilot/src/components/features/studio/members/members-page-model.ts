@@ -70,6 +70,8 @@ export interface RecruitingGroupRow {
   id: string;
   name: string;
   createdAt: string;
+  hiringUnitIds: string[];
+  hiringUnits: { id: string; name: string }[];
   isDefault: boolean;
   isVirtual?: boolean;
   members: RecruitingGroupMemberRow[];

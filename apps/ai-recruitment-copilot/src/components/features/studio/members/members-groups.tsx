@@ -14,12 +14,15 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { MemberCell } from "@/components/data-grid/cells/member-cell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
+import type { SearchableSelectOption } from "@/components/ui/searchable-select";
 import {
   Select,
   SelectContent,
@@ -122,6 +125,7 @@ interface RecruitingGroupsPanelProps {
   onCreateGroup: () => void;
   onDeleteGroup: (group: RecruitingGroupRow) => void;
   onGroupNameDraftChange: (groupId: string, value: string) => void;
+  onHiringUnitsChange: (group: RecruitingGroupRow, hiringUnitIds: string[]) => void;
   onRemoveGroupMember: (groupId: string, member: RecruitingGroupMemberRow) => void;
   onRenameGroup: (group: RecruitingGroupRow, name: string) => void;
   onMoveMemberToGroup: (row: MemberRow, sourceGroupId: string, targetGroupId: string) => void;
@@ -131,6 +135,7 @@ interface RecruitingGroupsPanelProps {
     role: RecruitingGroupRole,
   ) => void;
   pending: string | null;
+  hiringUnitOptions: SearchableSelectOption[];
   setNewGroupName: (value: string) => void;
 }
 
@@ -144,11 +149,13 @@ export function RecruitingGroupsPanel({
   onCreateGroup,
   onDeleteGroup,
   onGroupNameDraftChange,
+  onHiringUnitsChange,
   onRemoveGroupMember,
   onRenameGroup,
   onMoveMemberToGroup,
   onRoleChange,
   pending,
+  hiringUnitOptions,
   setNewGroupName,
 }: RecruitingGroupsPanelProps) {
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
@@ -257,10 +264,12 @@ export function RecruitingGroupsPanel({
                 canUpdate={canUpdate}
                 draftName={groupNameDrafts[group.id] ?? group.name}
                 group={group}
+                hiringUnitOptions={hiringUnitOptions}
                 id={getColumnId(group.id)}
                 key={group.id}
                 onDeleteGroup={onDeleteGroup}
                 onGroupNameDraftChange={onGroupNameDraftChange}
+                onHiringUnitsChange={onHiringUnitsChange}
                 onRemoveGroupMember={onRemoveGroupMember}
                 onRenameGroup={onRenameGroup}
                 onRoleChange={onRoleChange}
@@ -284,9 +293,11 @@ interface RecruitingGroupColumnProps {
   canUpdate: boolean;
   draftName?: string;
   group: RecruitingGroupRow;
+  hiringUnitOptions: SearchableSelectOption[];
   id: string;
   onDeleteGroup: (group: RecruitingGroupRow) => void;
   onGroupNameDraftChange: (groupId: string, value: string) => void;
+  onHiringUnitsChange: (group: RecruitingGroupRow, hiringUnitIds: string[]) => void;
   onRemoveGroupMember: (groupId: string, member: RecruitingGroupMemberRow) => void;
   onRenameGroup: (group: RecruitingGroupRow, name: string) => void;
   onRoleChange: (
@@ -301,9 +312,11 @@ function RecruitingGroupColumn({
   canUpdate,
   draftName,
   group,
+  hiringUnitOptions,
   id,
   onDeleteGroup,
   onGroupNameDraftChange,
+  onHiringUnitsChange,
   onRemoveGroupMember,
   onRenameGroup,
   onRoleChange,
@@ -314,6 +327,35 @@ function RecruitingGroupColumn({
     id,
   });
   const canManageGroup = canUpdate && !group.isVirtual;
+  const hiringUnitPendingKey = `hiring-units:${group.id}`;
+  let hiringUnitControl: ReactNode = null;
+  if (!group.isVirtual && canManageGroup) {
+    hiringUnitControl = (
+      <SearchableMultiSelect
+        disabled={pending === hiringUnitPendingKey}
+        emptyMessage="暂无用人组织"
+        onChange={(value) => onHiringUnitsChange(group, value)}
+        options={hiringUnitOptions}
+        placeholder="负责用人组织"
+        searchPlaceholder="搜索用人组织"
+        value={group.hiringUnitIds}
+      />
+    );
+  } else if (!group.isVirtual) {
+    hiringUnitControl = (
+      <div className="flex flex-wrap gap-1">
+        {group.hiringUnits.length > 0 ? (
+          group.hiringUnits.map((unit) => (
+            <Badge key={unit.id} variant="secondary">
+              {unit.name}
+            </Badge>
+          ))
+        ) : (
+          <Badge variant="outline">仅公共部门</Badge>
+        )}
+      </div>
+    );
+  }
 
   return (
     <section
@@ -365,6 +407,7 @@ function RecruitingGroupColumn({
             </span>
           ) : null}
         </div>
+        {hiringUnitControl}
       </div>
       <div className="flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-3">
         {group.members.length > 0 ? (
