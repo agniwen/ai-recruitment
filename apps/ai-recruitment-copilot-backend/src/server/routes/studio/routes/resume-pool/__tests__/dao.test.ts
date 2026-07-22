@@ -267,8 +267,8 @@ describe("queryResumePoolItems", () => {
     expect(none).toEqual([]);
   });
 
-  it("lists public items across organizations", async () => {
-    await createResumePoolItem(basePoolInput({ scope: "public" }));
+  it("lists public items only within the current organization", async () => {
+    const ownPublicId = await createResumePoolItem(basePoolInput({ scope: "public" }));
     await createResumePoolItem(
       basePoolInput({ createdBy: USER_B, organizationId: ORG_B, scope: "public" }),
     );
@@ -279,8 +279,8 @@ describe("queryResumePoolItems", () => {
       userId: USER_A,
     });
 
-    const orgIds = result.records.map((record) => record.organizationId);
-    expect(orgIds).toEqual(expect.arrayContaining([ORG_A, ORG_B]));
+    expect(result.records.map((record) => record.id)).toEqual([ownPublicId]);
+    expect(result.records.every((record) => record.organizationId === ORG_A)).toBe(true);
   });
 
   it("includes profile highlights for resume pool cards", async () => {
@@ -666,7 +666,7 @@ describe("importPoolItemToResumeLibrary", () => {
       hiringUnitId: null,
       importedBy: USER_B,
       jobDescriptionId: null,
-      organizationId: ORG_B,
+      organizationId: ORG_A,
       poolItemId: publicId,
     });
 
@@ -689,7 +689,7 @@ describe("importPoolItemToResumeLibrary", () => {
       hiringUnitId: null,
       importedBy: USER_B,
       jobDescriptionId: null,
-      organizationId: ORG_B,
+      organizationId: ORG_A,
       poolItemId: publicId,
     });
 
@@ -701,7 +701,7 @@ describe("importPoolItemToResumeLibrary", () => {
       .select()
       .from(studioInterview)
       .where(eq(studioInterview.id, result.resumeRecordId));
-    expect(record?.organizationId).toBe(ORG_B);
+    expect(record?.organizationId).toBe(ORG_A);
     expect(record?.candidateName).toBe(PROFILE.name);
     expect(record?.resumeSourceType).toBe("public_pool");
     expect(record?.resumeSourcePoolItemId).toBe(publicId);
@@ -712,12 +712,12 @@ describe("importPoolItemToResumeLibrary", () => {
       .from(resumePoolImport)
       .where(eq(resumePoolImport.importedResumeRecordId, result.resumeRecordId));
     expect(imports).toHaveLength(1);
-    expect(imports[0]?.organizationId).toBe(ORG_B);
+    expect(imports[0]?.organizationId).toBe(ORG_A);
     expect(cloneResumeSemanticIndexFromPoolToInterview).toHaveBeenCalledWith({
       poolItemId: publicId,
       resumeRecordId: result.resumeRecordId,
       sourceOrganizationId: ORG_A,
-      targetOrganizationId: ORG_B,
+      targetOrganizationId: ORG_A,
     });
     expect(enqueueResumeSemanticIndexJobBestEffort).not.toHaveBeenCalled();
   });
@@ -740,7 +740,7 @@ describe("importPoolItemToResumeLibrary", () => {
         hiringUnitId: null,
         importedBy: USER_B,
         jobDescriptionId: null,
-        organizationId: ORG_B,
+        organizationId: ORG_A,
         poolItemId: publicId,
       }),
     ).rejects.toThrow("clone failed");
@@ -763,7 +763,7 @@ describe("importPoolItemToResumeLibrary", () => {
       hiringUnitId: null,
       importedBy: USER_B,
       jobDescriptionId: null,
-      organizationId: ORG_B,
+      organizationId: ORG_A,
       poolItemId: publicId,
     });
     expect(retried.status).toBe("imported");
@@ -791,6 +791,23 @@ describe("importPoolItemToResumeLibrary", () => {
         jobDescriptionId: null,
         organizationId: ORG_A,
         poolItemId: privateId,
+      }),
+    ).rejects.toThrow("简历池记录不存在或无权访问");
+  });
+
+  it("rejects importing a public item from another organization", async () => {
+    const publicId = await createResumePoolItem(
+      basePoolInput({ createdBy: USER_B, organizationId: ORG_B, scope: "public" }),
+    );
+
+    await expect(
+      importPoolItemToResumeLibrary({
+        dedupPolicy: "force",
+        hiringUnitId: null,
+        importedBy: USER_A,
+        jobDescriptionId: null,
+        organizationId: ORG_A,
+        poolItemId: publicId,
       }),
     ).rejects.toThrow("简历池记录不存在或无权访问");
   });

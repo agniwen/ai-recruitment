@@ -297,10 +297,10 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
     update: "允许编辑「简历库」候选人资料、替换/解析简历，并从简历库发起 AI 面试。",
   },
   resumePool: {
-    create: "允许在「公共简历池」上传私有或公开简历。",
+    create: "允许在「公共简历池」上传私有或工作区共享简历。",
     delete: "允许删除自己在「公共简历池」中的私有记录。",
     import: "允许从「公共简历池」发起导入；真正写入简历库还同时需要「简历库」新增权限。",
-    publish: "允许把自己的私有简历池简历发布到「公共简历池」。",
+    publish: "允许把自己的私有简历池简历发布到本工作区共享的「公共简历池」。",
     read: "允许加载「公共简历池」列表、详情、简历文件和预览。",
   },
   resumeUploadBatch: {

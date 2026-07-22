@@ -49,7 +49,6 @@ import {
   resumeParseStatusBadge,
   sourceActorLabel,
   sourceLabel,
-  uploaderOrganizationLabel,
   uploaderUserLabel,
 } from "./resume-pool-page-model";
 import { ResumePoolRecommendationsPanel } from "./resume-pool-recommendations-panel";
@@ -139,7 +138,7 @@ function ResumePoolDetailSummaryPanel({
         <DetailSummaryItem label="关联岗位">
           {(() => {
             // 岗位名已按当前组织过滤：有名字=本组织可见的岗位，才做深链；
-            // 有 jobDescriptionId 但无名字=绑定到了当前组织不可见的岗位（公共池跨组织），仅提示不跳转。
+            // 有 jobDescriptionId 但无名字=岗位已删除、换岗或超出当前用户用人组织可见范围，仅提示不跳转。
             if (detail.jobDescriptionName) {
               return (
                 <Link
@@ -168,7 +167,6 @@ function ResumePoolDetailSummaryPanel({
           })()}
         </DetailSummaryItem>
         <DetailSummaryItem label="来源">{sourceLabel(detail)}</DetailSummaryItem>
-        <DetailSummaryItem label="上传组织">{uploaderOrganizationLabel(detail)}</DetailSummaryItem>
         <DetailSummaryItem label={sourceActorLabel(detail)}>
           {uploaderUserLabel(detail)}
         </DetailSummaryItem>
@@ -343,10 +341,6 @@ export function ResumePoolCardUploaderMeta({ record }: { record: ResumePoolListR
   const actorLabel = sourceActorLabel(record);
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
-      <div className="flex min-w-0 items-center gap-1.5">
-        <IconBuilding className="size-3.5 shrink-0" />
-        <span className="truncate">{uploaderOrganizationLabel(record)}</span>
-      </div>
       <span className="shrink-0">{actorLabel}</span>
       <MemberCell
         avatarClassName="size-4"

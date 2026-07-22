@@ -337,6 +337,10 @@ function accessibleWhere(poolItemId: string) {
   return and(eq(resumePoolItem.id, poolItemId), eq(resumePoolItem.status, "active"));
 }
 
+function isPublicPoolItemInOrganization(row: PoolRow, organizationId: string): boolean {
+  return row.scope === "public" && row.organizationId === organizationId;
+}
+
 async function loadAccessiblePoolItem(input: {
   organizationId: string;
   poolItemId: string;
@@ -350,7 +354,8 @@ async function loadAccessiblePoolItem(input: {
   if (!row) {
     return null;
   }
-  if (row.scope === "public") {
+  // Public pool is workspace-scoped: any member with access may use same-org public items.
+  if (isPublicPoolItemInOrganization(row, input.organizationId)) {
     return row;
   }
   if (row.organizationId === input.organizationId && row.createdBy === input.userId) {
@@ -372,7 +377,8 @@ async function loadVisiblePoolItem(input: {
   if (!row) {
     return null;
   }
-  if (row.scope === "public") {
+  // Public pool is workspace-scoped (not app-wide). Same-org members can read it.
+  if (isPublicPoolItemInOrganization(row, input.organizationId)) {
     return row;
   }
   if (row.organizationId !== input.organizationId || !row.createdBy) {
@@ -477,7 +483,12 @@ export async function queryResumePoolItems(
             ? undefined
             : inArray(resumePoolItem.createdBy, input.creatorIds ?? [input.userId]),
         )
-      : and(eq(resumePoolItem.scope, "public"), eq(resumePoolItem.status, "active"));
+      : and(
+          eq(resumePoolItem.scope, "public"),
+          eq(resumePoolItem.status, "active"),
+          // Public pool shares within the workspace only — never across organizations.
+          eq(resumePoolItem.organizationId, input.organizationId),
+        );
 
   const [totalRow] = await db.select({ total: count() }).from(resumePoolItem).where(where);
   const rows = await db
