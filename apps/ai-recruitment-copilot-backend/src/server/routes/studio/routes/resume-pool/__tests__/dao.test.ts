@@ -20,6 +20,7 @@ import {
   createResumePoolItem,
   deleteOwnPoolItem,
   importPoolItemToResumeLibrary,
+  listResumePoolUploaders,
   loadResumePoolItem,
   markResumePoolItemParsed,
   publishPrivatePoolItem,
@@ -212,20 +213,58 @@ function basePoolInput(overrides: Partial<Parameters<typeof createResumePoolItem
 }
 
 describe("queryResumePoolItems", () => {
-  it("only lists the current user's private items in the current organization", async () => {
+  it("filters private items by selected creators in the current organization", async () => {
     await createResumePoolItem(basePoolInput());
     await createResumePoolItem(basePoolInput({ createdBy: USER_B, organizationId: ORG_A }));
     await createResumePoolItem(basePoolInput({ createdBy: USER_A, organizationId: ORG_B }));
 
-    const result = await queryResumePoolItems({
+    const ownResult = await queryResumePoolItems({
+      creatorIds: [USER_A],
       organizationId: ORG_A,
       scope: "private",
       userId: USER_A,
     });
 
-    expect(result.records).toHaveLength(1);
-    expect(result.records[0]?.candidateName).toBe("候选人甲");
-    expect(result.records[0]?.scope).toBe("private");
+    expect(ownResult.records).toHaveLength(1);
+    expect(ownResult.records[0]?.candidateName).toBe("候选人甲");
+    expect(ownResult.records[0]?.scope).toBe("private");
+
+    const visibleResult = await queryResumePoolItems({
+      creatorIds: [USER_A, USER_B],
+      organizationId: ORG_A,
+      scope: "private",
+      userId: USER_A,
+    });
+    expect(visibleResult.records).toHaveLength(2);
+
+    const emptyResult = await queryResumePoolItems({
+      creatorIds: [],
+      organizationId: ORG_A,
+      scope: "private",
+      userId: USER_A,
+    });
+    expect(emptyResult).toEqual({ records: [], total: 0 });
+  });
+
+  it("lists uploader options inside both workspace and recruiting visibility scopes", async () => {
+    const restricted = await listResumePoolUploaders({
+      organizationId: ORG_A,
+      visibilityScope: { kind: "restricted", userIds: [USER_A, USER_B] },
+    });
+    const none = await listResumePoolUploaders({
+      organizationId: ORG_A,
+      visibilityScope: { kind: "none" },
+    });
+
+    expect(restricted).toEqual([
+      {
+        email: "resume-pool-a@example.com",
+        id: USER_A,
+        image: null,
+        name: "resume-pool-a",
+      },
+    ]);
+    expect(none).toEqual([]);
   });
 
   it("lists public items across organizations", async () => {
@@ -254,6 +293,7 @@ describe("queryResumePoolItems", () => {
     );
 
     const result = await queryResumePoolItems({
+      creatorIds: [USER_A],
       organizationId: ORG_A,
       scope: "private",
       userId: USER_A,
@@ -309,6 +349,7 @@ describe("queryResumePoolItems", () => {
 
     try {
       const result = await queryResumePoolItems({
+        creatorIds: [USER_A],
         organizationId: ORG_A,
         scope: "private",
         userId: USER_A,
@@ -486,6 +527,7 @@ describe("queryResumePoolItems", () => {
     });
 
     const result = await queryResumePoolItems({
+      creatorIds: [USER_A],
       organizationId: ORG_A,
       scope: "private",
       userId: USER_A,
