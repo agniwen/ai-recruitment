@@ -19,6 +19,7 @@ function WorkspaceRoute() {
       <WorkspaceSlugProvider
         id={state.workspace.id}
         memberRole={state.member.role}
+        permissions={state.permissions}
         slug={state.workspace.slug}
       >
         <AppSidebarShell>
@@ -55,6 +56,7 @@ export const Route = createFileRoute("/w/$slug")({
 
     if (location.pathname === `/w/${params.slug}`) {
       const href = await resolveWorkspaceLandingHref({
+        permissions: state.permissions,
         preferredArea: "studio",
         slug: params.slug,
       });

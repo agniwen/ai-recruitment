@@ -16,7 +16,6 @@ import {
   IconUserCircle as UserCircleIcon,
   IconUserCog as UserCogIcon,
   IconUsers as UsersIcon,
-  IconTool as WrenchIcon,
 } from "@tabler/icons-react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { SidebarBodyPortalContent } from "@/components/layout/app-sidebar/portals";
@@ -158,14 +157,6 @@ const navGroups: NavGroup[] = [
         path: "/studio/mail-ingest-accounts",
         resource: "page",
         title: "邮箱监听",
-      },
-      {
-        action: "agentDebug",
-        adminOnly: true,
-        icon: WrenchIcon,
-        path: "/studio/agent-debug",
-        resource: "page",
-        title: "Agent 调试",
       },
       {
         action: "permissions",

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const studioPageFiles = [
-  "w.$slug.studio.agent-debug.tsx",
   "w.$slug.studio.dashboard.tsx",
   "w.$slug.studio.departments.tsx",
   "w.$slug.studio.forms.tsx",

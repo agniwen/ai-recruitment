@@ -40,6 +40,8 @@ interface TimeSlotFormValue {
   startAt: string;
 }
 
+const RESUME_REVIEW_WORKSPACE_PERMISSIONS = {};
+
 function resumeReviewDetailQueryKey(slug: string, recordId: string) {
   return ["studio-resumes", slug, "detail", recordId, "review"] as const;
 }
@@ -319,6 +321,8 @@ function ResumeReviewDetailPage() {
     <WorkspaceSlugProvider
       id={state.workspace.id}
       memberRole={state.member.role}
+      permissions={RESUME_REVIEW_WORKSPACE_PERMISSIONS}
+      refreshPermissions={false}
       slug={state.workspace.slug}
     >
       <ResumeReviewDetailContent recordId={recordId} />

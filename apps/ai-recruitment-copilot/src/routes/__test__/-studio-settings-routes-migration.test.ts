@@ -12,7 +12,6 @@ describe("TanStack Start studio settings and detail route migration", () => {
   const routes = [
     "/w/$slug/studio/interview-questions",
     "/w/$slug/studio/global-config",
-    "/w/$slug/studio/agent-debug",
     "/w/$slug/studio/permissions",
     "/w/$slug/studio/members",
     "/w/$slug/studio/me",
@@ -32,7 +31,6 @@ describe("TanStack Start studio settings and detail route migration", () => {
     const sources = [
       readSource("routes/w.$slug.studio.interview-questions.tsx"),
       readSource("routes/w.$slug.studio.global-config.tsx"),
-      readSource("routes/w.$slug.studio.agent-debug.tsx"),
       readSource("routes/w.$slug.studio.permissions.tsx"),
       readSource("routes/w.$slug.studio.members.tsx"),
       readSource("routes/w.$slug.studio.me.tsx"),
@@ -61,34 +59,6 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(permissionsRoute).toContain("<WorkspacePermissionsSection");
     expect(permissionsRoute).toContain("headerRender");
     expect(globalConfigForm).not.toContain("<WorkspacePermissionsSection />");
-  });
-
-  it("exposes agent debug as an administrator-only system configuration page", () => {
-    const sidebar = readSource("components/features/studio/studio-sidebar-slots.tsx");
-    const globalConfigForm = readSource(
-      "components/features/studio/global-config/global-config-form.tsx",
-    );
-    const agentDebugRoute = readSource("routes/w.$slug.studio.agent-debug.tsx");
-    const agentDebugPage = readSource(
-      "components/features/studio/agent-debug/agent-debug-page.tsx",
-    );
-
-    expect(sidebar).toContain('path: "/studio/agent-debug"');
-    expect(sidebar).toContain('title: "Agent 调试"');
-    expect(sidebar).toContain('action: "agentDebug"');
-    expect(sidebar).toContain("adminOnly: true");
-    expect(globalConfigForm).not.toContain("简历解析测试");
-    expect(agentDebugRoute).toContain("requireStudioAdminAccess");
-    expect(agentDebugRoute).toContain('action: "agentDebug"');
-    expect(agentDebugRoute).toContain("<AgentDebugPage slug={slug} />");
-    expect(agentDebugRoute).not.toContain("@/components/ui/card");
-    expect(agentDebugRoute).not.toContain("<Card");
-    expect(agentDebugPage).toContain("JsonEditor");
-    expect(agentDebugPage).toContain("/studio/agent-debug/resume-parser-test");
-    expect(agentDebugPage).toContain('<section className="flex flex-col gap-4">');
-    expect(agentDebugPage).toContain('<TabsTrigger value="resume-parser">简历解析</TabsTrigger>');
-    expect(agentDebugPage).not.toContain("仅用于调试当前解析链路");
-    expect(agentDebugPage).not.toContain("当前上传文件的解析结果");
   });
 
   it("keeps system settings as a bare form with the save action in the page header", () => {
@@ -131,18 +101,23 @@ describe("TanStack Start studio settings and detail route migration", () => {
     const studioRoute = readSource("routes/w.$slug.studio.tsx");
     const authSession = readSource("lib/start/auth-session.ts");
     const authSessionServer = readSource("lib/start/auth-session.server.ts");
+    const permissionSnapshot = readSource(
+      "../../ai-recruitment-copilot-backend/src/server/access/workspace-permission-snapshot.ts",
+    );
 
     expect(studioRoute).toContain("getStudioPageAccessState");
     expect(studioRoute).toContain("findFirstAllowedStudioPath");
-    expect(studioRoute).toContain('action: "dashboard"');
-    expect(studioRoute).toContain('path: "/resumes"');
+    expect(studioRoute).toContain("getFirstAllowedStudioPagePath");
+    expect(studioRoute).toContain("STUDIO_PAGE_PATHS");
     expect(studioRoute).toMatch(/if \(!state\.allowed\) \{\s+throw notFound\(\);\s+\}/u);
     expect(studioRoute).not.toMatch(
       /if \(!state\.allowed\) \{\s+const fallbackPath = await findFirstAllowedStudioPath/u,
     );
     expect(authSession).toContain("getStudioPageAccessState");
+    expect(authSession).toContain("getFirstAllowedStudioPagePath");
     expect(authSessionServer).toContain("resolveStudioPageAccessFromRequest");
-    expect(authSessionServer).toContain("organizationRole.permission");
+    expect(authSessionServer).toContain("computeWorkspacePermissionSnapshot");
+    expect(permissionSnapshot).toContain("organizationRole.permission");
   });
 
   it("guards studio prefetch loaders with matching page permissions", () => {

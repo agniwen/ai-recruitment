@@ -1,61 +1,47 @@
-import { getStudioPageAccessState } from "@/lib/start/auth-session";
+import type { WorkspacePermissionStatements } from "@arc/shared/permission-statements";
+import { hasPermissionInStatements } from "@arc/shared/permission-statements";
 import type { StudioPagePermissionAction } from "@/lib/start/auth-session-types";
+import { STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
 
 type PreferredWorkspaceArea = "chat" | "studio";
 
-export const STUDIO_PAGE_PATHS = [
-  { action: "resumes", path: "/resumes" },
-  { action: "resumePool", path: "/resume-pool" },
-  { action: "interviews", path: "/interviews" },
-  { action: "dashboard", path: "/dashboard" },
-  { action: "hiringUnits", path: "/hiring-units" },
-  { action: "departments", path: "/departments" },
-  { action: "interviewers", path: "/interviewers" },
-  { action: "jobDescriptions", path: "/job-descriptions" },
-  { action: "forms", path: "/forms" },
-  { action: "interviewQuestions", path: "/interview-questions" },
-  { action: "me", path: "/me" },
-  { action: "members", path: "/members" },
-  { action: "mailIngestAccounts", path: "/mail-ingest-accounts" },
-  { action: "agentDebug", path: "/agent-debug" },
-  { action: "permissions", path: "/permissions" },
-  { action: "globalConfig", path: "/global-config" },
-] as const satisfies readonly {
-  action: StudioPagePermissionAction;
-  path: string;
-}[];
-
-async function canAccessPage(slug: string, action: StudioPagePermissionAction): Promise<boolean> {
-  const state = await getStudioPageAccessState({ data: { action, slug } });
-  return state.status === "ready" && state.allowed;
+function canAccessPage(
+  permissions: WorkspacePermissionStatements,
+  action: StudioPagePermissionAction,
+): boolean {
+  return hasPermissionInStatements(permissions, "page", action);
 }
 
-export async function findFirstAllowedStudioPath(slug: string): Promise<string | null> {
+export function findFirstAllowedStudioPath(
+  permissions: WorkspacePermissionStatements,
+): string | null {
   for (const item of STUDIO_PAGE_PATHS) {
-    if (await canAccessPage(slug, item.action)) {
+    if (canAccessPage(permissions, item.action)) {
       return item.path;
     }
   }
   return null;
 }
 
-export async function resolveWorkspaceLandingHref({
+export function resolveWorkspaceLandingHref({
+  permissions,
   preferredArea = "studio",
   slug,
 }: {
+  permissions: WorkspacePermissionStatements;
   preferredArea?: PreferredWorkspaceArea;
   slug: string;
-}): Promise<string | null> {
-  if (preferredArea === "chat" && (await canAccessPage(slug, "chat"))) {
+}): string | null {
+  if (preferredArea === "chat" && canAccessPage(permissions, "chat")) {
     return `/w/${slug}/chat`;
   }
 
-  const studioPath = await findFirstAllowedStudioPath(slug);
+  const studioPath = findFirstAllowedStudioPath(permissions);
   if (studioPath) {
     return `/w/${slug}/studio${studioPath}`;
   }
 
-  if (preferredArea === "studio" && (await canAccessPage(slug, "chat"))) {
+  if (preferredArea === "studio" && canAccessPage(permissions, "chat")) {
     return `/w/${slug}/chat`;
   }
 

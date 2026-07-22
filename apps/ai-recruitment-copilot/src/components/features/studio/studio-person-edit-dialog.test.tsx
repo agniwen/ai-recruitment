@@ -300,7 +300,7 @@ function renderDialog() {
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <WorkspaceSlugProvider id="org-1" memberRole="admin" slug="new">
+        <WorkspaceSlugProvider id="org-1" memberRole="admin" permissions={{}} slug="new">
           <StudioPersonEditDialog mode="resume" onOpenChange={vi.fn()} open recordId="resume-1" />
         </WorkspaceSlugProvider>
       </QueryClientProvider>,
@@ -327,7 +327,7 @@ function renderInterviewDialog({
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <WorkspaceSlugProvider id="org-1" memberRole="admin" slug="new">
+        <WorkspaceSlugProvider id="org-1" memberRole="admin" permissions={{}} slug="new">
           <StudioPersonEditDialog
             mode="interview"
             onEditResumeRecord={onEditResumeRecord}

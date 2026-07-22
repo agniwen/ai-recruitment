@@ -60,7 +60,6 @@ import { Route as WSlugStudioGlobalConfigRouteImport } from './routes/w.$slug.st
 import { Route as WSlugStudioFormsRouteImport } from './routes/w.$slug.studio.forms'
 import { Route as WSlugStudioDepartmentsRouteImport } from './routes/w.$slug.studio.departments'
 import { Route as WSlugStudioDashboardRouteImport } from './routes/w.$slug.studio.dashboard'
-import { Route as WSlugStudioAgentDebugRouteImport } from './routes/w.$slug.studio.agent-debug'
 import { Route as WSlugChatSessionIdRouteImport } from './routes/w.$slug.chat.$sessionId'
 import { Route as WSlugAgentSessionIdRouteImport } from './routes/w.$slug.agent.$sessionId'
 import { Route as PlatformMastraStudioAgentBuilderSkillsRouteImport } from './routes/platform.mastra-studio.agent-builder.skills'
@@ -433,11 +432,6 @@ const WSlugStudioDepartmentsRoute = WSlugStudioDepartmentsRouteImport.update({
 const WSlugStudioDashboardRoute = WSlugStudioDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
-  getParentRoute: () => WSlugStudioRoute,
-} as any)
-const WSlugStudioAgentDebugRoute = WSlugStudioAgentDebugRouteImport.update({
-  id: '/agent-debug',
-  path: '/agent-debug',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
 const WSlugChatSessionIdRoute = WSlugChatSessionIdRouteImport.update({
@@ -1150,7 +1144,6 @@ export interface FileRoutesByFullPath {
   '/platform/mastra-studio/agent-builder/skills': typeof PlatformMastraStudioAgentBuilderSkillsRouteWithChildren
   '/w/$slug/agent/$sessionId': typeof WSlugAgentSessionIdRoute
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
-  '/w/$slug/studio/agent-debug': typeof WSlugStudioAgentDebugRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
@@ -1300,7 +1293,6 @@ export interface FileRoutesByTo {
   '/platform/mastra-studio/agent-builder/skills': typeof PlatformMastraStudioAgentBuilderSkillsListingIndexRoute
   '/w/$slug/agent/$sessionId': typeof WSlugAgentSessionIdRoute
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
-  '/w/$slug/studio/agent-debug': typeof WSlugStudioAgentDebugRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
@@ -1452,7 +1444,6 @@ export interface FileRoutesById {
   '/platform/mastra-studio/agent-builder/skills': typeof PlatformMastraStudioAgentBuilderSkillsRouteWithChildren
   '/w/$slug/agent/$sessionId': typeof WSlugAgentSessionIdRoute
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
-  '/w/$slug/studio/agent-debug': typeof WSlugStudioAgentDebugRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
@@ -1614,7 +1605,6 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio/agent-builder/skills'
     | '/w/$slug/agent/$sessionId'
     | '/w/$slug/chat/$sessionId'
-    | '/w/$slug/studio/agent-debug'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
@@ -1764,7 +1754,6 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio/agent-builder/skills'
     | '/w/$slug/agent/$sessionId'
     | '/w/$slug/chat/$sessionId'
-    | '/w/$slug/studio/agent-debug'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
@@ -1915,7 +1904,6 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio/agent-builder/skills'
     | '/w/$slug/agent/$sessionId'
     | '/w/$slug/chat/$sessionId'
-    | '/w/$slug/studio/agent-debug'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
@@ -2396,13 +2384,6 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/w/$slug/studio/dashboard'
       preLoaderRoute: typeof WSlugStudioDashboardRouteImport
-      parentRoute: typeof WSlugStudioRoute
-    }
-    '/w/$slug/studio/agent-debug': {
-      id: '/w/$slug/studio/agent-debug'
-      path: '/agent-debug'
-      fullPath: '/w/$slug/studio/agent-debug'
-      preLoaderRoute: typeof WSlugStudioAgentDebugRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
     '/w/$slug/chat/$sessionId': {
@@ -3791,7 +3772,6 @@ const WSlugStudioResumesRouteWithChildren =
   WSlugStudioResumesRoute._addFileChildren(WSlugStudioResumesRouteChildren)
 
 interface WSlugStudioRouteChildren {
-  WSlugStudioAgentDebugRoute: typeof WSlugStudioAgentDebugRoute
   WSlugStudioDashboardRoute: typeof WSlugStudioDashboardRoute
   WSlugStudioDepartmentsRoute: typeof WSlugStudioDepartmentsRoute
   WSlugStudioFormsRoute: typeof WSlugStudioFormsRoute
@@ -3810,7 +3790,6 @@ interface WSlugStudioRouteChildren {
 }
 
 const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
-  WSlugStudioAgentDebugRoute: WSlugStudioAgentDebugRoute,
   WSlugStudioDashboardRoute: WSlugStudioDashboardRoute,
   WSlugStudioDepartmentsRoute: WSlugStudioDepartmentsRoute,
   WSlugStudioFormsRoute: WSlugStudioFormsRoute,

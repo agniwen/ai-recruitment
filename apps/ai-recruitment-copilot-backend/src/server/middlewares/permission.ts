@@ -8,10 +8,8 @@ import {
   getWorkspaceRequestContext,
   WorkspaceContextInvariantError,
 } from "@arc/ai-recruitment-copilot-backend/server/context/workspace-request-context";
-import {
-  createRequestWorkspaceAuthorizer,
-  usesRecruitingGroupPermission,
-} from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
+import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
+import { usesRecruitingGroupPermission } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-group-access";
 import type {
   WorkspaceAction,
   WorkspaceResource,
