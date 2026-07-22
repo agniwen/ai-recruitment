@@ -69,6 +69,9 @@ describe("TanStack Start studio settings and detail route migration", () => {
       "components/features/studio/global-config/global-config-form.tsx",
     );
     const agentDebugRoute = readSource("routes/w.$slug.studio.agent-debug.tsx");
+    const agentDebugPage = readSource(
+      "components/features/studio/agent-debug/agent-debug-page.tsx",
+    );
 
     expect(sidebar).toContain('path: "/studio/agent-debug"');
     expect(sidebar).toContain('title: "Agent 调试"');
@@ -77,14 +80,15 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(globalConfigForm).not.toContain("简历解析测试");
     expect(agentDebugRoute).toContain("requireStudioAdminAccess");
     expect(agentDebugRoute).toContain('action: "agentDebug"');
-    expect(agentDebugRoute).toContain("JsonEditor");
-    expect(agentDebugRoute).toContain("/studio/agent-debug/resume-parser-test");
-    expect(agentDebugRoute).toContain('<section className="flex flex-col gap-4">');
+    expect(agentDebugRoute).toContain("<AgentDebugPage slug={slug} />");
     expect(agentDebugRoute).not.toContain("@/components/ui/card");
     expect(agentDebugRoute).not.toContain("<Card");
-    expect(agentDebugRoute).not.toContain("简历解析");
-    expect(agentDebugRoute).not.toContain("仅用于调试当前解析链路");
-    expect(agentDebugRoute).not.toContain("当前上传文件的解析结果");
+    expect(agentDebugPage).toContain("JsonEditor");
+    expect(agentDebugPage).toContain("/studio/agent-debug/resume-parser-test");
+    expect(agentDebugPage).toContain('<section className="flex flex-col gap-4">');
+    expect(agentDebugPage).toContain('<TabsTrigger value="resume-parser">简历解析</TabsTrigger>');
+    expect(agentDebugPage).not.toContain("仅用于调试当前解析链路");
+    expect(agentDebugPage).not.toContain("当前上传文件的解析结果");
   });
 
   it("keeps system settings as a bare form with the save action in the page header", () => {
