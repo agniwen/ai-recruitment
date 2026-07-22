@@ -38,7 +38,7 @@ describe("TanStack Start platform route migration", () => {
       readSource("components/features/platform/organizations/organizations-grid.tsx"),
       readSource("components/features/platform/queues/queues-grid.tsx"),
       readSource("components/features/platform/users/users-grid.tsx"),
-      readSource("components/layout/platform-sidebar/platform-logo.tsx"),
+      readSource("components/layout/platform-sidebar/platform-sidebar.tsx"),
     ];
 
     expect(sources.join("\n")).not.toMatch(

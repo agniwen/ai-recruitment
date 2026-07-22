@@ -182,14 +182,16 @@ describe("TanStack Start migration patterns", () => {
     expect(packageJson).not.toContain('"server-only"');
   });
 
-  it("clears stale Vite dependency optimization cache on dev server startup", () => {
+  it("keeps the normal dev cache and reserves cache clearing for dev:fresh", () => {
     const packageJson = JSON.parse(readSource("package.json")) as {
       scripts: Record<string, string>;
     };
 
-    expect(packageJson.scripts.predev).toContain("node_modules/.vite");
-    expect(packageJson.scripts.predev).toContain(".tanstack/tmp");
+    expect(packageJson.scripts.predev).toBeUndefined();
     expect(packageJson.scripts.dev).toBe("vite dev");
+    expect(packageJson.scripts["dev:fresh"]).toContain("node_modules/.vite");
+    expect(packageJson.scripts["dev:fresh"]).toContain(".tanstack/tmp");
+    expect(packageJson.scripts["dev:fresh"]).toContain("vite dev --force");
   });
 
   it("keeps server function runtime modules out of circular imports", () => {
