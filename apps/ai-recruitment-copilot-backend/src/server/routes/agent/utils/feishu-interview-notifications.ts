@@ -14,6 +14,8 @@ import {
   getResendClient,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resend";
 import { getRequiredEnv } from "@arc/ai-recruitment-copilot-backend/lib/server/env";
+import { createFeishuInterviewEvaluationDocx } from "@arc/ai-recruitment-copilot-backend/server/routes/feishu/utils/feishu-docx";
+import { buildInterviewEvaluationDocument } from "@arc/ai-recruitment-copilot-backend/server/routes/feishu/utils/interview-evaluation-doc";
 import {
   InterviewSummaryCard,
   resolveHeaderTemplate,
@@ -70,9 +72,50 @@ function buildStudioUrl(roundId: string, organizationSlug: string | null): strin
   return `${root}${prefix}/studio/interviews?roundId=${encodeURIComponent(roundId)}`;
 }
 
+function buildResumeUrl(roundId: string, organizationSlug: string | null): string {
+  const baseUrl = getRequiredEnv("BETTER_AUTH_URL");
+  const root = baseUrl.replace(/\/$/, "");
+  const prefix = organizationSlug ? `/w/${encodeURIComponent(organizationSlug)}` : "";
+  return `${root}/api${prefix}/studio/interviews/${encodeURIComponent(roundId)}/resume`;
+}
+
+function formatDateTime(value: Date | null): string {
+  if (!value) {
+    return "未知";
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+  }).format(value);
+}
+
+function formatDuration(startedAt: Date | null, endedAt: Date | null): string {
+  if (!startedAt || !endedAt) {
+    return "未知";
+  }
+  const durationMs = endedAt.getTime() - startedAt.getTime();
+  if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    return "未知";
+  }
+  const totalMinutes = Math.max(1, Math.round(durationMs / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) {
+    return minutes > 0 ? `${hours} 小时 ${minutes} 分钟` : `${hours} 小时`;
+  }
+  return `${minutes} 分钟`;
+}
+
 interface NotificationCardInput {
   candidateName: string;
+  duration: string;
   evaluation: Record<string, unknown>;
+  interviewStartedAt: string;
   organizationSlug: string | null;
   roundId: string;
   summary: string | null;
@@ -96,13 +139,13 @@ function buildSummaryPayload(input: NotificationCardInput) {
   return { assessment, overallScore, recommendation };
 }
 
-function buildNotificationCard(input: NotificationCardInput) {
+function buildNotificationCard(input: NotificationCardInput, detailUrl?: string) {
   const { assessment, overallScore, recommendation } = buildSummaryPayload(input);
 
   const card = InterviewSummaryCard({
     assessment,
     candidateName: input.candidateName,
-    detailUrl: buildStudioUrl(input.roundId, input.organizationSlug),
+    detailUrl: detailUrl ?? buildStudioUrl(input.roundId, input.organizationSlug),
     overallScore,
     recommendation,
     summary: input.summary,
@@ -117,10 +160,12 @@ async function loadNotificationContext(options: SummaryReadyNotificationOptions)
     .select({
       candidateName: studioInterview.candidateName,
       createdBy: studioInterview.createdBy,
+      endedAt: interviewConversation.endedAt,
       evaluationCriteriaResults: interviewConversation.evaluationCriteriaResults,
       organizationId: studioInterview.organizationId,
       organizationSlug: organization.slug,
       scheduleEntryId: interviewConversation.scheduleEntryId,
+      startedAt: interviewConversation.startedAt,
       summaryStatus: interviewConversation.summaryStatus,
       targetRole: studioInterview.targetRole,
       transcriptSummary: interviewConversation.transcriptSummary,
@@ -300,6 +345,55 @@ async function markNotificationFailed(notificationId: string, error: unknown) {
     .where(eq(interviewNotification.id, notificationId));
 }
 
+async function ensureInterviewEvaluationDocument({
+  input,
+  notificationId,
+  providerId,
+  recipientOpenId,
+}: {
+  input: NotificationCardInput;
+  notificationId: string;
+  providerId: FeishuProviderId;
+  recipientOpenId: string;
+}): Promise<string> {
+  const [existing] = await db
+    .select({
+      documentUrl: interviewNotification.feishuDocumentUrl,
+    })
+    .from(interviewNotification)
+    .where(eq(interviewNotification.id, notificationId))
+    .limit(1);
+  if (existing?.documentUrl) {
+    return existing.documentUrl;
+  }
+
+  const detailUrl = buildStudioUrl(input.roundId, input.organizationSlug);
+  const document = buildInterviewEvaluationDocument({
+    candidateName: input.candidateName,
+    detailUrl,
+    duration: input.duration,
+    evaluation: input.evaluation,
+    interviewStartedAt: input.interviewStartedAt,
+    resumeUrl: buildResumeUrl(input.roundId, input.organizationSlug),
+    summary: input.summary,
+    targetRole: input.targetRole,
+  });
+  const created = await createFeishuInterviewEvaluationDocx(providerId, {
+    blocks: document.blocks,
+    recipientOpenId,
+    title: document.title,
+  });
+
+  await db
+    .update(interviewNotification)
+    .set({
+      feishuDocumentId: created.documentId,
+      feishuDocumentUrl: created.documentUrl,
+    })
+    .where(eq(interviewNotification.id, notificationId));
+  return created.documentUrl;
+}
+
 async function sendGoogleSummaryEmail({
   conversationId,
   context,
@@ -447,14 +541,15 @@ export async function notifyInterviewSummaryReady(
 
   const notificationInput = {
     candidateName: context.candidateName,
+    duration: formatDuration(context.startedAt, context.endedAt),
     evaluation: context.evaluationCriteriaResults ?? {},
+    interviewStartedAt: formatDateTime(context.startedAt),
     organizationSlug: context.organizationSlug ?? null,
     roundId: context.scheduleEntryId,
     summary: context.transcriptSummary,
     targetRole: context.targetRole,
   };
   const detailUrl = buildStudioUrl(context.scheduleEntryId, context.organizationSlug ?? null);
-  const { card, headerTemplate } = buildNotificationCard(notificationInput);
 
   if (recipients.length > 0) {
     const { postFeishuDirectCard } =
@@ -472,6 +567,13 @@ export async function notifyInterviewSummaryReady(
       }
 
       try {
+        const documentUrl = await ensureInterviewEvaluationDocument({
+          input: notificationInput,
+          notificationId,
+          providerId: recipient.providerId,
+          recipientOpenId: recipient.accountId,
+        });
+        const { card, headerTemplate } = buildNotificationCard(notificationInput, documentUrl);
         const sent = await postFeishuDirectCard(recipient.providerId, recipient.accountId, card, {
           headerTemplate,
         });

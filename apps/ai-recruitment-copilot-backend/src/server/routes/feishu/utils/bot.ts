@@ -4,7 +4,7 @@ import type { CardToFeishuPayloadOptions } from "@arc/adapter-feishu";
 import { Chat } from "chat";
 import type { Adapter, AdapterPostableMessage, CardElement } from "chat";
 import type { FeishuProviderId } from "./provider";
-import { FEISHU_PROVIDER_IDS } from "./provider";
+import { FEISHU_PROVIDER_IDS, getFeishuAppCredentials } from "./provider";
 import { routeDM, routeGroupMention } from "./router";
 
 // FeishuAdapter implements Adapter<FeishuThreadId, unknown>. encodeThreadId is in a
@@ -18,21 +18,15 @@ const cached = new Map<FeishuProviderId, { adapter: FeishuAdapter; bot: FeishuBo
 const FEISHU_BOT_CONFIG: Record<
   FeishuProviderId,
   {
-    appIdEnv: string;
-    appSecretEnv: string;
     encryptKeyEnv?: string;
     verificationTokenEnv?: string;
   }
 > = {
   feishu: {
-    appIdEnv: "FEISHU_APP_ID",
-    appSecretEnv: "FEISHU_APP_SECRET",
     encryptKeyEnv: "FEISHU_ENCRYPT_KEY",
     verificationTokenEnv: "FEISHU_VERIFICATION_TOKEN",
   },
   "feishu-jiguang-hr": {
-    appIdEnv: "FEISHU_APP_ID2",
-    appSecretEnv: "FEISHU_APP_SECRET2",
     encryptKeyEnv: "FEISHU_ENCRYPT_KEY2",
     verificationTokenEnv: "FEISHU_VERIFICATION_TOKEN2",
   },
@@ -47,9 +41,8 @@ function getEnv(name: string): string | undefined {
  * Lazily construct the Feishu Chat instance. Uses a module-level cache
  * so a single instance is shared across requests in the same process.
  *
- * Throws (via createFeishuAdapter) if FEISHU_APP_ID / FEISHU_APP_SECRET
- * are missing, so callers should only invoke this from request paths
- * (not at import time).
+ * Throws if the selected provider's app credentials are missing, so callers
+ * should only invoke this from request paths (not at import time).
  */
 export function getFeishuBot(providerId: FeishuProviderId = "feishu"): FeishuBot {
   const existing = cached.get(providerId);
@@ -63,11 +56,7 @@ export function getFeishuBot(providerId: FeishuProviderId = "feishu"): FeishuBot
   }
 
   const config = FEISHU_BOT_CONFIG[providerId];
-  const appId = getEnv(config.appIdEnv);
-  const appSecret = getEnv(config.appSecretEnv);
-  if (!appId || !appSecret) {
-    throw new Error(`${config.appIdEnv} and ${config.appSecretEnv} are required`);
-  }
+  const { appId, appSecret } = getFeishuAppCredentials(providerId);
 
   const adapter = createFeishuAdapter({
     appId,

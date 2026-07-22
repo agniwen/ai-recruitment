@@ -48,7 +48,7 @@ export function InterviewSummaryCard({
       ) : null}
       <Divider />
       <Section>
-        <CardText>{`🔗 [查看完整报告](${detailUrl})`}</CardText>
+        <CardText>{`🔗 [查看飞书评价表](${detailUrl})`}</CardText>
       </Section>
     </Card>
   );
