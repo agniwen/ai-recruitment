@@ -246,7 +246,7 @@ export interface JobDescriptionRecommendation {
 }
 
 export interface JobDescriptionRecommendationResult {
-  diagnostics: { eligibleCount: number; vectorHitCount: number };
+  diagnostics: { aboveThresholdCount: number; eligibleCount: number; vectorHitCount: number };
   recommendations: JobDescriptionRecommendation[];
   resume: { id: string };
   status: "disabled" | "ready" | "already_matched" | "indexing";

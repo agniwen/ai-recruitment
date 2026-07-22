@@ -35,6 +35,7 @@ const depsWith = (opts: {
   indexedJdCount?: number;
   jdRecovery?: "empty" | "failed" | "queued";
   reindexQueued?: boolean;
+  existingIds?: string[];
 }) => ({
   countIndexedJdVectors: vi.fn(() => Promise.resolve(opts.indexedJdCount ?? 1)),
   embed:
@@ -47,6 +48,9 @@ const depsWith = (opts: {
   enabled: opts.enabled ?? true,
   enqueueJobDescriptionsReindex: vi.fn(() => Promise.resolve(opts.jdRecovery ?? "queued")),
   enqueueResumeReindex: vi.fn(() => Promise.resolve(opts.reindexQueued ?? true)),
+  loadExistingJobDescriptionIds: vi.fn((_org: string, ids: string[]) =>
+    Promise.resolve(new Set(ids.filter((id) => (opts.existingIds ?? ids).includes(id)))),
+  ),
   loadJobDescriptionsForDisplay: vi.fn((_org: string, ids: string[]) =>
     Promise.resolve(ids.filter((id) => (opts.displayIds ?? ids).includes(id)).map(jdRow)),
   ),
@@ -128,10 +132,18 @@ describe("recommendJobDescriptionsForResume", () => {
   });
 
   it("删除兜底：向量命中 jd-1/jd-gone，但展示 join 只返回 jd-1 → jd-gone 掉出", async () => {
-    const res = await call(depsWith({ displayIds: ["jd-1"], hitIds: ["jd-1", "jd-gone"] }));
+    const res = await call(
+      depsWith({
+        displayIds: ["jd-1"],
+        existingIds: ["jd-1"],
+        hitIds: ["jd-1", "jd-gone"],
+      }),
+    );
     expect(res.status).toBe("ready");
     expect(res.recommendations.map((r) => r.id)).toEqual(["jd-1"]);
-    expect(res.diagnostics.vectorHitCount).toBe(1);
+    expect(res.diagnostics.aboveThresholdCount).toBe(2);
+    expect(res.diagnostics.eligibleCount).toBe(1);
+    expect(res.diagnostics.vectorHitCount).toBe(2);
   });
 
   it("已绑定 → already_matched，不检索", async () => {
@@ -203,12 +215,16 @@ describe("recommendJobDescriptionsForResume", () => {
   });
 
   it("原始命中均被招聘组范围过滤 + 可见 JD 回填已入队 → indexing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const deps = depsWith({ displayIds: [], hitIds: ["jd-out-of-scope"], indexedJdCount: 0 });
     const res = await call(deps);
 
     expect(deps.enqueueJobDescriptionsReindex).toHaveBeenCalled();
     expect(res.status).toBe("indexing");
+    expect(res.diagnostics.aboveThresholdCount).toBe(0);
     expect(res.diagnostics.vectorHitCount).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("0 命中 + JD 回填入队失败 → disabled", async () => {
@@ -239,5 +255,18 @@ describe("recommendJobDescriptionsForResume", () => {
     const res = await call(deps);
     expect(res.status).toBe("disabled");
     expect(res.recommendations).toEqual([]);
+  });
+
+  it("命中岗位已被删除 → ready 空 + aboveThresholdCount>0，且打 GC 日志（存在性掉出）", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const res = await call(
+      depsWith({ displayIds: [], existingIds: [], hitIds: ["jd-1"], indexedJdCount: 1 }),
+    );
+    expect(res.status).toBe("ready");
+    expect(res.recommendations).toEqual([]);
+    expect(res.diagnostics.aboveThresholdCount).toBe(1);
+    expect(res.diagnostics.eligibleCount).toBe(0);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("存在性 join"), expect.anything());
+    warn.mockRestore();
   });
 });

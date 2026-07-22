@@ -87,6 +87,7 @@ export interface JdRecommendationDeps {
     organizationId: string;
   }) => Promise<"empty" | "failed" | "queued">;
   enqueueResumeReindex: (input: { organizationId: string; sourceId: string }) => Promise<boolean>;
+  loadExistingJobDescriptionIds: (organizationId: string, ids: string[]) => Promise<Set<string>>;
   loadJobDescriptionsForDisplay: (
     organizationId: string,
     ids: string[],
@@ -160,7 +161,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 function indexingResult(resumeId: string): JobDescriptionRecommendationResult {
   return {
-    diagnostics: { eligibleCount: 0, vectorHitCount: 0 },
+    diagnostics: { aboveThresholdCount: 0, eligibleCount: 0, vectorHitCount: 0 },
     recommendations: [],
     resume: { id: resumeId },
     status: "indexing",
@@ -169,7 +170,7 @@ function indexingResult(resumeId: string): JobDescriptionRecommendationResult {
 
 function disabledResult(resumeId: string): JobDescriptionRecommendationResult {
   return {
-    diagnostics: { eligibleCount: 0, vectorHitCount: 0 },
+    diagnostics: { aboveThresholdCount: 0, eligibleCount: 0, vectorHitCount: 0 },
     recommendations: [],
     resume: { id: resumeId },
     status: "disabled",
@@ -197,7 +198,13 @@ export async function scoreJobDescriptionsForResume(
   input: ScoreJdCoreInput,
   // oxlint-disable-next-line no-use-before-define -- default dependency factory stays below the public function.
   deps: JdRecommendationDeps = createDefaultJdRecommendationDeps(),
-): Promise<{ loadedIds: Set<string>; ranked: JdRankedEntry[]; retrievedIds: Set<string> }> {
+): Promise<{
+  aboveThresholdCount: number;
+  loadedIds: Set<string>;
+  ranked: JdRankedEntry[];
+  retrievedIds: Set<string>;
+  vectorHitCount: number;
+}> {
   const resultGroups = await Promise.all(
     input.chunkEmbeddings.map((chunk) =>
       deps.vectorStore.searchSimilarResumes({
@@ -216,11 +223,10 @@ export async function scoreJobDescriptionsForResume(
     .filter((entry) => entry.score >= SCORE_THRESHOLD)
     .toSorted((a, b) => b.score - a.score || a.jdId.localeCompare(b.jdId));
 
-  const rows = await deps.loadJobDescriptionsForDisplay(
-    input.organizationId,
-    [...retrievedIds],
-    input.actorUserId,
-  );
+  const [existingIds, rows] = await Promise.all([
+    deps.loadExistingJobDescriptionIds(input.organizationId, [...retrievedIds]),
+    deps.loadJobDescriptionsForDisplay(input.organizationId, [...retrievedIds], input.actorUserId),
+  ]);
   const rowById = new Map(rows.map((row) => [row.id, row]));
   const loadedIds = new Set(rows.map((row) => row.id));
 
@@ -229,7 +235,20 @@ export async function scoreJobDescriptionsForResume(
     return row ? [{ jdId: entry.jdId, row, score: entry.score, similarity: entry.similarity }] : [];
   });
 
-  return { loadedIds, ranked, retrievedIds };
+  const missingIds = new Set(
+    [...retrievedIds].filter((id) => !existingIds.has(id) && !loadedIds.has(id)),
+  );
+  const missingAboveThresholdCount = aboveThreshold.filter((entry) =>
+    missingIds.has(entry.jdId),
+  ).length;
+
+  return {
+    aboveThresholdCount: ranked.length + missingAboveThresholdCount,
+    loadedIds,
+    ranked,
+    retrievedIds,
+    vectorHitCount: loadedIds.size + missingIds.size,
+  };
 }
 
 export async function recommendJobDescriptionsForResume(
@@ -242,7 +261,7 @@ export async function recommendJobDescriptionsForResume(
   }
   if (input.resume.jobDescriptionId) {
     return {
-      diagnostics: { eligibleCount: 0, vectorHitCount: 0 },
+      diagnostics: { aboveThresholdCount: 0, eligibleCount: 0, vectorHitCount: 0 },
       recommendations: [],
       resume: { id: input.resume.id },
       status: "already_matched",
@@ -296,6 +315,15 @@ export async function recommendJobDescriptionsForResume(
     deps,
   );
 
+  const existenceDropped = core.aboveThresholdCount - core.ranked.length;
+  if (existenceDropped > 0) {
+    console.warn("[jd-recommendations] 命中岗位已被删除（存在性 join 掉出），疑似孤儿向量未清理", {
+      existenceDropped,
+      organizationId: input.organizationId,
+      resumeId: input.resume.id,
+    });
+  }
+
   if (core.loadedIds.size === 0) {
     const indexedJdCount = await deps.countIndexedJdVectors(
       input.organizationId,
@@ -308,7 +336,7 @@ export async function recommendJobDescriptionsForResume(
       });
       if (recoveryStatus === "empty") {
         return {
-          diagnostics: { eligibleCount: 0, vectorHitCount: 0 },
+          diagnostics: { aboveThresholdCount: 0, eligibleCount: 0, vectorHitCount: 0 },
           recommendations: [],
           resume: { id: input.resume.id },
           status: "ready",
@@ -317,7 +345,11 @@ export async function recommendJobDescriptionsForResume(
       return pendingResult(input.resume.id, "jd_vectors_absent", recoveryStatus === "queued");
     }
     return {
-      diagnostics: { eligibleCount: 0, vectorHitCount: 0 },
+      diagnostics: {
+        aboveThresholdCount: core.aboveThresholdCount,
+        eligibleCount: 0,
+        vectorHitCount: core.vectorHitCount,
+      },
       recommendations: [],
       resume: { id: input.resume.id },
       status: "ready",
@@ -328,8 +360,9 @@ export async function recommendJobDescriptionsForResume(
 
   return {
     diagnostics: {
+      aboveThresholdCount: core.aboveThresholdCount,
       eligibleCount: core.ranked.length,
-      vectorHitCount: core.loadedIds.size,
+      vectorHitCount: core.vectorHitCount,
     },
     recommendations,
     resume: { id: input.resume.id },
@@ -362,6 +395,20 @@ async function countIndexedJdVectors(organizationId: string, actorUserId: string
       ),
     );
   return row?.total ?? 0;
+}
+
+async function loadExistingJobDescriptionIds(
+  organizationId: string,
+  ids: string[],
+): Promise<Set<string>> {
+  if (ids.length === 0) {
+    return new Set();
+  }
+  const rows = await db
+    .select({ id: jobDescription.id })
+    .from(jobDescription)
+    .where(and(eq(jobDescription.organizationId, organizationId), inArray(jobDescription.id, ids)));
+  return new Set(rows.map((row) => row.id));
 }
 
 async function loadJobDescriptionsForDisplay(
@@ -444,6 +491,7 @@ export function createDefaultJdRecommendationDeps(): JdRecommendationDeps {
         sourceId: input.sourceId,
         sourceType: "resume_pool_item",
       }),
+    loadExistingJobDescriptionIds,
     loadJobDescriptionsForDisplay,
     loadResumeChunks: (loadInput) => vectorStore.loadResumeEmbeddings(loadInput),
     vectorStore,
