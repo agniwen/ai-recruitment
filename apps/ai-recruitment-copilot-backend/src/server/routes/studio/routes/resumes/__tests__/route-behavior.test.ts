@@ -421,6 +421,43 @@ describe("resumeLibraryRouter behavior", () => {
     });
   });
 
+  it("updates overview identity fields without overwriting fork-only resume fields", async () => {
+    mocks.loadResumeDetail
+      .mockResolvedValueOnce(EXISTING_RECORD)
+      .mockResolvedValueOnce({ ...EXISTING_RECORD, candidateName: "新候选人" });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: 31,
+        candidateEmail: "new@example.com",
+        candidateName: "新候选人",
+        candidatePhone: "13900000000",
+        gender: "女",
+        jobDescriptionId: "jd-old",
+        resumeEvaluationStatus: "pass",
+        targetRole: "后端工程师",
+        workYears: 8.5,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        candidateEmail: "new@example.com",
+        candidateName: "新候选人",
+        candidatePhone: "13900000000",
+        jobDescriptionId: "jd-old",
+        targetRole: "后端工程师",
+      }),
+    );
+    const [updatePatch] = mocks.updatePatches;
+    expect(updatePatch).not.toHaveProperty("hiringUnitId");
+    expect(updatePatch).not.toHaveProperty("hrResumeAssessment");
+    expect(updatePatch).not.toHaveProperty("recommendationText");
+  });
+
   it("cleans semantic and duplicate state after deleting a resume", async () => {
     mocks.loadResumeDetail.mockResolvedValue(EXISTING_RECORD);
     mocks.deleteReturning.mockResolvedValue([{ id: RECORD_ID }]);

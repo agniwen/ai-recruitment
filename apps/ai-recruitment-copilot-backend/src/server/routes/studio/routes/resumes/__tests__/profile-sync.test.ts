@@ -20,34 +20,47 @@ const baseProfile: ResumeProfile = {
 describe("syncResumeProfileIdentity", () => {
   it("syncs edited identity fields into resumeProfile", () => {
     const synced = syncResumeProfileIdentity(baseProfile, {
+      age: 31,
       candidateEmail: " new@example.com ",
       candidateName: " 新姓名 ",
       candidatePhone: " 13900000000 ",
+      gender: " 女 ",
       targetRole: " 后端工程师 ",
+      workYears: 8.5,
     });
 
     expect(synced).toMatchObject({
+      age: 31,
       email: "new@example.com",
+      gender: "女",
       name: "新姓名",
       phone: "13900000000",
       targetRoles: ["后端工程师"],
+      workYears: 8.5,
     });
     expect(synced?.skills).toEqual(["React"]);
   });
 
   it("preserves required profile fields when editable values are blank", () => {
-    const synced = syncResumeProfileIdentity(baseProfile, {
-      candidateEmail: "",
-      candidateName: "",
-      candidatePhone: "",
-      targetRole: "",
-    });
+    const synced = syncResumeProfileIdentity(
+      { ...baseProfile, gender: "男" },
+      {
+        candidateEmail: "",
+        candidateName: "",
+        candidatePhone: "",
+        gender: "",
+        targetRole: "",
+      },
+    );
 
     expect(synced).toMatchObject({
+      age: null,
       email: null,
+      gender: "男",
       name: "旧姓名",
       phone: null,
       targetRoles: [],
+      workYears: null,
     });
   });
 

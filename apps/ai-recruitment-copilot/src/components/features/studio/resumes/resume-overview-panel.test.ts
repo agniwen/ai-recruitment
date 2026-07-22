@@ -19,13 +19,14 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(source).toContain("detail.hiringUnitName");
   });
 
-  it("shows resume evaluation as a read-only summary field", () => {
-    const overviewBody = source.slice(source.indexOf("export function ResumeOverviewPanel"));
-
-    expect(overviewBody).toContain("describeResumeEvaluationStatus");
-    expect(overviewBody).toContain('<DataField label="简历评估"');
-    expect(overviewBody).not.toContain("<Select");
-    expect(overviewBody).not.toContain("onValueChange");
+  it("adds permission-gated identity editing without dropping fork-only summary fields", () => {
+    expect(source).toContain("canEditResumeRecord(detail.resumeParseStatus)");
+    expect(source).toContain("updateStudioResumeIdentity");
+    expect(source).toContain('aria-label="编辑候选人信息"');
+    expect(source).toContain('<SelectItem value="unreviewed">未评估</SelectItem>');
+    expect(source.match(/label="目标岗位"/g)).toHaveLength(2);
+    expect(source.match(/label="用人组织"/g)).toHaveLength(2);
+    expect(source).toContain("detail.recommendationText");
   });
 
   it("keeps AI parsed review out of the overview summary area", () => {
