@@ -35,6 +35,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/mail-ingest/validation";
 import { listResumeParseQueueJobsWithDetailFilters } from "./queue-details";
 import type { PlatformQueueJobsResult } from "./queue-details";
+import { platformMastraRouter } from "./routes/mastra/route";
 
 // --- Organizations list ---
 const orgQuerySchema = z.object({
@@ -574,6 +575,7 @@ const platformQueues = factory
 export const platformRouter = factory
   .createApp()
   .use(adminMiddleware)
+  .route("/mastra", platformMastraRouter)
   .route("/", platformQueues)
   .route("/", platformMailIngestAccounts)
   .route("/", platformOrganizations)

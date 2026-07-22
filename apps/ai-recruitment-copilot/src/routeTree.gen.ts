@@ -25,6 +25,7 @@ import { Route as RRoundIdRouteImport } from './routes/r.$roundId'
 import { Route as PlatformUsersRouteImport } from './routes/platform.users'
 import { Route as PlatformQueuesRouteImport } from './routes/platform.queues'
 import { Route as PlatformOrganizationsRouteImport } from './routes/platform.organizations'
+import { Route as PlatformMastraStudioRouteImport } from './routes/platform.mastra-studio'
 import { Route as PlatformMailIngestAccountsRouteImport } from './routes/platform.mail-ingest-accounts'
 import { Route as JoinCodeRouteImport } from './routes/join.$code'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
@@ -139,6 +140,11 @@ const PlatformQueuesRoute = PlatformQueuesRouteImport.update({
 const PlatformOrganizationsRoute = PlatformOrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
+  getParentRoute: () => PlatformRoute,
+} as any)
+const PlatformMastraStudioRoute = PlatformMastraStudioRouteImport.update({
+  id: '/mastra-studio',
+  path: '/mastra-studio',
   getParentRoute: () => PlatformRoute,
 } as any)
 const PlatformMailIngestAccountsRoute =
@@ -342,6 +348,7 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
+  '/platform/mastra-studio': typeof PlatformMastraStudioRoute
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -395,6 +402,7 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
+  '/platform/mastra-studio': typeof PlatformMastraStudioRoute
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -447,6 +455,7 @@ export interface FileRoutesById {
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
+  '/platform/mastra-studio': typeof PlatformMastraStudioRoute
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -502,6 +511,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/join/$code'
     | '/platform/mail-ingest-accounts'
+    | '/platform/mastra-studio'
     | '/platform/organizations'
     | '/platform/queues'
     | '/platform/users'
@@ -555,6 +565,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/join/$code'
     | '/platform/mail-ingest-accounts'
+    | '/platform/mastra-studio'
     | '/platform/organizations'
     | '/platform/queues'
     | '/platform/users'
@@ -606,6 +617,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/join/$code'
     | '/platform/mail-ingest-accounts'
+    | '/platform/mastra-studio'
     | '/platform/organizations'
     | '/platform/queues'
     | '/platform/users'
@@ -779,6 +791,13 @@ declare module '@tanstack/react-router' {
       path: '/organizations'
       fullPath: '/platform/organizations'
       preLoaderRoute: typeof PlatformOrganizationsRouteImport
+      parentRoute: typeof PlatformRoute
+    }
+    '/platform/mastra-studio': {
+      id: '/platform/mastra-studio'
+      path: '/mastra-studio'
+      fullPath: '/platform/mastra-studio'
+      preLoaderRoute: typeof PlatformMastraStudioRouteImport
       parentRoute: typeof PlatformRoute
     }
     '/platform/mail-ingest-accounts': {
@@ -1055,6 +1074,7 @@ const InterviewRouteWithChildren = InterviewRoute._addFileChildren(
 
 interface PlatformRouteChildren {
   PlatformMailIngestAccountsRoute: typeof PlatformMailIngestAccountsRoute
+  PlatformMastraStudioRoute: typeof PlatformMastraStudioRoute
   PlatformOrganizationsRoute: typeof PlatformOrganizationsRoute
   PlatformQueuesRoute: typeof PlatformQueuesRoute
   PlatformUsersRoute: typeof PlatformUsersRoute
@@ -1062,6 +1082,7 @@ interface PlatformRouteChildren {
 
 const PlatformRouteChildren: PlatformRouteChildren = {
   PlatformMailIngestAccountsRoute: PlatformMailIngestAccountsRoute,
+  PlatformMastraStudioRoute: PlatformMastraStudioRoute,
   PlatformOrganizationsRoute: PlatformOrganizationsRoute,
   PlatformQueuesRoute: PlatformQueuesRoute,
   PlatformUsersRoute: PlatformUsersRoute,

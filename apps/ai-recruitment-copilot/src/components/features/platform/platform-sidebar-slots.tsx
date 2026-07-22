@@ -4,6 +4,7 @@ import {
   IconBuilding as Building2Icon,
   IconInbox as InboxIcon,
   IconListCheck as ListChecksIcon,
+  IconRobot as RobotIcon,
   IconUsers as UsersIcon,
 } from "@tabler/icons-react";
 import { Link, useRouterState } from "@tanstack/react-router";
@@ -48,6 +49,11 @@ const navItems: NavItem[] = [
     icon: ListChecksIcon,
     path: "/platform/queues",
     title: "队列任务",
+  },
+  {
+    icon: RobotIcon,
+    path: "/platform/mastra-studio",
+    title: "Mastra Studio",
   },
 ];
 

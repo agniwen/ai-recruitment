@@ -19,6 +19,7 @@ const ROUTE_META: { prefix: string; meta: RouteMeta }[] = [
   { meta: { title: "所有用户" }, prefix: "/platform/users" },
   { meta: { title: "邮箱监听" }, prefix: "/platform/mail-ingest-accounts" },
   { meta: { title: "队列任务" }, prefix: "/platform/queues" },
+  { meta: { title: "Mastra Studio" }, prefix: "/platform/mastra-studio" },
 ];
 
 const DEFAULT_META: RouteMeta = { title: "平台管理" };
