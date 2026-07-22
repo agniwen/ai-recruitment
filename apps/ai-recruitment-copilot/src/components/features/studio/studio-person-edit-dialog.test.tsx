@@ -5,9 +5,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
-import type { ResumeReview } from "@arc/shared/resume-review";
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
-import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { WorkspaceSlugProvider } from "@/lib/client/workspace-context";
 import { StudioPersonEditDialog } from "./studio-person-edit-dialog";
 
@@ -22,17 +20,6 @@ const apiMocks = vi.hoisted(() => ({
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
-}));
-
-const reviewRegenerationMocks = vi.hoisted(() => ({
-  cancel: vi.fn(),
-  hookValue: {
-    isGenerating: false,
-    progressStatus: "",
-    progressTools: [] as { done: boolean; name: string }[],
-    regenerate: vi.fn(),
-    scoringPreview: null as unknown,
-  },
 }));
 
 vi.mock("@/lib/client/api", () => ({
@@ -113,57 +100,6 @@ vi.mock("@/components/features/markdown-editor", () => ({
     />
   ),
 }));
-
-vi.mock("./use-resume-review-regeneration", () => ({
-  useResumeReviewRegeneration: () => ({
-    cancel: reviewRegenerationMocks.cancel,
-    ...reviewRegenerationMocks.hookValue,
-  }),
-}));
-
-const STRUCTURED_REVIEW: ResumeReview = {
-  biasScan: { items: [] },
-  dimensions: {
-    educationBackground: { rationale: "学历背景符合预期", score: 75 },
-    experienceRelevance: { rationale: "岗位相关", score: 78 },
-    potential: { rationale: "潜力良好", score: 80 },
-    projectMatch: { rationale: "项目匹配", score: 80 },
-    skillMatch: { rationale: "技能匹配", score: 80 },
-    stability: { rationale: "稳定性可接受", score: 75 },
-  },
-  levelRecommendation: { level: "中级", rationale: "经验匹配" },
-  nextStep: {
-    action: "interview",
-    disclaimer: "以上为初步结论",
-    interviewFocus: ["项目贡献"],
-    rationale: "建议面试核实",
-  },
-  overall: {
-    baseScore: 79,
-    conclusion: "候选人匹配度较高。",
-    scoreRationale: "基于六维度按 35/25/15/10/8/7 加权得出基础分 79（不含历史面试加权）",
-  },
-  schemaVersion: 4,
-  strengths: [{ evidence: "简历证据", impact: "匹配岗位", point: "经验匹配" }],
-  teamPositioning: { rationale: "经历集中", suggestion: "业务团队" },
-  weaknesses: [{ evidence: null, impact: "需面试确认", point: "细节不足" }],
-};
-
-const STRUCTURED_PROFILE: ResumeProfile = {
-  age: null,
-  educationExperiences: [],
-  email: "candidate@example.com",
-  gender: null,
-  name: "邓超",
-  personalStrengths: [],
-  phone: null,
-  projectExperiences: [],
-  schools: [],
-  skills: ["React"],
-  targetRoles: ["前端工程师"],
-  workExperiences: [],
-  workYears: 5,
-};
 
 function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibraryDetail {
   return {
@@ -346,13 +282,6 @@ function renderInterviewDialog({
 afterEach(() => {
   document.body.innerHTML = "";
   vi.clearAllMocks();
-  reviewRegenerationMocks.hookValue = {
-    isGenerating: false,
-    progressStatus: "",
-    progressTools: [],
-    regenerate: vi.fn(),
-    scoringPreview: null,
-  };
 });
 
 describe("StudioPersonEditDialog", () => {
@@ -407,22 +336,6 @@ describe("StudioPersonEditDialog", () => {
     queryClient.clear();
   });
 
-  it("prefills resume review notes in resume edit mode", async () => {
-    apiMocks.fetchStudioResume.mockResolvedValue(makeDetail());
-    const { queryClient, root } = renderDialog();
-
-    await vi.waitFor(() => {
-      expect(document.body.textContent).toContain("已有简历评价");
-    });
-
-    expect(apiMocks.fetchStudioResume).toHaveBeenCalledWith("new", "resume-1");
-
-    act(() => {
-      root.unmount();
-    });
-    queryClient.clear();
-  });
-
   it("prefills editable resume fields in resume edit mode", async () => {
     apiMocks.fetchStudioResume.mockResolvedValue({
       ...makeDetail(),
@@ -440,6 +353,10 @@ describe("StudioPersonEditDialog", () => {
     );
     expect(document.querySelector<HTMLInputElement>("#candidatePhone")?.value).toBe("13800138000");
     expect(document.querySelector<HTMLInputElement>("#targetRole")?.value).toBe("前端工程师");
+    expect(document.querySelector("#notes")).toBeNull();
+    expect(document.querySelector('[data-testid="file-upload"]')).toBeNull();
+    expect(document.querySelector("#hrResumeAssessment")).not.toBeNull();
+    expect(document.querySelector("#recommendationText")).not.toBeNull();
 
     act(() => {
       root.unmount();
@@ -501,55 +418,14 @@ describe("StudioPersonEditDialog", () => {
     queryClient.clear();
   });
 
-  it("preserves structured resume review when notes are manually changed", async () => {
-    apiMocks.fetchStudioResume.mockResolvedValue(makeDetail({ resumeReview: STRUCTURED_REVIEW }));
-    apiMocks.apiFetch.mockResolvedValue(makeDetail());
-    const { queryClient, root } = renderDialog();
-
-    await vi.waitFor(() => {
-      expect(document.querySelector<HTMLTextAreaElement>("#notes")?.value).toBe("已有简历评价");
-    });
-
-    const notes = document.querySelector<HTMLTextAreaElement>("#notes");
-    expect(notes).not.toBeNull();
-
-    act(() => {
-      if (!notes) {
-        return;
-      }
-      const valueSetter = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value",
-      )?.set;
-      valueSetter?.call(notes, "用户改过的简历评价");
-      notes.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-
-    const form = document.querySelector<HTMLFormElement>("#resume-edit-form");
-    expect(form).not.toBeNull();
-
-    act(() => {
-      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-
-    await vi.waitFor(() => {
-      expect(apiMocks.apiFetch).toHaveBeenCalled();
-    });
-
-    const [, init] = apiMocks.apiFetch.mock.calls[0] as [
-      string,
-      { body: FormData; method: string },
-    ];
-    expect(init.body.has("resumeReview")).toBe(false);
-
-    act(() => {
-      root.unmount();
-    });
-    queryClient.clear();
-  });
-
-  it("submits the selected resume evaluation status from resume edit mode", async () => {
-    apiMocks.fetchStudioResume.mockResolvedValue(makeDetail({ resumeEvaluationStatus: "pass" }));
+  it("submits editable fork fields without resume file or resume review", async () => {
+    apiMocks.fetchStudioResume.mockResolvedValue(
+      makeDetail({
+        hrResumeAssessment: "建议进入下一轮",
+        recommendationText: "推荐给业务负责人",
+        resumeEvaluationStatus: "pass",
+      }),
+    );
     apiMocks.apiFetch.mockResolvedValue(makeDetail({ resumeEvaluationStatus: "fail" }));
     const { queryClient, root } = renderDialog();
 
@@ -573,41 +449,12 @@ describe("StudioPersonEditDialog", () => {
       { body: FormData; method: string },
     ];
     expect(init.body.get("resumeEvaluationStatus")).toBe("pass");
-
-    act(() => {
-      root.unmount();
-    });
-    queryClient.clear();
-  });
-
-  it("shows resume review regeneration progress in resume edit mode", async () => {
-    reviewRegenerationMocks.hookValue = {
-      isGenerating: true,
-      progressStatus: "正在生成维度评分",
-      progressTools: [
-        { done: true, name: "检查硬性门槛" },
-        { done: false, name: "生成维度评分" },
-      ],
-      regenerate: vi.fn(),
-      scoringPreview: { baseScore: 82 },
-    };
-    apiMocks.fetchStudioResume.mockResolvedValue(makeDetail({ resumeProfile: STRUCTURED_PROFILE }));
-    const { queryClient, root } = renderDialog();
-
-    await vi.waitFor(() => {
-      expect(document.body.textContent).toContain("正在生成维度评分");
-    });
-
-    expect(document.body.textContent).toContain("检查硬性门槛");
-    expect(document.body.textContent).toContain("生成维度评分");
-    expect(document.body.textContent).toContain("评分预览：82");
-    const progressCard = document.querySelector(
-      '[data-testid="resume-review-generation-progress"]',
-    );
-    const notesEditor = document.querySelector("#notes");
-    expect(progressCard?.compareDocumentPosition(notesEditor as Node)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(init.body.get("hiringUnitId")).toBe("hu-1");
+    expect(init.body.get("hrResumeAssessment")).toBe("建议进入下一轮");
+    expect(init.body.get("recommendationText")).toBe("推荐给业务负责人");
+    expect(init.body.has("notes")).toBe(false);
+    expect(init.body.has("resume")).toBe(false);
+    expect(init.body.has("resumeReview")).toBe(false);
 
     act(() => {
       root.unmount();

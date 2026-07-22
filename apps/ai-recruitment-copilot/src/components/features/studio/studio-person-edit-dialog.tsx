@@ -1,9 +1,7 @@
 "use client";
 
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
-import type { ResumeReview } from "@arc/shared/resume-review";
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
-import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { useStore, useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -55,7 +53,6 @@ import {
   getScheduleEntryDateValue,
   scheduleEntryStatusMeta,
 } from "@arc/db-schema/studio-interviews";
-import { useResumeReviewRegeneration } from "./use-resume-review-regeneration";
 
 // 统一编辑对话框 props，通过 mode 分发到简历或面试模式。
 // Unified edit dialog props; dispatches to resume or interview body via mode.
@@ -130,7 +127,6 @@ function getFirstResumeEditErrorMessage(meta: Record<string, { errors?: unknown[
     "resumeEvaluationStatus",
     "recommendationText",
     "hrResumeAssessment",
-    "notes",
   ];
   for (const field of fieldOrder) {
     const message = getFormErrorMessage(meta[field]?.errors?.[0]);
@@ -139,78 +135,6 @@ function getFirstResumeEditErrorMessage(meta: Record<string, { errors?: unknown[
     }
   }
   return "请检查简历信息后再保存";
-}
-
-function getScoringPreviewScore(value: unknown): number | null {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-  const score = (value as { baseScore?: unknown }).baseScore;
-  return typeof score === "number" && Number.isFinite(score) ? score : null;
-}
-
-function ResumeReviewGenerationProgress({
-  progressStatus,
-  progressTools,
-  scoringPreview,
-}: {
-  progressStatus: string;
-  progressTools: { done: boolean; name: string }[];
-  scoringPreview: unknown;
-}) {
-  if (!(progressStatus || progressTools.length > 0 || scoringPreview)) {
-    return null;
-  }
-
-  const score = getScoringPreviewScore(scoringPreview);
-  return (
-    <Card className="gap-0 rounded-md py-0" data-testid="resume-review-generation-progress">
-      <CardContent className="space-y-2 bg-muted/30 px-3 py-2 text-sm">
-        {progressStatus ? <p className="font-medium text-foreground">{progressStatus}</p> : null}
-        {progressTools.length > 0 ? (
-          <div className="flex flex-wrap gap-2 text-xs">
-            {progressTools.map((tool) => (
-              <span
-                className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1"
-                key={tool.name}
-              >
-                {tool.done ? null : <LoaderCircleIcon className="size-3 animate-spin" />}
-                <span className={tool.done ? "text-muted-foreground" : "text-foreground"}>
-                  {tool.name}
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {score === null ? null : <p className="text-muted-foreground text-xs">评分预览：{score}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-function mergeTargetRole(targetRoles: string[], targetRole: string) {
-  const trimmed = targetRole.trim();
-  if (!trimmed) {
-    return targetRoles;
-  }
-  return [trimmed, ...targetRoles.filter((role) => role !== trimmed)];
-}
-
-function buildResumeProfileForReview(
-  profile: ResumeProfile,
-  values: ReturnType<typeof createResumeLibraryFormValues>,
-): ResumeProfile {
-  const candidateName = values.candidateName.trim();
-  const candidateEmail = values.candidateEmail.trim();
-  const candidatePhone = values.candidatePhone.trim();
-
-  return {
-    ...profile,
-    email: candidateEmail || profile.email,
-    name: candidateName || profile.name,
-    phone: candidatePhone || profile.phone,
-    targetRoles: mergeTargetRole(profile.targetRoles, values.targetRole),
-  };
 }
 
 function createResumeEditFormValues(
@@ -270,7 +194,7 @@ function InterviewEditSkeleton() {
 // 简历编辑体 — 与原 EditResumeDialog 逻辑完全一致。
 // ---------------------------------------------------------------------------
 
-// oxlint-disable-next-line eslint/complexity -- resume edit dialog orchestrates fetch + form + upload + review regeneration.
+// oxlint-disable-next-line eslint/complexity -- resume edit dialog coordinates fetching, fork-only hiring-unit selection, and validated updates.
 function ResumeEditBody({
   open,
   onOpenChange,
@@ -278,8 +202,6 @@ function ResumeEditBody({
   onUpdated,
 }: Omit<StudioPersonEditDialogProps, "mode">) {
   const slug = useWorkspaceSlug();
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [resumeReviewOverride, setResumeReviewOverride] = useState<ResumeReview | null>(null);
   const [hydratedFormKey, setHydratedFormKey] = useState<string | null>(null);
 
   // 拉取当前记录详情，open + recordId 同时为真才触发。
@@ -314,6 +236,8 @@ function ResumeEditBody({
         );
         return;
       }
+      // 编辑弹窗不再提交简历文件 / 简历评价（notes / resumeReview），服务端也会忽略这些字段。
+      // Edit no longer submits resume files or resume notes/reviews; the backend ignores them too.
       const formData = new FormData();
       formData.append("candidateName", value.candidateName);
       formData.append("candidateEmail", value.candidateEmail);
@@ -322,15 +246,8 @@ function ResumeEditBody({
       formData.append("targetRole", value.targetRole);
       formData.append("jobDescriptionId", value.jobDescriptionId);
       formData.append("hrResumeAssessment", value.hrResumeAssessment);
-      formData.append("notes", value.notes);
       formData.append("recommendationText", value.recommendationText);
       formData.append("resumeEvaluationStatus", value.resumeEvaluationStatus);
-      if (resumeFile) {
-        formData.append("resume", resumeFile);
-      }
-      if (resumeReviewOverride) {
-        formData.append("resumeReview", JSON.stringify(resumeReviewOverride));
-      }
 
       try {
         await apiFetch<ResumeLibraryDetail>(`/api/w/${slug}/studio/resumes/${recordId}`, {
@@ -340,8 +257,6 @@ function ResumeEditBody({
         toast.success("已保存");
         onUpdated?.();
         onOpenChange(false);
-        setResumeFile(null);
-        setResumeReviewOverride(null);
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "保存失败");
       }
@@ -353,34 +268,17 @@ function ResumeEditBody({
     validators: { onSubmit: resumeLibraryEditFormSchema },
   });
 
-  const {
-    cancel: cancelReviewGeneration,
-    isGenerating: isReviewGenerating,
-    progressStatus: reviewGenerationProgressStatus,
-    progressTools: reviewGenerationProgressTools,
-    regenerate: regenerateReview,
-    scoringPreview: reviewGenerationScoringPreview,
-  } = useResumeReviewRegeneration({
-    onDraftChange: (review) => form.setFieldValue("notes", review),
-    onGenerated: (result) => {
-      form.setFieldValue("notes", result.review);
-      setResumeReviewOverride(result.structuredReview);
-    },
-  });
-
   // 详情加载完成后回填表单；query.data 引用变更即触发。
   // Hydrate form once the detail resolves; keyed on query.data reference change.
   useEffect(() => {
     if (!query.data) {
       form.reset(formDefaultValues);
       setHydratedFormKey(null);
-      setResumeReviewOverride(null);
       return;
     }
     const nextHydratedFormKey = `${query.data.id}:${query.data.updatedAt}`;
     form.reset(formDefaultValues);
     setHydratedFormKey(nextHydratedFormKey);
-    setResumeReviewOverride(null);
     // form 实例在渲染间稳定，此处仅依赖 query.data 的引用变化。
     // form instance is stable across renders; only depend on query.data identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -390,55 +288,11 @@ function ResumeEditBody({
   const selectedHiringUnitId = useStore(form.store, (s) => s.values.hiringUnitId);
   const queryFormKey = query.data ? `${query.data.id}:${query.data.updatedAt}` : null;
   const isFormHydrated = queryFormKey !== null && hydratedFormKey === queryFormKey;
-  const resumeProfile = query.data?.resumeProfile ?? null;
   const lockedReason = query.data
     ? getResumeActionLockedReason(query.data.resumeParseStatus)
     : null;
   const isResumeLocked = lockedReason !== null;
   const hiringUnitInvalid = !selectedHiringUnitId;
-  const canRegenerateReview = Boolean(resumeProfile) && !resumeFile;
-  let regenerateReviewTitle: string | undefined;
-  if (resumeFile) {
-    regenerateReviewTitle = "请先保存新上传的 PDF 后再重新生成评价";
-  } else if (!resumeProfile) {
-    regenerateReviewTitle = "当前记录没有结构化简历，无法重新生成评价";
-  }
-
-  useEffect(() => {
-    if (!open) {
-      cancelReviewGeneration();
-    }
-  }, [open, cancelReviewGeneration]);
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) {
-      cancelReviewGeneration();
-      setResumeReviewOverride(null);
-    }
-    onOpenChange(nextOpen);
-  }
-
-  function handleRegenerateReview() {
-    if (isReviewGenerating) {
-      cancelReviewGeneration();
-      return;
-    }
-
-    if (!resumeProfile) {
-      toast.error("当前记录没有结构化简历，无法重新生成评价");
-      return;
-    }
-    if (resumeFile) {
-      toast.error("请先保存新上传的 PDF 后再重新生成评价");
-      return;
-    }
-
-    const { values } = form.store.state;
-    void regenerateReview({
-      jobDescriptionId: values.jobDescriptionId || null,
-      resumeProfile: buildResumeProfileForReview(resumeProfile, values),
-    });
-  }
 
   return (
     <Modal
@@ -446,20 +300,14 @@ function ResumeEditBody({
         <>
           <Button
             disabled={isSubmitting || query.isLoading}
-            onClick={() => handleOpenChange(false)}
+            onClick={() => onOpenChange(false)}
             type="button"
             variant="outline"
           >
             取消
           </Button>
           <Button
-            disabled={
-              isSubmitting ||
-              query.isLoading ||
-              isReviewGenerating ||
-              isResumeLocked ||
-              hiringUnitInvalid
-            }
+            disabled={isSubmitting || query.isLoading || isResumeLocked || hiringUnitInvalid}
             form="resume-edit-form"
             type="submit"
           >
@@ -468,7 +316,7 @@ function ResumeEditBody({
           </Button>
         </>
       }
-      onOpenChange={handleOpenChange}
+      onOpenChange={onOpenChange}
       open={open}
       size="xl"
       title="编辑简历"
@@ -526,45 +374,15 @@ function ResumeEditBody({
           <CandidateFormFields
             candidateNamePlaceholder="请输入候选人姓名"
             disabled={isSubmitting || isResumeLocked}
-            existingResumeFileName={query.data?.resumeFileName ?? null}
             form={form}
-            notesDisabled
-            notesEditorLeadingContent={
-              isReviewGenerating ? (
-                <ResumeReviewGenerationProgress
-                  progressStatus={reviewGenerationProgressStatus}
-                  progressTools={reviewGenerationProgressTools}
-                  scoringPreview={reviewGenerationScoringPreview}
-                />
-              ) : null
-            }
-            notesLabelAction={
-              <Button
-                disabled={
-                  isSubmitting ||
-                  query.isLoading ||
-                  isResumeLocked ||
-                  (!isReviewGenerating && !canRegenerateReview)
-                }
-                onClick={handleRegenerateReview}
-                size="xs"
-                title={regenerateReviewTitle}
-                type="button"
-                variant="ghost"
-              >
-                {isReviewGenerating ? (
-                  <LoaderCircleIcon className="animate-spin" data-icon="inline-start" />
-                ) : (
-                  <RotateCcwIcon data-icon="inline-start" />
-                )}
-                {isReviewGenerating ? "取消生成" : "重新生成"}
-              </Button>
-            }
-            onResumeFileChange={setResumeFile}
+            onResumeFileChange={() => {
+              // 简历文件字段在此模式下隐藏，不会触发该回调。
+            }}
             requireCandidateName
-            resumeFile={resumeFile}
-            resumeFilePlaceholder="未上传简历，点击选择文件"
+            resumeFile={null}
             showResumeEvaluationStatus
+            showResumeFile={false}
+            showSystemNotes={false}
           />
         </form>
       )}

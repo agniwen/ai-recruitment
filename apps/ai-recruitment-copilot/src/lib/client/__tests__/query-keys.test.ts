@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  chatConversationKeys,
   humanInterviewKeys,
   invalidateHumanInterviewCandidateQueries,
 } from "@/lib/client/api/query-keys";
+
+describe("chatConversationKeys", () => {
+  it("scopes cached conversation lists by workspace", () => {
+    expect(chatConversationKeys.all).toEqual(["chat-conversations"]);
+    expect(chatConversationKeys.list("acme")).toEqual(["chat-conversations", "acme"]);
+  });
+});
 
 describe("humanInterviewKeys", () => {
   it("builds stable hierarchical keys for candidate human interview data", () => {

@@ -365,7 +365,7 @@ describe("resumeLibraryRouter behavior", () => {
     });
   });
 
-  it("audits a job-description change and resets the prior evaluation", async () => {
+  it("audits a job change while preserving fork fields and ignoring resume review input", async () => {
     mocks.loadResumeDetail
       .mockResolvedValueOnce(EXISTING_RECORD)
       .mockResolvedValueOnce({ ...EXISTING_RECORD, jobDescriptionId: "jd-new" });
@@ -376,11 +376,12 @@ describe("resumeLibraryRouter behavior", () => {
     formData.set("candidateName", "候选人");
     formData.set("candidatePhone", "");
     formData.set("hiringUnitId", "unit-1");
-    formData.set("hrResumeAssessment", "");
+    formData.set("hrResumeAssessment", "建议进入下一轮");
     formData.set("jobDescriptionId", "jd-new");
-    formData.set("notes", "");
-    formData.set("recommendationText", "");
+    formData.set("notes", "不应覆盖已有简历评价");
+    formData.set("recommendationText", "推荐给业务负责人");
     formData.set("resumeEvaluationStatus", "pass");
+    formData.set("resumeReview", "invalid-json-that-must-be-ignored");
     formData.set("targetRole", "");
 
     const response = await makeApp().request(`/resumes/${RECORD_ID}`, {
@@ -388,6 +389,17 @@ describe("resumeLibraryRouter behavior", () => {
       method: "PATCH",
     });
     expect(response.status).toBe(200);
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        hiringUnitId: "unit-1",
+        hrResumeAssessment: "建议进入下一轮",
+        recommendationText: "推荐给业务负责人",
+      }),
+    );
+    const [updatePatch] = mocks.updatePatches;
+    expect(updatePatch).not.toHaveProperty("notes");
+    expect(updatePatch).not.toHaveProperty("resumeReview");
+    expect(updatePatch).not.toHaveProperty("resumeStorageKey");
     expect(mocks.insertedValues).toContainEqual(
       expect.objectContaining({
         action: "job_description_changed",

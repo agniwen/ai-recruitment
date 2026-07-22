@@ -100,6 +100,10 @@ export interface CandidateFormFieldsProps {
   notesEditorLeadingContent?: ReactNode;
   /** 仅禁用简历评价编辑器；用于自动生成过程中防止手动录入。 */
   notesDisabled?: boolean;
+  /** false 时隐藏简历文件字段（简历库编辑弹窗不再支持替换文件）。 */
+  showResumeFile?: boolean;
+  /** false 时隐藏简历评价字段。 */
+  showSystemNotes?: boolean;
   /** false 时只显示简历文件字段；用于新建弹窗解析完成前的初始状态。 */
   showDetails?: boolean;
   /** 编辑简历时显示评估状态；上传新简历时不显示。 */
@@ -258,6 +262,8 @@ export function CandidateFormFields({
   notesLabelAction,
   notesEditorLeadingContent,
   notesDisabled = false,
+  showResumeFile = true,
+  showSystemNotes = true,
   showDetails = true,
   showResumeEvaluationStatus = false,
   requireResumeFile = false,
@@ -274,7 +280,7 @@ export function CandidateFormFields({
   // "Has a resume" = either a freshly-picked File or an existing file name from
   // the server (edit mode populates existingResumeFileName from resumeStorageKey).
   const hasResume = Boolean(resumeFile) || Boolean(existingResumeFileName);
-  const showIdentityFields = showDetails && (!requireResumeFile || hasResume);
+  const showIdentityFields = showDetails && (!requireResumeFile || hasResume || !showResumeFile);
   const resumeUploadCopy = getResumeUploadCopy({
     existingResumeFileName,
     resumeFieldLabel,
@@ -292,35 +298,37 @@ export function CandidateFormFields({
 
   return (
     <div className="space-y-5">
-      <Field>
-        <FieldLabel htmlFor="candidate-resume-single-upload">
-          简历文件
-          <ResumeFileRequirementMarker required={requireResumeFile} />
-        </FieldLabel>
-        <FieldContent className="gap-2">
-          <FileUpload
-            accept={supportedResumeDocumentAccept}
-            acceptedFileTypes={[{ icon: IconFileUpload, label: supportedResumeDocumentLabel }]}
-            browseLabel={resumeFile ? "重新选择简历" : "选择简历"}
-            className="w-full"
-            description={resumeUploadCopy.description}
-            disabled={disabled}
-            ariaLabel="上传候选人简历文件"
-            draggingLabel="松开上传简历文件"
-            inputId="candidate-resume-single-upload"
-            maxFiles={resumeFileMaxFiles}
-            multiple={resumeFileMultiple}
-            onFileLimitExceeded={() => {
-              toast.error(`最多选择 ${resumeFileMaxFiles} 份简历文件`);
-            }}
-            onFilesAccepted={handleAcceptedResumeFiles}
-            rejectionLabel={`仅支持上传 ${supportedResumeDocumentLabel} 文件`}
-            showFileList={Boolean(resumeFile)}
-            title={resumeUploadCopy.title}
-          />
-          {resumeFieldExtra}
-        </FieldContent>
-      </Field>
+      {showResumeFile ? (
+        <Field>
+          <FieldLabel htmlFor="candidate-resume-single-upload">
+            简历文件
+            <ResumeFileRequirementMarker required={requireResumeFile} />
+          </FieldLabel>
+          <FieldContent className="gap-2">
+            <FileUpload
+              accept={supportedResumeDocumentAccept}
+              acceptedFileTypes={[{ icon: IconFileUpload, label: supportedResumeDocumentLabel }]}
+              browseLabel={resumeFile ? "重新选择简历" : "选择简历"}
+              className="w-full"
+              description={resumeUploadCopy.description}
+              disabled={disabled}
+              ariaLabel="上传候选人简历文件"
+              draggingLabel="松开上传简历文件"
+              inputId="candidate-resume-single-upload"
+              maxFiles={resumeFileMaxFiles}
+              multiple={resumeFileMultiple}
+              onFileLimitExceeded={() => {
+                toast.error(`最多选择 ${resumeFileMaxFiles} 份简历文件`);
+              }}
+              onFilesAccepted={handleAcceptedResumeFiles}
+              rejectionLabel={`仅支持上传 ${supportedResumeDocumentLabel} 文件`}
+              showFileList={Boolean(resumeFile)}
+              title={resumeUploadCopy.title}
+            />
+            {resumeFieldExtra}
+          </FieldContent>
+        </Field>
+      ) : null}
 
       {showDetails ? (
         <form.Field name="jobDescriptionId">
@@ -499,7 +507,7 @@ export function CandidateFormFields({
         </form.Field>
       ) : null}
 
-      {showDetails ? (
+      {showDetails && showSystemNotes ? (
         <form.Field name="notes">
           {(field) => {
             const errors = toFieldErrors(field.state.meta.errors);

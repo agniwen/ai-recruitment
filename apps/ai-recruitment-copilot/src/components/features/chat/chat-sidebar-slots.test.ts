@@ -10,4 +10,11 @@ describe("Chat sidebar session items", () => {
     expect(source).toContain("motion-reduce:has-[a:active]:scale-100");
     expect(source).toContain("motion-reduce:active:scale-100");
   });
+
+  it("caches workspace conversation lists and renders a pending skeleton", () => {
+    expect(source).toContain("chatConversationKeys.list(slug)");
+    expect(source).toContain("useQuery({");
+    expect(source).toContain("queryClient.invalidateQueries");
+    expect(source).toContain('aria-label="会话列表加载中"');
+  });
 });
