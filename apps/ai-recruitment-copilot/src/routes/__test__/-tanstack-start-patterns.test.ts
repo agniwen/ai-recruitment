@@ -61,7 +61,7 @@ describe("TanStack Start migration patterns", () => {
     const pendingOutlet = readSource("src/components/layout/pending-outlet.tsx");
     const studioLayout = readSource("src/routes/w.$slug.studio.tsx");
     const agentLayout = readSource("src/routes/w.$slug.agent.tsx");
-    const platformLayout = readSource("src/routes/platform.tsx");
+    const platformLayout = readSource("src/components/features/platform/platform-layout.tsx");
     const pendingView = readSource("src/components/layout/route-pending-view.tsx");
     const globalsCss = readSource("src/styles/globals.css");
 
@@ -301,7 +301,7 @@ describe("TanStack Start migration patterns", () => {
     const rootRoute = readSource("src/routes/__root.tsx");
     const studioLayoutRoute = readSource("src/routes/w.$slug.studio.tsx");
     const agentLayoutRoute = readSource("src/routes/w.$slug.agent.tsx");
-    const platformLayoutRoute = readSource("src/routes/platform.tsx");
+    const platformLayoutRoute = readSource("src/components/features/platform/platform-layout.tsx");
 
     expect(rootRoute).not.toContain("opacity-70");
     expect(rootRoute).not.toContain("isTransitioning");

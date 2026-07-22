@@ -12,7 +12,7 @@ function requiredIndex(source: string, token: string) {
 }
 
 const headerSource = readSource("sidebar-inset-header.tsx");
-const platformRouteSource = readSource("../../../routes/platform.tsx");
+const platformLayoutSource = readSource("../../features/platform/platform-layout.tsx");
 const studioRouteSource = readSource("../../../routes/w.$slug.studio.tsx");
 
 function expectHeaderInsideScrollArea(source: string, header: string) {
@@ -33,7 +33,11 @@ describe("SidebarInsetHeader translucent sticky layout", () => {
   });
 
   it("keeps platform and studio headers inside the scroll area", () => {
-    expectHeaderInsideScrollArea(platformRouteSource, "<PlatformHeader />");
+    const platformManagementBranch = platformLayoutSource.slice(
+      requiredIndex(platformLayoutSource, "<ScrollArea"),
+    );
+
+    expectHeaderInsideScrollArea(platformManagementBranch, "<PlatformHeader />");
     expectHeaderInsideScrollArea(studioRouteSource, "<SiteHeader />");
   });
 });

@@ -9,6 +9,13 @@ const testPathMarkers = [
   `${join("src", "components", "__tests__")}`,
   `${join("src", "routes", "__test__")}`,
 ];
+const vendoredMastraSourceMarker = join(
+  "src",
+  "components",
+  "features",
+  "mastra-studio",
+  "upstream",
+);
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir)
@@ -24,17 +31,18 @@ function listSourceFiles(dir: string): string[] {
 }
 
 describe("Tabler icons migration", () => {
-  const forbiddenPackages = [
-    ["lucide", "react"].join("-"),
-    "@hugeicons/core-free-icons",
-    "@hugeicons/react",
-  ];
+  const vendoredMastraIconPackage = ["lucide", "react"].join("-");
+  const removedIconPackages = ["@hugeicons/core-free-icons", "@hugeicons/react"];
+  const forbiddenPackages = [vendoredMastraIconPackage, ...removedIconPackages];
 
   it("does not import previous icon packages from app source", () => {
     const offenders = listSourceFiles(sourceRoot)
       .filter((file) => {
         const relativePath = relative(appRoot, file);
-        return !testPathMarkers.some((marker) => relativePath.startsWith(marker));
+        return (
+          !testPathMarkers.some((marker) => relativePath.startsWith(marker)) &&
+          !relativePath.startsWith(vendoredMastraSourceMarker)
+        );
       })
       .filter((file) => {
         const content = readFileSync(file, "utf-8");
@@ -54,7 +62,9 @@ describe("Tabler icons migration", () => {
       devDependencies?: Record<string, string>;
     };
 
-    for (const packageName of forbiddenPackages) {
+    // Mastra Studio's vendored upstream runtime still uses Lucide. Keep the
+    // first-party source assertion above, but allow that runtime dependency.
+    for (const packageName of removedIconPackages) {
       expect(packageJson.dependencies).not.toHaveProperty(packageName);
       expect(packageJson.devDependencies).not.toHaveProperty(packageName);
     }
