@@ -288,15 +288,19 @@ export const resumeLibraryReadRouter = factory
         return c.json({ error: error.message }, error.status);
       }
       const message = error instanceof Error ? error.message : "AI 重新评估失败，请稍后重试。";
-      const isEligibilityError = [
+      const eligibilityError = [
         "已结案候选人不能重新评估。",
         "简历解析完成后才能重新评估。",
         "请先关联在招岗位后再重新评估。",
-      ].includes(message);
-      if (isEligibilityError) {
-        return c.json({ error: message }, 409);
+      ].find((candidate) => candidate === message);
+      if (eligibilityError) {
+        return c.json({ error: eligibilityError }, 409);
       }
-      return c.json({ error: message }, 500);
+      console.error("[resume-reassess] enqueue failed", {
+        error,
+        resumeRecordId: id,
+      });
+      return c.json({ error: "AI 重新评估失败，请稍后重试。" }, 500);
     }
 
     invalidateStudioInterviewCaches(activeOrg.id);
