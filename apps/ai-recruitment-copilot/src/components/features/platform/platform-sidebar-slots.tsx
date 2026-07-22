@@ -1,35 +1,19 @@
 "use client";
 
-import {
-  IconActivity as ActivityIcon,
-  IconBook as BookOpenIcon,
-  IconBraces as BracesIcon,
-  IconBuilding as Building2Icon,
-  IconChartBar as ChartBarIcon,
-  IconChartLine as ChartLineIcon,
-  IconDatabase as DatabaseIcon,
-  IconFilter as FilterIcon,
-  IconFlask as FlaskConicalIcon,
-  IconFolderCode as FolderCodeIcon,
-  IconGauge as GaugeIcon,
-  IconGitBranch as GitBranchIcon,
-  IconInbox as InboxIcon,
-  IconListCheck as ListChecksIcon,
-  IconLogs as LogsIcon,
-  IconPlugConnected as PlugZapIcon,
-  IconPrompt as MessageSquareTextIcon,
-  IconRobot as RobotIcon,
-  IconSettings as SettingsIcon,
-  IconTool as WrenchIcon,
-  IconUsers as UsersIcon,
-} from "@tabler/icons-react";
+import { IconBuilding, IconInbox, IconListCheck, IconSearch, IconUsers } from "@tabler/icons-react";
+import { useKeyboardShortcutLabel } from "@mastra/playground-ui/hooks/use-keyboard-shortcut-label";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { addMastraStudioBase } from "@/components/features/mastra-studio/router/studio-route-path";
+import { useNavigationCommand } from "@/components/features/mastra-studio/upstream/lib/command";
+import type { NavIcon } from "@/components/features/mastra-studio/upstream/lib/nav/nav-items";
+import { bottomNav, mainNav } from "@/components/features/mastra-studio/upstream/lib/nav/nav-items";
 import {
   SidebarBodyPortalContent,
   SidebarFooterPortalContent,
   SidebarHeaderPortalContent,
 } from "@/components/layout/app-sidebar/portals";
 import { SidebarUserSection } from "@/components/layout/sidebar-user-section";
+import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -43,7 +27,7 @@ import { PlatformSidebarTabs, resolvePlatformSidebarTab } from "./platform-sideb
 
 interface NavItem {
   path: string;
-  icon: typeof Building2Icon;
+  icon: NavIcon;
   title: string;
   activePaths?: string[];
 }
@@ -57,22 +41,22 @@ const manageNavSections: NavSection[] = [
   {
     items: [
       {
-        icon: Building2Icon,
+        icon: IconBuilding,
         path: "/platform/organizations",
         title: "所有工作区",
       },
       {
-        icon: UsersIcon,
+        icon: IconUsers,
         path: "/platform/users",
         title: "所有用户",
       },
       {
-        icon: InboxIcon,
+        icon: IconInbox,
         path: "/platform/mail-ingest-accounts",
         title: "邮箱监听",
       },
       {
-        icon: ListChecksIcon,
+        icon: IconListCheck,
         path: "/platform/queues",
         title: "队列任务",
       },
@@ -81,83 +65,51 @@ const manageNavSections: NavSection[] = [
   },
 ];
 
-// Keep this lightweight host projection aligned with upstream navigation. Importing
-// the playground registry here would pull Studio UI into every Platform page.
 const mastraNavSections: NavSection[] = [
+  ...mainNav.map((section) => ({
+    items: section.items
+      .filter((item) => !item.hidden)
+      .map((item) => ({
+        activePaths: item.activePaths?.map(addMastraStudioBase),
+        icon: item.Icon,
+        path: addMastraStudioBase(item.url),
+        title: item.name,
+      })),
+    title: section.title,
+  })),
   {
-    items: [
-      { icon: RobotIcon, path: "/platform/mastra-studio/agents", title: "Agents" },
-      {
-        icon: MessageSquareTextIcon,
-        path: "/platform/mastra-studio/prompts",
-        title: "Prompts",
-      },
-      {
-        icon: GitBranchIcon,
-        path: "/platform/mastra-studio/workflows",
-        title: "Workflows",
-      },
-      {
-        icon: FilterIcon,
-        path: "/platform/mastra-studio/processors",
-        title: "Processors",
-      },
-      {
-        icon: PlugZapIcon,
-        path: "/platform/mastra-studio/mcps",
-        title: "MCP Servers",
-      },
-      { icon: WrenchIcon, path: "/platform/mastra-studio/tools", title: "Tools" },
-      {
-        icon: FolderCodeIcon,
-        path: "/platform/mastra-studio/workspaces",
-        title: "Workspaces",
-      },
-      {
-        icon: BracesIcon,
-        path: "/platform/mastra-studio/request-context",
-        title: "Request Context",
-      },
-    ],
-    title: "Primitives",
-  },
-  {
-    items: [
-      {
-        icon: ChartBarIcon,
-        path: "/platform/mastra-studio/evaluation",
-        title: "Overview",
-      },
-      { icon: GaugeIcon, path: "/platform/mastra-studio/scorers", title: "Scorers" },
-      { icon: DatabaseIcon, path: "/platform/mastra-studio/datasets", title: "Datasets" },
-      {
-        icon: FlaskConicalIcon,
-        path: "/platform/mastra-studio/experiments",
-        title: "Experiments",
-      },
-    ],
-    title: "Evaluation",
-  },
-  {
-    items: [
-      { icon: ChartLineIcon, path: "/platform/mastra-studio/metrics", title: "Metrics" },
-      {
-        activePaths: ["/platform/mastra-studio/traces"],
-        icon: ActivityIcon,
-        path: "/platform/mastra-studio/observability",
-        title: "Traces",
-      },
-      { icon: LogsIcon, path: "/platform/mastra-studio/logs", title: "Logs" },
-    ],
-    title: "Observability",
-  },
-  {
-    items: [
-      { icon: SettingsIcon, path: "/platform/mastra-studio/settings", title: "Settings" },
-      { icon: BookOpenIcon, path: "/platform/mastra-studio/resources", title: "Resources" },
-    ],
+    items: bottomNav
+      .filter((item) => !item.hidden)
+      .map((item) => ({
+        activePaths: item.activePaths?.map(addMastraStudioBase),
+        icon: item.Icon,
+        path: addMastraStudioBase(item.url),
+        title: item.name,
+      })),
   },
 ];
+
+function MastraSidebarSearch() {
+  const { setOpen } = useNavigationCommand({ enableShortcut: false });
+  const commandShortcutLabel = useKeyboardShortcutLabel("K");
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          aria-label="Search and navigate"
+          onClick={() => setOpen(true)}
+          tooltip="Search"
+          variant="outline"
+        >
+          <IconSearch />
+          <span>Search</span>
+          <Kbd className="ml-auto group-data-[collapsible=icon]:hidden">{commandShortcutLabel}</Kbd>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
 
 export function PlatformSidebarSlots() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -174,6 +126,7 @@ export function PlatformSidebarSlots() {
     <>
       <SidebarHeaderPortalContent>
         <PlatformSidebarTabs />
+        {activeTab === "mastra" ? <MastraSidebarSearch /> : null}
       </SidebarHeaderPortalContent>
 
       <SidebarBodyPortalContent>
