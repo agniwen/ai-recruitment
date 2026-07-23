@@ -50,12 +50,14 @@ import {
 } from "./recruiting-directive-text";
 import { RecruitingPersonMentionPopover } from "./recruiting-person-mention";
 import { RecruitingActionProposalToolUI } from "./recruiting-action-proposal";
+import { RecruitingResumeReviewCard } from "./recruiting-resume-review-card";
 import { emptyThreadStyle } from "./recruiting-thread-layout";
 import { NewRecruitingComposer } from "./new-recruiting-composer";
 import type {
   CandidateSummaryCard,
   CopilotCitation,
   RecruitingActionProposal,
+  ResumeRecordDetailResult,
   SearchResumeRecordsResult,
 } from "./recruiting-copilot-context";
 export { RecruitingCopilotContextProvider } from "./recruiting-copilot-context";
@@ -494,10 +496,34 @@ export const RecruitingResumeSearchToolUI = makeAssistantToolUI<unknown, SearchR
   },
 );
 
+export const RecruitingResumeDetailToolUI = makeAssistantToolUI<unknown, ResumeRecordDetailResult>({
+  display: "standalone",
+  render: ({ result, status }) => {
+    if (status.type === "running") {
+      return <ToolNotice>正在读取候选人数据库记录...</ToolNotice>;
+    }
+    const record = result?.resumeRecord;
+    if (!record) {
+      return <ToolNotice>未找到候选人记录。</ToolNotice>;
+    }
+    if (!record.jobDescriptionId) {
+      return <CopilotToolContextReporter citations={[record.citation]} />;
+    }
+    return (
+      <div className="grid gap-2">
+        <CopilotToolContextReporter citations={[record.citation]} />
+        <RecruitingResumeReviewCard record={record} />
+      </div>
+    );
+  },
+  toolName: "get_resume_record_detail",
+});
+
 export function RecruitingToolRenderers() {
   return (
     <>
       <RecruitingResumeSearchToolUI />
+      <RecruitingResumeDetailToolUI />
       <RecruitingActionProposalToolUI />
     </>
   );
