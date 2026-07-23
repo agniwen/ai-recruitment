@@ -486,11 +486,14 @@ export function createDefaultJdRecommendationDeps(): JdRecommendationDeps {
       Boolean(embeddingConfig.apiKey),
     enqueueJobDescriptionsReindex: enqueueVisibleJobDescriptionsForReindex,
     enqueueResumeReindex: (input) =>
-      enqueueResumeSemanticIndexJobBestEffort({
-        organizationId: input.organizationId,
-        sourceId: input.sourceId,
-        sourceType: "resume_pool_item",
-      }),
+      enqueueResumeSemanticIndexJobBestEffort(
+        {
+          organizationId: input.organizationId,
+          sourceId: input.sourceId,
+          sourceType: "resume_pool_item",
+        },
+        { noOpIsSuccess: false },
+      ),
     loadExistingJobDescriptionIds,
     loadJobDescriptionsForDisplay,
     loadResumeChunks: (loadInput) => vectorStore.loadResumeEmbeddings(loadInput),

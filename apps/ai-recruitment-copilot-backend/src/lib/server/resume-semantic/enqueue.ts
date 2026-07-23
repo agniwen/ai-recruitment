@@ -1,12 +1,16 @@
 import { isResumeSemanticIndexEnabled } from "./embedding";
 
-export async function enqueueResumeSemanticIndexJobBestEffort(input: {
-  organizationId: string;
-  sourceId: string | null | undefined;
-  sourceType: "resume_pool_item" | "studio_interview";
-}): Promise<boolean> {
+export async function enqueueResumeSemanticIndexJobBestEffort(
+  input: {
+    organizationId: string;
+    sourceId: string | null | undefined;
+    sourceType: "resume_pool_item" | "studio_interview";
+  },
+  options: { noOpIsSuccess?: boolean } = {},
+): Promise<boolean> {
+  const noOpResult = options.noOpIsSuccess ?? true;
   if (!(input.sourceId && isResumeSemanticIndexEnabled())) {
-    return false;
+    return noOpResult;
   }
   try {
     const { prepareResumeSemanticIndexJob } = await import("./indexer");
@@ -16,7 +20,7 @@ export async function enqueueResumeSemanticIndexJobBestEffort(input: {
       sourceType: input.sourceType,
     };
     if (!(await prepareResumeSemanticIndexJob(job))) {
-      return false;
+      return noOpResult;
     }
     const { enqueueResumeSemanticIndexJobs } =
       await import("@arc/resume-parse-queue/resume-semantic-index");
