@@ -143,21 +143,33 @@ export async function postFeishuDirectMessage(
   return { id: sent.id };
 }
 
+export async function trySendFeishuDirectCard(
+  send: () => Promise<{ id: string }>,
+): Promise<{ id: string | null }> {
+  try {
+    const sent = await send();
+    return { id: sent.id };
+  } catch {
+    return { id: null };
+  }
+}
+
 export async function postFeishuDirectCard(
   providerId: FeishuProviderId,
   openId: string,
   card: CardElement | unknown,
   options?: CardToFeishuPayloadOptions,
-): Promise<{ id: string }> {
-  const existing = cached.get(providerId);
-  if (!existing) {
-    getFeishuBot(providerId);
-  }
-  const adapter = cached.get(providerId)?.adapter;
-  if (!adapter) {
-    throw new Error(`Feishu bot is not initialized for provider ${providerId}`);
-  }
+): Promise<{ id: string | null }> {
+  return await trySendFeishuDirectCard(async () => {
+    const existing = cached.get(providerId);
+    if (!existing) {
+      getFeishuBot(providerId);
+    }
+    const adapter = cached.get(providerId)?.adapter;
+    if (!adapter) {
+      throw new Error(`Feishu bot is not initialized for provider ${providerId}`);
+    }
 
-  const sent = await adapter.postDirectCard(openId, card, options);
-  return { id: sent.id };
+    return await adapter.postDirectCard(openId, card, options);
+  });
 }
