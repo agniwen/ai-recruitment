@@ -16,18 +16,25 @@ describe("ResumeLibraryPage duplicate badges", () => {
     expect(cardSource).toContain("onShowDuplicateMatches(record)");
   });
 
-  it("shows candidate identity in the card without mailto table text", () => {
+  it("shows candidate identity in the card without contact links", () => {
     expect(cardSource).toContain("{record.candidateName}");
-    expect(cardSource).toContain("formatResumeCardContact(record.candidateEmail");
+    expect(cardSource).toContain("formatResumeRecordDisplayId(record.id)");
     expect(cardSource).not.toContain("mailto:");
+    expect(cardSource).not.toContain("tel:");
   });
 
-  it("shows row details directly in the candidate card", () => {
-    expect(cardSource).toContain("record.candidateEmail");
-    expect(cardSource).toContain("record.candidatePhone");
+  it("shows recruiting context and the next-step review recommendation in the candidate card", () => {
+    expect(cardSource).not.toContain('label="邮箱"');
+    expect(cardSource).not.toContain('label="电话"');
     expect(cardSource).toContain("getResumeLibraryJobDescriptionLabel(record)");
     expect(cardSource).toContain("record.creatorName");
     expect(cardSource).toContain("record.createdAt");
     expect(cardSource).toContain("lifecycle.fullLabel");
+    expect(cardSource).toContain("record.hiringUnitName");
+    expect(cardSource).toContain("record.resumeEvaluatorName");
+    expect(cardSource).toContain("describeResumeLibraryReviewCard");
+    expect(cardSource).toContain("record.resumeReviewBaseScore");
+    expect(cardSource).toContain("record.resumeReviewNextStepAction");
+    expect(cardSource).toContain('label="下一步建议"');
   });
 });

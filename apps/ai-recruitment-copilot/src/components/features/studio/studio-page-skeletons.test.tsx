@@ -15,7 +15,7 @@ import {
 
 describe("Studio page skeletons", () => {
   it.each([
-    ["招聘", () => <RecruitingPageSkeleton />],
+    ["招聘台", () => <RecruitingPageSkeleton />],
     ["人才库", () => <ResumePoolPageSkeleton />],
     ["AI 面试", () => <StudioTablePageSkeleton label="AI 面试" summary />],
     ["用人组织管理", () => <StudioTablePageSkeleton label="用人组织管理" />],
@@ -24,7 +24,7 @@ describe("Studio page skeletons", () => {
     ["我的信息", () => <ProfilePageSkeleton />],
     ["工作区管理", () => <MembersPageSkeleton />],
     ["权限管理", () => <PermissionsPageSkeleton />],
-    ["系统设置", () => <GlobalConfigPageSkeleton />],
+    ["上下文设置", () => <GlobalConfigPageSkeleton />],
     ["面试详情", () => <InterviewDetailPageSkeleton />],
   ])("renders an accessible %s loading state", (label, createSkeleton) => {
     const html = renderToStaticMarkup(createSkeleton());

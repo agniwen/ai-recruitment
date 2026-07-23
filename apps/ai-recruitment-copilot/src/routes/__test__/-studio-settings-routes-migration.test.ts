@@ -61,11 +61,14 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(globalConfigForm).not.toContain("<WorkspacePermissionsSection />");
   });
 
-  it("keeps system settings as a bare form with the save action in the page header", () => {
+  it("keeps context settings as a bare form with debounced auto-save", () => {
     const source = readSource("components/features/studio/global-config/global-config-form.tsx");
 
-    expect(source).toContain("actionRender={");
-    expect(source).toContain("保存配置");
+    expect(source).toContain("useDebouncedCallback");
+    expect(source).toContain("AUTOSAVE_DEBOUNCE_MS");
+    expect(source).toContain('toast.success("自动保存成功")');
+    expect(source).not.toContain("actionRender={");
+    expect(source).not.toContain("保存配置");
     expect(source).toContain('<FieldGroup className="gap-5">');
     expect(source).not.toContain("@/components/ui/card");
     expect(source).not.toContain("<Card");
@@ -75,7 +78,7 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(source).not.toContain("配置面试话术和公司背景");
   });
 
-  it("keeps system settings as the last item in the system configuration group", () => {
+  it("keeps context settings as the last item in the system configuration group", () => {
     const sidebar = readSource("components/features/studio/studio-sidebar-slots.tsx");
     const systemGroupStart = sidebar.indexOf('label: "系统配置"');
     const systemGroupSource = sidebar.slice(
@@ -83,7 +86,7 @@ describe("TanStack Start studio settings and detail route migration", () => {
       systemGroupStart,
     );
     const permissionIndex = systemGroupSource.indexOf('title: "权限管理"');
-    const settingsIndex = systemGroupSource.indexOf('title: "系统设置"');
+    const settingsIndex = systemGroupSource.indexOf('title: "上下文设置"');
 
     expect(permissionIndex).toBeGreaterThanOrEqual(0);
     expect(settingsIndex).toBeGreaterThan(permissionIndex);

@@ -2171,7 +2171,7 @@ export const studioRoundEmailLog = pgTable(
   ],
 );
 
-// 系统设置（单例表，固定 id="singleton"）
+// 上下文设置（单例表，固定 id="singleton"）
 // Global config (singleton table, id="singleton")
 export const globalConfig = pgTable("global_config", {
   closingInstructions: text("closing_instructions").notNull().default(""),
