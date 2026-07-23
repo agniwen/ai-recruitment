@@ -14,11 +14,11 @@ describe("ResumeLibraryFloatingActionBar", () => {
     expect(source).toContain("jobDescriptionLabel: string | null;");
     expect(source).toContain("const FLOATING_ACTION_GLASS_CLASS");
     expect(source).toContain(
-      'import { cossControlOverlayClass } from "@/components/ui/coss-style";',
+      'import { cossWhisperShadowClass } from "@/components/ui/coss-style";',
     );
     expect(source).toContain("bg-clip-padding");
-    expect(source).toContain("cossControlOverlayClass");
-    expect(source).toContain("bg-background/32");
+    expect(source).toContain("cossWhisperShadowClass");
+    expect(source).toContain("bg-background/80");
     expect(source).toContain("backdrop-blur-lg");
     expect(source).toContain("selectedItems: ResumeLibraryFloatingActionItem[];");
     expect(source).toContain("onClearSelection: () => void;");
@@ -31,7 +31,9 @@ describe("ResumeLibraryFloatingActionBar", () => {
     );
     expect(source).toContain("flex flex-col items-center justify-center gap-2");
     expect(source).toContain("pointer-events-none");
-    expect(source).toContain('<ScrollArea className="max-h-[7.75rem]" scrollbars="leave">');
+    expect(source).toContain(
+      '<ScrollArea className="max-h-[7.75rem]" scrollFade scrollbars="leave">',
+    );
     expect(source).not.toContain("overflow-y-auto");
     expect(source).toContain("selectedItems.map");
     expect(source).toContain("grid-cols-[minmax(0,1fr)_minmax(6rem,13rem)_auto]");
@@ -49,6 +51,5 @@ describe("ResumeLibraryFloatingActionBar", () => {
     expect(source).toContain("FLOATING_ACTION_GLASS_CLASS}");
     expect(source).toContain("批量删除");
     expect(source).not.toContain("rounded-full");
-    expect(source).not.toContain("bg-background/95");
   });
 });

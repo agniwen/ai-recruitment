@@ -30,7 +30,8 @@ describe("Tabs coss implementation", () => {
     expect(source).toContain("rounded-lg bg-muted p-0.5 text-muted-foreground/72");
     expect(source).toContain("data-[orientation=horizontal]:py-1");
     expect(source).toContain("data-active:text-foreground");
-    expect(source).toContain("rounded-md bg-background shadow-sm/5 dark:bg-input");
+    expect(source).toContain("rounded-md bg-background dark:bg-input");
+    expect(source).not.toContain("rounded-md bg-background shadow-sm/5 dark:bg-input");
     expect(source).toContain("bg-primary data-[orientation=horizontal]:h-0.5");
   });
 });

@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const source = readFileSync(new URL("pipeline-stage-action-bar.tsx", import.meta.url), "utf-8");
+const controllerSource = readFileSync(
+  new URL("studio-person-detail-controller.tsx", import.meta.url),
+  "utf-8",
+);
 
 describe("PipelineStageActionBar floating actions", () => {
   it("renders compact current-stage actions for the shared floating surface", () => {
@@ -98,6 +102,22 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(aiStageSource).not.toContain('variant="outline"');
   });
 
+  it("offers the interview link only for a loaded pending AI round on the page layout", () => {
+    const actionBarSource = controllerSource.slice(
+      controllerSource.indexOf("const actionBar ="),
+      controllerSource.indexOf("const actionBarClassName ="),
+    );
+
+    expect(source).toContain("aiRoundInterviewLink?: string;");
+    expect(source).toContain('pipelineStage === "ai_interview" && aiRoundInterviewLink');
+    expect(source).toContain("copyInterviewLink({ interviewLink: aiRoundInterviewLink })");
+    expect(actionBarSource).toContain('layoutMode === "page"');
+    expect(actionBarSource).toContain('actionBarPipelineStage === "ai_interview"');
+    expect(actionBarSource).toContain("!isRoundsLoading");
+    expect(actionBarSource).toContain('actionBarAiRound?.status === "pending"');
+    expect(actionBarSource).toContain("actionBarAiRound.interviewLink");
+  });
+
   it("does not expose direct offer or backward stage actions", () => {
     expect(source).not.toContain("直接发 Offer");
     expect(source).not.toContain('onAdvance("offer")');
@@ -109,15 +129,22 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(source).toContain("humanInterviewFeedbackComplete?: boolean;");
     expect(source).toContain("resolveOfferAdvanceDisabledReason");
     expect(source).toContain("OfferAdvanceButton");
-    expect(source).toContain("aria-disabled={Boolean(disabledReason)}");
+    expect(source).toContain("aria-disabled={locked}");
+    expect(source).toContain("disabled={isBusy}");
     expect(source).toContain("请先完成所有真人面试轮次，并补全每轮面试评价");
     expect(source).toContain("<TooltipTrigger render={button} />");
     expect(source).toContain("humanInterviewFeedbackComplete");
   });
 
-  it("keeps the action component presentation-only", () => {
-    expect(source).toContain("component is presentation-only and stateless");
-    expect(source).toContain("onAdvance(targetStage);");
+  it("keeps mutations in the parent while tracking transient pending UI state", () => {
+    expect(source).toContain("The parent");
+    expect(source).toContain("owns mutations");
+    expect(source).toContain("const [isAdvancing, setIsAdvancing] = useState(false);");
+    expect(source).toContain("await onAdvance(target);");
+    expect(source).toContain("setIsAdvancing(false);");
+    expect(source).toContain("void onAdvance(targetStage);");
+    expect(source).toContain("disabled={isBusy}");
+    expect(source).toContain("aria-busy={isBusy}");
     expect(source).toContain("onClick={onRequestClose}");
     expect(source).toContain("onClick={onRequestReactivate}");
     expect(source).not.toContain("pendingFlowActionRef");
