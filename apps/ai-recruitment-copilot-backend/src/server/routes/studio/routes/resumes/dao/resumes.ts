@@ -207,6 +207,9 @@ const SELECTED_COLUMNS = {
   resumeParseError: studioInterview.resumeParseError,
   resumeParseStatus: studioInterview.resumeParseStatus,
   resumeParsedAt: studioInterview.resumeParsedAt,
+  resumeProjectExperiences: sql<unknown>`${studioInterview.resumeProfile}->'projectExperiences'`.as(
+    "resume_project_experiences",
+  ),
   resumeReviewConclusion: sql<
     string | null
   >`${studioInterview.resumeReview}->'overall'->>'conclusion'`.as("resume_review_conclusion"),
@@ -277,6 +280,7 @@ const LIST_SELECTED_COLUMNS = {
   resumeEvaluationStatus: SELECTED_COLUMNS.resumeEvaluationStatus,
   resumeFileName: SELECTED_COLUMNS.resumeFileName,
   resumeParseStatus: SELECTED_COLUMNS.resumeParseStatus,
+  resumeProjectExperiences: SELECTED_COLUMNS.resumeProjectExperiences,
   resumeReviewConclusion: SELECTED_COLUMNS.resumeReviewConclusion,
   resumeReviewStatus: SELECTED_COLUMNS.resumeReviewStatus,
   resumeSchool: SELECTED_COLUMNS.resumeSchool,

@@ -4,6 +4,7 @@ import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import type { ResumeEducationDisplayItem } from "./resume-education";
 import type { ResumeDuplicateMatchSummary } from "./resume-duplicates";
 import type { ResumePoolScope, ResumePoolStatus } from "@arc/db-schema/schema";
+import type { ResumeLibraryProfileSnapshot } from "./studio-resumes";
 
 export const resumePoolScopeSchema = z.enum(["private", "public"]);
 export const resumePoolStatusSchema = z.enum(["active", "archived"]);
@@ -71,6 +72,7 @@ export interface ResumePoolListRecord {
   workYears: number | null;
   masteredSkills: string[];
   profileHighlights: ResumePoolProfileHighlights;
+  resumeProfileSnapshot: ResumeLibraryProfileSnapshot;
   skillsNormalized: string[];
   createdAt: string;
   updatedAt: string;
@@ -109,6 +111,8 @@ export interface ResumePoolImportDuplicateMatchRecord {
   id: string;
   jobDescriptionName: string | null;
   level?: "high" | "low" | "medium";
+  resumeProfileSnapshot?: ResumeLibraryProfileSnapshot | null;
+  skills?: string[];
   score?: number;
   semanticReasons?: string[];
   similarity?: {
