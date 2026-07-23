@@ -1,6 +1,13 @@
 "use client";
 
-import { IconBuilding, IconInbox, IconListCheck, IconSearch, IconUsers } from "@tabler/icons-react";
+import {
+  IconBuilding,
+  IconDatabase,
+  IconInbox,
+  IconListCheck,
+  IconSearch,
+  IconUsers,
+} from "@tabler/icons-react";
 import { useKeyboardShortcutLabel } from "@mastra/playground-ui/hooks/use-keyboard-shortcut-label";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { addMastraStudioBase } from "@/components/features/mastra-studio/router/studio-route-path";
@@ -59,6 +66,11 @@ const manageNavSections: NavSection[] = [
         icon: IconListCheck,
         path: "/platform/queues",
         title: "队列任务",
+      },
+      {
+        icon: IconDatabase,
+        path: "/platform/resume-parse-cache",
+        title: "解析缓存",
       },
     ],
     title: "平台管理",

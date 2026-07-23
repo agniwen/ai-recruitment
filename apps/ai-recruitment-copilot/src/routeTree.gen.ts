@@ -23,6 +23,7 @@ import { Route as StudioResumePoolRouteImport } from './routes/studio.resume-poo
 import { Route as StudioInterviewsRouteImport } from './routes/studio.interviews'
 import { Route as RRoundIdRouteImport } from './routes/r.$roundId'
 import { Route as PlatformUsersRouteImport } from './routes/platform.users'
+import { Route as PlatformResumeParseCacheRouteImport } from './routes/platform.resume-parse-cache'
 import { Route as PlatformQueuesRouteImport } from './routes/platform.queues'
 import { Route as PlatformOrganizationsRouteImport } from './routes/platform.organizations'
 import { Route as PlatformMastraStudioRouteImport } from './routes/platform.mastra-studio'
@@ -239,6 +240,12 @@ const PlatformUsersRoute = PlatformUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => PlatformRoute,
 } as any)
+const PlatformResumeParseCacheRoute =
+  PlatformResumeParseCacheRouteImport.update({
+    id: '/resume-parse-cache',
+    path: '/resume-parse-cache',
+    getParentRoute: () => PlatformRoute,
+  } as any)
 const PlatformQueuesRoute = PlatformQueuesRouteImport.update({
   id: '/queues',
   path: '/queues',
@@ -1103,6 +1110,7 @@ export interface FileRoutesByFullPath {
   '/platform/mastra-studio': typeof PlatformMastraStudioRouteWithChildren
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
+  '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
   '/r/$roundId': typeof RRoundIdRoute
   '/studio/interviews': typeof StudioInterviewsRoute
@@ -1258,6 +1266,7 @@ export interface FileRoutesByTo {
   '/platform/mastra-studio': typeof PlatformMastraStudioMainIndexRoute
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
+  '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
   '/r/$roundId': typeof RRoundIdRoute
   '/studio/interviews': typeof StudioInterviewsRoute
@@ -1401,6 +1410,7 @@ export interface FileRoutesById {
   '/platform/mastra-studio': typeof PlatformMastraStudioRouteWithChildren
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
+  '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
   '/r/$roundId': typeof RRoundIdRoute
   '/studio/interviews': typeof StudioInterviewsRoute
@@ -1564,6 +1574,7 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio'
     | '/platform/organizations'
     | '/platform/queues'
+    | '/platform/resume-parse-cache'
     | '/platform/users'
     | '/r/$roundId'
     | '/studio/interviews'
@@ -1719,6 +1730,7 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio'
     | '/platform/organizations'
     | '/platform/queues'
+    | '/platform/resume-parse-cache'
     | '/platform/users'
     | '/r/$roundId'
     | '/studio/interviews'
@@ -1861,6 +1873,7 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio'
     | '/platform/organizations'
     | '/platform/queues'
+    | '/platform/resume-parse-cache'
     | '/platform/users'
     | '/r/$roundId'
     | '/studio/interviews'
@@ -2125,6 +2138,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/platform/users'
       preLoaderRoute: typeof PlatformUsersRouteImport
+      parentRoute: typeof PlatformRoute
+    }
+    '/platform/resume-parse-cache': {
+      id: '/platform/resume-parse-cache'
+      path: '/resume-parse-cache'
+      fullPath: '/platform/resume-parse-cache'
+      preLoaderRoute: typeof PlatformResumeParseCacheRouteImport
       parentRoute: typeof PlatformRoute
     }
     '/platform/queues': {
@@ -3690,6 +3710,7 @@ interface PlatformRouteChildren {
   PlatformMastraStudioRoute: typeof PlatformMastraStudioRouteWithChildren
   PlatformOrganizationsRoute: typeof PlatformOrganizationsRoute
   PlatformQueuesRoute: typeof PlatformQueuesRoute
+  PlatformResumeParseCacheRoute: typeof PlatformResumeParseCacheRoute
   PlatformUsersRoute: typeof PlatformUsersRoute
 }
 
@@ -3698,6 +3719,7 @@ const PlatformRouteChildren: PlatformRouteChildren = {
   PlatformMastraStudioRoute: PlatformMastraStudioRouteWithChildren,
   PlatformOrganizationsRoute: PlatformOrganizationsRoute,
   PlatformQueuesRoute: PlatformQueuesRoute,
+  PlatformResumeParseCacheRoute: PlatformResumeParseCacheRoute,
   PlatformUsersRoute: PlatformUsersRoute,
 }
 
