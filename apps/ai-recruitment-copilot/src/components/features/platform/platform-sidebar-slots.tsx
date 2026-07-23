@@ -3,8 +3,11 @@
 import {
   IconBuilding,
   IconDatabase,
+  IconGauge,
   IconInbox,
   IconListCheck,
+  IconRadio,
+  IconServer,
   IconSearch,
   IconUsers,
 } from "@tabler/icons-react";
@@ -74,6 +77,26 @@ const manageNavSections: NavSection[] = [
       },
     ],
     title: "平台管理",
+  },
+  {
+    items: [
+      {
+        icon: IconServer,
+        path: "/platform/livekit/overview",
+        title: "服务概览",
+      },
+      {
+        icon: IconRadio,
+        path: "/platform/livekit/rooms",
+        title: "实时房间",
+      },
+      {
+        icon: IconGauge,
+        path: "/platform/livekit/metrics",
+        title: "运行指标",
+      },
+    ],
+    title: "LiveKit",
   },
 ];
 
