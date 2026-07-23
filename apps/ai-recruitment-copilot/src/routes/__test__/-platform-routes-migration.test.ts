@@ -65,6 +65,23 @@ describe("TanStack Start platform route migration", () => {
     expect(gridSource).toContain('type: "search"');
   });
 
+  it("links platform admins and the platform sidebar back to the workspace", () => {
+    const sidebarSource = readSource("components/layout/sidebar-user-section.tsx");
+    const studioRouteSource = readSource("routes/studio.tsx");
+    const routeTree = readSource("routeTree.gen.ts");
+
+    expect(sidebarSource).toContain('session?.user?.role === "admin"');
+    expect(sidebarSource).toContain('to="/platform"');
+    expect(sidebarSource).toContain("进入管理后台");
+    expect(sidebarSource).toContain('to="/studio"');
+    expect(sidebarSource).toContain("返回工作台");
+    expect(studioRouteSource).toContain('createFileRoute("/studio")');
+    expect(studioRouteSource).toContain('location.pathname !== "/studio"');
+    expect(studioRouteSource).toContain("redirectToActiveWorkspace");
+    expect(studioRouteSource).toContain(`\`/w/\${slug}/studio\``);
+    expect(routeTree).toContain("'/studio': typeof StudioRouteWithChildren");
+  });
+
   it("splits platform mail ingest account role and status into separate columns", () => {
     const source = readSource(
       "components/features/platform/mail-ingest-accounts/mail-ingest-accounts-grid.tsx",

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WaitRouteImport } from './routes/wait'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SelectWorkspaceRouteImport } from './routes/select-workspace'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as LoginRouteImport } from './routes/login'
@@ -180,6 +181,11 @@ const WaitRoute = WaitRouteImport.update({
   path: '/wait',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SelectWorkspaceRoute = SelectWorkspaceRouteImport.update({
   id: '/select-workspace',
   path: '/select-workspace',
@@ -221,19 +227,19 @@ const WSlugRoute = WSlugRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudioResumesRoute = StudioResumesRouteImport.update({
-  id: '/studio/resumes',
-  path: '/studio/resumes',
-  getParentRoute: () => rootRouteImport,
+  id: '/resumes',
+  path: '/resumes',
+  getParentRoute: () => StudioRoute,
 } as any)
 const StudioResumePoolRoute = StudioResumePoolRouteImport.update({
-  id: '/studio/resume-pool',
-  path: '/studio/resume-pool',
-  getParentRoute: () => rootRouteImport,
+  id: '/resume-pool',
+  path: '/resume-pool',
+  getParentRoute: () => StudioRoute,
 } as any)
 const StudioInterviewsRoute = StudioInterviewsRouteImport.update({
-  id: '/studio/interviews',
-  path: '/studio/interviews',
-  getParentRoute: () => rootRouteImport,
+  id: '/interviews',
+  path: '/interviews',
+  getParentRoute: () => StudioRoute,
 } as any)
 const RRoundIdRoute = RRoundIdRouteImport.update({
   id: '/r/$roundId',
@@ -1130,6 +1136,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/platform': typeof PlatformRouteWithChildren
   '/select-workspace': typeof SelectWorkspaceRoute
+  '/studio': typeof StudioRouteWithChildren
   '/wait': typeof WaitRoute
   '/api/app-version': typeof ApiAppVersionRoute
   '/human-interview/$inviteToken': typeof HumanInterviewInviteTokenRoute
@@ -1291,6 +1298,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/platform': typeof PlatformRouteWithChildren
   '/select-workspace': typeof SelectWorkspaceRoute
+  '/studio': typeof StudioRouteWithChildren
   '/wait': typeof WaitRoute
   '/api/app-version': typeof ApiAppVersionRoute
   '/human-interview/$inviteToken': typeof HumanInterviewInviteTokenRoute
@@ -1439,6 +1447,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/platform': typeof PlatformRouteWithChildren
   '/select-workspace': typeof SelectWorkspaceRoute
+  '/studio': typeof StudioRouteWithChildren
   '/wait': typeof WaitRoute
   '/api/app-version': typeof ApiAppVersionRoute
   '/human-interview/$inviteToken': typeof HumanInterviewInviteTokenRoute
@@ -1608,6 +1617,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/platform'
     | '/select-workspace'
+    | '/studio'
     | '/wait'
     | '/api/app-version'
     | '/human-interview/$inviteToken'
@@ -1769,6 +1779,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/platform'
     | '/select-workspace'
+    | '/studio'
     | '/wait'
     | '/api/app-version'
     | '/human-interview/$inviteToken'
@@ -1916,6 +1927,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/platform'
     | '/select-workspace'
+    | '/studio'
     | '/wait'
     | '/api/app-version'
     | '/human-interview/$inviteToken'
@@ -2084,15 +2096,13 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PlatformRoute: typeof PlatformRouteWithChildren
   SelectWorkspaceRoute: typeof SelectWorkspaceRoute
+  StudioRoute: typeof StudioRouteWithChildren
   WaitRoute: typeof WaitRoute
   ApiAppVersionRoute: typeof ApiAppVersionRoute
   HumanInterviewInviteTokenRoute: typeof HumanInterviewInviteTokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
   JoinCodeRoute: typeof JoinCodeRoute
   RRoundIdRoute: typeof RRoundIdRoute
-  StudioInterviewsRoute: typeof StudioInterviewsRoute
-  StudioResumePoolRoute: typeof StudioResumePoolRoute
-  StudioResumesRoute: typeof StudioResumesRoute
   WSlugRoute: typeof WSlugRouteWithChildren
   HumanInterviewInterviewerInviteTokenRoute: typeof HumanInterviewInterviewerInviteTokenRoute
   ResumeReviewSlugRecordIdRoute: typeof ResumeReviewSlugRecordIdRoute
@@ -2105,6 +2115,13 @@ declare module '@tanstack/react-router' {
       path: '/wait'
       fullPath: '/wait'
       preLoaderRoute: typeof WaitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/select-workspace': {
@@ -2165,24 +2182,24 @@ declare module '@tanstack/react-router' {
     }
     '/studio/resumes': {
       id: '/studio/resumes'
-      path: '/studio/resumes'
+      path: '/resumes'
       fullPath: '/studio/resumes'
       preLoaderRoute: typeof StudioResumesRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof StudioRoute
     }
     '/studio/resume-pool': {
       id: '/studio/resume-pool'
-      path: '/studio/resume-pool'
+      path: '/resume-pool'
       fullPath: '/studio/resume-pool'
       preLoaderRoute: typeof StudioResumePoolRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof StudioRoute
     }
     '/studio/interviews': {
       id: '/studio/interviews'
-      path: '/studio/interviews'
+      path: '/interviews'
       fullPath: '/studio/interviews'
       preLoaderRoute: typeof StudioInterviewsRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof StudioRoute
     }
     '/r/$roundId': {
       id: '/r/$roundId'
@@ -3840,6 +3857,21 @@ const PlatformRouteWithChildren = PlatformRoute._addFileChildren(
   PlatformRouteChildren,
 )
 
+interface StudioRouteChildren {
+  StudioInterviewsRoute: typeof StudioInterviewsRoute
+  StudioResumePoolRoute: typeof StudioResumePoolRoute
+  StudioResumesRoute: typeof StudioResumesRoute
+}
+
+const StudioRouteChildren: StudioRouteChildren = {
+  StudioInterviewsRoute: StudioInterviewsRoute,
+  StudioResumePoolRoute: StudioResumePoolRoute,
+  StudioResumesRoute: StudioResumesRoute,
+}
+
+const StudioRouteWithChildren =
+  StudioRoute._addFileChildren(StudioRouteChildren)
+
 interface WSlugAgentRouteChildren {
   WSlugAgentSessionIdRoute: typeof WSlugAgentSessionIdRoute
   WSlugAgentIndexRoute: typeof WSlugAgentIndexRoute
@@ -3969,15 +4001,13 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PlatformRoute: PlatformRouteWithChildren,
   SelectWorkspaceRoute: SelectWorkspaceRoute,
+  StudioRoute: StudioRouteWithChildren,
   WaitRoute: WaitRoute,
   ApiAppVersionRoute: ApiAppVersionRoute,
   HumanInterviewInviteTokenRoute: HumanInterviewInviteTokenRoute,
   InviteTokenRoute: InviteTokenRoute,
   JoinCodeRoute: JoinCodeRoute,
   RRoundIdRoute: RRoundIdRoute,
-  StudioInterviewsRoute: StudioInterviewsRoute,
-  StudioResumePoolRoute: StudioResumePoolRoute,
-  StudioResumesRoute: StudioResumesRoute,
   WSlugRoute: WSlugRouteWithChildren,
   HumanInterviewInterviewerInviteTokenRoute:
     HumanInterviewInterviewerInviteTokenRoute,
