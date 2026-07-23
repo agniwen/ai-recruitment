@@ -19,10 +19,16 @@ describe("createFeishuDocx", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           code: 0,
-          data: { children: [{ block_id: "heading-1" }, { block_id: "callout-1" }] },
+          data: {
+            children: [
+              { block_id: "heading-1" },
+              { block_id: "callout-1", children: ["callout-empty-text"] },
+            ],
+          },
           msg: "success",
         }),
       )
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: {}, msg: "success" }))
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { children: [] }, msg: "success" }))
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { member: {} }, msg: "success" }));
     const sleep = vi.fn(() => Promise.resolve());
@@ -35,7 +41,22 @@ describe("createFeishuDocx", () => {
           {
             block_type: 19,
             callout: { background_color: 2, border_color: 2 },
-            children: [{ block_type: 2, text: { elements: [] } }],
+            children: [
+              {
+                block_type: 2,
+                text: {
+                  elements: [
+                    {
+                      text_run: {
+                        content: "业务一面评价",
+                        text_element_style: { bold: true },
+                      },
+                    },
+                  ],
+                },
+              },
+              { block_type: 2, text: { elements: [] } },
+            ],
           },
         ],
         recipientOpenId: "ou_hr",
@@ -48,7 +69,7 @@ describe("createFeishuDocx", () => {
       documentId: "docx-1",
       documentUrl: "https://feishu.cn/docx/docx-1",
     });
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher).toHaveBeenCalledTimes(5);
     expect(fetcher.mock.calls[0]?.[0]).toBe("https://open.feishu.cn/open-apis/docx/v1/documents");
     expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
       title: "张三 - 面试评价表",
@@ -63,12 +84,31 @@ describe("createFeishuDocx", () => {
       ],
     });
     expect(fetcher.mock.calls[2]?.[0]).toBe(
+      "https://open.feishu.cn/open-apis/docx/v1/documents/docx-1/blocks/callout-empty-text",
+    );
+    expect(fetcher.mock.calls[2]?.[1]?.method).toBe("PATCH");
+    expect(JSON.parse(String(fetcher.mock.calls[2]?.[1]?.body))).toEqual({
+      update_text_elements: {
+        elements: [
+          {
+            text_run: {
+              content: "业务一面评价",
+              text_element_style: { bold: true },
+            },
+          },
+        ],
+      },
+    });
+    expect(fetcher.mock.calls[3]?.[0]).toBe(
       "https://open.feishu.cn/open-apis/docx/v1/documents/docx-1/blocks/callout-1/children",
     );
-    expect(fetcher.mock.calls[3]?.[0]).toBe(
+    expect(JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body))).toEqual({
+      children: [{ block_type: 2, text: { elements: [] } }],
+    });
+    expect(fetcher.mock.calls[4]?.[0]).toBe(
       "https://open.feishu.cn/open-apis/drive/v1/permissions/docx-1/members?type=docx",
     );
-    expect(JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body))).toEqual({
+    expect(JSON.parse(String(fetcher.mock.calls[4]?.[1]?.body))).toEqual({
       member_id: "ou_hr",
       member_type: "openid",
       perm: "edit",
@@ -160,13 +200,19 @@ describe("createFeishuDocx", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           code: 0,
-          data: { children: [{ block_id: "resume-block" }, { block_id: "heading-block" }] },
+          data: {
+            children: [
+              { block_id: "resume-view", children: ["resume-block"] },
+              { block_id: "heading-block" },
+            ],
+          },
           msg: "success",
         }),
       )
       .mockResolvedValueOnce(
         jsonResponse({ code: 0, data: { file_token: "file-resume" }, msg: "success" }),
       )
+      .mockResolvedValueOnce(jsonResponse({ code: 0, data: {}, msg: "success" }))
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { member: {} }, msg: "success" }));
 
     await createFeishuDocx(
@@ -185,7 +231,7 @@ describe("createFeishuDocx", () => {
 
     expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({
       children: [
-        { block_type: 23, file: {} },
+        { block_type: 23, file: { token: "", view_type: 2 } },
         { block_type: 4, heading2: { elements: [] } },
       ],
     });
@@ -202,7 +248,14 @@ describe("createFeishuDocx", () => {
     expect(uploadBody.get("parent_node")).toBe("resume-block");
     expect(uploadBody.get("size")).toBe("4");
     expect(uploadBody.get("extra")).toBe(JSON.stringify({ drive_route_token: "docx-with-resume" }));
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher.mock.calls[3]?.[0]).toBe(
+      "https://open.feishu.cn/open-apis/docx/v1/documents/docx-with-resume/blocks/resume-block",
+    );
+    expect(fetcher.mock.calls[3]?.[1]?.method).toBe("PATCH");
+    expect(JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body))).toEqual({
+      replace_file: { token: "file-resume" },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(5);
   });
 
   it("retries a rate-limited Feishu request", async () => {
