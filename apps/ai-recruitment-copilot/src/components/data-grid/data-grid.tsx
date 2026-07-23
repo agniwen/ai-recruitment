@@ -3,7 +3,7 @@
 import type { ColumnDef, OnChangeFn, RowSelectionState, SortingState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardFrame } from "@/components/ui/card";
 import {
   Table,
@@ -15,7 +15,14 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@arc/shared/utils";
 import { PaginationBar } from "./parts/pagination-bar";
-import { getPinningStyles, PINNED_HEADER_CLASS, STICKY_HEADER_CLASS } from "./parts/pinned-cell";
+import {
+  getPinnedEdgeClassName,
+  getPinnedEdgeSides,
+  getPinningStyles,
+  PINNED_HEADER_CLASS,
+  readHorizontalScrollOverflow,
+  STICKY_HEADER_CLASS,
+} from "./parts/pinned-cell";
 import { Toolbar } from "./parts/toolbar";
 import type { ToolbarFilterConfig } from "./parts/toolbar";
 
@@ -118,6 +125,7 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
     }),
     [columnPinning],
   );
+  const hasPinning = normalizedPinning.left.length > 0 || normalizedPinning.right.length > 0;
 
   const table = useReactTable({
     columns,
@@ -153,6 +161,60 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
 
   const { rows } = table.getRowModel();
 
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollOverflow, setScrollOverflow] = useState({
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
+
+  const updateScrollOverflow = useCallback(() => {
+    const element = scrollRef.current;
+    if (!element) {
+      return;
+    }
+    setScrollOverflow(readHorizontalScrollOverflow(element));
+  }, []);
+
+  const setScrollNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollRef.current = node;
+      if (!(node && hasPinning)) {
+        return;
+      }
+      setScrollOverflow(readHorizontalScrollOverflow(node));
+    },
+    [hasPinning],
+  );
+
+  useEffect(() => {
+    if (!hasPinning) {
+      setScrollOverflow({ canScrollLeft: false, canScrollRight: false });
+      return;
+    }
+
+    const element = scrollRef.current;
+    if (!element) {
+      return;
+    }
+
+    updateScrollOverflow();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const resizeObserver = new ResizeObserver(() => {
+      updateScrollOverflow();
+    });
+    resizeObserver.observe(element);
+    const tableElement = element.querySelector("table");
+    if (tableElement) {
+      resizeObserver.observe(tableElement);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [hasPinning, rows.length, columns, updateScrollOverflow]);
+
   return (
     <div className="flex flex-col gap-4">
       {headerExtra ? <div>{headerExtra}</div> : null}
@@ -176,7 +238,9 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
           <Table
             render={
               <div
-                className={cn(maxHeight && "overflow-auto")}
+                className={cn(maxHeight ? "overflow-auto" : "overflow-x-auto")}
+                onScroll={hasPinning ? updateScrollOverflow : undefined}
+                ref={setScrollNode}
                 style={maxHeight ? { maxHeight } : undefined}
               />
             }
@@ -187,9 +251,19 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
                     const pin = header.column.getIsPinned();
+                    const edge = getPinnedEdgeSides(header.column);
                     return (
                       <TableHead
-                        className={cn(maxHeight && STICKY_HEADER_CLASS, pin && PINNED_HEADER_CLASS)}
+                        className={cn(
+                          maxHeight && STICKY_HEADER_CLASS,
+                          pin && PINNED_HEADER_CLASS,
+                          getPinnedEdgeClassName({
+                            isLeftEdge: edge.isLeftEdge,
+                            isRightEdge: edge.isRightEdge,
+                            showLeftEdge: scrollOverflow.canScrollLeft,
+                            showRightEdge: scrollOverflow.canScrollRight,
+                          }),
+                        )}
                         key={header.id}
                         style={getPinningStyles(header.column, {
                           isHeader: true,
@@ -208,11 +282,23 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
             <TableBody>
               {rows.map((row) => (
                 <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} style={getPinningStyles(cell.column)}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+                  {row.getVisibleCells().map((cell) => {
+                    const edge = getPinnedEdgeSides(cell.column);
+                    return (
+                      <TableCell
+                        className={getPinnedEdgeClassName({
+                          isLeftEdge: edge.isLeftEdge,
+                          isRightEdge: edge.isRightEdge,
+                          showLeftEdge: scrollOverflow.canScrollLeft,
+                          showRightEdge: scrollOverflow.canScrollRight,
+                        })}
+                        key={cell.id}
+                        style={getPinningStyles(cell.column)}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))}
             </TableBody>
