@@ -14,7 +14,11 @@ import {
   getResendClient,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resend";
 import { getRequiredEnv } from "@arc/ai-recruitment-copilot-backend/lib/server/env";
-import { createFeishuInterviewEvaluationDocx } from "@arc/ai-recruitment-copilot-backend/server/routes/feishu/utils/feishu-docx";
+import {
+  createFeishuInterviewEvaluationDocx,
+  moveFeishuInterviewEvaluationDocx,
+  resolveFeishuDocxDocumentId,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/feishu/utils/feishu-docx";
 import { buildInterviewEvaluationDocument } from "@arc/ai-recruitment-copilot-backend/server/routes/feishu/utils/interview-evaluation-doc";
 import {
   InterviewSummaryCard,
@@ -358,12 +362,17 @@ async function ensureInterviewEvaluationDocument({
 }): Promise<string> {
   const [existing] = await db
     .select({
+      documentId: interviewNotification.feishuDocumentId,
       documentUrl: interviewNotification.feishuDocumentUrl,
     })
     .from(interviewNotification)
     .where(eq(interviewNotification.id, notificationId))
     .limit(1);
   if (existing?.documentUrl) {
+    const documentId = resolveFeishuDocxDocumentId(existing.documentId, existing.documentUrl);
+    if (documentId) {
+      await moveFeishuInterviewEvaluationDocx(providerId, documentId);
+    }
     return existing.documentUrl;
   }
 
