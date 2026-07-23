@@ -2,13 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
   capCandidateComparisonIds,
   createRecruitingActionProposal,
+  createRecruitingCopilotTools,
   getResumePoolDetailForCopilot,
   searchResumeRecordsForCopilot,
 } from "../tools/recruiting-copilot";
 import { normalizeResumePoolItemId } from "../tools/resume-pool-id";
 
 const mocks = vi.hoisted(() => ({
+  listAllJobDescriptions: vi.fn(),
+  loadJobDescriptionById: vi.fn(),
+  loadResumeDetail: vi.fn(),
   loadResumePoolItem: vi.fn(),
+  upsertConversationContextJobBinding: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
@@ -28,18 +33,22 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer"
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao",
   () => ({
-    listAllJobDescriptions: vi.fn(),
-    loadJobDescriptionById: vi.fn(),
+    listAllJobDescriptions: mocks.listAllJobDescriptions,
+    loadJobDescriptionById: mocks.loadJobDescriptionById,
   }),
 );
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes",
   () => ({
     listResumeRecords: vi.fn(),
+    loadResumeDetail: mocks.loadResumeDetail,
   }),
 );
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao", () => ({
   loadResumePoolItem: mocks.loadResumePoolItem,
+}));
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat", () => ({
+  upsertConversationContextJobBinding: mocks.upsertConversationContextJobBinding,
 }));
 
 describe("recruiting copilot tools", () => {
@@ -203,7 +212,7 @@ describe("recruiting copilot tools", () => {
     });
   });
 
-  it("creates confirmable recruiting action proposals without executing writes", () => {
+  it("creates confirmable recruiting action proposals with stable bind ids", () => {
     const result = createRecruitingActionProposal({
       explanation: "候选人与岗位技能匹配，可以先绑定岗位。",
       payload: {
@@ -216,7 +225,7 @@ describe("recruiting copilot tools", () => {
 
     expect(result.proposal).toEqual({
       explanation: "候选人与岗位技能匹配，可以先绑定岗位。",
-      id: expect.any(String),
+      id: "conversation-bind:resume_record:resume-1",
       payload: {
         jobDescriptionId: "jd-1",
         resumeRecordId: "resume-1",
@@ -247,7 +256,47 @@ describe("recruiting copilot tools", () => {
     expect(mocks.loadResumePoolItem).not.toHaveBeenCalled();
   });
 
-  it("creates confirmable pool bind proposals", () => {
+  it("applies a scoped conversation job overlay to resume-pool details", async () => {
+    const authorize = vi.fn().mockResolvedValue(true);
+    mocks.loadResumePoolItem.mockResolvedValueOnce({
+      candidateName: "李四",
+      id: "pool-1",
+      jobDescriptionId: null,
+      jobDescriptionName: null,
+      masteredSkills: ["React"],
+      notes: null,
+      resumeParseStatus: "completed",
+      resumeProfile: { name: "李四" },
+      scope: "private",
+      skillsNormalized: [],
+      targetRole: "前端",
+    });
+    mocks.loadJobDescriptionById.mockResolvedValueOnce({
+      id: "jd-1",
+      name: "前端工程师",
+    });
+
+    const result = await getResumePoolDetailForCopilot({
+      authorize,
+      contextBindings: { resume_pool_item: { "pool-1": "jd-1" } },
+      id: "pool:pool-1",
+      organizationId: "org-1",
+      userId: "user-1",
+      visibilityScope: { kind: "all" },
+    });
+
+    expect(mocks.loadJobDescriptionById).toHaveBeenCalledWith("org-1", "jd-1", {
+      actorUserId: "user-1",
+    });
+    expect(result.resumePoolItem).toEqual(
+      expect.objectContaining({
+        jobDescriptionId: "jd-1",
+        jobDescriptionName: "前端工程师",
+      }),
+    );
+  });
+
+  it("creates confirmable pool bind proposals with stable ids", () => {
     const result = createRecruitingActionProposal({
       explanation: "人才库条目尚未绑定岗位，先请用户选择。",
       payload: {
@@ -258,6 +307,86 @@ describe("recruiting copilot tools", () => {
     });
 
     expect(result.proposal.type).toBe("bind_pool_item_to_job");
+    expect(result.proposal.id).toBe("conversation-bind:resume_pool_item:pool-1");
     expect(result.proposal.payload).toEqual({ poolItemId: "pool-1" });
+  });
+
+  it("registers propose_recruiting_action with requireApproval", () => {
+    const tools = createRecruitingCopilotTools({
+      authorize: vi.fn().mockResolvedValue(true),
+      organizationId: "org-1",
+      userId: "user-1",
+      visibilityScope: { kind: "all" },
+    });
+    expect(tools.propose_recruiting_action.requireApproval).toBe(true);
+    expect(tools.propose_recruiting_action.description).toContain("必须主动、立即调用");
+    expect(tools.get_resume_record_detail.description).toContain(
+      "必须立刻调用 propose_recruiting_action",
+    );
+    expect(tools.get_resume_pool_detail.description).toContain(
+      "必须立刻调用 propose_recruiting_action",
+    );
+  });
+
+  it("does not execute a native candidate approval without target update and JD permissions", async () => {
+    const authorize = vi
+      .fn()
+      .mockImplementation(({ resource }: { resource: string }) =>
+        Promise.resolve(resource !== "jd"),
+      );
+    const tools = createRecruitingCopilotTools({
+      authorize,
+      conversationId: "conversation-1",
+      organizationId: "org-1",
+      userId: "user-1",
+      visibilityScope: { kind: "all" },
+    });
+
+    await expect(
+      tools.propose_recruiting_action.execute?.(
+        {
+          explanation: "先按前端岗位分析。",
+          payload: { jobDescriptionId: "jd-1", resumeRecordId: "resume-1" },
+          title: "关联岗位",
+          type: "bind_candidate_to_job",
+        },
+        {} as never,
+      ),
+    ).rejects.toThrow("没有权限在本对话中关联该候选人与岗位。");
+    expect(authorize).toHaveBeenCalledWith({ action: "update", resource: "resumeLibrary" });
+    expect(authorize).toHaveBeenCalledWith({ action: "read", resource: "jd" });
+    expect(mocks.upsertConversationContextJobBinding).not.toHaveBeenCalled();
+  });
+
+  it("does not execute a native pool approval for a JD outside hiring-unit scope", async () => {
+    vi.clearAllMocks();
+    const authorize = vi.fn().mockResolvedValue(true);
+    mocks.loadJobDescriptionById.mockResolvedValueOnce(null);
+    const tools = createRecruitingCopilotTools({
+      authorize,
+      conversationId: "conversation-1",
+      organizationId: "org-1",
+      userId: "user-1",
+      visibilityScope: { kind: "all" },
+    });
+
+    const result = await tools.propose_recruiting_action.execute?.(
+      {
+        explanation: "先按前端岗位分析。",
+        payload: { jobDescriptionId: "jd-other-unit", poolItemId: "pool:pool-1" },
+        title: "关联岗位",
+        type: "bind_pool_item_to_job",
+      },
+      {} as never,
+    );
+
+    expect(authorize).toHaveBeenCalledWith({ action: "import", resource: "resumePool" });
+    expect(authorize).toHaveBeenCalledWith({ action: "read", resource: "jd" });
+    expect(mocks.loadJobDescriptionById).toHaveBeenCalledWith("org-1", "jd-other-unit", {
+      actorUserId: "user-1",
+    });
+    expect(result).not.toHaveProperty("confirmation");
+    expect(mocks.loadResumePoolItem).not.toHaveBeenCalled();
+    expect(mocks.upsertConversationContextJobBinding).not.toHaveBeenCalled();
   });
 });

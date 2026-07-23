@@ -112,7 +112,7 @@ describe("conversationsRouter", () => {
     mocks.checkConversationOwner.mockResolvedValue("ok");
     mocks.confirmRecruitingAction.mockResolvedValue({
       actionType: "bind_candidate_to_job",
-      message: "已绑定候选人到岗位。",
+      message: "已在本对话中将该候选人关联到所选岗位（仅影响本轮分析，未改招聘台数据）。",
       status: "executed",
     });
 
@@ -138,6 +138,8 @@ describe("conversationsRouter", () => {
     expect(mocks.confirmRecruitingAction).toHaveBeenCalledWith(
       expect.objectContaining({
         authorize: mocks.authorize,
+        conversationId: "conversation_1",
+        decision: "confirm",
         operatorId: USER_ID,
         organizationId: ORG_ID,
         visibilityScope: { kind: "all" },
@@ -147,9 +149,14 @@ describe("conversationsRouter", () => {
       action: "update",
       resource: "resumeLibrary",
     });
+    expect(mocks.authorize).toHaveBeenCalledWith({ action: "read", resource: "jd" });
+    expect(mocks.resolveHiringUnitAccessScope).toHaveBeenCalledWith({
+      actorUserId: USER_ID,
+      organizationId: ORG_ID,
+    });
     await expect(res.json()).resolves.toEqual({
       actionType: "bind_candidate_to_job",
-      message: "已绑定候选人到岗位。",
+      message: "已在本对话中将该候选人关联到所选岗位（仅影响本轮分析，未改招聘台数据）。",
       status: "executed",
     });
   });
@@ -158,7 +165,7 @@ describe("conversationsRouter", () => {
     mocks.checkConversationOwner.mockResolvedValue("ok");
     mocks.confirmRecruitingAction.mockResolvedValue({
       actionType: "bind_pool_item_to_job",
-      message: "已绑定人才库条目到岗位。",
+      message: "已在本对话中将该人才库条目关联到所选岗位（仅影响本轮分析，未改人才库数据）。",
       status: "executed",
     });
 
@@ -197,6 +204,8 @@ describe("conversationsRouter", () => {
     });
     expect(mocks.confirmRecruitingAction).toHaveBeenCalledWith(
       expect.objectContaining({
+        conversationId: "conversation_1",
+        decision: "confirm",
         hiringUnitScope: {
           canAccessAll: false,
           hiringUnitIds: ["hiring-unit-1"],
@@ -257,4 +266,50 @@ describe("conversationsRouter", () => {
     expect(res.status).toBe(403);
     expect(mocks.confirmRecruitingAction).not.toHaveBeenCalled();
   });
+});
+
+it("persists ignore after RBAC and ownership checks without loading candidate data", async () => {
+  mocks.checkConversationOwner.mockResolvedValue("ok");
+  mocks.confirmRecruitingAction.mockResolvedValue({
+    actionType: "bind_candidate_to_job",
+    confirmation: {
+      confirmedAt: "2026-07-24T00:00:00.000Z",
+      status: "ignored",
+    },
+    message: "已忽略该动作建议。",
+    status: "executed",
+  });
+
+  const res = await makeApp().request("/conversations/conversation_1/actions/confirm", {
+    body: JSON.stringify({
+      decision: "ignore",
+      proposal: {
+        explanation: "候选人与岗位匹配。",
+        id: "conversation-bind:resume_record:resume-1",
+        payload: {
+          resumeRecordId: "resume-1",
+        },
+        title: "关联岗位",
+        type: "bind_candidate_to_job",
+      },
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+
+  expect(res.status).toBe(200);
+  expect(mocks.authorize).toHaveBeenCalledWith({
+    action: "update",
+    resource: "resumeLibrary",
+  });
+  expect(mocks.authorize).toHaveBeenCalledWith({ action: "read", resource: "jd" });
+  expect(mocks.loadResumeDetail).not.toHaveBeenCalled();
+  expect(mocks.resolveHiringUnitAccessScope).not.toHaveBeenCalled();
+  expect(mocks.confirmRecruitingAction).toHaveBeenCalledWith(
+    expect.objectContaining({
+      conversationId: "conversation_1",
+      decision: "ignore",
+      hiringUnitScope: null,
+    }),
+  );
 });

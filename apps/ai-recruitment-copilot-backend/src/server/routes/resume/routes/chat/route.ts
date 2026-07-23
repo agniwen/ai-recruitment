@@ -6,14 +6,18 @@ import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-ba
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { legacyUiMessageToArcMessage } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/adapters/arc-message-adapter";
 import { createRecruitingCopilotAgent } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/recruiting-copilot-agent";
+import { mastra } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/index";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { resumeChatRequestSchema } from "@arc/ai-recruitment-copilot-backend/server/routes/resume/schema";
 import {
   checkConversationOwner,
   deleteMessagesFromId,
+  loadConversationContextBindings,
   upsertChatMessage,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat";
+import { extractV6NativeApproval } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/utils/extract-v6-native-approval";
+import { EMPTY_CHAT_CONTEXT_BINDINGS } from "@arc/db-schema/chat-context-bindings";
 import { loadResumeRecordFocus } from "./dao";
 import { resolveRecruitingCopilotFocus } from "./focus";
 import { validateClientChatMessages } from "./messages";
@@ -141,6 +145,10 @@ export const resumeChatRouter = factory
     const conversationOwned = chatId
       ? (await checkConversationOwner(userId, chatId, orgId)) === "ok"
       : false;
+    const contextBindings =
+      conversationOwned && chatId
+        ? await loadConversationContextBindings(chatId, orgId)
+        : EMPTY_CHAT_CONTEXT_BINDINGS;
 
     const preparedConversation = await prepareConversationMessages({
       chatId,
@@ -163,12 +171,19 @@ export const resumeChatRouter = factory
     });
     const agent = createRecruitingCopilotAgent({
       authorize,
+      contextBindings,
+      conversationId: conversationOwned ? chatId : null,
       focus: resolvedFocus ?? undefined,
       organizationId: orgId,
       userId,
       visibilityScope,
     });
-    const agentStream = await agent.stream(toModelMessages(messages));
+    agent.__registerMastra(mastra);
+
+    const nativeApproval = extractV6NativeApproval(messages);
+    const agentStream = nativeApproval
+      ? await agent.resumeStream(nativeApproval.resumeData, { runId: nativeApproval.runId })
+      : await agent.stream(toModelMessages(messages));
     const stream = createUIMessageStream<UIMessage>({
       execute: ({ writer }) => {
         writer.merge(

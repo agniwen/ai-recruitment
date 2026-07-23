@@ -4,8 +4,10 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { loadResumePoolItem } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao";
+import type { ChatContextBindings } from "@arc/db-schema/chat-context-bindings";
 import { resumePoolItem } from "@arc/db-schema/schema";
 import type { ResumePoolDetail } from "@arc/shared/resume-pool";
+import { resolveConversationJobOverlay } from "./conversation-job-overlay";
 import { normalizeResumePoolItemId } from "./resume-pool-id";
 
 const resumePoolCitationSchema = z.object({
@@ -49,6 +51,7 @@ function cleanString(value: string | null | undefined): string | null {
 function toResumePoolItemDetail(
   detail: ResumePoolDetail,
   resumeText: string | null,
+  jobBinding: { jobDescriptionId: string | null; jobDescriptionName: string | null },
 ): z.infer<typeof resumePoolItemDetailSchema> {
   const keySkills = (
     detail.masteredSkills.length > 0 ? detail.masteredSkills : detail.skillsNormalized
@@ -59,12 +62,12 @@ function toResumePoolItemDetail(
       id: `pool:${detail.id}`,
       label: detail.candidateName,
       recordType: "resume_pool_item",
-      secondaryLabel: detail.jobDescriptionName,
+      secondaryLabel: jobBinding.jobDescriptionName,
     },
     hasAiProfile: detail.resumeProfile !== null,
     id: detail.id,
-    jobDescriptionId: detail.jobDescriptionId,
-    jobDescriptionName: detail.jobDescriptionName,
+    jobDescriptionId: jobBinding.jobDescriptionId,
+    jobDescriptionName: jobBinding.jobDescriptionName,
     keySkills,
     notes: cleanString(detail.notes),
     resumeParseStatus: detail.resumeParseStatus,
@@ -78,6 +81,7 @@ function toResumePoolItemDetail(
 
 export async function getResumePoolDetailForCopilot(input: {
   authorize: WorkspaceAuthorizer;
+  contextBindings?: ChatContextBindings;
   id: string;
   includeResumeText?: boolean;
   organizationId: string;
@@ -119,5 +123,12 @@ export async function getResumePoolDetailForCopilot(input: {
       .limit(1);
     resumeText = row?.resumeText?.slice(0, 12_000) ?? null;
   }
-  return { resumePoolItem: toResumePoolItemDetail(detail, resumeText) };
+  const jobBinding = await resolveConversationJobOverlay({
+    actorUserId: input.userId,
+    boundJobDescriptionId: input.contextBindings?.resume_pool_item?.[detail.id],
+    jobDescriptionId: detail.jobDescriptionId,
+    jobDescriptionName: detail.jobDescriptionName,
+    organizationId: input.organizationId,
+  });
+  return { resumePoolItem: toResumePoolItemDetail(detail, resumeText, jobBinding) };
 }

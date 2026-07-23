@@ -182,7 +182,7 @@ export const conversationsRouter = factory
         return c.json({ error: "Forbidden" }, 403);
       }
 
-      const { proposal } = c.req.valid("json");
+      const { proposal, decision } = c.req.valid("json");
       const authorize = createRequestWorkspaceAuthorizer({
         headers: c.req.raw.headers,
         memberRole: c.var.member?.role,
@@ -196,6 +196,12 @@ export const conversationsRouter = factory
           authorize({ action: "read", resource: "jd" }),
         ]);
         allowed = poolPermissions.every(Boolean);
+      } else if (proposal.type === "bind_candidate_to_job") {
+        const candidatePermissions = await Promise.all([
+          authorize({ action: "update", resource: "resumeLibrary" }),
+          authorize({ action: "read", resource: "jd" }),
+        ]);
+        allowed = candidatePermissions.every(Boolean);
       } else {
         allowed = await authorize({ action: "update", resource: "resumeLibrary" });
       }
@@ -208,32 +214,41 @@ export const conversationsRouter = factory
         userId: user.id,
       });
       let hiringUnitScope = null;
-      if (proposal.type === "bind_pool_item_to_job") {
-        const visiblePoolItem = await loadResumePoolItem({
-          organizationId: activeOrg.id,
-          poolItemId: normalizeResumePoolItemId(proposal.payload.poolItemId),
-          userId: user.id,
-          visibilityScope,
-        });
-        if (!visiblePoolItem) {
-          return c.json({ error: "Not Found" }, 404);
+      if (decision !== "ignore") {
+        if (proposal.type === "bind_pool_item_to_job") {
+          const visiblePoolItem = await loadResumePoolItem({
+            organizationId: activeOrg.id,
+            poolItemId: normalizeResumePoolItemId(proposal.payload.poolItemId),
+            userId: user.id,
+            visibilityScope,
+          });
+          if (!visiblePoolItem) {
+            return c.json({ error: "Not Found" }, 404);
+          }
+        } else {
+          const visibleRecord = await loadResumeDetail(
+            proposal.payload.resumeRecordId,
+            activeOrg.id,
+            visibilityScope,
+          );
+          if (!visibleRecord) {
+            return c.json({ error: "Not Found" }, 404);
+          }
         }
-        hiringUnitScope = await resolveHiringUnitAccessScope({
-          actorUserId: user.id,
-          organizationId: activeOrg.id,
-        });
-      } else {
-        const visibleRecord = await loadResumeDetail(
-          proposal.payload.resumeRecordId,
-          activeOrg.id,
-          visibilityScope,
-        );
-        if (!visibleRecord) {
-          return c.json({ error: "Not Found" }, 404);
+        if (
+          proposal.type === "bind_pool_item_to_job" ||
+          proposal.type === "bind_candidate_to_job"
+        ) {
+          hiringUnitScope = await resolveHiringUnitAccessScope({
+            actorUserId: user.id,
+            organizationId: activeOrg.id,
+          });
         }
       }
       const result = await confirmRecruitingAction({
         authorize,
+        conversationId,
+        decision,
         hiringUnitScope,
         operatorId: user.id,
         organizationId: activeOrg.id,

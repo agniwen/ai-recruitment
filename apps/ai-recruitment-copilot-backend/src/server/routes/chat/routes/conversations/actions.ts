@@ -8,17 +8,17 @@ import {
   ResumeAnalysisError,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
-import { resetResumeEvaluationForJobChange } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
 import { transitionCandidateStage } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-transition";
 import { loadJobDescriptionById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
-import {
-  bindResumePoolItemJobDescription,
-  loadResumePoolItem,
-} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao";
+import { loadResumePoolItem } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao";
+import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import type { HiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import { normalizeResumePoolItemId } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/tools/resume-pool-id";
 import { interviewAuditLog, studioInterview } from "@arc/db-schema/schema";
-import type { ResumeEvaluationStatus } from "@arc/shared/studio-resumes";
+import {
+  patchRecruitingActionConfirmationInConversation,
+  upsertConversationContextJobBinding,
+} from "../../dao/chat";
 import type { confirmRecruitingActionSchema } from "../../schema";
 
 export type ConfirmRecruitingActionInput = z.infer<typeof confirmRecruitingActionSchema>;
@@ -26,6 +26,12 @@ export type ConfirmRecruitingActionInput = z.infer<typeof confirmRecruitingActio
 export type ConfirmRecruitingActionResult =
   | {
       actionType: ConfirmRecruitingActionInput["proposal"]["type"];
+      confirmation?: {
+        confirmedAt: string;
+        jobDescriptionId?: string;
+        jobDescriptionName?: string | null;
+        status: "confirmed" | "ignored";
+      };
       message: string;
       status: "executed" | "noop";
     }
@@ -46,110 +52,104 @@ function normalizeQuestions(
   }));
 }
 
+async function stampProposalConfirmation(input: {
+  conversationId: string;
+  jobDescriptionId?: string;
+  jobDescriptionName?: string | null;
+  organizationId: string;
+  proposalId: string;
+  status: "confirmed" | "ignored";
+}) {
+  const confirmation = {
+    confirmedAt: new Date().toISOString(),
+    ...(input.jobDescriptionId ? { jobDescriptionId: input.jobDescriptionId } : {}),
+    ...(input.jobDescriptionName === undefined
+      ? {}
+      : { jobDescriptionName: input.jobDescriptionName }),
+    status: input.status,
+  };
+  await patchRecruitingActionConfirmationInConversation({
+    confirmation,
+    conversationId: input.conversationId,
+    organizationId: input.organizationId,
+    proposalId: input.proposalId,
+  });
+  return confirmation;
+}
+
 async function confirmBindCandidateToJob(input: {
-  jobDescriptionId: string | null;
+  conversationId: string;
+  jobDescriptionId: string;
   operatorId: string | null;
   organizationId: string;
   proposalId: string;
-  proposalTitle: string;
   resumeRecordId: string;
+  visibilityScope: RecruitingVisibilityScope;
 }): Promise<ConfirmRecruitingActionResult> {
-  const nextJobDescription = input.jobDescriptionId
-    ? await loadJobDescriptionById(input.organizationId, input.jobDescriptionId)
-    : null;
-  if (input.jobDescriptionId && !nextJobDescription) {
-    return { message: "岗位不存在或不属于当前 workspace。", status: "failed" };
+  if (!input.operatorId) {
+    return { message: "无法确认当前操作人。", status: "failed" };
   }
-
-  const now = new Date();
-  const result = await db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select({
-        jobDescriptionId: studioInterview.jobDescriptionId,
-        resumeEvaluationStatus: studioInterview.resumeEvaluationStatus,
-      })
-      .from(studioInterview)
-      .where(
-        and(
-          eq(studioInterview.id, input.resumeRecordId),
-          eq(studioInterview.organizationId, input.organizationId),
-        ),
-      )
-      .for("update")
-      .limit(1);
-    if (!existing) {
-      return { kind: "not_found" as const };
-    }
-    if (existing.jobDescriptionId === input.jobDescriptionId) {
-      return { kind: "noop" as const };
-    }
-    await tx
-      .update(studioInterview)
-      .set({ jobDescriptionId: input.jobDescriptionId, updatedAt: now })
-      .where(
-        and(
-          eq(studioInterview.id, input.resumeRecordId),
-          eq(studioInterview.organizationId, input.organizationId),
-        ),
-      );
-    await tx.insert(interviewAuditLog).values({
-      action: "job_description_changed",
-      createdAt: now,
-      detail: {
-        copilotActionProposalId: input.proposalId,
-        copilotActionTitle: input.proposalTitle,
-        fromJobDescriptionId: existing.jobDescriptionId,
-        fromJobDescriptionName: null,
-        source: "workspace_recruiting_copilot",
-        toJobDescriptionId: input.jobDescriptionId,
-        toJobDescriptionName: nextJobDescription?.name ?? null,
-      },
-      id: crypto.randomUUID(),
-      interviewRecordId: input.resumeRecordId,
-      operatorId: input.operatorId,
-      organizationId: input.organizationId,
-    });
+  const nextJobDescription = await loadJobDescriptionById(
+    input.organizationId,
+    input.jobDescriptionId,
+    { actorUserId: input.operatorId },
+  );
+  if (!nextJobDescription) {
     return {
-      kind: "updated" as const,
-      previousJobDescriptionId: existing.jobDescriptionId,
-      previousStatus: existing.resumeEvaluationStatus,
+      message: "岗位不存在或不在当前招聘组负责的用人组织范围内。",
+      status: "failed",
     };
-  });
-
-  if (result.kind === "not_found") {
-    return { message: "候选人记录不存在。", status: "failed" };
   }
-  if (result.kind === "noop") {
+  const existing = await loadResumeDetail(
+    input.resumeRecordId,
+    input.organizationId,
+    input.visibilityScope,
+  );
+  if (!existing) {
+    return { message: "候选人记录不存在或无权访问。", status: "failed" };
+  }
+
+  const result = await upsertConversationContextJobBinding({
+    conversationId: input.conversationId,
+    jobDescriptionId: input.jobDescriptionId,
+    jobDescriptionName: nextJobDescription.name,
+    kind: "resume_record",
+    organizationId: input.organizationId,
+    recordId: input.resumeRecordId,
+    summaryText: `已在本对话中将该候选人关联到「${nextJobDescription.name}」（仅影响本轮分析，未改招聘台数据）。`,
+  });
+  const confirmation = await stampProposalConfirmation({
+    conversationId: input.conversationId,
+    jobDescriptionId: input.jobDescriptionId,
+    jobDescriptionName: nextJobDescription.name,
+    organizationId: input.organizationId,
+    proposalId: input.proposalId,
+    status: "confirmed",
+  });
+  if (result.status === "noop") {
     return {
       actionType: "bind_candidate_to_job",
-      message: "候选人已绑定到该岗位。",
+      confirmation,
+      message: "本对话已将该候选人关联到该岗位（仅影响本轮分析，未改招聘台数据）。",
       status: "noop",
     };
   }
-  if (result.previousStatus) {
-    await resetResumeEvaluationForJobChange({
-      id: input.resumeRecordId,
-      nextJobDescriptionId: input.jobDescriptionId,
-      operatorId: input.operatorId,
-      organizationId: input.organizationId,
-      previousJobDescriptionId: result.previousJobDescriptionId,
-      previousStatus: result.previousStatus as ResumeEvaluationStatus,
-    });
-  }
-  invalidateStudioInterviewCaches(input.organizationId);
   return {
     actionType: "bind_candidate_to_job",
-    message: "已绑定候选人到岗位。",
+    confirmation,
+    message: "已在本对话中将该候选人关联到所选岗位（仅影响本轮分析，未改招聘台数据）。",
     status: "executed",
   };
 }
 
 async function confirmBindPoolItemToJob(input: {
+  conversationId: string;
   hiringUnitScope: HiringUnitAccessScope;
   jobDescriptionId: string;
   operatorId: string | null;
   organizationId: string;
   poolItemId: string;
+  proposalId: string;
   visibilityScope: RecruitingVisibilityScope;
 }): Promise<ConfirmRecruitingActionResult> {
   if (!input.operatorId) {
@@ -159,9 +159,13 @@ async function confirmBindPoolItemToJob(input: {
   const nextJobDescription = await loadJobDescriptionById(
     input.organizationId,
     input.jobDescriptionId,
+    { actorUserId: input.operatorId },
   );
   if (!nextJobDescription) {
-    return { message: "岗位不存在或不属于当前 workspace。", status: "failed" };
+    return {
+      message: "岗位不存在或不在当前招聘组负责的用人组织范围内。",
+      status: "failed",
+    };
   }
 
   const existing = await loadResumePoolItem({
@@ -173,36 +177,55 @@ async function confirmBindPoolItemToJob(input: {
   if (!existing) {
     return { message: "人才库记录不存在或无权访问。", status: "failed" };
   }
-  if (existing.jobDescriptionId === input.jobDescriptionId) {
+
+  const result = await upsertConversationContextJobBinding({
+    conversationId: input.conversationId,
+    jobDescriptionId: input.jobDescriptionId,
+    jobDescriptionName: nextJobDescription.name,
+    kind: "resume_pool_item",
+    organizationId: input.organizationId,
+    recordId: poolItemId,
+    summaryText: `已在本对话中将该人才库条目关联到「${nextJobDescription.name}」（仅影响本轮分析，未改人才库数据）。`,
+  });
+  const confirmation = await stampProposalConfirmation({
+    conversationId: input.conversationId,
+    jobDescriptionId: input.jobDescriptionId,
+    jobDescriptionName: nextJobDescription.name,
+    organizationId: input.organizationId,
+    proposalId: input.proposalId,
+    status: "confirmed",
+  });
+  if (result.status === "noop") {
     return {
       actionType: "bind_pool_item_to_job",
-      message: "人才库条目已绑定到该岗位。",
+      confirmation,
+      message: "本对话已将该人才库条目关联到该岗位（仅影响本轮分析，未改人才库数据）。",
       status: "noop",
     };
   }
-  if (existing.jobDescriptionId) {
-    return { message: "该人才库条目已绑定其他岗位。", status: "failed" };
-  }
-
-  const bindResult = await bindResumePoolItemJobDescription({
-    actorId: input.operatorId,
-    hiringUnitScope: input.hiringUnitScope,
-    jobDescriptionId: input.jobDescriptionId,
-    organizationId: input.organizationId,
-    poolItemId,
-  });
-  if (bindResult === "job_description_not_found") {
-    return {
-      message: "岗位不存在或不在当前招聘组负责的用人组织范围内。",
-      status: "failed",
-    };
-  }
-  if (bindResult === "already_bound") {
-    return { message: "该人才库条目已绑定岗位。", status: "failed" };
-  }
   return {
     actionType: "bind_pool_item_to_job",
-    message: "已绑定人才库条目到岗位。",
+    confirmation,
+    message: "已在本对话中将该人才库条目关联到所选岗位（仅影响本轮分析，未改人才库数据）。",
+    status: "executed",
+  };
+}
+
+async function ignoreRecruitingAction(input: {
+  conversationId: string;
+  organizationId: string;
+  proposal: ConfirmRecruitingActionInput["proposal"];
+}): Promise<ConfirmRecruitingActionResult> {
+  const confirmation = await stampProposalConfirmation({
+    conversationId: input.conversationId,
+    organizationId: input.organizationId,
+    proposalId: input.proposal.id,
+    status: "ignored",
+  });
+  return {
+    actionType: input.proposal.type,
+    confirmation,
+    message: "已忽略该动作建议。",
     status: "executed",
   };
 }
@@ -329,24 +352,37 @@ async function confirmGenerateInterviewQuestions(input: {
 
 export function confirmRecruitingAction(input: {
   authorize: WorkspaceAuthorizer;
+  conversationId: string;
+  decision?: ConfirmRecruitingActionInput["decision"];
   hiringUnitScope: HiringUnitAccessScope | null;
   operatorId: string | null;
   organizationId: string;
   proposal: ConfirmRecruitingActionInput["proposal"];
   visibilityScope: RecruitingVisibilityScope;
 }) {
+  if (input.decision === "ignore") {
+    return ignoreRecruitingAction({
+      conversationId: input.conversationId,
+      organizationId: input.organizationId,
+      proposal: input.proposal,
+    });
+  }
   if (input.proposal.type === "bind_candidate_to_job") {
     const jobDescriptionId = input.proposal.payload.jobDescriptionId ?? null;
     if (!jobDescriptionId) {
       return { message: "请先选择要绑定的岗位。", status: "failed" };
     }
+    if (!input.hiringUnitScope) {
+      return { message: "无法确认当前用人组织访问范围。", status: "failed" };
+    }
     return confirmBindCandidateToJob({
+      conversationId: input.conversationId,
       jobDescriptionId,
       operatorId: input.operatorId,
       organizationId: input.organizationId,
       proposalId: input.proposal.id,
-      proposalTitle: input.proposal.title,
       resumeRecordId: input.proposal.payload.resumeRecordId,
+      visibilityScope: input.visibilityScope,
     });
   }
   if (input.proposal.type === "bind_pool_item_to_job") {
@@ -358,11 +394,13 @@ export function confirmRecruitingAction(input: {
       return { message: "无法确认当前用人组织访问范围。", status: "failed" };
     }
     return confirmBindPoolItemToJob({
+      conversationId: input.conversationId,
       hiringUnitScope: input.hiringUnitScope,
       jobDescriptionId,
       operatorId: input.operatorId,
       organizationId: input.organizationId,
       poolItemId: input.proposal.payload.poolItemId,
+      proposalId: input.proposal.id,
       visibilityScope: input.visibilityScope,
     });
   }
