@@ -16,10 +16,12 @@ import {
   upsertChatMessageSchema,
   upsertConversationSchema,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/schema";
-import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { confirmRecruitingAction } from "./actions";
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
+import { loadResumePoolItem } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao";
+import { normalizeResumePoolItemId } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/tools/resume-pool-id";
+import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 export const conversationsRouter = factory
   .createApp()
@@ -161,7 +163,6 @@ export const conversationsRouter = factory
   })
   .post(
     "/:id/actions/confirm",
-    requirePermission("resumeLibrary", "update"),
     zValidator("json", confirmRecruitingActionSchema, jsonValidatorError("动作参数无效。")),
     async (c) => {
       const { user, activeOrg } = c.var;
@@ -182,30 +183,62 @@ export const conversationsRouter = factory
       }
 
       const { proposal } = c.req.valid("json");
-      const visibilityScope = await resolveRecruitingVisibilityScope({
-        currentRole: c.var.member?.role,
-        organizationId: activeOrg.id,
-        userId: user.id,
-      });
-      const visibleRecord = await loadResumeDetail(
-        proposal.payload.resumeRecordId,
-        activeOrg.id,
-        visibilityScope,
-      );
-      if (!visibleRecord) {
-        return c.json({ error: "Not Found" }, 404);
-      }
       const authorize = createRequestWorkspaceAuthorizer({
         headers: c.req.raw.headers,
         memberRole: c.var.member?.role,
         organizationId: activeOrg.id,
         userId: user.id,
       });
+      let allowed: boolean;
+      if (proposal.type === "bind_pool_item_to_job") {
+        const poolPermissions = await Promise.all([
+          authorize({ action: "import", resource: "resumePool" }),
+          authorize({ action: "read", resource: "jd" }),
+        ]);
+        allowed = poolPermissions.every(Boolean);
+      } else {
+        allowed = await authorize({ action: "update", resource: "resumeLibrary" });
+      }
+      if (!allowed) {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+      const visibilityScope = await resolveRecruitingVisibilityScope({
+        currentRole: c.var.member?.role,
+        organizationId: activeOrg.id,
+        userId: user.id,
+      });
+      let hiringUnitScope = null;
+      if (proposal.type === "bind_pool_item_to_job") {
+        const visiblePoolItem = await loadResumePoolItem({
+          organizationId: activeOrg.id,
+          poolItemId: normalizeResumePoolItemId(proposal.payload.poolItemId),
+          userId: user.id,
+          visibilityScope,
+        });
+        if (!visiblePoolItem) {
+          return c.json({ error: "Not Found" }, 404);
+        }
+        hiringUnitScope = await resolveHiringUnitAccessScope({
+          actorUserId: user.id,
+          organizationId: activeOrg.id,
+        });
+      } else {
+        const visibleRecord = await loadResumeDetail(
+          proposal.payload.resumeRecordId,
+          activeOrg.id,
+          visibilityScope,
+        );
+        if (!visibleRecord) {
+          return c.json({ error: "Not Found" }, 404);
+        }
+      }
       const result = await confirmRecruitingAction({
         authorize,
+        hiringUnitScope,
         operatorId: user.id,
         organizationId: activeOrg.id,
         proposal,
+        visibilityScope,
       });
       const status = result.status === "failed" ? 409 : 200;
       return c.json(result, status);

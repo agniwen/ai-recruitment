@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   confirmRecruitingAction: vi.fn(),
   createRequestWorkspaceAuthorizer: vi.fn(),
   loadResumeDetail: vi.fn(),
+  loadResumePoolItem: vi.fn(),
+  resolveHiringUnitAccessScope: vi.fn(),
   resolveRecruitingVisibilityScope: vi.fn(),
   upsertConversation: vi.fn(),
 }));
@@ -17,12 +19,18 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/access/workspace-access-poli
 vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility", () => ({
   resolveRecruitingVisibilityScope: mocks.resolveRecruitingVisibilityScope,
 }));
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope", () => ({
+  resolveHiringUnitAccessScope: mocks.resolveHiringUnitAccessScope,
+}));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes",
   () => ({
     loadResumeDetail: mocks.loadResumeDetail,
   }),
 );
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao", () => ({
+  loadResumePoolItem: mocks.loadResumePoolItem,
+}));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat", () => ({
   checkConversationOwner: mocks.checkConversationOwner,
@@ -31,11 +39,6 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat", () =>
   listUserConversations: vi.fn(),
   upsertChatMessage: vi.fn(),
   upsertConversation: mocks.upsertConversation,
-}));
-vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
-  requirePermission: () => async (_c: unknown, next: () => Promise<void>) => {
-    await next();
-  },
 }));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/chat/routes/conversations/actions",
@@ -69,7 +72,13 @@ describe("conversationsRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createRequestWorkspaceAuthorizer.mockReturnValue(mocks.authorize);
+    mocks.authorize.mockResolvedValue(true);
     mocks.loadResumeDetail.mockResolvedValue({ id: "resume-1" });
+    mocks.loadResumePoolItem.mockResolvedValue({ id: "pool-1" });
+    mocks.resolveHiringUnitAccessScope.mockResolvedValue({
+      canAccessAll: false,
+      hiringUnitIds: ["hiring-unit-1"],
+    });
     mocks.resolveRecruitingVisibilityScope.mockResolvedValue({ kind: "all" });
   });
 
@@ -131,13 +140,98 @@ describe("conversationsRouter", () => {
         authorize: mocks.authorize,
         operatorId: USER_ID,
         organizationId: ORG_ID,
+        visibilityScope: { kind: "all" },
       }),
     );
+    expect(mocks.authorize).toHaveBeenCalledWith({
+      action: "update",
+      resource: "resumeLibrary",
+    });
     await expect(res.json()).resolves.toEqual({
       actionType: "bind_candidate_to_job",
       message: "已绑定候选人到岗位。",
       status: "executed",
     });
+  });
+
+  it("uses target pool, JD, visibility, and hiring-unit guards for pool binding", async () => {
+    mocks.checkConversationOwner.mockResolvedValue("ok");
+    mocks.confirmRecruitingAction.mockResolvedValue({
+      actionType: "bind_pool_item_to_job",
+      message: "已绑定人才库条目到岗位。",
+      status: "executed",
+    });
+
+    const res = await makeApp().request("/conversations/conversation_1/actions/confirm", {
+      body: JSON.stringify({
+        proposal: {
+          explanation: "人才库候选人与岗位匹配。",
+          id: "proposal-pool-1",
+          payload: {
+            jobDescriptionId: "jd-1",
+            poolItemId: "pool:pool-1",
+          },
+          title: "绑定人才库岗位",
+          type: "bind_pool_item_to_job",
+        },
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(res.status).toBe(200);
+    expect(mocks.authorize).toHaveBeenCalledWith({
+      action: "import",
+      resource: "resumePool",
+    });
+    expect(mocks.authorize).toHaveBeenCalledWith({ action: "read", resource: "jd" });
+    expect(mocks.loadResumePoolItem).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      poolItemId: "pool-1",
+      userId: USER_ID,
+      visibilityScope: { kind: "all" },
+    });
+    expect(mocks.resolveHiringUnitAccessScope).toHaveBeenCalledWith({
+      actorUserId: USER_ID,
+      organizationId: ORG_ID,
+    });
+    expect(mocks.confirmRecruitingAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hiringUnitScope: {
+          canAccessAll: false,
+          hiringUnitIds: ["hiring-unit-1"],
+        },
+        visibilityScope: { kind: "all" },
+      }),
+    );
+  });
+
+  it("rejects pool binding before record lookup when pool import permission is missing", async () => {
+    mocks.checkConversationOwner.mockResolvedValue("ok");
+    mocks.authorize.mockImplementation(({ resource }: { resource: string }) =>
+      Promise.resolve(resource !== "resumePool"),
+    );
+
+    const res = await makeApp().request("/conversations/conversation_1/actions/confirm", {
+      body: JSON.stringify({
+        proposal: {
+          explanation: "人才库候选人与岗位匹配。",
+          id: "proposal-pool-1",
+          payload: {
+            jobDescriptionId: "jd-1",
+            poolItemId: "pool:pool-1",
+          },
+          title: "绑定人才库岗位",
+          type: "bind_pool_item_to_job",
+        },
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(res.status).toBe(403);
+    expect(mocks.loadResumePoolItem).not.toHaveBeenCalled();
+    expect(mocks.confirmRecruitingAction).not.toHaveBeenCalled();
   });
 
   it("does not execute recruiting actions for conversations outside the workspace", async () => {

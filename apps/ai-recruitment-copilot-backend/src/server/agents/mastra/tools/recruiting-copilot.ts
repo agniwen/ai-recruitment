@@ -3,6 +3,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { QdrantResumeVectorStore } from "@arc/ai-recruitment-copilot-backend/lib/server/qdrant/resume-vector-store";
 import {
   embedResumeSemanticTexts,
@@ -23,6 +24,19 @@ import {
 import { jobDescription, studioInterview } from "@arc/db-schema/schema";
 import type { ResumeLibraryListRecord } from "@arc/shared/studio-resumes";
 import type { JobDescriptionRecord } from "@arc/shared/job-descriptions";
+import {
+  getResumePoolDetailForCopilot,
+  getResumePoolDetailInputSchema,
+  getResumePoolDetailOutputSchema,
+} from "./resume-pool";
+
+export { normalizeResumePoolItemId } from "./resume-pool-id";
+export {
+  getResumePoolDetailForCopilot,
+  getResumePoolDetailInputSchema,
+  getResumePoolDetailOutputSchema,
+  resumePoolItemDetailSchema,
+} from "./resume-pool";
 
 const MAX_SEARCH_LIMIT = 10;
 const MAX_COMPARISON_CANDIDATES = 5;
@@ -81,6 +95,7 @@ export const recruitingActionProposalSchema = z.object({
   title: z.string(),
   type: z.enum([
     "bind_candidate_to_job",
+    "bind_pool_item_to_job",
     "advance_candidate_stage",
     "generate_interview_questions",
   ]),
@@ -621,10 +636,14 @@ export function createRecruitingActionProposal(
 }
 
 export function createRecruitingCopilotTools({
+  authorize,
   organizationId,
+  userId,
   visibilityScope,
 }: {
+  authorize: WorkspaceAuthorizer;
   organizationId: string;
+  userId: string;
   visibilityScope: RecruitingVisibilityScope;
 }) {
   return {
@@ -642,9 +661,24 @@ export function createRecruitingCopilotTools({
       id: "get_job_description_detail",
       inputSchema: getJobDescriptionDetailInputSchema,
     }),
+    get_resume_pool_detail: createTool({
+      description:
+        "读取当前 workspace 人才库（resume pool）条目详情。id 可为 uuid 或 pool:uuid。默认返回结构化画像与解析状态；只有需要逐段引用时才请求 resumeText。若无 AI 解析，hasAiProfile 为 false。",
+      execute: (input: z.infer<typeof getResumePoolDetailInputSchema>) =>
+        getResumePoolDetailForCopilot({
+          ...input,
+          authorize,
+          organizationId,
+          userId,
+          visibilityScope,
+        }),
+      id: "get_resume_pool_detail",
+      inputSchema: getResumePoolDetailInputSchema,
+      outputSchema: getResumePoolDetailOutputSchema,
+    }),
     get_resume_record_detail: createTool({
       description:
-        "读取当前 workspace 中某个候选人的简历详情。默认返回结构化画像；只有需要逐段引用时才请求 resumeText。",
+        "读取当前 workspace 中某个招聘台候选人的简历详情。默认返回结构化画像；只有需要逐段引用时才请求 resumeText。",
       execute: (input: z.infer<typeof getResumeRecordDetailInputSchema>) =>
         getResumeRecordDetailForCopilot({ ...input, organizationId, visibilityScope }),
       id: "get_resume_record_detail",
@@ -652,7 +686,8 @@ export function createRecruitingCopilotTools({
       outputSchema: getResumeRecordDetailOutputSchema,
     }),
     propose_recruiting_action: createTool({
-      description: "创建一个需要用户确认的招聘动作建议卡片。此工具只返回建议，不修改任何系统数据。",
+      description:
+        "创建一个需要用户确认的招聘动作建议卡片。此工具只返回建议，不修改任何系统数据。绑定招聘台候选人用 type=bind_candidate_to_job（payload.resumeRecordId）；绑定人才库条目用 type=bind_pool_item_to_job（payload.poolItemId）。尚未绑定时 jobDescriptionId 可省略，由前端行动卡让用户选择。",
       execute: (input: z.infer<typeof proposeRecruitingActionInputSchema>) =>
         Promise.resolve(createRecruitingActionProposal(input)),
       id: "propose_recruiting_action",

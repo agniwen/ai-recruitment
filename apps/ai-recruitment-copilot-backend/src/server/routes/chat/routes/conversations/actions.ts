@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import {
   generateInterviewQuestionsForProfile,
@@ -10,6 +11,12 @@ import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-bac
 import { resetResumeEvaluationForJobChange } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
 import { transitionCandidateStage } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-transition";
 import { loadJobDescriptionById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
+import {
+  bindResumePoolItemJobDescription,
+  loadResumePoolItem,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao";
+import type { HiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import { normalizeResumePoolItemId } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/tools/resume-pool-id";
 import { interviewAuditLog, studioInterview } from "@arc/db-schema/schema";
 import type { ResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import type { confirmRecruitingActionSchema } from "../../schema";
@@ -137,6 +144,69 @@ async function confirmBindCandidateToJob(input: {
   };
 }
 
+async function confirmBindPoolItemToJob(input: {
+  hiringUnitScope: HiringUnitAccessScope;
+  jobDescriptionId: string;
+  operatorId: string | null;
+  organizationId: string;
+  poolItemId: string;
+  visibilityScope: RecruitingVisibilityScope;
+}): Promise<ConfirmRecruitingActionResult> {
+  if (!input.operatorId) {
+    return { message: "无法确认当前操作人。", status: "failed" };
+  }
+  const poolItemId = normalizeResumePoolItemId(input.poolItemId);
+  const nextJobDescription = await loadJobDescriptionById(
+    input.organizationId,
+    input.jobDescriptionId,
+  );
+  if (!nextJobDescription) {
+    return { message: "岗位不存在或不属于当前 workspace。", status: "failed" };
+  }
+
+  const existing = await loadResumePoolItem({
+    organizationId: input.organizationId,
+    poolItemId,
+    userId: input.operatorId,
+    visibilityScope: input.visibilityScope,
+  });
+  if (!existing) {
+    return { message: "人才库记录不存在或无权访问。", status: "failed" };
+  }
+  if (existing.jobDescriptionId === input.jobDescriptionId) {
+    return {
+      actionType: "bind_pool_item_to_job",
+      message: "人才库条目已绑定到该岗位。",
+      status: "noop",
+    };
+  }
+  if (existing.jobDescriptionId) {
+    return { message: "该人才库条目已绑定其他岗位。", status: "failed" };
+  }
+
+  const bindResult = await bindResumePoolItemJobDescription({
+    actorId: input.operatorId,
+    hiringUnitScope: input.hiringUnitScope,
+    jobDescriptionId: input.jobDescriptionId,
+    organizationId: input.organizationId,
+    poolItemId,
+  });
+  if (bindResult === "job_description_not_found") {
+    return {
+      message: "岗位不存在或不在当前招聘组负责的用人组织范围内。",
+      status: "failed",
+    };
+  }
+  if (bindResult === "already_bound") {
+    return { message: "该人才库条目已绑定岗位。", status: "failed" };
+  }
+  return {
+    actionType: "bind_pool_item_to_job",
+    message: "已绑定人才库条目到岗位。",
+    status: "executed",
+  };
+}
+
 async function confirmAdvanceCandidateStage(input: {
   authorize: WorkspaceAuthorizer;
   operatorId: string | null;
@@ -259,18 +329,41 @@ async function confirmGenerateInterviewQuestions(input: {
 
 export function confirmRecruitingAction(input: {
   authorize: WorkspaceAuthorizer;
+  hiringUnitScope: HiringUnitAccessScope | null;
   operatorId: string | null;
   organizationId: string;
   proposal: ConfirmRecruitingActionInput["proposal"];
+  visibilityScope: RecruitingVisibilityScope;
 }) {
   if (input.proposal.type === "bind_candidate_to_job") {
+    const jobDescriptionId = input.proposal.payload.jobDescriptionId ?? null;
+    if (!jobDescriptionId) {
+      return { message: "请先选择要绑定的岗位。", status: "failed" };
+    }
     return confirmBindCandidateToJob({
-      jobDescriptionId: input.proposal.payload.jobDescriptionId,
+      jobDescriptionId,
       operatorId: input.operatorId,
       organizationId: input.organizationId,
       proposalId: input.proposal.id,
       proposalTitle: input.proposal.title,
       resumeRecordId: input.proposal.payload.resumeRecordId,
+    });
+  }
+  if (input.proposal.type === "bind_pool_item_to_job") {
+    const jobDescriptionId = input.proposal.payload.jobDescriptionId ?? null;
+    if (!jobDescriptionId) {
+      return { message: "请先选择要绑定的岗位。", status: "failed" };
+    }
+    if (!input.hiringUnitScope) {
+      return { message: "无法确认当前用人组织访问范围。", status: "failed" };
+    }
+    return confirmBindPoolItemToJob({
+      hiringUnitScope: input.hiringUnitScope,
+      jobDescriptionId,
+      operatorId: input.operatorId,
+      organizationId: input.organizationId,
+      poolItemId: input.proposal.payload.poolItemId,
+      visibilityScope: input.visibilityScope,
     });
   }
   if (input.proposal.type === "advance_candidate_stage") {

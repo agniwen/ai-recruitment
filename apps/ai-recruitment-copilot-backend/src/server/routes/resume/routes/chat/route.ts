@@ -3,6 +3,7 @@ import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { zValidator } from "@hono/zod-validator";
 import { toAISdkStream } from "@mastra/ai-sdk";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { legacyUiMessageToArcMessage } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/adapters/arc-message-adapter";
 import { createRecruitingCopilotAgent } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/recruiting-copilot-agent";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -154,9 +155,17 @@ export const resumeChatRouter = factory
     }
     const { messages } = preparedConversation;
 
+    const authorize = createRequestWorkspaceAuthorizer({
+      headers: c.req.raw.headers,
+      memberRole: c.var.member?.role,
+      organizationId: orgId,
+      userId,
+    });
     const agent = createRecruitingCopilotAgent({
+      authorize,
       focus: resolvedFocus ?? undefined,
       organizationId: orgId,
+      userId,
       visibilityScope,
     });
     const agentStream = await agent.stream(toModelMessages(messages));

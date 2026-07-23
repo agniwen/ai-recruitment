@@ -2,8 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   capCandidateComparisonIds,
   createRecruitingActionProposal,
+  getResumePoolDetailForCopilot,
   searchResumeRecordsForCopilot,
 } from "../tools/recruiting-copilot";
+import { normalizeResumePoolItemId } from "../tools/resume-pool-id";
+
+const mocks = vi.hoisted(() => ({
+  loadResumePoolItem: vi.fn(),
+}));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {},
@@ -32,6 +38,9 @@ vi.mock(
     listResumeRecords: vi.fn(),
   }),
 );
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao", () => ({
+  loadResumePoolItem: mocks.loadResumePoolItem,
+}));
 
 describe("recruiting copilot tools", () => {
   it("returns candidate summary cards and citations without full resume payloads", async () => {
@@ -215,5 +224,40 @@ describe("recruiting copilot tools", () => {
       title: "绑定候选人到前端工程师",
       type: "bind_candidate_to_job",
     });
+  });
+
+  it("normalizes pool mention ids for resume pool tools", () => {
+    expect(normalizeResumePoolItemId("pool:abc-123")).toBe("abc-123");
+    expect(normalizeResumePoolItemId("abc-123")).toBe("abc-123");
+  });
+
+  it("does not query resume pool records without the target workspace permission", async () => {
+    const authorize = vi.fn().mockResolvedValue(false);
+
+    await expect(
+      getResumePoolDetailForCopilot({
+        authorize,
+        id: "pool:pool-1",
+        organizationId: "org-1",
+        userId: "user-1",
+        visibilityScope: { kind: "all" },
+      }),
+    ).resolves.toEqual({ resumePoolItem: null });
+    expect(authorize).toHaveBeenCalledWith({ action: "read", resource: "resumePool" });
+    expect(mocks.loadResumePoolItem).not.toHaveBeenCalled();
+  });
+
+  it("creates confirmable pool bind proposals", () => {
+    const result = createRecruitingActionProposal({
+      explanation: "人才库条目尚未绑定岗位，先请用户选择。",
+      payload: {
+        poolItemId: "pool-1",
+      },
+      title: "绑定人才库条目到岗位",
+      type: "bind_pool_item_to_job",
+    });
+
+    expect(result.proposal.type).toBe("bind_pool_item_to_job");
+    expect(result.proposal.payload).toEqual({ poolItemId: "pool-1" });
   });
 });
