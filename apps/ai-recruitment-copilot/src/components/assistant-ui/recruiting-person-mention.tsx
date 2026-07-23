@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PROTOTYPE — @-mention people from 招聘台 / 人才库 in the recruiting composer.
+ * PROTOTYPE — @-mention people from 招聘台 / 简历池 in the recruiting composer.
  * Flat list (no category drill-down): show 20 by default, search returns top 20 matches.
  */
 
@@ -35,7 +35,7 @@ function personLabel(name: string | null | undefined, fallback: string) {
 }
 
 function sourceLabel(type: MentionPerson["type"]): string {
-  return type === "resume_record" ? "招聘台" : "人才库";
+  return type === "resume_record" ? "招聘台" : "简历池";
 }
 
 function personRoleLine(person: {

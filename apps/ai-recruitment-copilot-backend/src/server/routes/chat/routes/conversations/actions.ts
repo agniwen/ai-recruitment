@@ -175,7 +175,7 @@ async function confirmBindPoolItemToJob(input: {
     visibilityScope: input.visibilityScope,
   });
   if (!existing) {
-    return { message: "人才库记录不存在或无权访问。", status: "failed" };
+    return { message: "简历池记录不存在或无权访问。", status: "failed" };
   }
 
   const result = await upsertConversationContextJobBinding({
@@ -185,7 +185,7 @@ async function confirmBindPoolItemToJob(input: {
     kind: "resume_pool_item",
     organizationId: input.organizationId,
     recordId: poolItemId,
-    summaryText: `已在本对话中将该人才库条目关联到「${nextJobDescription.name}」（仅影响本轮分析，未改人才库数据）。`,
+    summaryText: `已在本对话中将该简历池条目关联到「${nextJobDescription.name}」（仅影响本轮分析，未改简历池数据）。`,
   });
   const confirmation = await stampProposalConfirmation({
     conversationId: input.conversationId,
@@ -199,14 +199,14 @@ async function confirmBindPoolItemToJob(input: {
     return {
       actionType: "bind_pool_item_to_job",
       confirmation,
-      message: "本对话已将该人才库条目关联到该岗位（仅影响本轮分析，未改人才库数据）。",
+      message: "本对话已将该简历池条目关联到该岗位（仅影响本轮分析，未改简历池数据）。",
       status: "noop",
     };
   }
   return {
     actionType: "bind_pool_item_to_job",
     confirmation,
-    message: "已在本对话中将该人才库条目关联到所选岗位（仅影响本轮分析，未改人才库数据）。",
+    message: "已在本对话中将该简历池条目关联到所选岗位（仅影响本轮分析，未改简历池数据）。",
     status: "executed",
   };
 }

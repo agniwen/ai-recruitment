@@ -352,11 +352,11 @@ describe("recruiting copilot tools", () => {
 
   it("creates confirmable pool bind proposals with stable ids", () => {
     const result = createRecruitingActionProposal({
-      explanation: "人才库条目尚未绑定岗位，先请用户选择。",
+      explanation: "简历池条目尚未绑定岗位，先请用户选择。",
       payload: {
         poolItemId: "pool-1",
       },
-      title: "绑定人才库条目到岗位",
+      title: "绑定简历池条目到岗位",
       type: "bind_pool_item_to_job",
     });
 

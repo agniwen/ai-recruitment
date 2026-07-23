@@ -16,7 +16,7 @@ describe("RecruitingCopilotAgent product boundaries", () => {
     expect(source).toContain("get_resume_pool_detail");
     expect(source).toContain("bind_candidate_to_job");
     expect(source).toContain("bind_pool_item_to_job");
-    expect(source).toContain("人才库");
+    expect(source).toContain("简历池");
     expect(source).not.toContain("conversationJobBindingProposal");
   });
 });

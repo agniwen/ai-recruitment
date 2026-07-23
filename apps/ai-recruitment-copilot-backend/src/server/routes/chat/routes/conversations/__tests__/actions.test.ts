@@ -159,7 +159,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
         jobDescriptionId: "jd-1",
         status: "confirmed",
       }),
-      message: "已在本对话中将该人才库条目关联到所选岗位（仅影响本轮分析，未改人才库数据）。",
+      message: "已在本对话中将该简历池条目关联到所选岗位（仅影响本轮分析，未改简历池数据）。",
     });
   });
 

@@ -748,7 +748,7 @@ async function executePoolBindProposal(input: {
       kind: "resume_pool_item",
       organizationId: input.organizationId,
       recordId: poolItemId,
-      summaryText: `已在本对话中将该人才库条目关联到「${nextJobDescription.name}」（仅影响本轮分析，未改人才库数据）。`,
+      summaryText: `已在本对话中将该简历池条目关联到「${nextJobDescription.name}」（仅影响本轮分析，未改简历池数据）。`,
     });
   }
   return confirmedConversationBindResult({
@@ -988,7 +988,7 @@ export function createRecruitingCopilotTools({
     }),
     get_resume_pool_detail: createTool({
       description:
-        "读取当前 workspace 人才库（resume pool）条目详情。id 可为 uuid 或 pool:uuid。若返回的 jobDescriptionId 为 null：同一轮必须立刻调用 propose_recruiting_action（type=bind_pool_item_to_job，payload.poolItemId=本条目 id），不要先口头询问用户是否要选岗位，也不要在提案前输出匹配/分析正文。",
+        "读取当前 workspace 简历池（resume pool）条目详情。id 可为 uuid 或 pool:uuid。若返回的 jobDescriptionId 为 null：同一轮必须立刻调用 propose_recruiting_action（type=bind_pool_item_to_job，payload.poolItemId=本条目 id），不要先口头询问用户是否要选岗位，也不要在提案前输出匹配/分析正文。",
       execute: (input: z.infer<typeof getResumePoolDetailInputSchema>) =>
         getResumePoolDetailForCopilot({
           ...input,

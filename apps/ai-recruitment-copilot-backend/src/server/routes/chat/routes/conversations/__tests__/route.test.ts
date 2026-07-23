@@ -165,20 +165,20 @@ describe("conversationsRouter", () => {
     mocks.checkConversationOwner.mockResolvedValue("ok");
     mocks.confirmRecruitingAction.mockResolvedValue({
       actionType: "bind_pool_item_to_job",
-      message: "已在本对话中将该人才库条目关联到所选岗位（仅影响本轮分析，未改人才库数据）。",
+      message: "已在本对话中将该简历池条目关联到所选岗位（仅影响本轮分析，未改简历池数据）。",
       status: "executed",
     });
 
     const res = await makeApp().request("/conversations/conversation_1/actions/confirm", {
       body: JSON.stringify({
         proposal: {
-          explanation: "人才库候选人与岗位匹配。",
+          explanation: "简历池候选人与岗位匹配。",
           id: "proposal-pool-1",
           payload: {
             jobDescriptionId: "jd-1",
             poolItemId: "pool:pool-1",
           },
-          title: "绑定人才库岗位",
+          title: "绑定简历池岗位",
           type: "bind_pool_item_to_job",
         },
       }),
@@ -224,13 +224,13 @@ describe("conversationsRouter", () => {
     const res = await makeApp().request("/conversations/conversation_1/actions/confirm", {
       body: JSON.stringify({
         proposal: {
-          explanation: "人才库候选人与岗位匹配。",
+          explanation: "简历池候选人与岗位匹配。",
           id: "proposal-pool-1",
           payload: {
             jobDescriptionId: "jd-1",
             poolItemId: "pool:pool-1",
           },
-          title: "绑定人才库岗位",
+          title: "绑定简历池岗位",
           type: "bind_pool_item_to_job",
         },
       }),

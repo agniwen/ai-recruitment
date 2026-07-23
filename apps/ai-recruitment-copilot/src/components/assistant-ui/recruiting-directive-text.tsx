@@ -17,7 +17,7 @@ function typeLabel(type: string): string {
     return "招聘台";
   }
   if (type === "resume_pool") {
-    return "人才库";
+    return "简历池";
   }
   return type;
 }
