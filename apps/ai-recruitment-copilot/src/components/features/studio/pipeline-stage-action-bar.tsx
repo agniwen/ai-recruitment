@@ -117,7 +117,8 @@ export function PipelineStageActionBar({
     onRequestReactivate,
     pipelineStage,
   });
-  const groupedPrimaryAction = pipelineStage === "closed" ? null : primaryAction;
+  const groupedPrimaryAction =
+    pipelineStage === "closed" || aiInterviewDisabled ? null : primaryAction;
   const aiRoundCopyLinkAction =
     pipelineStage === "ai_interview" && aiRoundInterviewLink ? (
       <Button

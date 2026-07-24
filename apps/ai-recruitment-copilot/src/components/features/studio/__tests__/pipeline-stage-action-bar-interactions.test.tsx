@@ -2,6 +2,7 @@
 
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import { act } from "react";
+import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -22,11 +23,13 @@ function renderActionBar({
   aiInterviewDisabled,
   onAdvance = vi.fn(),
   pipelineStage = "ai_interview",
+  primaryAction,
 }: {
   aiRoundInterviewLink?: string;
   aiInterviewDisabled?: boolean;
   onAdvance?: (target: PipelineStage) => void | Promise<void>;
   pipelineStage?: PipelineStage;
+  primaryAction?: ReactNode;
 } = {}) {
   const host = document.createElement("div");
   document.body.append(host);
@@ -43,6 +46,7 @@ function renderActionBar({
         onRequestReactivate={vi.fn()}
         onViewCurrentStage={vi.fn()}
         pipelineStage={pipelineStage}
+        primaryAction={primaryAction}
       />,
     );
   });
@@ -122,5 +126,15 @@ describe("PipelineStageActionBar interactions", () => {
     });
 
     expect(host.textContent).not.toContain("推进到 AI 面试");
+  });
+
+  it("hides a supplied launch action when the job disables AI interviews", () => {
+    const host = renderActionBar({
+      aiInterviewDisabled: true,
+      pipelineStage: "screening",
+      primaryAction: <button type="button">发起 AI 面试</button>,
+    });
+
+    expect(host.textContent).not.toContain("发起 AI 面试");
   });
 });
