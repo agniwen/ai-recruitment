@@ -406,6 +406,7 @@ export function useStudioPersonDetailController({
       hasResumeFile: resumeRecord.hasResumeFile,
       id: resumeRecord.id,
       interviewQuestions: resumeRecord.interviewQuestions,
+      jobDescriptionAiInterviewDisabled: resumeRecord.jobDescriptionAiInterviewDisabled,
       jobDescriptionId: resumeRecord.jobDescriptionId,
       jobDescriptionName: resumeRecord.jobDescriptionName,
       notes: resumeRecord.notes,
