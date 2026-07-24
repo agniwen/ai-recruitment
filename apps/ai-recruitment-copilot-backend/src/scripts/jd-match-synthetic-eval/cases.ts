@@ -12,6 +12,7 @@ function job(input: {
   name: string;
 }): JobDescriptionListRecord {
   return {
+    aiInterviewDisabled: false,
     allowCrossDepartmentInterviewers: false,
     code: null,
     controlCategory: null,

@@ -43,6 +43,7 @@ const nullableDateStringSchema = (label: string) =>
 
 export const jobDescriptionBaseSchema = z
   .object({
+    aiInterviewDisabled: z.boolean(),
     allowCrossDepartmentInterviewers: z.boolean(),
     code: jobDescriptionCodeSchema,
     controlCategory: nullableTextSchema(120, "岗位管控分类"),
@@ -136,6 +137,7 @@ export interface JobDescriptionInterviewerSummary {
 export interface JobDescriptionRecord {
   id: string;
   allowCrossDepartmentInterviewers: boolean;
+  aiInterviewDisabled: boolean;
   code: string | null;
   controlCategory: string | null;
   departmentId: string;

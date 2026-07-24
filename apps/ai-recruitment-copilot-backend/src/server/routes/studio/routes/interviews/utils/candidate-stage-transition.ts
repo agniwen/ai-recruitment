@@ -6,7 +6,7 @@ import {
   getHumanInterviewOfferReadinessError,
   loadHumanInterviewRoundReadiness,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds";
-import { interviewAuditLog, studioInterview } from "@arc/db-schema/schema";
+import { interviewAuditLog, jobDescription, studioInterview } from "@arc/db-schema/schema";
 import {
   getCandidateReactivationError,
   getCandidateStageTransitionError,
@@ -57,18 +57,26 @@ export async function transitionCandidateStage(command: {
     const [existing] = await tx
       .select({
         closedMeta: studioInterview.closedMeta,
+        jobDescriptionAiInterviewDisabled: jobDescription.aiInterviewDisabled,
         jobDescriptionId: studioInterview.jobDescriptionId,
         outcome: studioInterview.outcome,
         pipelineStage: studioInterview.pipelineStage,
       })
       .from(studioInterview)
+      .leftJoin(
+        jobDescription,
+        and(
+          eq(studioInterview.jobDescriptionId, jobDescription.id),
+          eq(jobDescription.organizationId, studioInterview.organizationId),
+        ),
+      )
       .where(
         and(
           eq(studioInterview.id, command.candidateId),
           eq(studioInterview.organizationId, command.organizationId),
         ),
       )
-      .for("update")
+      .for("update", { of: studioInterview })
       .limit(1);
     if (!existing) {
       return { kind: "not_found" } as const;
@@ -81,6 +89,12 @@ export async function transitionCandidateStage(command: {
     });
     if (reactivationError) {
       return { kind: "invalid", message: reactivationError } as const;
+    }
+    if (
+      command.input.pipelineStage === "ai_interview" &&
+      existing.jobDescriptionAiInterviewDisabled
+    ) {
+      return { kind: "invalid", message: "当前关联岗位已禁用 AI 面试。" } as const;
     }
 
     let humanInterviewOfferReadinessError: string | null = null;

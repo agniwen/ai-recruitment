@@ -58,6 +58,7 @@ type JobDescriptionFormTab = "basic" | "screening" | "interview-questions" | "fo
 
 export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
   return {
+    aiInterviewDisabled: false,
     allowCrossDepartmentInterviewers: false,
     code: "",
     departmentId: "",
@@ -71,6 +72,7 @@ export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
 
 function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
   return {
+    aiInterviewDisabled: record.aiInterviewDisabled,
     allowCrossDepartmentInterviewers: record.allowCrossDepartmentInterviewers,
     code: record.code ?? "",
     departmentId: record.departmentId,
@@ -189,6 +191,7 @@ export function JobDescriptionFormDialog({
     defaultValues: resolvedInitialValues,
     onSubmit: async ({ value }) => {
       const body = {
+        aiInterviewDisabled: value.aiInterviewDisabled,
         allowCrossDepartmentInterviewers: value.allowCrossDepartmentInterviewers,
         code: value.code?.trim() || undefined,
         departmentId: value.departmentId,
@@ -226,6 +229,7 @@ export function JobDescriptionFormDialog({
         "name",
         "departmentId",
         "allowCrossDepartmentInterviewers",
+        "aiInterviewDisabled",
         "interviewerIds",
         "description",
         "prompt",
@@ -502,6 +506,28 @@ export function JobDescriptionFormDialog({
                                   );
                                 }
                               }}
+                            />
+                          </CardContent>
+                        </Card>
+                      </Field>
+                    )}
+                  </form.Field>
+
+                  <form.Field name="aiInterviewDisabled">
+                    {(field) => (
+                      <Field className="md:col-span-2">
+                        <Card className="gap-0 rounded-lg py-0">
+                          <CardContent className="flex items-center justify-between gap-4 px-3 py-2.5">
+                            <div className="space-y-0.5">
+                              <FieldLabel htmlFor={field.name}>禁用 AI 面试</FieldLabel>
+                              <p className="text-muted-foreground text-xs">
+                                开启后，关联该岗位的候选人不能从简历筛选阶段发起 AI 面试。
+                              </p>
+                            </div>
+                            <Switch
+                              checked={field.state.value}
+                              id={field.name}
+                              onCheckedChange={field.handleChange}
                             />
                           </CardContent>
                         </Card>

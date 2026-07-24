@@ -41,6 +41,7 @@ import { copyInterviewLink } from "@/components/features/studio/interviews/inter
 export interface PipelineStageActionBarProps {
   pipelineStage: PipelineStage;
   primaryAction?: ReactNode;
+  aiInterviewDisabled?: boolean;
   canCreateHumanInterview?: boolean;
   canCreateOffer?: boolean;
   hasJobDescription?: boolean;
@@ -75,6 +76,7 @@ export interface PipelineStageActionBarProps {
 export function PipelineStageActionBar({
   pipelineStage,
   primaryAction,
+  aiInterviewDisabled = false,
   canCreateHumanInterview = true,
   canCreateOffer = true,
   hasJobDescription = true,
@@ -103,6 +105,7 @@ export function PipelineStageActionBar({
   }
 
   const actions = getStageActions({
+    aiInterviewDisabled,
     canCreateHumanInterview,
     canCreateOffer,
     hasJobDescription,
@@ -379,6 +382,7 @@ interface StageButton {
 }
 
 function getStageActions(props: {
+  aiInterviewDisabled: boolean;
   pipelineStage: PipelineStage;
   canCreateHumanInterview: boolean;
   canCreateOffer: boolean;
@@ -391,6 +395,7 @@ function getStageActions(props: {
   onRequestReactivate: () => void;
 }): { left: ReactNode[]; right: ReactNode[] } {
   const {
+    aiInterviewDisabled,
     pipelineStage,
     canCreateHumanInterview,
     canCreateOffer,
@@ -520,21 +525,23 @@ function getStageActions(props: {
     case "written_test": {
       // 笔试阶段当前 UI 隐藏；但万一被 API 直接置过来了，至少给个出口。
       // Hidden tab currently; allow advance/back so HR isn't stuck.
-      buttons.push({
-        key: "to-ai",
-        node: (
-          <Button
-            disabled={isBusy}
-            key="to-ai"
-            onClick={() => void onAdvance("ai_interview")}
-            size="sm"
-          >
-            <IconArrowRight className="size-4" />
-            {isAdvancing ? "推进中..." : "推进到 AI 面试"}
-          </Button>
-        ),
-        side: "right",
-      });
+      if (!aiInterviewDisabled) {
+        buttons.push({
+          key: "to-ai",
+          node: (
+            <Button
+              disabled={isBusy}
+              key="to-ai"
+              onClick={() => void onAdvance("ai_interview")}
+              size="sm"
+            >
+              <IconArrowRight className="size-4" />
+              {isAdvancing ? "推进中..." : "推进到 AI 面试"}
+            </Button>
+          ),
+          side: "right",
+        });
+      }
       break;
     }
 

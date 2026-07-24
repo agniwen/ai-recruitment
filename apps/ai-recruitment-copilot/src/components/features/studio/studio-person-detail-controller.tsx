@@ -79,6 +79,7 @@ interface UnifiedRecord {
   candidateEmail: string | null;
   candidatePhone: string | null;
   targetRole: string | null;
+  jobDescriptionAiInterviewDisabled?: boolean;
   jobDescriptionId: string | null;
   jobDescriptionName: string | null;
   resumeFileName: string | null;
@@ -579,6 +580,7 @@ export function useStudioPersonDetailController({
   const showLaunchButton =
     mode === "resume" &&
     record?.pipelineStage === "screening" &&
+    !record?.jobDescriptionAiInterviewDisabled &&
     canLaunchResumeModeRecord &&
     !isRoundsLoading &&
     candidateRounds.length === 0;
@@ -671,6 +673,7 @@ export function useStudioPersonDetailController({
     actionBarPipelineStage &&
     record.outcome ? (
       <PipelineStageActionBar
+        aiInterviewDisabled={record.jobDescriptionAiInterviewDisabled}
         humanInterviewDone={Boolean(
           resumeRecord?.stageProgress.humanInterview &&
           resumeRecord.stageProgress.humanInterview.totalRounds > 0 &&

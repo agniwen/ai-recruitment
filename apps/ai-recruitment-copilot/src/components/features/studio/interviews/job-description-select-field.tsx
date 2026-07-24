@@ -39,6 +39,7 @@ export function JobDescriptionSelectField({
   disabled,
   label = "关联在招岗位",
   matching = false,
+  hideAiInterviewDisabled = false,
   required = true,
   showDescription = true,
   size = "default",
@@ -57,6 +58,8 @@ export function JobDescriptionSelectField({
    * surfaces a spinner + hint so the user understands a value is incoming.
    */
   matching?: boolean;
+  /** Hide jobs that cannot be selected after a candidate leaves screening. */
+  hideAiInterviewDisabled?: boolean;
   /** When false, omit the required asterisk next to the label. */
   required?: boolean;
   /** When false, omit the helper description under the field. */
@@ -102,11 +105,17 @@ export function JobDescriptionSelectField({
               id="interview-jd-select"
               invalid={!!error}
               onChange={(next) => onChange(next ?? "")}
-              options={jobDescriptions.map((jd) => ({
-                description: showDescription ? describeInterviewers(jd) : undefined,
-                label: buildJdLabel(jd),
-                value: jd.id,
-              }))}
+              options={jobDescriptions.flatMap((jd) =>
+                hideAiInterviewDisabled && jd.aiInterviewDisabled
+                  ? []
+                  : [
+                      {
+                        description: showDescription ? describeInterviewers(jd) : undefined,
+                        label: buildJdLabel(jd),
+                        value: jd.id,
+                      },
+                    ],
+              )}
               placeholder={matching ? "正在为你匹配在招岗位…" : "请选择在招岗位"}
               searchPlaceholder="搜索岗位…"
               triggerClassName={size === "sm" ? "h-8" : undefined}

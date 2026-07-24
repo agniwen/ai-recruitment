@@ -743,6 +743,7 @@ export const minimaxVoicePreview = pgTable(
 export const jobDescription = pgTable(
   "job_description",
   {
+    aiInterviewDisabled: boolean("ai_interview_disabled").default(false).notNull(),
     allowCrossDepartmentInterviewers: boolean("allow_cross_department_interviewers")
       .default(false)
       .notNull(),

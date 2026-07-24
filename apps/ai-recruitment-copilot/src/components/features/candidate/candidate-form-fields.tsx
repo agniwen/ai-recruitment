@@ -128,6 +128,8 @@ export interface CandidateFormFieldsProps {
    * Used while the post-parse auto-match request is in flight.
    */
   isJobDescriptionMatching?: boolean;
+  /** 非筛选阶段编辑候选人时，隐藏禁用 AI 面试的岗位。 */
+  hideAiInterviewDisabledJobDescriptions?: boolean;
 }
 
 const NAME_MAX_LENGTH = 120;
@@ -270,6 +272,7 @@ export function CandidateFormFields({
   resumeFileMaxFiles = 1,
   resumeFileMultiple = false,
   isJobDescriptionMatching = false,
+  hideAiInterviewDisabledJobDescriptions = false,
 }: CandidateFormFieldsProps) {
   const resumeFieldLabel = describeResumeFileLabel({
     existingName: existingResumeFileName,
@@ -338,6 +341,7 @@ export function CandidateFormFields({
               <JobDescriptionSelectField
                 disabled={disabled}
                 error={errors?.[0]?.message}
+                hideAiInterviewDisabled={hideAiInterviewDisabledJobDescriptions}
                 matching={isJobDescriptionMatching}
                 onChange={(next) => field.handleChange(next)}
                 value={field.state.value ?? ""}

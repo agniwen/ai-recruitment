@@ -140,6 +140,8 @@ export interface ResumeLibraryListRecord {
   jobDescriptionId: string | null;
   jobDescriptionDepartmentName: string | null;
   jobDescriptionName: string | null;
+  // 当前关联岗位是否禁止候选人发起 AI 面试。
+  jobDescriptionAiInterviewDisabled: boolean;
   jobDescriptionInterviewers: { id: string; name: string }[];
   humanInterviewers: { id: string; image: string | null; name: string }[];
   resumeFileName: string | null;

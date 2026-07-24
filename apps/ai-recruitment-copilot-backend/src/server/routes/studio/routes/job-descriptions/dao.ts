@@ -157,6 +157,7 @@ function listJobDescriptionRows({
 
   let query = db
     .select({
+      aiInterviewDisabled: jobDescription.aiInterviewDisabled,
       allowCrossDepartmentInterviewers: jobDescription.allowCrossDepartmentInterviewers,
       code: jobDescription.code,
       controlCategory: jobDescription.controlCategory,
@@ -322,6 +323,7 @@ function toJobDescriptionListRecord(
 ): JobDescriptionListRecord {
   const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
   return {
+    aiInterviewDisabled: row.aiInterviewDisabled,
     allowCrossDepartmentInterviewers: row.allowCrossDepartmentInterviewers,
     code: row.code,
     controlCategory: row.controlCategory,
@@ -558,6 +560,7 @@ export async function loadJobDescriptionById(
   );
   const [row] = await db
     .select({
+      aiInterviewDisabled: jobDescription.aiInterviewDisabled,
       allowCrossDepartmentInterviewers: jobDescription.allowCrossDepartmentInterviewers,
       code: jobDescription.code,
       controlCategory: jobDescription.controlCategory,
@@ -786,6 +789,7 @@ export function serializeJobDescription(
 ): JobDescriptionRecord {
   const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
   return {
+    aiInterviewDisabled: row.aiInterviewDisabled,
     allowCrossDepartmentInterviewers: row.allowCrossDepartmentInterviewers,
     code: row.code,
     controlCategory: row.controlCategory,

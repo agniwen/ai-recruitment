@@ -20,6 +20,7 @@ const resumeProfile: ResumeProfile = {
 
 const jobDescriptions: JobDescriptionListRecord[] = [
   {
+    aiInterviewDisabled: false,
     allowCrossDepartmentInterviewers: false,
     code: null,
     controlCategory: null,

@@ -375,6 +375,7 @@ function ResumeEditBody({
             candidateNamePlaceholder="请输入候选人姓名"
             disabled={isSubmitting || isResumeLocked}
             form={form}
+            hideAiInterviewDisabledJobDescriptions={query.data?.pipelineStage !== "screening"}
             onResumeFileChange={() => {
               // 简历文件字段在此模式下隐藏，不会触发该回调。
             }}

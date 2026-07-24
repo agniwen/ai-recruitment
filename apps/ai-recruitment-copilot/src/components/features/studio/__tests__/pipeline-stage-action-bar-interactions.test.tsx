@@ -19,10 +19,14 @@ const mountedRoots: { host: HTMLDivElement; root: ReturnType<typeof createRoot> 
 
 function renderActionBar({
   aiRoundInterviewLink,
+  aiInterviewDisabled,
   onAdvance = vi.fn(),
+  pipelineStage = "ai_interview",
 }: {
   aiRoundInterviewLink?: string;
+  aiInterviewDisabled?: boolean;
   onAdvance?: (target: PipelineStage) => void | Promise<void>;
+  pipelineStage?: PipelineStage;
 } = {}) {
   const host = document.createElement("div");
   document.body.append(host);
@@ -33,11 +37,12 @@ function renderActionBar({
     root.render(
       <PipelineStageActionBar
         aiRoundInterviewLink={aiRoundInterviewLink}
+        aiInterviewDisabled={aiInterviewDisabled}
         onAdvance={onAdvance}
         onRequestClose={vi.fn()}
         onRequestReactivate={vi.fn()}
         onViewCurrentStage={vi.fn()}
-        pipelineStage="ai_interview"
+        pipelineStage={pipelineStage}
       />,
     );
   });
@@ -108,5 +113,14 @@ describe("PipelineStageActionBar interactions", () => {
     expect(host.querySelector('[aria-label^="当前招聘阶段："]')?.getAttribute("aria-busy")).toBe(
       "false",
     );
+  });
+
+  it("hides the written-test advance action when the job disables AI interviews", () => {
+    const host = renderActionBar({
+      aiInterviewDisabled: true,
+      pipelineStage: "written_test",
+    });
+
+    expect(host.textContent).not.toContain("推进到 AI 面试");
   });
 });

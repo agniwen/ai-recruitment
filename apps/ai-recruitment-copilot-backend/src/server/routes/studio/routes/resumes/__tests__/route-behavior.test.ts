@@ -343,6 +343,25 @@ describe("resumeLibraryRouter behavior", () => {
     expect(mocks.loadOrCreateActiveInterviewContextSnapshot).not.toHaveBeenCalled();
   });
 
+  it("blocks launching AI interview when the linked job disables it", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      ...EXISTING_RECORD,
+      jobDescriptionAiInterviewDisabled: true,
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/launch-interview`, {
+      body: JSON.stringify({ interviewQuestions: [] }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "当前关联岗位已禁用 AI 面试。",
+    });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it("exposes workspace review data and records a one-time evaluation", async () => {
     mocks.loadResumeDetailForAuthenticatedReviewer
       .mockResolvedValueOnce({ id: RECORD_ID })
@@ -439,6 +458,40 @@ describe("resumeLibraryRouter behavior", () => {
       organizationId: ORGANIZATION_ID,
       resumeRecordId: RECORD_ID,
     });
+  });
+
+  it("blocks rebinding a later-stage candidate to an AI-disabled job", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      ...EXISTING_RECORD,
+      pipelineStage: "human_interview",
+    });
+    mocks.loadJobDescriptionById.mockResolvedValue({
+      aiInterviewDisabled: true,
+      id: "jd-new",
+      name: "线下面试岗位",
+    });
+
+    const formData = new FormData();
+    formData.set("candidateEmail", "");
+    formData.set("candidateName", "候选人");
+    formData.set("candidatePhone", "");
+    formData.set("hiringUnitId", "unit-1");
+    formData.set("hrResumeAssessment", "");
+    formData.set("jobDescriptionId", "jd-new");
+    formData.set("recommendationText", "");
+    formData.set("resumeEvaluationStatus", "pass");
+    formData.set("targetRole", "");
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}`, {
+      body: formData,
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "候选人离开筛选阶段后，不能改绑到已禁用 AI 面试的岗位。",
+    });
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it("invalidates stale AI scoring and queues a new assessment when the job changes", async () => {

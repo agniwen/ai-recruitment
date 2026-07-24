@@ -28,6 +28,7 @@ vi.mock(
 
 function createTransaction(existing: {
   closedMeta: null;
+  jobDescriptionAiInterviewDisabled?: boolean;
   jobDescriptionId: string;
   outcome: "in_pipeline";
   pipelineStage: "human_interview" | "screening";
@@ -38,8 +39,10 @@ function createTransaction(existing: {
     insert: vi.fn(() => ({ values: insertedValues })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          for: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([existing]) })),
+        leftJoin: vi.fn(() => ({
+          where: vi.fn(() => ({
+            for: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([existing]) })),
+          })),
         })),
       })),
     })),
@@ -170,5 +173,34 @@ describe("transitionCandidateStage", () => {
     const audit = insertedValues.mock.calls[0]?.[0] as { detail?: Record<string, unknown> };
     expect(audit.detail).not.toHaveProperty("source");
     expect(audit.detail).not.toHaveProperty("copilotActionProposalId");
+  });
+
+  it("rejects advancing to AI interview when the linked job disables it", async () => {
+    const { insertedValues, tx, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionAiInterviewDisabled: true,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "screening",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+
+    await expect(
+      transitionCandidateStage({
+        authorize: vi.fn(),
+        candidateId: "candidate-a",
+        input: { pipelineStage: "ai_interview" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({
+      kind: "invalid",
+      message: "当前关联岗位已禁用 AI 面试。",
+    });
+
+    expect(updatedWhere).not.toHaveBeenCalled();
+    expect(insertedValues).not.toHaveBeenCalled();
+    expect(mocks.invalidateCaches).not.toHaveBeenCalled();
   });
 });

@@ -34,6 +34,7 @@ export function InterviewBasicInfoFields({ form }: { form: InterviewFormApi }) {
           return (
             <JobDescriptionSelectField
               error={errors?.[0]?.message}
+              hideAiInterviewDisabled
               onChange={(next) => field.handleChange(next)}
               value={field.state.value ?? ""}
             />

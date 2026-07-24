@@ -221,6 +221,7 @@ function JobDescriptionManagementPage({
       return;
     }
     setCreateDraft({
+      aiInterviewDisabled: false,
       allowCrossDepartmentInterviewers: false,
       controlCategory: null,
       departmentId,

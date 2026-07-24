@@ -96,6 +96,18 @@ const INVALIDATED_RESUME_ASSESSMENT = {
   resumeScreeningStatus: "idle" as const,
 };
 
+function getAiInterviewDisabledJobChangeError(input: {
+  changed: boolean;
+  nextJobDescription: Awaited<ReturnType<typeof loadJobDescriptionById>>;
+  pipelineStage: (typeof studioInterview.$inferSelect)["pipelineStage"];
+}): string | null {
+  return input.changed &&
+    input.pipelineStage !== "screening" &&
+    input.nextJobDescription?.aiInterviewDisabled
+    ? "候选人离开筛选阶段后，不能改绑到已禁用 AI 面试的岗位。"
+    : null;
+}
+
 async function reassessAfterJobDescriptionChange(input: {
   organizationId: string;
   resumeRecordId: string;
@@ -391,6 +403,14 @@ export const resumeLibraryRouter = factory
       const nextJobDescription = jobDescriptionChanged
         ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)
         : null;
+      const jobChangeError = getAiInterviewDisabledJobChangeError({
+        changed: jobDescriptionChanged,
+        nextJobDescription,
+        pipelineStage: existing.pipelineStage,
+      });
+      if (jobChangeError) {
+        return c.json({ error: jobChangeError }, 409);
+      }
 
       // Mirror identity into resumeProfile JSON when a structured profile exists.
       // Table: candidateName/email/phone/targetRole/jobDescriptionId
@@ -528,6 +548,14 @@ export const resumeLibraryRouter = factory
         jobDescriptionChanged && nextJobDescriptionId
           ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)
           : null;
+      const jobChangeError = getAiInterviewDisabledJobChangeError({
+        changed: jobDescriptionChanged,
+        nextJobDescription,
+        pipelineStage: existing.pipelineStage,
+      });
+      if (jobChangeError) {
+        return c.json({ error: jobChangeError }, 409);
+      }
 
       const resumeProfile = syncResumeProfileIdentity(existing.resumeProfile, input.data);
       const resumeProfileUpdate: Partial<typeof studioInterview.$inferInsert> = resumeProfile

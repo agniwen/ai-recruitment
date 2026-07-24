@@ -225,6 +225,7 @@ export function ResumeLibraryCardActions({
   const canLaunchInterview =
     canCreateInterview &&
     canLaunchInterviewFromResume(record.resumeParseStatus) &&
+    !record.jobDescriptionAiInterviewDisabled &&
     !record.hasInterviewRounds &&
     record.pipelineStage !== "closed";
   const canPreviewFromMenu =

@@ -116,6 +116,7 @@ async function seedFixtures() {
 
 function jobDescriptionPayload(overrides?: Partial<Record<string, unknown>>) {
   return {
+    aiInterviewDisabled: false,
     allowCrossDepartmentInterviewers: true,
     departmentId: DEPARTMENT_ID,
     description: "",

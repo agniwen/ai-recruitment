@@ -285,6 +285,7 @@ export const jobDescriptionsRouter = factory
 
       for (const code of preferredCodeCandidates) {
         const record = {
+          aiInterviewDisabled: input.aiInterviewDisabled,
           allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
           code,
           controlCategory: nullableText(input.controlCategory),
@@ -459,6 +460,7 @@ export const jobDescriptionsRouter = factory
 
       const now = new Date();
       const updateValues = {
+        aiInterviewDisabled: input.aiInterviewDisabled,
         allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
         controlCategory: nullableText(input.controlCategory),
         departmentId: input.departmentId,

@@ -48,6 +48,7 @@ type MinimumWorkYearsRule = Extract<ResumeScreeningFieldRule, { field: "minimumW
 
 export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
   return {
+    aiInterviewDisabled: false,
     allowCrossDepartmentInterviewers: false,
     code: "",
     departmentId: "",

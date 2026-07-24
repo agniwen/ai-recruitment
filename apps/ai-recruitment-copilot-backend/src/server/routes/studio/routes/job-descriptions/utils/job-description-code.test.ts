@@ -1,5 +1,8 @@
 import { globalConfigSchema } from "@arc/shared/global-config";
-import { jobDescriptionFormSchema } from "@arc/shared/job-descriptions";
+import {
+  createDefaultResumeScreeningPolicy,
+  jobDescriptionFormSchema,
+} from "@arc/shared/job-descriptions";
 import { describe, expect, it } from "vitest";
 import {
   buildJobDescriptionCodeCandidates,
@@ -91,6 +94,7 @@ describe("job description code helpers", () => {
 
   it("normalizes an optional generated code in job description input", () => {
     const parsed = jobDescriptionFormSchema.parse({
+      aiInterviewDisabled: false,
       allowCrossDepartmentInterviewers: false,
       code: " aur26062215347 ",
       departmentId: "department-1",
@@ -98,6 +102,7 @@ describe("job description code helpers", () => {
       interviewerIds: ["interviewer-1"],
       name: "前端工程师",
       prompt: "考察前端能力",
+      resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
     });
 
     expect(parsed.code).toBe("AUR26062215347");
@@ -106,6 +111,7 @@ describe("job description code helpers", () => {
   it("rejects invalid job description code input", () => {
     expect(() =>
       jobDescriptionFormSchema.parse({
+        aiInterviewDisabled: false,
         allowCrossDepartmentInterviewers: false,
         code: "AUR-26062215347",
         departmentId: "department-1",
@@ -113,6 +119,7 @@ describe("job description code helpers", () => {
         interviewerIds: ["interviewer-1"],
         name: "前端工程师",
         prompt: "考察前端能力",
+        resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
       }),
     ).toThrow();
   });

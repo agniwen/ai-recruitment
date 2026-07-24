@@ -513,6 +513,9 @@ export const resumeLibraryReadRouter = factory
           case "resume_not_ready": {
             return c.json({ error: "简历解析完成后才能发起 AI 面试。" }, 409);
           }
+          case "job_disables_ai_interview": {
+            return c.json({ error: "当前关联岗位已禁用 AI 面试。" }, 409);
+          }
           case "round_not_created": {
             return c.json({ error: "未生成面试轮次。" }, 400);
           }

@@ -342,6 +342,10 @@ export function ResumeLibraryPage({ metrics }: { metrics: ResumeLibraryMetrics }
   }
 
   function startAiInterview(record: ResumeLibraryListRecord) {
+    if (record.jobDescriptionAiInterviewDisabled) {
+      toast.error("当前关联岗位已禁用 AI 面试");
+      return;
+    }
     if (!canLaunchInterviewFromResume(record.resumeParseStatus)) {
       toast.error("简历解析完成后才能发起 AI 面试");
       return;

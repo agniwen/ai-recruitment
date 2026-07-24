@@ -40,7 +40,16 @@ vi.mock("@/hooks/use-mobile", () => ({
 }));
 
 vi.mock("@/components/features/studio/interviews/job-description-select-field", () => ({
-  JobDescriptionSelectField: () => <div data-testid="job-description-select" />,
+  JobDescriptionSelectField: ({
+    hideAiInterviewDisabled,
+  }: {
+    hideAiInterviewDisabled?: boolean;
+  }) => (
+    <div
+      data-hide-ai-interview-disabled={String(Boolean(hideAiInterviewDisabled))}
+      data-testid="job-description-select"
+    />
+  ),
 }));
 
 vi.mock("@/components/ui/file-upload", () => ({
@@ -128,6 +137,7 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     humanInterviewers: [],
     id: "resume-1",
     interviewQuestions: [],
+    jobDescriptionAiInterviewDisabled: false,
     jobDescriptionDepartmentName: null,
     jobDescriptionId: "jd-1",
     jobDescriptionInterviewers: [],
@@ -361,6 +371,23 @@ describe("StudioPersonEditDialog", () => {
     expect(document.querySelector('[data-testid="file-upload"]')).toBeNull();
     expect(document.querySelector("#hrResumeAssessment")).not.toBeNull();
     expect(document.querySelector("#recommendationText")).not.toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    queryClient.clear();
+  });
+
+  it("hides AI-disabled jobs when editing a candidate outside screening", async () => {
+    apiMocks.fetchStudioResume.mockResolvedValue(makeDetail({ pipelineStage: "human_interview" }));
+    const { queryClient, root } = renderDialog();
+
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector<HTMLElement>('[data-testid="job-description-select"]')?.dataset
+          .hideAiInterviewDisabled,
+      ).toBe("true");
+    });
 
     act(() => {
       root.unmount();

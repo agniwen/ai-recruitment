@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createDefaultResumeScreeningPolicy, jobDescriptionFormSchema } from "../job-descriptions";
 
 const baseJobDescription = {
+  aiInterviewDisabled: false,
   allowCrossDepartmentInterviewers: false,
   departmentId: "dept-1",
   description: "",

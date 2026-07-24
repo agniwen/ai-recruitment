@@ -5,6 +5,7 @@ import {
 } from "../launch-ai-interview-round";
 
 const candidate = {
+  jobDescriptionAiInterviewDisabled: false,
   jobDescriptionId: "jd_1",
   pipelineStage: "screening" as const,
   resumeParseStatus: "ready" as const,
@@ -54,6 +55,18 @@ describe("launchAiInterviewRound", () => {
     const result = await createLaunchAiInterviewRound(deps)(command);
 
     expect(result).toEqual({ ok: false, reason: "stage_conflict" });
+    expect(deps.commit).not.toHaveBeenCalled();
+  });
+
+  it("rejects a candidate whose job disables AI interviews", async () => {
+    deps.loadCandidate.mockResolvedValue({
+      ...candidate,
+      jobDescriptionAiInterviewDisabled: true,
+    });
+
+    const result = await createLaunchAiInterviewRound(deps)(command);
+
+    expect(result).toEqual({ ok: false, reason: "job_disables_ai_interview" });
     expect(deps.commit).not.toHaveBeenCalled();
   });
 
