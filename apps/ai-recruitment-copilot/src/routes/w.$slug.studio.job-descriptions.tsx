@@ -181,6 +181,8 @@ function JobDescriptionManagementPage({
     void queryClient.invalidateQueries({ queryKey: ["job-descriptions"] });
     void queryClient.invalidateQueries({ queryKey: ["interviewers"] });
     void queryClient.invalidateQueries({ queryKey: ["departments"] });
+    void queryClient.invalidateQueries({ queryKey: ["studio-resumes", slug] });
+    void queryClient.invalidateQueries({ queryKey: ["studio-interviews", slug] });
     void router.invalidate();
   }
 

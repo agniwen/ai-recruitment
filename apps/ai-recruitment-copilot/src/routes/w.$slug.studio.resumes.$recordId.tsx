@@ -300,6 +300,10 @@ function RecruiterResumeDetailPage() {
           onLaunchInterview={
             canCreateInterview
               ? ({ id, candidateName }) => {
+                  if (detail?.jobDescriptionAiInterviewDisabled) {
+                    toast.error("当前关联岗位已禁用 AI 面试");
+                    return;
+                  }
                   if (detail && !canLaunchInterviewFromResume(detail.resumeParseStatus)) {
                     toast.error("简历解析完成后才能发起 AI 面试");
                     return;

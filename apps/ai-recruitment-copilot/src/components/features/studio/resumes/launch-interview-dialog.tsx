@@ -143,6 +143,14 @@ export function LaunchInterviewDialog({
       if (!recordId) {
         return;
       }
+      if (!resumeDetail) {
+        return;
+      }
+      if (resumeDetail.jobDescriptionAiInterviewDisabled) {
+        toast.error("当前关联岗位已禁用 AI 面试");
+        onOpenChange(false);
+        return;
+      }
       setSubmitting(true);
       try {
         const round = await launchInterviewFromResume(
@@ -180,6 +188,11 @@ export function LaunchInterviewDialog({
       try {
         const detail = await fetchStudioResume(slug, recordId);
         if (cancelled || abortController.signal.aborted) {
+          return;
+        }
+        if (detail?.jobDescriptionAiInterviewDisabled) {
+          toast.error("当前关联岗位已禁用 AI 面试");
+          onOpenChange(false);
           return;
         }
         setResumeDetail(detail);
@@ -304,10 +317,12 @@ export function LaunchInterviewDialog({
             >
               取消
             </Button>
-            <Button disabled={isBusy} onClick={() => void form.handleSubmit()} type="button">
-              {submitting ? <LoaderCircleIcon className="size-4 animate-spin" /> : null}
-              发起
-            </Button>
+            {resumeDetail && !resumeDetail.jobDescriptionAiInterviewDisabled ? (
+              <Button disabled={isBusy} onClick={() => void form.handleSubmit()} type="button">
+                {submitting ? <LoaderCircleIcon className="size-4 animate-spin" /> : null}
+                发起
+              </Button>
+            ) : null}
           </div>
         }
       >
