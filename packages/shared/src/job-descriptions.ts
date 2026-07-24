@@ -40,6 +40,106 @@ const nullableDateStringSchema = (label: string) =>
     .regex(/^\d{4}-\d{2}-\d{2}$/, `${label}格式无效`)
     .nullable()
     .optional();
+const nullableTimeSchema = (label: string) =>
+  z
+    .string()
+    .trim()
+    .refine((value) => value === "" || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value), {
+      message: `${label}格式无效`,
+    })
+    .nullable()
+    .optional();
+
+export const jobDescriptionPrioritySchema = z.enum(["P0", "P1", "P2"]);
+export type JobDescriptionPriority = z.infer<typeof jobDescriptionPrioritySchema>;
+
+function validateWorkSchedule(
+  value: {
+    workEndTime?: string | null;
+    workStartTime?: string | null;
+    workTimezone?: string | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const hasWorkSchedule = Boolean(
+    value.workStartTime?.trim() || value.workEndTime?.trim() || value.workTimezone?.trim(),
+  );
+  if (!hasWorkSchedule) {
+    return;
+  }
+  if (!value.workStartTime?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "请选择工作开始时间",
+      path: ["workStartTime"],
+    });
+  }
+  if (!value.workEndTime?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "请选择工作结束时间",
+      path: ["workEndTime"],
+    });
+  }
+  if (!value.workTimezone?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "请输入工作时区",
+      path: ["workTimezone"],
+    });
+  }
+}
+
+function validateSalaryRange(
+  value: {
+    salaryCurrency?: string | null;
+    salaryMaxAmount?: number | null;
+    salaryMinAmount?: number | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const hasSalary =
+    (value.salaryMinAmount !== null && value.salaryMinAmount !== undefined) ||
+    (value.salaryMaxAmount !== null && value.salaryMaxAmount !== undefined) ||
+    Boolean(value.salaryCurrency?.trim());
+  if (!hasSalary) {
+    return;
+  }
+  if (value.salaryMinAmount === null || value.salaryMinAmount === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "请输入薪资下限",
+      path: ["salaryMinAmount"],
+    });
+  }
+  if (value.salaryMaxAmount === null || value.salaryMaxAmount === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      message: "请输入薪资上限",
+      path: ["salaryMaxAmount"],
+    });
+  }
+  if (!value.salaryCurrency?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "请选择薪资币种",
+      path: ["salaryCurrency"],
+    });
+  }
+  if (
+    value.salaryMinAmount !== null &&
+    value.salaryMinAmount !== undefined &&
+    value.salaryMaxAmount !== null &&
+    value.salaryMaxAmount !== undefined &&
+    value.salaryMaxAmount < value.salaryMinAmount
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "薪资上限不能低于下限",
+      path: ["salaryMaxAmount"],
+    });
+  }
+}
 
 export const jobDescriptionBaseSchema = z
   .object({
@@ -52,6 +152,7 @@ export const jobDescriptionBaseSchema = z
     expectedOnboardDate: nullableDateStringSchema("期望到岗日期"),
     gapCount: nullableCountSchema("缺口"),
     headcount: nullableCountSchema("HC"),
+    humanInterviewerIds: z.array(z.string().trim().min(1)).max(20),
     interviewerIds: z
       .array(z.string().trim().min(1))
       .min(1, "请至少选择一位面试官")
@@ -62,7 +163,7 @@ export const jobDescriptionBaseSchema = z
     notes: nullableTextSchema(2000, "备注说明"),
     offeredPendingOnboardCount: nullableCountSchema("已发 offer 待入职"),
     onboardedCount: nullableCountSchema("已到岗"),
-    priority: nullableTextSchema(80, "优先级"),
+    priority: jobDescriptionPrioritySchema,
     prompt: z.string().trim().min(1, "请输入岗位 prompt").max(10_000, "prompt 不能超过 10000 字"),
     recruitmentStatus: nullableTextSchema(120, "招聘状态"),
     requestedDate: nullableDateStringSchema("提需日期"),
@@ -74,50 +175,14 @@ export const jobDescriptionBaseSchema = z
     salaryMinAmount: nullableSalaryAmountSchema,
     serviceUnit: nullableTextSchema(120, "服务单位"),
     sourceSheet: nullableTextSchema(120, "来源表格"),
+    workEndTime: nullableTimeSchema("工作结束时间"),
     workLocation: nullableTextSchema(120, "工作地点"),
+    workStartTime: nullableTimeSchema("工作开始时间"),
+    workTimezone: nullableTextSchema(100, "工作时区"),
   })
   .superRefine((value, ctx) => {
-    const hasSalary =
-      (value.salaryMinAmount !== null && value.salaryMinAmount !== undefined) ||
-      (value.salaryMaxAmount !== null && value.salaryMaxAmount !== undefined) ||
-      Boolean(value.salaryCurrency?.trim());
-    if (!hasSalary) {
-      return;
-    }
-    if (value.salaryMinAmount === null || value.salaryMinAmount === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        message: "请输入薪资下限",
-        path: ["salaryMinAmount"],
-      });
-    }
-    if (value.salaryMaxAmount === null || value.salaryMaxAmount === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        message: "请输入薪资上限",
-        path: ["salaryMaxAmount"],
-      });
-    }
-    if (!value.salaryCurrency?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        message: "请选择薪资币种",
-        path: ["salaryCurrency"],
-      });
-    }
-    if (
-      value.salaryMinAmount !== null &&
-      value.salaryMinAmount !== undefined &&
-      value.salaryMaxAmount !== null &&
-      value.salaryMaxAmount !== undefined &&
-      value.salaryMaxAmount < value.salaryMinAmount
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "薪资上限不能低于下限",
-        path: ["salaryMaxAmount"],
-      });
-    }
+    validateWorkSchedule(value, ctx);
+    validateSalaryRange(value, ctx);
   });
 
 export const jobDescriptionFormSchema = jobDescriptionBaseSchema;
@@ -147,12 +212,13 @@ export interface JobDescriptionRecord {
   expectedOnboardDate: string | null;
   gapCount: number | null;
   headcount: number | null;
+  humanInterviewerIds: string[];
   jobLevel: string | null;
   jobSeries: string | null;
   notes: string | null;
   offeredPendingOnboardCount: number | null;
   onboardedCount: number | null;
-  priority: string | null;
+  priority: JobDescriptionPriority;
   /** @deprecated Replaced by interview-question-templates. Read for legacy data only. */
   presetQuestions: string[];
   prompt: string;
@@ -165,7 +231,10 @@ export interface JobDescriptionRecord {
   salaryMinAmount: number | null;
   serviceUnit: string | null;
   sourceSheet: string | null;
+  workEndTime: string | null;
   workLocation: string | null;
+  workStartTime: string | null;
+  workTimezone: string | null;
   resumeScreeningPolicy: ResumeScreeningPolicy;
   resumeScreeningPolicyHash: string | null;
   resumeScreeningPolicyVersion: number;

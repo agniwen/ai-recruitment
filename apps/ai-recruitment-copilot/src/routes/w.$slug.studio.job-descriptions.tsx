@@ -231,6 +231,7 @@ function JobDescriptionManagementPage({
       expectedOnboardDate: null,
       gapCount: null,
       headcount: null,
+      humanInterviewerIds: [],
       interviewerIds: [],
       jobLevel: null,
       jobSeries: null,
@@ -238,7 +239,7 @@ function JobDescriptionManagementPage({
       notes: null,
       offeredPendingOnboardCount: null,
       onboardedCount: null,
-      priority: null,
+      priority: "P0",
       prompt,
       recruitmentStatus: null,
       requestedDate: null,
@@ -250,7 +251,10 @@ function JobDescriptionManagementPage({
       salaryMinAmount: null,
       serviceUnit: null,
       sourceSheet: null,
+      workEndTime: null,
       workLocation: null,
+      workStartTime: null,
+      workTimezone: null,
     });
     setCreateDraftSessionId((id) => id + 1);
     crud.setEditingRecord(null);
@@ -379,7 +383,7 @@ function JobDescriptionManagementPage({
         },
         key: "interviewers",
         size: 168,
-        title: "面试官",
+        title: "AI面试官",
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) => {
@@ -471,16 +475,16 @@ function JobDescriptionManagementPage({
         type: "multi-select" as const,
       },
       {
-        emptyMessage: "没有匹配的面试官",
+        emptyMessage: "没有匹配的 AI面试官",
         key: "interviewerId" as const,
         options: interviewers.map((i) => ({
           description: i.departmentName ?? "未知部门",
           label: i.name,
           value: i.id,
         })),
-        placeholder: "全部面试官",
-        searchPlaceholder: "搜索面试官…",
-        selectedFormat: (count: number) => `已选 ${count} 位面试官`,
+        placeholder: "全部 AI面试官",
+        searchPlaceholder: "搜索 AI面试官…",
+        selectedFormat: (count: number) => `已选 ${count} 位 AI面试官`,
         type: "multi-select" as const,
       },
     ],

@@ -24,6 +24,7 @@ function job(input: {
     expectedOnboardDate: null,
     gapCount: null,
     headcount: null,
+    humanInterviewerIds: [],
     id: input.id,
     interviewerIds: [],
     interviewers: [],
@@ -34,7 +35,7 @@ function job(input: {
     offeredPendingOnboardCount: null,
     onboardedCount: null,
     presetQuestions: [],
-    priority: null,
+    priority: "P0",
     prompt: "合成岗位面试 Prompt",
     recruitmentStatus: null,
     requestedDate: null,
@@ -50,7 +51,10 @@ function job(input: {
     serviceUnit: null,
     sourceSheet: null,
     updatedAt: SYNTHETIC_TIME,
+    workEndTime: null,
     workLocation: null,
+    workStartTime: null,
+    workTimezone: null,
   };
 }
 

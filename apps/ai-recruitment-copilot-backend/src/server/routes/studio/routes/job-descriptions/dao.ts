@@ -28,6 +28,7 @@ import {
   department,
   interviewer,
   jobDescription,
+  jobDescriptionHumanInterviewer,
   jobDescriptionInterviewer,
   studioInterview,
   studioInterviewSchedule,
@@ -192,7 +193,10 @@ function listJobDescriptionRows({
       serviceUnit: jobDescription.serviceUnit,
       sourceSheet: jobDescription.sourceSheet,
       updatedAt: jobDescription.updatedAt,
+      workEndTime: jobDescription.workEndTime,
       workLocation: jobDescription.workLocation,
+      workStartTime: jobDescription.workStartTime,
+      workTimezone: jobDescription.workTimezone,
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
@@ -282,6 +286,27 @@ async function loadInterviewersForJobDescriptions(
   return map;
 }
 
+async function loadHumanInterviewerIdsForJobDescriptions(
+  jobDescriptionIds: string[],
+): Promise<Map<string, string[]>> {
+  const map = new Map(jobDescriptionIds.map((id) => [id, [] as string[]]));
+  if (jobDescriptionIds.length === 0) {
+    return map;
+  }
+  const rows = await db
+    .select({
+      jobDescriptionId: jobDescriptionHumanInterviewer.jobDescriptionId,
+      userId: jobDescriptionHumanInterviewer.userId,
+    })
+    .from(jobDescriptionHumanInterviewer)
+    .where(inArray(jobDescriptionHumanInterviewer.jobDescriptionId, jobDescriptionIds));
+
+  for (const row of rows) {
+    map.get(row.jobDescriptionId)?.push(row.userId);
+  }
+  return map;
+}
+
 async function loadResumeCountsForJobDescriptions(
   jobDescriptionIds: string[],
 ): Promise<Map<string, number>> {
@@ -319,6 +344,7 @@ async function loadResumeCountsForJobDescriptions(
 function toJobDescriptionListRecord(
   row: Awaited<ReturnType<typeof listJobDescriptionRows>>[number],
   interviewers: JobDescriptionInterviewerSummary[],
+  humanInterviewerIds: string[],
   resumeCount: number,
 ): JobDescriptionListRecord {
   const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
@@ -335,6 +361,7 @@ function toJobDescriptionListRecord(
     expectedOnboardDate: row.expectedOnboardDate,
     gapCount: row.gapCount,
     headcount: row.headcount,
+    humanInterviewerIds,
     id: row.id,
     interviewerIds: interviewers.map((item) => item.id),
     interviewers,
@@ -361,7 +388,10 @@ function toJobDescriptionListRecord(
     serviceUnit: row.serviceUnit,
     sourceSheet: row.sourceSheet,
     updatedAt: serializeDate(row.updatedAt),
+    workEndTime: row.workEndTime,
     workLocation: row.workLocation,
+    workStartTime: row.workStartTime,
+    workTimezone: row.workTimezone,
   };
 }
 
@@ -443,7 +473,8 @@ export async function queryPaginatedJobDescriptions(
   ]);
 
   const ids = records.map((record) => record.id);
-  const [interviewersMap, resumeCountsMap] = await Promise.all([
+  const [humanInterviewerIdsMap, interviewersMap, resumeCountsMap] = await Promise.all([
+    loadHumanInterviewerIdsForJobDescriptions(ids),
     loadInterviewersForJobDescriptions(ids),
     loadResumeCountsForJobDescriptions(ids),
   ]);
@@ -455,6 +486,7 @@ export async function queryPaginatedJobDescriptions(
       toJobDescriptionListRecord(
         record,
         interviewersMap.get(record.id) ?? [],
+        humanInterviewerIdsMap.get(record.id) ?? [],
         resumeCountsMap.get(record.id) ?? 0,
       ),
     ),
@@ -491,7 +523,8 @@ export async function listAllJobDescriptions(
     sortOrder: "asc",
   });
   const ids = rows.map((row) => row.id);
-  const [interviewersMap, resumeCountsMap] = await Promise.all([
+  const [humanInterviewerIdsMap, interviewersMap, resumeCountsMap] = await Promise.all([
+    loadHumanInterviewerIdsForJobDescriptions(ids),
     loadInterviewersForJobDescriptions(ids),
     loadResumeCountsForJobDescriptions(ids),
   ]);
@@ -499,6 +532,7 @@ export async function listAllJobDescriptions(
     toJobDescriptionListRecord(
       row,
       interviewersMap.get(row.id) ?? [],
+      humanInterviewerIdsMap.get(row.id) ?? [],
       resumeCountsMap.get(row.id) ?? 0,
     ),
   );
@@ -598,7 +632,10 @@ export async function loadJobDescriptionById(
       serviceUnit: jobDescription.serviceUnit,
       sourceSheet: jobDescription.sourceSheet,
       updatedAt: jobDescription.updatedAt,
+      workEndTime: jobDescription.workEndTime,
       workLocation: jobDescription.workLocation,
+      workStartTime: jobDescription.workStartTime,
+      workTimezone: jobDescription.workTimezone,
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
@@ -607,12 +644,16 @@ export async function loadJobDescriptionById(
   if (!row) {
     return null;
   }
-  const interviewersMap = await loadInterviewersForJobDescriptions([id]);
+  const [humanInterviewerIdsMap, interviewersMap] = await Promise.all([
+    loadHumanInterviewerIdsForJobDescriptions([id]),
+    loadInterviewersForJobDescriptions([id]),
+  ]);
   const interviewers = interviewersMap.get(id) ?? [];
   // eslint-disable-next-line no-use-before-define -- kept near public load functions for readability.
   return serializeJobDescription(
     row,
     interviewers.map((item) => item.id),
+    humanInterviewerIdsMap.get(id) ?? [],
   );
 }
 
@@ -786,6 +827,7 @@ export function loadJobDescriptionMetrics(
 export function serializeJobDescription(
   row: typeof jobDescription.$inferSelect,
   interviewerIds: string[],
+  humanInterviewerIds: string[],
 ): JobDescriptionRecord {
   const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
   return {
@@ -800,6 +842,7 @@ export function serializeJobDescription(
     expectedOnboardDate: row.expectedOnboardDate,
     gapCount: row.gapCount,
     headcount: row.headcount,
+    humanInterviewerIds,
     id: row.id,
     interviewerIds,
     jobLevel: row.jobLevel,
@@ -824,6 +867,9 @@ export function serializeJobDescription(
     serviceUnit: row.serviceUnit,
     sourceSheet: row.sourceSheet,
     updatedAt: serializeDate(row.updatedAt),
+    workEndTime: row.workEndTime,
     workLocation: row.workLocation,
+    workStartTime: row.workStartTime,
+    workTimezone: row.workTimezone,
   };
 }

@@ -44,7 +44,7 @@ function JobDescriptionPreview({ record }: { record: JobDescriptionRecord }) {
           ) : null}
         </div>
         <p className="text-muted-foreground text-xs">
-          已配置 {record.interviewerIds.length} 位面试官
+          已配置 {record.interviewerIds.length} 位 AI面试官
         </p>
       </div>
 

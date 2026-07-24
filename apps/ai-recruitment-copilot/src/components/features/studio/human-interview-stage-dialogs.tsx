@@ -1,7 +1,7 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { humanInterviewRoundOutcomeMeta } from "@arc/db-schema/studio-interviews";
 import type { HumanInterviewRoundOutcome } from "@arc/db-schema/studio-interviews";
@@ -14,8 +14,6 @@ import {
   createHumanInterviewRound,
 } from "@/lib/client/api";
 import { invalidateHumanInterviewCandidateQueries } from "@/lib/client/api/query-keys";
-import { rpc } from "@/lib/client/rpc";
-import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,32 +30,16 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { Textarea } from "@/components/ui/textarea";
 import { addOneHourToDateTimeLocalInputValue } from "./human-interview-stage-utils";
+import { useWorkspaceInterviewerMembers } from "./use-workspace-interviewer-members";
 
-interface WorkspaceMember {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-}
-
-function useWorkspaceMembers() {
-  const slug = useWorkspaceSlug();
-  return useQuery({
-    queryFn: () =>
-      rpcFetch<{ records: WorkspaceMember[] }>(
-        rpc.api.w[":slug"].studio.workspace.members.$get({ param: { slug } }),
-        "加载成员列表失败",
-      ),
-    queryKey: ["workspace-members", slug],
-    staleTime: 60_000,
-  });
-}
+const EMPTY_INTERVIEWER_IDS: string[] = [];
 
 interface ScheduleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   candidateId: string;
   existingCount: number;
+  defaultInterviewerIds?: string[];
   onScheduled: () => void;
 }
 
@@ -73,16 +55,23 @@ export function ScheduleRoundDialog({
   onOpenChange,
   candidateId,
   existingCount,
+  defaultInterviewerIds = EMPTY_INTERVIEWER_IDS,
   onScheduled,
 }: ScheduleDialogProps) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
-  const { data: members } = useWorkspaceMembers();
+  const { data: members = [] } = useWorkspaceInterviewerMembers(open);
   const [label, setLabel] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [validUntil, setValidUntil] = useState("");
   const [interviewerIds, setInterviewerIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setInterviewerIds([...defaultInterviewerIds]);
+    }
+  }, [defaultInterviewerIds, open]);
 
   function reset() {
     setLabel("");
@@ -142,7 +131,7 @@ export function ScheduleRoundDialog({
     },
   });
 
-  const memberOptions = (members?.records ?? []).map((m) => ({
+  const memberOptions = members.map((m) => ({
     label: m.name,
     value: m.id,
   }));

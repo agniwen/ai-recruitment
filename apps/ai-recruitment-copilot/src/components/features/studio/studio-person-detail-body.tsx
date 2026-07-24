@@ -742,6 +742,9 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
                 candidateId={record.id}
                 candidateName={record.candidateName}
                 disabled={record.pipelineStage === "closed"}
+                resumeJobDescriptionHumanInterviewerIds={
+                  resumeRecord?.jobDescriptionHumanInterviewerIds
+                }
               />
             </TabsContent>
           ) : null}

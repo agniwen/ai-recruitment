@@ -32,6 +32,7 @@ const jobDescriptions: JobDescriptionListRecord[] = [
     expectedOnboardDate: null,
     gapCount: null,
     headcount: null,
+    humanInterviewerIds: [],
     id: "jd-1",
     interviewerIds: [],
     interviewers: [],
@@ -42,7 +43,7 @@ const jobDescriptions: JobDescriptionListRecord[] = [
     offeredPendingOnboardCount: null,
     onboardedCount: null,
     presetQuestions: [],
-    priority: null,
+    priority: "P0",
     prompt: "请考察前端能力。",
     recruitmentStatus: null,
     requestedDate: null,
@@ -58,7 +59,10 @@ const jobDescriptions: JobDescriptionListRecord[] = [
     serviceUnit: null,
     sourceSheet: null,
     updatedAt: new Date("2026-06-20T00:00:00.000Z"),
+    workEndTime: null,
     workLocation: null,
+    workStartTime: null,
+    workTimezone: null,
   },
 ];
 

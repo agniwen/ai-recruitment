@@ -211,6 +211,7 @@ export interface ResumeLibraryDetail extends ResumeLibraryListRecord {
   hrResumeAssessmentUpdatedBy: string | null;
   humanInterviewerId: string | null;
   humanInterviewScheduledAt: string | null;
+  jobDescriptionHumanInterviewerIds: string[];
   resumeProfile: ResumeProfile | null;
   resumeReview: ResumeReview | null;
   resumeContentHash: string | null;

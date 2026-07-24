@@ -38,6 +38,8 @@ import {
 import { EndMeetingDialog, MeetingLinksDialog } from "./human-interview-stage-meetings";
 import { RoundCard } from "./human-interview-stage-rounds";
 
+const EMPTY_INTERVIEWER_IDS: string[] = [];
+
 interface PanelProps {
   candidateId: string;
   candidateName: string;
@@ -47,6 +49,7 @@ interface PanelProps {
   // closed 状态时所有写按钮禁用（页面上层已隐藏，这里再兜一手）。
   // All writes disabled when candidate is closed (defense in depth).
   disabled?: boolean;
+  resumeJobDescriptionHumanInterviewerIds?: string[];
 }
 
 interface DialogState {
@@ -102,6 +105,7 @@ export function HumanInterviewStagePanel({
   canDelete = true,
   canUpdate = true,
   disabled,
+  resumeJobDescriptionHumanInterviewerIds = EMPTY_INTERVIEWER_IDS,
 }: PanelProps) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
@@ -229,6 +233,7 @@ export function HumanInterviewStagePanel({
 
       <ScheduleRoundDialog
         candidateId={candidateId}
+        defaultInterviewerIds={resumeJobDescriptionHumanInterviewerIds}
         existingCount={rounds.length}
         onOpenChange={(open) => dispatchDialog({ open, type: "scheduleOpenChanged" })}
         onScheduled={invalidateRounds}

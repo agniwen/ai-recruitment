@@ -1,4 +1,4 @@
-/* oxlint-disable complexity -- root form coordinates validation and extracted subforms. */
+/* oxlint-disable complexity, max-lines -- root form coordinates validation and extracted subforms. */
 "use client";
 
 import { IconLoader2 } from "@tabler/icons-react";
@@ -38,6 +38,13 @@ import {
 } from "@/components/ui/input-group";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarkdownEditor } from "@/components/features/markdown-editor";
 import { Switch } from "@/components/ui/switch";
@@ -49,6 +56,7 @@ import {
   LinkedFormsList,
   LinkedInterviewQuestionTemplatesList,
 } from "./job-description-linked-resources";
+import { useWorkspaceInterviewerMembers } from "../use-workspace-interviewer-members";
 
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -63,10 +71,15 @@ export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
     code: "",
     departmentId: "",
     description: "",
+    humanInterviewerIds: [],
     interviewerIds: [],
     name: "",
+    priority: "P0",
     prompt: "",
     resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
+    workEndTime: "",
+    workStartTime: "",
+    workTimezone: "",
   };
 }
 
@@ -77,10 +90,15 @@ function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
     code: record.code ?? "",
     departmentId: record.departmentId,
     description: record.description ?? "",
+    humanInterviewerIds: [...record.humanInterviewerIds],
     interviewerIds: [...record.interviewerIds],
     name: record.name,
+    priority: record.priority,
     prompt: record.prompt,
     resumeScreeningPolicy: record.resumeScreeningPolicy,
+    workEndTime: record.workEndTime ?? "",
+    workStartTime: record.workStartTime ?? "",
+    workTimezone: record.workTimezone ?? "",
   };
 }
 
@@ -127,6 +145,7 @@ export function JobDescriptionFormDialog({
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isGeneratingScreeningPolicy, setIsGeneratingScreeningPolicy] = useState(false);
   const [activeTab, setActiveTab] = useState<JobDescriptionFormTab>("basic");
+  const { data: humanInterviewers = [] } = useWorkspaceInterviewerMembers(open);
   const resolvedInitialValues = useMemo(() => {
     if (record) {
       return toDepartmentScopedFormValues(record, interviewers);
@@ -196,10 +215,15 @@ export function JobDescriptionFormDialog({
         code: value.code?.trim() || undefined,
         departmentId: value.departmentId,
         description: value.description?.trim() || "",
+        humanInterviewerIds: value.humanInterviewerIds,
         interviewerIds: value.interviewerIds,
         name: value.name.trim(),
+        priority: value.priority,
         prompt: value.prompt.trim(),
         resumeScreeningPolicy: value.resumeScreeningPolicy,
+        workEndTime: value.workEndTime?.trim() || null,
+        workStartTime: value.workStartTime?.trim() || null,
+        workTimezone: value.workTimezone?.trim() || null,
       };
 
       const response = isEdit
@@ -232,7 +256,12 @@ export function JobDescriptionFormDialog({
         "aiInterviewDisabled",
         "interviewerIds",
         "description",
+        "humanInterviewerIds",
+        "priority",
         "prompt",
+        "workEndTime",
+        "workStartTime",
+        "workTimezone",
       ];
       const screeningFields = ["resumeScreeningPolicy"];
       const hasBasicError = basicFields.some((key) => (meta[key]?.errors?.length ?? 0) > 0);
@@ -438,6 +467,37 @@ export function JobDescriptionFormDialog({
                     }}
                   </form.Field>
 
+                  <form.Field name="priority">
+                    {(field) => {
+                      const errors = toFieldErrors(field.state.meta.errors);
+                      return (
+                        <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
+                          <FieldLabel htmlFor={field.name}>岗位优先级</FieldLabel>
+                          <FieldContent className="gap-2">
+                            <Select
+                              onValueChange={(value) => value && field.handleChange(value)}
+                              value={field.state.value}
+                            >
+                              <SelectTrigger
+                                aria-invalid={!!errors?.length}
+                                className="w-full"
+                                id={field.name}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="P0">P0（紧急/高）</SelectItem>
+                                <SelectItem value="P1">P1（中）</SelectItem>
+                                <SelectItem value="P2">P2（低）</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FieldError errors={errors} />
+                          </FieldContent>
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+
                   <form.Field name="departmentId">
                     {(field) => {
                       const errors = toFieldErrors(field.state.meta.errors);
@@ -477,6 +537,79 @@ export function JobDescriptionFormDialog({
                       );
                     }}
                   </form.Field>
+
+                  <form.Field name="workTimezone">
+                    {(field) => {
+                      const errors = toFieldErrors(field.state.meta.errors);
+                      return (
+                        <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
+                          <FieldLabel htmlFor={field.name}>工作时区</FieldLabel>
+                          <FieldContent className="gap-2">
+                            <Input
+                              aria-invalid={!!errors?.length}
+                              id={field.name}
+                              onBlur={field.handleBlur}
+                              onChange={(event) => field.handleChange(event.target.value)}
+                              placeholder="如：Asia/Shanghai"
+                              value={field.state.value ?? ""}
+                            />
+                            <FieldError errors={errors} />
+                          </FieldContent>
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <form.Field name="workStartTime">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>工作开始时间</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                onBlur={field.handleBlur}
+                                onChange={(event) => field.handleChange(event.target.value)}
+                                step={60}
+                                type="time"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                    <form.Field name="workEndTime">
+                      {(field) => {
+                        const errors = toFieldErrors(field.state.meta.errors);
+                        return (
+                          <Field
+                            data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                          >
+                            <FieldLabel htmlFor={field.name}>工作结束时间</FieldLabel>
+                            <FieldContent className="gap-2">
+                              <Input
+                                aria-invalid={!!errors?.length}
+                                id={field.name}
+                                onBlur={field.handleBlur}
+                                onChange={(event) => field.handleChange(event.target.value)}
+                                step={60}
+                                type="time"
+                                value={field.state.value ?? ""}
+                              />
+                              <FieldError errors={errors} />
+                            </FieldContent>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  </div>
 
                   <form.Field name="allowCrossDepartmentInterviewers">
                     {(field) => (
@@ -544,11 +677,11 @@ export function JobDescriptionFormDialog({
                           data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
                         >
                           <FieldLabel>
-                            面试官 <span className="text-destructive">*</span>
+                            AI面试官 <span className="text-destructive">*</span>
                           </FieldLabel>
                           <FieldContent className="gap-2">
                             <SearchableMultiSelect
-                              emptyMessage="没有匹配的面试官"
+                              emptyMessage="没有匹配的 AI面试官"
                               invalid={!!errors?.length}
                               onChange={(next) => {
                                 const synced = getDepartmentSyncedInterviewerSelection({
@@ -564,9 +697,40 @@ export function JobDescriptionFormDialog({
                                 field.handleChange(synced.interviewerIds);
                               }}
                               options={interviewerOptions}
-                              placeholder="选择面试官…"
-                              searchPlaceholder="搜索面试官…"
-                              selectedFormat={(count) => `已选 ${count} 位面试官`}
+                              placeholder="选择 AI面试官…"
+                              searchPlaceholder="搜索 AI面试官…"
+                              selectedFormat={(count) => `已选 ${count} 位 AI面试官`}
+                              selectedPreviewLimit={3}
+                              value={field.state.value}
+                            />
+                            <FieldError errors={errors} />
+                          </FieldContent>
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+
+                  <form.Field name="humanInterviewerIds">
+                    {(field) => {
+                      const errors = toFieldErrors(field.state.meta.errors);
+                      return (
+                        <Field
+                          className="md:col-span-2"
+                          data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
+                        >
+                          <FieldLabel>真人面试官（可选）</FieldLabel>
+                          <FieldContent className="gap-2">
+                            <SearchableMultiSelect
+                              emptyMessage="没有可选的真人面试官"
+                              invalid={!!errors?.length}
+                              onChange={field.handleChange}
+                              options={humanInterviewers.map((member) => ({
+                                label: member.name,
+                                value: member.id,
+                              }))}
+                              placeholder="选择真人面试官…"
+                              searchPlaceholder="搜索真人面试官…"
+                              selectedFormat={(count) => `已选 ${count} 位真人面试官`}
                               selectedPreviewLimit={3}
                               value={field.state.value}
                             />

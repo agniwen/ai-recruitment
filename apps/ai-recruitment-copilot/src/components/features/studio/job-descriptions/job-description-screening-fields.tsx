@@ -53,8 +53,10 @@ export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
     code: "",
     departmentId: "",
     description: "",
+    humanInterviewerIds: [],
     interviewerIds: [],
     name: "",
+    priority: "P0",
     prompt: "",
     resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
   };

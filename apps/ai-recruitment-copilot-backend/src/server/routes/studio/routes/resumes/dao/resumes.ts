@@ -18,6 +18,7 @@ import {
   interviewConversation,
   interviewAuditLog,
   jobDescription,
+  jobDescriptionHumanInterviewer,
   jobDescriptionInterviewer,
   studioHumanInterviewRound,
   studioHumanInterviewRoundInterviewer,
@@ -982,15 +983,23 @@ export async function loadResumeDetail(
 
   const { interviewQuestions, resumeProfile, resumeReview, ...rest } = row;
   const resumeScreeningResult = parseResumeScreeningResult(rest.resumeScreeningResult);
-  const [derivedFields, peopleFields, duplicateMatches] = await Promise.all([
-    loadResumeDerivedFields([rest.id]),
-    loadResumePeopleFields([rest], organizationId),
-    listActiveDuplicateMatchCounts({
-      organizationId,
-      sourceIds: [rest.id],
-      sourceType: "studio_interview",
-    }),
-  ]);
+  const [derivedFields, peopleFields, duplicateMatches, jobDescriptionHumanInterviewerIds] =
+    await Promise.all([
+      loadResumeDerivedFields([rest.id]),
+      loadResumePeopleFields([rest], organizationId),
+      listActiveDuplicateMatchCounts({
+        organizationId,
+        sourceIds: [rest.id],
+        sourceType: "studio_interview",
+      }),
+      rest.jobDescriptionId
+        ? db
+            .select({ userId: jobDescriptionHumanInterviewer.userId })
+            .from(jobDescriptionHumanInterviewer)
+            .where(eq(jobDescriptionHumanInterviewer.jobDescriptionId, rest.jobDescriptionId))
+            .then((rows) => rows.map((item) => item.userId))
+        : Promise.resolve([]),
+    ]);
   return {
     ...toRecord(
       rest,
@@ -1009,6 +1018,7 @@ export async function loadResumeDetail(
     humanInterviewScheduledAt: serializeDate(rest.humanInterviewScheduledAt),
     humanInterviewerId: rest.humanInterviewerId,
     interviewQuestions: interviewQuestions ?? [],
+    jobDescriptionHumanInterviewerIds,
     offerAcceptedAt: serializeDate(rest.offerAcceptedAt),
     offerSentAt: serializeDate(rest.offerSentAt),
     resumeContentHash: rest.resumeContentHash,

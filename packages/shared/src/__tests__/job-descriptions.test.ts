@@ -6,8 +6,10 @@ const baseJobDescription = {
   allowCrossDepartmentInterviewers: false,
   departmentId: "dept-1",
   description: "",
+  humanInterviewerIds: [],
   interviewerIds: ["interviewer-1"],
   name: "前端工程师",
+  priority: "P0",
   prompt: "岗位职责和任职要求",
   resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
 };
@@ -55,6 +57,13 @@ describe("jobDescriptionFormSchema salary fields", () => {
 });
 
 describe("jobDescriptionFormSchema recruitment demand fields", () => {
+  it("accepts the P0 default with no human interviewers", () => {
+    const result = jobDescriptionFormSchema.parse(baseJobDescription);
+
+    expect(result.priority).toBe("P0");
+    expect(result.humanInterviewerIds).toEqual([]);
+  });
+
   it("preserves optional recruitment demand fields", () => {
     const result = jobDescriptionFormSchema.safeParse({
       ...baseJobDescription,
@@ -67,7 +76,7 @@ describe("jobDescriptionFormSchema recruitment demand fields", () => {
       notes: "台湾本地驻场办公",
       offeredPendingOnboardCount: 0,
       onboardedCount: 1,
-      priority: "P0（紧急/高）",
+      priority: "P0",
       recruitmentStatus: "招聘中",
       requestedDate: "2026-05-07",
       requester: "马姬@maji_jj321",
@@ -88,7 +97,7 @@ describe("jobDescriptionFormSchema recruitment demand fields", () => {
       notes: "台湾本地驻场办公",
       offeredPendingOnboardCount: 0,
       onboardedCount: 1,
-      priority: "P0（紧急/高）",
+      priority: "P0",
       recruitmentStatus: "招聘中",
       requestedDate: "2026-05-07",
       requester: "马姬@maji_jj321",
@@ -97,6 +106,43 @@ describe("jobDescriptionFormSchema recruitment demand fields", () => {
       sourceSheet: "万帧公司",
       workLocation: "台湾",
     });
+  });
+
+  it("rejects unsupported priority values", () => {
+    const result = jobDescriptionFormSchema.safeParse({
+      ...baseJobDescription,
+      priority: "紧急",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a complete minute-level work schedule", () => {
+    const result = jobDescriptionFormSchema.safeParse({
+      ...baseJobDescription,
+      workEndTime: "18:30",
+      workStartTime: "09:15",
+      workTimezone: "Asia/Shanghai",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({
+      workEndTime: "18:30",
+      workStartTime: "09:15",
+      workTimezone: "Asia/Shanghai",
+    });
+  });
+
+  it("requires work time and timezone to be configured together", () => {
+    const result = jobDescriptionFormSchema.safeParse({
+      ...baseJobDescription,
+      workStartTime: "09:00",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining([["workEndTime"], ["workTimezone"]]),
+    );
   });
 
   it("rejects negative headcount values", () => {

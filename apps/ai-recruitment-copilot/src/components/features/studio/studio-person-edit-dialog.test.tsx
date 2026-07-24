@@ -139,6 +139,7 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     interviewQuestions: [],
     jobDescriptionAiInterviewDisabled: false,
     jobDescriptionDepartmentName: null,
+    jobDescriptionHumanInterviewerIds: [],
     jobDescriptionId: "jd-1",
     jobDescriptionInterviewers: [],
     jobDescriptionName: "前端工程师",

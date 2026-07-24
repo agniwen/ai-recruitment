@@ -228,7 +228,7 @@ function InterviewerManagementPage({ departments }: { departments: DepartmentRec
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
           description="给不同部门配好 AI 面试官的人设、追问风格和声音，面试时更贴合岗位。"
-          title="面试官管理"
+          title="AI面试官设置"
         />
 
         <DataGrid<InterviewerListRecord>
@@ -386,7 +386,7 @@ function StudioInterviewersRoute() {
 export const Route = createFileRoute("/w/$slug/studio/interviewers")({
   component: StudioInterviewersRoute,
   head: () => ({
-    meta: [{ title: "面试官管理" }],
+    meta: [{ title: "AI面试官设置" }],
   }),
   loader: async (loaderContext) => {
     const { location, params } = loaderContext as unknown as {
@@ -412,7 +412,7 @@ export const Route = createFileRoute("/w/$slug/studio/interviewers")({
     }
     return state;
   },
-  pendingComponent: () => <StudioTablePageSkeleton label="面试官管理" />,
+  pendingComponent: () => <StudioTablePageSkeleton label="AI面试官设置" />,
   shouldReload: false,
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
 });

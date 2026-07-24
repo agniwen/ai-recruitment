@@ -226,6 +226,7 @@ export const relations = defineRelations(schema, (r) => ({
       from: r.jobDescription.departmentId,
       to: r.department.id,
     }),
+    humanInterviewerLinks: r.many.jobDescriptionHumanInterviewer(),
     interviewQuestionTemplateLinks: r.many.interviewQuestionTemplateJobDescription(),
     interviewerLinks: r.many.jobDescriptionInterviewer(),
     organization: r.one.organization({
@@ -235,6 +236,16 @@ export const relations = defineRelations(schema, (r) => ({
     studioInterviews: r.many.studioInterview(),
     user: r.one.user({
       from: r.jobDescription.createdBy,
+      to: r.user.id,
+    }),
+  },
+  jobDescriptionHumanInterviewer: {
+    jobDescription: r.one.jobDescription({
+      from: r.jobDescriptionHumanInterviewer.jobDescriptionId,
+      to: r.jobDescription.id,
+    }),
+    user: r.one.user({
+      from: r.jobDescriptionHumanInterviewer.userId,
       to: r.user.id,
     }),
   },

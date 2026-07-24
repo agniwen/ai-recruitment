@@ -3,7 +3,13 @@ import { and, count, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { jobDescription, jobDescriptionInterviewer, studioInterview } from "@arc/db-schema/schema";
+import {
+  jobDescription,
+  jobDescriptionHumanInterviewer,
+  jobDescriptionInterviewer,
+  member,
+  studioInterview,
+} from "@arc/db-schema/schema";
 import { jobDescriptionFormSchema, jobDescriptionUpdateSchema } from "@arc/shared/job-descriptions";
 import { computeResumeScreeningPolicyHash } from "@arc/shared/resume-screening";
 import { validateJobDescriptionInterviewerDepartments } from "@arc/shared/job-description-interviewers";
@@ -79,6 +85,26 @@ async function validateReferences(
 
 function dedupeInterviewerIds(ids: string[]): string[] {
   return uniq(ids.map((id) => id.trim()).filter(Boolean));
+}
+
+async function humanInterviewerIdsAreValid(
+  organizationId: string,
+  userIds: string[],
+): Promise<boolean> {
+  if (userIds.length === 0) {
+    return true;
+  }
+  const rows = await db
+    .select({ userId: member.userId })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        eq(member.isInterviewer, true),
+        inArray(member.userId, userIds),
+      ),
+    );
+  return rows.length === userIds.length;
 }
 
 function nullableText(value: string | null | undefined): string | null {
@@ -258,6 +284,7 @@ export const jobDescriptionsRouter = factory
         input.resumeScreeningPolicy,
       );
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
+      const humanInterviewerIds = dedupeInterviewerIds(input.humanInterviewerIds);
       if (interviewerIds.length === 0) {
         return c.json({ error: "请至少选择一位面试官。" }, 400);
       }
@@ -271,6 +298,9 @@ export const jobDescriptionsRouter = factory
       );
       if (referenceError) {
         return c.json({ error: referenceError }, 400);
+      }
+      if (!(await humanInterviewerIdsAreValid(activeOrg.id, humanInterviewerIds))) {
+        return c.json({ error: "存在无效的真人面试官，请刷新后重试。" }, 400);
       }
 
       const now = new Date();
@@ -310,7 +340,7 @@ export const jobDescriptionsRouter = factory
           // presetQuestions is deprecated — column kept with default [] for legacy
           // data; new rows always store an empty array.
           presetQuestions: [],
-          priority: nullableText(input.priority),
+          priority: input.priority,
           prompt: input.prompt.trim(),
           recruitmentStatus: nullableText(input.recruitmentStatus),
           requestedDate: nullableText(input.requestedDate),
@@ -325,7 +355,10 @@ export const jobDescriptionsRouter = factory
           serviceUnit: nullableText(input.serviceUnit),
           sourceSheet: nullableText(input.sourceSheet),
           updatedAt: now,
+          workEndTime: nullableText(input.workEndTime),
           workLocation: nullableText(input.workLocation),
+          workStartTime: nullableText(input.workStartTime),
+          workTimezone: nullableText(input.workTimezone),
         } satisfies typeof jobDescription.$inferSelect;
 
         try {
@@ -338,6 +371,15 @@ export const jobDescriptionsRouter = factory
                 jobDescriptionId: record.id,
               })),
             );
+            if (humanInterviewerIds.length > 0) {
+              await tx.insert(jobDescriptionHumanInterviewer).values(
+                humanInterviewerIds.map((userId) => ({
+                  createdAt: now,
+                  jobDescriptionId: record.id,
+                  userId,
+                })),
+              );
+            }
           });
 
           safeUpdateTag(`job-descriptions:${activeOrg.id}`);
@@ -348,7 +390,7 @@ export const jobDescriptionsRouter = factory
             organizationId: activeOrg.id,
           });
 
-          return c.json(serializeJobDescription(record, interviewerIds), 201);
+          return c.json(serializeJobDescription(record, interviewerIds, humanInterviewerIds), 201);
         } catch (insertError) {
           if (!isJobCodeConflict(insertError)) {
             throw insertError;
@@ -443,6 +485,7 @@ export const jobDescriptionsRouter = factory
         ? existing.resumeScreeningPolicyVersion + 1
         : existing.resumeScreeningPolicyVersion;
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
+      const humanInterviewerIds = dedupeInterviewerIds(input.humanInterviewerIds);
       if (interviewerIds.length === 0) {
         return c.json({ error: "请至少选择一位面试官。" }, 400);
       }
@@ -456,6 +499,9 @@ export const jobDescriptionsRouter = factory
       );
       if (error) {
         return c.json({ error }, 400);
+      }
+      if (!(await humanInterviewerIdsAreValid(activeOrg.id, humanInterviewerIds))) {
+        return c.json({ error: "存在无效的真人面试官，请刷新后重试。" }, 400);
       }
 
       const now = new Date();
@@ -475,7 +521,7 @@ export const jobDescriptionsRouter = factory
         notes: nullableText(input.notes),
         offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,
         onboardedCount: input.onboardedCount ?? null,
-        priority: nullableText(input.priority),
+        priority: input.priority,
         prompt: input.prompt.trim(),
         recruitmentStatus: nullableText(input.recruitmentStatus),
         requestedDate: nullableText(input.requestedDate),
@@ -493,7 +539,10 @@ export const jobDescriptionsRouter = factory
         serviceUnit: nullableText(input.serviceUnit),
         sourceSheet: nullableText(input.sourceSheet),
         updatedAt: now,
+        workEndTime: nullableText(input.workEndTime),
         workLocation: nullableText(input.workLocation),
+        workStartTime: nullableText(input.workStartTime),
+        workTimezone: nullableText(input.workTimezone),
       };
       try {
         await db.transaction(async (tx) => {
@@ -513,6 +562,18 @@ export const jobDescriptionsRouter = factory
               jobDescriptionId: id,
             })),
           );
+          await tx
+            .delete(jobDescriptionHumanInterviewer)
+            .where(eq(jobDescriptionHumanInterviewer.jobDescriptionId, id));
+          if (humanInterviewerIds.length > 0) {
+            await tx.insert(jobDescriptionHumanInterviewer).values(
+              humanInterviewerIds.map((userId) => ({
+                createdAt: now,
+                jobDescriptionId: id,
+                userId,
+              })),
+            );
+          }
         });
       } catch (updateError) {
         if (isJobCodeConflict(updateError)) {

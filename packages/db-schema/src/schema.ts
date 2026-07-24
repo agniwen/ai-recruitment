@@ -776,7 +776,7 @@ export const jobDescription = pgTable(
         onDelete: "cascade",
       }),
     presetQuestions: jsonb("preset_questions").$type<string[]>().notNull().default([]),
-    priority: text("priority"),
+    priority: text("priority").$type<"P0" | "P1" | "P2">().default("P0").notNull(),
     prompt: text("prompt").notNull(),
     recruitmentStatus: text("recruitment_status"),
     requestedDate: text("requested_date"),
@@ -794,13 +794,17 @@ export const jobDescription = pgTable(
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    workEndTime: text("work_end_time"),
     workLocation: text("work_location"),
+    workStartTime: text("work_start_time"),
+    workTimezone: text("work_timezone"),
   },
   (table) => [
     index("job_description_department_idx").on(table.departmentId),
     index("job_description_name_idx").on(table.name),
     index("job_description_created_at_idx").on(table.createdAt),
     index("job_description_organization_idx").on(table.organizationId),
+    check("job_description_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2')`),
     uniqueIndex("job_description_org_code_uq")
       .on(table.organizationId, table.code)
       .where(sql`${table.code} IS NOT NULL`),
@@ -821,6 +825,23 @@ export const jobDescriptionInterviewer = pgTable(
   (table) => [
     primaryKey({ columns: [table.jobDescriptionId, table.interviewerId] }),
     index("job_description_interviewer_interviewer_idx").on(table.interviewerId),
+  ],
+);
+
+export const jobDescriptionHumanInterviewer = pgTable(
+  "job_description_human_interviewer",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    jobDescriptionId: text("job_description_id")
+      .notNull()
+      .references(() => jobDescription.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.jobDescriptionId, table.userId] }),
+    index("job_description_human_interviewer_user_idx").on(table.userId),
   ],
 );
 

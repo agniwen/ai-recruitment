@@ -20,6 +20,7 @@ import {
   user,
 } from "@arc/db-schema/schema";
 import { createDefaultResumeScreeningPolicy } from "@arc/shared/resume-screening";
+import type { JobDescriptionFormValues } from "@arc/shared/job-descriptions";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 
 const mocks = vi.hoisted(() => ({
@@ -114,14 +115,18 @@ async function seedFixtures() {
   });
 }
 
-function jobDescriptionPayload(overrides?: Partial<Record<string, unknown>>) {
+function jobDescriptionPayload(
+  overrides?: Partial<JobDescriptionFormValues>,
+): JobDescriptionFormValues {
   return {
     aiInterviewDisabled: false,
     allowCrossDepartmentInterviewers: true,
     departmentId: DEPARTMENT_ID,
     description: "",
+    humanInterviewerIds: [],
     interviewerIds: [INTERVIEWER_ID],
     name: "前端工程师",
+    priority: "P0",
     prompt: "负责前端工程化与业务开发。",
     resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
     ...overrides,
