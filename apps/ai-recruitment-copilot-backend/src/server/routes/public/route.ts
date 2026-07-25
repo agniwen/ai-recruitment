@@ -25,10 +25,6 @@ import { createInternalErrorResponse } from "@arc/ai-recruitment-copilot-backend
 import { buildTokenErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/routes/interview/utils";
 import { loadSubmissionsByInterview } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/forms/dao/submissions";
 import {
-  queryInterviewConversationReportByRound,
-  queryInterviewConversationReportsByRound,
-} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/interview-conversations";
-import {
   endHumanInterviewMeeting,
   isHumanInterviewMeetingBeforeScheduledStart,
   isHumanInterviewMeetingAfterValidUntil,
@@ -49,9 +45,11 @@ import {
   signHumanInterviewMeetingToken,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/human-interview-livekit";
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
+import { publicInterviewRoundReportsRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/public/routes/interview-rounds/routes/reports/route";
 
 export const publicRouter = factory
   .createApp()
+  .route("/interview-rounds/:id/reports", publicInterviewRoundReportsRouter)
   .get("/minimax-voice-previews/:id", async (c) => {
     const id = c.req.param("id");
     const [row] = await db
@@ -271,28 +269,6 @@ export const publicRouter = factory
       return c.json({ error: "记录不存在。" }, 404);
     }
     return c.json(detail, 200);
-  })
-  .get("/interview-rounds/:id/reports", async (c) => {
-    const roundId = c.req.param("id");
-    const scope = await resolvePublicInterviewScope(roundId);
-    if (!scope) {
-      return c.json({ error: "记录不存在。" }, 404);
-    }
-    const reports = await queryInterviewConversationReportsByRound(scope.roundId);
-    return c.json(reports, 200);
-  })
-  .get("/interview-rounds/:id/reports/:conversationId", async (c) => {
-    const roundId = c.req.param("id");
-    const conversationId = c.req.param("conversationId");
-    const scope = await resolvePublicInterviewScope(roundId);
-    if (!scope) {
-      return c.json({ error: "记录不存在。" }, 404);
-    }
-    const report = await queryInterviewConversationReportByRound(scope.roundId, conversationId);
-    if (!report) {
-      return c.json({ error: "面试记录不存在。" }, 404);
-    }
-    return c.json(report, 200);
   })
   .get("/interview-rounds/:id/form-submissions", async (c) => {
     const roundId = c.req.param("id");

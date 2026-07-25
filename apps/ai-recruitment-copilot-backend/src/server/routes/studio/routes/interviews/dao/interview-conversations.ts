@@ -281,16 +281,10 @@ async function loadSnapshotRowsByConversationIds(conversationIds: string[]) {
   return rowsByConversationId;
 }
 
-export async function queryInterviewConversationReports(
-  interviewRecordId: string,
-  options: QueryInterviewConversationReportsOptions = {},
+async function serializeConversationReports(
+  conversations: InterviewConversationRow[],
+  options: QueryInterviewConversationReportsOptions,
 ) {
-  const conversations = await db
-    .select()
-    .from(interviewConversation)
-    .where(eq(interviewConversation.interviewRecordId, interviewRecordId))
-    .orderBy(desc(interviewConversation.updatedAt));
-
   if (conversations.length === 0) {
     return [] as StudioInterviewConversationReport[];
   }
@@ -320,6 +314,19 @@ export async function queryInterviewConversationReports(
   });
 }
 
+export async function queryInterviewConversationReports(
+  interviewRecordId: string,
+  options: QueryInterviewConversationReportsOptions = {},
+) {
+  const conversations = await db
+    .select()
+    .from(interviewConversation)
+    .where(eq(interviewConversation.interviewRecordId, interviewRecordId))
+    .orderBy(desc(interviewConversation.updatedAt));
+
+  return serializeConversationReports(conversations, options);
+}
+
 // 按轮次（scheduleEntryId）过滤 conversations，适用于 round-keyed 的报告端点。
 // Filter conversations by round (scheduleEntryId) for round-keyed report endpoints.
 export async function queryInterviewConversationReportsByRound(
@@ -332,33 +339,7 @@ export async function queryInterviewConversationReportsByRound(
     .where(eq(interviewConversation.scheduleEntryId, scheduleEntryId))
     .orderBy(desc(interviewConversation.updatedAt));
 
-  if (conversations.length === 0) {
-    return [] as StudioInterviewConversationReport[];
-  }
-
-  const conversationIds = conversations.map((conversation) => conversation.conversationId);
-  const turnRows = await db
-    .select()
-    .from(interviewConversationTurn)
-    .where(inArray(interviewConversationTurn.conversationId, conversationIds))
-    .orderBy(asc(interviewConversationTurn.createdAt), asc(interviewConversationTurn.receivedAt));
-  const snapshotRowsByConversationId = options.includeSnapshotMetadata
-    ? await loadSnapshotRowsByConversationIds(conversationIds)
-    : null;
-
-  return conversations.map((conversation) => {
-    const turns = turnRows.filter((turn) => turn.conversationId === conversation.conversationId);
-    return serializeConversationReport(
-      conversation,
-      turns,
-      snapshotRowsByConversationId
-        ? (snapshotRowsByConversationId.get(conversation.conversationId) ?? {
-            context: null,
-            evidence: null,
-          })
-        : undefined,
-    );
-  });
+  return serializeConversationReports(conversations, options);
 }
 
 export async function queryInterviewConversationReportByRound(
