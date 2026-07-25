@@ -7,11 +7,12 @@ import {
   normalizeScope,
 } from "@/components/features/studio/resume-pool/resume-pool-page-model";
 import { ResumePoolPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 
 export const Route = createFileRoute("/w/$slug/studio/resume-pool")({
   component: ResumePoolPage,
   head: () => ({
-    meta: [{ title: "人才库" }],
+    meta: [{ title: formatDocumentTitle("人才库") }],
   }),
   pendingComponent: ResumePoolPageSkeleton,
   validateSearch: (search: Record<string, unknown>): ResumePoolSearch => ({

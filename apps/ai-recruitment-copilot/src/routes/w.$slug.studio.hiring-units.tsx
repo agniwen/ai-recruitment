@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import type { DataGridQueryState } from "@/components/data-grid/query-contract";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 import { loadStudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import type { StudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
@@ -285,7 +286,7 @@ function StudioHiringUnitsRoute() {
 export const Route = createFileRoute("/w/$slug/studio/hiring-units")({
   component: StudioHiringUnitsRoute,
   head: () => ({
-    meta: [{ title: "用人组织管理" }],
+    meta: [{ title: formatDocumentTitle("用人组织管理") }],
   }),
   loader: async (loaderContext) => {
     const { location, params } = loaderContext as unknown as {

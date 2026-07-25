@@ -47,9 +47,12 @@ describe("TanStack Start studio resumes migration", () => {
     const source = readSource("routes/w.$slug.studio.resumes.$recordId.tsx");
 
     expect(source).toContain("function getRecruiterResumeDocumentTitle(");
+    expect(source).toMatch(
+      /return formatDocumentTitle\(name \? `候选人详情·\$\{name\}` : "候选人详情"\);/u,
+    );
     expect(source).toContain("const documentTitle = getRecruiterResumeDocumentTitle");
     expect(source).toContain("document.title = documentTitle;");
-    expect(source).toContain('meta: [{ title: "候选人详情" }]');
+    expect(source).toContain('meta: [{ title: formatDocumentTitle("候选人详情") }]');
   });
 
   it("keeps the migrated resumes route and page free of Next runtime imports", () => {

@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { PermissionGate } from "@/components/features/permission/permission-gate";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { ProfilePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { getWorkspaceRoleLabel } from "@/components/features/studio/members/role-display";
@@ -725,7 +726,7 @@ function MyProfilePage() {
 export const Route = createFileRoute("/w/$slug/studio/me")({
   component: MyProfilePage,
   head: () => ({
-    meta: [{ title: "我的信息" }],
+    meta: [{ title: formatDocumentTitle("我的信息") }],
   }),
   pendingComponent: ProfilePageSkeleton,
 });

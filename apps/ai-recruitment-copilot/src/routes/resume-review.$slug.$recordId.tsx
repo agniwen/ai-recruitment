@@ -32,6 +32,7 @@ import { fetchStudioResumeReview, submitResumeReviewEvaluation } from "@/lib/cli
 import { dateTimeLocalInputToISOString } from "@/lib/client/datetime-local";
 import { WorkspaceSlugProvider, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { getResumeReviewAccessState } from "@/lib/start/auth-session";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -333,7 +334,7 @@ function ResumeReviewDetailPage() {
 export const Route = createFileRoute("/resume-review/$slug/$recordId")({
   component: ResumeReviewDetailPage,
   head: () => ({
-    meta: [{ title: "简历评估" }],
+    meta: [{ title: formatDocumentTitle("简历评估") }],
   }),
   loader: async (loaderContext) => {
     const { location, params } = loaderContext as unknown as {

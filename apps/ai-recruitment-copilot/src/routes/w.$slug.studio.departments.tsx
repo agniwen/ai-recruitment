@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import type { DataGridQueryState } from "@/components/data-grid/query-contract";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 import { loadStudioDepartmentsState } from "@/lib/start/studio/departments.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import type { StudioDepartmentsState } from "@/lib/start/studio/departments.functions";
@@ -391,7 +392,7 @@ function StudioDepartmentsRoute() {
 export const Route = createFileRoute("/w/$slug/studio/departments")({
   component: StudioDepartmentsRoute,
   head: () => ({
-    meta: [{ title: "部门管理" }],
+    meta: [{ title: formatDocumentTitle("部门管理") }],
   }),
   loader: async (loaderContext) => {
     const { location, params } = loaderContext as unknown as {

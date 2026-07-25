@@ -12,6 +12,7 @@ import {
   useRouterState,
   useSearch,
 } from "@tanstack/react-router";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 import { loadStudioInterviewsState } from "@/lib/start/studio/interviews.functions";
 import type { StudioInterviewsState } from "@/lib/start/studio/interviews.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
@@ -764,7 +765,7 @@ function StudioInterviewsRoute() {
 export const Route = createFileRoute("/w/$slug/studio/interviews")({
   component: StudioInterviewsRoute,
   head: () => ({
-    meta: [{ title: "AI 面试" }],
+    meta: [{ title: formatDocumentTitle("AI 面试") }],
   }),
   loader: async (loaderContext) => {
     const { location, params } = loaderContext as unknown as {

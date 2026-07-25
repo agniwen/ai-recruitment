@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetchStudioResume } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useHasPermission } from "@/hooks/use-has-permission";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 
 type ResumeDetailPageSearchValue = boolean | number | string;
@@ -79,7 +80,7 @@ function listSearchFromDetailSearch(search: ResumeDetailPageSearch): ResumeDetai
 
 function getRecruiterResumeDocumentTitle(candidateName: string | null | undefined) {
   const name = candidateName?.trim();
-  return name ? `候选人详情·${name}` : "候选人详情";
+  return formatDocumentTitle(name ? `候选人详情·${name}` : "候选人详情");
 }
 
 function RecruiterResumeDetailSkeleton() {
@@ -413,7 +414,7 @@ function RecruiterResumeDetailPage() {
 export const Route = createFileRoute("/w/$slug/studio/resumes/$recordId")({
   component: RecruiterResumeDetailPage,
   head: () => ({
-    meta: [{ title: "候选人详情" }],
+    meta: [{ title: formatDocumentTitle("候选人详情") }],
   }),
   loader: async (loaderContext) => {
     const { params } = loaderContext as unknown as {

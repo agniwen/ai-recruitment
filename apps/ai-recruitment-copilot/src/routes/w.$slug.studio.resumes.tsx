@@ -9,6 +9,7 @@ import {
   useParams,
   useRouterState,
 } from "@tanstack/react-router";
+import { formatDocumentTitle } from "@/lib/start/document-title";
 import { loadStudioResumesState } from "@/lib/start/studio/resumes.functions";
 import type { StudioResumesState } from "@/lib/start/studio/resumes.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
@@ -46,7 +47,7 @@ function StudioResumesRoute() {
 export const Route = createFileRoute("/w/$slug/studio/resumes")({
   component: StudioResumesRoute,
   head: () => ({
-    meta: [{ title: "招聘台" }],
+    meta: [{ title: formatDocumentTitle("招聘台") }],
   }),
   loader: async (loaderContext) => {
     const { location, params } = loaderContext as unknown as {
