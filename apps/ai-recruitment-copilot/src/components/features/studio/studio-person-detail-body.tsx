@@ -58,7 +58,6 @@ import {
   formatReportStatus,
   getReportBadgeVariant,
   resolveRecommendationVariant,
-  truncateText,
 } from "./interviews/interview-detail/helpers";
 import { RecordingPlayer } from "./interviews/interview-detail/recording-player";
 
@@ -302,8 +301,12 @@ function InterviewResultTabContent({
                   />
                 ) : null}
               </FrameHeader>
-              <FramePanel className="flex-1 p-4">
-                <CollectedCandidateInfoList emptyLabel="暂无表单答复" items={formItems} />
+              <FramePanel className="flex-1 p-0">
+                <ScrollArea className="max-h-[28rem]" scrollFade>
+                  <div className="p-4">
+                    <CollectedCandidateInfoList emptyLabel="暂无表单答复" items={formItems} />
+                  </div>
+                </ScrollArea>
               </FramePanel>
             </Frame>
             <Frame className="h-full">
@@ -324,21 +327,17 @@ function InterviewResultTabContent({
                   </Button>
                 ) : null}
               </FrameHeader>
-              <FramePanel className="flex-1 p-4">
-                <CollectedCandidateInfoList emptyLabel="暂无沟通题" items={interviewItems} />
+              <FramePanel className="flex-1 p-0">
+                <ScrollArea className="max-h-[28rem]" scrollFade>
+                  <div className="p-4">
+                    <CollectedCandidateInfoList emptyLabel="暂无沟通题" items={interviewItems} />
+                  </div>
+                </ScrollArea>
               </FramePanel>
             </Frame>
           </>
         )}
       </div>
-
-      <section className="space-y-3">
-        <h3 className="font-medium text-sm">简历评价</h3>
-        <MarkdownView
-          className="text-muted-foreground text-sm leading-6"
-          content={truncateText(record.notes) || "暂无简历评价"}
-        />
-      </section>
     </div>
   );
 }
