@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  IconCalendarEvent as CalendarEventIcon,
   IconChartBar as ChartNoAxesCombinedIcon,
   IconRobot as BotIcon,
   IconBuilding as Building2Icon,
@@ -72,6 +73,13 @@ const navGroups: NavGroup[] = [
         path: "/studio/interviews",
         resource: "page",
         title: "AI 面试",
+      },
+      {
+        action: "interviews",
+        icon: CalendarEventIcon,
+        path: "/studio/calendar",
+        resource: "page",
+        title: "日程管理",
       },
       {
         action: "dashboard",

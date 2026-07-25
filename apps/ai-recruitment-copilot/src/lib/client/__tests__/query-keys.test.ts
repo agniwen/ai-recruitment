@@ -3,6 +3,7 @@ import {
   chatConversationKeys,
   humanInterviewKeys,
   invalidateHumanInterviewCandidateQueries,
+  studioCalendarKeys,
 } from "@/lib/client/api/query-keys";
 
 describe("chatConversationKeys", () => {
@@ -45,5 +46,16 @@ describe("humanInterviewKeys", () => {
     expect(invalidateQueries).toHaveBeenNthCalledWith(3, {
       queryKey: ["studio-resumes"],
     });
+  });
+});
+
+describe("studioCalendarKeys", () => {
+  it("scopes cached events by workspace and visible range", () => {
+    expect(studioCalendarKeys.range("acme", "2026-07-01", "2026-08-01")).toEqual([
+      "studio-calendar",
+      "acme",
+      "2026-07-01",
+      "2026-08-01",
+    ]);
   });
 });
