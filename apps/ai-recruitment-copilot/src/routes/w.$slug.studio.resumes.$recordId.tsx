@@ -236,9 +236,6 @@ function RecruiterResumeDetailPage() {
   } | null>(null);
   const [interviewRoundDetailId, setInterviewRoundDetailId] = useState<string | null>(null);
   const [interviewDetailDialogOpen, setInterviewDetailDialogOpen] = useState(false);
-  const [interviewDetailDefaultTab, setInterviewDetailDefaultTab] = useState<
-    "overview" | "reports"
-  >("overview");
   const detailQuery = useQuery({
     queryFn: () => fetchStudioResume(slug, recordId),
     queryKey: ["studio-resumes", slug, "detail", recordId, "authed"] as const,
@@ -364,13 +361,12 @@ function RecruiterResumeDetailPage() {
       </main>
 
       <StudioPersonDetailDialog
-        defaultTab={interviewDetailDefaultTab}
+        defaultTab="overview"
         mode="interview"
         onOpenChange={setInterviewDetailDialogOpen}
         onOpenChangeComplete={(open) => {
           if (!open && !interviewDetailDialogOpen) {
             setInterviewRoundDetailId(null);
-            setInterviewDetailDefaultTab("overview");
           }
         }}
         onUpdated={invalidateAll}
@@ -382,7 +378,6 @@ function RecruiterResumeDetailPage() {
         candidateName={launchingRecord?.candidateName ?? null}
         onLaunched={(round) => {
           invalidateAll();
-          setInterviewDetailDefaultTab("overview");
           setInterviewRoundDetailId(round.id);
           setInterviewDetailDialogOpen(true);
         }}
