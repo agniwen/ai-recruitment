@@ -47,7 +47,6 @@ import { countDisplayInterviewTurns } from "@arc/shared/interview-transcript-tur
 import { pipelineStageMeta, scheduleEntryStatusMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import { useRoundEmailSummary } from "./interviews/round-email/use-round-email-summary";
-import { ensureArray } from "./interviews/interview-detail/helpers";
 
 import {
   findCachedResumeCandidateName,
@@ -439,6 +438,7 @@ export function useStudioPersonDetailController({
         : null,
     [hasRecord, visiblePipelineStage],
   );
+  const showAgentInstructions = import.meta.env.DEV && mode === "interview" && !isPublic;
   const availableTabs = useMemo(() => {
     const tabs = new Set<StudioPersonDetailTab>();
     if (!hasRecord) {
@@ -447,12 +447,10 @@ export function useStudioPersonDetailController({
     tabs.add("overview");
     if (mode === "interview") {
       tabs.add("reports");
-      tabs.add("questions");
       tabs.add("experience");
-      if (!isPublic) {
+      if (showAgentInstructions) {
         tabs.add("instructions");
       }
-      tabs.add("forms");
       return tabs;
     }
     tabs.add("ai-analysis");
@@ -466,7 +464,14 @@ export function useStudioPersonDetailController({
       tabs.add("offer");
     }
     return tabs;
-  }, [canReadHumanInterview, canReadOffer, hasRecord, isPublic, mode, tabVisibilityRecord]);
+  }, [
+    canReadHumanInterview,
+    canReadOffer,
+    hasRecord,
+    mode,
+    showAgentInstructions,
+    tabVisibilityRecord,
+  ]);
   useEffect(() => {
     if (record && !availableTabs.has(activeTab)) {
       setActiveTab("overview");
@@ -539,10 +544,6 @@ export function useStudioPersonDetailController({
       ? `候选人已进入「${pipelineStageMeta[record.pipelineStage].label}」阶段，AI 面试相关操作已锁定。如需修改请先回退阶段或重新激活。`
       : null;
   const isAiStageLocked = aiStageLockedReason !== null;
-  const interviewQuestions = ensureArray<
-    StudioInterviewRoundDetail["candidate"]["interviewQuestions"][number]
-  >(record?.interviewQuestions);
-  const visibleInterviewQuestions = interviewQuestions.slice(0, 20);
   const latestReport = reports[0] ?? null;
   const latestEvaluationSummary = getEvaluationSummary(
     latestReport?.evaluationCriteriaResults as Record<string, unknown> | undefined,
@@ -756,11 +757,6 @@ export function useStudioPersonDetailController({
             </TabsTrigger>
           ) : null}
           {mode === "interview" ? (
-            <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="questions">
-              AI 题目
-            </TabsTrigger>
-          ) : null}
-          {mode === "interview" ? (
             <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="experience">
               经历
             </TabsTrigger>
@@ -788,19 +784,10 @@ export function useStudioPersonDetailController({
               Offer
             </TabsTrigger>
           ) : null}
-          {mode === "interview" ? (
-            <>
-              {/* 公开访问下不暴露 Agent 提示词面板 —— 这是面试官调试用，不属于候选人侧/对外可见信息。
-                Agent prompts are admin tooling (no public mirror) and are hidden from public access. */}
-              {isPublic ? null : (
-                <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="instructions">
-                  Agent 提示词
-                </TabsTrigger>
-              )}
-              <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="forms">
-                表单答复
-              </TabsTrigger>
-            </>
+          {showAgentInstructions ? (
+            <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="instructions">
+              Agent 提示词
+            </TabsTrigger>
           ) : null}
         </TabsList>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -908,6 +895,7 @@ export function useStudioPersonDetailController({
     setActiveTab,
     setMetadataReport,
     shell,
+    showAgentInstructions,
     showTimelineRail,
     slug,
     tabContentRootRef,
@@ -915,7 +903,6 @@ export function useStudioPersonDetailController({
     title,
     totalDisplayTurnCount,
     updatingRoundId,
-    visibleInterviewQuestions,
   };
 }
 
