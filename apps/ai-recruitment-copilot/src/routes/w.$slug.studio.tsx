@@ -8,6 +8,7 @@ import { STUDIO_MAIN_SCROLL_RESTORATION_ID } from "@/components/features/studio/
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { getFirstAllowedStudioPagePath, getStudioPageAccessState } from "@/lib/start/auth-session";
+import { documentTitleMeta } from "@/lib/start/document-title";
 import { STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
 
 function findStudioPageByPath(pathname: string, slug: string) {
@@ -59,13 +60,13 @@ function StudioPendingRoute() {
 
 export const Route = createFileRoute("/w/$slug/studio")({
   component: StudioShellRoute,
-  head: () => ({
+  head: ({ matches }) => ({
     meta: [
       {
         content: "Studio 管理后台。",
         name: "description",
       },
-      { title: "Studio" },
+      ...documentTitleMeta(matches),
     ],
   }),
   loader: async (loaderContext) => {
