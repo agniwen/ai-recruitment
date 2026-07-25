@@ -4,7 +4,6 @@
 import { IconArrowBackUp, IconChevronDown, IconLoader2, IconMessage2 } from "@tabler/icons-react";
 import { cn } from "@arc/shared/utils";
 import { env } from "@/env/client";
-import type { ReactNode } from "react";
 
 import { CandidateBasicInfoView } from "@/components/features/candidate/candidate-basic-info-view";
 import { MarkdownView } from "@/components/features/display/markdown-view";
@@ -142,22 +141,17 @@ function FormSubmissionResetAction({
 function InterviewResultFrame({
   evaluationSummary,
   report,
-  resetAction,
 }: {
   evaluationSummary: StudioPersonDetailViewModel["latestEvaluationSummary"];
   report: StudioPersonDetailViewModel["latestReport"];
-  resetAction?: ReactNode;
 }) {
   return (
     <Frame className="h-full">
       <FrameHeader className="flex-row items-center justify-between gap-3">
         <FrameTitle>面试结果</FrameTitle>
-        <div className="flex items-center gap-2">
-          <Badge variant={report ? getReportBadgeVariant(report.status) : "outline"}>
-            {report ? formatReportStatus(report.status) : "暂无报告"}
-          </Badge>
-          {resetAction}
-        </div>
+        <Badge variant={report ? getReportBadgeVariant(report.status) : "outline"}>
+          {report ? formatReportStatus(report.status) : "暂无报告"}
+        </Badge>
       </FrameHeader>
       <FramePanel className="flex-1">
         <div className="grid gap-x-8 gap-y-4 sm:grid-cols-3">
@@ -240,24 +234,7 @@ function InterviewResultTabContent({
         {isReportsLoading ? (
           <InterviewResultOverviewSkeleton />
         ) : (
-          <InterviewResultFrame
-            evaluationSummary={evaluationSummary}
-            report={report}
-            resetAction={
-              canResetResultRound ? (
-                <Button
-                  disabled={resettingRoundId === record.roundId}
-                  onClick={() => void handleResetRound(record.roundId as string)}
-                  size="xs"
-                  type="button"
-                  variant="outline"
-                >
-                  <IconArrowBackUp />
-                  {resettingRoundId === record.roundId ? "重置中..." : "重置沟通"}
-                </Button>
-              ) : undefined
-            }
-          />
+          <InterviewResultFrame evaluationSummary={evaluationSummary} report={report} />
         )}
         <Frame className="h-full">
           <FrameHeader className="flex-row flex-wrap items-center justify-between">
@@ -333,6 +310,19 @@ function InterviewResultTabContent({
               <FrameHeader className="flex-row items-center gap-2">
                 <FrameTitle>沟通题</FrameTitle>
                 <Badge variant="outline">共{interviewItems.length}题</Badge>
+                {canResetResultRound ? (
+                  <Button
+                    className="ml-auto"
+                    disabled={resettingRoundId === record.roundId}
+                    onClick={() => void handleResetRound(record.roundId as string)}
+                    size="xs"
+                    type="button"
+                    variant="outline"
+                  >
+                    <IconArrowBackUp />
+                    {resettingRoundId === record.roundId ? "重置中..." : "重置沟通"}
+                  </Button>
+                ) : null}
               </FrameHeader>
               <FramePanel className="flex-1 p-4">
                 <CollectedCandidateInfoList emptyLabel="暂无沟通题" items={interviewItems} />
