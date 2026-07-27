@@ -2,6 +2,7 @@ import type {
   InterviewReportSnapshotMetadata,
   StudioInterviewConversationReport,
 } from "@arc/db-schema/interview-session";
+import { interviewKeyInformationSchema } from "@arc/db-schema/interview-key-information";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { formatCandidateFormAnswer } from "@arc/shared/candidate-form-answer";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -16,8 +17,66 @@ type InterviewConversationRow = typeof interviewConversation.$inferSelect;
 type InterviewConversationTurnRow = typeof interviewConversationTurn.$inferSelect;
 type InterviewContextSnapshotRow = typeof interviewContextSnapshot.$inferSelect;
 type InterviewEvidenceSnapshotRow = typeof interviewEvidenceSnapshot.$inferSelect;
+type ReportConversationBaseRow = Pick<
+  InterviewConversationRow,
+  | "agentId"
+  | "callSuccessful"
+  | "conversationId"
+  | "createdAt"
+  | "dataCollectionResults"
+  | "dynamicVariables"
+  | "endedAt"
+  | "evaluationCriteriaResults"
+  | "interviewRecordId"
+  | "lastSyncedAt"
+  | "latestError"
+  | "metadata"
+  | "metrics"
+  | "mode"
+  | "organizationId"
+  | "recordingDurationSecs"
+  | "recordingStatus"
+  | "scheduleEntryId"
+  | "startedAt"
+  | "status"
+  | "transcript"
+  | "transcriptSummary"
+  | "updatedAt"
+  | "webhookReceivedAt"
+>;
+type ReportConversationRow = ReportConversationBaseRow & {
+  keyInformation: InterviewConversationRow["keyInformation"];
+};
+
+const reportConversationColumns = {
+  agentId: interviewConversation.agentId,
+  callSuccessful: interviewConversation.callSuccessful,
+  conversationId: interviewConversation.conversationId,
+  createdAt: interviewConversation.createdAt,
+  dataCollectionResults: interviewConversation.dataCollectionResults,
+  dynamicVariables: interviewConversation.dynamicVariables,
+  endedAt: interviewConversation.endedAt,
+  evaluationCriteriaResults: interviewConversation.evaluationCriteriaResults,
+  interviewRecordId: interviewConversation.interviewRecordId,
+  lastSyncedAt: interviewConversation.lastSyncedAt,
+  latestError: interviewConversation.latestError,
+  metadata: interviewConversation.metadata,
+  metrics: interviewConversation.metrics,
+  mode: interviewConversation.mode,
+  organizationId: interviewConversation.organizationId,
+  recordingDurationSecs: interviewConversation.recordingDurationSecs,
+  recordingStatus: interviewConversation.recordingStatus,
+  scheduleEntryId: interviewConversation.scheduleEntryId,
+  startedAt: interviewConversation.startedAt,
+  status: interviewConversation.status,
+  transcript: interviewConversation.transcript,
+  transcriptSummary: interviewConversation.transcriptSummary,
+  updatedAt: interviewConversation.updatedAt,
+  webhookReceivedAt: interviewConversation.webhookReceivedAt,
+};
 
 export interface QueryInterviewConversationReportsOptions {
+  includeKeyInformation?: boolean;
   includeSnapshotMetadata?: boolean;
 }
 
@@ -27,7 +86,7 @@ interface SnapshotRows {
 }
 
 function buildFallbackTurns(
-  conversation: InterviewConversationRow,
+  conversation: ReportConversationBaseRow,
 ): InterviewConversationTurnRow[] {
   const transcript = Array.isArray(conversation.transcript) ? conversation.transcript : [];
   const fallbackCreatedAt = conversation.webhookReceivedAt ?? conversation.updatedAt;
@@ -163,7 +222,7 @@ function buildFullTextInput(
 }
 
 function buildSnapshotMetadata(
-  conversation: InterviewConversationRow,
+  conversation: ReportConversationBaseRow,
   turns: InterviewConversationTurnRow[],
   snapshotRows: SnapshotRows,
 ): InterviewReportSnapshotMetadata {
@@ -205,11 +264,15 @@ function buildSnapshotMetadata(
 }
 
 function serializeConversationReport(
-  conversation: InterviewConversationRow,
+  conversation: ReportConversationRow,
   turnRows: InterviewConversationTurnRow[],
   snapshotRows?: SnapshotRows,
+  includeKeyInformation = false,
 ): StudioInterviewConversationReport {
   const turns = turnRows.length > 0 ? turnRows : buildFallbackTurns(conversation);
+  const parsedKeyInformation = includeKeyInformation
+    ? interviewKeyInformationSchema.safeParse(conversation.keyInformation)
+    : null;
 
   return {
     agentId: conversation.agentId,
@@ -222,6 +285,7 @@ function serializeConversationReport(
     endedAt: conversation.endedAt,
     evaluationCriteriaResults: conversation.evaluationCriteriaResults ?? {},
     interviewRecordId: conversation.interviewRecordId,
+    keyInformation: parsedKeyInformation?.success ? parsedKeyInformation.data : null,
     lastSyncedAt: conversation.lastSyncedAt,
     latestError: conversation.latestError,
     metadata: conversation.metadata ?? {},
@@ -241,6 +305,45 @@ function serializeConversationReport(
     userTurnCount: turns.filter((turn) => turn.role === "user").length,
     webhookReceivedAt: conversation.webhookReceivedAt,
   };
+}
+
+function isUndefinedColumnError(error: unknown) {
+  let current = error;
+  while (current && typeof current === "object") {
+    if ("code" in current && current.code === "42703") {
+      return true;
+    }
+    current = "cause" in current ? current.cause : null;
+  }
+  return false;
+}
+
+async function loadKeyInformationByConversationIds(
+  conversationIds: string[],
+  includeKeyInformation: boolean,
+) {
+  if (!includeKeyInformation || conversationIds.length === 0) {
+    return new Map<string, InterviewConversationRow["keyInformation"]>();
+  }
+
+  try {
+    const rows = await db
+      .select({
+        conversationId: interviewConversation.conversationId,
+        keyInformation: interviewConversation.keyInformation,
+      })
+      .from(interviewConversation)
+      .where(inArray(interviewConversation.conversationId, conversationIds));
+
+    return new Map(rows.map((row) => [row.conversationId, row.keyInformation]));
+  } catch (error) {
+    // Keep existing reports available during a rolling deploy before the
+    // key-information migration has reached the database.
+    if (isUndefinedColumnError(error)) {
+      return new Map<string, InterviewConversationRow["keyInformation"]>();
+    }
+    throw error;
+  }
 }
 
 async function loadSnapshotRowsByConversationIds(conversationIds: string[]) {
@@ -282,7 +385,7 @@ async function loadSnapshotRowsByConversationIds(conversationIds: string[]) {
 }
 
 async function serializeConversationReports(
-  conversations: InterviewConversationRow[],
+  conversations: ReportConversationBaseRow[],
   options: QueryInterviewConversationReportsOptions,
 ) {
   if (conversations.length === 0) {
@@ -290,6 +393,10 @@ async function serializeConversationReports(
   }
 
   const conversationIds = conversations.map((conversation) => conversation.conversationId);
+  const keyInformationByConversationId = await loadKeyInformationByConversationIds(
+    conversationIds,
+    options.includeKeyInformation ?? false,
+  );
   const turnRows = await db
     .select()
     .from(interviewConversationTurn)
@@ -302,7 +409,10 @@ async function serializeConversationReports(
   return conversations.map((conversation) => {
     const turns = turnRows.filter((turn) => turn.conversationId === conversation.conversationId);
     return serializeConversationReport(
-      conversation,
+      {
+        ...conversation,
+        keyInformation: keyInformationByConversationId.get(conversation.conversationId) ?? null,
+      },
       turns,
       snapshotRowsByConversationId
         ? (snapshotRowsByConversationId.get(conversation.conversationId) ?? {
@@ -310,6 +420,7 @@ async function serializeConversationReports(
             evidence: null,
           })
         : undefined,
+      options.includeKeyInformation,
     );
   });
 }
@@ -319,7 +430,7 @@ export async function queryInterviewConversationReports(
   options: QueryInterviewConversationReportsOptions = {},
 ) {
   const conversations = await db
-    .select()
+    .select(reportConversationColumns)
     .from(interviewConversation)
     .where(eq(interviewConversation.interviewRecordId, interviewRecordId))
     .orderBy(desc(interviewConversation.updatedAt));
@@ -334,7 +445,7 @@ export async function queryInterviewConversationReportsByRound(
   options: QueryInterviewConversationReportsOptions = {},
 ) {
   const conversations = await db
-    .select()
+    .select(reportConversationColumns)
     .from(interviewConversation)
     .where(eq(interviewConversation.scheduleEntryId, scheduleEntryId))
     .orderBy(desc(interviewConversation.updatedAt));
@@ -348,7 +459,7 @@ export async function queryInterviewConversationReportByRound(
   options: QueryInterviewConversationReportsOptions = {},
 ) {
   const [conversation] = await db
-    .select()
+    .select(reportConversationColumns)
     .from(interviewConversation)
     .where(
       and(
@@ -362,23 +473,6 @@ export async function queryInterviewConversationReportByRound(
     return null;
   }
 
-  const turnRows = await db
-    .select()
-    .from(interviewConversationTurn)
-    .where(eq(interviewConversationTurn.conversationId, conversationId))
-    .orderBy(asc(interviewConversationTurn.createdAt), asc(interviewConversationTurn.receivedAt));
-  const snapshotRowsByConversationId = options.includeSnapshotMetadata
-    ? await loadSnapshotRowsByConversationIds([conversationId])
-    : null;
-
-  return serializeConversationReport(
-    conversation,
-    turnRows,
-    snapshotRowsByConversationId
-      ? (snapshotRowsByConversationId.get(conversationId) ?? {
-          context: null,
-          evidence: null,
-        })
-      : undefined,
-  );
+  const [report] = await serializeConversationReports([conversation], options);
+  return report ?? null;
 }

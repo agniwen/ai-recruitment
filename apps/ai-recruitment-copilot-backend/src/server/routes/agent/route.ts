@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -15,6 +15,7 @@ import {
   notifyInterviewSummaryReady,
   retryFailedInterviewSummaryNotifications,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/feishu-interview-notifications";
+import { runKeyInformationJob } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/interview-key-information-job";
 import { runSummaryJob } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/interview-summary-job";
 import { createInterviewEvidenceSnapshot } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/evidence-snapshot";
 import {
@@ -188,6 +189,11 @@ export const agentRouter = factory
       const summaryResetFields = isNewTranscript
         ? {
             evaluationCriteriaResults: {},
+            keyInformation: null,
+            keyInformationAttempts: 0,
+            keyInformationError: null,
+            keyInformationStartedAt: null,
+            keyInformationStatus: "pending" as const,
             summaryAttempts: 0,
             summaryError: null,
             summaryStartedAt: null,
@@ -343,6 +349,10 @@ export const agentRouter = factory
         conversationId: data.conversationId,
         interviewRecordId: data.interviewRecordId,
       });
+      void runKeyInformationJob({
+        conversationId: data.conversationId,
+        interviewRecordId: data.interviewRecordId,
+      });
     }
 
     return c.json({ conversationId: data.conversationId, success: true }, 201);
@@ -380,13 +390,38 @@ export const agentRouter = factory
             ),
           ),
           lt(interviewConversation.updatedAt, staleThreshold),
+          isNotNull(interviewConversation.interviewRecordId),
+          lt(interviewConversation.summaryAttempts, RECOVERY_MAX_ATTEMPTS),
         ),
       )
       .limit(RECOVERY_BATCH_SIZE);
 
-    const retryable = candidates.filter(
-      (row) => row.interviewRecordId && row.summaryAttempts < RECOVERY_MAX_ATTEMPTS,
-    );
+    const retryable = candidates;
+
+    const keyInformationCandidates = await db
+      .select({
+        conversationId: interviewConversation.conversationId,
+        interviewRecordId: interviewConversation.interviewRecordId,
+        keyInformationAttempts: interviewConversation.keyInformationAttempts,
+      })
+      .from(interviewConversation)
+      .where(
+        and(
+          or(
+            inArray(interviewConversation.keyInformationStatus, ["pending", "failed"]),
+            and(
+              eq(interviewConversation.keyInformationStatus, "running"),
+              lt(interviewConversation.keyInformationStartedAt, staleThreshold),
+            ),
+          ),
+          lt(interviewConversation.updatedAt, staleThreshold),
+          isNotNull(interviewConversation.interviewRecordId),
+          lt(interviewConversation.keyInformationAttempts, RECOVERY_MAX_ATTEMPTS),
+        ),
+      )
+      .limit(RECOVERY_BATCH_SIZE);
+
+    const keyInformationRetryable = keyInformationCandidates;
 
     for (const row of retryable) {
       if (!row.interviewRecordId) {
@@ -398,7 +433,22 @@ export const agentRouter = factory
       });
     }
 
+    for (const row of keyInformationRetryable) {
+      if (!row.interviewRecordId) {
+        continue;
+      }
+      void runKeyInformationJob({
+        conversationId: row.conversationId,
+        interviewRecordId: row.interviewRecordId,
+      });
+    }
+
     return c.json({
+      keyInformation: {
+        retried: keyInformationRetryable.length,
+        scanned: keyInformationCandidates.length,
+        skipped: keyInformationCandidates.length - keyInformationRetryable.length,
+      },
       retried: retryable.length,
       scanned: candidates.length,
       skipped: candidates.length - retryable.length,
