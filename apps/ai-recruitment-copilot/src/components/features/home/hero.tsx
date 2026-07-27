@@ -6,7 +6,7 @@ import {
   IconArrowRight as ArrowRightIcon,
   IconSparkles as SparklesIcon,
 } from "@tabler/icons-react";
-import { motion, useReducedMotion } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 import { FadeContent } from "@/components/react-bits/fade-content";
 import { SplitText } from "@/components/react-bits/split-text";
 import { Button } from "@/components/ui/button";
@@ -49,14 +49,14 @@ export function Hero({ onResumeFiltering, onWorkbench }: HeroProps) {
         {reducedMotion ? (
           <span className={BRAND_MARK_CLASS}>AI Recruitment Copilot</span>
         ) : (
-          <motion.span
+          <m.span
             animate={{ opacity: 1, transform: "translateY(0px)" }}
             className={BRAND_MARK_CLASS}
             initial={{ opacity: 0, transform: "translateY(12px)" }}
             transition={{ delay: 0.15, duration: 0.5, ease: "easeOut" }}
           >
             AI Recruitment Copilot
-          </motion.span>
+          </m.span>
         )}
         <SplitText text="简历，先聊清楚。面试，一开口就来。" />
       </h1>
