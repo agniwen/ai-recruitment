@@ -379,6 +379,7 @@ function InterviewReportDetails({
             <KeyInterviewInformation
               data={report.keyInformation}
               onEvidenceSelect={onEvidenceSelect}
+              surface={surface}
             />
           ) : null}
           <InterviewReportDetailSection surface={surface} title="评估指标">
