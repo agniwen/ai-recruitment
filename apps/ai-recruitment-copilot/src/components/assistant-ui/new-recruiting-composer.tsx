@@ -5,6 +5,7 @@ import { LexicalComposerInput } from "@assistant-ui/react-lexical";
 import { IconArrowUp } from "@tabler/icons-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { withCleanup } from "@/lib/client/async-control";
 import { cn } from "@/lib/utils";
 import { composerSendButtonClass } from "./recruiting-copilot-context";
 import { RecruitingComposerDirectiveChip } from "./recruiting-directive-text";
@@ -94,11 +95,12 @@ function NewRecruitingComposerShell({
     }
     submittingRef.current = true;
     composerRuntime.setText("");
-    try {
-      await onSubmit(nextText);
-    } finally {
-      submittingRef.current = false;
-    }
+    await withCleanup(
+      () => onSubmit(nextText),
+      () => {
+        submittingRef.current = false;
+      },
+    );
   };
 
   const submit = () => {

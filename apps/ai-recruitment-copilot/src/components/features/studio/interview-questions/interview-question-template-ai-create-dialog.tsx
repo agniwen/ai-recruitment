@@ -3,6 +3,7 @@
 import type { InterviewQuestionTemplateQuestionInput } from "@arc/db-schema/interview-question-templates";
 import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import { rpcFetch } from "@/lib/client/api";
+import { runAsyncAction } from "@/lib/client/async-control";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { Button } from "@/components/ui/button";
@@ -72,33 +73,35 @@ export function InterviewQuestionTemplateAiCreateDialog({
     }
 
     setGenerating(true);
-    try {
-      const result = await rpcFetch<{ questions: InterviewQuestionTemplateQuestionInput[] }>(
-        rpc.api.w[":slug"].studio["interview-questions"]["ai-generate-questions"].$post({
-          json: {
-            jobDescriptionId,
-            prompt: prompt.trim(),
-          },
-          param: { slug },
-        }),
-        "AI 生成沟通题失败",
-      );
+    await runAsyncAction({
+      cleanup: () => setGenerating(false),
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : "AI 生成失败");
+      },
+      operation: async () => {
+        const result = await rpcFetch<{ questions: InterviewQuestionTemplateQuestionInput[] }>(
+          rpc.api.w[":slug"].studio["interview-questions"]["ai-generate-questions"].$post({
+            json: {
+              jobDescriptionId,
+              prompt: prompt.trim(),
+            },
+            param: { slug },
+          }),
+          "AI 生成沟通题失败",
+        );
 
-      if (result.questions.length === 0) {
-        toast.error("未生成任何题目，请调整指令后重试");
-        return;
-      }
+        if (result.questions.length === 0) {
+          toast.error("未生成任何题目，请调整指令后重试");
+          return;
+        }
 
-      onGenerated({
-        jobDescriptionId,
-        questions: result.questions,
-      });
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "AI 生成失败");
-    } finally {
-      setGenerating(false);
-    }
+        onGenerated({
+          jobDescriptionId,
+          questions: result.questions,
+        });
+        onOpenChange(false);
+      },
+    });
   }
 
   return (

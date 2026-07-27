@@ -42,6 +42,7 @@ import {
   updateStudioInterviewRound,
 } from "@/lib/client/api";
 import { dateTimeLocalInputToISOString } from "@/lib/client/datetime-local";
+import { runAsyncAction } from "@/lib/client/async-control";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import {
   canEditResumeRecord,
@@ -472,21 +473,21 @@ function InterviewEditBody({
       return;
     }
     setIsSubmitting(true);
-    try {
-      await updateStudioInterviewRound(slug, recordId, {
-        allowTextInput: formValues.allowTextInput,
-        notes: formValues.notes,
-        scheduledAt: dateTimeLocalInputToISOString(formValues.scheduledAt),
-        scheduledEndAt: dateTimeLocalInputToISOString(formValues.scheduledEndAt),
-      });
-      toast.success("已保存轮次");
-      onUpdated?.();
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "保存失败");
-    } finally {
-      setIsSubmitting(false);
-    }
+    await runAsyncAction({
+      cleanup: () => setIsSubmitting(false),
+      onError: (error) => toast.error(error instanceof Error ? error.message : "保存失败"),
+      operation: async () => {
+        await updateStudioInterviewRound(slug, recordId, {
+          allowTextInput: formValues.allowTextInput,
+          notes: formValues.notes,
+          scheduledAt: dateTimeLocalInputToISOString(formValues.scheduledAt),
+          scheduledEndAt: dateTimeLocalInputToISOString(formValues.scheduledEndAt),
+        });
+        toast.success("已保存轮次");
+        onUpdated?.();
+        onOpenChange(false);
+      },
+    });
   }
 
   async function handleReset() {
@@ -495,16 +496,16 @@ function InterviewEditBody({
     }
     setResetConfirmOpen(false);
     setIsResetting(true);
-    try {
-      await resetStudioInterviewRound(slug, recordId);
-      toast.success("轮次已重置为待开始");
-      onUpdated?.();
-      await refetch();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "重置失败");
-    } finally {
-      setIsResetting(false);
-    }
+    await runAsyncAction({
+      cleanup: () => setIsResetting(false),
+      onError: (error) => toast.error(error instanceof Error ? error.message : "重置失败"),
+      operation: async () => {
+        await resetStudioInterviewRound(slug, recordId);
+        toast.success("轮次已重置为待开始");
+        onUpdated?.();
+        await refetch();
+      },
+    });
   }
 
   return (

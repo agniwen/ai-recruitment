@@ -2,6 +2,7 @@
 
 import type { DepartmentRecord } from "@arc/shared/departments";
 import { rpcFetch } from "@/lib/client/api";
+import { runAsyncAction } from "@/lib/client/async-control";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { Button } from "@/components/ui/button";
@@ -72,34 +73,36 @@ export function JobDescriptionAiCreateDialog({
     }
 
     setGenerating(true);
-    try {
-      const result = await rpcFetch<{
-        description: string;
-        prompt: string;
-        suggestedName: string;
-      }>(
-        rpc.api.w[":slug"].studio["job-descriptions"]["ai-generate"].$post({
-          json: {
-            departmentName: departmentName ?? undefined,
-            prompt: prompt.trim(),
-          },
-          param: { slug },
-        }),
-        "AI 生成岗位内容失败",
-      );
+    await runAsyncAction({
+      cleanup: () => setGenerating(false),
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : "AI 生成失败");
+      },
+      operation: async () => {
+        const result = await rpcFetch<{
+          description: string;
+          prompt: string;
+          suggestedName: string;
+        }>(
+          rpc.api.w[":slug"].studio["job-descriptions"]["ai-generate"].$post({
+            json: {
+              departmentName: departmentName ?? undefined,
+              prompt: prompt.trim(),
+            },
+            param: { slug },
+          }),
+          "AI 生成岗位内容失败",
+        );
 
-      onGenerated({
-        departmentId,
-        description: result.description,
-        name: result.suggestedName,
-        prompt: result.prompt,
-      });
-      onOpenChange(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "AI 生成失败");
-    } finally {
-      setGenerating(false);
-    }
+        onGenerated({
+          departmentId,
+          description: result.description,
+          name: result.suggestedName,
+          prompt: result.prompt,
+        });
+        onOpenChange(false);
+      },
+    });
   }
 
   return (

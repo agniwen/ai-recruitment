@@ -95,9 +95,12 @@ describe("TanStack Start migration patterns", () => {
     );
 
     expect(workspaceSwitcher).toContain("setSwitching(true)");
-    expect(workspaceSwitcher).toContain("finally");
+    expect(workspaceSwitcher).toContain("withCleanup");
+    expect(workspaceSwitcher).toContain(
+      "() => navigate({ href: resolveSwitchTarget(pathname, o.slug) })",
+    );
     expect(workspaceSwitcher).toContain("setSwitching(false)");
-    expect(workspaceSwitcher.indexOf("await navigate")).toBeLessThan(
+    expect(workspaceSwitcher.indexOf("() => navigate")).toBeLessThan(
       workspaceSwitcher.indexOf("setSwitching(false)"),
     );
   });

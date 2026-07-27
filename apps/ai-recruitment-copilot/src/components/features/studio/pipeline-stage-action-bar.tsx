@@ -22,6 +22,7 @@ import { pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage, ScheduleEntryStatus } from "@arc/db-schema/studio-interviews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { withCleanup } from "@/lib/client/async-control";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
@@ -97,11 +98,10 @@ export function PipelineStageActionBar({
       return;
     }
     setIsAdvancing(true);
-    try {
-      await onAdvance(target);
-    } finally {
-      setIsAdvancing(false);
-    }
+    await withCleanup(
+      () => onAdvance(target),
+      () => setIsAdvancing(false),
+    );
   }
 
   const actions = getStageActions({

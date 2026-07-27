@@ -140,8 +140,9 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(source).toContain("The parent");
     expect(source).toContain("owns mutations");
     expect(source).toContain("const [isAdvancing, setIsAdvancing] = useState(false);");
-    expect(source).toContain("await onAdvance(target);");
-    expect(source).toContain("setIsAdvancing(false);");
+    expect(source).toContain("await withCleanup(");
+    expect(source).toContain("() => onAdvance(target)");
+    expect(source).toContain("() => setIsAdvancing(false)");
     expect(source).toContain("void onAdvance(targetStage);");
     expect(source).toContain("disabled={isBusy}");
     expect(source).toContain("aria-busy={isBusy}");
