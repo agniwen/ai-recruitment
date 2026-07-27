@@ -236,7 +236,6 @@ describe("TanStack Start migration patterns", () => {
       "src/lib/start/studio/interviewers.functions.ts",
       "src/lib/start/studio/interviews.functions.ts",
       "src/lib/start/studio/job-descriptions.functions.ts",
-      "src/lib/start/studio/resumes.functions.ts",
     ];
 
     for (const file of workspaceRouteFiles) {
@@ -270,6 +269,16 @@ describe("TanStack Start migration patterns", () => {
       expect(source).toContain('access.status !== "ready"');
       expect(source).not.toContain("await import");
     }
+
+    const resumesFunctions = readSource("src/lib/start/studio/resumes.functions.ts");
+    const resumesState = readSource("src/lib/start/studio/resumes-state.server.ts");
+
+    expect(resumesFunctions).toContain("createServerFn");
+    expect(resumesFunctions).toContain("loadStudioResumesStateFromRequest");
+    expect(resumesState).toContain("resolveWorkspaceAccessFromRequest");
+    expect(resumesState).toContain('access.status !== "ready"');
+    expect(resumesState).toContain("canReadStudioResumes");
+    expect(`${resumesFunctions}\n${resumesState}`).not.toContain("await import");
   });
 
   it("handles notFound at the root instead of rendering inside layout routes", () => {
@@ -287,15 +296,19 @@ describe("TanStack Start migration patterns", () => {
   it("keeps Recharts dashboards out of the server-rendered shell", () => {
     const dashboardRoute = readSource("src/routes/w.$slug.studio.dashboard.tsx");
     const resumesRoute = readSource("src/routes/w.$slug.studio.resumes.tsx");
+    const resumeMetrics = readSource(
+      "src/components/features/studio/resumes/resume-library-metrics-section.tsx",
+    );
     const jobDescriptionsRoute = readSource("src/routes/w.$slug.studio.job-descriptions.tsx");
 
     expect(dashboardRoute).toContain("ClientOnly");
     expect(dashboardRoute).toContain('} from "@tanstack/react-router"');
-    expect(resumesRoute).toContain("ClientOnly");
-    expect(resumesRoute).toContain('} from "@tanstack/react-router"');
+    expect(resumesRoute).not.toContain("ResumeLibraryCharts");
+    expect(resumeMetrics).toContain("ClientOnly");
+    expect(resumeMetrics).toContain('from "@tanstack/react-router"');
     expect(jobDescriptionsRoute).toContain("ClientOnly");
     expect(jobDescriptionsRoute).toContain('} from "@tanstack/react-router"');
-    expect(resumesRoute).toContain("<ResumeLibraryCharts metrics={metrics} />");
+    expect(resumeMetrics).toContain("<ResumeLibraryCharts metrics={metrics} />");
     expect(jobDescriptionsRoute).toContain("<JobDescriptionCharts metrics={metrics} />");
   });
 

@@ -108,14 +108,15 @@ describe("TanStack Start studio settings and detail route migration", () => {
       "../../ai-recruitment-copilot-backend/src/server/access/workspace-permission-snapshot.ts",
     );
 
-    expect(studioRoute).toContain("getStudioPageAccessState");
+    expect(studioRoute).toContain("parentMatchPromise");
+    expect(studioRoute).toContain("hasPermissionInStatements");
     expect(studioRoute).toContain("findFirstAllowedStudioPath");
     expect(studioRoute).toContain("getFirstAllowedStudioPagePath");
     expect(studioRoute).toContain("STUDIO_PAGE_PATHS");
-    expect(studioRoute).toMatch(/if \(!state\.allowed\) \{\s+throw notFound\(\);\s+\}/u);
-    expect(studioRoute).not.toMatch(
-      /if \(!state\.allowed\) \{\s+const fallbackPath = await findFirstAllowedStudioPath/u,
+    expect(studioRoute).toContain(
+      'hasPermissionInStatements(state.permissions, "page", requestedPage.action)',
     );
+    expect(studioRoute).toMatch(/state\.status !== "ready"[\s\S]+throw notFound\(\);/u);
     expect(authSession).toContain("getStudioPageAccessState");
     expect(authSession).toContain("getFirstAllowedStudioPagePath");
     expect(authSessionServer).toContain("resolveStudioPageAccessFromRequest");
@@ -134,7 +135,6 @@ describe("TanStack Start studio settings and detail route migration", () => {
       ["interviewers", "interviewers"],
       ["interviews", "interviews"],
       ["job-descriptions", "jobDescriptions"],
-      ["resumes", "resumes"],
     ] as const;
 
     expect(pageAccess).toContain("getStudioPageAccessState");
@@ -149,6 +149,22 @@ describe("TanStack Start studio settings and detail route migration", () => {
       expect(guardIndex).toBeGreaterThanOrEqual(0);
       expect(prefetchIndex).toBeGreaterThan(guardIndex);
     }
+
+    const resumesRoute = readSource("routes/w.$slug.studio.resumes.tsx");
+    const resumesState = readSource("lib/start/studio/resumes-state.server.ts");
+    const resumesAccess = readSource("lib/start/studio/resumes-access.ts");
+    const accessIndex = resumesState.indexOf("canReadStudioResumes(access)");
+    const prefetchIndex = resumesState.indexOf("await loadStudioResumesData");
+
+    expect(resumesRoute).toContain("loadStudioResumesState");
+    expect(resumesAccess).toContain(
+      'hasPermissionInStatements(access.permissions, "page", "resumes")',
+    );
+    expect(resumesAccess).toContain(
+      'hasPermissionInStatements(access.permissions, "resumeLibrary", "read")',
+    );
+    expect(accessIndex).toBeGreaterThanOrEqual(0);
+    expect(prefetchIndex).toBeGreaterThan(accessIndex);
   });
 
   it("keeps workspace permission role actions compact in the role column", () => {

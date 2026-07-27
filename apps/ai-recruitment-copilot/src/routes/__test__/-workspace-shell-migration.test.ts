@@ -94,6 +94,7 @@ describe("TanStack Start workspace shell migration", () => {
     expect(packageJson).not.toContain('"glimm"');
     expect(workspaceRoute).not.toContain("glimm");
     expect(sidebarTabs).not.toContain("glimm");
-    expect(sidebarTabs).toContain("navigate({ to: target });");
+    expect(sidebarTabs).toContain("void navigate(target);");
+    expect(sidebarTabs).toContain("router.preloadRoute(getSidebarTabTarget(tab, slug))");
   });
 });
