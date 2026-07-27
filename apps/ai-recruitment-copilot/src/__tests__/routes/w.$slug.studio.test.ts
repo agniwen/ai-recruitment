@@ -1,7 +1,7 @@
 import { isNotFound } from "@tanstack/react-router";
 import { describe, expect, it } from "vitest";
 import type { WorkspaceAccessState } from "@/lib/start/auth-session-types";
-import { Route } from "./w.$slug.studio";
+import { Route } from "@/routes/w.$slug.studio";
 
 function readyAccess(
   page: Extract<WorkspaceAccessState, { status: "ready" }>["permissions"]["page"],

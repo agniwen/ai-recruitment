@@ -71,6 +71,24 @@ describe("uploadsRouter cache policy", () => {
     });
   });
 
+  it("returns the standard JSON validation error shape for invalid preflight input", async () => {
+    const res = await makeApp().request("/uploads/preflight", {
+      body: JSON.stringify({
+        filename: "resume.jpeg",
+        hash: "invalid-hash",
+        mediaType: "image/jpeg",
+        size: 1024,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({ error: "Invalid sha256 hex" });
+    expect(mocks.findAttachmentByContentHash).not.toHaveBeenCalled();
+    expect(mocks.createAttachment).not.toHaveBeenCalled();
+  });
+
   it("cache disabled: preflight does not read the content-hash registry", async () => {
     process.env.RESUME_PARSE_DISABLE_CACHE = "true";
     mocks.findAttachmentByContentHash.mockResolvedValue({

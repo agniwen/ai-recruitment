@@ -21,7 +21,7 @@ import {
   MAX_ATTACHMENT_SIZE,
   uploadPreflightSchema,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/schema";
-import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
+import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 
 function getParsedStructured(parsed: ParsedResumeDocument) {
   return "structured" in parsed ? parsed.structured : null;
@@ -69,56 +69,63 @@ function buildUploadResponse(args: {
 
 export const uploadsRouter = factory
   .createApp()
-  .post("/preflight", zValidator("json", uploadPreflightSchema), async (c) => {
-    const { user, activeOrg } = c.var;
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-    if (!activeOrg) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
+  .post(
+    "/preflight",
+    zValidator("json", uploadPreflightSchema, jsonValidatorError("上传预检参数无效。")),
+    async (c) => {
+      const { user, activeOrg } = c.var;
+      if (!user) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
+      if (!activeOrg) {
+        return c.json({ error: "Unauthorized" }, 401);
+      }
 
-    const { filename, hash, mediaType, size } = c.req.valid("json");
+      const { filename, hash, mediaType, size } = c.req.valid("json");
 
-    const cached = isResumeParseCacheEnabled() ? await findAttachmentByContentHash(hash) : null;
-    const existing =
-      cached && isResumeParseCacheSourceCompatible(cached.parsedTextSource) ? cached : null;
-    if (!existing) {
-      return c.json({ hit: false } as const);
-    }
+      const cached = isResumeParseCacheEnabled() ? await findAttachmentByContentHash(hash) : null;
+      const existing =
+        cached && isResumeParseCacheSourceCompatible(cached.parsedTextSource) ? cached : null;
+      if (!existing) {
+        return c.json({ hit: false } as const, 200);
+      }
 
-    const attachmentId = crypto.randomUUID();
-    await createAttachment({
-      contentHash: hash,
-      filename: filename.slice(0, 255),
-      id: attachmentId,
-      mediaType,
-      organizationId: activeOrg.id,
-      parsedAt: existing.parsedAt,
-      parsedError: existing.parsedError,
-      parsedPageCount: existing.parsedPageCount,
-      parsedStatus: existing.parsedStatus,
-      parsedStructured: existing.parsedStructured,
-      parsedText: existing.parsedText,
-      parsedTextSource: existing.parsedTextSource,
-      size,
-      storageKey: existing.storageKey,
-      userId: user.id,
-    });
-
-    return c.json({
-      hit: true as const,
-      ...buildUploadResponse({
-        attachmentId,
+      const attachmentId = crypto.randomUUID();
+      await createAttachment({
+        contentHash: hash,
+        filename: filename.slice(0, 255),
+        id: attachmentId,
+        mediaType,
+        organizationId: activeOrg.id,
+        parsedAt: existing.parsedAt,
+        parsedError: existing.parsedError,
         parsedPageCount: existing.parsedPageCount,
         parsedStatus: existing.parsedStatus,
         parsedStructured: existing.parsedStructured,
         parsedText: existing.parsedText,
         parsedTextSource: existing.parsedTextSource,
-        slug: activeOrg.slug,
-      }),
-    });
-  })
+        size,
+        storageKey: existing.storageKey,
+        userId: user.id,
+      });
+
+      return c.json(
+        {
+          hit: true as const,
+          ...buildUploadResponse({
+            attachmentId,
+            parsedPageCount: existing.parsedPageCount,
+            parsedStatus: existing.parsedStatus,
+            parsedStructured: existing.parsedStructured,
+            parsedText: existing.parsedText,
+            parsedTextSource: existing.parsedTextSource,
+            slug: activeOrg.slug,
+          }),
+        },
+        200,
+      );
+    },
+  )
   .post("/", async (c) => {
     const { user, activeOrg } = c.var;
     if (!user) {
@@ -190,6 +197,7 @@ export const uploadsRouter = factory
           parsedTextSource: existing.parsedTextSource,
           slug: activeOrg.slug,
         }),
+        200,
       );
     }
 
@@ -269,5 +277,6 @@ export const uploadsRouter = factory
           parseOutcome.status === "fulfilled" ? parseOutcome.value.textSource : null,
         slug: activeOrg.slug,
       }),
+      200,
     );
   });

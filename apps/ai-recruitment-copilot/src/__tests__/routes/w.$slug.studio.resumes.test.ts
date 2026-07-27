@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Route } from "./w.$slug.studio.resumes";
+import { Route } from "@/routes/w.$slug.studio.resumes";
 
 function shouldReloadAt(pathname: string) {
   const { shouldReload } = Route.options;
