@@ -569,10 +569,6 @@ function StudioDashboardRoute() {
 }
 
 export const Route = createFileRoute("/w/$slug/studio/dashboard")({
-  component: StudioDashboardRoute,
-  head: () => ({
-    meta: [{ title: formatDocumentTitle("数据看板") }],
-  }),
   loader: async ({ params }) => {
     await requireStudioPageAccess({
       action: "dashboard",
@@ -590,5 +586,9 @@ export const Route = createFileRoute("/w/$slug/studio/dashboard")({
     }
     return state;
   },
+  head: () => ({
+    meta: [{ title: formatDocumentTitle("数据看板") }],
+  }),
+  component: StudioDashboardRoute,
   pendingComponent: DashboardPageSkeleton,
 });

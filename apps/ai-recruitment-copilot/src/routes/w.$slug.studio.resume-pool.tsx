@@ -10,13 +10,13 @@ import { ResumePoolPageSkeleton } from "@/components/features/studio/studio-page
 import { formatDocumentTitle } from "@/lib/start/document-title";
 
 export const Route = createFileRoute("/w/$slug/studio/resume-pool")({
-  component: ResumePoolPage,
-  head: () => ({
-    meta: [{ title: formatDocumentTitle("人才库") }],
-  }),
-  pendingComponent: ResumePoolPageSkeleton,
   validateSearch: (search: Record<string, unknown>): ResumePoolSearch => ({
     scope: normalizeScope(search.scope),
     uploaderId: normalizeResumePoolUploaderId(search.uploaderId),
   }),
+  head: () => ({
+    meta: [{ title: formatDocumentTitle("人才库") }],
+  }),
+  component: ResumePoolPage,
+  pendingComponent: ResumePoolPageSkeleton,
 });

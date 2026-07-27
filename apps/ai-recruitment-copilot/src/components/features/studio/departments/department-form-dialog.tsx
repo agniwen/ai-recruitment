@@ -3,6 +3,7 @@
 import type { DepartmentFormValues, DepartmentRecord } from "@arc/shared/departments";
 import { departmentFormSchema } from "@arc/shared/departments";
 import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { toast } from "sonner";
@@ -50,6 +51,10 @@ export function DepartmentFormDialog({
 }) {
   const slug = useWorkspaceSlug();
   const isEdit = record !== null;
+  const buildValues = useCallback(
+    () => (record ? toFormValues(record) : defaultValues()),
+    [record],
+  );
   const { data: hiringUnits = [] } = useQuery({
     enabled: open,
     queryFn: async () => {
@@ -70,7 +75,7 @@ export function DepartmentFormDialog({
   });
 
   const { form, isSubmitting } = useEntityForm<DepartmentFormValues>({
-    buildValues: () => (record ? toFormValues(record) : defaultValues()),
+    buildValues,
     onSubmit: async (value) => {
       const body = {
         description: value.description?.trim() || "",

@@ -277,7 +277,7 @@ function ResumePoolHighlightRow({
   );
 }
 
-export function ResumePoolCardHighlights({ record }: { record: ResumePoolListRecord }) {
+function ResumePoolCardHighlights({ record }: { record: ResumePoolListRecord }) {
   const { profileHighlights } = record;
   const { educationItems } = profileHighlights;
   const educationFallbackLines =
@@ -337,7 +337,7 @@ export function ResumePoolCardHighlights({ record }: { record: ResumePoolListRec
   );
 }
 
-export function ResumePoolCardUploaderMeta({ record }: { record: ResumePoolListRecord }) {
+function ResumePoolCardUploaderMeta({ record }: { record: ResumePoolListRecord }) {
   const actorLabel = sourceActorLabel(record);
   return (
     <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
@@ -448,7 +448,7 @@ export function ResumePoolDetailDialog({
   );
 }
 
-export function ResumePoolCardActions({
+function ResumePoolCardActions({
   canDelete,
   canImport,
   canPublish,

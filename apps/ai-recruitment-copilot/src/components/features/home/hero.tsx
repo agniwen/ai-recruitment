@@ -77,7 +77,7 @@ export function Hero({ onResumeFiltering, onWorkbench }: HeroProps) {
             variant="outline"
           >
             <span>开始简历筛选</span>
-            <span className="inline-flex max-w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:ml-2 group-hover:max-w-4 group-hover:opacity-100">
+            <span className="inline-flex max-w-0 overflow-hidden opacity-0 transition-[margin,max-width,opacity] duration-300 ease-out group-hover:ml-2 group-hover:max-w-4 group-hover:opacity-100">
               <ArrowRightIcon aria-hidden="true" className="size-4" />
             </span>
           </Button>
@@ -88,7 +88,7 @@ export function Hero({ onResumeFiltering, onWorkbench }: HeroProps) {
             variant="outline"
           >
             <span>进入工作台</span>
-            <span className="inline-flex max-w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:ml-2 group-hover:max-w-4 group-hover:opacity-100">
+            <span className="inline-flex max-w-0 overflow-hidden opacity-0 transition-[margin,max-width,opacity] duration-300 ease-out group-hover:ml-2 group-hover:max-w-4 group-hover:opacity-100">
               <ArrowRightIcon aria-hidden="true" className="size-4" />
             </span>
           </Button>
