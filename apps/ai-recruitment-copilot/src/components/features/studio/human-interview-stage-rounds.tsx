@@ -367,7 +367,7 @@ function RoundCardActions({
       {canCompleteRound ? (
         <Button onClick={onComplete} size="sm" variant="outline">
           <IconCircleCheck className="size-4" />
-          标记完成
+          面试评价
         </Button>
       ) : null}
       {canCancelRound ? (

@@ -69,7 +69,7 @@ import {
 // Candidate stage transition input. Encodes the (pipelineStage, outcome)
 // invariant: closed ⇔ a terminal outcome; everything else stays in_pipeline.
 
-// 真人复面：「标记完成」的 input。outcome / feedback 必填，score 可选。
+// 真人复面：「面试评价」的 input。outcome / feedback 必填，score 可选。
 // Human interview "mark complete" input. Outcome required.
 
 // 真人复面：「取消」的 input。reason 可选，便于后续审计 / 通知候选人。

@@ -36,7 +36,7 @@ import { humanInterviewFeedbackSchema } from "./utils/human-interview-readiness"
 // Candidate stage transition input. Encodes the (pipelineStage, outcome)
 // invariant: closed ⇔ a terminal outcome; everything else stays in_pipeline.
 
-// 真人复面：「标记完成」的 input。outcome / feedback 必填，score 可选。
+// 真人复面：「面试评价」的 input。outcome / feedback 必填，score 可选。
 // Human interview "mark complete" input. Outcome required.
 const completeHumanRoundSchema = z.object({
   feedback: humanInterviewFeedbackSchema,
@@ -171,7 +171,7 @@ export const studioInterviewHumanRouter = factory
   .post(
     "/:id/human-interview-rounds/:roundId/complete",
     requirePermission("humanInterview", "update"),
-    zValidator("json", completeHumanRoundSchema, jsonValidatorError("标记完成参数无效。")),
+    zValidator("json", completeHumanRoundSchema, jsonValidatorError("面试评价参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {

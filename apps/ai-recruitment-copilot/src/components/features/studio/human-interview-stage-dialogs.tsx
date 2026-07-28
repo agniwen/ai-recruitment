@@ -229,7 +229,7 @@ export function ScheduleRoundDialog({
   );
 }
 
-// ── 标记完成 dialog ──
+// ── 面试评价 dialog ──
 // Complete-round dialog.
 
 interface CompleteDialogProps {
@@ -282,9 +282,9 @@ export function CompleteRoundDialog({
         score: parsedScore,
       });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "标记完成失败"),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "面试评价失败"),
     onSuccess: () => {
-      toast.success("已标记完成");
+      toast.success("已面试评价");
       void invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug });
       onCompleted();
       handleOpenChange(false);
@@ -295,7 +295,7 @@ export function CompleteRoundDialog({
     <Dialog onOpenChange={handleOpenChange} open={round !== null}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>标记完成：{round?.label}</DialogTitle>
+          <DialogTitle>面试评价：{round?.label}</DialogTitle>
           <DialogDescription>
             录入面试结果。完成后会自动结束该轮次下的会议，且只能修改评分和反馈。
           </DialogDescription>
@@ -421,7 +421,7 @@ export function CancelRoundDialog({
         <DialogHeader>
           <DialogTitle>取消轮次：{round?.label}</DialogTitle>
           <DialogDescription>
-            取消后该轮不会算入复面统计，关联的视频会议也会一并删除；如想保留为「已完成」请改走「标记完成」流程。
+            取消后该轮不会算入复面统计，关联的视频会议也会一并删除；如想保留为「已完成」请改走「面试评价」流程。
           </DialogDescription>
         </DialogHeader>
 
