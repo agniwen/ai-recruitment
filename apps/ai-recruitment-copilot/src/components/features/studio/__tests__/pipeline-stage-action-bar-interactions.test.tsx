@@ -21,12 +21,14 @@ const mountedRoots: { host: HTMLDivElement; root: ReturnType<typeof createRoot> 
 function renderActionBar({
   aiRoundInterviewLink,
   aiInterviewDisabled,
+  evaluationActions,
   onAdvance = vi.fn(),
   pipelineStage = "ai_interview",
   primaryAction,
 }: {
   aiRoundInterviewLink?: string;
   aiInterviewDisabled?: boolean;
+  evaluationActions?: ReactNode;
   onAdvance?: (target: PipelineStage) => void | Promise<void>;
   pipelineStage?: PipelineStage;
   primaryAction?: ReactNode;
@@ -41,6 +43,7 @@ function renderActionBar({
       <PipelineStageActionBar
         aiRoundInterviewLink={aiRoundInterviewLink}
         aiInterviewDisabled={aiInterviewDisabled}
+        evaluationActions={evaluationActions}
         onAdvance={onAdvance}
         onRequestClose={vi.fn()}
         onRequestReactivate={vi.fn()}
@@ -136,5 +139,61 @@ describe("PipelineStageActionBar interactions", () => {
     });
 
     expect(host.textContent).not.toContain("发起 AI 面试");
+  });
+
+  it("keeps resume evaluation actions beside the current stage when AI interviews are disabled", () => {
+    const host = renderActionBar({
+      aiInterviewDisabled: true,
+      evaluationActions: (
+        <>
+          <button className="text-green-700" type="button">
+            评估通过
+          </button>
+          <button className="text-red-700" type="button">
+            评估不通过
+          </button>
+        </>
+      ),
+      pipelineStage: "screening",
+      primaryAction: <button type="button">发起 AI 面试</button>,
+    });
+
+    const stageControl = host.querySelector('[aria-label^="查看当前阶段："]');
+    const passButton = getButton(host, "评估通过");
+    const failButton = getButton(host, "评估不通过");
+
+    expect(stageControl?.compareDocumentPosition(passButton)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(passButton.compareDocumentPosition(failButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(host.textContent).not.toContain("发起 AI 面试");
+  });
+
+  it("keeps evaluation available for an unassessed record in a legacy closed stage", () => {
+    const host = renderActionBar({
+      evaluationActions: <button type="button">评估通过</button>,
+      pipelineStage: "closed",
+    });
+
+    expect(getButton(host, "评估通过")).toBeDefined();
+  });
+
+  it("groups the two evaluation decisions separately from other primary actions", () => {
+    const host = renderActionBar({
+      evaluationActions: (
+        <>
+          <button type="button">评估通过</button>
+          <button type="button">评估不通过</button>
+        </>
+      ),
+      pipelineStage: "screening",
+      primaryAction: <button type="button">发起 AI 面试</button>,
+    });
+
+    const evaluationGroup = getButton(host, "评估通过").closest('[role="group"]');
+    const launchGroup = getButton(host, "发起 AI 面试").closest('[role="group"]');
+
+    expect(getButton(host, "评估不通过").closest('[role="group"]')).toBe(evaluationGroup);
+    expect(evaluationGroup).not.toBe(launchGroup);
   });
 });

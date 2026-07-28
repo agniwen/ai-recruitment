@@ -41,6 +41,7 @@ import { copyInterviewLink } from "@/components/features/studio/interviews/inter
 
 export interface PipelineStageActionBarProps {
   pipelineStage: PipelineStage;
+  evaluationActions?: ReactNode;
   primaryAction?: ReactNode;
   aiInterviewDisabled?: boolean;
   canCreateHumanInterview?: boolean;
@@ -76,6 +77,7 @@ export interface PipelineStageActionBarProps {
 
 export function PipelineStageActionBar({
   pipelineStage,
+  evaluationActions,
   primaryAction,
   aiInterviewDisabled = false,
   canCreateHumanInterview = true,
@@ -136,7 +138,7 @@ export function PipelineStageActionBar({
     pipelineStage === "ai_interview" && aiRoundReset ? (
       <AiRoundResetAction {...aiRoundReset} isBusy={isBusy} />
     ) : null;
-  const hasPrimaryActions =
+  const hasGroupedPrimaryActions =
     Boolean(groupedPrimaryAction) ||
     Boolean(aiRoundCopyLinkAction) ||
     Boolean(aiRoundResetAction) ||
@@ -158,7 +160,12 @@ export function PipelineStageActionBar({
         className="m-0 inline-flex min-w-0 flex-wrap items-center justify-end gap-2 border-0 p-0"
         disabled={isBusy}
       >
-        {hasPrimaryActions ? (
+        {evaluationActions ? (
+          <ButtonGroup aria-label="简历评估" className="flex-wrap justify-end">
+            {evaluationActions}
+          </ButtonGroup>
+        ) : null}
+        {hasGroupedPrimaryActions ? (
           <ButtonGroup className="flex-wrap justify-end">
             {groupedPrimaryAction}
             {aiRoundCopyLinkAction}

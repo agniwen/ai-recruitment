@@ -48,6 +48,7 @@ export function StudioPersonDetailView({ model }: { model: StudioPersonDetailVie
     pendingResetSubmissionId,
     recordId,
     reduceMotion,
+    resumeEvaluationDialog,
     roundId,
     setActiveTab,
     setMetadataReport,
@@ -104,6 +105,7 @@ export function StudioPersonDetailView({ model }: { model: StudioPersonDetailVie
           </m.div>
         ) : null}
       </AnimatePresence>
+      {resumeEvaluationDialog}
       {mode === "interview" && canViewReportMetadata ? (
         <InterviewReportMetadataDialog
           onOpenChange={(open) => {

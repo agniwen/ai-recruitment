@@ -7,7 +7,7 @@ import { useReducedMotion } from "motion/react";
 import type { StudioInterviewConversationReport } from "@arc/db-schema/interview-session";
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
 import { canLaunchInterviewFromResume } from "@arc/shared/studio-resumes";
-import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
+import type { ResumeEvaluationStatus, ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -45,6 +45,11 @@ import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useHasPermission } from "@/hooks/use-has-permission";
 import { PipelineStageActionBar } from "./pipeline-stage-action-bar";
+import {
+  ResumeEvaluationActions,
+  ResumeEvaluationDialog,
+  shouldShowResumeEvaluationActions,
+} from "./resumes/resume-evaluation-dialog";
 import { DetailHeaderSkeleton } from "./studio-person-detail-skeletons";
 import { pipelineStageMeta, scheduleEntryStatusMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
@@ -187,6 +192,7 @@ export function useStudioPersonDetailController({
   const [metadataReport, setMetadataReport] = useState<StudioInterviewConversationReport | null>(
     null,
   );
+  const [evaluationDecision, setEvaluationDecision] = useState<ResumeEvaluationStatus | null>(null);
   const [selectedResultConversationId, setSelectedResultConversationId] = useState<string | null>(
     null,
   );
@@ -206,6 +212,7 @@ export function useStudioPersonDetailController({
   const navigate = useNavigate();
   useEffect(() => {
     setActiveTab(defaultTab ?? "overview");
+    setEvaluationDecision(null);
     setMetadataReport(null);
     setOptimisticPipelineStage(null);
     setSelectedResultConversationId(null);
@@ -690,6 +697,12 @@ export function useStudioPersonDetailController({
   })();
   const actionBarPipelineStage = visiblePipelineStage ?? record?.pipelineStage;
   const actionBarAiRound = candidateRounds.at(-1);
+  const resumeEvaluationActions = shouldShowResumeEvaluationActions({
+    layoutMode,
+    status: resumeRecord?.resumeEvaluationStatus,
+  }) ? (
+    <ResumeEvaluationActions onDecisionSelect={setEvaluationDecision} />
+  ) : null;
   const actionBar =
     mode === "resume" &&
     record &&
@@ -731,6 +744,7 @@ export function useStudioPersonDetailController({
         }
         canCreateHumanInterview={canCreateHumanInterview}
         canCreateOffer={canCreateOffer}
+        evaluationActions={resumeEvaluationActions}
         hasJobDescription={Boolean(resumeRecord?.jobDescriptionId)}
         onAdvance={async (target) => {
           const error = await advancePipelineStage({
@@ -761,6 +775,15 @@ export function useStudioPersonDetailController({
     ) : null;
   const headerActionBar = layoutMode === "modal" ? actionBar : null;
   const floatingActionBar = layoutMode === "page" ? actionBar : null;
+  const resumeEvaluationDialog =
+    mode === "resume" && canUseManagementActions && record ? (
+      <ResumeEvaluationDialog
+        decision={evaluationDecision}
+        onDecisionChange={setEvaluationDecision}
+        onSubmitted={() => onUpdated?.()}
+        recordId={record.id}
+      />
+    ) : null;
   let headerExtra: ReactNode = null;
   if (isLoading) {
     headerExtra = <DetailHeaderSkeleton mode={mode} />;
@@ -892,6 +915,7 @@ export function useStudioPersonDetailController({
     resettingSubmissionId,
     resultReports,
     resultRoundId,
+    resumeEvaluationDialog,
     resumeInterviewResultRecord,
     resumePreviewUrl,
     resumeRecord,

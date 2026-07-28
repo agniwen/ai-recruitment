@@ -93,7 +93,6 @@ describe("TanStack Start studio resumes migration", () => {
     expect(source).toContain("<h1");
     expect(source).toContain("{title}");
     expect(source).toContain("ResumeReviewEvaluationBar");
-    expect(source).toContain("submitResumeReviewEvaluation");
     expect(source).toContain('createFileRoute("/resume-review/$slug/$recordId")');
     expect(source).toContain("<WorkspaceSlugProvider");
     expect(source).toContain("pb-[calc(7rem+env(safe-area-inset-bottom))]");
@@ -120,7 +119,7 @@ describe("TanStack Start studio resumes migration", () => {
   });
 
   it("shows the submitted resume evaluation status instead of disabled action buttons", () => {
-    const source = readSource("routes/resume-review.$slug.$recordId.tsx");
+    const source = readSource("components/features/studio/resumes/resume-evaluation-dialog.tsx");
 
     expect(source).toContain("const hasSubmittedEvaluation");
     expect(source).toContain("describeResumeEvaluationStatus(status)");
