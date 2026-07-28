@@ -33,10 +33,11 @@ const mocks = vi.hoisted(() => ({
   replaceDuplicateMatchesForSource: vi.fn(),
   resolveRecruitingVisibilityScope: vi.fn(),
   resolveResumeUploadStorage: vi.fn(),
-  submitResumeEvaluationOnce: vi.fn(),
+  submitResumeEvaluation: vi.fn(),
   transaction: vi.fn(),
   updatePatches: [] as Record<string, unknown>[],
   updateResumeEvaluationStatus: vi.fn(),
+  updateResumeEvaluationStatusInTransaction: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
@@ -95,9 +96,9 @@ vi.mock(
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation",
   () => ({
-    submitResumeEvaluationOnce: mocks.submitResumeEvaluationOnce,
+    submitResumeEvaluation: mocks.submitResumeEvaluation,
     updateResumeEvaluationStatus: mocks.updateResumeEvaluationStatus,
-    updateResumeEvaluationStatusInTransaction: vi.fn(),
+    updateResumeEvaluationStatusInTransaction: mocks.updateResumeEvaluationStatusInTransaction,
   }),
 );
 vi.mock(
@@ -259,6 +260,10 @@ describe("resumeLibraryRouter behavior", () => {
     mocks.jobDescriptionIdsExist.mockResolvedValue(true);
     mocks.loadHiringUnitById.mockResolvedValue({ id: "unit-1", name: "用人组织" });
     mocks.enqueueResumeReassessmentForRecord.mockResolvedValue("enqueued");
+    mocks.updateResumeEvaluationStatusInTransaction.mockResolvedValue({
+      currentStatus: null,
+      status: "updated",
+    });
     mocks.buildScheduleRows.mockReturnValue([SCHEDULE_ROW]);
     mocks.loadInterviewRoundDetail.mockResolvedValue({ id: SCHEDULE_ROW.id });
     mocks.queryPaginatedResumeRecords.mockResolvedValue({
@@ -423,12 +428,12 @@ describe("resumeLibraryRouter behavior", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
-  it("exposes workspace review data and records a one-time evaluation", async () => {
+  it("exposes workspace review data and records a reviewer evaluation", async () => {
     mocks.loadResumeDetailForAuthenticatedReviewer
       .mockResolvedValueOnce({ id: RECORD_ID, jobDescriptionId: "jd-old" })
       .mockResolvedValueOnce({ id: RECORD_ID, jobDescriptionId: "jd-old" })
       .mockResolvedValueOnce({ id: RECORD_ID, resumeEvaluationStatus: "pass" });
-    mocks.submitResumeEvaluationOnce.mockResolvedValue({ status: "updated" });
+    mocks.submitResumeEvaluation.mockResolvedValue({ status: "updated" });
 
     const detailResponse = await makeApp().request(`/resumes/${RECORD_ID}/review`);
     const evaluationResponse = await makeApp().request(`/resumes/${RECORD_ID}/review/evaluation`, {
@@ -445,7 +450,7 @@ describe("resumeLibraryRouter behavior", () => {
 
     expect(detailResponse.status).toBe(200);
     expect(evaluationResponse.status).toBe(200);
-    expect(mocks.submitResumeEvaluationOnce).toHaveBeenCalledWith({
+    expect(mocks.submitResumeEvaluation).toHaveBeenCalledWith({
       availableTimeSlots: [
         { endAt: "2026-07-12T11:00:00.000Z", startAt: "2026-07-12T10:00:00.000Z" },
       ],
@@ -479,7 +484,30 @@ describe("resumeLibraryRouter behavior", () => {
     await expect(response.json()).resolves.toEqual({
       error: "请先关联在招岗位后再评估。",
     });
-    expect(mocks.submitResumeEvaluationOnce).not.toHaveBeenCalled();
+    expect(mocks.submitResumeEvaluation).not.toHaveBeenCalled();
+  });
+
+  it("rejects another reviewer after an evaluation has passed", async () => {
+    mocks.loadResumeDetailForAuthenticatedReviewer.mockResolvedValue({
+      id: RECORD_ID,
+      jobDescriptionId: "jd-old",
+      resumeEvaluationStatus: "pass",
+    });
+    mocks.submitResumeEvaluation.mockResolvedValue({
+      currentStatus: "pass",
+      status: "already_passed",
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/review/evaluation`, {
+      body: JSON.stringify({ reason: "尝试再次评价", status: "fail" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "该简历已评估通过，不能继续评估。",
+    });
   });
 
   it("rejects the workspace evaluation endpoint when the resume has no linked job", async () => {
@@ -499,6 +527,25 @@ describe("resumeLibraryRouter behavior", () => {
       error: "请先关联在招岗位后再评估。",
     });
     expect(mocks.updateResumeEvaluationStatus).not.toHaveBeenCalled();
+  });
+
+  it("does not let the workspace evaluation endpoint reopen a passed evaluation", async () => {
+    mocks.loadResumeDetail.mockResolvedValue(EXISTING_RECORD);
+    mocks.updateResumeEvaluationStatus.mockResolvedValue({
+      currentStatus: "pass",
+      status: "already_passed",
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/evaluation`, {
+      body: JSON.stringify({ status: "fail" }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "该简历已评估通过，不能继续评估。",
+    });
   });
 
   it("rejects reassessment when the resume has no linked job", async () => {
@@ -787,12 +834,49 @@ describe("resumeLibraryRouter behavior", () => {
     });
   });
 
+  it("rolls back a stale quick-edit submission when another reviewer passes first", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      ...EXISTING_RECORD,
+      resumeEvaluationStatus: "fail",
+    });
+    mocks.updateResumeEvaluationStatusInTransaction.mockResolvedValue({
+      currentStatus: "pass",
+      status: "already_passed",
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: 31,
+        candidateEmail: "new@example.com",
+        candidateName: "新候选人",
+        candidatePhone: "13900000000",
+        gender: "女",
+        hiringUnitId: "unit-1",
+        jobDescriptionId: "jd-old",
+        recommendationText: "推荐给业务负责人",
+        resumeEvaluationStatus: "fail",
+        targetRole: "后端工程师",
+        workYears: 8.5,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "该简历已评估通过，不能继续评估。",
+    });
+    expect(mocks.updatePatches).toHaveLength(0);
+    expect(mocks.recordCandidateActivityInTransaction).not.toHaveBeenCalled();
+  });
+
   it("updates a recommendation for a legacy record without a job or hiring unit", async () => {
     const legacyRecord = {
       ...EXISTING_RECORD,
       hiringUnitId: null,
       jobDescriptionId: null,
       jobDescriptionName: null,
+      resumeEvaluationStatus: null,
     };
     mocks.loadResumeDetail
       .mockResolvedValueOnce(legacyRecord)

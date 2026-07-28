@@ -429,7 +429,7 @@ describe("resume review detail route", () => {
     expect(routeSource).toContain('"/:id/review/evaluation"');
     expect(routeSource).toContain("loadResumeDetailForAuthenticatedReviewer");
     expect(routeSource).not.toContain("loadResumeDetailForWorkspaceMember");
-    expect(routeSource).toContain("submitResumeEvaluationOnce");
+    expect(routeSource).toContain("submitResumeEvaluation");
   });
 
   it("records audit logs for reviewer submission and admin edits", () => {

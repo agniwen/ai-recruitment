@@ -118,12 +118,14 @@ describe("TanStack Start studio resumes migration", () => {
     expect(source).toContain('canUseTimelineRailScroll ? "xl:overflow-hidden" : undefined');
   });
 
-  it("shows the submitted resume evaluation status instead of disabled action buttons", () => {
+  it("keeps fail reviewable while showing pass as the terminal evaluation status", () => {
     const source = readSource("components/features/studio/resumes/resume-evaluation-dialog.tsx");
 
-    expect(source).toContain("const hasSubmittedEvaluation");
     expect(source).toContain("describeResumeEvaluationStatus(status)");
     expect(source).toContain("评估结果");
-    expect(source).toContain("if (hasSubmittedEvaluation) {");
+    expect(source).toContain('if (status === "pass") {');
+    expect(source).toContain('status === "fail"');
+    expect(source).toContain("可继续评估");
+    expect(source).toContain("ResumeEvaluationActions");
   });
 });

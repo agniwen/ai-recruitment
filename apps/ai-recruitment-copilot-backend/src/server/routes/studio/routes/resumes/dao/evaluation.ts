@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { interviewAuditLog, jobDescription, studioInterview } from "@arc/db-schema/schema";
 import type { ResumeEvaluationStatus } from "@arc/shared/studio-resumes";
@@ -13,7 +13,7 @@ export interface ResumeEvaluationAvailableTimeSlot {
 export type ResumeEvaluationMutationResult =
   | { status: "updated"; currentStatus: ResumeEvaluationStatus | null }
   | { status: "unchanged"; currentStatus: ResumeEvaluationStatus | null }
-  | { status: "already_evaluated"; currentStatus: ResumeEvaluationStatus | null }
+  | { status: "already_passed"; currentStatus: "pass" }
   | { status: "not_found" };
 
 async function loadJobDescriptionNames(
@@ -100,7 +100,7 @@ async function insertEvaluationAudit(
   });
 }
 
-export async function submitResumeEvaluationOnce(input: {
+export async function submitResumeEvaluation(input: {
   availableTimeSlots?: ResumeEvaluationAvailableTimeSlot[];
   id: string;
   operatorId: string | null;
@@ -110,7 +110,26 @@ export async function submitResumeEvaluationOnce(input: {
 }): Promise<ResumeEvaluationMutationResult> {
   const now = new Date();
   return await db.transaction(async (tx) => {
-    const [updated] = await tx
+    const [existing] = await tx
+      .select({ resumeEvaluationStatus: studioInterview.resumeEvaluationStatus })
+      .from(studioInterview)
+      .where(
+        and(
+          eq(studioInterview.id, input.id),
+          eq(studioInterview.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1)
+      .for("update", { of: studioInterview });
+
+    if (!existing) {
+      return { status: "not_found" };
+    }
+    if (existing.resumeEvaluationStatus === "pass") {
+      return { currentStatus: "pass", status: "already_passed" };
+    }
+
+    await tx
       .update(studioInterview)
       .set({
         resumeEvaluationStatus: input.status,
@@ -120,35 +139,16 @@ export async function submitResumeEvaluationOnce(input: {
         and(
           eq(studioInterview.id, input.id),
           eq(studioInterview.organizationId, input.organizationId),
-          isNull(studioInterview.resumeEvaluationStatus),
         ),
-      )
-      .returning({ id: studioInterview.id });
-
-    if (!updated) {
-      const [existing] = await tx
-        .select({ resumeEvaluationStatus: studioInterview.resumeEvaluationStatus })
-        .from(studioInterview)
-        .where(
-          and(
-            eq(studioInterview.id, input.id),
-            eq(studioInterview.organizationId, input.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!existing) {
-        return { status: "not_found" };
-      }
-      return {
-        currentStatus: existing.resumeEvaluationStatus,
-        status: "already_evaluated",
-      };
-    }
+      );
 
     await insertEvaluationAudit(tx, {
-      action: "resume_evaluation_submitted",
+      action:
+        existing.resumeEvaluationStatus === null
+          ? "resume_evaluation_submitted"
+          : "resume_evaluation_updated",
       availableTimeSlots: input.availableTimeSlots,
-      fromStatus: null,
+      fromStatus: existing.resumeEvaluationStatus,
       interviewRecordId: input.id,
       operatorId: input.operatorId,
       organizationId: input.organizationId,
@@ -250,10 +250,14 @@ export async function updateResumeEvaluationStatusInTransaction(
         eq(studioInterview.organizationId, input.organizationId),
       ),
     )
-    .limit(1);
+    .limit(1)
+    .for("update", { of: studioInterview });
 
   if (!existing) {
     return { status: "not_found" };
+  }
+  if (existing.resumeEvaluationStatus === "pass") {
+    return { currentStatus: "pass", status: "already_passed" };
   }
   if (existing.resumeEvaluationStatus === input.status) {
     return { currentStatus: input.status, status: "unchanged" };

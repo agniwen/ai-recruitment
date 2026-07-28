@@ -17,6 +17,8 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/client/api", () => ({
+  isApiError: (error: unknown) =>
+    error instanceof Error && "status" in error && typeof error.status === "number",
   submitResumeReviewEvaluation: apiMocks.submitResumeReviewEvaluation,
 }));
 
@@ -123,7 +125,7 @@ describe("ResumeEvaluationDialog", () => {
     act(() => root.unmount());
   });
 
-  it("shows actions only on page details while the resume is unassessed and not closed", () => {
+  it("shows actions on page details until an evaluation passes", () => {
     expect(
       shouldShowResumeEvaluationActions({
         hasJobDescription: true,
@@ -173,7 +175,7 @@ describe("ResumeEvaluationDialog", () => {
         layoutMode: "page",
         status: "fail",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldShowResumeEvaluationActions({
         hasJobDescription: true,
@@ -182,6 +184,57 @@ describe("ResumeEvaluationDialog", () => {
         status: null,
       }),
     ).toBe(false);
+  });
+
+  it("keeps the current fail result visible while allowing another reviewer to evaluate", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient();
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <ResumeReviewEvaluationBar
+            hasJobDescription={true}
+            isLoading={false}
+            recordId="resume-1"
+            status="fail"
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain("评估结果");
+    expect(container.textContent).toContain("不通过");
+    expect(container.textContent).toContain("评估通过");
+    expect(container.textContent).toContain("评估不通过");
+    act(() => root.unmount());
+  });
+
+  it("keeps pass terminal and hides further evaluation actions", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient();
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <ResumeReviewEvaluationBar
+            hasJobDescription={true}
+            isLoading={false}
+            recordId="resume-1"
+            status="pass"
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain("评估结果");
+    expect(container.textContent).toContain("通过");
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    act(() => root.unmount());
   });
 
   it("uses the shared badge tones and emits both evaluation decisions", () => {
@@ -241,6 +294,35 @@ describe("ResumeEvaluationDialog", () => {
     expect(onSubmitted).toHaveBeenCalledWith({ id: "resume-1" });
     expect(onDecisionChange).toHaveBeenCalledWith(null);
 
+    act(() => root.unmount());
+  });
+
+  it("refreshes the detail and closes a stale dialog after another reviewer passes", async () => {
+    apiMocks.submitResumeReviewEvaluation.mockRejectedValue(
+      Object.assign(new Error("该简历已评估通过，不能继续评估。"), { status: 409 }),
+    );
+    const { onDecisionChange, queryClient, root } = renderDialog("fail");
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+
+    const reason = document.querySelector<HTMLTextAreaElement>("#resume-review-evaluation-reason");
+    act(() => {
+      if (reason) {
+        setInputValue(reason, "仍不符合要求");
+      }
+    });
+
+    const submit = [...document.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("提交评估"),
+    );
+    await act(async () => {
+      submit?.click();
+      await Promise.resolve();
+    });
+
+    expect(onDecisionChange).toHaveBeenCalledWith(null);
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["studio-resumes", "workspace-1"],
+    });
     act(() => root.unmount());
   });
 

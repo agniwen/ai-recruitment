@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { submitResumeReviewEvaluation } from "@/lib/client/api";
+import { isApiError, submitResumeReviewEvaluation } from "@/lib/client/api";
 import { dateTimeLocalInputToISOString } from "@/lib/client/datetime-local";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 
@@ -46,8 +46,8 @@ interface ResumeEvaluationDialogProps {
 const EMPTY_TIME_SLOT: TimeSlotFormValue = { endAt: "", startAt: "" };
 
 /**
- * Floating-bar resume pass/fail actions: page layout only, job-bound, unassessed, not closed.
- * 仅在独立详情页 + 已关联岗位 + 尚未评估 + 未结案时展示「评估通过 / 不通过」。
+ * Floating-bar resume pass/fail actions: page layout only, job-bound, not passed, not closed.
+ * 仅在独立详情页 + 已关联岗位 + 尚未评估通过 + 未结案时展示「评估通过 / 不通过」。
  */
 export function shouldShowResumeEvaluationActions(input: {
   hasJobDescription: boolean;
@@ -61,7 +61,7 @@ export function shouldShowResumeEvaluationActions(input: {
   if (input.pipelineStage === "closed") {
     return false;
   }
-  return input.status === null;
+  return input.status === null || input.status === "fail";
 }
 
 export function ResumeEvaluationActions({
@@ -116,6 +116,10 @@ export function ResumeEvaluationDialog({
       status: ResumeEvaluationStatus;
     }) => submitResumeReviewEvaluation(slug, recordId, input),
     onError: (error) => {
+      if (isApiError(error) && error.status === 409) {
+        onDecisionChange(null);
+        void queryClient.invalidateQueries({ queryKey: ["studio-resumes", slug] });
+      }
       toast.error(error instanceof Error ? error.message : "提交评估失败");
     },
     onSuccess: (detail) => {
@@ -300,9 +304,8 @@ export function ResumeReviewEvaluationBar({
   status: ResumeEvaluationStatus | null | undefined;
 }) {
   const [decision, setDecision] = useState<ResumeEvaluationStatus | null>(null);
-  const hasSubmittedEvaluation = status !== null && status !== undefined;
 
-  if (hasSubmittedEvaluation) {
+  if (status === "pass") {
     const meta = describeResumeEvaluationStatus(status);
     return (
       <div className="fixed right-0 bottom-0 left-0 z-20 border-t bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur">
@@ -320,6 +323,13 @@ export function ResumeReviewEvaluationBar({
 
   return (
     <div className="fixed right-0 bottom-0 left-0 z-20 border-t bg-background/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur">
+      {status === "fail" ? (
+        <div className="mx-auto mb-2 flex w-full max-w-md items-center justify-center gap-2 text-sm">
+          <span className="text-muted-foreground">评估结果</span>
+          <Badge variant="danger">不通过</Badge>
+          <span className="text-muted-foreground">可继续评估</span>
+        </div>
+      ) : null}
       <ButtonGroup
         aria-label="简历评估"
         className="mx-auto w-full max-w-md [&>*]:min-w-0 [&>*]:flex-1"

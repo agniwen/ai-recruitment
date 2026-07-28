@@ -383,6 +383,9 @@ export const resumeLibraryRouter = factory
       if (result.status === "not_found") {
         return c.json({ error: "记录不存在。" }, 404);
       }
+      if (result.status === "already_passed") {
+        return c.json({ error: "该简历已评估通过，不能继续评估。" }, 409);
+      }
 
       invalidateStudioInterviewCaches(activeOrg.id);
       const detail = await loadResumeDetail(id, activeOrg.id, visibilityScope);
@@ -486,7 +489,21 @@ export const resumeLibraryRouter = factory
           : {}),
       } satisfies Partial<typeof studioInterview.$inferInsert>;
 
-      await db.transaction(async (tx) => {
+      const evaluationResult = await db.transaction(async (tx) => {
+        if (
+          !jobDescriptionChanged &&
+          (existing.resumeEvaluationStatus !== "pass" || nextEvaluationStatus !== "pass")
+        ) {
+          const result = await updateResumeEvaluationStatusInTransaction(tx, {
+            id,
+            operatorId: c.var.user?.id ?? null,
+            organizationId: activeOrg.id,
+            status: nextEvaluationStatus,
+          });
+          if (result.status === "already_passed") {
+            return result;
+          }
+        }
         await tx
           .update(studioInterview)
           .set(update)
@@ -501,14 +518,6 @@ export const resumeLibraryRouter = factory
             previousEvaluationStatus: existing.resumeEvaluationStatus,
             previousJobDescriptionId: existing.jobDescriptionId,
             previousJobDescriptionName: existing.jobDescriptionName,
-          });
-        }
-        if (!jobDescriptionChanged && nextEvaluationStatus !== existing.resumeEvaluationStatus) {
-          await updateResumeEvaluationStatusInTransaction(tx, {
-            id,
-            operatorId: c.var.user?.id ?? null,
-            organizationId: activeOrg.id,
-            status: nextEvaluationStatus,
           });
         }
         await recordCandidateActivityInTransaction(tx, {
@@ -534,7 +543,11 @@ export const resumeLibraryRouter = factory
           operatorId: c.var.user?.id ?? null,
           organizationId: activeOrg.id,
         });
+        return null;
       });
+      if (evaluationResult?.status === "already_passed") {
+        return c.json({ error: "该简历已评估通过，不能继续评估。" }, 409);
+      }
 
       if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {
         await reassessAfterJobDescriptionChange({
@@ -662,7 +675,21 @@ export const resumeLibraryRouter = factory
           : {}),
       } satisfies Partial<typeof studioInterview.$inferInsert>;
 
-      await db.transaction(async (tx) => {
+      const evaluationResult = await db.transaction(async (tx) => {
+        if (
+          !jobDescriptionChanged &&
+          (existing.resumeEvaluationStatus !== "pass" || nextResumeEvaluationStatus !== "pass")
+        ) {
+          const result = await updateResumeEvaluationStatusInTransaction(tx, {
+            id,
+            operatorId: c.var.user?.id ?? null,
+            organizationId: activeOrg.id,
+            status: nextResumeEvaluationStatus,
+          });
+          if (result.status === "already_passed") {
+            return result;
+          }
+        }
         await tx
           .update(studioInterview)
           .set(update)
@@ -677,17 +704,6 @@ export const resumeLibraryRouter = factory
             previousEvaluationStatus: existing.resumeEvaluationStatus,
             previousJobDescriptionId: existing.jobDescriptionId,
             previousJobDescriptionName: existing.jobDescriptionName,
-          });
-        }
-        if (
-          !jobDescriptionChanged &&
-          nextResumeEvaluationStatus !== existing.resumeEvaluationStatus
-        ) {
-          await updateResumeEvaluationStatusInTransaction(tx, {
-            id,
-            operatorId: c.var.user?.id ?? null,
-            organizationId: activeOrg.id,
-            status: nextResumeEvaluationStatus,
           });
         }
         await recordCandidateActivityInTransaction(tx, {
@@ -713,7 +729,11 @@ export const resumeLibraryRouter = factory
           operatorId: c.var.user?.id ?? null,
           organizationId: activeOrg.id,
         });
+        return null;
       });
+      if (evaluationResult?.status === "already_passed") {
+        return c.json({ error: "该简历已评估通过，不能继续评估。" }, 409);
+      }
 
       if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {
         await reassessAfterJobDescriptionChange({

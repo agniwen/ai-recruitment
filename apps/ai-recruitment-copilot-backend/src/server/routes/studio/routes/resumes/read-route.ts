@@ -19,7 +19,7 @@ import {
   loadResumeDetail,
   queryPaginatedResumeRecords,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
-import { submitResumeEvaluationOnce } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
+import { submitResumeEvaluation } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
 import { loadCandidateTimeline } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/timeline";
 import { listOrgSkillSuggestions } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills";
 import { studioInterviewQuestionClientSchema } from "@arc/db-schema/studio-interviews";
@@ -453,7 +453,7 @@ export const resumeLibraryReadRouter = factory
         return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
       }
       const input = c.req.valid("json");
-      const result = await submitResumeEvaluationOnce({
+      const result = await submitResumeEvaluation({
         availableTimeSlots: input.availableTimeSlots ?? [],
         id,
         operatorId: c.var.user?.id ?? null,
@@ -461,8 +461,8 @@ export const resumeLibraryReadRouter = factory
         reason: input.reason,
         status: input.status,
       });
-      if (result.status === "already_evaluated") {
-        return c.json({ error: "该简历已评估，不能重复评估。" }, 409);
+      if (result.status === "already_passed") {
+        return c.json({ error: "该简历已评估通过，不能继续评估。" }, 409);
       }
       if (result.status === "not_found") {
         return c.json({ error: "记录不存在。" }, 404);
