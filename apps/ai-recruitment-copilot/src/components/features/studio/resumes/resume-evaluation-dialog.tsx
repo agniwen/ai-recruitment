@@ -85,7 +85,7 @@ export function ResumeEvaluationActions({
         评估通过
       </Button>
       <Button
-        className="border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/15 hover:text-rose-700 focus-visible:ring-rose-500/20 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-300 dark:hover:bg-rose-500/20 dark:hover:text-rose-300"
+        className="!border-l border-rose-500/30 bg-rose-500/10 text-rose-700 hover:bg-rose-500/15 hover:text-rose-700 focus-visible:ring-rose-500/20 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-300 dark:hover:bg-rose-500/20 dark:hover:text-rose-300"
         disabled={disabled}
         onClick={() => onDecisionSelect("fail")}
         size="sm"

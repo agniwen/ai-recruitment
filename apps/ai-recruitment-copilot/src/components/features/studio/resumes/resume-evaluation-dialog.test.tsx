@@ -202,6 +202,7 @@ describe("ResumeEvaluationDialog", () => {
     );
     expect(pass?.className).toContain("border-emerald-500/30");
     expect(fail?.className).toContain("border-rose-500/30");
+    expect(fail?.className).toContain("!border-l");
 
     act(() => {
       pass?.click();
