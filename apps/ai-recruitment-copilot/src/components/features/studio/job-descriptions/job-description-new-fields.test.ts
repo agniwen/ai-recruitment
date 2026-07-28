@@ -36,6 +36,7 @@ describe("job description recruiting defaults", () => {
     expect(formSource).toContain('<form.Field name="resumeContact">');
     expect(formSource).toContain("CONTACT_MAX_LENGTH = 500");
     expect(formSource).toContain("AI面试官");
+    expect(formSource).toContain("AI面试官（可选）");
     expect(formSource).toContain('<form.Field name="humanInterviewerIds">');
     expect(formSource).toContain("真人面试官（可选）");
   });

@@ -29,6 +29,7 @@ import {
   deleteJobDescriptionSemanticIndexBestEffort,
   enqueueJobDescriptionIndexJobBestEffort,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/jd-semantic/enqueue";
+import { googleSheetSyncRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/routes/google-sheet-sync/route";
 import { generateJobDescriptionFromPrompt } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/ai-job-description-generate";
 import { generateResumeScreeningPolicyFromJobDescription } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/resume-screening-policy-generate";
 import {
@@ -270,6 +271,7 @@ export const jobDescriptionsRouter = factory
       }
     },
   )
+  .route("/sync-google-sheet", googleSheetSyncRouter)
   .post(
     "/",
     requirePermission("jd", "create"),
@@ -285,10 +287,6 @@ export const jobDescriptionsRouter = factory
       );
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
       const humanInterviewerIds = dedupeInterviewerIds(input.humanInterviewerIds);
-      if (interviewerIds.length === 0) {
-        return c.json({ error: "请至少选择一位面试官。" }, 400);
-      }
-
       const { error: referenceError } = await validateReferences(
         activeOrg.id,
         input.departmentId,
@@ -321,6 +319,7 @@ export const jobDescriptionsRouter = factory
           controlCategory: nullableText(input.controlCategory),
           createdAt: now,
           createdBy: c.var.user?.id ?? null,
+          creationSource: "manual",
           departmentId: input.departmentId,
           description: input.description?.trim() || null,
           expectedOnboardDate: nullableText(input.expectedOnboardDate),
@@ -364,13 +363,15 @@ export const jobDescriptionsRouter = factory
         try {
           await db.transaction(async (tx) => {
             await tx.insert(jobDescription).values(record);
-            await tx.insert(jobDescriptionInterviewer).values(
-              interviewerIds.map((id) => ({
-                createdAt: now,
-                interviewerId: id,
-                jobDescriptionId: record.id,
-              })),
-            );
+            if (interviewerIds.length > 0) {
+              await tx.insert(jobDescriptionInterviewer).values(
+                interviewerIds.map((id) => ({
+                  createdAt: now,
+                  interviewerId: id,
+                  jobDescriptionId: record.id,
+                })),
+              );
+            }
             if (humanInterviewerIds.length > 0) {
               await tx.insert(jobDescriptionHumanInterviewer).values(
                 humanInterviewerIds.map((userId) => ({
@@ -486,10 +487,6 @@ export const jobDescriptionsRouter = factory
         : existing.resumeScreeningPolicyVersion;
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
       const humanInterviewerIds = dedupeInterviewerIds(input.humanInterviewerIds);
-      if (interviewerIds.length === 0) {
-        return c.json({ error: "请至少选择一位面试官。" }, 400);
-      }
-
       const { error } = await validateReferences(
         activeOrg.id,
         input.departmentId,
@@ -555,13 +552,15 @@ export const jobDescriptionsRouter = factory
           await tx
             .delete(jobDescriptionInterviewer)
             .where(eq(jobDescriptionInterviewer.jobDescriptionId, id));
-          await tx.insert(jobDescriptionInterviewer).values(
-            interviewerIds.map((interviewerId) => ({
-              createdAt: now,
-              interviewerId,
-              jobDescriptionId: id,
-            })),
-          );
+          if (interviewerIds.length > 0) {
+            await tx.insert(jobDescriptionInterviewer).values(
+              interviewerIds.map((interviewerId) => ({
+                createdAt: now,
+                interviewerId,
+                jobDescriptionId: id,
+              })),
+            );
+          }
           await tx
             .delete(jobDescriptionHumanInterviewer)
             .where(eq(jobDescriptionHumanInterviewer.jobDescriptionId, id));

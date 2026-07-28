@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultResumeScreeningPolicy, jobDescriptionFormSchema } from "../job-descriptions";
+import {
+  createDefaultResumeScreeningPolicy,
+  jobDescriptionCodeSchema,
+  jobDescriptionFormSchema,
+} from "../job-descriptions";
 
 const baseJobDescription = {
   aiInterviewDisabled: false,
@@ -57,6 +61,20 @@ describe("jobDescriptionFormSchema salary fields", () => {
 });
 
 describe("jobDescriptionFormSchema recruitment demand fields", () => {
+  it("allows a job to be saved without an AI interviewer", () => {
+    const result = jobDescriptionFormSchema.safeParse({
+      ...baseJobDescription,
+      interviewerIds: [],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts Google Sheet REQ codes alongside generated codes", () => {
+    expect(jobDescriptionCodeSchema.parse("REQ-000006")).toBe("REQ-000006");
+    expect(jobDescriptionCodeSchema.parse("AUR202607281230001")).toBe("AUR202607281230001");
+  });
+
   it("accepts the P0 default with no human interviewers", () => {
     const result = jobDescriptionFormSchema.parse(baseJobDescription);
 

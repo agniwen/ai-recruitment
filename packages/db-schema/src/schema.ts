@@ -755,6 +755,10 @@ export const jobDescription = pgTable(
     controlCategory: text("control_category"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    creationSource: text("creation_source")
+      .$type<"manual" | "google_sheets">()
+      .default("manual")
+      .notNull(),
     departmentId: text("department_id")
       .notNull()
       .references(() => department.id, { onDelete: "restrict" }),
@@ -808,6 +812,10 @@ export const jobDescription = pgTable(
     index("job_description_name_idx").on(table.name),
     index("job_description_created_at_idx").on(table.createdAt),
     index("job_description_organization_idx").on(table.organizationId),
+    check(
+      "job_description_creation_source_check",
+      sql`${table.creationSource} IN ('manual', 'google_sheets')`,
+    ),
     check("job_description_priority_check", sql`${table.priority} IN ('P0', 'P1', 'P2')`),
     uniqueIndex("job_description_org_code_uq")
       .on(table.organizationId, table.code)

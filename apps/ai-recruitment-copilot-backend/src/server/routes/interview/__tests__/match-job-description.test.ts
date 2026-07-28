@@ -26,6 +26,7 @@ const jobDescriptions: JobDescriptionListRecord[] = [
     controlCategory: null,
     createdAt: new Date("2026-06-20T00:00:00.000Z"),
     createdBy: "user-1",
+    creationSource: "manual",
     departmentId: "department-1",
     departmentName: "研发部",
     description: "负责 Web 前端研发。",

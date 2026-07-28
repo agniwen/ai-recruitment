@@ -12,7 +12,10 @@ export const jobDescriptionCodeSchema = z
   .string()
   .trim()
   .transform((value) => value.toUpperCase())
-  .refine((value) => value === "" || /^[A-Z0-9]{12,23}$/.test(value), "岗位编码格式无效")
+  .refine(
+    (value) => value === "" || /^[A-Z0-9]{12,23}$/.test(value) || /^REQ-\d{6}$/.test(value),
+    "岗位编码格式无效",
+  )
   .transform((value) => value || undefined)
   .optional();
 
@@ -52,6 +55,8 @@ const nullableTimeSchema = (label: string) =>
 
 export const jobDescriptionPrioritySchema = z.enum(["P0", "P1", "P2"]);
 export type JobDescriptionPriority = z.infer<typeof jobDescriptionPrioritySchema>;
+export const jobDescriptionCreationSourceSchema = z.enum(["manual", "google_sheets"]);
+export type JobDescriptionCreationSource = z.infer<typeof jobDescriptionCreationSourceSchema>;
 
 function validateWorkSchedule(
   value: {
@@ -153,10 +158,7 @@ export const jobDescriptionBaseSchema = z
     gapCount: nullableCountSchema("缺口"),
     headcount: nullableCountSchema("HC"),
     humanInterviewerIds: z.array(z.string().trim().min(1)).max(20),
-    interviewerIds: z
-      .array(z.string().trim().min(1))
-      .min(1, "请至少选择一位面试官")
-      .max(20, "最多只能选择 20 位面试官"),
+    interviewerIds: z.array(z.string().trim().min(1)).max(20, "最多只能选择 20 位面试官"),
     jobLevel: nullableTextSchema(80, "职级"),
     jobSeries: nullableTextSchema(120, "序列"),
     name: z.string().trim().min(1, "请输入岗位名称").max(120, "岗位名称不能超过 120 个字符"),
@@ -205,6 +207,7 @@ export interface JobDescriptionRecord {
   aiInterviewDisabled: boolean;
   code: string | null;
   controlCategory: string | null;
+  creationSource: JobDescriptionCreationSource;
   departmentId: string;
   interviewerIds: string[];
   name: string;
@@ -249,6 +252,30 @@ export interface JobDescriptionListRecord extends JobDescriptionRecord {
   // 非归档候选人 / 简历计数；用于列表"简历关联"列。
   // Non-archived candidate count; powers the "resume association" column.
   resumeCount: number;
+}
+
+export interface JobDescriptionGoogleSheetsSyncSkippedRow {
+  code: string | null;
+  reason: string;
+  rowNumber: number;
+}
+
+export interface JobDescriptionGoogleSheetsSyncWarning {
+  code: string | null;
+  field: string;
+  message: string;
+  rowNumber: number;
+}
+
+export interface JobDescriptionGoogleSheetsSyncResult {
+  departmentsCreated: number;
+  hiringUnitsCreated: number;
+  jobsCreated: number;
+  jobsUnchanged: number;
+  jobsUpdated: number;
+  processedRows: number;
+  skipped: JobDescriptionGoogleSheetsSyncSkippedRow[];
+  warnings: JobDescriptionGoogleSheetsSyncWarning[];
 }
 
 /**

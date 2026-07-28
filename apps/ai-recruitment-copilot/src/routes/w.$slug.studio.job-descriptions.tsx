@@ -62,6 +62,8 @@ import { createAiGeneratedJobDescriptionFormValues } from "@/components/features
 import { JobDescriptionAiCreateDialog } from "@/components/features/studio/job-descriptions/job-description-ai-create-dialog";
 import { JobDescriptionTalentRecommendationsDialog } from "@/components/features/studio/job-descriptions/job-description-talent-recommendations-dialog";
 import { useJobDescriptionDeepLink } from "@/components/features/studio/job-descriptions/use-job-description-deep-link";
+import { JobDescriptionToolbarActions } from "@/components/features/studio/job-descriptions/job-description-management-actions";
+import { jobDescriptionSourceColumn } from "@/components/features/studio/job-descriptions/job-description-source-column";
 import { useHasPermission } from "@/hooks/use-has-permission";
 
 const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
@@ -118,7 +120,14 @@ function JobDescriptionManagementPage({
   const canCreateJobDescription = useHasPermission("jd", "create");
   const canUpdateJobDescription = useHasPermission("jd", "update");
   const canDeleteJobDescription = useHasPermission("jd", "delete");
+  const canCreateHiringUnit = useHasPermission("hiringUnit", "create");
+  const canCreateDepartment = useHasPermission("department", "create");
   const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
+  const canSyncGoogleSheet =
+    canCreateJobDescription &&
+    canUpdateJobDescription &&
+    canCreateHiringUnit &&
+    canCreateDepartment;
 
   const fetchJobDescriptions = useCallback(
     async (params: {
@@ -175,7 +184,7 @@ function JobDescriptionManagementPage({
     queryKeyBase: ["job-descriptions", slug],
   });
 
-  const missingRefs = departments.length === 0 || interviewers.length === 0;
+  const missingRefs = departments.length === 0;
 
   function invalidateJobDescriptionData() {
     grid.invalidate();
@@ -277,6 +286,7 @@ function JobDescriptionManagementPage({
         size: 128,
         title: "部门",
       }),
+      jobDescriptionSourceColumn,
       customColumn<JobDescriptionListRecord>({
         cell: (r) =>
           r.recruitmentStatus ? (
@@ -489,9 +499,9 @@ function JobDescriptionManagementPage({
                   <EmptyMedia variant="icon">
                     <FileTextIcon className="size-5" />
                   </EmptyMedia>
-                  <EmptyTitle>请先创建部门和面试官</EmptyTitle>
+                  <EmptyTitle>请先创建或同步部门</EmptyTitle>
                   <EmptyDescription>
-                    在招岗位需要同时指定部门和面试官，先去对应页面完成配置。
+                    在招岗位必须属于一个部门；AI 面试官可以稍后再配置。
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -538,31 +548,17 @@ function JobDescriptionManagementPage({
           filters={filtersConfig}
           getRowId={(r) => r.id}
           toolbarRight={
-            canCreateJobDescription ? (
-              <ButtonGroup className="flex-1 sm:flex-none">
-                <Button
-                  className="flex-1 sm:flex-none"
-                  disabled={missingRefs}
-                  onClick={() => {
-                    setCreateDraft(null);
-                    crud.openCreate();
-                  }}
-                >
-                  <PlusIcon className="size-4" />
-                  新建在招岗位
-                </Button>
-                <Button
-                  aria-label="AI 创建在招岗位"
-                  disabled={missingRefs}
-                  onClick={() => setAiCreateOpen(true)}
-                  size="icon"
-                  title="AI 创建在招岗位"
-                  type="button"
-                >
-                  <SparklesIcon className="size-4" />
-                </Button>
-              </ButtonGroup>
-            ) : null
+            <JobDescriptionToolbarActions
+              canCreate={canCreateJobDescription}
+              canSync={canSyncGoogleSheet}
+              missingDepartment={missingRefs}
+              onAiCreate={() => setAiCreateOpen(true)}
+              onCreate={() => {
+                setCreateDraft(null);
+                crud.openCreate();
+              }}
+              onSynced={invalidateJobDescriptionData}
+            />
           }
         />
       </div>

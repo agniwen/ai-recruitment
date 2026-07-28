@@ -699,6 +699,9 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.22.4
+      undici:
+        specifier: ^7.28.0
+        version: 7.28.0
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -10383,10 +10386,6 @@ packages:
     resolution: {integrity: sha512-YmfV3YnEDzXRC5lZ2jWtWWHKGUm1zIt8AhesR1tens+HTNv+YZlN/dp6G727LOvMJ8xjP9Be7Y2Sdr96LDm+pg==}
     engines: {node: '>=18.17'}
 
-  undici@7.25.0:
-    resolution: {integrity: sha512-xXnp4kTyor2Zq+J1FfPI6Eq3ew5h6Vl0F/8d9XU5zZQf1tX9s2Su1/3PiMmUANFULpmksxkClamIZcaUqryHsQ==}
-    engines: {node: '>=20.18.1'}
-
   undici@7.28.0:
     resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
     engines: {node: '>=20.18.1'}
@@ -12051,7 +12050,7 @@ snapshots:
       open: 8.4.2
       picomatch: 4.0.5
       systeminformation: 5.31.16
-      undici: 7.25.0
+      undici: 7.28.0
       which: 4.0.0
       yocto-spinner: 1.2.1
 
@@ -21229,8 +21228,6 @@ snapshots:
   undici-types@7.16.0: {}
 
   undici@6.27.0: {}
-
-  undici@7.25.0: {}
 
   undici@7.28.0: {}
 

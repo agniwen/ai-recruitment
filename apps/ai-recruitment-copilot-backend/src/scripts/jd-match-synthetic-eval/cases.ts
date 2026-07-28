@@ -18,6 +18,7 @@ function job(input: {
     controlCategory: null,
     createdAt: SYNTHETIC_TIME,
     createdBy: null,
+    creationSource: "manual",
     departmentId: `department-${input.id}`,
     departmentName: input.departmentName,
     description: input.description,

@@ -69,17 +69,34 @@ function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
     aiInterviewDisabled: record.aiInterviewDisabled,
     allowCrossDepartmentInterviewers: record.allowCrossDepartmentInterviewers,
     code: record.code ?? "",
+    controlCategory: record.controlCategory,
     departmentId: record.departmentId,
     description: record.description ?? "",
+    expectedOnboardDate: record.expectedOnboardDate,
+    gapCount: record.gapCount,
+    headcount: record.headcount,
     humanInterviewerIds: [...record.humanInterviewerIds],
     interviewerIds: [...record.interviewerIds],
+    jobLevel: record.jobLevel,
+    jobSeries: record.jobSeries,
     name: record.name,
+    notes: record.notes,
+    offeredPendingOnboardCount: record.offeredPendingOnboardCount,
+    onboardedCount: record.onboardedCount,
     priority: record.priority,
     prompt: record.prompt,
+    recruitmentStatus: record.recruitmentStatus,
+    requestedDate: record.requestedDate,
     requester: record.requester ?? "",
     resumeContact: record.resumeContact ?? "",
     resumeScreeningPolicy: record.resumeScreeningPolicy,
+    salaryCurrency: record.salaryCurrency,
+    salaryMaxAmount: record.salaryMaxAmount,
+    salaryMinAmount: record.salaryMinAmount,
+    serviceUnit: record.serviceUnit,
+    sourceSheet: record.sourceSheet,
     workEndTime: record.workEndTime ?? "",
+    workLocation: record.workLocation,
     workStartTime: record.workStartTime ?? "",
     workTimezone: record.workTimezone ?? "",
   };
@@ -196,17 +213,34 @@ export function JobDescriptionFormDialog({
         aiInterviewDisabled: value.aiInterviewDisabled,
         allowCrossDepartmentInterviewers: value.allowCrossDepartmentInterviewers,
         code: value.code?.trim() || undefined,
+        controlCategory: value.controlCategory?.trim() || null,
         departmentId: value.departmentId,
         description: value.description?.trim() || "",
+        expectedOnboardDate: value.expectedOnboardDate?.trim() || null,
+        gapCount: value.gapCount ?? null,
+        headcount: value.headcount ?? null,
         humanInterviewerIds: value.humanInterviewerIds,
         interviewerIds: value.interviewerIds,
+        jobLevel: value.jobLevel?.trim() || null,
+        jobSeries: value.jobSeries?.trim() || null,
         name: value.name.trim(),
+        notes: value.notes?.trim() || null,
+        offeredPendingOnboardCount: value.offeredPendingOnboardCount ?? null,
+        onboardedCount: value.onboardedCount ?? null,
         priority: value.priority,
         prompt: value.prompt.trim(),
+        recruitmentStatus: value.recruitmentStatus?.trim() || null,
+        requestedDate: value.requestedDate?.trim() || null,
         requester: value.requester?.trim() || null,
         resumeContact: value.resumeContact?.trim() || null,
         resumeScreeningPolicy: value.resumeScreeningPolicy,
+        salaryCurrency: value.salaryCurrency?.trim() || null,
+        salaryMaxAmount: value.salaryMaxAmount ?? null,
+        salaryMinAmount: value.salaryMinAmount ?? null,
+        serviceUnit: value.serviceUnit?.trim() || null,
+        sourceSheet: value.sourceSheet?.trim() || null,
         workEndTime: value.workEndTime?.trim() || null,
+        workLocation: value.workLocation?.trim() || null,
         workStartTime: value.workStartTime?.trim() || null,
         workTimezone: value.workTimezone?.trim() || null,
       };
@@ -286,7 +320,7 @@ export function JobDescriptionFormDialog({
     }
   }, [open, form, resolvedInitialValues]);
 
-  const missingRefs = departments.length === 0 || interviewers.length === 0;
+  const missingRefs = departments.length === 0;
 
   async function handleGenerateCode() {
     setIsGeneratingCode(true);
@@ -353,7 +387,7 @@ export function JobDescriptionFormDialog({
         open={open}
         onOpenChange={onOpenChange}
         title={isEdit ? "编辑在招岗位" : "新建在招岗位"}
-        description="为在招岗位指定部门和面试官，prompt 在面试时会传给语音 agent。"
+        description="为在招岗位指定部门；可选的面试官和 prompt 会在面试时传给语音 agent。"
         size="xl"
         headerExtra={
           <TabsList className="mt-2">
@@ -713,9 +747,7 @@ export function JobDescriptionFormDialog({
                           className="md:col-span-2"
                           data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}
                         >
-                          <FieldLabel>
-                            AI面试官 <span className="text-destructive">*</span>
-                          </FieldLabel>
+                          <FieldLabel>AI面试官（可选）</FieldLabel>
                           <FieldContent className="gap-2">
                             <SearchableMultiSelect
                               emptyMessage="没有匹配的 AI面试官"

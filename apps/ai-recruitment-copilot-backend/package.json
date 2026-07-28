@@ -79,6 +79,7 @@
     "react-dom": "catalog:",
     "resend": "^6.12.3",
     "tsx": "^4.21.0",
+    "undici": "^7.28.0",
     "zod": "catalog:"
   },
   "devDependencies": {
