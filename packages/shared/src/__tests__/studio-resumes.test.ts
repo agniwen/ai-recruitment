@@ -10,6 +10,7 @@ import {
   getResumeInterviewGateReason,
   resumeEvaluationStatusSchema,
   resumeEvaluationUpdateSchema,
+  resumeIdentityUpdateSchema,
   resumeLibraryEditFormSchema,
   resumeLibraryFormSchema,
 } from "../studio-resumes";
@@ -61,6 +62,49 @@ describe("resumeLibraryEditFormSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues[0]?.message).toBe("请填写候选人姓名");
+    }
+  });
+});
+
+describe("resumeIdentityUpdateSchema", () => {
+  const validIdentity = {
+    age: 31,
+    candidateEmail: "",
+    candidateName: "郭靖",
+    candidatePhone: "",
+    gender: "",
+    hiringUnitId: "unit-1",
+    jobDescriptionId: "jd-1",
+    resumeEvaluationStatus: "unreviewed",
+    targetRole: "后端工程师",
+    workYears: 8,
+  };
+
+  it("accepts editable hiring unit and target role fields", () => {
+    const result = resumeIdentityUpdateSchema.safeParse(validIdentity);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.hiringUnitId).toBe("unit-1");
+      expect(result.data.targetRole).toBe("后端工程师");
+    }
+  });
+
+  it("requires an integer age when age is provided", () => {
+    expect(resumeIdentityUpdateSchema.safeParse({ ...validIdentity, age: 31.5 }).success).toBe(
+      false,
+    );
+    expect(resumeIdentityUpdateSchema.safeParse({ ...validIdentity, age: "31" }).success).toBe(
+      false,
+    );
+  });
+
+  it("requires a hiring unit for quick edits", () => {
+    const result = resumeIdentityUpdateSchema.safeParse({ ...validIdentity, hiringUnitId: "" });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe("请选择用人组织");
     }
   });
 });

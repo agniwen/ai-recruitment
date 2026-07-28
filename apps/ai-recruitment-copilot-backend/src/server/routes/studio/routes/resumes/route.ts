@@ -48,6 +48,7 @@ import {
   jobDescriptionIdsExist,
   loadJobDescriptionById,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
+import { loadHiringUnitById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao";
 import { createResumeRecordFromStorage } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/create-from-storage";
 import { syncResumeProfileIdentity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/profile-sync";
 import {
@@ -382,9 +383,15 @@ export const resumeLibraryRouter = factory
       }
 
       const input = c.req.valid("json");
-      const ok = await jobDescriptionIdsExist([input.jobDescriptionId], activeOrg.id);
-      if (!ok) {
+      const [jobDescriptionExists, hiringUnit] = await Promise.all([
+        jobDescriptionIdsExist([input.jobDescriptionId], activeOrg.id),
+        loadHiringUnitById(input.hiringUnitId, activeOrg.id),
+      ]);
+      if (!jobDescriptionExists) {
         return c.json({ error: "所选在招岗位不存在。" }, 400);
+      }
+      if (!hiringUnit) {
+        return c.json({ error: "所选用人组织不存在。" }, 400);
       }
 
       const nextJobDescriptionId = input.jobDescriptionId;
@@ -394,7 +401,7 @@ export const resumeLibraryRouter = factory
         : null;
 
       // Mirror identity into resumeProfile JSON when a structured profile exists.
-      // Table: candidateName/email/phone/targetRole/jobDescriptionId
+      // Table: candidateName/email/phone/hiringUnitId/targetRole/jobDescriptionId
       // JSON: name/email/phone/gender/age/workYears/targetRoles
       const resumeProfile = syncResumeProfileIdentity(existing.resumeProfile, {
         age: input.age,
@@ -402,7 +409,7 @@ export const resumeLibraryRouter = factory
         candidateName: input.candidateName,
         candidatePhone: input.candidatePhone,
         gender: input.gender,
-        targetRole: input.targetRole || existing.targetRole || "",
+        targetRole: input.targetRole,
         workYears: input.workYears,
       });
       const now = new Date();
@@ -410,9 +417,9 @@ export const resumeLibraryRouter = factory
         candidateEmail: input.candidateEmail || null,
         candidateName: input.candidateName,
         candidatePhone: input.candidatePhone || null,
+        hiringUnitId: input.hiringUnitId,
         jobDescriptionId: nextJobDescriptionId,
-        targetRole:
-          input.targetRole || resumeProfile?.targetRoles[0] || existing.targetRole || null,
+        targetRole: input.targetRole || resumeProfile?.targetRoles[0] || null,
         updatedAt: now,
         ...(resumeProfile ? { resumeProfile } : {}),
         ...(jobDescriptionChanged
@@ -509,6 +516,14 @@ export const resumeLibraryRouter = factory
           return c.json({ error: "所选在招岗位不存在。" }, 400);
         }
       }
+      const { hiringUnitId } = input.data;
+      if (!hiringUnitId) {
+        return c.json({ error: "请选择用人组织。" }, 400);
+      }
+      const hiringUnit = await loadHiringUnitById(hiringUnitId, activeOrg.id);
+      if (!hiringUnit) {
+        return c.json({ error: "所选用人组织不存在。" }, 400);
+      }
       const nextJobDescriptionId = input.data.jobDescriptionId || null;
       const jobDescriptionChanged = existing.jobDescriptionId !== nextJobDescriptionId;
       const nextJobDescription =
@@ -533,7 +548,7 @@ export const resumeLibraryRouter = factory
         candidateEmail: input.data.candidateEmail || null,
         candidateName: input.data.candidateName || resumeProfile?.name || existing.candidateName,
         candidatePhone: input.data.candidatePhone || resumeProfile?.phone || null,
-        hiringUnitId: input.data.hiringUnitId,
+        hiringUnitId,
         hrResumeAssessment: nextHrResumeAssessment,
         ...(hrAssessmentChanged
           ? {

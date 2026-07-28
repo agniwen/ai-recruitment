@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   listCandidateRounds: vi.fn(),
   listDuplicateMatchesForSource: vi.fn(),
   loadCandidateTimeline: vi.fn(),
+  loadHiringUnitById: vi.fn(),
   loadInterviewRoundDetail: vi.fn(),
   loadJobDescriptionById: vi.fn(),
   loadOrCreateActiveInterviewContextSnapshot: vi.fn(),
@@ -164,6 +165,9 @@ vi.mock(
     loadJobDescriptionById: mocks.loadJobDescriptionById,
   }),
 );
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao", () => ({
+  loadHiringUnitById: mocks.loadHiringUnitById,
+}));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/create-from-storage",
   () => ({ createResumeRecordFromStorage: mocks.createResumeRecordFromStorage }),
@@ -243,6 +247,7 @@ describe("resumeLibraryRouter behavior", () => {
     mocks.resolveRecruitingVisibilityScope.mockResolvedValue({ kind: "all" });
     mocks.resolveResumeUploadStorage.mockResolvedValue(null);
     mocks.jobDescriptionIdsExist.mockResolvedValue(true);
+    mocks.loadHiringUnitById.mockResolvedValue({ id: "unit-1", name: "用人组织" });
     mocks.enqueueResumeReassessmentForRecord.mockResolvedValue("enqueued");
     mocks.buildScheduleRows.mockReturnValue([SCHEDULE_ROW]);
     mocks.loadInterviewRoundDetail.mockResolvedValue({ id: SCHEDULE_ROW.id });
@@ -568,6 +573,7 @@ describe("resumeLibraryRouter behavior", () => {
         candidateName: "候选人",
         candidatePhone: "",
         gender: "",
+        hiringUnitId: "unit-1",
         jobDescriptionId: "jd-new",
         resumeEvaluationStatus: "pass",
         targetRole: "",
@@ -624,6 +630,7 @@ describe("resumeLibraryRouter behavior", () => {
         candidateName: "新候选人",
         candidatePhone: "13900000000",
         gender: "女",
+        hiringUnitId: "unit-2",
         jobDescriptionId: "jd-old",
         resumeEvaluationStatus: "pass",
         targetRole: "后端工程师",
@@ -639,14 +646,70 @@ describe("resumeLibraryRouter behavior", () => {
         candidateEmail: "new@example.com",
         candidateName: "新候选人",
         candidatePhone: "13900000000",
+        hiringUnitId: "unit-2",
         jobDescriptionId: "jd-old",
         targetRole: "后端工程师",
       }),
     );
     const [updatePatch] = mocks.updatePatches;
-    expect(updatePatch).not.toHaveProperty("hiringUnitId");
     expect(updatePatch).not.toHaveProperty("hrResumeAssessment");
     expect(updatePatch).not.toHaveProperty("recommendationText");
+  });
+
+  it("rejects an overview hiring unit outside the active organization", async () => {
+    mocks.loadResumeDetail.mockResolvedValue(EXISTING_RECORD);
+    mocks.loadHiringUnitById.mockResolvedValue(null);
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: 31,
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: "unit-other-org",
+        jobDescriptionId: "jd-old",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        workYears: 8,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "所选用人组织不存在。" });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("allows overview quick edit to clear the target role", async () => {
+    mocks.loadResumeDetail
+      .mockResolvedValueOnce({ ...EXISTING_RECORD, targetRole: "旧目标岗位" })
+      .mockResolvedValueOnce({ ...EXISTING_RECORD, targetRole: null });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: null,
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: "unit-1",
+        jobDescriptionId: "jd-old",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        workYears: null,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        targetRole: null,
+      }),
+    );
   });
 
   it("cleans semantic and duplicate state after deleting a resume", async () => {

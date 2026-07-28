@@ -654,6 +654,7 @@ export const resumeIdentityUpdateSchema = z.object({
     .max(120, "候选人姓名不能超过 120 个字符"),
   candidatePhone: z.string().trim().max(40, "联系电话不能超过 40 个字符"),
   gender: z.string().trim().max(40),
+  hiringUnitId: resumeLibraryRequiredHiringUnitIdSchema,
   jobDescriptionId: z.string().trim().min(1, "请选择关联在招岗位").max(100, "关联在招岗位无效"),
   resumeEvaluationStatus: resumeEvaluationStatusFormValueSchema,
   targetRole: z.string().trim().max(120, "目标岗位不能超过 120 个字符"),

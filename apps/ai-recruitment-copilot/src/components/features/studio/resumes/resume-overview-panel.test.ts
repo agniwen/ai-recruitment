@@ -24,9 +24,19 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(source).toContain("updateStudioResumeIdentity");
     expect(source).toContain('aria-label="编辑候选人信息"');
     expect(source).toContain('<SelectItem value="unreviewed">未评估</SelectItem>');
-    expect(source.match(/label="目标岗位"/g)).toHaveLength(2);
-    expect(source.match(/label="用人组织"/g)).toHaveLength(2);
+    expect(source).toContain('htmlFor="overview-target-role">目标岗位');
+    expect(source).toContain('htmlFor="overview-hiring-unit"');
+    expect(source).toContain('<DataField label="目标岗位"');
+    expect(source).toContain('<DataField label="用人组织"');
     expect(source).toContain("detail.recommendationText");
+  });
+
+  it("edits the hiring unit and target role and uses a number-only age input", () => {
+    expect(source).toContain('id="overview-hiring-unit"');
+    expect(source).toContain('id="overview-target-role"');
+    expect(source).toContain("hiringUnitId: draft.hiringUnitId");
+    expect(source).toContain("targetRole: draft.targetRole.trim()");
+    expect(source).toMatch(/id="overview-age"[\s\S]*?type="number"/);
   });
 
   it("keeps AI parsed review out of the overview summary area", () => {

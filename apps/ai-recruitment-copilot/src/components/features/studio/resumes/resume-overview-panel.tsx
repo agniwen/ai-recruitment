@@ -24,7 +24,7 @@ import {
   resumeReviewBiasCategoryLabel,
 } from "@arc/shared/resume-review";
 import { IconCheck, IconPencil, IconX } from "@tabler/icons-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { Field, FieldContent, FieldError, FieldLabel } from "@/components/ui/field";
 import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/ui/frame";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -48,7 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateStudioResumeIdentity } from "@/lib/client/api";
+import { fetchSelectableHiringUnits, updateStudioResumeIdentity } from "@/lib/client/api";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { cn } from "@arc/shared/utils";
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from "recharts";
@@ -566,8 +567,10 @@ interface OverviewIdentityDraft {
   candidateName: string;
   candidatePhone: string;
   gender: string;
+  hiringUnitId: string;
   jobDescriptionId: string;
   resumeEvaluationStatus: "fail" | "pass" | "unreviewed";
+  targetRole: string;
   workYears: string;
 }
 
@@ -581,8 +584,10 @@ function toOverviewIdentityDraft(detail: ResumeLibraryDetail): OverviewIdentityD
     candidateName: detail.candidateName || profile?.name || "",
     candidatePhone: detail.candidatePhone ?? profile?.phone ?? "",
     gender: profile?.gender ?? "",
+    hiringUnitId: detail.hiringUnitId ?? "",
     jobDescriptionId: detail.jobDescriptionId ?? "",
     resumeEvaluationStatus: detail.resumeEvaluationStatus ?? "unreviewed",
+    targetRole: detail.targetRole ?? "",
     workYears:
       profile?.workYears === null || profile?.workYears === undefined
         ? ""
@@ -615,8 +620,19 @@ function ResumeOverviewCandidateInfoSection({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<OverviewIdentityDraft>(() => toOverviewIdentityDraft(detail));
   const [saving, setSaving] = useState(false);
+  const [hiringUnitError, setHiringUnitError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [jdError, setJdError] = useState<string | null>(null);
+  const hiringUnitsQuery = useQuery({
+    enabled: editing && Boolean(slug),
+    queryFn: () => (slug ? fetchSelectableHiringUnits(slug) : Promise.resolve([])),
+    queryKey: ["hiring-units", slug, "selectable"],
+    refetchOnWindowFocus: false,
+  });
+  const hiringUnitOptions = (hiringUnitsQuery.data ?? []).map((unit) => ({
+    label: unit.name,
+    value: unit.id,
+  }));
 
   // Match 招聘台列表 card 编辑按钮：resumeLibrary:update（via canEdit）+ 解析 ready。
   const showEdit = Boolean(canEdit && slug && canEditResumeRecord(detail.resumeParseStatus));
@@ -628,6 +644,7 @@ function ResumeOverviewCandidateInfoSection({
   useEffect(() => {
     if (!editing) {
       setDraft(toOverviewIdentityDraft(detail));
+      setHiringUnitError(null);
       setNameError(null);
       setJdError(null);
     }
@@ -638,6 +655,7 @@ function ResumeOverviewCandidateInfoSection({
     if (!showEdit && editing) {
       setEditing(false);
       setDraft(toOverviewIdentityDraft(detail));
+      setHiringUnitError(null);
       setNameError(null);
       setJdError(null);
     }
@@ -645,6 +663,7 @@ function ResumeOverviewCandidateInfoSection({
 
   function handleCancel() {
     setDraft(toOverviewIdentityDraft(detail));
+    setHiringUnitError(null);
     setNameError(null);
     setJdError(null);
     setEditing(false);
@@ -663,6 +682,10 @@ function ResumeOverviewCandidateInfoSection({
       setJdError("请选择关联在招岗位");
       return;
     }
+    if (!draft.hiringUnitId.trim()) {
+      setHiringUnitError("请选择用人组织");
+      return;
+    }
     const email = draft.candidateEmail.trim();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       toast.error("请输入有效邮箱");
@@ -670,8 +693,8 @@ function ResumeOverviewCandidateInfoSection({
     }
     const age = parseOptionalNumber(draft.age);
     const workYears = parseOptionalNumber(draft.workYears);
-    if (draft.age.trim() && age === null) {
-      toast.error("年龄请输入有效数字");
+    if (draft.age.trim() && (age === null || !Number.isInteger(age))) {
+      toast.error("年龄请输入整数");
       return;
     }
     if (draft.workYears.trim() && workYears === null) {
@@ -679,6 +702,7 @@ function ResumeOverviewCandidateInfoSection({
       return;
     }
 
+    setHiringUnitError(null);
     setNameError(null);
     setJdError(null);
     setSaving(true);
@@ -692,10 +716,10 @@ function ResumeOverviewCandidateInfoSection({
           candidateName: name,
           candidatePhone: draft.candidatePhone.trim(),
           gender: draft.gender.trim(),
+          hiringUnitId: draft.hiringUnitId,
           jobDescriptionId: draft.jobDescriptionId.trim(),
           resumeEvaluationStatus: draft.resumeEvaluationStatus,
-          // Keep existing target role (not shown in this section).
-          targetRole: detail.targetRole ?? "",
+          targetRole: draft.targetRole.trim(),
           workYears,
         };
         await updateStudioResumeIdentity(slug, detail.id, payload);
@@ -725,7 +749,7 @@ function ResumeOverviewCandidateInfoSection({
           <Button
             aria-label="保存"
             className="size-7"
-            disabled={saving}
+            disabled={saving || hiringUnitsQuery.isLoading}
             onClick={() => void handleSave()}
             size="icon-sm"
             type="button"
@@ -783,7 +807,19 @@ function ResumeOverviewCandidateInfoSection({
               {nameError ? <FieldError errors={[{ message: nameError }]} /> : null}
             </FieldContent>
           </Field>
-          <DataField label="目标岗位" value={detail.targetRole} valueClassName="font-medium" />
+          <Field>
+            <FieldLabel htmlFor="overview-target-role">目标岗位</FieldLabel>
+            <Input
+              className="h-8"
+              disabled={saving}
+              id="overview-target-role"
+              maxLength={120}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, targetRole: event.target.value }))
+              }
+              value={draft.targetRole}
+            />
+          </Field>
           <div>
             <JobDescriptionSelectField
               disabled={saving}
@@ -797,7 +833,28 @@ function ResumeOverviewCandidateInfoSection({
               value={draft.jobDescriptionId}
             />
           </div>
-          <DataField label="用人组织" value={detail.hiringUnitName} />
+          <Field data-invalid={hiringUnitError ? true : undefined}>
+            <FieldLabel htmlFor="overview-hiring-unit">
+              用人组织 <span className="text-destructive">*</span>
+            </FieldLabel>
+            <FieldContent className="gap-1">
+              <SearchableSelect
+                disabled={saving || hiringUnitsQuery.isLoading}
+                emptyMessage="暂无可选用人组织"
+                id="overview-hiring-unit"
+                invalid={Boolean(hiringUnitError)}
+                onChange={(next) => {
+                  setDraft((current) => ({ ...current, hiringUnitId: next ?? "" }));
+                  setHiringUnitError(null);
+                }}
+                options={hiringUnitOptions}
+                placeholder={hiringUnitsQuery.isLoading ? "加载用人组织..." : "请选择用人组织"}
+                searchPlaceholder="搜索用人组织..."
+                value={draft.hiringUnitId || null}
+              />
+              {hiringUnitError ? <FieldError errors={[{ message: hiringUnitError }]} /> : null}
+            </FieldContent>
+          </Field>
           <Field>
             <FieldLabel htmlFor="overview-resume-evaluation">简历评估</FieldLabel>
             <Select
@@ -839,7 +896,11 @@ function ResumeOverviewCandidateInfoSection({
               id="overview-age"
               disabled={saving}
               inputMode="numeric"
+              max={120}
+              min={0}
               onChange={(event) => setDraft((current) => ({ ...current, age: event.target.value }))}
+              step={1}
+              type="number"
               value={draft.age}
             />
           </Field>
