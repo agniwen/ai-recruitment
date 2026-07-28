@@ -26,7 +26,6 @@ import type {
   JobDescriptionMetrics,
   JobDescriptionRecord,
 } from "@arc/shared/job-descriptions";
-import { createDefaultResumeScreeningPolicy } from "@arc/shared/job-descriptions";
 import type { PaginatedJobDescriptionResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { JobDescriptionCharts } from "@/components/features/studio/job-descriptions/job-description-charts";
 import { ScopedResumesModal } from "@/components/features/studio/scoped-resumes-modal";
@@ -59,6 +58,7 @@ import {
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { JobDescriptionFormDialog } from "@/components/features/studio/job-descriptions/job-description-form-dialog";
+import { createAiGeneratedJobDescriptionFormValues } from "@/components/features/studio/job-descriptions/job-description-form-values";
 import { JobDescriptionAiCreateDialog } from "@/components/features/studio/job-descriptions/job-description-ai-create-dialog";
 import { JobDescriptionTalentRecommendationsDialog } from "@/components/features/studio/job-descriptions/job-description-talent-recommendations-dialog";
 import { useJobDescriptionDeepLink } from "@/components/features/studio/job-descriptions/use-job-description-deep-link";
@@ -223,40 +223,14 @@ function JobDescriptionManagementPage({
     if (!canCreateJobDescription) {
       return;
     }
-    setCreateDraft({
-      aiInterviewDisabled: false,
-      allowCrossDepartmentInterviewers: false,
-      controlCategory: null,
-      departmentId,
-      description,
-      expectedOnboardDate: null,
-      gapCount: null,
-      headcount: null,
-      humanInterviewerIds: [],
-      interviewerIds: [],
-      jobLevel: null,
-      jobSeries: null,
-      name,
-      notes: null,
-      offeredPendingOnboardCount: null,
-      onboardedCount: null,
-      priority: "P0",
-      prompt,
-      recruitmentStatus: null,
-      requestedDate: null,
-      requester: null,
-      resumeContact: null,
-      resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
-      salaryCurrency: null,
-      salaryMaxAmount: null,
-      salaryMinAmount: null,
-      serviceUnit: null,
-      sourceSheet: null,
-      workEndTime: null,
-      workLocation: null,
-      workStartTime: null,
-      workTimezone: null,
-    });
+    setCreateDraft(
+      createAiGeneratedJobDescriptionFormValues({
+        departmentId,
+        description,
+        name,
+        prompt,
+      }),
+    );
     setCreateDraftSessionId((id) => id + 1);
     crud.setEditingRecord(null);
     crud.setFormDialogOpen(true);

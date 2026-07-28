@@ -6,10 +6,7 @@ import type { CandidateFormTemplateListRecord } from "@arc/db-schema/candidate-f
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import type { InterviewQuestionTemplateListRecord } from "@arc/db-schema/interview-question-templates";
-import {
-  createDefaultResumeScreeningPolicy,
-  jobDescriptionFormSchema,
-} from "@arc/shared/job-descriptions";
+import { jobDescriptionFormSchema } from "@arc/shared/job-descriptions";
 import type { JobDescriptionFormValues, JobDescriptionRecord } from "@arc/shared/job-descriptions";
 import type { ResumeScreeningPolicy } from "@arc/shared/resume-screening";
 import {
@@ -58,6 +55,7 @@ import {
   LinkedInterviewQuestionTemplatesList,
 } from "./job-description-linked-resources";
 import { useWorkspaceInterviewerMembers } from "../use-workspace-interviewer-members";
+import { createJobDescriptionFormValues } from "./job-description-form-values";
 
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -65,27 +63,6 @@ const CONTACT_MAX_LENGTH = 500;
 const PROMPT_MAX_LENGTH = 10_000;
 
 type JobDescriptionFormTab = "basic" | "screening" | "interview-questions" | "forms";
-
-export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
-  return {
-    aiInterviewDisabled: false,
-    allowCrossDepartmentInterviewers: false,
-    code: "",
-    departmentId: "",
-    description: "",
-    humanInterviewerIds: [],
-    interviewerIds: [],
-    name: "",
-    priority: "P0",
-    prompt: "",
-    requester: "",
-    resumeContact: "",
-    resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
-    workEndTime: "",
-    workStartTime: "",
-    workTimezone: "",
-  };
-}
 
 function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
   return {
@@ -159,7 +136,7 @@ export function JobDescriptionFormDialog({
     if (initialDraft) {
       return initialDraft;
     }
-    return emptyJobDescriptionFormValues();
+    return createJobDescriptionFormValues();
   }, [initialDraft, interviewers, record]);
 
   const { data: linkedForms = [], isLoading: isFormsLoading } = useQuery({

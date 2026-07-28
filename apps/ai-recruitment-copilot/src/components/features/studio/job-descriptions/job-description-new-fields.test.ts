@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import {
+  createAiGeneratedJobDescriptionFormValues,
+  createJobDescriptionFormValues,
+} from "./job-description-form-values";
 
 const formSource = readFileSync(
   new URL("job-description-form-dialog.tsx", import.meta.url),
@@ -34,6 +38,25 @@ describe("job description recruiting defaults", () => {
     expect(formSource).toContain("AI面试官");
     expect(formSource).toContain('<form.Field name="humanInterviewerIds">');
     expect(formSource).toContain("真人面试官（可选）");
+  });
+
+  it("disables AI interviews by default for every new-job entry point", () => {
+    expect(createJobDescriptionFormValues().aiInterviewDisabled).toBe(true);
+    const aiDraft = createAiGeneratedJobDescriptionFormValues({
+      departmentId: "department-1",
+      description: "岗位描述",
+      name: "前端工程师",
+      prompt: "岗位要求",
+    });
+    expect(aiDraft.aiInterviewDisabled).toBe(true);
+    expect(aiDraft).toMatchObject({
+      controlCategory: null,
+      requester: null,
+      resumeContact: null,
+      workEndTime: null,
+      workStartTime: null,
+      workTimezone: null,
+    });
   });
 
   it("defaults new human interview rounds from the linked job", () => {
