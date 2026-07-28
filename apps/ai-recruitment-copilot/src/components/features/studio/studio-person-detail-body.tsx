@@ -3,6 +3,7 @@
 
 import { IconArrowBackUp, IconChevronDown, IconCopy, IconLoader2 } from "@tabler/icons-react";
 import { countDisplayInterviewTurns } from "@arc/shared/interview-transcript-turns";
+import { canProgressResumeToInterview } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
 import type { ReactNode } from "react";
 import { env } from "@/env/client";
@@ -843,7 +844,13 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
           shouldShowHumanInterviewTab(tabVisibilityRecord, canReadHumanInterview) ? (
             <TabsContent value="human-interview">
               <HumanInterviewStagePanel
-                canCreate={canCreateHumanInterview}
+                canCreate={
+                  canCreateHumanInterview &&
+                  canProgressResumeToInterview({
+                    jobDescriptionId: resumeRecord?.jobDescriptionId,
+                    status: resumeRecord?.resumeEvaluationStatus,
+                  })
+                }
                 canDelete={canDeleteHumanInterview}
                 canUpdate={canUpdateHumanInterview}
                 candidateId={record.id}

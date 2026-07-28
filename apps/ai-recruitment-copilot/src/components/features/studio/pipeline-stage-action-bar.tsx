@@ -47,6 +47,7 @@ export interface PipelineStageActionBarProps {
   canCreateHumanInterview?: boolean;
   canCreateOffer?: boolean;
   hasJobDescription?: boolean;
+  resumeEvaluationPassed?: boolean;
   // 真人复面是否全部 completed。
   // Whether all human interview rounds are done.
   humanInterviewDone?: boolean;
@@ -75,6 +76,24 @@ export interface PipelineStageActionBarProps {
   onRequestReactivate: () => void;
 }
 
+function shouldShowInterviewProgressAction(input: {
+  aiInterviewDisabled: boolean;
+  canAdvance?: boolean;
+  canCreate?: boolean;
+  hasJobDescription: boolean;
+  pipelineStage: PipelineStage;
+  resumeEvaluationPassed: boolean;
+}) {
+  return (
+    input.pipelineStage !== "closed" &&
+    !input.aiInterviewDisabled &&
+    input.hasJobDescription &&
+    input.resumeEvaluationPassed &&
+    input.canAdvance !== false &&
+    input.canCreate !== false
+  );
+}
+
 export function PipelineStageActionBar({
   pipelineStage,
   evaluationActions,
@@ -83,6 +102,7 @@ export function PipelineStageActionBar({
   canCreateHumanInterview = true,
   canCreateOffer = true,
   hasJobDescription = true,
+  resumeEvaluationPassed = true,
   humanInterviewDone,
   humanInterviewFeedbackComplete,
   aiRoundReset,
@@ -118,9 +138,17 @@ export function PipelineStageActionBar({
     onAdvance: handleAdvance,
     onRequestReactivate,
     pipelineStage,
+    resumeEvaluationPassed,
   });
-  const groupedPrimaryAction =
-    pipelineStage === "closed" || aiInterviewDisabled ? null : primaryAction;
+  const groupedEvaluationActions = hasJobDescription ? evaluationActions : null;
+  const groupedPrimaryAction = shouldShowInterviewProgressAction({
+    aiInterviewDisabled,
+    hasJobDescription,
+    pipelineStage,
+    resumeEvaluationPassed,
+  })
+    ? primaryAction
+    : null;
   const aiRoundCopyLinkAction =
     pipelineStage === "ai_interview" && aiRoundInterviewLink ? (
       <Button
@@ -160,9 +188,9 @@ export function PipelineStageActionBar({
         className="m-0 inline-flex min-w-0 flex-wrap items-center justify-end gap-2 border-0 p-0"
         disabled={isBusy}
       >
-        {evaluationActions ? (
+        {groupedEvaluationActions ? (
           <ButtonGroup aria-label="简历评估" className="flex-wrap justify-end">
-            {evaluationActions}
+            {groupedEvaluationActions}
           </ButtonGroup>
         ) : null}
         {hasGroupedPrimaryActions ? (
@@ -395,6 +423,7 @@ function getStageActions(props: {
   canCreateHumanInterview: boolean;
   canCreateOffer: boolean;
   hasJobDescription: boolean;
+  resumeEvaluationPassed: boolean;
   humanInterviewFeedbackComplete?: boolean;
   humanInterviewDone?: boolean;
   isAdvancing: boolean;
@@ -408,6 +437,7 @@ function getStageActions(props: {
     canCreateHumanInterview,
     canCreateOffer,
     hasJobDescription,
+    resumeEvaluationPassed,
     humanInterviewFeedbackComplete,
     humanInterviewDone,
     isAdvancing,
@@ -449,7 +479,16 @@ function getStageActions(props: {
       // 简历筛选阶段：可发起 AI 面试，也可跳过 AI 直接进入真人复面；Offer 必须在真人复面后。
       // Screening: start AI, or skip to human interview. Offer requires human interview first.
       const canAdvanceToHumanInterview = hasEvent({ type: "SKIP_TO_HUMAN_INTERVIEW" });
-      if (canAdvanceToHumanInterview && canCreateHumanInterview) {
+      if (
+        shouldShowInterviewProgressAction({
+          aiInterviewDisabled: false,
+          canAdvance: canAdvanceToHumanInterview,
+          canCreate: canCreateHumanInterview,
+          hasJobDescription,
+          pipelineStage,
+          resumeEvaluationPassed,
+        })
+      ) {
         buttons.push({
           key: "to-human",
           node: (
@@ -474,7 +513,16 @@ function getStageActions(props: {
       // AI 面试阶段只能进入真人复面或结案，不能直接进入 Offer。
       // AI interview can only advance to human interview or close, never directly to offer.
       const canAdvanceToHumanInterview = hasEvent({ type: "ADVANCE_TO_HUMAN_INTERVIEW" });
-      if (canAdvanceToHumanInterview && canCreateHumanInterview) {
+      if (
+        shouldShowInterviewProgressAction({
+          aiInterviewDisabled: false,
+          canAdvance: canAdvanceToHumanInterview,
+          canCreate: canCreateHumanInterview,
+          hasJobDescription,
+          pipelineStage,
+          resumeEvaluationPassed,
+        })
+      ) {
         // 还没跑完时，允许 HR 提前安排复面（跳过场景：技术面已经过、不想等剩下的）。
         // Skip-ahead path while AI interviews are still in flight.
         buttons.push({
@@ -533,7 +581,14 @@ function getStageActions(props: {
     case "written_test": {
       // 笔试阶段当前 UI 隐藏；但万一被 API 直接置过来了，至少给个出口。
       // Hidden tab currently; allow advance/back so HR isn't stuck.
-      if (!aiInterviewDisabled) {
+      if (
+        shouldShowInterviewProgressAction({
+          aiInterviewDisabled,
+          hasJobDescription,
+          pipelineStage,
+          resumeEvaluationPassed,
+        })
+      ) {
         buttons.push({
           key: "to-ai",
           node: (

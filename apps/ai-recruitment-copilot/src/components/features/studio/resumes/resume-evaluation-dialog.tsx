@@ -46,15 +46,16 @@ interface ResumeEvaluationDialogProps {
 const EMPTY_TIME_SLOT: TimeSlotFormValue = { endAt: "", startAt: "" };
 
 /**
- * Floating-bar resume pass/fail actions: page layout only, unassessed, not closed.
- * 仅在独立详情页 + 尚未评估 + 未结案时展示「评估通过 / 不通过」。
+ * Floating-bar resume pass/fail actions: page layout only, job-bound, unassessed, not closed.
+ * 仅在独立详情页 + 已关联岗位 + 尚未评估 + 未结案时展示「评估通过 / 不通过」。
  */
 export function shouldShowResumeEvaluationActions(input: {
+  hasJobDescription: boolean;
   layoutMode: "modal" | "page";
   pipelineStage?: PipelineStage | null;
   status: ResumeEvaluationStatus | null | undefined;
 }) {
-  if (input.layoutMode !== "page") {
+  if (input.layoutMode !== "page" || !input.hasJobDescription) {
     return false;
   }
   if (input.pipelineStage === "closed") {
@@ -288,10 +289,12 @@ export function ResumeEvaluationDialog({
 }
 
 export function ResumeReviewEvaluationBar({
+  hasJobDescription,
   isLoading,
   recordId,
   status,
 }: {
+  hasJobDescription: boolean;
   isLoading: boolean;
   recordId: string;
   status: ResumeEvaluationStatus | null | undefined;
@@ -309,6 +312,10 @@ export function ResumeReviewEvaluationBar({
         </div>
       </div>
     );
+  }
+
+  if (!hasJobDescription) {
+    return null;
   }
 
   return (

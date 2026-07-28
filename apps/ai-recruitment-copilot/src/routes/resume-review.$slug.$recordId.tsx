@@ -48,6 +48,7 @@ function ResumeReviewDetailContent({ recordId }: { recordId: string }) {
       </main>
 
       <ResumeReviewEvaluationBar
+        hasJobDescription={Boolean(detail?.jobDescriptionId)}
         isLoading={detailQuery.isLoading}
         recordId={recordId}
         status={detail?.resumeEvaluationStatus}

@@ -6,7 +6,10 @@ import { IconExternalLink, IconRobot } from "@tabler/icons-react";
 import { useReducedMotion } from "motion/react";
 import type { StudioInterviewConversationReport } from "@arc/db-schema/interview-session";
 import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-rounds";
-import { canLaunchInterviewFromResume } from "@arc/shared/studio-resumes";
+import {
+  canLaunchInterviewFromResume,
+  canProgressResumeToInterview,
+} from "@arc/shared/studio-resumes";
 import type { ResumeEvaluationStatus, ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,7 +45,6 @@ import { JobDescriptionHoverCard } from "@/components/features/studio/job-descri
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useHasPermission } from "@/hooks/use-has-permission";
 import { PipelineStageActionBar } from "./pipeline-stage-action-bar";
 import {
@@ -610,25 +612,23 @@ export function useStudioPersonDetailController({
     (mode !== "resume" || !record?.resumeParseStatus
       ? true
       : canLaunchInterviewFromResume(record.resumeParseStatus));
+  const canProgressResumeRecordToInterview = canProgressResumeToInterview({
+    jobDescriptionId: resumeRecord?.jobDescriptionId,
+    status: resumeRecord?.resumeEvaluationStatus,
+  });
   const showLaunchButton =
     mode === "resume" &&
     record?.pipelineStage === "screening" &&
+    canProgressResumeRecordToInterview &&
     !record?.jobDescriptionAiInterviewDisabled &&
     canLaunchResumeModeRecord &&
     !isRoundsLoading &&
     candidateRounds.length === 0;
-  const launchResumeModeDisabledReason =
-    showLaunchButton && !resumeRecord?.jobDescriptionId ? "请先绑定在招岗位后再发起 AI 面试" : null;
   const launchResumeModeButtonContent = showLaunchButton ? (
     <Button
-      aria-disabled={Boolean(launchResumeModeDisabledReason)}
-      className={cn(launchResumeModeDisabledReason && "opacity-50")}
       size="sm"
       onClick={() => {
         if (!record) {
-          return;
-        }
-        if (launchResumeModeDisabledReason) {
           return;
         }
         if (onLaunchInterview) {
@@ -649,15 +649,6 @@ export function useStudioPersonDetailController({
       {onLaunchInterview ? null : <IconExternalLink className="size-3.5 opacity-70" />}
     </Button>
   ) : null;
-  const launchResumeModeButton =
-    launchResumeModeButtonContent && launchResumeModeDisabledReason ? (
-      <Tooltip>
-        <TooltipTrigger render={launchResumeModeButtonContent} />
-        <TooltipContent>{launchResumeModeDisabledReason}</TooltipContent>
-      </Tooltip>
-    ) : (
-      launchResumeModeButtonContent
-    );
   const cachedResumeCandidateName =
     mode === "resume" ? findCachedResumeCandidateName(queryClient, effectiveRecordId) : null;
   const resumeTitle = record?.candidateName?.trim() || cachedResumeCandidateName || "候选人详情";
@@ -700,6 +691,7 @@ export function useStudioPersonDetailController({
   const actionBarPipelineStage = visiblePipelineStage ?? record?.pipelineStage;
   const actionBarAiRound = candidateRounds.at(-1);
   const resumeEvaluationActions = shouldShowResumeEvaluationActions({
+    hasJobDescription: Boolean(resumeRecord?.jobDescriptionId),
     layoutMode,
     pipelineStage: resumeRecord?.pipelineStage ?? record?.pipelineStage,
     status: resumeRecord?.resumeEvaluationStatus,
@@ -749,6 +741,7 @@ export function useStudioPersonDetailController({
         canCreateOffer={canCreateOffer}
         evaluationActions={resumeEvaluationActions}
         hasJobDescription={Boolean(resumeRecord?.jobDescriptionId)}
+        resumeEvaluationPassed={canProgressResumeRecordToInterview}
         onAdvance={async (target) => {
           const error = await advancePipelineStage({
             queryClient,
@@ -773,7 +766,7 @@ export function useStudioPersonDetailController({
         }
         onViewCurrentStage={() => setActiveTab(tabForPipelineStage(actionBarPipelineStage))}
         pipelineStage={actionBarPipelineStage}
-        primaryAction={launchResumeModeButton}
+        primaryAction={launchResumeModeButtonContent}
       />
     ) : null;
   const headerActionBar = layoutMode === "modal" ? actionBar : null;

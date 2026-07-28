@@ -520,6 +520,13 @@ export function getResumeInterviewGateReason(status: ResumeEvaluationStatus | nu
   return "请先完成简历评估，通过后才能推进面试。";
 }
 
+export function canProgressResumeToInterview(input: {
+  jobDescriptionId: string | null | undefined;
+  status: ResumeEvaluationStatus | null | undefined;
+}) {
+  return Boolean(input.jobDescriptionId) && input.status === "pass";
+}
+
 export type CandidateTimelineEventKind =
   | "candidate"
   | "stage"

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ResumeEvaluationActions,
   ResumeEvaluationDialog,
+  ResumeReviewEvaluationBar,
   shouldShowResumeEvaluationActions,
 } from "./resume-evaluation-dialog";
 
@@ -98,23 +99,84 @@ function renderDialog(decision: "pass" | "fail") {
 }
 
 describe("ResumeEvaluationDialog", () => {
+  it("hides member-review evaluation actions until a job is bound", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient();
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <ResumeReviewEvaluationBar
+            hasJobDescription={false}
+            isLoading={false}
+            recordId="resume-1"
+            status={null}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(container.textContent).not.toContain("评估通过");
+    expect(container.textContent).not.toContain("评估不通过");
+    act(() => root.unmount());
+  });
+
   it("shows actions only on page details while the resume is unassessed and not closed", () => {
-    expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: null })).toBe(true);
     expect(
       shouldShowResumeEvaluationActions({
+        hasJobDescription: true,
+        layoutMode: "page",
+        status: null,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowResumeEvaluationActions({
+        hasJobDescription: true,
         layoutMode: "page",
         pipelineStage: "screening",
         status: null,
       }),
     ).toBe(true);
-    expect(shouldShowResumeEvaluationActions({ layoutMode: "modal", status: null })).toBe(false);
-    expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: undefined })).toBe(
-      false,
-    );
-    expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: "pass" })).toBe(false);
-    expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: "fail" })).toBe(false);
     expect(
       shouldShowResumeEvaluationActions({
+        hasJobDescription: false,
+        layoutMode: "page",
+        status: null,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowResumeEvaluationActions({
+        hasJobDescription: true,
+        layoutMode: "modal",
+        status: null,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowResumeEvaluationActions({
+        hasJobDescription: true,
+        layoutMode: "page",
+        status: undefined,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowResumeEvaluationActions({
+        hasJobDescription: true,
+        layoutMode: "page",
+        status: "pass",
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowResumeEvaluationActions({
+        hasJobDescription: true,
+        layoutMode: "page",
+        status: "fail",
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowResumeEvaluationActions({
+        hasJobDescription: true,
         layoutMode: "page",
         pipelineStage: "closed",
         status: null,

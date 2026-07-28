@@ -52,4 +52,47 @@ describe("ResumeLibraryCardActions", () => {
 
     expect(host.textContent).not.toContain("AI面");
   });
+
+  it.each([
+    ["has no bound job", { jobDescriptionId: null, resumeEvaluationStatus: "pass" }],
+    [
+      "has not passed resume evaluation",
+      { jobDescriptionId: "job-1", resumeEvaluationStatus: null },
+    ],
+    ["failed resume evaluation", { jobDescriptionId: "job-1", resumeEvaluationStatus: "fail" }],
+  ])("hides the AI interview action when the candidate %s", (_, gateFields) => {
+    const record = {
+      hasInterviewRounds: false,
+      hasResumeFile: false,
+      jobDescriptionAiInterviewDisabled: false,
+      pipelineStage: "screening",
+      resumeFileName: null,
+      resumeParseStatus: "ready",
+      ...gateFields,
+    } as ResumeLibraryListRecord;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push({ host, root });
+
+    act(() => {
+      root.render(
+        <ResumeLibraryCardActions
+          canCopyLink={false}
+          canCreateInterview
+          canDeleteResumeLibrary={false}
+          canUpdateResumeLibrary={false}
+          onCopyDetailLink={vi.fn()}
+          onDelete={vi.fn()}
+          onEdit={vi.fn()}
+          onLaunchInterview={vi.fn()}
+          onPreviewResume={vi.fn()}
+          onTransition={vi.fn()}
+          record={record}
+        />,
+      );
+    });
+
+    expect(host.textContent).not.toContain("AI面");
+  });
 });

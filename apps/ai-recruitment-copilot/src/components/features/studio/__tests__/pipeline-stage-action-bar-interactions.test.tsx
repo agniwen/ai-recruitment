@@ -22,16 +22,20 @@ function renderActionBar({
   aiRoundInterviewLink,
   aiInterviewDisabled,
   evaluationActions,
+  hasJobDescription,
   onAdvance = vi.fn(),
   pipelineStage = "ai_interview",
   primaryAction,
+  resumeEvaluationPassed,
 }: {
   aiRoundInterviewLink?: string;
   aiInterviewDisabled?: boolean;
   evaluationActions?: ReactNode;
+  hasJobDescription?: boolean;
   onAdvance?: (target: PipelineStage) => void | Promise<void>;
   pipelineStage?: PipelineStage;
   primaryAction?: ReactNode;
+  resumeEvaluationPassed?: boolean;
 } = {}) {
   const host = document.createElement("div");
   document.body.append(host);
@@ -44,12 +48,14 @@ function renderActionBar({
         aiRoundInterviewLink={aiRoundInterviewLink}
         aiInterviewDisabled={aiInterviewDisabled}
         evaluationActions={evaluationActions}
+        hasJobDescription={hasJobDescription}
         onAdvance={onAdvance}
         onRequestClose={vi.fn()}
         onRequestReactivate={vi.fn()}
         onViewCurrentStage={vi.fn()}
         pipelineStage={pipelineStage}
         primaryAction={primaryAction}
+        resumeEvaluationPassed={resumeEvaluationPassed}
       />,
     );
   });
@@ -139,6 +145,39 @@ describe("PipelineStageActionBar interactions", () => {
     });
 
     expect(host.textContent).not.toContain("发起 AI 面试");
+  });
+
+  it("hides evaluation and next-interview actions when no job is bound", () => {
+    const host = renderActionBar({
+      evaluationActions: <button type="button">评估通过</button>,
+      hasJobDescription: false,
+      pipelineStage: "screening",
+      primaryAction: <button type="button">发起 AI 面试</button>,
+    });
+
+    expect(host.textContent).not.toContain("评估通过");
+    expect(host.textContent).not.toContain("发起 AI 面试");
+    expect(host.textContent).not.toContain("安排真人面试");
+  });
+
+  it("hides all screening next-interview actions before the resume passes evaluation", () => {
+    const host = renderActionBar({
+      pipelineStage: "screening",
+      primaryAction: <button type="button">发起 AI 面试</button>,
+      resumeEvaluationPassed: false,
+    });
+
+    expect(host.textContent).not.toContain("发起 AI 面试");
+    expect(host.textContent).not.toContain("安排真人面试");
+  });
+
+  it("hides the human-interview advance after a legacy AI round without a passed evaluation", () => {
+    const host = renderActionBar({
+      pipelineStage: "ai_interview",
+      resumeEvaluationPassed: false,
+    });
+
+    expect(host.textContent).not.toContain("安排真人面试");
   });
 
   it("keeps resume evaluation actions beside the current stage when AI interviews are disabled", () => {

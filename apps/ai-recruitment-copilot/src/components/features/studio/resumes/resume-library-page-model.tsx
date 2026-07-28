@@ -257,10 +257,16 @@ export const PIPELINE_STAGE_TAB_DESCRIPTIONS: Record<string, string> = {
 // stage's UI is built.
 export const HIDDEN_PIPELINE_STAGE_TABS = new Set<string>(["written_test"]);
 
+export function buildResumeDetailShareText(fullLink: string, recommendationText: string | null) {
+  const recommendation = recommendationText?.trim();
+  return recommendation ? `${fullLink}\n\n${recommendation}` : fullLink;
+}
+
 export async function copyResumeDetailLink(slug: string, record: ResumeLibraryListRecord) {
   const fullLink = toAbsoluteUrl(`/resume-review/${slug}/${record.id}`);
+  const shareText = buildResumeDetailShareText(fullLink, record.recommendationText);
   try {
-    const result = await copyTextToClipboard(fullLink);
+    const result = await copyTextToClipboard(shareText);
     if (result === "copied") {
       toast.success("详情链接已复制");
       return;

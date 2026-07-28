@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canDeleteResumeRecord,
+  canProgressResumeToInterview,
   createResumeLibraryFormValues,
   describeResumeEvaluationStatus,
   describeResumeProgress,
@@ -152,6 +153,18 @@ describe("resume evaluation status", () => {
     expect(getResumeInterviewGateReason(null)).toBe("请先完成简历评估，通过后才能推进面试。");
     expect(getResumeInterviewGateReason("fail")).toBe("简历评估未通过，不能推进面试。");
   });
+
+  it.each([
+    ["job-1", "pass", true],
+    [null, "pass", false],
+    ["job-1", null, false],
+    ["job-1", "fail", false],
+  ] as const)(
+    "requires both a bound job and passed evaluation for interview progression",
+    (jobDescriptionId, status, expected) => {
+      expect(canProgressResumeToInterview({ jobDescriptionId, status })).toBe(expected);
+    },
+  );
 });
 
 describe("describeResumeProgress", () => {
