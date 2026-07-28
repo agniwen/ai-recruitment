@@ -76,6 +76,7 @@ describe("resumeIdentityUpdateSchema", () => {
     gender: "",
     hiringUnitId: "unit-1",
     jobDescriptionId: "jd-1",
+    recommendationText: "推荐给业务负责人",
     resumeEvaluationStatus: "unreviewed",
     targetRole: "后端工程师",
     workYears: 8,
@@ -87,6 +88,7 @@ describe("resumeIdentityUpdateSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.hiringUnitId).toBe("unit-1");
+      expect(result.data.recommendationText).toBe("推荐给业务负责人");
       expect(result.data.targetRole).toBe("后端工程师");
     }
   });
@@ -100,13 +102,27 @@ describe("resumeIdentityUpdateSchema", () => {
     );
   });
 
-  it("requires a hiring unit for quick edits", () => {
-    const result = resumeIdentityUpdateSchema.safeParse({ ...validIdentity, hiringUnitId: "" });
+  it("allows recommendation quick edits for legacy records without a job or hiring unit", () => {
+    const result = resumeIdentityUpdateSchema.safeParse({
+      ...validIdentity,
+      hiringUnitId: null,
+      jobDescriptionId: null,
+    });
 
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0]?.message).toBe("请选择用人组织");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.hiringUnitId).toBeNull();
+      expect(result.data.jobDescriptionId).toBeNull();
     }
+  });
+
+  it("limits quick-edit recommendation text to 2000 characters", () => {
+    expect(
+      resumeIdentityUpdateSchema.safeParse({
+        ...validIdentity,
+        recommendationText: "a".repeat(2001),
+      }).success,
+    ).toBe(false);
   });
 });
 

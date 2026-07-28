@@ -42,6 +42,7 @@ import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/ui/fram
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -569,6 +570,7 @@ interface OverviewIdentityDraft {
   gender: string;
   hiringUnitId: string;
   jobDescriptionId: string;
+  recommendationText: string;
   resumeEvaluationStatus: "fail" | "pass" | "unreviewed";
   targetRole: string;
   workYears: string;
@@ -586,6 +588,7 @@ function toOverviewIdentityDraft(detail: ResumeLibraryDetail): OverviewIdentityD
     gender: profile?.gender ?? "",
     hiringUnitId: detail.hiringUnitId ?? "",
     jobDescriptionId: detail.jobDescriptionId ?? "",
+    recommendationText: detail.recommendationText ?? "",
     resumeEvaluationStatus: detail.resumeEvaluationStatus ?? "unreviewed",
     targetRole: detail.targetRole ?? "",
     workYears:
@@ -678,11 +681,11 @@ function ResumeOverviewCandidateInfoSection({
       setNameError("请填写候选人姓名");
       return;
     }
-    if (!draft.jobDescriptionId.trim()) {
+    if (!draft.jobDescriptionId.trim() && detail.jobDescriptionId) {
       setJdError("请选择关联在招岗位");
       return;
     }
-    if (!draft.hiringUnitId.trim()) {
+    if (!draft.hiringUnitId.trim() && detail.hiringUnitId) {
       setHiringUnitError("请选择用人组织");
       return;
     }
@@ -716,8 +719,9 @@ function ResumeOverviewCandidateInfoSection({
           candidateName: name,
           candidatePhone: draft.candidatePhone.trim(),
           gender: draft.gender.trim(),
-          hiringUnitId: draft.hiringUnitId,
-          jobDescriptionId: draft.jobDescriptionId.trim(),
+          hiringUnitId: draft.hiringUnitId.trim() || null,
+          jobDescriptionId: draft.jobDescriptionId.trim() || null,
+          recommendationText: draft.recommendationText.trim(),
           resumeEvaluationStatus: draft.resumeEvaluationStatus,
           targetRole: draft.targetRole.trim(),
           workYears,
@@ -775,14 +779,6 @@ function ResumeOverviewCandidateInfoSection({
 
   return (
     <section className="border-border/50 border-t pt-6">
-      {detail.recommendationText ? (
-        <div className="mb-6 rounded-lg border border-muted/60 bg-muted/20 p-4">
-          <p className="mb-2 font-medium text-sm">推荐语</p>
-          <p className="whitespace-pre-wrap text-muted-foreground text-sm leading-6">
-            {detail.recommendationText}
-          </p>
-        </div>
-      ) : null}
       <div className="mb-3 flex items-center gap-1.5">
         <h3 className="font-medium text-sm">候选人信息</h3>
         {actions}
@@ -943,6 +939,20 @@ function ResumeOverviewCandidateInfoSection({
               value={draft.candidatePhone}
             />
           </Field>
+          <Field className="col-span-full">
+            <FieldLabel htmlFor="overview-recommendation-text">推荐语</FieldLabel>
+            <Textarea
+              disabled={saving}
+              id="overview-recommendation-text"
+              maxLength={2000}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, recommendationText: event.target.value }))
+              }
+              placeholder="填写给业务方或面试官看的推荐理由"
+              rows={3}
+              value={draft.recommendationText}
+            />
+          </Field>
         </DataFields>
       ) : (
         <DataFields columns={3} density="compact">
@@ -965,6 +975,12 @@ function ResumeOverviewCandidateInfoSection({
           <DataField kind="number" label="工作年限" value={detail.resumeProfile?.workYears} />
           <DataField kind="email" label="邮箱" value={displayEmail} />
           <DataField kind="phone" label="电话" value={displayPhone} />
+          <DataField
+            label="推荐语"
+            span="full"
+            value={detail.recommendationText}
+            valueClassName="whitespace-pre-wrap"
+          />
         </DataFields>
       )}
     </section>

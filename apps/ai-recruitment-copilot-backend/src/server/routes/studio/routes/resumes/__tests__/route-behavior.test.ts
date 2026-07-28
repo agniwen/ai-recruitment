@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- route-level behavior tests share one fully mocked resume router harness. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 
@@ -575,6 +576,7 @@ describe("resumeLibraryRouter behavior", () => {
         gender: "",
         hiringUnitId: "unit-1",
         jobDescriptionId: "jd-new",
+        recommendationText: "",
         resumeEvaluationStatus: "pass",
         targetRole: "",
         workYears: null,
@@ -632,6 +634,7 @@ describe("resumeLibraryRouter behavior", () => {
         gender: "女",
         hiringUnitId: "unit-2",
         jobDescriptionId: "jd-old",
+        recommendationText: "推荐给业务负责人",
         resumeEvaluationStatus: "pass",
         targetRole: "后端工程师",
         workYears: 8.5,
@@ -648,12 +651,101 @@ describe("resumeLibraryRouter behavior", () => {
         candidatePhone: "13900000000",
         hiringUnitId: "unit-2",
         jobDescriptionId: "jd-old",
+        recommendationText: "推荐给业务负责人",
         targetRole: "后端工程师",
       }),
     );
     const [updatePatch] = mocks.updatePatches;
     expect(updatePatch).not.toHaveProperty("hrResumeAssessment");
-    expect(updatePatch).not.toHaveProperty("recommendationText");
+    expect(updatePatch).toHaveProperty("recommendationText", "推荐给业务负责人");
+  });
+
+  it("updates a recommendation for a legacy record without a job or hiring unit", async () => {
+    const legacyRecord = {
+      ...EXISTING_RECORD,
+      hiringUnitId: null,
+      jobDescriptionId: null,
+      jobDescriptionName: null,
+    };
+    mocks.loadResumeDetail
+      .mockResolvedValueOnce(legacyRecord)
+      .mockResolvedValueOnce({ ...legacyRecord, recommendationText: "推荐给业务负责人" });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: null,
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: null,
+        jobDescriptionId: null,
+        recommendationText: "推荐给业务负责人",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        workYears: null,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.jobDescriptionIdsExist).not.toHaveBeenCalled();
+    expect(mocks.loadHiringUnitById).not.toHaveBeenCalled();
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        hiringUnitId: null,
+        jobDescriptionId: null,
+        recommendationText: "推荐给业务负责人",
+      }),
+    );
+  });
+
+  it("does not let overview quick edit clear an existing job or hiring unit", async () => {
+    mocks.loadResumeDetail.mockResolvedValue(EXISTING_RECORD);
+
+    const clearJobResponse = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: null,
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: "unit-1",
+        jobDescriptionId: null,
+        recommendationText: "",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        workYears: null,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(clearJobResponse.status).toBe(400);
+    await expect(clearJobResponse.json()).resolves.toEqual({ error: "请选择关联在招岗位。" });
+
+    const clearHiringUnitResponse = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: null,
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: null,
+        jobDescriptionId: "jd-old",
+        recommendationText: "",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        workYears: null,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(clearHiringUnitResponse.status).toBe(400);
+    await expect(clearHiringUnitResponse.json()).resolves.toEqual({ error: "请选择用人组织。" });
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it("rejects an overview hiring unit outside the active organization", async () => {
@@ -669,6 +761,7 @@ describe("resumeLibraryRouter behavior", () => {
         gender: "",
         hiringUnitId: "unit-other-org",
         jobDescriptionId: "jd-old",
+        recommendationText: "",
         resumeEvaluationStatus: "pass",
         targetRole: "",
         workYears: 8,
@@ -696,6 +789,7 @@ describe("resumeLibraryRouter behavior", () => {
         gender: "",
         hiringUnitId: "unit-1",
         jobDescriptionId: "jd-old",
+        recommendationText: "",
         resumeEvaluationStatus: "pass",
         targetRole: "",
         workYears: null,
@@ -707,6 +801,7 @@ describe("resumeLibraryRouter behavior", () => {
     expect(response.status).toBe(200);
     expect(mocks.updatePatches).toContainEqual(
       expect.objectContaining({
+        recommendationText: null,
         targetRole: null,
       }),
     );

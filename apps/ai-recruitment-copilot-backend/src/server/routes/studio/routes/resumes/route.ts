@@ -383,22 +383,33 @@ export const resumeLibraryRouter = factory
       }
 
       const input = c.req.valid("json");
+      if (existing.jobDescriptionId && !input.jobDescriptionId) {
+        return c.json({ error: "请选择关联在招岗位。" }, 400);
+      }
+      if (existing.hiringUnitId && !input.hiringUnitId) {
+        return c.json({ error: "请选择用人组织。" }, 400);
+      }
       const [jobDescriptionExists, hiringUnit] = await Promise.all([
-        jobDescriptionIdsExist([input.jobDescriptionId], activeOrg.id),
-        loadHiringUnitById(input.hiringUnitId, activeOrg.id),
+        input.jobDescriptionId
+          ? jobDescriptionIdsExist([input.jobDescriptionId], activeOrg.id)
+          : Promise.resolve(true),
+        input.hiringUnitId
+          ? loadHiringUnitById(input.hiringUnitId, activeOrg.id)
+          : Promise.resolve(null),
       ]);
       if (!jobDescriptionExists) {
         return c.json({ error: "所选在招岗位不存在。" }, 400);
       }
-      if (!hiringUnit) {
+      if (input.hiringUnitId && !hiringUnit) {
         return c.json({ error: "所选用人组织不存在。" }, 400);
       }
 
-      const nextJobDescriptionId = input.jobDescriptionId;
+      const nextJobDescriptionId = input.jobDescriptionId ?? null;
       const jobDescriptionChanged = existing.jobDescriptionId !== nextJobDescriptionId;
-      const nextJobDescription = jobDescriptionChanged
-        ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)
-        : null;
+      const nextJobDescription =
+        jobDescriptionChanged && nextJobDescriptionId
+          ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)
+          : null;
 
       // Mirror identity into resumeProfile JSON when a structured profile exists.
       // Table: candidateName/email/phone/hiringUnitId/targetRole/jobDescriptionId
@@ -417,8 +428,9 @@ export const resumeLibraryRouter = factory
         candidateEmail: input.candidateEmail || null,
         candidateName: input.candidateName,
         candidatePhone: input.candidatePhone || null,
-        hiringUnitId: input.hiringUnitId,
+        hiringUnitId: input.hiringUnitId ?? null,
         jobDescriptionId: nextJobDescriptionId,
+        recommendationText: input.recommendationText || null,
         targetRole: input.targetRole || resumeProfile?.targetRoles[0] || null,
         updatedAt: now,
         ...(resumeProfile ? { resumeProfile } : {}),

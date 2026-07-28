@@ -28,7 +28,9 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(source).toContain('htmlFor="overview-hiring-unit"');
     expect(source).toContain('<DataField label="目标岗位"');
     expect(source).toContain('<DataField label="用人组织"');
-    expect(source).toContain("detail.recommendationText");
+    expect(source).toContain('htmlFor="overview-recommendation-text">推荐语');
+    expect(source).toContain('label="推荐语"');
+    expect(source).toContain("recommendationText: draft.recommendationText.trim()");
   });
 
   it("edits the hiring unit and target role and uses a number-only age input", () => {

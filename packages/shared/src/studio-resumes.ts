@@ -597,6 +597,13 @@ const resumeLibraryOptionalHiringUnitIdSchema = z
   .nullable()
   .transform((value) => (value && value.length > 0 ? value : null));
 
+const resumeLibraryOptionalJobDescriptionIdSchema = z
+  .string()
+  .trim()
+  .max(100, "关联在招岗位无效")
+  .nullable()
+  .transform((value) => (value && value.length > 0 ? value : null));
+
 const resumeLibraryRequiredHiringUnitIdSchema = z
   .string()
   .trim()
@@ -661,8 +668,9 @@ export const resumeIdentityUpdateSchema = z.object({
     .max(120, "候选人姓名不能超过 120 个字符"),
   candidatePhone: z.string().trim().max(40, "联系电话不能超过 40 个字符"),
   gender: z.string().trim().max(40),
-  hiringUnitId: resumeLibraryRequiredHiringUnitIdSchema,
-  jobDescriptionId: z.string().trim().min(1, "请选择关联在招岗位").max(100, "关联在招岗位无效"),
+  hiringUnitId: resumeLibraryOptionalHiringUnitIdSchema,
+  jobDescriptionId: resumeLibraryOptionalJobDescriptionIdSchema,
+  recommendationText: z.string().trim().max(2000, "推荐语不能超过 2000 字"),
   resumeEvaluationStatus: resumeEvaluationStatusFormValueSchema,
   targetRole: z.string().trim().max(120, "目标岗位不能超过 120 个字符"),
   workYears: z.number().min(0).max(80).nullable(),
