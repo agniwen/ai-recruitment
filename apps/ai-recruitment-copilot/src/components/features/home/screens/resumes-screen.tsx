@@ -388,20 +388,29 @@ function ToolbarIconButton({
   );
 }
 
+function ResumeSearchChip({ label, minWidth }: { label: string; minWidth: string }) {
+  return (
+    <div className="relative" style={{ minWidth }}>
+      <IconSearch className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
+      <div className="flex h-9 w-full items-center rounded-md border border-input bg-background pr-3 pl-9 text-muted-foreground text-sm shadow-xs">
+        {label}
+      </div>
+    </div>
+  );
+}
+
 function ResumeToolbar() {
   // 真实 Toolbar 布局: flex flex-col gap-3 sm:flex-row sm:items-center
   // Filters 与 toolbarRight 同一个 flex row 顺序排列，不做左右分栏。
   return (
     <div className="flex flex-wrap items-start gap-3">
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="relative min-w-[15rem]">
-          <IconSearch className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
-          <div className="flex h-9 w-full items-center rounded-md border border-input bg-background pr-9 pl-9 text-muted-foreground text-sm shadow-xs">
-            搜索候选人、邮箱、电话、简历名或目标岗位
-          </div>
-        </div>
+        <ResumeSearchChip label="候选人姓名" minWidth="9rem" />
+        <ResumeSearchChip label="邮箱" minWidth="10rem" />
+        <ResumeSearchChip label="电话" minWidth="9rem" />
+        <FilterSelectChip label="用人组织" />
+        <FilterSelectChip label="关联岗位" />
         <FilterSelectChip label="按技能筛选（需同时具备）" />
-        <FilterSelectChip label="按关联岗位筛选" />
       </div>
       <div className="flex min-w-fit shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap">
         <ToolbarIconButton label="刷新">

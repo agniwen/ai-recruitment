@@ -73,8 +73,18 @@ const paginationSchema = makePaginationSchema(SORT_COLUMNS);
 // 允许调用方原样传入 CSV 拆分结果（可能含空串）；buildWhere 内统一 trim + drop blank。
 // Accept caller-supplied arrays that may contain empty/whitespace entries —
 // buildWhere drops blanks before using them so we don't need to error here.
+//
+// 文本筛选拆成独立字段（姓名 / 邮箱 / 电话），彼此 AND；
+// 关联岗位走 jobDescriptionIds；用人组织走 hiringUnitIds。
+// `search` 保留为跨字段 OR 的自由文本检索（chat copilot 等调用方仍可使用）。
+// Text filters are per-field (AND). Linked JDs / hiring units use id lists.
+// `search` remains free-text OR across fields for copilot-style callers.
 const filtersSchema = z.object({
+  candidateEmail: z.string().trim().max(120).optional().nullable(),
+  candidateName: z.string().trim().max(120).optional().nullable(),
+  candidatePhone: z.string().trim().max(120).optional().nullable(),
   creatorIds: z.array(z.string()).max(50).optional().nullable(),
+  hiringUnitIds: z.array(z.string()).max(50).optional().nullable(),
   jobDescriptionIds: z.array(z.string()).max(50).optional().nullable(),
   outcomes: z.array(z.string()).max(10).optional().nullable(),
   pipelineStages: z.array(z.string()).max(10).optional().nullable(),
@@ -89,6 +99,21 @@ type ResumeQueryFilters = z.infer<typeof filtersSchema> & { forceEmpty?: boolean
 // 把单字段 filter 编译成 conditions 数组，挪出 buildWhere 拆复杂度。
 // Filter compilation helpers split out of buildWhere to keep its complexity low.
 
+function buildIlikeCondition(
+  column:
+    | typeof studioInterview.candidateEmail
+    | typeof studioInterview.candidateName
+    | typeof studioInterview.candidatePhone,
+  value: string | null | undefined,
+) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return ilike(column, `%${trimmed}%`);
+}
+
+/** Free-text OR across identity / file / target-role columns (copilot + legacy). */
 function buildSearchCondition(search: string | null | undefined) {
   const trimmed = search?.trim();
   if (!trimmed) {
@@ -127,6 +152,11 @@ function buildJdIdsCondition(jdIds: string[] | null | undefined) {
   return filtered.length > 0 ? inArray(studioInterview.jobDescriptionId, filtered) : null;
 }
 
+function buildHiringUnitIdsCondition(hiringUnitIds: string[] | null | undefined) {
+  const filtered = hiringUnitIds?.filter((id) => id.trim().length > 0) ?? [];
+  return filtered.length > 0 ? inArray(studioInterview.hiringUnitId, filtered) : null;
+}
+
 function buildCreatorIdsCondition(creatorIds: string[] | null | undefined) {
   const filtered = creatorIds?.filter((id) => id.trim().length > 0) ?? [];
   return filtered.length > 0 ? inArray(studioInterview.createdBy, filtered) : null;
@@ -153,8 +183,12 @@ function buildWhere(organizationId: string, filters?: ResumeQueryFilters) {
   const conditions = [
     eq(studioInterview.organizationId, organizationId),
     buildSearchCondition(filters?.search),
+    buildIlikeCondition(studioInterview.candidateName, filters?.candidateName),
+    buildIlikeCondition(studioInterview.candidateEmail, filters?.candidateEmail),
+    buildIlikeCondition(studioInterview.candidatePhone, filters?.candidatePhone),
     buildSkillsCondition(filters?.skills),
     buildJdIdsCondition(filters?.jobDescriptionIds),
+    buildHiringUnitIdsCondition(filters?.hiringUnitIds),
     buildCreatorIdsCondition(filters?.creatorIds),
     buildStagesCondition(filters?.pipelineStages),
     buildOutcomesCondition(filters?.outcomes),
@@ -834,16 +868,23 @@ function toRecord(
   };
 }
 
+export interface ResumeListFilters {
+  candidateEmail?: string | null;
+  candidateName?: string | null;
+  candidatePhone?: string | null;
+  creatorIds?: string[] | null;
+  hiringUnitIds?: string[] | null;
+  jobDescriptionIds?: string[] | null;
+  outcomes?: string[] | null;
+  pipelineStages?: string[] | null;
+  /** Free-text OR across name / email / phone / file / target role. */
+  search?: string | null;
+  skills?: string[] | null;
+}
+
 export async function queryPaginatedResumeRecords(
   organizationId: string,
-  filters?: {
-    search?: string | null;
-    creatorIds?: string[] | null;
-    skills?: string[] | null;
-    jobDescriptionIds?: string[] | null;
-    pipelineStages?: string[] | null;
-    outcomes?: string[] | null;
-  },
+  filters?: ResumeListFilters,
   pagination?: Record<string, unknown>,
   visibilityScope?: RecruitingVisibilityScope,
   knownTotal?: number,
@@ -910,14 +951,7 @@ export async function queryPaginatedResumeRecords(
  */
 export function listResumeRecords(
   organizationId: string,
-  filters?: {
-    search?: string | null;
-    creatorIds?: string[] | null;
-    skills?: string[] | null;
-    jobDescriptionIds?: string[] | null;
-    pipelineStages?: string[] | null;
-    outcomes?: string[] | null;
-  },
+  filters?: ResumeListFilters,
   pagination?: Partial<Pagination>,
   visibilityScope?: RecruitingVisibilityScope,
 ) {

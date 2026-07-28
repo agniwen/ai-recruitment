@@ -44,6 +44,7 @@ import {
   fetchStudioResumeSkillSuggestions,
   fetchStudioResumes,
 } from "@/lib/client/api";
+import { fetchSelectableHiringUnits } from "@/lib/client/api/endpoints/hiring-units";
 import { rpc } from "@/lib/client/rpc";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
@@ -69,6 +70,7 @@ import {
   useResumeLibrarySearchState,
 } from "./resume-library-page-model";
 import type { FetchParams, SearchParamsRecord, WorkspaceMember } from "./resume-library-page-model";
+import { useResumeLibraryCollapsibleFiltersWithState } from "./resume-library-filters";
 import { ResumeLibraryCardList } from "./resume-library-page-list";
 import {
   ResumeLibraryDeleteDialogs,
@@ -191,13 +193,16 @@ export function ResumeLibraryPage() {
     () =>
       (params: FetchParams): Promise<PaginatedResumeLibraryResult> =>
         fetchStudioResumes(slug, {
+          candidateEmail: params.filters.candidateEmail || undefined,
+          candidateName: params.filters.candidateName || undefined,
+          candidatePhone: params.filters.candidatePhone || undefined,
           creatorIds: parseCsvParam(params.filters.creatorIds),
+          hiringUnitId: params.filters.hiringUnitId || undefined,
           jobDescriptionIds: parseCsvParam(params.filters.jdIds),
           knownTotal: params.knownTotal,
           page: params.page,
           pageSize: params.pageSize,
           pipelineStages: parseCsvParam(params.filters.stage),
-          search: params.search || undefined,
           skills: parseCsvParam(params.filters.skills),
           sortBy: params.sortBy,
           sortOrder: params.sortOrder,
@@ -233,6 +238,12 @@ export function ResumeLibraryPage() {
       return payload.records;
     },
     queryKey: ["job-descriptions", "all", slug],
+    staleTime: 60_000,
+  });
+
+  const { data: hiringUnits = [] } = useQuery({
+    queryFn: () => fetchSelectableHiringUnits(slug),
+    queryKey: ["hiring-units", "selectable", slug],
     staleTime: 60_000,
   });
 
@@ -275,17 +286,16 @@ export function ResumeLibraryPage() {
     initialPageParam: { knownTotal: undefined as number | undefined, page: 1 },
     queryFn: ({ pageParam }) =>
       fetcher({
-        filters: grid.filters,
+        filters: grid.deferredFilters,
         knownTotal: pageParam.knownTotal,
         page: pageParam.page,
         pageSize: RESUME_LIBRARY_INFINITE_PAGE_SIZE,
-        search: grid.deferredSearch,
         sortBy: activeSort?.id,
         sortOrder: activeSortOrder,
       }),
     queryKey: buildInfiniteDataGridQueryKey(["studio-resumes", slug], {
-      filters: grid.filters,
-      search: grid.deferredSearch,
+      filters: grid.deferredFilters,
+      search: "",
       sortBy: activeSort?.id,
       sortOrder: activeSortOrder,
     }),
@@ -353,9 +363,15 @@ export function ResumeLibraryPage() {
   const filtersConfig = useMemo(
     () => [
       {
-        key: "search" as const,
-        minWidth: "15rem",
-        placeholder: "搜索候选人、邮箱、电话、简历名或目标岗位",
+        key: "candidateName" as const,
+        minWidth: "9rem",
+        placeholder: "候选人姓名",
+        type: "search" as const,
+      },
+      {
+        key: "candidateEmail" as const,
+        minWidth: "10rem",
+        placeholder: "邮箱",
         type: "search" as const,
       },
       {
@@ -373,6 +389,36 @@ export function ResumeLibraryPage() {
         type: "multi-select" as const,
       },
       {
+        key: "candidatePhone" as const,
+        minWidth: "9rem",
+        placeholder: "电话",
+        type: "search" as const,
+      },
+      {
+        emptyMessage: "没有匹配的用人组织",
+        key: "hiringUnitId" as const,
+        options: hiringUnits.map((unit) => ({
+          label: unit.name,
+          searchValue: unit.description ? `${unit.name} ${unit.description}` : unit.name,
+          value: unit.id,
+        })),
+        placeholder: "用人组织",
+        searchPlaceholder: "搜索用人组织…",
+        type: "select" as const,
+      },
+      {
+        emptyMessage: "没有匹配的岗位",
+        key: "jdIds" as const,
+        options: jobDescriptions.map((jd) => ({
+          label: jd.departmentName ? `${jd.departmentName} / ${jd.name}` : jd.name,
+          searchValue: jd.departmentName ? `${jd.departmentName} ${jd.name}` : jd.name,
+          value: jd.id,
+        })),
+        placeholder: "关联岗位",
+        searchPlaceholder: "搜索岗位或部门…",
+        type: "select" as const,
+      },
+      {
         emptyMessage: "没有匹配的技能",
         key: "skills" as const,
         options: skillSuggestions.map((item) => ({
@@ -385,21 +431,12 @@ export function ResumeLibraryPage() {
         selectedFormat: (count: number) => `已选 ${count} 个技能（同时具备）`,
         type: "multi-select" as const,
       },
-      {
-        emptyMessage: "没有匹配的岗位",
-        key: "jdIds" as const,
-        options: jobDescriptions.map((jd) => ({
-          label: jd.departmentName ? `${jd.departmentName} / ${jd.name}` : jd.name,
-          value: jd.id,
-        })),
-        placeholder: "按关联岗位筛选",
-        searchPlaceholder: "搜索岗位或部门…",
-        selectedFormat: (count: number) => `已选 ${count} 个岗位`,
-        type: "multi-select" as const,
-      },
     ],
-    [skillSuggestions, jobDescriptions, workspaceMembers],
+    [hiringUnits, skillSuggestions, jobDescriptions, workspaceMembers],
   );
+
+  const { filtersExtra, visibleFilters: visibleFiltersConfig } =
+    useResumeLibraryCollapsibleFiltersWithState(filtersConfig, grid.filters);
 
   async function handleDelete() {
     if (!deleteRecord) {
@@ -530,7 +567,8 @@ export function ResumeLibraryPage() {
           currentUserId={currentUserId}
           empty={resumeLibraryEmptyState}
           fetchNextPage={resumeLibraryListQuery.fetchNextPage}
-          filters={filtersConfig}
+          filters={visibleFiltersConfig}
+          filtersExtra={filtersExtra}
           grid={grid}
           hasActiveUploadBatches={hasActiveUploadBatches}
           hasNextPage={Boolean(resumeLibraryListQuery.hasNextPage)}

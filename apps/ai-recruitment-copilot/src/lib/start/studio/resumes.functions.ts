@@ -5,14 +5,22 @@ import { workspaceDataGridInputSchema } from "@/lib/start/server-fn-validators";
 import { loadStudioResumesStateFromRequest } from "./resumes-state.server";
 
 export interface ResumeFilters extends Record<string, string> {
+  candidateEmail: string;
+  candidateName: string;
+  candidatePhone: string;
   creatorIds: string;
-  skills: string;
+  hiringUnitId: string;
   jdIds: string;
+  skills: string;
   stage: string;
 }
 
 const resumeFiltersSchema = z.object({
+  candidateEmail: z.string(),
+  candidateName: z.string(),
+  candidatePhone: z.string(),
   creatorIds: z.string(),
+  hiringUnitId: z.string(),
   jdIds: z.string(),
   skills: z.string(),
   stage: z.string(),

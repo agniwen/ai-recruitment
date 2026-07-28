@@ -30,13 +30,20 @@ export interface ResumeListParams {
   knownTotal?: number;
   page?: number;
   pageSize?: number;
-  search?: string;
+  /** 候选人姓名（模糊匹配）。 */
+  candidateName?: string;
+  /** 候选人邮箱（模糊匹配）。 */
+  candidateEmail?: string;
+  /** 候选人电话（模糊匹配）。 */
+  candidatePhone?: string;
   /** 创建人用户 id 列表。Creator user id filter (OR semantics). */
   creatorIds?: string[];
   /** 任一匹配的技能（CSV-encoded on the wire）。Any-of skill filter. */
   skills?: string[];
   /** 关联岗位 id 列表。 Job-description id filter (OR semantics). */
   jobDescriptionIds?: string[];
+  /** 用人组织 id。Hiring-unit filter (exact match). */
+  hiringUnitId?: string;
   /** pipeline 阶段过滤（任一匹配）。Pipeline stage filter (OR semantics). */
   pipelineStages?: string[];
   /** 候选人最终结论过滤（任一匹配）。Outcome filter (OR semantics). */
@@ -45,9 +52,65 @@ export interface ResumeListParams {
   sortOrder?: "asc" | "desc";
 }
 
+function optionalCsvParam(values: string[] | undefined): string | undefined {
+  return values && values.length > 0 ? values.join(",") : undefined;
+}
+
+function buildResumeListQuery(params: ResumeListParams): Record<string, string> {
+  const query: Record<string, string> = {};
+  if (params.page !== undefined) {
+    query.page = String(params.page);
+  }
+  if (params.pageSize !== undefined) {
+    query.pageSize = String(params.pageSize);
+  }
+  if (params.knownTotal !== undefined) {
+    query.knownTotal = String(params.knownTotal);
+  }
+  if (params.candidateName) {
+    query.candidateName = params.candidateName;
+  }
+  if (params.candidateEmail) {
+    query.candidateEmail = params.candidateEmail;
+  }
+  if (params.candidatePhone) {
+    query.candidatePhone = params.candidatePhone;
+  }
+  const creatorIds = optionalCsvParam(params.creatorIds);
+  if (creatorIds) {
+    query.creatorIds = creatorIds;
+  }
+  const skills = optionalCsvParam(params.skills);
+  if (skills) {
+    query.skills = skills;
+  }
+  const jdIds = optionalCsvParam(params.jobDescriptionIds);
+  if (jdIds) {
+    query.jdIds = jdIds;
+  }
+  if (params.hiringUnitId) {
+    query.hiringUnitId = params.hiringUnitId;
+  }
+  const pipelineStages = optionalCsvParam(params.pipelineStages);
+  if (pipelineStages) {
+    query.pipelineStages = pipelineStages;
+  }
+  const outcomes = optionalCsvParam(params.outcomes);
+  if (outcomes) {
+    query.outcomes = outcomes;
+  }
+  if (params.sortBy) {
+    query.sortBy = params.sortBy;
+  }
+  if (params.sortOrder) {
+    query.sortOrder = params.sortOrder;
+  }
+  return query;
+}
+
 /**
- * 拉取简历列表（支持分页 / 关键词 / 排序 / 技能 / 关联岗位筛选）。
- * Fetch the resume list (pagination / keyword / sort / skills / JD filters).
+ * 拉取简历列表（支持分页 / 分字段文本筛选 / 排序 / 技能 / 关联岗位筛选）。
+ * Fetch the resume list (pagination / field text filters / sort / skills / JD).
  */
 export function fetchStudioResumes(
   slug: string,
@@ -56,27 +119,7 @@ export function fetchStudioResumes(
   return rpcFetch<PaginatedResumeLibraryResult>(
     rpc.api.w[":slug"].studio.resumes.$get({
       param: { slug },
-      query: {
-        ...(params.page === undefined ? {} : { page: String(params.page) }),
-        ...(params.pageSize === undefined ? {} : { pageSize: String(params.pageSize) }),
-        ...(params.knownTotal === undefined ? {} : { knownTotal: String(params.knownTotal) }),
-        ...(params.search ? { search: params.search } : {}),
-        ...(params.creatorIds && params.creatorIds.length > 0
-          ? { creatorIds: params.creatorIds.join(",") }
-          : {}),
-        ...(params.skills && params.skills.length > 0 ? { skills: params.skills.join(",") } : {}),
-        ...(params.jobDescriptionIds && params.jobDescriptionIds.length > 0
-          ? { jdIds: params.jobDescriptionIds.join(",") }
-          : {}),
-        ...(params.pipelineStages && params.pipelineStages.length > 0
-          ? { pipelineStages: params.pipelineStages.join(",") }
-          : {}),
-        ...(params.outcomes && params.outcomes.length > 0
-          ? { outcomes: params.outcomes.join(",") }
-          : {}),
-        ...(params.sortBy ? { sortBy: params.sortBy } : {}),
-        ...(params.sortOrder ? { sortOrder: params.sortOrder } : {}),
-      },
+      query: buildResumeListQuery(params),
     }),
     "加载简历列表失败",
   );

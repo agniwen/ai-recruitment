@@ -24,7 +24,11 @@ vi.mock("../resumes.server", () => ({
 
 const query: DataGridQueryState<ResumeFilters> = {
   filters: {
+    candidateEmail: "",
+    candidateName: "",
+    candidatePhone: "",
     creatorIds: "",
+    hiringUnitId: "",
     jdIds: "",
     skills: "",
     stage: "",

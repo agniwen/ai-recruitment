@@ -701,6 +701,7 @@ export function useStudioPersonDetailController({
   const actionBarAiRound = candidateRounds.at(-1);
   const resumeEvaluationActions = shouldShowResumeEvaluationActions({
     layoutMode,
+    pipelineStage: resumeRecord?.pipelineStage ?? record?.pipelineStage,
     status: resumeRecord?.resumeEvaluationStatus,
   }) ? (
     <ResumeEvaluationActions onDecisionSelect={setEvaluationDecision} />

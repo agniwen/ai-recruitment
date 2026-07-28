@@ -190,7 +190,9 @@ export function Toolbar(props: ToolbarProps) {
             );
           })}
           {filtersExtra ? (
-            <div className="min-w-0 [&>button]:w-full sm:w-auto sm:[&>button]:w-auto">
+            // Full-width only for text/select-like controls on mobile; keep
+            // icon-only buttons square (same size-9 as refresh / reset).
+            <div className="min-w-0 [&>button:not([data-size=icon])]:w-full sm:w-auto sm:[&>button:not([data-size=icon])]:w-auto">
               {filtersExtra}
             </div>
           ) : null}

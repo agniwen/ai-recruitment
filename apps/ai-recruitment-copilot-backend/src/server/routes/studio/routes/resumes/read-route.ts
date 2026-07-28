@@ -89,14 +89,17 @@ export const resumeLibraryReadRouter = factory
     zValidator(
       "query",
       z.object({
+        candidateEmail: z.string().optional(),
+        candidateName: z.string().optional(),
+        candidatePhone: z.string().optional(),
         creatorIds: z.string().optional(),
+        hiringUnitId: z.string().optional(),
         jdIds: z.string().optional(),
         knownTotal: z.coerce.number().int().min(0).max(10_000_000).optional(),
         outcomes: z.string().optional(),
         page: z.string().optional(),
         pageSize: z.string().optional(),
         pipelineStages: z.string().optional(),
-        search: z.string().optional(),
         skills: z.string().optional(),
         sortBy: z.string().optional(),
         sortOrder: z.string().optional(),
@@ -117,11 +120,14 @@ export const resumeLibraryReadRouter = factory
       const result = await queryPaginatedResumeRecords(
         activeOrg.id,
         {
+          candidateEmail: q.candidateEmail,
+          candidateName: q.candidateName,
+          candidatePhone: q.candidatePhone,
           creatorIds: parseCsvParam(q.creatorIds),
+          hiringUnitIds: q.hiringUnitId ? [q.hiringUnitId] : undefined,
           jobDescriptionIds: parseCsvParam(q.jdIds),
           outcomes: parseCsvParam(q.outcomes),
           pipelineStages: parseCsvParam(q.pipelineStages),
-          search: q.search,
           skills: parseCsvParam(q.skills),
         },
         {

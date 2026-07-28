@@ -74,4 +74,20 @@ describe("Toolbar", () => {
     expect(html).toContain('data-slot="tooltip-trigger"');
     expect(html).toContain('tabindex="0"');
   });
+
+  it("does not stretch icon-only filtersExtra buttons to full width", () => {
+    const html = renderToStaticMarkup(
+      <Toolbar
+        filtersExtra={
+          <button data-size="icon" type="button">
+            expand
+          </button>
+        }
+      />,
+    );
+
+    // React escapes class selectors in static markup.
+    expect(html).toContain("[&amp;&gt;button:not([data-size=icon])]:w-full");
+    expect(html).not.toContain("[&amp;&gt;button]:w-full sm:w-auto sm:[&amp;&gt;button]:w-auto");
+  });
 });

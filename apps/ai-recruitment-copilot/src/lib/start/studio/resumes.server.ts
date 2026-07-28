@@ -43,10 +43,15 @@ export async function loadStudioResumesData({
             listResumeRecords(
               workspaceId,
               {
+                candidateEmail: query.filters.candidateEmail || undefined,
+                candidateName: query.filters.candidateName || undefined,
+                candidatePhone: query.filters.candidatePhone || undefined,
                 creatorIds: parseCsvParam(query.filters.creatorIds),
+                hiringUnitIds: query.filters.hiringUnitId
+                  ? [query.filters.hiringUnitId]
+                  : undefined,
                 jobDescriptionIds: parseCsvParam(query.filters.jdIds),
                 pipelineStages: parseCsvParam(query.filters.stage),
-                search: query.search || undefined,
                 skills: parseCsvParam(query.filters.skills),
               },
               {

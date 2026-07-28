@@ -34,14 +34,18 @@ vi.mock(
 
 const query: DataGridQueryState<ResumeFilters> = {
   filters: {
+    candidateEmail: "zhang@example.com",
+    candidateName: "郭靖",
+    candidatePhone: "138",
     creatorIds: "user-a,user-b",
+    hiringUnitId: "unit-1",
     jdIds: "jd-1",
     skills: "React,TypeScript",
     stage: "screening",
   },
   page: 3,
   pageSize: 50,
-  search: "前端工程师",
+  search: "",
   sortBy: "createdAt",
   sortOrder: "desc",
 };
@@ -69,10 +73,13 @@ describe("loadStudioResumesData", () => {
     expect(listResumeRecords).toHaveBeenCalledWith(
       "org-1",
       {
+        candidateEmail: "zhang@example.com",
+        candidateName: "郭靖",
+        candidatePhone: "138",
         creatorIds: ["user-a", "user-b"],
+        hiringUnitIds: ["unit-1"],
         jobDescriptionIds: ["jd-1"],
         pipelineStages: ["screening"],
-        search: "前端工程师",
         skills: ["React", "TypeScript"],
       },
       { page: 1, pageSize: 20, sortBy: "createdAt", sortOrder: "desc" },
@@ -91,7 +98,7 @@ describe("loadStudioResumesData", () => {
       "infinite",
       {
         filters: query.filters,
-        search: "前端工程师",
+        search: "",
         sortBy: "createdAt",
         sortOrder: "desc",
       },

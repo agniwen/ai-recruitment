@@ -98,14 +98,28 @@ function renderDialog(decision: "pass" | "fail") {
 }
 
 describe("ResumeEvaluationDialog", () => {
-  it("shows actions only on page details while the resume is unassessed", () => {
+  it("shows actions only on page details while the resume is unassessed and not closed", () => {
     expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: null })).toBe(true);
+    expect(
+      shouldShowResumeEvaluationActions({
+        layoutMode: "page",
+        pipelineStage: "screening",
+        status: null,
+      }),
+    ).toBe(true);
     expect(shouldShowResumeEvaluationActions({ layoutMode: "modal", status: null })).toBe(false);
     expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: undefined })).toBe(
       false,
     );
     expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: "pass" })).toBe(false);
     expect(shouldShowResumeEvaluationActions({ layoutMode: "page", status: "fail" })).toBe(false);
+    expect(
+      shouldShowResumeEvaluationActions({
+        layoutMode: "page",
+        pipelineStage: "closed",
+        status: null,
+      }),
+    ).toBe(false);
   });
 
   it("uses the shared badge tones and emits both evaluation decisions", () => {

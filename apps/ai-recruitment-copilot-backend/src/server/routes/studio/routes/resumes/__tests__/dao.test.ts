@@ -307,10 +307,25 @@ describe("queryPaginatedResumeRecords", () => {
     }
   });
 
-  it("supports search filter against candidateName", async () => {
+  it("supports free-text search filter against candidateName", async () => {
     const result = await queryPaginatedResumeRecords(ORG_A, { search: "郭靖" });
     expect(result.total).toBe(1);
     expect(result.records[0]?.candidateName).toBe("郭靖");
+  });
+
+  it("filters by dedicated text fields (AND semantics)", async () => {
+    const byName = await queryPaginatedResumeRecords(ORG_A, { candidateName: "郭" });
+    expect(byName.records.map((row) => row.candidateName)).toEqual(["郭靖"]);
+
+    const byEmail = await queryPaginatedResumeRecords(ORG_A, { candidateEmail: "li@" });
+    expect(byEmail.records.map((row) => row.candidateName)).toEqual(["李四"]);
+
+    // Name matches 郭靖 but email does not — intersection empty.
+    const none = await queryPaginatedResumeRecords(ORG_A, {
+      candidateEmail: "li@",
+      candidateName: "郭",
+    });
+    expect(none.records).toEqual([]);
   });
 
   it("filters by skills with AND (intersection) semantics", async () => {

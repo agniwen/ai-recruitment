@@ -1,5 +1,6 @@
 "use client";
 
+import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import type { ResumeEvaluationStatus, ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import { describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import {
@@ -44,11 +45,22 @@ interface ResumeEvaluationDialogProps {
 
 const EMPTY_TIME_SLOT: TimeSlotFormValue = { endAt: "", startAt: "" };
 
+/**
+ * Floating-bar resume pass/fail actions: page layout only, unassessed, not closed.
+ * 仅在独立详情页 + 尚未评估 + 未结案时展示「评估通过 / 不通过」。
+ */
 export function shouldShowResumeEvaluationActions(input: {
   layoutMode: "modal" | "page";
+  pipelineStage?: PipelineStage | null;
   status: ResumeEvaluationStatus | null | undefined;
 }) {
-  return input.layoutMode === "page" && input.status === null;
+  if (input.layoutMode !== "page") {
+    return false;
+  }
+  if (input.pipelineStage === "closed") {
+    return false;
+  }
+  return input.status === null;
 }
 
 export function ResumeEvaluationActions({

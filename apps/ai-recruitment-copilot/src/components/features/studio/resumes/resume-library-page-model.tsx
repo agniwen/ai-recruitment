@@ -29,15 +29,32 @@ export const ResumeDocumentPreviewDialog = lazy(async () => {
 });
 
 // 工具栏多选下拉在 state/URL 里以 CSV 字符串编码，符合 data-grid 工具栏约定。
-// 「skills」= 候选人必须同时拥有所有选中的技能（AND）；
-// 「jdIds」= 关联岗位为所选中任一（OR，因为一份简历只能绑一个岗位）。
+// 文本筛选项（姓名 / 邮箱 / 电话）各自独立，彼此 AND。
+// 「hiringUnitId」= 用人组织（可搜索单选）。
+// 「jdIds」= 关联岗位（可搜索单选，值为单个岗位 id）。
+// 「skills」= 候选人必须同时拥有所有选中的技能（AND）。
 // Multi-select toolbar filters are CSV-encoded per the data-grid convention.
-// skills = candidate must have ALL selected skills (intersection / AND);
-// jdIds = candidate's linked JD is one of the selection (OR — a resume can
-//          link to only one JD, so AND would always be empty for >1).
-export const EMPTY_FILTERS: ResumeFilters = { creatorIds: "", jdIds: "", skills: "", stage: "" };
+// Text filters are independent string fields (AND).
+// hiringUnitId / jdIds = searchable single-selects.
+// skills = candidate must have ALL selected skills (intersection / AND).
+export const EMPTY_FILTERS: ResumeFilters = {
+  candidateEmail: "",
+  candidateName: "",
+  candidatePhone: "",
+  creatorIds: "",
+  hiringUnitId: "",
+  jdIds: "",
+  skills: "",
+  stage: "",
+};
 export const RESUME_LIBRARY_FILTER_KEYS = Object.keys(EMPTY_FILTERS) as (keyof ResumeFilters &
   string)[];
+/** 工具栏默认收起时始终展示的筛选项（其余需点「更多条件」展开）。 */
+export const RESUME_LIBRARY_PRIMARY_FILTER_KEYS = [
+  "candidateName",
+  "candidateEmail",
+  "creatorIds",
+] as const satisfies readonly (keyof ResumeFilters)[];
 export const RESUME_LIBRARY_DEFAULT_SORTING = [{ desc: true, id: "createdAt" }];
 const RESUME_LIBRARY_CARD_HEIGHTS = {
   base: 714,
@@ -327,7 +344,6 @@ export interface FetchParams {
   knownTotal?: number;
   page: number;
   pageSize: number;
-  search: string;
   filters: ResumeFilters;
   sortBy: string | undefined;
   sortOrder: "asc" | "desc" | undefined;
@@ -353,7 +369,7 @@ export interface ResumeLibraryGridState {
     onResetFilters: () => void;
     rowSelection: ResumeLibraryRowSelection;
   };
-  deferredSearch: string;
+  deferredFilters: ResumeFilters;
   filters: ResumeFilters;
   rowSelection: ResumeLibraryRowSelection;
   setFilter: (key: keyof ResumeFilters & string, value: string) => void;
@@ -410,7 +426,9 @@ export function useResumeLibrarySearchState({
 }: UseResumeLibrarySearchStateOptions): ResumeLibraryGridState {
   const router = useRouter();
   const query = useMemo(() => parseResumeQuery(routeSearch), [routeSearch]);
-  const deferredSearch = useDeferredValue(query.search);
+  // DebouncedSearchInput already debounces commits; deferredFilters still
+  // keeps the list query behind concurrent rendering of rapid filter edits.
+  const deferredFilters = useDeferredValue(query.filters);
   const [rowSelection, setRowSelection] = useState<ResumeLibraryRowSelection>({});
 
   const updateRouteSearch = useCallback(
@@ -454,29 +472,25 @@ export function useResumeLibrarySearchState({
 
   const onFilterChange = useCallback(
     (key: string, value: string) => {
-      if (key === "search") {
-        updateRouteSearchAndResetPage({ search: value || undefined });
-        return;
-      }
       setFilter(key as keyof ResumeFilters & string, value);
     },
-    [setFilter, updateRouteSearchAndResetPage],
+    [setFilter],
   );
 
   const filterValues = useMemo(() => {
-    const out: Record<string, string> = { search: query.search };
+    const out: Record<string, string> = {};
     for (const key of RESUME_LIBRARY_FILTER_KEYS) {
       out[key] = query.filters[key];
     }
     return out;
-  }, [query.filters, query.search]);
+  }, [query.filters]);
 
-  const canResetFilters =
-    query.search.trim() !== "" ||
-    RESUME_LIBRARY_FILTER_KEYS.some((key) => query.filters[key] !== EMPTY_FILTERS[key]);
+  const canResetFilters = RESUME_LIBRARY_FILTER_KEYS.some(
+    (key) => query.filters[key] !== EMPTY_FILTERS[key],
+  );
 
   const onResetFilters = useCallback(() => {
-    const updates: Record<string, number | string | undefined> = { page: 1, search: undefined };
+    const updates: Record<string, number | string | undefined> = { page: 1 };
     for (const key of RESUME_LIBRARY_FILTER_KEYS) {
       updates[key] = EMPTY_FILTERS[key] || undefined;
     }
@@ -503,13 +517,13 @@ export function useResumeLibrarySearchState({
   return useMemo(
     () => ({
       bind,
-      deferredSearch,
+      deferredFilters,
       filters: query.filters,
       rowSelection,
       setFilter,
       setRowSelection,
       sorting,
     }),
-    [bind, deferredSearch, query.filters, rowSelection, setFilter, setRowSelection, sorting],
+    [bind, deferredFilters, query.filters, rowSelection, setFilter, setRowSelection, sorting],
   );
 }
