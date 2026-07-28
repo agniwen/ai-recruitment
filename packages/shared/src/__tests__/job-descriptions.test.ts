@@ -108,6 +108,29 @@ describe("jobDescriptionFormSchema recruitment demand fields", () => {
     });
   });
 
+  it("allows requester and resume contact values up to 500 characters", () => {
+    const result = jobDescriptionFormSchema.safeParse({
+      ...baseJobDescription,
+      requester: "需".repeat(500),
+      resumeContact: "简".repeat(500),
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects requester and resume contact values over 500 characters", () => {
+    const result = jobDescriptionFormSchema.safeParse({
+      ...baseJobDescription,
+      requester: "需".repeat(501),
+      resumeContact: "简".repeat(501),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining([["requester"], ["resumeContact"]]),
+    );
+  });
+
   it("rejects unsupported priority values", () => {
     const result = jobDescriptionFormSchema.safeParse({
       ...baseJobDescription,

@@ -61,6 +61,7 @@ import { useWorkspaceInterviewerMembers } from "../use-workspace-interviewer-mem
 
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
+const CONTACT_MAX_LENGTH = 500;
 const PROMPT_MAX_LENGTH = 10_000;
 
 type JobDescriptionFormTab = "basic" | "screening" | "interview-questions" | "forms";
@@ -77,6 +78,8 @@ export function emptyJobDescriptionFormValues(): JobDescriptionFormValues {
     name: "",
     priority: "P0",
     prompt: "",
+    requester: "",
+    resumeContact: "",
     resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
     workEndTime: "",
     workStartTime: "",
@@ -96,6 +99,8 @@ function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
     name: record.name,
     priority: record.priority,
     prompt: record.prompt,
+    requester: record.requester ?? "",
+    resumeContact: record.resumeContact ?? "",
     resumeScreeningPolicy: record.resumeScreeningPolicy,
     workEndTime: record.workEndTime ?? "",
     workStartTime: record.workStartTime ?? "",
@@ -221,6 +226,8 @@ export function JobDescriptionFormDialog({
         name: value.name.trim(),
         priority: value.priority,
         prompt: value.prompt.trim(),
+        requester: value.requester?.trim() || null,
+        resumeContact: value.resumeContact?.trim() || null,
         resumeScreeningPolicy: value.resumeScreeningPolicy,
         workEndTime: value.workEndTime?.trim() || null,
         workStartTime: value.workStartTime?.trim() || null,
@@ -260,6 +267,8 @@ export function JobDescriptionFormDialog({
         "humanInterviewerIds",
         "priority",
         "prompt",
+        "requester",
+        "resumeContact",
         "workEndTime",
         "workStartTime",
         "workTimezone",
@@ -535,6 +544,52 @@ export function JobDescriptionFormDialog({
                               placeholder="选择部门"
                               searchPlaceholder="搜索部门…"
                               value={field.state.value || null}
+                            />
+                            <FieldError errors={errors} />
+                          </FieldContent>
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+
+                  <form.Field name="requester">
+                    {(field) => {
+                      const errors = toFieldErrors(field.state.meta.errors);
+                      return (
+                        <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
+                          <FieldLabel htmlFor={field.name}>需求发起人</FieldLabel>
+                          <FieldContent className="gap-2">
+                            <Input
+                              aria-invalid={!!errors?.length}
+                              id={field.name}
+                              maxLength={CONTACT_MAX_LENGTH}
+                              onBlur={field.handleBlur}
+                              onChange={(event) => field.handleChange(event.target.value)}
+                              placeholder="请输入需求发起人"
+                              value={field.state.value ?? ""}
+                            />
+                            <FieldError errors={errors} />
+                          </FieldContent>
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+
+                  <form.Field name="resumeContact">
+                    {(field) => {
+                      const errors = toFieldErrors(field.state.meta.errors);
+                      return (
+                        <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
+                          <FieldLabel htmlFor={field.name}>简历对接人</FieldLabel>
+                          <FieldContent className="gap-2">
+                            <Input
+                              aria-invalid={!!errors?.length}
+                              id={field.name}
+                              maxLength={CONTACT_MAX_LENGTH}
+                              onBlur={field.handleBlur}
+                              onChange={(event) => field.handleChange(event.target.value)}
+                              placeholder="请输入简历对接人"
+                              value={field.state.value ?? ""}
                             />
                             <FieldError errors={errors} />
                           </FieldContent>

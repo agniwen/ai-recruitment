@@ -159,6 +159,8 @@ describe("insertBatchWithItems", () => {
       jdMode: "none",
       jobDescriptionId: null,
       organizationId: ORG_A,
+      recruitmentSource: "referral",
+      recruitmentSourceDetail: "王推荐",
       userId: USER_A,
     });
 
@@ -173,6 +175,8 @@ describe("insertBatchWithItems", () => {
       expect(batch?.processedCount).toBe(0);
       expect(batch?.succeededCount).toBe(0);
       expect(batch?.failedCount).toBe(0);
+      expect(batch?.recruitmentSource).toBe("referral");
+      expect(batch?.recruitmentSourceDetail).toBe("王推荐");
       expect(batch?.skippedCount).toBe(0);
 
       const items = await db
@@ -195,6 +199,8 @@ describe("insertBatchWithItems", () => {
       for (const record of records) {
         expect(record.resumeParseStatus).toBe("queued");
         expect(record.resumeProfile).toBeNull();
+        expect(record.recruitmentSource).toBe("referral");
+        expect(record.recruitmentSourceDetail).toBe("王推荐");
         expect(record.resumeStorageKey).toBeTruthy();
       }
     } finally {

@@ -5,15 +5,30 @@ import { useState } from "react";
 import { JobDescriptionSelectField } from "@/components/features/studio/interviews/job-description-select-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ResumeUploadBatchDedupPolicy, ResumeUploadBatchJdMode } from "@arc/db-schema/schema";
+import {
+  resumeRecruitmentSourceMeta,
+  resumeRecruitmentSources,
+} from "@arc/shared/bulk-resume-upload";
+import type { ResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 
 export interface BulkUploadConfirmConfig {
   jdMode: ResumeUploadBatchJdMode;
   jobDescriptionId: string | null;
   dedupPolicy: ResumeUploadBatchDedupPolicy;
+  recruitmentSource: ResumeRecruitmentSource;
+  recruitmentSourceDetail: string | null;
 }
 
 interface Props {
@@ -45,10 +60,18 @@ export function BulkUploadConfirmDialog({
 }: Props) {
   const [jdMode, setJdMode] = useState<ResumeUploadBatchJdMode>("auto");
   const [jobDescriptionId, setJobDescriptionId] = useState("");
+  const [recruitmentSource, setRecruitmentSource] = useState<ResumeRecruitmentSource | "">("");
+  const [recruitmentSourceDetail, setRecruitmentSourceDetail] = useState("");
 
-  // 必须选文件，且 bind 模式下必须选 JD 才能开始。
-  // Must have files; in bind mode a JD must be selected.
-  const canStart = files.length > 0 && (jdMode !== "bind" || jobDescriptionId.length > 0);
+  const sourceDetailMeta = recruitmentSource
+    ? resumeRecruitmentSourceMeta[recruitmentSource]
+    : null;
+  const sourceNeedsDetail = Boolean(sourceDetailMeta?.detailLabel);
+  const canStart =
+    files.length > 0 &&
+    recruitmentSource.length > 0 &&
+    (!sourceNeedsDetail || recruitmentSourceDetail.trim().length > 0) &&
+    (jdMode !== "bind" || jobDescriptionId.length > 0);
 
   function handleStart() {
     if (!canStart) {
@@ -58,6 +81,8 @@ export function BulkUploadConfirmDialog({
       dedupPolicy: "skip",
       jdMode,
       jobDescriptionId: jdMode === "bind" ? jobDescriptionId : null,
+      recruitmentSource: recruitmentSource as ResumeRecruitmentSource,
+      recruitmentSourceDetail: sourceNeedsDetail ? recruitmentSourceDetail.trim() : null,
     });
   }
 
@@ -113,6 +138,49 @@ export function BulkUploadConfirmDialog({
               </ul>
             </CardContent>
           </Card>
+        </div>
+
+        <div>
+          <Label className="mb-2 block text-sm" htmlFor="resume-recruitment-source">
+            简历来源 <span className="text-destructive">*</span>
+          </Label>
+          <Select
+            onValueChange={(value) => {
+              setRecruitmentSource(value as ResumeRecruitmentSource);
+              setRecruitmentSourceDetail("");
+            }}
+            value={recruitmentSource}
+          >
+            <SelectTrigger
+              aria-label="选择简历来源"
+              className="w-full"
+              id="resume-recruitment-source"
+            >
+              <SelectValue placeholder="请选择简历来源" />
+            </SelectTrigger>
+            <SelectContent>
+              {resumeRecruitmentSources.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {resumeRecruitmentSourceMeta[value].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {sourceNeedsDetail ? (
+            <div className="mt-3">
+              <Label className="mb-2 block text-sm" htmlFor="resume-recruitment-source-detail">
+                {sourceDetailMeta?.detailLabel}
+                <span className="text-destructive"> *</span>
+              </Label>
+              <Input
+                id="resume-recruitment-source-detail"
+                maxLength={500}
+                onChange={(event) => setRecruitmentSourceDetail(event.target.value)}
+                placeholder={sourceDetailMeta?.detailPlaceholder ?? undefined}
+                value={recruitmentSourceDetail}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* JD 关联模式 / Job description binding mode */}

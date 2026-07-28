@@ -52,6 +52,7 @@ import type {
 } from "./studio-interviews";
 import type { ResumeParserStructured } from "./resume-parser-schema";
 import type { ResumeReview } from "./resume-review";
+import type { ResumeRecruitmentSource } from "./resume-recruitment-source";
 import { sql } from "drizzle-orm";
 import {
   bigserial,
@@ -463,6 +464,8 @@ export const studioInterview = pgTable(
     // Stage axis; default lets pre-migration INSERTs succeed.
     pipelineStage: text("pipeline_stage").$type<PipelineStage>().notNull().default("screening"),
     recommendationText: text("recommendation_text"),
+    recruitmentSource: text("recruitment_source").$type<ResumeRecruitmentSource>(),
+    recruitmentSourceDetail: text("recruitment_source_detail"),
     resumeContentHash: text("resume_content_hash"),
     resumeEvaluationStatus: text("resume_evaluation_status").$type<ResumeEvaluationStatus>(),
     resumeFileName: text("resume_file_name"),
@@ -1266,6 +1269,8 @@ export const resumeUploadBatch = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     processedCount: integer("processed_count").notNull().default(0),
+    recruitmentSource: text("recruitment_source").$type<ResumeRecruitmentSource>(),
+    recruitmentSourceDetail: text("recruitment_source_detail"),
     resumePoolScope: text("resume_pool_scope").$type<ResumePoolScope>(),
     skippedCount: integer("skipped_count").notNull().default(0),
     status: text("status").$type<ResumeUploadBatchStatus>().notNull(),

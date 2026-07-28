@@ -162,6 +162,8 @@ export const resumeUploadBatchesRouter = factory
         jdMode: input.jdMode,
         jobDescriptionId: input.jobDescriptionId ?? null,
         organizationId: activeOrg.id,
+        recruitmentSource: input.recruitmentSource ?? null,
+        recruitmentSourceDetail: input.recruitmentSourceDetail ?? null,
         resumePoolScope: input.resumePoolScope ?? null,
         target: input.target,
         userId: user.id,

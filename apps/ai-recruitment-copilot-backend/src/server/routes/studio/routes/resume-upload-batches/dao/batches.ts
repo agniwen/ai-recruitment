@@ -19,6 +19,7 @@ import type {
   BulkResumeBatchDetailDto,
   BulkResumeBatchDto,
   BulkResumeBatchItemDto,
+  ResumeRecruitmentSource,
 } from "@arc/shared/bulk-resume-upload";
 import type { ResumeParseJobData } from "@arc/resume-parse-queue/resume-parse";
 import { deleteDuplicateMatchesForSource } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
@@ -38,6 +39,8 @@ export function toBatchDto(row: BatchRow): BulkResumeBatchDto {
     jdMode: row.jdMode,
     jobDescriptionId: row.jobDescriptionId,
     processedCount: row.processedCount,
+    recruitmentSource: row.recruitmentSource,
+    recruitmentSourceDetail: row.recruitmentSourceDetail,
     resumePoolScope: row.resumePoolScope,
     skippedCount: row.skippedCount,
     status: row.status,
@@ -73,6 +76,8 @@ export interface CreateBatchInput {
   jobDescriptionId: string | null;
   dedupPolicy: "skip" | "create";
   referralTargetRole?: string | null;
+  recruitmentSource?: ResumeRecruitmentSource | null;
+  recruitmentSourceDetail?: string | null;
   resumePoolScope?: ResumePoolScope | null;
   sourceChannel?: ResumePoolSourceChannel | null;
   target?: ResumeUploadBatchTarget;
@@ -102,6 +107,8 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
       jdMode: input.jdMode,
       jobDescriptionId: input.jobDescriptionId,
       organizationId: input.organizationId,
+      recruitmentSource: input.recruitmentSource ?? null,
+      recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
       resumePoolScope: target === "resume_pool" ? scope : null,
       status: "pending",
       target,
@@ -131,6 +138,8 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
           jobDescriptionId: input.jdMode === "bind" ? input.jobDescriptionId : null,
           notes: null,
           organizationId: input.organizationId,
+          recruitmentSource: input.recruitmentSource ?? null,
+          recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
           resumeContentHash: file.contentHash,
           resumeFileName: file.originalFileName,
           resumeParseError: null,

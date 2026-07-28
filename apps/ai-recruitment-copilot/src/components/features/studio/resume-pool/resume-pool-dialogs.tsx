@@ -39,6 +39,7 @@ import {
   toResumeDedupMatches,
   useJobDescriptions,
 } from "./resume-pool-page-model";
+import { buildResumePoolRecommendationTemplate } from "./resume-pool-recommendation-template";
 
 const RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH = 2000;
 export function SelectResumePoolScopeDialog({
@@ -230,6 +231,14 @@ export function ImportResumePoolDialog({
   const bindInvalid = mode === "bind" && !jobDescriptionId;
   const hiringUnitInvalid = !hiringUnitId;
   const { isPending } = mutation;
+  const selectedJobDescription = jobDescriptions.find((jd) => jd.id === jobDescriptionId);
+  const selectedHiringUnit = hiringUnits.find((unit) => unit.id === hiringUnitId);
+  let recruitmentSource = "";
+  if (item?.sourceChannel === "referral") {
+    recruitmentSource = "内推";
+  } else if (item?.sourceChannel === "mail_ingest") {
+    recruitmentSource = "邮件入库";
+  }
 
   return (
     <>
@@ -318,7 +327,33 @@ export function ImportResumePoolDialog({
             </FieldContent>
           </Field>
           <Field>
-            <FieldLabel htmlFor="resume-pool-import-recommendation">推荐理由</FieldLabel>
+            <div className="flex items-center gap-2">
+              <FieldLabel htmlFor="resume-pool-import-recommendation">推荐理由</FieldLabel>
+              <Button
+                className="h-auto px-0 py-0 text-xs"
+                disabled={isPending}
+                onClick={() =>
+                  setRecommendationText(
+                    buildResumePoolRecommendationTemplate({
+                      candidateContact: item?.candidatePhone ?? item?.candidateEmail,
+                      candidateName: item?.candidateName,
+                      hiringUnitName: selectedHiringUnit?.name,
+                      jobDescriptionName:
+                        mode === "bind"
+                          ? selectedJobDescription?.name
+                          : (item?.jobDescriptionName ?? item?.targetRole),
+                      recruitmentSource,
+                      resumeContact: selectedJobDescription?.resumeContact,
+                      workYears: item?.workYears,
+                    }),
+                  )
+                }
+                type="button"
+                variant="link"
+              >
+                插入模版
+              </Button>
+            </div>
             <FieldContent>
               <Textarea
                 disabled={isPending}

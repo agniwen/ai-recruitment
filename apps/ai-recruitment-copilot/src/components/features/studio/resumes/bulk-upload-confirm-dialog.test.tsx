@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 describe("BulkUploadConfirmDialog", () => {
-  it("defaults to auto JD matching and marks suspected duplicates", () => {
+  it("requires a resume source before starting an upload", () => {
     const onConfirmed = vi.fn();
     const { root } = renderDialog(onConfirmed);
     const startButton = [...document.querySelectorAll("button")].find((button) =>
@@ -51,6 +51,21 @@ describe("BulkUploadConfirmDialog", () => {
     );
 
     expect(startButton).toBeTruthy();
+    expect(startButton?.disabled).toBe(true);
+
+    act(() => {
+      const sourceTrigger = document.querySelector<HTMLButtonElement>(
+        '[aria-label="选择简历来源"]',
+      );
+      sourceTrigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    act(() => {
+      const bossOption = [...document.querySelectorAll('[role="option"]')].find(
+        (option) => option.textContent === "Boss直聘",
+      );
+      bossOption?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
     act(() => {
       startButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -59,6 +74,8 @@ describe("BulkUploadConfirmDialog", () => {
       dedupPolicy: "skip",
       jdMode: "auto",
       jobDescriptionId: null,
+      recruitmentSource: "boss",
+      recruitmentSourceDetail: null,
     });
 
     act(() => {
