@@ -12,6 +12,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { DateTimePicker } from "@/components/date-time-picker";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { submitResumeReviewEvaluation } from "@/lib/client/api";
@@ -227,10 +227,10 @@ export function ResumeEvaluationDialog({
                       <Label className="text-xs" htmlFor={`slot-start-${index}`}>
                         开始时间
                       </Label>
-                      <Input
+                      <DateTimePicker
                         id={`slot-start-${index}`}
-                        onChange={(event) => updateTimeSlot(index, { startAt: event.target.value })}
-                        type="datetime-local"
+                        onValueChange={(startAt) => updateTimeSlot(index, { startAt })}
+                        placeholder="选择开始时间"
                         value={slot.startAt}
                       />
                     </div>
@@ -238,10 +238,10 @@ export function ResumeEvaluationDialog({
                       <Label className="text-xs" htmlFor={`slot-end-${index}`}>
                         结束时间
                       </Label>
-                      <Input
+                      <DateTimePicker
                         id={`slot-end-${index}`}
-                        onChange={(event) => updateTimeSlot(index, { endAt: event.target.value })}
-                        type="datetime-local"
+                        onValueChange={(endAt) => updateTimeSlot(index, { endAt })}
+                        placeholder="选择结束时间"
                         value={slot.endAt}
                       />
                     </div>

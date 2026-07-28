@@ -19,6 +19,27 @@ vi.mock("@/lib/client/api", () => ({
   submitResumeReviewEvaluation: apiMocks.submitResumeReviewEvaluation,
 }));
 
+vi.mock("@/components/date-time-picker", () => ({
+  DateTimePicker: ({
+    id,
+    onValueChange,
+    value,
+  }: {
+    id?: string;
+    onValueChange: (value: string) => void;
+    value: string;
+  }) => (
+    <input
+      aria-label={id}
+      data-slot="date-time-picker"
+      id={id}
+      onChange={(event) => onValueChange(event.target.value)}
+      type="text"
+      value={value}
+    />
+  ),
+}));
+
 vi.mock("@/lib/client/workspace-context", () => ({
   useWorkspaceSlug: () => "workspace-1",
 }));
@@ -153,6 +174,8 @@ describe("ResumeEvaluationDialog", () => {
     const reason = document.querySelector<HTMLTextAreaElement>("#resume-review-evaluation-reason");
     const startAt = document.querySelector<HTMLInputElement>("#slot-start-0");
     const endAt = document.querySelector<HTMLInputElement>("#slot-end-0");
+    expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
+    expect(document.querySelectorAll('[data-slot="date-time-picker"]')).toHaveLength(2);
     act(() => {
       if (reason && startAt && endAt) {
         setInputValue(reason, "符合岗位要求");
