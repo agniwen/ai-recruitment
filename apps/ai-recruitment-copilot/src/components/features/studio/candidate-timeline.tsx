@@ -153,8 +153,14 @@ const ACTIVITY_FORMATTERS: Record<string, ActivityFormatter> = {
   面试题草稿已生成: () => "生成面试题草稿",
 };
 
+const AUDIT_ACTION_FORMATTERS: Record<string, ActivityFormatter> = {
+  candidate_information_updated: () => "更新候选人信息",
+};
+
 function formatActivityEvent(event: CandidateTimelineEvent) {
-  const formatter = ACTIVITY_FORMATTERS[event.title];
+  const formatter =
+    (event.action ? AUDIT_ACTION_FORMATTERS[event.action] : undefined) ??
+    ACTIVITY_FORMATTERS[event.title];
   if (formatter) {
     return formatter(event);
   }

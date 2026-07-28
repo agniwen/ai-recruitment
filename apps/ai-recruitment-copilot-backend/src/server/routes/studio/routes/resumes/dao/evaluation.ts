@@ -229,54 +229,63 @@ export async function resetResumeEvaluationForJobChange(input: {
   return await db.transaction((tx) => resetResumeEvaluationForJobChangeInTransaction(tx, input));
 }
 
-export async function updateResumeEvaluationStatus(input: {
+interface UpdateResumeEvaluationStatusInput {
   id: string;
   operatorId: string | null;
   organizationId: string;
   status: ResumeEvaluationStatus | null;
-}): Promise<ResumeEvaluationMutationResult> {
+}
+
+export async function updateResumeEvaluationStatusInTransaction(
+  tx: Tx,
+  input: UpdateResumeEvaluationStatusInput,
+): Promise<ResumeEvaluationMutationResult> {
   const now = new Date();
-  return await db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select({ resumeEvaluationStatus: studioInterview.resumeEvaluationStatus })
-      .from(studioInterview)
-      .where(
-        and(
-          eq(studioInterview.id, input.id),
-          eq(studioInterview.organizationId, input.organizationId),
-        ),
-      )
-      .limit(1);
+  const [existing] = await tx
+    .select({ resumeEvaluationStatus: studioInterview.resumeEvaluationStatus })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, input.id),
+        eq(studioInterview.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
 
-    if (!existing) {
-      return { status: "not_found" };
-    }
-    if (existing.resumeEvaluationStatus === input.status) {
-      return { currentStatus: input.status, status: "unchanged" };
-    }
+  if (!existing) {
+    return { status: "not_found" };
+  }
+  if (existing.resumeEvaluationStatus === input.status) {
+    return { currentStatus: input.status, status: "unchanged" };
+  }
 
-    await tx
-      .update(studioInterview)
-      .set({
-        resumeEvaluationStatus: input.status,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(studioInterview.id, input.id),
-          eq(studioInterview.organizationId, input.organizationId),
-        ),
-      );
+  await tx
+    .update(studioInterview)
+    .set({
+      resumeEvaluationStatus: input.status,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(studioInterview.id, input.id),
+        eq(studioInterview.organizationId, input.organizationId),
+      ),
+    );
 
-    await insertEvaluationAudit(tx, {
-      action: "resume_evaluation_updated",
-      fromStatus: existing.resumeEvaluationStatus,
-      interviewRecordId: input.id,
-      operatorId: input.operatorId,
-      organizationId: input.organizationId,
-      toStatus: input.status,
-    });
-
-    return { currentStatus: input.status, status: "updated" };
+  await insertEvaluationAudit(tx, {
+    action: "resume_evaluation_updated",
+    fromStatus: existing.resumeEvaluationStatus,
+    interviewRecordId: input.id,
+    operatorId: input.operatorId,
+    organizationId: input.organizationId,
+    toStatus: input.status,
   });
+
+  return { currentStatus: input.status, status: "updated" };
+}
+
+export async function updateResumeEvaluationStatus(
+  input: UpdateResumeEvaluationStatusInput,
+): Promise<ResumeEvaluationMutationResult> {
+  return await db.transaction((tx) => updateResumeEvaluationStatusInTransaction(tx, input));
 }

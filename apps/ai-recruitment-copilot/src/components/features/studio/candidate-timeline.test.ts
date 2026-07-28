@@ -10,6 +10,8 @@ describe("CandidateTimeline visual density", () => {
     expect(source).toContain("<PreviewCardTrigger");
     expect(source).toContain("formatRelativeTime(event.occurredAt)");
     expect(source).toContain("ACTIVITY_FORMATTERS");
+    expect(source).toContain('candidate_information_updated: () => "更新候选人信息"');
+    expect(source).toContain("AUDIT_ACTION_FORMATTERS[event.action]");
     expect(source).not.toContain("absolute w-px bg-border");
   });
 

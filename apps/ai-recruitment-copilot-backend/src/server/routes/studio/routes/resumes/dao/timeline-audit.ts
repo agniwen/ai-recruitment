@@ -1,6 +1,7 @@
 import { candidateOutcomeMeta, pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";
 import type {
+  CandidateTimelineEventMeta,
   CandidateTimelineEventTone,
   ResumeEvaluationStatus,
 } from "@arc/shared/studio-resumes";
@@ -28,6 +29,45 @@ function isResumeEvaluationStatus(value: unknown): value is ResumeEvaluationStat
 
 function resumeEvaluationLabel(value: unknown): string {
   return isResumeEvaluationStatus(value) ? describeResumeEvaluationStatus(value).label : "未知状态";
+}
+
+function candidateInformationValue(detail: Record<string, unknown>, key: string, fallback: string) {
+  const value = detail[key];
+  if (typeof value === "number") {
+    return String(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  return fallback;
+}
+
+export function auditMetadata(
+  detail: Record<string, unknown>,
+  action: string,
+): CandidateTimelineEventMeta[] {
+  if (action !== "candidate_information_updated") {
+    return [];
+  }
+  return [
+    { label: "姓名", value: candidateInformationValue(detail, "candidateName", "未填写") },
+    { label: "目标岗位", value: candidateInformationValue(detail, "targetRole", "未填写") },
+    {
+      label: "关联岗位",
+      value: candidateInformationValue(detail, "jobDescriptionName", "未绑定岗位"),
+    },
+    {
+      label: "用人组织",
+      value: candidateInformationValue(detail, "hiringUnitName", "未分配用人组织"),
+    },
+    { label: "简历评估", value: resumeEvaluationLabel(detail.resumeEvaluationStatus) },
+    { label: "性别", value: candidateInformationValue(detail, "gender", "未填写") },
+    { label: "年龄", value: candidateInformationValue(detail, "age", "未填写") },
+    { label: "工作年限", value: candidateInformationValue(detail, "workYears", "未填写") },
+    { label: "邮箱", value: candidateInformationValue(detail, "candidateEmail", "未填写") },
+    { label: "电话", value: candidateInformationValue(detail, "candidatePhone", "未填写") },
+    { label: "推荐语", value: candidateInformationValue(detail, "recommendationText", "未填写") },
+  ];
 }
 
 function jobDescriptionChangeLabel(
@@ -87,6 +127,9 @@ export function auditDescription(detail: Record<string, unknown>, action: string
     const to = jobDescriptionChangeLabel(detail, "toJobDescriptionId", "toJobDescriptionName");
     return `${from} -> ${to}`;
   }
+  if (action === "candidate_information_updated") {
+    return "已保存最新候选人信息";
+  }
   if (action === "interview_questions_drafted") {
     const count = typeof detail.questionCount === "number" ? detail.questionCount : null;
     return count === null ? "面试题草稿已生成" : `已生成 ${count} 道面试题草稿`;
@@ -139,6 +182,7 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
   const titles: Record<string, string> = {
     agent_report_received: "AI 报告已接收",
     ai_interview_launched: "发起 AI 面试",
+    candidate_information_updated: "候选人信息已更新",
     context_snapshot_refresh: "上下文已刷新",
     human_interview_round_cancelled: "真人复面取消",
     human_interview_round_completed: "真人复面完成",
@@ -188,6 +232,7 @@ export function auditTone(action: string): CandidateTimelineEventTone {
   }
   if (
     action === "candidate_transition" ||
+    action === "candidate_information_updated" ||
     action === "ai_interview_launched" ||
     action === "resume_evaluation_submitted" ||
     action === "resume_evaluation_updated" ||

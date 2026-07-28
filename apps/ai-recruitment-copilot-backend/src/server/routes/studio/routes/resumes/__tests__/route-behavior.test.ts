@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   loadResumeLibraryMetrics: vi.fn(),
   permissionChecks: [] as [string, string][],
   queryPaginatedResumeRecords: vi.fn(),
+  recordCandidateActivityInTransaction: vi.fn(),
   removeImportedInterviewFromConversations: vi.fn(),
   replaceDuplicateMatchesForSource: vi.fn(),
   resolveRecruitingVisibilityScope: vi.fn(),
@@ -95,6 +96,7 @@ vi.mock(
   () => ({
     submitResumeEvaluationOnce: mocks.submitResumeEvaluationOnce,
     updateResumeEvaluationStatus: vi.fn(),
+    updateResumeEvaluationStatusInTransaction: vi.fn(),
   }),
 );
 vi.mock(
@@ -113,6 +115,12 @@ vi.mock(
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/timeline",
   () => ({ loadCandidateTimeline: mocks.loadCandidateTimeline }),
+);
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity",
+  () => ({
+    recordCandidateActivityInTransaction: mocks.recordCandidateActivityInTransaction,
+  }),
 );
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills",
@@ -510,6 +518,27 @@ describe("resumeLibraryRouter behavior", () => {
       organizationId: ORGANIZATION_ID,
       resumeRecordId: RECORD_ID,
     });
+    expect(mocks.recordCandidateActivityInTransaction).toHaveBeenCalledWith(expect.any(Object), {
+      action: "candidate_information_updated",
+      detail: {
+        age: null,
+        candidateEmail: null,
+        candidateName: "候选人",
+        candidatePhone: null,
+        gender: null,
+        hiringUnitId: "unit-1",
+        hiringUnitName: "用人组织",
+        jobDescriptionId: "jd-new",
+        jobDescriptionName: "新岗位",
+        recommendationText: "推荐给业务负责人",
+        resumeEvaluationStatus: null,
+        targetRole: null,
+        workYears: null,
+      },
+      interviewRecordId: RECORD_ID,
+      operatorId: USER_ID,
+      organizationId: ORGANIZATION_ID,
+    });
   });
 
   it("restarts a later-stage candidate at screening when rebinding to an AI-disabled job", async () => {
@@ -621,9 +650,24 @@ describe("resumeLibraryRouter behavior", () => {
   });
 
   it("updates overview identity fields without overwriting fork-only resume fields", async () => {
+    const updatedDetail = {
+      ...EXISTING_RECORD,
+      candidateEmail: "new@example.com",
+      candidateName: "新候选人",
+      candidatePhone: "13900000000",
+      hiringUnitId: "unit-2",
+      hiringUnitName: "用人组织",
+      recommendationText: "推荐给业务负责人",
+      resumeProfile: {
+        age: 31,
+        gender: "女",
+        workYears: 8.5,
+      },
+      targetRole: "后端工程师",
+    };
     mocks.loadResumeDetail
       .mockResolvedValueOnce(EXISTING_RECORD)
-      .mockResolvedValueOnce({ ...EXISTING_RECORD, candidateName: "新候选人" });
+      .mockResolvedValueOnce(updatedDetail);
 
     const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
       body: JSON.stringify({
@@ -658,6 +702,27 @@ describe("resumeLibraryRouter behavior", () => {
     const [updatePatch] = mocks.updatePatches;
     expect(updatePatch).not.toHaveProperty("hrResumeAssessment");
     expect(updatePatch).toHaveProperty("recommendationText", "推荐给业务负责人");
+    expect(mocks.recordCandidateActivityInTransaction).toHaveBeenCalledWith(expect.any(Object), {
+      action: "candidate_information_updated",
+      detail: {
+        age: 31,
+        candidateEmail: "new@example.com",
+        candidateName: "新候选人",
+        candidatePhone: "13900000000",
+        gender: "女",
+        hiringUnitId: "unit-2",
+        hiringUnitName: "用人组织",
+        jobDescriptionId: "jd-old",
+        jobDescriptionName: "旧岗位",
+        recommendationText: "推荐给业务负责人",
+        resumeEvaluationStatus: "pass",
+        targetRole: "后端工程师",
+        workYears: 8.5,
+      },
+      interviewRecordId: RECORD_ID,
+      operatorId: USER_ID,
+      organizationId: ORGANIZATION_ID,
+    });
   });
 
   it("updates a recommendation for a legacy record without a job or hiring unit", async () => {

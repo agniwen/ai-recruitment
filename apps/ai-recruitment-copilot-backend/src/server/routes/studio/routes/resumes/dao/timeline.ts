@@ -28,7 +28,13 @@ import {
   scheduleEntryStatusMeta,
 } from "@arc/db-schema/studio-interviews";
 import { loadResumeDetail } from "./resumes";
-import { auditDescription, auditTitle, auditTone, stageLabel } from "./timeline-audit";
+import {
+  auditDescription,
+  auditMetadata,
+  auditTitle,
+  auditTone,
+  stageLabel,
+} from "./timeline-audit";
 
 type TimeValue = Date | string | null | undefined;
 
@@ -104,6 +110,7 @@ function addEvent(
     return;
   }
   events.push({
+    action: input.action,
     actorImage: input.actorImage,
     actorName: input.actorName,
     description: input.description,
@@ -706,12 +713,14 @@ export async function loadCandidateTimeline(
       continue;
     }
     addEvent(events, {
+      action: log.action,
       actorImage: log.actorImage,
       actorName: log.actorName,
       description,
       id: `audit:${log.id}`,
       kind: "audit",
       metadata: compactMeta([
+        ...auditMetadata(log.detail ?? {}, log.action),
         textMeta("动作", auditTitle(log.action, log.detail ?? {})),
         textMeta("轮次 ID", log.scheduleEntryId),
         textMeta(

@@ -557,6 +557,7 @@ export interface CandidateTimelineTimeSlot {
 }
 
 export interface CandidateTimelineEvent {
+  action?: string;
   id: string;
   kind: CandidateTimelineEventKind;
   tone: CandidateTimelineEventTone;

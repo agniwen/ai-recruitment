@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- resume route keeps its collection and item mutations in one route-owned module. */
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { resumeLibraryReadRouter } from "./read-route";
@@ -19,6 +20,7 @@ import {
 } from "@arc/shared/studio-resumes";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { removeImportedInterviewFromConversations } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat";
+import { recordCandidateActivityInTransaction } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import {
   parseResumeFastToProfile,
@@ -26,7 +28,10 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
-import { updateResumeEvaluationStatus } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
+import {
+  updateResumeEvaluationStatus,
+  updateResumeEvaluationStatusInTransaction,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
 import {
   applyJobDescriptionChangeEffects,
   JOB_DESCRIPTION_CHANGE_PIPELINE_RESET,
@@ -150,6 +155,28 @@ export function parseResumeLibraryCreateFormInput(formData: FormData) {
 
 export function parseResumeLibraryEditFormInput(formData: FormData) {
   return parseResumeLibraryFormData(formData, resumeLibraryEditFormSchema);
+}
+
+interface CandidateInformationActivityDetail {
+  age: number | null;
+  candidateEmail: string | null;
+  candidateName: string | null;
+  candidatePhone: string | null;
+  gender: string | null;
+  hiringUnitId: string | null;
+  hiringUnitName: string | null;
+  jobDescriptionId: string | null;
+  jobDescriptionName: string | null;
+  recommendationText: string | null;
+  resumeEvaluationStatus: "fail" | "pass" | null;
+  targetRole: string | null;
+  workYears: number | null;
+}
+
+function buildCandidateInformationActivityDetail(
+  detail: CandidateInformationActivityDetail,
+): Record<string, unknown> {
+  return { ...detail };
 }
 
 export function parseResumeReviewFormInput(
@@ -424,6 +451,11 @@ export const resumeLibraryRouter = factory
         workYears: input.workYears,
       });
       const now = new Date();
+      const nextTargetRole = input.targetRole || resumeProfile?.targetRoles[0] || null;
+      const nextEvaluationStatus =
+        jobDescriptionChanged || input.resumeEvaluationStatus === "unreviewed"
+          ? null
+          : input.resumeEvaluationStatus;
       const update = {
         candidateEmail: input.candidateEmail || null,
         candidateName: input.candidateName,
@@ -431,7 +463,7 @@ export const resumeLibraryRouter = factory
         hiringUnitId: input.hiringUnitId ?? null,
         jobDescriptionId: nextJobDescriptionId,
         recommendationText: input.recommendationText || null,
-        targetRole: input.targetRole || resumeProfile?.targetRoles[0] || null,
+        targetRole: nextTargetRole,
         updatedAt: now,
         ...(resumeProfile ? { resumeProfile } : {}),
         ...(jobDescriptionChanged
@@ -459,20 +491,38 @@ export const resumeLibraryRouter = factory
             previousJobDescriptionName: existing.jobDescriptionName,
           });
         }
-      });
-
-      if (!jobDescriptionChanged) {
-        const nextEvaluationStatus =
-          input.resumeEvaluationStatus === "unreviewed" ? null : input.resumeEvaluationStatus;
-        if (nextEvaluationStatus !== existing.resumeEvaluationStatus) {
-          await updateResumeEvaluationStatus({
+        if (!jobDescriptionChanged && nextEvaluationStatus !== existing.resumeEvaluationStatus) {
+          await updateResumeEvaluationStatusInTransaction(tx, {
             id,
             operatorId: c.var.user?.id ?? null,
             organizationId: activeOrg.id,
             status: nextEvaluationStatus,
           });
         }
-      }
+        await recordCandidateActivityInTransaction(tx, {
+          action: "candidate_information_updated",
+          detail: buildCandidateInformationActivityDetail({
+            age: input.age,
+            candidateEmail: input.candidateEmail || null,
+            candidateName: input.candidateName,
+            candidatePhone: input.candidatePhone || null,
+            gender: input.gender || null,
+            hiringUnitId: input.hiringUnitId,
+            hiringUnitName: hiringUnit?.name ?? existing.hiringUnitName ?? null,
+            jobDescriptionId: nextJobDescriptionId,
+            jobDescriptionName: jobDescriptionChanged
+              ? (nextJobDescription?.name ?? null)
+              : existing.jobDescriptionName,
+            recommendationText: input.recommendationText || null,
+            resumeEvaluationStatus: nextEvaluationStatus,
+            targetRole: nextTargetRole,
+            workYears: input.workYears,
+          }),
+          interviewRecordId: id,
+          operatorId: c.var.user?.id ?? null,
+          organizationId: activeOrg.id,
+        });
+      });
 
       if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {
         await reassessAfterJobDescriptionChange({
@@ -556,10 +606,18 @@ export const resumeLibraryRouter = factory
       const now = new Date();
       const nextHrResumeAssessment = input.data.hrResumeAssessment || null;
       const hrAssessmentChanged = existing.hrResumeAssessment !== nextHrResumeAssessment;
+      const nextCandidateName =
+        input.data.candidateName || resumeProfile?.name || existing.candidateName;
+      const nextCandidatePhone = input.data.candidatePhone || resumeProfile?.phone || null;
+      const nextTargetRole = input.data.targetRole || resumeProfile?.targetRoles[0] || null;
+      const nextResumeEvaluationStatus =
+        jobDescriptionChanged || input.data.resumeEvaluationStatus === "unreviewed"
+          ? null
+          : input.data.resumeEvaluationStatus;
       const update = {
         candidateEmail: input.data.candidateEmail || null,
-        candidateName: input.data.candidateName || resumeProfile?.name || existing.candidateName,
-        candidatePhone: input.data.candidatePhone || resumeProfile?.phone || null,
+        candidateName: nextCandidateName,
+        candidatePhone: nextCandidatePhone,
         hiringUnitId,
         hrResumeAssessment: nextHrResumeAssessment,
         ...(hrAssessmentChanged
@@ -570,7 +628,7 @@ export const resumeLibraryRouter = factory
           : {}),
         jobDescriptionId: nextJobDescriptionId,
         recommendationText: input.data.recommendationText || null,
-        targetRole: input.data.targetRole || resumeProfile?.targetRoles[0] || null,
+        targetRole: nextTargetRole,
         updatedAt: now,
         ...resumeProfileUpdate,
         ...(jobDescriptionChanged
@@ -598,22 +656,41 @@ export const resumeLibraryRouter = factory
             previousJobDescriptionName: existing.jobDescriptionName,
           });
         }
-      });
-      const nextResumeEvaluationStatus =
-        jobDescriptionChanged || input.data.resumeEvaluationStatus === "unreviewed"
-          ? null
-          : input.data.resumeEvaluationStatus;
-      if (
-        !jobDescriptionChanged &&
-        nextResumeEvaluationStatus !== existing.resumeEvaluationStatus
-      ) {
-        await updateResumeEvaluationStatus({
-          id,
+        if (
+          !jobDescriptionChanged &&
+          nextResumeEvaluationStatus !== existing.resumeEvaluationStatus
+        ) {
+          await updateResumeEvaluationStatusInTransaction(tx, {
+            id,
+            operatorId: c.var.user?.id ?? null,
+            organizationId: activeOrg.id,
+            status: nextResumeEvaluationStatus,
+          });
+        }
+        await recordCandidateActivityInTransaction(tx, {
+          action: "candidate_information_updated",
+          detail: buildCandidateInformationActivityDetail({
+            age: resumeProfile?.age ?? null,
+            candidateEmail: input.data.candidateEmail || null,
+            candidateName: nextCandidateName,
+            candidatePhone: nextCandidatePhone,
+            gender: resumeProfile?.gender || null,
+            hiringUnitId,
+            hiringUnitName: hiringUnit.name,
+            jobDescriptionId: nextJobDescriptionId,
+            jobDescriptionName: jobDescriptionChanged
+              ? (nextJobDescription?.name ?? null)
+              : existing.jobDescriptionName,
+            recommendationText: input.data.recommendationText || null,
+            resumeEvaluationStatus: nextResumeEvaluationStatus,
+            targetRole: nextTargetRole,
+            workYears: resumeProfile?.workYears ?? null,
+          }),
+          interviewRecordId: id,
           operatorId: c.var.user?.id ?? null,
           organizationId: activeOrg.id,
-          status: nextResumeEvaluationStatus,
         });
-      }
+      });
 
       if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {
         await reassessAfterJobDescriptionChange({
