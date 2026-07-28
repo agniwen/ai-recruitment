@@ -47,6 +47,7 @@ export interface PipelineStageActionBarProps {
   canCreateHumanInterview?: boolean;
   canCreateOffer?: boolean;
   hasJobDescription?: boolean;
+  missingJobAction?: ReactNode;
   resumeEvaluationPassed?: boolean;
   // 真人复面是否全部 completed。
   // Whether all human interview rounds are done.
@@ -102,6 +103,7 @@ export function PipelineStageActionBar({
   canCreateHumanInterview = true,
   canCreateOffer = true,
   hasJobDescription = true,
+  missingJobAction,
   resumeEvaluationPassed = true,
   humanInterviewDone,
   humanInterviewFeedbackComplete,
@@ -193,6 +195,7 @@ export function PipelineStageActionBar({
             {groupedEvaluationActions}
           </ButtonGroup>
         ) : null}
+        {missingJobAction}
         {hasGroupedPrimaryActions ? (
           <ButtonGroup className="flex-wrap justify-end">
             {groupedPrimaryAction}
@@ -548,7 +551,7 @@ function getStageActions(props: {
     case "human_interview": {
       // 真人复面阶段：只有完成所有轮次并补全评价后才能进入 Offer。
       // Human interview: offer is available only after rounds are complete with feedback.
-      if (canCreateOffer) {
+      if (canCreateOffer && hasJobDescription) {
         const disabledReason = resolveOfferAdvanceDisabledReason(
           humanInterviewDone,
           humanInterviewFeedbackComplete,

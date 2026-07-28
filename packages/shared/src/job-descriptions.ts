@@ -278,6 +278,19 @@ export interface JobDescriptionGoogleSheetsSyncResult {
   warnings: JobDescriptionGoogleSheetsSyncWarning[];
 }
 
+export type JobDescriptionGoogleSheetsSyncRunStatus = "failed" | "queued" | "running" | "succeeded";
+
+export interface JobDescriptionGoogleSheetsSyncRun {
+  createdAt: string;
+  error: string | null;
+  finishedAt: string | null;
+  id: string;
+  result: JobDescriptionGoogleSheetsSyncResult | null;
+  startedAt: string | null;
+  status: JobDescriptionGoogleSheetsSyncRunStatus;
+  updatedAt: string;
+}
+
 /**
  * 在招岗位管理页头部 chart 的聚合数据。
  * - candidatesByJd：各岗位非归档候选人数 Top 8。

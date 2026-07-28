@@ -823,6 +823,52 @@ export const jobDescription = pgTable(
   ],
 );
 
+export const jobDescriptionGoogleSheetSyncRun = pgTable(
+  "job_description_google_sheet_sync_run",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    error: text("error"),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
+    result: jsonb("result").$type<{
+      departmentsCreated: number;
+      hiringUnitsCreated: number;
+      jobsCreated: number;
+      jobsUnchanged: number;
+      jobsUpdated: number;
+      processedRows: number;
+      skipped: { code: string | null; reason: string; rowNumber: number }[];
+      warnings: { code: string | null; field: string; message: string; rowNumber: number }[];
+    } | null>(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    status: text("status")
+      .$type<"failed" | "queued" | "running" | "succeeded">()
+      .default("queued")
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "job_description_google_sheet_sync_run_status_check",
+      sql`${table.status} IN ('queued', 'running', 'succeeded', 'failed')`,
+    ),
+    uniqueIndex("job_description_google_sheet_sync_run_active_org_uq")
+      .on(table.organizationId)
+      .where(sql`${table.status} IN ('queued', 'running')`),
+    index("job_description_google_sheet_sync_run_org_created_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const jobDescriptionInterviewer = pgTable(
   "job_description_interviewer",
   {

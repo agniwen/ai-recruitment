@@ -25,7 +25,7 @@ import {
 } from "@arc/shared/resume-review";
 import { IconCheck, IconPencil, IconX } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
@@ -611,11 +611,13 @@ function parseOptionalNumber(raw: string): number | null {
 function ResumeOverviewCandidateInfoSection({
   canEdit = false,
   detail,
+  jobBindingRequestKey,
   onUpdated,
   slug,
 }: {
   canEdit?: boolean;
   detail: ResumeLibraryDetail;
+  jobBindingRequestKey?: number;
   onUpdated?: () => void;
   slug?: string;
 }) {
@@ -626,6 +628,7 @@ function ResumeOverviewCandidateInfoSection({
   const [hiringUnitError, setHiringUnitError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [jdError, setJdError] = useState<string | null>(null);
+  const jobDescriptionFieldRef = useRef<HTMLDivElement>(null);
   const hiringUnitsQuery = useQuery({
     enabled: editing && Boolean(slug),
     queryFn: () => (slug ? fetchSelectableHiringUnits(slug) : Promise.resolve([])),
@@ -663,6 +666,19 @@ function ResumeOverviewCandidateInfoSection({
       setJdError(null);
     }
   }, [detail, editing, showEdit]);
+
+  useEffect(() => {
+    if (!(jobBindingRequestKey && showEdit)) {
+      return;
+    }
+    setEditing(true);
+    requestAnimationFrame(() => {
+      jobDescriptionFieldRef.current?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [jobBindingRequestKey, showEdit]);
 
   function handleCancel() {
     setDraft(toOverviewIdentityDraft(detail));
@@ -816,14 +832,16 @@ function ResumeOverviewCandidateInfoSection({
               value={draft.targetRole}
             />
           </Field>
-          <div>
+          <div ref={jobDescriptionFieldRef}>
             <JobDescriptionSelectField
               disabled={saving}
               error={jdError ?? undefined}
+              id="overview-job-description-select"
               onChange={(next) => {
                 setDraft((current) => ({ ...current, jobDescriptionId: next }));
                 setJdError(null);
               }}
+              openRequestKey={jobBindingRequestKey}
               showDescription={false}
               size="sm"
               value={draft.jobDescriptionId}
@@ -854,7 +872,7 @@ function ResumeOverviewCandidateInfoSection({
           <Field>
             <FieldLabel htmlFor="overview-resume-evaluation">简历评估</FieldLabel>
             <Select
-              disabled={saving}
+              disabled={saving || !draft.jobDescriptionId.trim()}
               onValueChange={(next) =>
                 setDraft((current) => ({
                   ...current,
@@ -990,12 +1008,14 @@ function ResumeOverviewCandidateInfoSection({
 export function ResumeOverviewPanel({
   canEdit = false,
   detail,
+  jobBindingRequestKey,
   onUpdated,
   onViewAiScore,
   slug,
 }: {
   canEdit?: boolean;
   detail: ResumeLibraryDetail;
+  jobBindingRequestKey?: number;
   onUpdated?: () => void;
   onViewAiScore?: () => void;
   slug?: string;
@@ -1007,6 +1027,7 @@ export function ResumeOverviewPanel({
       <ResumeOverviewCandidateInfoSection
         canEdit={canEdit}
         detail={detail}
+        jobBindingRequestKey={jobBindingRequestKey}
         onUpdated={onUpdated}
         slug={slug}
       />

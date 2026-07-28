@@ -29,7 +29,7 @@ vi.mock(
 function createTransaction(existing: {
   closedMeta: null;
   jobDescriptionAiInterviewDisabled?: boolean;
-  jobDescriptionId: string;
+  jobDescriptionId: string | null;
   outcome: "in_pipeline";
   pipelineStage: "human_interview" | "screening";
 }) {
@@ -197,6 +197,34 @@ describe("transitionCandidateStage", () => {
     ).resolves.toEqual({
       kind: "invalid",
       message: "当前关联岗位已禁用 AI 面试。",
+    });
+
+    expect(updatedWhere).not.toHaveBeenCalled();
+    expect(insertedValues).not.toHaveBeenCalled();
+    expect(mocks.invalidateCaches).not.toHaveBeenCalled();
+  });
+
+  it("rejects advancing when the candidate has no linked job", async () => {
+    const { insertedValues, tx, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionId: null,
+      outcome: "in_pipeline",
+      pipelineStage: "screening",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+
+    await expect(
+      transitionCandidateStage({
+        authorize: vi.fn(),
+        candidateId: "candidate-a",
+        input: { pipelineStage: "ai_interview" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({
+      kind: "invalid",
+      message: "请先绑定在招岗位后再推进招聘阶段。",
     });
 
     expect(updatedWhere).not.toHaveBeenCalled();

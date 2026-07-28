@@ -27,6 +27,7 @@ import type {
   JobDescriptionRecord,
 } from "@arc/shared/job-descriptions";
 import type { PaginatedJobDescriptionResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import { JobDescriptionCharts } from "@/components/features/studio/job-descriptions/job-description-charts";
 import { ScopedResumesModal } from "@/components/features/studio/scoped-resumes-modal";
 import {
@@ -56,7 +57,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { rpc } from "@/lib/client/rpc";
-import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { JobDescriptionFormDialog } from "@/components/features/studio/job-descriptions/job-description-form-dialog";
 import { createAiGeneratedJobDescriptionFormValues } from "@/components/features/studio/job-descriptions/job-description-form-values";
 import { JobDescriptionAiCreateDialog } from "@/components/features/studio/job-descriptions/job-description-ai-create-dialog";
@@ -105,6 +106,7 @@ function JobDescriptionManagementPage({
   metrics: JobDescriptionMetrics;
 }) {
   const slug = useWorkspaceSlug();
+  const memberRole = useWorkspaceMemberRole();
   const router = useRouter();
   const queryClient = useQueryClient();
   // 当前点开"简历关联"的那条 JD；null 表示弹窗关闭。
@@ -120,14 +122,8 @@ function JobDescriptionManagementPage({
   const canCreateJobDescription = useHasPermission("jd", "create");
   const canUpdateJobDescription = useHasPermission("jd", "update");
   const canDeleteJobDescription = useHasPermission("jd", "delete");
-  const canCreateHiringUnit = useHasPermission("hiringUnit", "create");
-  const canCreateDepartment = useHasPermission("department", "create");
   const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
-  const canSyncGoogleSheet =
-    canCreateJobDescription &&
-    canUpdateJobDescription &&
-    canCreateHiringUnit &&
-    canCreateDepartment;
+  const canSyncGoogleSheet = isWorkspaceAdministratorRole(memberRole);
 
   const fetchJobDescriptions = useCallback(
     async (params: {

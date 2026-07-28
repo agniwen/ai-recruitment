@@ -94,6 +94,10 @@ export const ac = createAccessControl(statement);
 
 export const NO_ACCESS_WORKSPACE_ROLE = "noAccess";
 
+export function isWorkspaceAdministratorRole(role: string | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
 export const owner = ac.newRole({
   ...ownerAc.statements,
   auditLog: ["read"],

@@ -28,8 +28,14 @@ vi.mock("@/components/features/studio/job-descriptions/job-description-hover-car
 }));
 
 vi.mock("@/components/features/studio/interviews/job-description-select-field", () => ({
-  JobDescriptionSelectField: ({ value }: { value: string }) => (
-    <input aria-label="关联岗位" readOnly value={value} />
+  JobDescriptionSelectField: ({
+    openRequestKey,
+    value,
+  }: {
+    openRequestKey?: number;
+    value: string;
+  }) => (
+    <input aria-label="关联岗位" data-open-request-key={openRequestKey} readOnly value={value} />
   ),
 }));
 
@@ -100,7 +106,7 @@ function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: str
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function renderOverview(detail: ResumeLibraryDetail) {
+function renderOverview(detail: ResumeLibraryDetail, jobBindingRequestKey?: number) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -111,7 +117,12 @@ function renderOverview(detail: ResumeLibraryDetail) {
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <ResumeOverviewPanel canEdit detail={detail} slug="workspace" />
+        <ResumeOverviewPanel
+          canEdit
+          detail={detail}
+          jobBindingRequestKey={jobBindingRequestKey}
+          slug="workspace"
+        />
       </QueryClientProvider>,
     );
   });
@@ -242,6 +253,30 @@ it("quick-edits a recommendation when the legacy record has no job or hiring uni
       );
     });
   });
+
+  act(() => root.unmount());
+  queryClient.clear();
+});
+
+it("enters quick edit and requests the linked-job select to open", async () => {
+  const detail = {
+    ...makeDetail(),
+    jobDescriptionId: null,
+    jobDescriptionName: null,
+  };
+  apiMocks.fetchSelectableHiringUnits.mockResolvedValue([]);
+
+  const { container, queryClient, root } = renderOverview(detail, 1);
+
+  await act(async () => {
+    await vi.waitFor(() => {
+      const jobSelect = container.querySelector<HTMLInputElement>('[aria-label="关联岗位"]');
+      expect(jobSelect).not.toBeNull();
+      expect(jobSelect?.dataset.openRequestKey).toBe("1");
+    });
+  });
+
+  expect(container.querySelector('[aria-label="保存"]')).not.toBeNull();
 
   act(() => root.unmount());
   queryClient.clear();

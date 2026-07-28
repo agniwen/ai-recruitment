@@ -81,8 +81,8 @@ export function getCandidateStageTransitionError({
   if (to === "closed") {
     return null;
   }
-  if (to === "human_interview" && !hasJobDescription) {
-    return "请先绑定在招岗位后再安排真人面试";
+  if (!hasJobDescription) {
+    return "请先绑定在招岗位后再推进招聘阶段。";
   }
 
   const event = getCandidatePipelineEventForTargetStage({ from, to });

@@ -16,4 +16,15 @@ describe("StudioPersonDetailController resume record mapping", () => {
       "jobDescriptionAiInterviewDisabled: resumeRecord.jobDescriptionAiInterviewDisabled",
     );
   });
+
+  it("routes the unbound-job action into the linked-job quick editor", () => {
+    const actionStart = source.indexOf("const missingJobAction =");
+    const actionEnd = source.indexOf("const actionBar =", actionStart);
+    const actionSource = source.slice(actionStart, actionEnd);
+
+    expect(actionSource).toContain('variant="ghost"');
+    expect(actionSource).toContain("简历尚未绑定岗位");
+    expect(actionSource).toContain('setActiveTab("overview")');
+    expect(actionSource).toContain("setJobBindingRequestKey((current) => current + 1)");
+  });
 });

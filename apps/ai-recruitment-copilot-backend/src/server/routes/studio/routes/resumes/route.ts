@@ -369,6 +369,9 @@ export const resumeLibraryRouter = factory
       if (!existing) {
         return c.json({ error: "记录不存在。" }, 404);
       }
+      if (!existing.jobDescriptionId) {
+        return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
+      }
 
       const input = c.req.valid("json");
       const result = await updateResumeEvaluationStatus({
@@ -433,6 +436,15 @@ export const resumeLibraryRouter = factory
 
       const nextJobDescriptionId = input.jobDescriptionId ?? null;
       const jobDescriptionChanged = existing.jobDescriptionId !== nextJobDescriptionId;
+      const requestedEvaluationStatus =
+        input.resumeEvaluationStatus === "unreviewed" ? null : input.resumeEvaluationStatus;
+      if (
+        !nextJobDescriptionId &&
+        requestedEvaluationStatus !== null &&
+        requestedEvaluationStatus !== existing.resumeEvaluationStatus
+      ) {
+        return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
+      }
       const nextJobDescription =
         jobDescriptionChanged && nextJobDescriptionId
           ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)
@@ -588,6 +600,17 @@ export const resumeLibraryRouter = factory
       }
       const nextJobDescriptionId = input.data.jobDescriptionId || null;
       const jobDescriptionChanged = existing.jobDescriptionId !== nextJobDescriptionId;
+      const requestedEvaluationStatus =
+        input.data.resumeEvaluationStatus === "unreviewed"
+          ? null
+          : input.data.resumeEvaluationStatus;
+      if (
+        !nextJobDescriptionId &&
+        requestedEvaluationStatus !== null &&
+        requestedEvaluationStatus !== existing.resumeEvaluationStatus
+      ) {
+        return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
+      }
       const nextJobDescription =
         jobDescriptionChanged && nextJobDescriptionId
           ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)

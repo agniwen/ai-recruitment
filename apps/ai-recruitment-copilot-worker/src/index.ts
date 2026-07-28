@@ -14,6 +14,10 @@ import {
   closeResumeReviewGenerationQueue,
   createResumeReviewGenerationWorker,
 } from "@arc/resume-parse-queue/resume-review-generation";
+import {
+  closeJobDescriptionGoogleSheetSyncQueue,
+  createJobDescriptionGoogleSheetSyncWorker,
+} from "@arc/resume-parse-queue/job-description-google-sheet-sync";
 import { createWorkerApp } from "./app";
 import { resolveWorkerServerConfig } from "./config";
 import { getWorkerConnectionSummary, loadWorkerEnv } from "./env";
@@ -78,6 +82,8 @@ async function main() {
   let worker: ReturnType<typeof createResumeParseWorker> | null = null;
   let semanticIndexWorker: ReturnType<typeof createResumeSemanticIndexWorker> | null = null;
   let reviewGenerationWorker: ReturnType<typeof createResumeReviewGenerationWorker> | null = null;
+  let googleSheetSyncWorker: ReturnType<typeof createJobDescriptionGoogleSheetSyncWorker> | null =
+    null;
   let mailIngestScheduler: MailIngestScheduler | null = null;
   if (isResumeParseQueueConfigured()) {
     await recoverIncompleteResumeParseJobs();
@@ -105,6 +111,11 @@ async function main() {
         await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/review-worker");
       await processResumeReviewGenerationJob(payload);
     });
+    googleSheetSyncWorker = createJobDescriptionGoogleSheetSyncWorker(async (payload) => {
+      const { processGoogleSheetSyncRun } =
+        await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/routes/google-sheet-sync/processor");
+      await processGoogleSheetSyncRun(payload);
+    });
     mailIngestScheduler = startMailIngestScheduler();
   }
   if (!worker) {
@@ -125,9 +136,11 @@ async function main() {
         await worker?.close();
         await semanticIndexWorker?.close();
         await reviewGenerationWorker?.close();
+        await googleSheetSyncWorker?.close();
         await closeResumeParseQueue();
         await closeResumeSemanticIndexQueue();
         await closeResumeReviewGenerationQueue();
+        await closeJobDescriptionGoogleSheetSyncQueue();
         if (process.env.DATABASE_URL) {
           const { closeDatabase } =
             await import("@arc/ai-recruitment-copilot-backend/lib/server/db");

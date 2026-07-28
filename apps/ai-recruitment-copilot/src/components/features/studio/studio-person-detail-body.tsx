@@ -757,6 +757,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
                 <ResumeOverviewPanel
                   canEdit={Boolean(model.canUpdateResumeLibrary)}
                   detail={resumeRecord}
+                  jobBindingRequestKey={model.jobBindingRequestKey}
                   onUpdated={model.onResumeIdentityUpdated}
                   onViewAiScore={() => setActiveTab("ai-analysis")}
                   slug={model.slug}
@@ -782,7 +783,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
                   review={resumeRecord?.resumeReview}
                   screeningResultSlot={<ResumeScreeningResultPanel resumeRecord={resumeRecord} />}
                   summaryAction={
-                    canUseManagementActions ? (
+                    canUseManagementActions && resumeRecord?.jobDescriptionId ? (
                       <Button
                         disabled={isResumeAssessmentInProgress || isReassessingResume}
                         onClick={handleReassessResume}

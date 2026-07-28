@@ -202,6 +202,7 @@ export function useStudioPersonDetailController({
     null,
   );
   const [isReassessingResume, setIsReassessingResume] = useState(false);
+  const [jobBindingRequestKey, setJobBindingRequestKey] = useState(0);
   const tabContentRootRef = useRef<HTMLDivElement>(null);
   const {
     pendingResetSubmissionId,
@@ -217,6 +218,7 @@ export function useStudioPersonDetailController({
     setEvaluationDecision(null);
     setMetadataReport(null);
     setOptimisticPipelineStage(null);
+    setJobBindingRequestKey(0);
     setSelectedResultConversationId(null);
   }, [defaultTab, mode, recordId, roundId]);
   useEffect(() => {
@@ -698,6 +700,24 @@ export function useStudioPersonDetailController({
   }) ? (
     <ResumeEvaluationActions onDecisionSelect={setEvaluationDecision} />
   ) : null;
+  const missingJobAction =
+    layoutMode === "page" &&
+    resumeRecord &&
+    !resumeRecord.jobDescriptionId &&
+    resumeRecord.pipelineStage !== "closed" &&
+    canUpdateResumeLibrary ? (
+      <Button
+        onClick={() => {
+          setActiveTab("overview");
+          setJobBindingRequestKey((current) => current + 1);
+        }}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        简历尚未绑定岗位
+      </Button>
+    ) : null;
   const actionBar =
     mode === "resume" &&
     record &&
@@ -741,6 +761,7 @@ export function useStudioPersonDetailController({
         canCreateOffer={canCreateOffer}
         evaluationActions={resumeEvaluationActions}
         hasJobDescription={Boolean(resumeRecord?.jobDescriptionId)}
+        missingJobAction={missingJobAction}
         resumeEvaluationPassed={canProgressResumeRecordToInterview}
         onAdvance={async (target) => {
           const error = await advancePipelineStage({
@@ -894,6 +915,7 @@ export function useStudioPersonDetailController({
     isRoundsLoading,
     isSelectedReportLoading: shouldFetchSelectedReport && isSelectedReportFetching,
     isTimelineLoading,
+    jobBindingRequestKey,
     metadataReport,
     mode,
     onRequestClose,

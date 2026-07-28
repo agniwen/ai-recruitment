@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobDescriptionSelectField } from "./job-description-select-field";
 
 const queryMocks = vi.hoisted(() => ({
+  open: vi.fn(),
   records: [] as {
     aiInterviewDisabled: boolean;
     departmentName: string;
@@ -24,8 +25,10 @@ vi.mock("@/lib/client/workspace-context", () => ({
 }));
 
 vi.mock("@/components/ui/searchable-select", () => ({
-  SearchableSelect: ({ options }: { options: { label: string }[] }) => (
-    <div data-testid="job-options">{options.map((option) => option.label).join("|")}</div>
+  SearchableSelect: ({ id, options }: { id: string; options: { label: string }[] }) => (
+    <button data-testid="job-options" id={id} onClick={queryMocks.open} type="button">
+      {options.map((option) => option.label).join("|")}
+    </button>
   ),
 }));
 
@@ -48,6 +51,7 @@ afterEach(() => {
     act(() => root.unmount());
     host.remove();
   }
+  vi.clearAllMocks();
 });
 
 describe("JobDescriptionSelectField", () => {
@@ -69,5 +73,29 @@ describe("JobDescriptionSelectField", () => {
 
     expect(host.textContent).toContain("可用岗位");
     expect(host.textContent).not.toContain("禁用岗位");
+  });
+
+  it("focuses and opens the selector for an external quick-edit request", async () => {
+    queryMocks.records = [job("jd-enabled", "可用岗位", false)];
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    mountedRoots.push({ host, root });
+
+    act(() => {
+      root.render(
+        <JobDescriptionSelectField
+          id="overview-job-description-select"
+          onChange={vi.fn()}
+          openRequestKey={1}
+          value=""
+        />,
+      );
+    });
+
+    await act(async () => {
+      await vi.waitFor(() => expect(queryMocks.open).toHaveBeenCalledOnce());
+    });
+    expect(document.activeElement?.id).toBe("overview-job-description-select");
   });
 });

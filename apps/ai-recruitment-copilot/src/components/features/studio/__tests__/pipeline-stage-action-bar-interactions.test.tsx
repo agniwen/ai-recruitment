@@ -23,6 +23,7 @@ function renderActionBar({
   aiInterviewDisabled,
   evaluationActions,
   hasJobDescription,
+  missingJobAction,
   onAdvance = vi.fn(),
   pipelineStage = "ai_interview",
   primaryAction,
@@ -32,6 +33,7 @@ function renderActionBar({
   aiInterviewDisabled?: boolean;
   evaluationActions?: ReactNode;
   hasJobDescription?: boolean;
+  missingJobAction?: ReactNode;
   onAdvance?: (target: PipelineStage) => void | Promise<void>;
   pipelineStage?: PipelineStage;
   primaryAction?: ReactNode;
@@ -49,6 +51,7 @@ function renderActionBar({
         aiInterviewDisabled={aiInterviewDisabled}
         evaluationActions={evaluationActions}
         hasJobDescription={hasJobDescription}
+        missingJobAction={missingJobAction}
         onAdvance={onAdvance}
         onRequestClose={vi.fn()}
         onRequestReactivate={vi.fn()}
@@ -158,6 +161,25 @@ describe("PipelineStageActionBar interactions", () => {
     expect(host.textContent).not.toContain("评估通过");
     expect(host.textContent).not.toContain("发起 AI 面试");
     expect(host.textContent).not.toContain("安排真人面试");
+  });
+
+  it("shows the linked-job quick-edit action when no job is bound", () => {
+    const host = renderActionBar({
+      hasJobDescription: false,
+      missingJobAction: <button type="button">简历尚未绑定岗位</button>,
+      pipelineStage: "screening",
+    });
+
+    expect(getButton(host, "简历尚未绑定岗位")).toBeDefined();
+  });
+
+  it("hides offer advancement when a legacy human-interview record has no linked job", () => {
+    const host = renderActionBar({
+      hasJobDescription: false,
+      pipelineStage: "human_interview",
+    });
+
+    expect(host.textContent).not.toContain("进入 Offer");
   });
 
   it("hides all screening next-interview actions before the resume passes evaluation", () => {

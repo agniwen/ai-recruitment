@@ -288,6 +288,9 @@ export const resumeLibraryReadRouter = factory
     if (!existing) {
       return c.json({ error: "记录不存在。" }, 404);
     }
+    if (!existing.jobDescriptionId) {
+      return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
+    }
     try {
       const enqueueResult = await enqueueResumeReassessmentForRecord({
         organizationId: activeOrg.id,
@@ -445,6 +448,9 @@ export const resumeLibraryReadRouter = factory
       const existing = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
       if (!existing) {
         return c.json({ error: "记录不存在。" }, 404);
+      }
+      if (!existing.jobDescriptionId) {
+        return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
       }
       const input = c.req.valid("json");
       const result = await submitResumeEvaluationOnce({

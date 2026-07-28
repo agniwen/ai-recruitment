@@ -5,6 +5,7 @@ import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useQuery } from "@tanstack/react-query";
 import { IconLoader2 as LoaderCircleIcon } from "@tabler/icons-react";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 import {
   Field,
@@ -37,9 +38,11 @@ export function JobDescriptionSelectField({
   error,
   action,
   disabled,
+  id = "interview-jd-select",
   label = "关联在招岗位",
   matching = false,
   hideAiInterviewDisabled = false,
+  openRequestKey,
   required = true,
   showDescription = true,
   size = "default",
@@ -49,6 +52,8 @@ export function JobDescriptionSelectField({
   error?: string;
   action?: ReactNode;
   disabled?: boolean;
+  /** Trigger id, used by labels and external quick-edit focus. */
+  id?: string;
   /** Field label text. Defaults to 关联在招岗位. */
   label?: string;
   /**
@@ -60,6 +65,8 @@ export function JobDescriptionSelectField({
   matching?: boolean;
   /** Hide jobs that cannot be selected after a candidate leaves screening. */
   hideAiInterviewDisabled?: boolean;
+  /** Changing this key opens the linked-job selector. */
+  openRequestKey?: number;
   /** When false, omit the required asterisk next to the label. */
   required?: boolean;
   /** When false, omit the helper description under the field. */
@@ -83,9 +90,20 @@ export function JobDescriptionSelectField({
     staleTime: 60_000,
   });
 
+  useEffect(() => {
+    if (!(openRequestKey && !disabled && !matching)) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      const trigger = document.querySelector(`#${id}`) as HTMLElement | null;
+      trigger?.focus();
+      trigger?.click();
+    });
+  }, [disabled, id, matching, openRequestKey]);
+
   return (
     <Field data-invalid={error ? true : undefined}>
-      <FieldLabel className="flex items-center gap-2" htmlFor="interview-jd-select">
+      <FieldLabel className="flex items-center gap-2" htmlFor={id}>
         <span>
           {label}
           {required ? <span className="text-destructive"> *</span> : null}
@@ -102,7 +120,7 @@ export function JobDescriptionSelectField({
           <div className="min-w-0 flex-1">
             <SearchableSelect
               disabled={disabled || matching}
-              id="interview-jd-select"
+              id={id}
               invalid={!!error}
               onChange={(next) => onChange(next ?? "")}
               options={jobDescriptions.flatMap((jd) =>

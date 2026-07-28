@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   submitResumeEvaluationOnce: vi.fn(),
   transaction: vi.fn(),
   updatePatches: [] as Record<string, unknown>[],
+  updateResumeEvaluationStatus: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
@@ -95,7 +96,7 @@ vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation",
   () => ({
     submitResumeEvaluationOnce: mocks.submitResumeEvaluationOnce,
-    updateResumeEvaluationStatus: vi.fn(),
+    updateResumeEvaluationStatus: mocks.updateResumeEvaluationStatus,
     updateResumeEvaluationStatusInTransaction: vi.fn(),
   }),
 );
@@ -424,8 +425,8 @@ describe("resumeLibraryRouter behavior", () => {
 
   it("exposes workspace review data and records a one-time evaluation", async () => {
     mocks.loadResumeDetailForAuthenticatedReviewer
-      .mockResolvedValueOnce({ id: RECORD_ID })
-      .mockResolvedValueOnce({ id: RECORD_ID })
+      .mockResolvedValueOnce({ id: RECORD_ID, jobDescriptionId: "jd-old" })
+      .mockResolvedValueOnce({ id: RECORD_ID, jobDescriptionId: "jd-old" })
       .mockResolvedValueOnce({ id: RECORD_ID, resumeEvaluationStatus: "pass" });
     mocks.submitResumeEvaluationOnce.mockResolvedValue({ status: "updated" });
 
@@ -454,6 +455,67 @@ describe("resumeLibraryRouter behavior", () => {
       reason: "符合岗位要求",
       status: "pass",
     });
+  });
+
+  it("rejects evaluation when the resume has no linked job", async () => {
+    mocks.loadResumeDetailForAuthenticatedReviewer.mockResolvedValue({
+      id: RECORD_ID,
+      jobDescriptionId: null,
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/review/evaluation`, {
+      body: JSON.stringify({
+        availableTimeSlots: [
+          { endAt: "2026-07-12T11:00:00.000Z", startAt: "2026-07-12T10:00:00.000Z" },
+        ],
+        reason: "符合岗位要求",
+        status: "pass",
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "请先关联在招岗位后再评估。",
+    });
+    expect(mocks.submitResumeEvaluationOnce).not.toHaveBeenCalled();
+  });
+
+  it("rejects the workspace evaluation endpoint when the resume has no linked job", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      ...EXISTING_RECORD,
+      jobDescriptionId: null,
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/evaluation`, {
+      body: JSON.stringify({ status: "pass" }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "请先关联在招岗位后再评估。",
+    });
+    expect(mocks.updateResumeEvaluationStatus).not.toHaveBeenCalled();
+  });
+
+  it("rejects reassessment when the resume has no linked job", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      ...EXISTING_RECORD,
+      jobDescriptionId: null,
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/reassess`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "请先关联在招岗位后再评估。",
+    });
+    expect(mocks.enqueueResumeReassessmentForRecord).not.toHaveBeenCalled();
   });
 
   it("audits a job change while preserving fork fields and invalidating stale AI assessment", async () => {
@@ -746,7 +808,7 @@ describe("resumeLibraryRouter behavior", () => {
         hiringUnitId: null,
         jobDescriptionId: null,
         recommendationText: "推荐给业务负责人",
-        resumeEvaluationStatus: "pass",
+        resumeEvaluationStatus: "unreviewed",
         targetRole: "",
         workYears: null,
       }),
@@ -764,6 +826,39 @@ describe("resumeLibraryRouter behavior", () => {
         recommendationText: "推荐给业务负责人",
       }),
     );
+  });
+
+  it("rejects a quick-edit evaluation when the resume still has no linked job", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      ...EXISTING_RECORD,
+      hiringUnitId: null,
+      jobDescriptionId: null,
+      resumeEvaluationStatus: null,
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: null,
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: null,
+        jobDescriptionId: null,
+        recommendationText: "",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        workYears: null,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "请先关联在招岗位后再评估。",
+    });
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it("does not let overview quick edit clear an existing job or hiring unit", async () => {
