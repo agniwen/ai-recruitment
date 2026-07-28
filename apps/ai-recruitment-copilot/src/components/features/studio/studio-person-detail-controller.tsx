@@ -478,6 +478,8 @@ export function useStudioPersonDetailController({
   const hasRecord = record !== null;
   const tabVisibilityRecord = hasRecord
     ? {
+        hasAiInterviewRounds: candidateRounds.length > 0,
+        jobDescriptionAiInterviewDisabled: record?.jobDescriptionAiInterviewDisabled,
         pipelineStage: visiblePipelineStage,
       }
     : null;

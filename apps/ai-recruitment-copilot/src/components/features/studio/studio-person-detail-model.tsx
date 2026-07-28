@@ -45,11 +45,17 @@ export type StudioPersonDetailTab =
   | "instructions"
   | "transcript";
 
-export function shouldShowAiInterviewTab(record: { pipelineStage?: string } | null): boolean {
-  if (!record?.pipelineStage) {
+export function shouldShowAiInterviewTab(
+  record: {
+    hasAiInterviewRounds?: boolean;
+    jobDescriptionAiInterviewDisabled?: boolean;
+    pipelineStage?: string;
+  } | null,
+): boolean {
+  if (!record?.pipelineStage || record.jobDescriptionAiInterviewDisabled) {
     return false;
   }
-  return ["ai_interview", "human_interview", "offer", "closed"].includes(record.pipelineStage);
+  return record.pipelineStage === "ai_interview" || Boolean(record.hasAiInterviewRounds);
 }
 
 // 真人复面 / Offer tab 的可见性：阶段已到达或经过时才显示，避免新候选人页面噪音。
