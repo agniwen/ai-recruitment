@@ -15,6 +15,7 @@ import {
 import type { ResumePoolEventType, ResumePoolScope, ResumePoolStatus } from "@arc/db-schema/schema";
 import type { ResumeParseStatus } from "@arc/db-schema/studio-interviews";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
+import type { ResumeRecruitmentSource } from "@arc/db-schema/resume-recruitment-source";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type {
   PaginatedResumePoolResult,
@@ -59,6 +60,8 @@ export interface CreateResumePoolItemInput {
   jobDescriptionId: string | null;
   notes: string | null;
   organizationId: string | null;
+  recruitmentSource?: ResumeRecruitmentSource | null;
+  recruitmentSourceDetail?: string | null;
   resumeFileName: string | null;
   resumeParseStatus?: ResumeParseStatus;
   resumeProfile: ResumeProfile | null;
@@ -224,6 +227,8 @@ export async function createResumePoolItem(input: CreateResumePoolItemInput): Pr
       organizationId: input.organizationId,
       publishedAt: input.scope === "public" ? now : null,
       publishedBy: input.scope === "public" ? input.createdBy : null,
+      recruitmentSource: input.recruitmentSource ?? null,
+      recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
       resumeContentHash: input.contentHash,
       resumeFileName: input.resumeFileName,
       resumeParseError: null,
@@ -234,7 +239,8 @@ export async function createResumePoolItem(input: CreateResumePoolItemInput): Pr
       resumeText: input.resumeText ?? null,
       scope: input.scope,
       skillsNormalized: normalizeSkills(input.resumeProfile?.skills),
-      sourceChannel: input.sourceChannel ?? null,
+      sourceChannel:
+        input.sourceChannel ?? (input.recruitmentSource === "referral" ? "referral" : null),
       sourceOrganizationId: input.scope === "public" ? input.organizationId : null,
       sourcePoolItemId: null,
       sourceUserId: input.scope === "public" ? input.createdBy : null,
@@ -706,6 +712,8 @@ export function importPoolItemToResumeLibrary(
             notes: source.notes,
             organizationId: admission.organizationId,
             recommendationText: input.recommendationText ?? null,
+            recruitmentSource: source.recruitmentSource,
+            recruitmentSourceDetail: source.recruitmentSourceDetail,
             resumeFileName: source.resumeFileName,
             resumeParseStatus: "processing",
             resumeProfile: source.resumeProfile,

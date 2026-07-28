@@ -170,6 +170,8 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
           organizationId: input.organizationId,
           publishedAt: scope === "public" ? now : null,
           publishedBy: scope === "public" ? input.userId : null,
+          recruitmentSource: input.recruitmentSource ?? null,
+          recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
           resumeContentHash: file.contentHash,
           resumeFileName: file.originalFileName,
           resumeParseError: null,
@@ -179,7 +181,8 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
           resumeStorageKey: file.storageKey,
           scope,
           skillsNormalized: [],
-          sourceChannel: input.sourceChannel ?? null,
+          sourceChannel:
+            input.sourceChannel ?? (input.recruitmentSource === "referral" ? "referral" : null),
           sourceOrganizationId: scope === "public" ? input.organizationId : null,
           sourcePoolItemId: null,
           sourceUserId: scope === "public" ? input.userId : null,

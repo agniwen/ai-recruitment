@@ -401,10 +401,12 @@ describe("queryResumePoolItems", () => {
     expect(detail?.uploaderEmail).toBe("resume-pool-a@example.com");
   });
 
-  it("stores selected hiring unit when importing into the resume library", async () => {
+  it("stores selected hiring unit and recruitment source when importing", async () => {
     const poolItemId = await createResumePoolItem(
       basePoolInput({
         contentHash: "hash-resume-pool-import-hiring-unit",
+        recruitmentSource: "referral",
+        recruitmentSourceDetail: "李推荐",
         resumeFileName: "candidate-import-hiring-unit.pdf",
       }),
     );
@@ -426,6 +428,8 @@ describe("queryResumePoolItems", () => {
       .select({
         hiringUnitId: studioInterview.hiringUnitId,
         recommendationText: studioInterview.recommendationText,
+        recruitmentSource: studioInterview.recruitmentSource,
+        recruitmentSourceDetail: studioInterview.recruitmentSourceDetail,
       })
       .from(studioInterview)
       .where(eq(studioInterview.id, result.resumeRecordId))
@@ -433,6 +437,8 @@ describe("queryResumePoolItems", () => {
 
     expect(record?.hiringUnitId).toBe(HIRING_UNIT_A);
     expect(record?.recommendationText).toBe("推荐理由：项目经历匹配业务需求");
+    expect(record?.recruitmentSource).toBe("referral");
+    expect(record?.recruitmentSourceDetail).toBe("李推荐");
   });
 
   it("does not generate resume review synchronously when importing into the resume library", async () => {

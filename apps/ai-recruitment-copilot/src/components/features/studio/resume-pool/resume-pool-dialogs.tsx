@@ -2,8 +2,9 @@
 
 import { IconDatabase, IconLoader2 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { ResumePoolScope, ResumeUploadBatchDedupPolicy } from "@arc/db-schema/schema";
+import type { ResumePoolScope } from "@arc/db-schema/schema";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
+import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import type {
   ResumePoolImportDuplicateResult,
   ResumePoolListRecord,
@@ -42,6 +43,24 @@ import {
 import { buildResumePoolRecommendationTemplate } from "./resume-pool-recommendation-template";
 
 const RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH = 2000;
+
+function describePoolItemRecruitmentSource(item: ResumePoolListRecord | null): string {
+  const recruitmentSource = describeResumeRecruitmentSource(
+    item?.recruitmentSource,
+    item?.recruitmentSourceDetail,
+  );
+  if (recruitmentSource) {
+    return recruitmentSource;
+  }
+  if (item?.sourceChannel === "referral") {
+    return "内推";
+  }
+  if (item?.sourceChannel === "mail_ingest") {
+    return "邮件入库";
+  }
+  return "";
+}
+
 export function SelectResumePoolScopeDialog({
   defaultScope,
   onOpenChange,
@@ -96,40 +115,6 @@ export function SelectResumePoolScopeDialog({
           </FieldLabel>
         ))}
       </RadioGroup>
-    </Modal>
-  );
-}
-
-export function PrivateResumePoolUploadPolicyDialog({
-  fileCount,
-  onConfirmed,
-  onOpenChange,
-  open,
-}: {
-  fileCount: number;
-  open: boolean;
-  onConfirmed: (dedupPolicy: ResumeUploadBatchDedupPolicy) => void;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <Modal
-      description="命中疑似重复时仍会加入私有简历，并在列表中标记“疑似重复”。"
-      footer={
-        <>
-          <Button onClick={() => onOpenChange(false)} variant="outline">
-            取消
-          </Button>
-          <Button onClick={() => onConfirmed("skip")}>开始上传 ({fileCount})</Button>
-        </>
-      }
-      onOpenChange={onOpenChange}
-      open={open}
-      size="sm"
-      title="查重处理"
-    >
-      <p className="rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground text-sm">
-        所有简历都会被保留；系统会把疑似重复关系记录到简历上。
-      </p>
     </Modal>
   );
 }
@@ -233,12 +218,7 @@ export function ImportResumePoolDialog({
   const { isPending } = mutation;
   const selectedJobDescription = jobDescriptions.find((jd) => jd.id === jobDescriptionId);
   const selectedHiringUnit = hiringUnits.find((unit) => unit.id === hiringUnitId);
-  let recruitmentSource = "";
-  if (item?.sourceChannel === "referral") {
-    recruitmentSource = "内推";
-  } else if (item?.sourceChannel === "mail_ingest") {
-    recruitmentSource = "邮件入库";
-  }
+  const recruitmentSource = describePoolItemRecruitmentSource(item);
 
   return (
     <>

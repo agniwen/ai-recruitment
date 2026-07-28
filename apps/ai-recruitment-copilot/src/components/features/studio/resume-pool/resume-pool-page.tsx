@@ -4,7 +4,7 @@
 import { IconLoader2, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import type { ResumePoolScope, ResumeUploadBatchDedupPolicy } from "@arc/db-schema/schema";
+import type { ResumePoolScope } from "@arc/db-schema/schema";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
 import type { ResumePoolListRecord } from "@arc/shared/resume-pool";
 
@@ -66,9 +66,10 @@ import type { ResumePoolFilters } from "@/components/features/studio/resume-pool
 import { useResumePoolPageState } from "@/components/features/studio/resume-pool/use-resume-pool-page-state";
 import {
   ImportResumePoolDialog,
-  PrivateResumePoolUploadPolicyDialog,
   SelectResumePoolScopeDialog,
 } from "@/components/features/studio/resume-pool/resume-pool-dialogs";
+import { ResumePoolUploadConfirmDialog } from "@/components/features/studio/resume-pool/resume-pool-upload-confirm-dialog";
+import type { ResumePoolUploadConfirmConfig } from "@/components/features/studio/resume-pool/resume-pool-upload-confirm-dialog";
 import { ResumePoolDetailDialog } from "@/components/features/studio/resume-pool/resume-pool-details";
 import {
   ResumePoolListContent,
@@ -115,9 +116,8 @@ export function ResumePoolPage() {
     detailRecord,
     duplicateMatchRecord,
     importTarget,
-    pendingPrivateUploadFiles,
+    pendingUploadFiles,
     previewRecord,
-    privateUploadPolicyOpen,
     progressOpen,
     selectedPrivateResumeIds,
     setBatchListOpen,
@@ -125,15 +125,16 @@ export function ResumePoolPage() {
     setDetailRecord,
     setDuplicateMatchRecord,
     setImportTarget,
-    setPendingPrivateUploadFiles,
+    setPendingUploadFiles,
     setPreviewRecord,
-    setPrivateUploadPolicyOpen,
     setProgressOpen,
     setSelectedPrivateResumeIds,
     setUploadEntryOpen,
+    setUploadConfirmOpen,
     setUploadOpen,
     setUploadScope,
     uploadEntryOpen,
+    uploadConfirmOpen,
     uploadOpen,
     uploadScope,
   } = useResumePoolPageState(scope);
@@ -294,7 +295,7 @@ export function ResumePoolPage() {
   function startQueuedUpload(
     files: File[],
     targetScope: ResumePoolScope,
-    dedupPolicy: ResumeUploadBatchDedupPolicy,
+    config: ResumePoolUploadConfirmConfig,
   ) {
     if (!canUploadResumePool) {
       return;
@@ -303,13 +304,15 @@ export function ResumePoolPage() {
       return;
     }
     setUploadEntryOpen(false);
-    setPrivateUploadPolicyOpen(false);
-    setPendingPrivateUploadFiles([]);
+    setUploadConfirmOpen(false);
+    setPendingUploadFiles([]);
     setProgressOpen(true);
     void bulk.start(files, {
-      dedupPolicy,
+      dedupPolicy: config.dedupPolicy,
       jdMode: "none",
       jobDescriptionId: null,
+      recruitmentSource: config.recruitmentSource,
+      recruitmentSourceDetail: config.recruitmentSourceDetail,
       resumePoolScope: targetScope,
       target: "resume_pool",
     });
@@ -322,13 +325,10 @@ export function ResumePoolPage() {
     if (files.length === 0) {
       return;
     }
-    if (targetScope === "private") {
-      setUploadEntryOpen(false);
-      setPendingPrivateUploadFiles(files);
-      setPrivateUploadPolicyOpen(true);
-      return;
-    }
-    startQueuedUpload(files, "public", "create");
+    setUploadScope(targetScope);
+    setUploadEntryOpen(false);
+    setPendingUploadFiles(files);
+    setUploadConfirmOpen(true);
   }
 
   async function handleOpenBatch(batch: (typeof poolBatches)[number]) {
@@ -567,18 +567,17 @@ export function ResumePoolPage() {
         open={uploadEntryOpen}
         title="上传简历"
       />
-      <PrivateResumePoolUploadPolicyDialog
-        fileCount={pendingPrivateUploadFiles.length}
-        onConfirmed={(dedupPolicy) =>
-          startQueuedUpload(pendingPrivateUploadFiles, "private", dedupPolicy)
-        }
+      <ResumePoolUploadConfirmDialog
+        fileCount={pendingUploadFiles.length}
+        onConfirmed={(config) => startQueuedUpload(pendingUploadFiles, uploadScope, config)}
         onOpenChange={(open) => {
-          setPrivateUploadPolicyOpen(open);
+          setUploadConfirmOpen(open);
           if (!open) {
-            setPendingPrivateUploadFiles([]);
+            setPendingUploadFiles([]);
           }
         }}
-        open={privateUploadPolicyOpen}
+        open={uploadConfirmOpen}
+        scope={uploadScope}
       />
       <UploadBatchListDialog
         batches={poolBatches}

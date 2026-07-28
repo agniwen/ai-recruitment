@@ -215,9 +215,10 @@ describe("insertBatchWithItems", () => {
       jdMode: "bind",
       jobDescriptionId: REFERRAL_JD,
       organizationId: ORG_A,
+      recruitmentSource: "referral",
+      recruitmentSourceDetail: "李推荐",
       referralTargetRole: "内推前端工程师",
       resumePoolScope: "public",
-      sourceChannel: "referral",
       target: "resume_pool",
       userId: USER_A,
     });
@@ -236,6 +237,8 @@ describe("insertBatchWithItems", () => {
         .where(eq(resumePoolItem.id, poolItemId));
 
       expect(poolItem?.jobDescriptionId).toBe(REFERRAL_JD);
+      expect(poolItem?.recruitmentSource).toBe("referral");
+      expect(poolItem?.recruitmentSourceDetail).toBe("李推荐");
       expect(poolItem?.sourceChannel).toBe("referral");
       expect(poolItem?.targetRole).toBe("内推前端工程师");
     } finally {

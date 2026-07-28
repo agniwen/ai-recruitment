@@ -4,6 +4,7 @@ import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import type { ResumeEducationDisplayItem } from "./resume-education";
 import type { ResumeDuplicateMatchSummary } from "./resume-duplicates";
 import type { ResumePoolScope, ResumePoolStatus } from "@arc/db-schema/schema";
+import type { ResumeRecruitmentSource } from "@arc/db-schema/resume-recruitment-source";
 import type { ResumeLibraryProfileSnapshot } from "./studio-resumes";
 
 export const resumePoolScopeSchema = z.enum(["private", "public"]);
@@ -56,6 +57,8 @@ export interface ResumePoolListRecord {
   sourceChannel: ResumePoolSourceChannel | null;
   publishedAt: string | null;
   publishedBy: string | null;
+  recruitmentSource: ResumeRecruitmentSource | null;
+  recruitmentSourceDetail: string | null;
   candidateName: string;
   candidateEmail: string | null;
   candidatePhone: string | null;

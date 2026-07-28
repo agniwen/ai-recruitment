@@ -3,6 +3,7 @@ import { studioInterview } from "@arc/db-schema/schema";
 import type { StudioInterviewResumeSourceType } from "@arc/db-schema/schema";
 import type { InterviewQuestion, ResumeProfile } from "@arc/db-schema/interview/types";
 import type { ResumeReview } from "@arc/db-schema/resume-review";
+import type { ResumeRecruitmentSource } from "@arc/db-schema/resume-recruitment-source";
 import type {
   ResumeParseStatus,
   ResumeReviewStatus,
@@ -25,6 +26,8 @@ export interface CreateResumeRecordFromStorageInput {
   notes: string | null;
   organizationId: string;
   recommendationText?: string | null;
+  recruitmentSource?: ResumeRecruitmentSource | null;
+  recruitmentSourceDetail?: string | null;
   resumeFileName: string | null;
   resumeProfile: ResumeProfile | null;
   resumeParseStatus?: ResumeParseStatus;
@@ -79,6 +82,8 @@ export async function createResumeRecordFromStorage(
       notes: input.notes,
       organizationId: input.organizationId,
       recommendationText: input.recommendationText ?? null,
+      recruitmentSource: input.recruitmentSource ?? null,
+      recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
       resumeContentHash: input.contentHash,
       resumeFileName: input.resumeFileName,
       resumeParseError: null,

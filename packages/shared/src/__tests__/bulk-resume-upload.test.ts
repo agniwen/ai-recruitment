@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createBulkResumeBatchSchema } from "../bulk-resume-upload";
+import {
+  createBulkResumeBatchSchema,
+  describeResumeRecruitmentSource,
+} from "../bulk-resume-upload";
 
 const baseInput = {
   dedupPolicy: "skip" as const,
@@ -23,6 +26,17 @@ describe("createBulkResumeBatchSchema recruitment source", () => {
     expect(createBulkResumeBatchSchema.safeParse(baseInput).success).toBe(true);
   });
 
+  it("requires a source for resume-pool uploads", () => {
+    const result = createBulkResumeBatchSchema.safeParse({
+      ...baseInput,
+      recruitmentSource: null,
+      target: "resume_pool",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(["recruitmentSource"]);
+  });
+
   it.each(["referral", "other"] as const)("requires detail for %s", (recruitmentSource) => {
     const result = createBulkResumeBatchSchema.safeParse({
       ...baseInput,
@@ -32,5 +46,12 @@ describe("createBulkResumeBatchSchema recruitment source", () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.path).toEqual(["recruitmentSourceDetail"]);
+  });
+});
+
+describe("describeResumeRecruitmentSource", () => {
+  it("formats referral and custom source details for recommendation templates", () => {
+    expect(describeResumeRecruitmentSource("referral", "李推荐")).toBe("内推（李推荐）");
+    expect(describeResumeRecruitmentSource("other", "线下活动")).toBe("线下活动");
   });
 });

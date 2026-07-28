@@ -35,6 +35,27 @@ export const resumeRecruitmentSourceMeta: Record<
   zhilian: { detailLabel: null, detailPlaceholder: null, label: "智联招聘" },
 };
 
+export function resumeRecruitmentSourceNeedsDetail(
+  source: ResumeRecruitmentSource | "" | null | undefined,
+): boolean {
+  return source ? Boolean(resumeRecruitmentSourceMeta[source].detailLabel) : false;
+}
+
+export function describeResumeRecruitmentSource(
+  source: ResumeRecruitmentSource | null | undefined,
+  detail: string | null | undefined,
+): string {
+  if (!source) {
+    return "";
+  }
+  const normalizedDetail = detail?.trim();
+  if (source === "other" && normalizedDetail) {
+    return normalizedDetail;
+  }
+  const { label } = resumeRecruitmentSourceMeta[source];
+  return normalizedDetail ? `${label}（${normalizedDetail}）` : label;
+}
+
 // /uploads 单文件返回。
 // /uploads single-file return shape.
 export interface BulkResumeUploadFileDescriptor {
@@ -68,17 +89,20 @@ export const createBulkResumeBatchSchema = z
     target: z.enum(["resume_library", "resume_pool"]).default("resume_library"),
   })
   .superRefine((value, ctx) => {
-    if (value.target === "resume_library" && !value.recruitmentSource) {
+    if (!value.recruitmentSource) {
       ctx.addIssue({
         code: "custom",
         message: "请选择简历来源",
         path: ["recruitmentSource"],
       });
     }
-    const sourceDetailLabel = value.recruitmentSource
-      ? resumeRecruitmentSourceMeta[value.recruitmentSource].detailLabel
-      : null;
-    if (sourceDetailLabel && !value.recruitmentSourceDetail?.trim()) {
+    if (
+      resumeRecruitmentSourceNeedsDetail(value.recruitmentSource) &&
+      !value.recruitmentSourceDetail?.trim()
+    ) {
+      const sourceDetailLabel = value.recruitmentSource
+        ? resumeRecruitmentSourceMeta[value.recruitmentSource].detailLabel
+        : null;
       ctx.addIssue({
         code: "custom",
         message: `请输入${sourceDetailLabel}`,

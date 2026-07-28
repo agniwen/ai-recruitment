@@ -1141,6 +1141,8 @@ export const resumePoolItem = pgTable(
     }),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     publishedBy: text("published_by").references(() => user.id, { onDelete: "set null" }),
+    recruitmentSource: text("recruitment_source").$type<ResumeRecruitmentSource>(),
+    recruitmentSourceDetail: text("recruitment_source_detail"),
     resumeContentHash: text("resume_content_hash"),
     resumeFileName: text("resume_file_name"),
     resumeParseError: text("resume_parse_error"),

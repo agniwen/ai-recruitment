@@ -8,8 +8,8 @@ export function useResumePoolPageState(initialUploadScope: ResumePoolScope) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadEntryOpen, setUploadEntryOpen] = useState(false);
   const [uploadScope, setUploadScope] = useState<ResumePoolScope>(initialUploadScope);
-  const [privateUploadPolicyOpen, setPrivateUploadPolicyOpen] = useState(false);
-  const [pendingPrivateUploadFiles, setPendingPrivateUploadFiles] = useState<File[]>([]);
+  const [uploadConfirmOpen, setUploadConfirmOpen] = useState(false);
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<File[]>([]);
   const [progressOpen, setProgressOpen] = useState(false);
   const [batchListOpen, setBatchListOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<ResumePoolListRecord | null>(null);
@@ -29,9 +29,8 @@ export function useResumePoolPageState(initialUploadScope: ResumePoolScope) {
     detailRecord,
     duplicateMatchRecord,
     importTarget,
-    pendingPrivateUploadFiles,
+    pendingUploadFiles,
     previewRecord,
-    privateUploadPolicyOpen,
     progressOpen,
     selectedPrivateResumeIds,
     setBatchListOpen,
@@ -39,14 +38,15 @@ export function useResumePoolPageState(initialUploadScope: ResumePoolScope) {
     setDetailRecord,
     setDuplicateMatchRecord,
     setImportTarget,
-    setPendingPrivateUploadFiles,
+    setPendingUploadFiles,
     setPreviewRecord,
-    setPrivateUploadPolicyOpen,
     setProgressOpen,
     setSelectedPrivateResumeIds,
+    setUploadConfirmOpen,
     setUploadEntryOpen,
     setUploadOpen,
     setUploadScope,
+    uploadConfirmOpen,
     uploadEntryOpen,
     uploadOpen,
     uploadScope,

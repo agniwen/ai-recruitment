@@ -5,23 +5,13 @@ import { useState } from "react";
 import { JobDescriptionSelectField } from "@/components/features/studio/interviews/job-description-select-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { ResumeUploadBatchDedupPolicy, ResumeUploadBatchJdMode } from "@arc/db-schema/schema";
-import {
-  resumeRecruitmentSourceMeta,
-  resumeRecruitmentSources,
-} from "@arc/shared/bulk-resume-upload";
+import { resumeRecruitmentSourceNeedsDetail } from "@arc/shared/bulk-resume-upload";
 import type { ResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
+import { ResumeRecruitmentSourceFields } from "./resume-recruitment-source-fields";
 
 export interface BulkUploadConfirmConfig {
   jdMode: ResumeUploadBatchJdMode;
@@ -63,10 +53,7 @@ export function BulkUploadConfirmDialog({
   const [recruitmentSource, setRecruitmentSource] = useState<ResumeRecruitmentSource | "">("");
   const [recruitmentSourceDetail, setRecruitmentSourceDetail] = useState("");
 
-  const sourceDetailMeta = recruitmentSource
-    ? resumeRecruitmentSourceMeta[recruitmentSource]
-    : null;
-  const sourceNeedsDetail = Boolean(sourceDetailMeta?.detailLabel);
+  const sourceNeedsDetail = resumeRecruitmentSourceNeedsDetail(recruitmentSource);
   const canStart =
     files.length > 0 &&
     recruitmentSource.length > 0 &&
@@ -140,48 +127,13 @@ export function BulkUploadConfirmDialog({
           </Card>
         </div>
 
-        <div>
-          <Label className="mb-2 block text-sm" htmlFor="resume-recruitment-source">
-            简历来源 <span className="text-destructive">*</span>
-          </Label>
-          <Select
-            onValueChange={(value) => {
-              setRecruitmentSource(value as ResumeRecruitmentSource);
-              setRecruitmentSourceDetail("");
-            }}
-            value={recruitmentSource}
-          >
-            <SelectTrigger
-              aria-label="选择简历来源"
-              className="w-full"
-              id="resume-recruitment-source"
-            >
-              <SelectValue placeholder="请选择简历来源" />
-            </SelectTrigger>
-            <SelectContent>
-              {resumeRecruitmentSources.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {resumeRecruitmentSourceMeta[value].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {sourceNeedsDetail ? (
-            <div className="mt-3">
-              <Label className="mb-2 block text-sm" htmlFor="resume-recruitment-source-detail">
-                {sourceDetailMeta?.detailLabel}
-                <span className="text-destructive"> *</span>
-              </Label>
-              <Input
-                id="resume-recruitment-source-detail"
-                maxLength={500}
-                onChange={(event) => setRecruitmentSourceDetail(event.target.value)}
-                placeholder={sourceDetailMeta?.detailPlaceholder ?? undefined}
-                value={recruitmentSourceDetail}
-              />
-            </div>
-          ) : null}
-        </div>
+        <ResumeRecruitmentSourceFields
+          detail={recruitmentSourceDetail}
+          idPrefix="resume-recruitment"
+          onDetailChange={setRecruitmentSourceDetail}
+          onSourceChange={setRecruitmentSource}
+          source={recruitmentSource}
+        />
 
         {/* JD 关联模式 / Job description binding mode */}
         <div>

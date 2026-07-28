@@ -299,6 +299,8 @@ async function fetchAndParse(
         jobDescriptionId,
         notes: null,
         organizationId,
+        recruitmentSource: batchRow.recruitmentSource,
+        recruitmentSourceDetail: batchRow.recruitmentSourceDetail,
         resumeFileName: item.originalFileName,
         resumeParseStatus: "ready",
         resumeProfile,

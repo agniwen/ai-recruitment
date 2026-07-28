@@ -109,6 +109,8 @@ export function toResumePoolListRecord(
     profileHighlights: buildProfileHighlights(row.resumeProfile),
     publishedAt: serializeDate(row.publishedAt),
     publishedBy: row.publishedBy,
+    recruitmentSource: row.recruitmentSource,
+    recruitmentSourceDetail: row.recruitmentSourceDetail,
     resumeContentHash: row.resumeContentHash,
     resumeFileName: row.resumeFileName,
     resumeParseError: row.resumeParseError,
