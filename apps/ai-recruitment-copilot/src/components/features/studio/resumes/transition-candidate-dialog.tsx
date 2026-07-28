@@ -3,13 +3,13 @@
 /* oxlint-disable no-use-before-define -- helper components defined below export */
 // 「标记结案」/「重新激活」二合一对话框。
 //   - mode='close'：HR 选 outcome（录用/淘汰/撤回/归档）+ 可选的录用 / 淘汰细节
-//   - mode='reactivate'：HR 填写原因并选择恢复到哪个非 closed 阶段
+//   - mode='reactivate'：HR 填写原因并恢复到简历初筛
 // 内部 fetch 候选人详情（React Query 缓存复用 detail 面板的数据）拿到 closedMeta /
 // candidate name；调用方只传 id 即可。
 //
 // Close & reactivate combined dialog. In close mode HR picks an outcome and
 // fills outcome-specific details. In reactivate mode HR enters a reason and
-// chooses which non-closed stage to restore to. Candidate detail is fetched via
+// restores the candidate to resume screening. Candidate detail is fetched via
 // React Query and shares cache with the detail panel.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,14 +19,8 @@ import {
   candidateOutcomeMeta,
   closeCategoryMeta,
   closeCategoryValues,
-  pipelineStageMeta,
 } from "@arc/db-schema/studio-interviews";
-import type {
-  CandidateOutcome,
-  ClosedMeta,
-  CloseCategory,
-  PipelineStage,
-} from "@arc/db-schema/studio-interviews";
+import type { CandidateOutcome, ClosedMeta, CloseCategory } from "@arc/db-schema/studio-interviews";
 import type { ApiError } from "@/lib/client/api/errors";
 import { fetchStudioResume, transitionInterviewRecord } from "@/lib/client/api";
 import { runAsyncAction } from "@/lib/client/async-control";
@@ -64,52 +58,8 @@ const CLOSE_OUTCOMES: Exclude<CandidateOutcome, "in_pipeline">[] = [
   "archived",
 ];
 
-type ReactivateTargetStage = Extract<
-  PipelineStage,
-  "screening" | "ai_interview" | "human_interview" | "offer"
->;
-
-const REACTIVATE_TARGET_STAGES: ReactivateTargetStage[] = [
-  "screening",
-  "ai_interview",
-  "human_interview",
-  "offer",
-];
-
-const REACTIVATE_TARGET_STAGE_INDEX = new Map(
-  REACTIVATE_TARGET_STAGES.map((stage, index) => [stage, index]),
-);
-
-function getReachedReactivateStageIndex(
-  resume: Awaited<ReturnType<typeof fetchStudioResume>> | undefined,
-): number {
-  let reached = 0;
-  const previousStage = resume?.closedMeta?.previousStage;
-  if (previousStage && REACTIVATE_TARGET_STAGE_INDEX.has(previousStage as ReactivateTargetStage)) {
-    reached = Math.max(
-      reached,
-      REACTIVATE_TARGET_STAGE_INDEX.get(previousStage as ReactivateTargetStage) ?? 0,
-    );
-  }
-  if (resume?.hasInterviewRounds || resume?.stageProgress.aiInterview) {
-    reached = Math.max(reached, REACTIVATE_TARGET_STAGE_INDEX.get("ai_interview") ?? 0);
-  }
-  if (resume?.stageProgress.humanInterview) {
-    reached = Math.max(reached, REACTIVATE_TARGET_STAGE_INDEX.get("human_interview") ?? 0);
-  }
-  if (resume?.stageProgress.offer) {
-    reached = Math.max(reached, REACTIVATE_TARGET_STAGE_INDEX.get("offer") ?? 0);
-  }
-  return reached;
-}
-
-function isReactivateTargetStageEnabled(
-  stage: ReactivateTargetStage,
-  resume: Awaited<ReturnType<typeof fetchStudioResume>> | undefined,
-): boolean {
-  const stageIndex = REACTIVATE_TARGET_STAGE_INDEX.get(stage) ?? 0;
-  return stageIndex <= getReachedReactivateStageIndex(resume);
-}
+const REACTIVATE_TARGET_STAGE = "screening" as const;
+const REACTIVATE_TARGET_STAGE_LABEL = "简历初筛";
 
 interface TransitionCandidateDialogProps {
   open: boolean;
@@ -440,20 +390,13 @@ function ReactivateDialog({
 }: Omit<TransitionCandidateDialogProps, "mode" | "initialOutcome">) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
-  const { data: resume } = useQuery({
-    enabled: open && !!candidate?.id,
-    queryFn: () => fetchStudioResume(slug, candidate?.id ?? ""),
-    queryKey: ["studio-resumes", slug, "detail", candidate?.id],
-  });
 
   const [reactivationReason, setReactivationReason] = useState("");
-  const [targetStage, setTargetStage] = useState<ReactivateTargetStage>("screening");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setReactivationReason("");
-      setTargetStage("screening");
     }
   }, [open]);
 
@@ -464,10 +407,6 @@ function ReactivateDialog({
     const trimmedReason = reactivationReason.trim();
     if (!trimmedReason) {
       toast.error("请填写重新激活原因");
-      return;
-    }
-    if (!isReactivateTargetStageEnabled(targetStage, resume)) {
-      toast.error("请选择候选人已走过的招聘阶段");
       return;
     }
     setSubmitting(true);
@@ -482,10 +421,10 @@ function ReactivateDialog({
       operation: async () => {
         await transitionInterviewRecord(slug, candidate.id, {
           outcome: "in_pipeline",
-          pipelineStage: targetStage,
+          pipelineStage: REACTIVATE_TARGET_STAGE,
           reactivationReason: trimmedReason,
         });
-        toast.success(`已重新激活，回到「${pipelineStageMeta[targetStage].label}」`);
+        toast.success(`已重新激活，回到「${REACTIVATE_TARGET_STAGE_LABEL}」`);
         await queryClient.invalidateQueries({
           queryKey: ["studio-resumes", slug, "detail", candidate.id],
         });
@@ -503,8 +442,7 @@ function ReactivateDialog({
         <DialogHeader>
           <DialogTitle>重新激活：{candidateLabel}</DialogTitle>
           <DialogDescription>
-            选择恢复到哪个招聘阶段。确认后简历评估会重置为「未评估」，已存在的轮次 / Offer
-            记录会保留。
+            恢复到简历初筛阶段。确认后简历评估会重置为「未评估」，已存在的轮次 / Offer 记录会保留。
           </DialogDescription>
         </DialogHeader>
 
@@ -513,23 +451,14 @@ function ReactivateDialog({
             <Label className="text-sm" htmlFor="reactivation-target-stage">
               回退阶段
             </Label>
-            <Select
-              onValueChange={(value) => setTargetStage(value as ReactivateTargetStage)}
-              value={targetStage}
-            >
+            <Select value={REACTIVATE_TARGET_STAGE}>
               <SelectTrigger className="w-full" id="reactivation-target-stage">
-                <SelectValue>{pipelineStageMeta[targetStage].label}</SelectValue>
+                <SelectValue>{REACTIVATE_TARGET_STAGE_LABEL}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {REACTIVATE_TARGET_STAGES.map((stage) => (
-                  <SelectItem
-                    disabled={!isReactivateTargetStageEnabled(stage, resume)}
-                    key={stage}
-                    value={stage}
-                  >
-                    {pipelineStageMeta[stage].label}
-                  </SelectItem>
-                ))}
+                <SelectItem value={REACTIVATE_TARGET_STAGE}>
+                  {REACTIVATE_TARGET_STAGE_LABEL}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
