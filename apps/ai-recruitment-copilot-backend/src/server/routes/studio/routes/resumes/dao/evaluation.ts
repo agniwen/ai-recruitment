@@ -160,6 +160,64 @@ export async function submitResumeEvaluationOnce(input: {
   });
 }
 
+export async function resetResumeEvaluationForJobChangeInTransaction(
+  tx: Tx,
+  input: {
+    id: string;
+    nextJobDescriptionId: string | null;
+    operatorId: string | null;
+    organizationId: string;
+    previousJobDescriptionId: string | null;
+    previousStatus: ResumeEvaluationStatus;
+  },
+): Promise<ResumeEvaluationMutationResult> {
+  const now = new Date();
+  const [existing] = await tx
+    .select({ resumeEvaluationStatus: studioInterview.resumeEvaluationStatus })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, input.id),
+        eq(studioInterview.organizationId, input.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) {
+    return { status: "not_found" };
+  }
+  if (existing.resumeEvaluationStatus === null) {
+    return { currentStatus: null, status: "unchanged" };
+  }
+
+  await tx
+    .update(studioInterview)
+    .set({
+      resumeEvaluationStatus: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(studioInterview.id, input.id),
+        eq(studioInterview.organizationId, input.organizationId),
+      ),
+    );
+
+  await insertEvaluationAudit(tx, {
+    action: "resume_evaluation_reset_for_job_change",
+    fromStatus: input.previousStatus,
+    interviewRecordId: input.id,
+    nextJobDescriptionId: input.nextJobDescriptionId,
+    operatorId: input.operatorId,
+    organizationId: input.organizationId,
+    previousJobDescriptionId: input.previousJobDescriptionId,
+    reason: "岗位变更后需重新评估",
+    toStatus: null,
+  });
+
+  return { currentStatus: null, status: "updated" };
+}
+
 export async function resetResumeEvaluationForJobChange(input: {
   id: string;
   nextJobDescriptionId: string | null;
@@ -168,53 +226,7 @@ export async function resetResumeEvaluationForJobChange(input: {
   previousJobDescriptionId: string | null;
   previousStatus: ResumeEvaluationStatus;
 }): Promise<ResumeEvaluationMutationResult> {
-  const now = new Date();
-  return await db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select({ resumeEvaluationStatus: studioInterview.resumeEvaluationStatus })
-      .from(studioInterview)
-      .where(
-        and(
-          eq(studioInterview.id, input.id),
-          eq(studioInterview.organizationId, input.organizationId),
-        ),
-      )
-      .limit(1);
-
-    if (!existing) {
-      return { status: "not_found" };
-    }
-    if (existing.resumeEvaluationStatus === null) {
-      return { currentStatus: null, status: "unchanged" };
-    }
-
-    await tx
-      .update(studioInterview)
-      .set({
-        resumeEvaluationStatus: null,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(studioInterview.id, input.id),
-          eq(studioInterview.organizationId, input.organizationId),
-        ),
-      );
-
-    await insertEvaluationAudit(tx, {
-      action: "resume_evaluation_reset_for_job_change",
-      fromStatus: input.previousStatus,
-      interviewRecordId: input.id,
-      nextJobDescriptionId: input.nextJobDescriptionId,
-      operatorId: input.operatorId,
-      organizationId: input.organizationId,
-      previousJobDescriptionId: input.previousJobDescriptionId,
-      reason: "岗位变更后需重新评估",
-      toStatus: null,
-    });
-
-    return { currentStatus: null, status: "updated" };
-  });
+  return await db.transaction((tx) => resetResumeEvaluationForJobChangeInTransaction(tx, input));
 }
 
 export async function updateResumeEvaluationStatus(input: {

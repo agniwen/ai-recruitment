@@ -443,8 +443,8 @@ describe("resume review detail route", () => {
     expect(evaluationDaoSource).toContain("reason");
     expect(evaluationDaoSource).toContain("fromStatus");
     expect(evaluationDaoSource).toContain("toStatus");
-    expect(routeSource).toContain("recordResumeJobDescriptionChange");
-    expect(routeSource).toContain("resetResumeEvaluationForJobChange");
+    expect(evaluationDaoSource).toContain("recordResumeJobDescriptionChange");
+    expect(routeSource).toContain("applyJobDescriptionChangeEffects");
     expect(timelineDaoSource).toContain("readResumeEvaluationTimeSlots");
     expect(timelineDaoSource).toContain("关联岗位已变更");
     expect(timelineDaoSource).toContain("jobDescriptionAuditLabel");

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 
 const mocks = vi.hoisted(() => ({
+  applyJobDescriptionChangeEffects: vi.fn(),
   autoBindApplicableTemplates: vi.fn(),
   buildScheduleRows: vi.fn(),
   createResumeRecordFromStorage: vi.fn(),
@@ -27,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   queryPaginatedResumeRecords: vi.fn(),
   removeImportedInterviewFromConversations: vi.fn(),
   replaceDuplicateMatchesForSource: vi.fn(),
-  resetResumeEvaluationForJobChange: vi.fn(),
   resolveRecruitingVisibilityScope: vi.fn(),
   resolveResumeUploadStorage: vi.fn(),
   submitResumeEvaluationOnce: vi.fn(),
@@ -91,9 +91,21 @@ vi.mock(
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation",
   () => ({
-    resetResumeEvaluationForJobChange: mocks.resetResumeEvaluationForJobChange,
     submitResumeEvaluationOnce: mocks.submitResumeEvaluationOnce,
     updateResumeEvaluationStatus: vi.fn(),
+  }),
+);
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/job-change-reset",
+  () => ({
+    JOB_DESCRIPTION_CHANGE_PIPELINE_RESET: {
+      closedAt: null,
+      closedMeta: null,
+      closedReason: null,
+      outcome: "in_pipeline",
+      pipelineStage: "screening",
+    },
+    applyJobDescriptionChangeEffects: mocks.applyJobDescriptionChangeEffects,
   }),
 );
 vi.mock(
@@ -469,32 +481,32 @@ describe("resumeLibraryRouter behavior", () => {
     );
     const [updatePatch] = mocks.updatePatches;
     expect(updatePatch).not.toHaveProperty("resumeStorageKey");
-    expect(mocks.insertedValues).toContainEqual(
-      expect.objectContaining({
-        action: "job_description_changed",
-        detail: {
-          fromJobDescriptionId: "jd-old",
-          fromJobDescriptionName: "旧岗位",
-          toJobDescriptionId: "jd-new",
-          toJobDescriptionName: "新岗位",
-        },
-      }),
-    );
-    expect(mocks.resetResumeEvaluationForJobChange).toHaveBeenCalledWith({
-      id: RECORD_ID,
+    expect(mocks.applyJobDescriptionChangeEffects).toHaveBeenCalledWith(expect.any(Object), {
+      interviewRecordId: RECORD_ID,
       nextJobDescriptionId: "jd-new",
+      nextJobDescriptionName: "新岗位",
       operatorId: USER_ID,
       organizationId: ORGANIZATION_ID,
+      previousEvaluationStatus: "pass",
       previousJobDescriptionId: "jd-old",
-      previousStatus: "pass",
+      previousJobDescriptionName: "旧岗位",
     });
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        closedAt: null,
+        closedMeta: null,
+        closedReason: null,
+        outcome: "in_pipeline",
+        pipelineStage: "screening",
+      }),
+    );
     expect(mocks.enqueueResumeReassessmentForRecord).toHaveBeenCalledWith({
       organizationId: ORGANIZATION_ID,
       resumeRecordId: RECORD_ID,
     });
   });
 
-  it("blocks rebinding a later-stage candidate to an AI-disabled job", async () => {
+  it("restarts a later-stage candidate at screening when rebinding to an AI-disabled job", async () => {
     mocks.loadResumeDetail.mockResolvedValue({
       ...EXISTING_RECORD,
       pipelineStage: "human_interview",
@@ -521,11 +533,14 @@ describe("resumeLibraryRouter behavior", () => {
       method: "PATCH",
     });
 
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({
-      error: "候选人离开筛选阶段后，不能改绑到已禁用 AI 面试的岗位。",
-    });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        outcome: "in_pipeline",
+        pipelineStage: "screening",
+      }),
+    );
+    expect(mocks.applyJobDescriptionChangeEffects).toHaveBeenCalled();
   });
 
   it("invalidates stale AI scoring and queues a new assessment when the job changes", async () => {
@@ -581,6 +596,20 @@ describe("resumeLibraryRouter behavior", () => {
       organizationId: ORGANIZATION_ID,
       resumeRecordId: RECORD_ID,
     });
+    expect(mocks.applyJobDescriptionChangeEffects).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        interviewRecordId: RECORD_ID,
+        operatorId: USER_ID,
+        organizationId: ORGANIZATION_ID,
+      }),
+    );
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        outcome: "in_pipeline",
+        pipelineStage: "screening",
+      }),
+    );
   });
 
   it("updates overview identity fields without overwriting fork-only resume fields", async () => {

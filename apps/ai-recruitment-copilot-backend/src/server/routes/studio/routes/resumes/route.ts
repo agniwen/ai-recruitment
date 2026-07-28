@@ -4,7 +4,7 @@ import { resumeLibraryReadRouter } from "./read-route";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { interviewAuditLog, studioInterview } from "@arc/db-schema/schema";
+import { studioInterview } from "@arc/db-schema/schema";
 import { resumeReviewSchema } from "@arc/shared/resume-review";
 import type { ResumeReview } from "@arc/shared/resume-review";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
@@ -26,10 +26,11 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
+import { updateResumeEvaluationStatus } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
 import {
-  resetResumeEvaluationForJobChange,
-  updateResumeEvaluationStatus,
-} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
+  applyJobDescriptionChangeEffects,
+  JOB_DESCRIPTION_CHANGE_PIPELINE_RESET,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/job-change-reset";
 import { parseResumePayloadInput } from "@arc/db-schema/studio-interviews";
 import {
   normalizeResumeFile,
@@ -95,18 +96,6 @@ const INVALIDATED_RESUME_ASSESSMENT = {
   resumeScreeningResult: null,
   resumeScreeningStatus: "idle" as const,
 };
-
-function getAiInterviewDisabledJobChangeError(input: {
-  changed: boolean;
-  nextJobDescription: Awaited<ReturnType<typeof loadJobDescriptionById>>;
-  pipelineStage: (typeof studioInterview.$inferSelect)["pipelineStage"];
-}): string | null {
-  return input.changed &&
-    input.pipelineStage !== "screening" &&
-    input.nextJobDescription?.aiInterviewDisabled
-    ? "候选人离开筛选阶段后，不能改绑到已禁用 AI 面试的岗位。"
-    : null;
-}
 
 async function reassessAfterJobDescriptionChange(input: {
   organizationId: string;
@@ -403,14 +392,6 @@ export const resumeLibraryRouter = factory
       const nextJobDescription = jobDescriptionChanged
         ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)
         : null;
-      const jobChangeError = getAiInterviewDisabledJobChangeError({
-        changed: jobDescriptionChanged,
-        nextJobDescription,
-        pipelineStage: existing.pipelineStage,
-      });
-      if (jobChangeError) {
-        return c.json({ error: jobChangeError }, 409);
-      }
 
       // Mirror identity into resumeProfile JSON when a structured profile exists.
       // Table: candidateName/email/phone/targetRole/jobDescriptionId
@@ -434,7 +415,12 @@ export const resumeLibraryRouter = factory
           input.targetRole || resumeProfile?.targetRoles[0] || existing.targetRole || null,
         updatedAt: now,
         ...(resumeProfile ? { resumeProfile } : {}),
-        ...(jobDescriptionChanged ? INVALIDATED_RESUME_ASSESSMENT : {}),
+        ...(jobDescriptionChanged
+          ? {
+              ...INVALIDATED_RESUME_ASSESSMENT,
+              ...JOB_DESCRIPTION_CHANGE_PIPELINE_RESET,
+            }
+          : {}),
       } satisfies Partial<typeof studioInterview.$inferInsert>;
 
       await db.transaction(async (tx) => {
@@ -443,33 +429,20 @@ export const resumeLibraryRouter = factory
           .set(update)
           .where(and(eq(studioInterview.id, id), eq(studioInterview.organizationId, activeOrg.id)));
         if (jobDescriptionChanged) {
-          await tx.insert(interviewAuditLog).values({
-            action: "job_description_changed",
-            createdAt: now,
-            detail: {
-              fromJobDescriptionId: existing.jobDescriptionId,
-              fromJobDescriptionName: existing.jobDescriptionName,
-              toJobDescriptionId: nextJobDescriptionId,
-              toJobDescriptionName: nextJobDescription?.name ?? null,
-            },
-            id: crypto.randomUUID(),
+          await applyJobDescriptionChangeEffects(tx, {
             interviewRecordId: id,
+            nextJobDescriptionId,
+            nextJobDescriptionName: nextJobDescription?.name ?? null,
             operatorId: c.var.user?.id ?? null,
             organizationId: activeOrg.id,
+            previousEvaluationStatus: existing.resumeEvaluationStatus,
+            previousJobDescriptionId: existing.jobDescriptionId,
+            previousJobDescriptionName: existing.jobDescriptionName,
           });
         }
       });
 
-      if (jobDescriptionChanged && existing.resumeEvaluationStatus) {
-        await resetResumeEvaluationForJobChange({
-          id,
-          nextJobDescriptionId,
-          operatorId: c.var.user?.id ?? null,
-          organizationId: activeOrg.id,
-          previousJobDescriptionId: existing.jobDescriptionId,
-          previousStatus: existing.resumeEvaluationStatus,
-        });
-      } else {
+      if (!jobDescriptionChanged) {
         const nextEvaluationStatus =
           input.resumeEvaluationStatus === "unreviewed" ? null : input.resumeEvaluationStatus;
         if (nextEvaluationStatus !== existing.resumeEvaluationStatus) {
@@ -482,13 +455,7 @@ export const resumeLibraryRouter = factory
         }
       }
 
-      if (
-        jobDescriptionChanged &&
-        resumeProfile &&
-        existing.resumeParseStatus === "ready" &&
-        existing.pipelineStage !== "closed" &&
-        existing.outcome === "in_pipeline"
-      ) {
+      if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {
         await reassessAfterJobDescriptionChange({
           organizationId: activeOrg.id,
           resumeRecordId: id,
@@ -548,14 +515,6 @@ export const resumeLibraryRouter = factory
         jobDescriptionChanged && nextJobDescriptionId
           ? await loadJobDescriptionById(activeOrg.id, nextJobDescriptionId)
           : null;
-      const jobChangeError = getAiInterviewDisabledJobChangeError({
-        changed: jobDescriptionChanged,
-        nextJobDescription,
-        pipelineStage: existing.pipelineStage,
-      });
-      if (jobChangeError) {
-        return c.json({ error: jobChangeError }, 409);
-      }
 
       const resumeProfile = syncResumeProfileIdentity(existing.resumeProfile, input.data);
       const resumeProfileUpdate: Partial<typeof studioInterview.$inferInsert> = resumeProfile
@@ -587,7 +546,12 @@ export const resumeLibraryRouter = factory
         targetRole: input.data.targetRole || resumeProfile?.targetRoles[0] || null,
         updatedAt: now,
         ...resumeProfileUpdate,
-        ...(jobDescriptionChanged ? INVALIDATED_RESUME_ASSESSMENT : {}),
+        ...(jobDescriptionChanged
+          ? {
+              ...INVALIDATED_RESUME_ASSESSMENT,
+              ...JOB_DESCRIPTION_CHANGE_PIPELINE_RESET,
+            }
+          : {}),
       } satisfies Partial<typeof studioInterview.$inferInsert>;
 
       await db.transaction(async (tx) => {
@@ -596,19 +560,15 @@ export const resumeLibraryRouter = factory
           .set(update)
           .where(and(eq(studioInterview.id, id), eq(studioInterview.organizationId, activeOrg.id)));
         if (jobDescriptionChanged) {
-          await tx.insert(interviewAuditLog).values({
-            action: "job_description_changed",
-            createdAt: now,
-            detail: {
-              fromJobDescriptionId: existing.jobDescriptionId,
-              fromJobDescriptionName: existing.jobDescriptionName,
-              toJobDescriptionId: nextJobDescriptionId,
-              toJobDescriptionName: nextJobDescription?.name ?? null,
-            },
-            id: crypto.randomUUID(),
+          await applyJobDescriptionChangeEffects(tx, {
             interviewRecordId: id,
+            nextJobDescriptionId,
+            nextJobDescriptionName: nextJobDescription?.name ?? null,
             operatorId: c.var.user?.id ?? null,
             organizationId: activeOrg.id,
+            previousEvaluationStatus: existing.resumeEvaluationStatus,
+            previousJobDescriptionId: existing.jobDescriptionId,
+            previousJobDescriptionName: existing.jobDescriptionName,
           });
         }
       });
@@ -616,16 +576,10 @@ export const resumeLibraryRouter = factory
         jobDescriptionChanged || input.data.resumeEvaluationStatus === "unreviewed"
           ? null
           : input.data.resumeEvaluationStatus;
-      if (jobDescriptionChanged && existing.resumeEvaluationStatus) {
-        await resetResumeEvaluationForJobChange({
-          id,
-          nextJobDescriptionId,
-          operatorId: c.var.user?.id ?? null,
-          organizationId: activeOrg.id,
-          previousJobDescriptionId: existing.jobDescriptionId,
-          previousStatus: existing.resumeEvaluationStatus,
-        });
-      } else if (nextResumeEvaluationStatus !== existing.resumeEvaluationStatus) {
+      if (
+        !jobDescriptionChanged &&
+        nextResumeEvaluationStatus !== existing.resumeEvaluationStatus
+      ) {
         await updateResumeEvaluationStatus({
           id,
           operatorId: c.var.user?.id ?? null,
@@ -634,13 +588,7 @@ export const resumeLibraryRouter = factory
         });
       }
 
-      if (
-        jobDescriptionChanged &&
-        resumeProfile &&
-        existing.resumeParseStatus === "ready" &&
-        existing.pipelineStage !== "closed" &&
-        existing.outcome === "in_pipeline"
-      ) {
+      if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {
         await reassessAfterJobDescriptionChange({
           organizationId: activeOrg.id,
           resumeRecordId: id,
