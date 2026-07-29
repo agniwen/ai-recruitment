@@ -11,6 +11,7 @@ import {
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
 import type { SQL } from "drizzle-orm";
 import { and, asc, count, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -34,7 +35,13 @@ import {
   studioInterview,
   studioInterviewSchedule,
 } from "@arc/db-schema/schema";
-import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import {
+  resolveDepartmentHiringUnitScopeCondition,
+  resolveJobDescriptionHiringUnitScopeCondition,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+
+const jobHiringUnit = alias(hiringUnit, "job_description_hiring_unit");
+const departmentHiringUnit = alias(hiringUnit, "job_description_department_hiring_unit");
 
 const jobDescriptionListFiltersSchema = z.object({
   departmentId: z.string().trim().max(120).optional().nullable(),
@@ -166,6 +173,8 @@ function listJobDescriptionRows({
       createdAt: jobDescription.createdAt,
       createdBy: jobDescription.createdBy,
       creationSource: jobDescription.creationSource,
+      departmentHiringUnitId: department.hiringUnitId,
+      departmentHiringUnitName: departmentHiringUnit.name,
       departmentId: jobDescription.departmentId,
       departmentName: department.name,
       description: jobDescription.description,
@@ -173,8 +182,8 @@ function listJobDescriptionRows({
       gapCount: jobDescription.gapCount,
       googleSheetDeleted: jobDescription.googleSheetDeleted,
       headcount: jobDescription.headcount,
-      hiringUnitId: department.hiringUnitId,
-      hiringUnitName: hiringUnit.name,
+      hiringUnitId: jobDescription.hiringUnitId,
+      hiringUnitName: jobHiringUnit.name,
       id: jobDescription.id,
       jobLevel: jobDescription.jobLevel,
       jobSeries: jobDescription.jobSeries,
@@ -206,7 +215,8 @@ function listJobDescriptionRows({
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
-    .leftJoin(hiringUnit, eq(department.hiringUnitId, hiringUnit.id))
+    .leftJoin(jobHiringUnit, eq(jobDescription.hiringUnitId, jobHiringUnit.id))
+    .leftJoin(departmentHiringUnit, eq(department.hiringUnitId, departmentHiringUnit.id))
     .where(where)
     .orderBy(buildOrderBy(ORDER_COLUMNS, sortBy, sortOrder))
     .$dynamic();
@@ -370,8 +380,8 @@ function toJobDescriptionListRecord(
     gapCount: row.gapCount,
     googleSheetDeleted: row.googleSheetDeleted,
     headcount: row.headcount,
-    hiringUnitId: row.hiringUnitId,
-    hiringUnitName: row.hiringUnitName,
+    hiringUnitId: row.hiringUnitId ?? row.departmentHiringUnitId,
+    hiringUnitName: row.hiringUnitName ?? row.departmentHiringUnitName,
     humanInterviewerIds,
     id: row.id,
     interviewerIds: interviewers.map((item) => item.id),
@@ -456,7 +466,7 @@ export async function queryPaginatedJobDescriptions(
   const { page, pageSize, sortBy, sortOrder } = parseJobDescriptionPagination(pagination);
   const offset = (page - 1) * pageSize;
   const jdIdsForInterviewers = await resolveJdIdsForInterviewers(organizationId, interviewerIds);
-  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+  const scopeCondition = await resolveJobDescriptionHiringUnitScopeCondition({
     actorUserId: filters?.actorUserId,
     organizationId,
   });
@@ -524,7 +534,7 @@ export async function listAllJobDescriptions(
   organizationId: string,
   options?: { actorUserId?: string | null },
 ): Promise<JobDescriptionListRecord[]> {
-  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+  const scopeCondition = await resolveJobDescriptionHiringUnitScopeCondition({
     actorUserId: options?.actorUserId,
     organizationId,
   });
@@ -596,7 +606,7 @@ export async function loadJobDescriptionById(
   id: string,
   options?: { actorUserId?: string | null },
 ): Promise<JobDescriptionRecord | null> {
-  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+  const scopeCondition = await resolveJobDescriptionHiringUnitScopeCondition({
     actorUserId: options?.actorUserId,
     organizationId,
   });
@@ -613,6 +623,8 @@ export async function loadJobDescriptionById(
       createdAt: jobDescription.createdAt,
       createdBy: jobDescription.createdBy,
       creationSource: jobDescription.creationSource,
+      departmentHiringUnitId: department.hiringUnitId,
+      departmentHiringUnitName: departmentHiringUnit.name,
       departmentId: jobDescription.departmentId,
       description: jobDescription.description,
       expectedOnboardDate: jobDescription.expectedOnboardDate,
@@ -622,8 +634,8 @@ export async function loadJobDescriptionById(
       gapCount: jobDescription.gapCount,
       googleSheetDeleted: jobDescription.googleSheetDeleted,
       headcount: jobDescription.headcount,
-      hiringUnitId: department.hiringUnitId,
-      hiringUnitName: hiringUnit.name,
+      hiringUnitId: jobDescription.hiringUnitId,
+      hiringUnitName: jobHiringUnit.name,
       id: jobDescription.id,
       jobLevel: jobDescription.jobLevel,
       jobSeries: jobDescription.jobSeries,
@@ -656,7 +668,8 @@ export async function loadJobDescriptionById(
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
-    .leftJoin(hiringUnit, eq(department.hiringUnitId, hiringUnit.id))
+    .leftJoin(jobHiringUnit, eq(jobDescription.hiringUnitId, jobHiringUnit.id))
+    .leftJoin(departmentHiringUnit, eq(department.hiringUnitId, departmentHiringUnit.id))
     .where(where)
     .limit(1);
   if (!row) {
@@ -669,7 +682,11 @@ export async function loadJobDescriptionById(
   const interviewers = interviewersMap.get(id) ?? [];
   // eslint-disable-next-line no-use-before-define -- kept near public load functions for readability.
   return serializeJobDescription(
-    row,
+    {
+      ...row,
+      hiringUnitId: row.hiringUnitId ?? row.departmentHiringUnitId,
+      hiringUnitName: row.hiringUnitName ?? row.departmentHiringUnitName,
+    },
     interviewers.map((item) => item.id),
     humanInterviewerIdsMap.get(id) ?? [],
   );
@@ -814,14 +831,20 @@ async function queryJobDescriptionMetrics(
   organizationId: string,
   options?: { actorUserId?: string | null },
 ): Promise<JobDescriptionMetrics> {
-  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
-    actorUserId: options?.actorUserId,
-    organizationId,
-  });
+  const [jobScopeCondition, departmentScopeCondition] = await Promise.all([
+    resolveJobDescriptionHiringUnitScopeCondition({
+      actorUserId: options?.actorUserId,
+      organizationId,
+    }),
+    resolveDepartmentHiringUnitScopeCondition({
+      actorUserId: options?.actorUserId,
+      organizationId,
+    }),
+  ]);
   const [candidatesByJd, completionByJd, loadByInterviewer] = await Promise.all([
-    loadCandidatesByJd(organizationId, scopeCondition),
-    loadCompletionByJd(organizationId, scopeCondition),
-    loadLoadByInterviewer(organizationId, scopeCondition),
+    loadCandidatesByJd(organizationId, jobScopeCondition),
+    loadCompletionByJd(organizationId, jobScopeCondition),
+    loadLoadByInterviewer(organizationId, departmentScopeCondition),
   ]);
   return { candidatesByJd, completionByJd, loadByInterviewer };
 }
@@ -844,6 +867,8 @@ export function loadJobDescriptionMetrics(
 
 export function serializeJobDescription(
   row: typeof jobDescription.$inferSelect & {
+    departmentHiringUnitId?: string | null;
+    departmentHiringUnitName?: string | null;
     hiringUnitId?: string | null;
     hiringUnitName?: string | null;
   },
@@ -865,8 +890,8 @@ export function serializeJobDescription(
     gapCount: row.gapCount,
     googleSheetDeleted: row.googleSheetDeleted ?? null,
     headcount: row.headcount,
-    hiringUnitId: row.hiringUnitId ?? null,
-    hiringUnitName: row.hiringUnitName ?? null,
+    hiringUnitId: row.hiringUnitId ?? row.departmentHiringUnitId ?? null,
+    hiringUnitName: row.hiringUnitName ?? row.departmentHiringUnitName ?? null,
     humanInterviewerIds,
     id: row.id,
     interviewerIds,

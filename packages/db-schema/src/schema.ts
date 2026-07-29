@@ -778,6 +778,14 @@ export const jobDescription = pgTable(
      */
     googleSheetDeleted: boolean("google_sheet_deleted"),
     headcount: integer("headcount"),
+    /**
+     * 岗位自身的编制组织（用人组织）。
+     * Google 同步可直接写入表格「编制组织」；手动岗位通常从所属部门带出。
+     * 展示时优先本字段，缺省再回退部门所属用人组织。
+     */
+    hiringUnitId: text("hiring_unit_id").references(() => hiringUnit.id, {
+      onDelete: "set null",
+    }),
     id: text("id").primaryKey(),
     jobLevel: text("job_level"),
     jobSeries: text("job_series"),
@@ -818,6 +826,7 @@ export const jobDescription = pgTable(
   },
   (table) => [
     index("job_description_department_idx").on(table.departmentId),
+    index("job_description_hiring_unit_idx").on(table.organizationId, table.hiringUnitId),
     index("job_description_name_idx").on(table.name),
     index("job_description_created_at_idx").on(table.createdAt),
     index("job_description_organization_idx").on(table.organizationId),

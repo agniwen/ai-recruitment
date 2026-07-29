@@ -124,7 +124,7 @@ describe("parseGoogleSheetJobRows", () => {
     });
   });
 
-  it("assigns empty department rows to the default department instead of skipping", () => {
+  it("allows empty department cells and marks them as unspecified", () => {
     const result = parseGoogleSheetJobRows([
       HEADERS,
       row({ 稳定唯一值: "REQ-000020", 部门: "" }),
@@ -137,17 +137,26 @@ describe("parseGoogleSheetJobRows", () => {
       DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME,
       DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME,
     ]);
+    expect(result.records.every((item) => item.departmentSpecified === false)).toBe(true);
     expect(result.warnings).toContainEqual({
       code: "REQ-000020",
       field: "部门",
-      message: `部门为空，已归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」。`,
+      message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位保留本系统部门；编制组织仍按表格写入。`,
       rowNumber: 2,
     });
     expect(result.warnings).toContainEqual({
       code: "REQ-000021",
       field: "部门",
-      message: `部门为空，已归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」。`,
+      message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位保留本系统部门；编制组织仍按表格写入。`,
       rowNumber: 3,
+    });
+  });
+
+  it("keeps departmentSpecified true when the sheet provides a department", () => {
+    const result = parseGoogleSheetJobRows([HEADERS, row({ 稳定唯一值: "REQ-000030" })]);
+    expect(result.records[0]).toMatchObject({
+      departmentName: "平台组",
+      departmentSpecified: true,
     });
   });
 });
@@ -155,8 +164,10 @@ describe("parseGoogleSheetJobRows", () => {
 describe("Google Sheet mapped job changes", () => {
   it("is idempotent when all mapped values are unchanged", () => {
     const [parsed] = parseGoogleSheetJobRows([HEADERS, row()]).records;
-    const values = buildGoogleSheetJobValues(parsed, "department-1");
+    const values = buildGoogleSheetJobValues(parsed, "department-1", "hiring-unit-1");
 
+    expect(values.hiringUnitId).toBe("hiring-unit-1");
+    expect(values.departmentId).toBe("department-1");
     expect(hasGoogleSheetJobChanges(values, values)).toBe(false);
     expect(
       hasGoogleSheetJobChanges(
@@ -167,5 +178,60 @@ describe("Google Sheet mapped job changes", () => {
         values,
       ),
     ).toBe(true);
+    expect(
+      hasGoogleSheetJobChanges(
+        {
+          ...values,
+          hiringUnitId: "hiring-unit-old",
+        },
+        values,
+      ),
+    ).toBe(true);
+  });
+
+  it("omits departmentId on update when the sheet department cell is empty", () => {
+    const [parsed] = parseGoogleSheetJobRows([
+      HEADERS,
+      row({ 稳定唯一值: "REQ-000040", 部门: "" }),
+    ]).records;
+    expect(parsed.departmentSpecified).toBe(false);
+
+    // Update path: pass undefined departmentId so existing department is preserved.
+    const updateValues = buildGoogleSheetJobValues(parsed, undefined, "hiring-unit-1");
+    expect(updateValues.departmentId).toBeUndefined();
+    expect(updateValues.hiringUnitId).toBe("hiring-unit-1");
+    expect(
+      hasGoogleSheetJobChanges(
+        {
+          controlCategory: updateValues.controlCategory,
+          departmentId: "existing-department",
+          expectedOnboardDate: null,
+          gapCount: updateValues.gapCount,
+          headcount: updateValues.headcount,
+          hiringUnitId: "hiring-unit-1",
+          jobLevel: updateValues.jobLevel,
+          jobSeries: updateValues.jobSeries,
+          name: updateValues.name,
+          notes: updateValues.notes,
+          offeredPendingOnboardCount: updateValues.offeredPendingOnboardCount,
+          onboardedCount: updateValues.onboardedCount,
+          priority: updateValues.priority,
+          prompt: updateValues.prompt,
+          recruitmentStatus: updateValues.recruitmentStatus,
+          requestedDate: updateValues.requestedDate,
+          requester: updateValues.requester,
+          resumeContact: updateValues.resumeContact,
+          salaryRangeRaw: updateValues.salaryRangeRaw,
+          serviceUnit: updateValues.serviceUnit,
+          sourceSheet: updateValues.sourceSheet,
+          workLocation: updateValues.workLocation,
+        },
+        updateValues,
+      ),
+    ).toBe(false);
+
+    // Create path: still writes the default department under the hiring unit.
+    const createValues = buildGoogleSheetJobValues(parsed, "default-dept-id", "hiring-unit-1");
+    expect(createValues.departmentId).toBe("default-dept-id");
   });
 });

@@ -76,9 +76,11 @@ describe("job description recruiting defaults", () => {
     expect(formSource).not.toContain('type="date"');
   });
 
-  it("shows read-only hiring unit derived from the selected department", () => {
+  it("shows read-only hiring unit, preferring job-level Google sheet org", () => {
     expect(formSource).toContain("编制组织");
     expect(formSource).toContain("selectedDepartmentHiringUnitName");
+    expect(formSource).toContain("record?.hiringUnitName");
+    expect(formSource).toContain('creationSource === "google_sheets"');
     expect(formSource).toContain('id="job-description-hiring-unit"');
     expect(formSource).toContain("disabled");
     expect(formSource).toContain("readOnly");

@@ -70,12 +70,13 @@ async function validateReferences(
     .filter((item): item is (typeof selectableInterviewers)[number] => item !== undefined);
 
   if (!departmentRow) {
-    return { error: "所选部门不存在。" as const };
+    return { departmentHiringUnitId: null, error: "所选部门不存在。" as const };
   }
   if (interviewerRows.length !== interviewerIds.length) {
-    return { error: "存在无效的面试官，请刷新后重试。" as const };
+    return { departmentHiringUnitId: null, error: "存在无效的面试官，请刷新后重试。" as const };
   }
   return {
+    departmentHiringUnitId: departmentRow.hiringUnitId,
     error: validateJobDescriptionInterviewerDepartments({
       allowCrossDepartmentInterviewers,
       departmentId,
@@ -287,7 +288,7 @@ export const jobDescriptionsRouter = factory
       );
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
       const humanInterviewerIds = dedupeInterviewerIds(input.humanInterviewerIds);
-      const { error: referenceError } = await validateReferences(
+      const { departmentHiringUnitId, error: referenceError } = await validateReferences(
         activeOrg.id,
         input.departmentId,
         interviewerIds,
@@ -329,6 +330,7 @@ export const jobDescriptionsRouter = factory
           gapCount: input.gapCount ?? null,
           googleSheetDeleted: null,
           headcount: input.headcount ?? null,
+          hiringUnitId: departmentHiringUnitId,
           id: crypto.randomUUID(),
           jobLevel: nullableText(input.jobLevel),
           jobSeries: nullableText(input.jobSeries),
@@ -495,7 +497,7 @@ export const jobDescriptionsRouter = factory
         : existing.resumeScreeningPolicyVersion;
       const interviewerIds = dedupeInterviewerIds(input.interviewerIds);
       const humanInterviewerIds = dedupeInterviewerIds(input.humanInterviewerIds);
-      const { error } = await validateReferences(
+      const { departmentHiringUnitId, error } = await validateReferences(
         activeOrg.id,
         input.departmentId,
         interviewerIds,
@@ -510,6 +512,12 @@ export const jobDescriptionsRouter = factory
       }
 
       const now = new Date();
+      // Google-synced jobs keep sheet-written 编制组织 until the next sheet sync.
+      // Manual jobs refresh hiring unit from the selected department.
+      const nextHiringUnitId =
+        existing.creationSource === "google_sheets"
+          ? existing.hiringUnitId
+          : departmentHiringUnitId;
       const updateValues = {
         aiInterviewDisabled: input.aiInterviewDisabled,
         allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
@@ -519,6 +527,7 @@ export const jobDescriptionsRouter = factory
         expectedOnboardDate: nullableText(input.expectedOnboardDate),
         gapCount: input.gapCount ?? null,
         headcount: input.headcount ?? null,
+        hiringUnitId: nextHiringUnitId,
         ...(!existing.code && input.code ? { code: input.code } : {}),
         jobLevel: nullableText(input.jobLevel),
         jobSeries: nullableText(input.jobSeries),

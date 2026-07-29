@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   department,
+  jobDescription,
   member,
   recruitingGroupHiringUnit,
   recruitingGroupMember,
@@ -100,6 +101,35 @@ export function buildDepartmentHiringUnitScopeCondition(
   return or(isNull(department.hiringUnitId), inArray(department.hiringUnitId, scope.hiringUnitIds));
 }
 
+/**
+ * Job-description visibility: allow either the job's own hiring unit or the
+ * linked department's hiring unit (legacy rows / manual posts).
+ */
+export function buildJobDescriptionHiringUnitScopeCondition(
+  scope: HiringUnitAccessScope,
+): SQL | undefined {
+  if (scope.canAccessAll) {
+    return;
+  }
+  if (!scope.canAccessPublic && scope.hiringUnitIds.length === 0) {
+    return sql`false`;
+  }
+
+  const jobUnitInScope =
+    scope.hiringUnitIds.length > 0
+      ? inArray(jobDescription.hiringUnitId, scope.hiringUnitIds)
+      : undefined;
+  const departmentUnitInScope =
+    scope.hiringUnitIds.length > 0
+      ? inArray(department.hiringUnitId, scope.hiringUnitIds)
+      : undefined;
+  const publicAccess = scope.canAccessPublic
+    ? and(isNull(jobDescription.hiringUnitId), isNull(department.hiringUnitId))
+    : undefined;
+
+  return or(jobUnitInScope, departmentUnitInScope, publicAccess);
+}
+
 export async function resolveDepartmentHiringUnitScopeCondition({
   actorUserId,
   organizationId,
@@ -111,6 +141,21 @@ export async function resolveDepartmentHiringUnitScopeCondition({
     return;
   }
   return buildDepartmentHiringUnitScopeCondition(
+    await resolveHiringUnitAccessScope({ actorUserId, organizationId }),
+  );
+}
+
+export async function resolveJobDescriptionHiringUnitScopeCondition({
+  actorUserId,
+  organizationId,
+}: {
+  actorUserId?: string | null;
+  organizationId: string;
+}): Promise<SQL | undefined> {
+  if (!actorUserId) {
+    return;
+  }
+  return buildJobDescriptionHiringUnitScopeCondition(
     await resolveHiringUnitAccessScope({ actorUserId, organizationId }),
   );
 }

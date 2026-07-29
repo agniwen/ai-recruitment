@@ -124,6 +124,7 @@ export const relations = defineRelations(schema, (r) => ({
   },
   hiringUnit: {
     departments: r.many.department(),
+    jobDescriptions: r.many.jobDescription(),
     organization: r.one.organization({
       from: r.hiringUnit.organizationId,
       to: r.organization.id,
@@ -225,6 +226,10 @@ export const relations = defineRelations(schema, (r) => ({
     department: r.one.department({
       from: r.jobDescription.departmentId,
       to: r.department.id,
+    }),
+    hiringUnit: r.one.hiringUnit({
+      from: r.jobDescription.hiringUnitId,
+      to: r.hiringUnit.id,
     }),
     humanInterviewerLinks: r.many.jobDescriptionHumanInterviewer(),
     interviewQuestionTemplateLinks: r.many.interviewQuestionTemplateJobDescription(),

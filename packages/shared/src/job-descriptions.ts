@@ -211,8 +211,10 @@ export interface JobDescriptionRecord {
   creationSource: JobDescriptionCreationSource;
   departmentId: string;
   /**
-   * 关联部门所属的用人组织（编制组织）。只读派生字段，不可在岗位表单中编辑。
-   * Hiring unit of the linked department (establishment org). Read-only.
+   * 编制组织（用人组织）ID / 名称。
+   * - Google 同步：直接写入表格「编制组织」对应的用人组织
+   * - 手动岗位：通常从所属部门带出
+   * 展示优先岗位自身字段；缺省时回退部门所属用人组织。只读，不在岗位表单编辑。
    */
   hiringUnitId: string | null;
   hiringUnitName: string | null;

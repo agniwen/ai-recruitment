@@ -362,12 +362,24 @@ export function JobDescriptionFormDialog({
   );
   const selectedDepartmentId = useStore(form.store, (state) => state.values.departmentId);
   const selectedInterviewerIds = useStore(form.store, (state) => state.values.interviewerIds);
+  // Prefer the job-level 编制组织 (Google sync writes it directly). Fall back to
+  // the selected department's hiring unit when editing manual posts / changing dept.
   const selectedDepartmentHiringUnitName = useMemo(() => {
-    if (!selectedDepartmentId) {
-      return null;
+    if (
+      record?.hiringUnitName &&
+      (!selectedDepartmentId || selectedDepartmentId === record.departmentId)
+    ) {
+      return record.hiringUnitName;
     }
-    return departments.find((dept) => dept.id === selectedDepartmentId)?.hiringUnitName ?? null;
-  }, [departments, selectedDepartmentId]);
+    if (!selectedDepartmentId) {
+      return record?.hiringUnitName ?? null;
+    }
+    return (
+      departments.find((dept) => dept.id === selectedDepartmentId)?.hiringUnitName ??
+      record?.hiringUnitName ??
+      null
+    );
+  }, [departments, record, selectedDepartmentId]);
   const interviewerOptions = useMemo(
     () =>
       buildJobDescriptionInterviewerOptions(
@@ -606,11 +618,15 @@ export function JobDescriptionFormDialog({
                         readOnly
                         value={selectedDepartmentHiringUnitName ?? ""}
                         placeholder={
-                          selectedDepartmentId ? "所属部门未配置用人组织" : "请先选择所属部门"
+                          selectedDepartmentId || record?.hiringUnitId
+                            ? "未配置编制组织"
+                            : "请先选择所属部门"
                         }
                       />
                       <p className="text-muted-foreground text-xs">
-                        由所属部门自动带出，不可在岗位中直接修改。
+                        {record?.creationSource === "google_sheets"
+                          ? "Google 文档同步写入的编制组织；部门为空时仍保留表格中的组织。"
+                          : "由所属部门自动带出，不可在岗位中直接修改。"}
                       </p>
                     </FieldContent>
                   </Field>
