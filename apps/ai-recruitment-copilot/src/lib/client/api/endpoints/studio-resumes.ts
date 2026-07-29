@@ -316,6 +316,7 @@ export function submitResumeReviewEvaluation(
   id: string,
   input: {
     availableTimeSlots?: { endAt: string; startAt: string }[];
+    departmentName: string;
     reason: string;
     status: ResumeEvaluationStatus;
   },

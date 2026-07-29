@@ -55,6 +55,7 @@ describe("submitResumeEvaluation", () => {
     useTransaction(tx);
 
     const result = await submitResumeEvaluation({
+      departmentName: "研发部",
       id: "resume-1",
       operatorId: "reviewer-2",
       organizationId: "org-1",
@@ -68,6 +69,7 @@ describe("submitResumeEvaluation", () => {
       expect.objectContaining({
         action: "resume_evaluation_updated",
         detail: expect.objectContaining({
+          departmentName: "研发部",
           fromStatus: "fail",
           reason: "仍不符合要求",
           toStatus: "fail",
@@ -85,6 +87,7 @@ describe("submitResumeEvaluation", () => {
       availableTimeSlots: [
         { endAt: "2026-07-29T11:00:00.000Z", startAt: "2026-07-29T10:00:00.000Z" },
       ],
+      departmentName: "产品部",
       id: "resume-1",
       operatorId: "reviewer-3",
       organizationId: "org-1",
@@ -108,6 +111,7 @@ describe("submitResumeEvaluation", () => {
     useTransaction(tx);
 
     const result = await submitResumeEvaluation({
+      departmentName: "市场部",
       id: "resume-1",
       operatorId: "reviewer-4",
       organizationId: "org-1",

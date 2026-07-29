@@ -267,13 +267,49 @@ describe("ResumeEvaluationDialog", () => {
     act(() => root.unmount());
   });
 
+  it("requires department and reason before submitting an evaluation", async () => {
+    const { toast } = await import("sonner");
+    const { root } = renderDialog("fail");
+    const submit = [...document.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("提交评估"),
+    );
+
+    await act(async () => {
+      submit?.click();
+      await Promise.resolve();
+    });
+    expect(toast.error).toHaveBeenCalledWith("请填写评审部门");
+    expect(apiMocks.submitResumeReviewEvaluation).not.toHaveBeenCalled();
+
+    const department = document.querySelector<HTMLInputElement>(
+      "#resume-review-evaluation-department",
+    );
+    act(() => {
+      if (department) {
+        setInputValue(department, "研发部");
+      }
+    });
+    await act(async () => {
+      submit?.click();
+      await Promise.resolve();
+    });
+    expect(toast.error).toHaveBeenCalledWith("请填写评估原因");
+    expect(apiMocks.submitResumeReviewEvaluation).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+  });
+
   it("submits an evaluation failure through the existing evaluation endpoint", async () => {
     apiMocks.submitResumeReviewEvaluation.mockResolvedValue({ id: "resume-1" });
     const { onDecisionChange, onSubmitted, root } = renderDialog("fail");
 
+    const department = document.querySelector<HTMLInputElement>(
+      "#resume-review-evaluation-department",
+    );
     const reason = document.querySelector<HTMLTextAreaElement>("#resume-review-evaluation-reason");
     act(() => {
-      if (reason) {
+      if (department && reason) {
+        setInputValue(department, "研发部");
         setInputValue(reason, "岗位经验不匹配");
       }
     });
@@ -288,6 +324,7 @@ describe("ResumeEvaluationDialog", () => {
 
     expect(apiMocks.submitResumeReviewEvaluation).toHaveBeenCalledWith("workspace-1", "resume-1", {
       availableTimeSlots: [],
+      departmentName: "研发部",
       reason: "岗位经验不匹配",
       status: "fail",
     });
@@ -304,9 +341,13 @@ describe("ResumeEvaluationDialog", () => {
     const { onDecisionChange, queryClient, root } = renderDialog("fail");
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
+    const department = document.querySelector<HTMLInputElement>(
+      "#resume-review-evaluation-department",
+    );
     const reason = document.querySelector<HTMLTextAreaElement>("#resume-review-evaluation-reason");
     act(() => {
-      if (reason) {
+      if (department && reason) {
+        setInputValue(department, "产品部");
         setInputValue(reason, "仍不符合要求");
       }
     });
@@ -330,13 +371,17 @@ describe("ResumeEvaluationDialog", () => {
     apiMocks.submitResumeReviewEvaluation.mockResolvedValue({ id: "resume-1" });
     const { root } = renderDialog("pass");
 
+    const department = document.querySelector<HTMLInputElement>(
+      "#resume-review-evaluation-department",
+    );
     const reason = document.querySelector<HTMLTextAreaElement>("#resume-review-evaluation-reason");
     const startAt = document.querySelector<HTMLInputElement>("#slot-start-0");
     const endAt = document.querySelector<HTMLInputElement>("#slot-end-0");
     expect(document.querySelector('input[type="datetime-local"]')).toBeNull();
     expect(document.querySelectorAll('[data-slot="date-time-picker"]')).toHaveLength(2);
     act(() => {
-      if (reason && startAt && endAt) {
+      if (department && reason && startAt && endAt) {
+        setInputValue(department, "用人部门");
         setInputValue(reason, "符合岗位要求");
         setInputValue(startAt, "2026-07-29T10:00");
         setInputValue(endAt, "2026-07-29T11:00");
@@ -358,6 +403,7 @@ describe("ResumeEvaluationDialog", () => {
           startAt: new Date("2026-07-29T10:00").toISOString(),
         },
       ],
+      departmentName: "用人部门",
       reason: "符合岗位要求",
       status: "pass",
     });

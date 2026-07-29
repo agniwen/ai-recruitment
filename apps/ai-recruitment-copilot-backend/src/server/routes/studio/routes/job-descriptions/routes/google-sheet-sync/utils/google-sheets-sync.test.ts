@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGoogleSheetJobValues,
+  DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME,
   hasGoogleSheetJobChanges,
   parseGoogleSheetJobRows,
 } from "./google-sheets-sync";
@@ -89,7 +90,7 @@ describe("parseGoogleSheetJobRows", () => {
     const result = parseGoogleSheetJobRows([
       HEADERS,
       row({ 稳定唯一值: "待生成" }),
-      row({ 稳定唯一值: "REQ-000010", 部门: "" }),
+      row({ 稳定唯一值: "REQ-000010", 编制组织: "" }),
       row({
         "JD(必填) 岗位职责+任职要求": "",
         稳定唯一值: "REQ-000011",
@@ -101,6 +102,33 @@ describe("parseGoogleSheetJobRows", () => {
     expect(result.records).toEqual([]);
     expect(result.skipped.map((item) => item.rowNumber)).toEqual([2, 3, 4, 5, 6]);
     expect(result.skipped.filter((item) => item.reason.includes("重复"))).toHaveLength(2);
+  });
+
+  it("assigns empty department rows to the default department instead of skipping", () => {
+    const result = parseGoogleSheetJobRows([
+      HEADERS,
+      row({ 稳定唯一值: "REQ-000020", 部门: "" }),
+      row({ 稳定唯一值: "REQ-000021", 部门: "   " }),
+    ]);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.records).toHaveLength(2);
+    expect(result.records.map((item) => item.departmentName)).toEqual([
+      DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME,
+      DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME,
+    ]);
+    expect(result.warnings).toContainEqual({
+      code: "REQ-000020",
+      field: "部门",
+      message: `部门为空，已归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」。`,
+      rowNumber: 2,
+    });
+    expect(result.warnings).toContainEqual({
+      code: "REQ-000021",
+      field: "部门",
+      message: `部门为空，已归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」。`,
+      rowNumber: 3,
+    });
   });
 });
 

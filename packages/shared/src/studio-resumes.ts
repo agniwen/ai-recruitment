@@ -473,6 +473,7 @@ export const resumeEvaluationStatusSubmitSchema = z
       .array(resumeEvaluationAvailableTimeSlotSchema)
       .max(10, "可预约时间最多 10 段")
       .optional(),
+    departmentName: z.string().trim().min(1, "请填写评审部门").max(100, "评审部门不能超过 100 字"),
     reason: z.string().trim().min(1, "请填写评估原因").max(2000, "评估原因不能超过 2000 字"),
     status: resumeEvaluationStatusSchema,
   })

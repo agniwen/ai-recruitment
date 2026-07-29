@@ -38,6 +38,9 @@ const HEADERS = {
   workLocation: "工作地点",
 } as const;
 
+/** Sheet rows with an empty 部门 cell fall back to this existing department name. */
+export const DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME = "默认部门";
+
 const REQUIRED_HEADERS = Object.values(HEADERS);
 
 type NullableMappedValue = number | string | null | undefined;
@@ -213,12 +216,12 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
 
     const name = cellText(row, headerIndexes.get(HEADERS.name));
     const hiringUnitName = cellText(row, headerIndexes.get(HEADERS.hiringUnitName));
-    const departmentName = cellText(row, headerIndexes.get(HEADERS.departmentName));
+    const rawDepartmentName = cellText(row, headerIndexes.get(HEADERS.departmentName));
+    const departmentName = rawDepartmentName || DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME;
     const prompt = cellText(row, headerIndexes.get(HEADERS.prompt));
     const missingRequired = findMissingRequiredFields([
       ["岗位名称", name],
       ["编制组织", hiringUnitName],
-      ["部门", departmentName],
       ["JD", prompt],
     ]);
     if (missingRequired.length > 0) {
@@ -228,6 +231,14 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
         rowNumber,
       });
       continue;
+    }
+    if (!rawDepartmentName) {
+      warnings.push({
+        code,
+        field: HEADERS.departmentName,
+        message: `部门为空，已归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」。`,
+        rowNumber,
+      });
     }
 
     const rawRequestedDate = cellText(row, headerIndexes.get(HEADERS.requestedDate));
@@ -397,11 +408,20 @@ export async function syncGoogleSheetJobDescriptions({
         .from(department)
         .where(eq(department.organizationId, organizationId));
       const departmentsByName = new Map<string, { id: string; name: string }>();
+      // Org-wide fallback for empty sheet departments → "默认部门" (any hiring unit / none).
+      let defaultDepartment: { id: string; name: string } | null = null;
       for (const row of departmentRows) {
+        const identity = normalizeIdentity(row.name);
+        if (
+          !defaultDepartment &&
+          identity === normalizeIdentity(DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME)
+        ) {
+          defaultDepartment = { id: row.id, name: row.name };
+        }
         if (!row.hiringUnitId) {
           continue;
         }
-        const key = `${row.hiringUnitId}\u0000${normalizeIdentity(row.name)}`;
+        const key = `${row.hiringUnitId}\u0000${identity}`;
         if (!departmentsByName.has(key)) {
           departmentsByName.set(key, row);
         }
@@ -466,6 +486,16 @@ export async function syncGoogleSheetJobDescriptions({
 
         const departmentKey = `${unit.id}\u0000${normalizeIdentity(record.departmentName)}`;
         let departmentRow = departmentsByName.get(departmentKey);
+        // Prefer the pre-created org "默认部门" when sheet 部门 is empty/default and not under this unit yet.
+        if (
+          !departmentRow &&
+          normalizeIdentity(record.departmentName) ===
+            normalizeIdentity(DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME) &&
+          defaultDepartment
+        ) {
+          departmentRow = defaultDepartment;
+          departmentsByName.set(departmentKey, departmentRow);
+        }
         if (!departmentRow) {
           departmentRow = { id: crypto.randomUUID(), name: record.departmentName };
           await tx.insert(department).values({
@@ -479,6 +509,12 @@ export async function syncGoogleSheetJobDescriptions({
             updatedAt: now,
           });
           departmentsByName.set(departmentKey, departmentRow);
+          if (
+            normalizeIdentity(record.departmentName) ===
+            normalizeIdentity(DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME)
+          ) {
+            defaultDepartment = departmentRow;
+          }
           departmentsCreated += 1;
         }
 

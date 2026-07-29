@@ -72,6 +72,7 @@ async function insertEvaluationAudit(
       | "resume_evaluation_submitted"
       | "resume_evaluation_updated";
     availableTimeSlots?: ResumeEvaluationAvailableTimeSlot[];
+    departmentName?: string | null;
     fromStatus: ResumeEvaluationStatus | null;
     interviewRecordId: string;
     nextJobDescriptionId?: string | null;
@@ -87,6 +88,7 @@ async function insertEvaluationAudit(
     createdAt: new Date(),
     detail: {
       availableTimeSlots: input.availableTimeSlots ?? [],
+      departmentName: input.departmentName ?? null,
       fromStatus: input.fromStatus,
       nextJobDescriptionId: input.nextJobDescriptionId ?? null,
       previousJobDescriptionId: input.previousJobDescriptionId ?? null,
@@ -102,6 +104,7 @@ async function insertEvaluationAudit(
 
 export async function submitResumeEvaluation(input: {
   availableTimeSlots?: ResumeEvaluationAvailableTimeSlot[];
+  departmentName: string;
   id: string;
   operatorId: string | null;
   organizationId: string;
@@ -148,6 +151,7 @@ export async function submitResumeEvaluation(input: {
           ? "resume_evaluation_submitted"
           : "resume_evaluation_updated",
       availableTimeSlots: input.availableTimeSlots,
+      departmentName: input.departmentName,
       fromStatus: existing.resumeEvaluationStatus,
       interviewRecordId: input.id,
       operatorId: input.operatorId,

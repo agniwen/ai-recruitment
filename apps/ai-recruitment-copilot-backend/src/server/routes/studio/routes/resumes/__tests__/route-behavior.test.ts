@@ -441,6 +441,7 @@ describe("resumeLibraryRouter behavior", () => {
         availableTimeSlots: [
           { endAt: "2026-07-12T11:00:00.000Z", startAt: "2026-07-12T10:00:00.000Z" },
         ],
+        departmentName: "研发部",
         reason: "符合岗位要求",
         status: "pass",
       }),
@@ -454,6 +455,7 @@ describe("resumeLibraryRouter behavior", () => {
       availableTimeSlots: [
         { endAt: "2026-07-12T11:00:00.000Z", startAt: "2026-07-12T10:00:00.000Z" },
       ],
+      departmentName: "研发部",
       id: RECORD_ID,
       operatorId: USER_ID,
       organizationId: ORGANIZATION_ID,
@@ -473,6 +475,7 @@ describe("resumeLibraryRouter behavior", () => {
         availableTimeSlots: [
           { endAt: "2026-07-12T11:00:00.000Z", startAt: "2026-07-12T10:00:00.000Z" },
         ],
+        departmentName: "研发部",
         reason: "符合岗位要求",
         status: "pass",
       }),
@@ -499,7 +502,11 @@ describe("resumeLibraryRouter behavior", () => {
     });
 
     const response = await makeApp().request(`/resumes/${RECORD_ID}/review/evaluation`, {
-      body: JSON.stringify({ reason: "尝试再次评价", status: "fail" }),
+      body: JSON.stringify({
+        departmentName: "研发部",
+        reason: "尝试再次评价",
+        status: "fail",
+      }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
     });

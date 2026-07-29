@@ -109,11 +109,25 @@ export function auditDescription(detail: Record<string, unknown>, action: string
     const count = typeof detail.turnCount === "number" ? detail.turnCount : null;
     return count === null ? "AI 面试报告已同步" : `AI 面试报告已同步，共 ${count} 条转写`;
   }
-  if (action === "resume_evaluation_submitted") {
-    return `评估结果：${resumeEvaluationLabel(detail.toStatus)}`;
-  }
-  if (action === "resume_evaluation_updated") {
-    return `评估状态：${resumeEvaluationLabel(detail.fromStatus)} -> ${resumeEvaluationLabel(detail.toStatus)}`;
+  if (action === "resume_evaluation_submitted" || action === "resume_evaluation_updated") {
+    const departmentName =
+      typeof detail.departmentName === "string" && detail.departmentName.trim()
+        ? detail.departmentName.trim()
+        : null;
+    const reason =
+      typeof detail.reason === "string" && detail.reason.trim() ? detail.reason.trim() : null;
+    const statusPart =
+      action === "resume_evaluation_submitted"
+        ? `评估结果：${resumeEvaluationLabel(detail.toStatus)}`
+        : `评估状态：${resumeEvaluationLabel(detail.fromStatus)} -> ${resumeEvaluationLabel(detail.toStatus)}`;
+    const parts = [statusPart];
+    if (departmentName) {
+      parts.push(`部门：${departmentName}`);
+    }
+    if (reason) {
+      parts.push(`原因：${reason}`);
+    }
+    return parts.join("，");
   }
   if (action === "resume_evaluation_reset_for_job_change") {
     return typeof detail.reason === "string" ? detail.reason : "岗位变更后需重新评估";

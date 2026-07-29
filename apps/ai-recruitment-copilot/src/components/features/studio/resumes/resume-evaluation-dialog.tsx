@@ -25,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { isApiError, submitResumeReviewEvaluation } from "@/lib/client/api";
@@ -107,11 +108,13 @@ export function ResumeEvaluationDialog({
 }: ResumeEvaluationDialogProps) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
+  const [departmentName, setDepartmentName] = useState("");
   const [reason, setReason] = useState("");
   const [timeSlots, setTimeSlots] = useState<TimeSlotFormValue[]>([EMPTY_TIME_SLOT]);
   const mutation = useMutation({
     mutationFn: (input: {
       availableTimeSlots?: { endAt: string; startAt: string }[];
+      departmentName: string;
       reason: string;
       status: ResumeEvaluationStatus;
     }) => submitResumeReviewEvaluation(slug, recordId, input),
@@ -136,6 +139,7 @@ export function ResumeEvaluationDialog({
 
   useEffect(() => {
     if (decision) {
+      setDepartmentName("");
       setReason("");
       setTimeSlots([EMPTY_TIME_SLOT]);
     }
@@ -153,6 +157,11 @@ export function ResumeEvaluationDialog({
 
   function handleSubmitEvaluation() {
     if (!decision) {
+      return;
+    }
+    const trimmedDepartmentName = departmentName.trim();
+    if (!trimmedDepartmentName) {
+      toast.error("请填写评审部门");
       return;
     }
     const trimmedReason = reason.trim();
@@ -189,6 +198,7 @@ export function ResumeEvaluationDialog({
 
     mutation.mutate({
       availableTimeSlots: availableTimeSlots as { endAt: string; startAt: string }[],
+      departmentName: trimmedDepartmentName,
       reason: trimmedReason,
       status: decision,
     });
@@ -201,19 +211,37 @@ export function ResumeEvaluationDialog({
           <DialogTitle>{decision === "pass" ? "评估通过" : "评估不通过"}</DialogTitle>
           <DialogDescription>
             {decision === "pass"
-              ? "填写通过原因，并维护候选人可预约的面试时间段。"
-              : "填写不通过原因，提交后该结果会进入候选人时间线。"}
+              ? "填写评审部门、通过原因，并维护候选人可预约的面试时间段。"
+              : "填写评审部门与不通过原因，提交后该结果会进入候选人时间线。"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="grid gap-2">
-            <Label htmlFor="resume-review-evaluation-reason">原因</Label>
+            <Label htmlFor="resume-review-evaluation-department">
+              部门 <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              aria-required
+              id="resume-review-evaluation-department"
+              maxLength={100}
+              onChange={(event) => setDepartmentName(event.target.value)}
+              placeholder="请输入评审部门"
+              required
+              value={departmentName}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="resume-review-evaluation-reason">
+              原因 <span className="text-destructive">*</span>
+            </Label>
             <Textarea
+              aria-required
               id="resume-review-evaluation-reason"
               maxLength={2000}
               onChange={(event) => setReason(event.target.value)}
               placeholder="请输入评估判断依据"
+              required
               rows={4}
               value={reason}
             />

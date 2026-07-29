@@ -440,6 +440,7 @@ describe("resume review detail route", () => {
     expect(evaluationDaoSource).toContain("previousJobDescriptionName");
     expect(evaluationDaoSource).toContain("nextJobDescriptionName");
     expect(evaluationDaoSource).toContain("availableTimeSlots");
+    expect(evaluationDaoSource).toContain("departmentName");
     expect(evaluationDaoSource).toContain("reason");
     expect(evaluationDaoSource).toContain("fromStatus");
     expect(evaluationDaoSource).toContain("toStatus");

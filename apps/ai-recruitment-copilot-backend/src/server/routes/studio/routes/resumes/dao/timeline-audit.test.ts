@@ -1,6 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { auditDescription, auditMetadata, auditTitle, auditTone } from "./timeline-audit";
 
+describe("resume evaluation audit timeline", () => {
+  it("includes department and reason in evaluation activity copy", () => {
+    expect(
+      auditDescription(
+        {
+          departmentName: "研发部",
+          reason: "符合岗位要求",
+          toStatus: "pass",
+        },
+        "resume_evaluation_submitted",
+      ),
+    ).toBe("评估结果：通过，部门：研发部，原因：符合岗位要求");
+
+    expect(
+      auditDescription(
+        {
+          departmentName: "产品部",
+          fromStatus: "fail",
+          reason: "综合评估通过",
+          toStatus: "pass",
+        },
+        "resume_evaluation_updated",
+      ),
+    ).toBe("评估状态：不通过 -> 通过，部门：产品部，原因：综合评估通过");
+  });
+});
+
 describe("candidate information audit timeline", () => {
   it("renders the latest displayed candidate information as structured metadata", () => {
     const detail = {

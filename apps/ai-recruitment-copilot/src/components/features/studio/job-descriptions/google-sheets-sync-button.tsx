@@ -14,22 +14,45 @@ import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 
 const SYNC_STATUS_POLL_INTERVAL_MS = 5000;
+const SYNC_TOAST_DURATION_MS = 15_000;
+const MAX_DETAIL_LINES_IN_TOAST = 20;
 
-function buildResultDescription(result: JobDescriptionGoogleSheetsSyncResult): string {
-  const parts = [
-    `用人组织新增 ${result.hiringUnitsCreated}`,
-    `部门新增 ${result.departmentsCreated}`,
-    `岗位新增 ${result.jobsCreated}`,
-    `岗位更新 ${result.jobsUpdated}`,
-    `未变化 ${result.jobsUnchanged}`,
+function formatSkippedLine(item: JobDescriptionGoogleSheetsSyncResult["skipped"][number]): string {
+  const code = item.code ? `（${item.code}）` : "";
+  return `第 ${item.rowNumber} 行${code}：${item.reason}`;
+}
+
+function formatWarningLine(item: JobDescriptionGoogleSheetsSyncResult["warnings"][number]): string {
+  const code = item.code ? `（${item.code}）` : "";
+  return `第 ${item.rowNumber} 行${code} ${item.field}：${item.message}`;
+}
+
+function appendLimitedLines(lines: string[], items: string[], label: string): void {
+  if (items.length === 0) {
+    return;
+  }
+  lines.push(`${label} ${items.length} 条：`);
+  const visible = items.slice(0, MAX_DETAIL_LINES_IN_TOAST);
+  lines.push(...visible.map((item) => `· ${item}`));
+  const remaining = items.length - visible.length;
+  if (remaining > 0) {
+    lines.push(`· …另有 ${remaining} 条未展开`);
+  }
+}
+
+/** Build the multi-line toast body for a finished Google Sheet sync. */
+export function buildGoogleSheetSyncResultDescription(
+  result: JobDescriptionGoogleSheetsSyncResult,
+): string {
+  const imported = result.jobsCreated + result.jobsUpdated;
+  const lines = [
+    `处理 ${result.processedRows} 行（导入/更新 ${imported}，未变化 ${result.jobsUnchanged}，跳过 ${result.skipped.length}）`,
+    `用人组织新增 ${result.hiringUnitsCreated}，部门新增 ${result.departmentsCreated}`,
+    `岗位新增 ${result.jobsCreated}，岗位更新 ${result.jobsUpdated}`,
   ];
-  if (result.skipped.length > 0) {
-    parts.push(`跳过 ${result.skipped.length}`);
-  }
-  if (result.warnings.length > 0) {
-    parts.push(`警告 ${result.warnings.length}`);
-  }
-  return parts.join("，");
+  appendLimitedLines(lines, result.skipped.map(formatSkippedLine), "跳过");
+  appendLimitedLines(lines, result.warnings.map(formatWarningLine), "警告");
+  return lines.join("\n");
 }
 
 function isActiveRun(run: JobDescriptionGoogleSheetsSyncRun | null | undefined): boolean {
@@ -109,8 +132,14 @@ export function GoogleSheetsSyncButton({
       run.result.departmentsCreated +
       run.result.jobsCreated +
       run.result.jobsUpdated;
+    const description = buildGoogleSheetSyncResultDescription(run.result);
     toast.success(changed > 0 ? "Google 文档同步完成" : "Google 文档没有变化", {
-      description: buildResultDescription(run.result),
+      description: (
+        <div className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed">
+          {description}
+        </div>
+      ),
+      duration: SYNC_TOAST_DURATION_MS,
     });
   }, [onSynced, run]);
 

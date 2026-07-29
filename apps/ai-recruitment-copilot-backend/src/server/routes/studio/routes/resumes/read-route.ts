@@ -455,6 +455,7 @@ export const resumeLibraryReadRouter = factory
       const input = c.req.valid("json");
       const result = await submitResumeEvaluation({
         availableTimeSlots: input.availableTimeSlots ?? [],
+        departmentName: input.departmentName,
         id,
         operatorId: c.var.user?.id ?? null,
         organizationId: activeOrg.id,
