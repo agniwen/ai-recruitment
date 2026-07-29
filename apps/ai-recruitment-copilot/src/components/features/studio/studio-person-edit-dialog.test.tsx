@@ -150,6 +150,8 @@ function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibrary
     outcome: "in_pipeline",
     pipelineStage: "screening",
     recommendationText: null,
+    recruitmentSource: null,
+    recruitmentSourceDetail: null,
     resumeContentHash: "hash",
     resumeEvaluationStatus: null,
     resumeEvaluatorId: null,

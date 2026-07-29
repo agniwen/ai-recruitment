@@ -8,6 +8,7 @@
 // between the resume-mode detail dialog and the launch-interview dialog so the
 // same data renders the same way in both places.
 
+import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import { canEditResumeRecord, describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import type { ResumeIdentityUpdateInput, ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import type {
@@ -987,6 +988,13 @@ function ResumeOverviewCandidateInfoSection({
             valueClassName="font-medium"
           />
           <DataField label="用人组织" value={detail.hiringUnitName} />
+          <DataField
+            label="简历来源"
+            value={describeResumeRecruitmentSource(
+              detail.recruitmentSource,
+              detail.recruitmentSourceDetail,
+            )}
+          />
           <DataField label="简历评估" value={resumeEvaluation.label} valueClassName="font-medium" />
           <DataField label="性别" value={detail.resumeProfile?.gender} />
           <DataField kind="number" label="年龄" value={detail.resumeProfile?.age} />

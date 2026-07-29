@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ResumeAnalysisResult, ResumeProfile } from "@arc/db-schema/interview/types";
+import type { ResumeRecruitmentSource } from "@arc/db-schema/resume-recruitment-source";
 import type { ResumeReview, ResumeReviewAction } from "@arc/db-schema/resume-review";
 import type { ResumeDuplicateMatchSummary } from "./resume-duplicates";
 import {
@@ -156,6 +157,8 @@ export interface ResumeLibraryListRecord {
   resumeEvaluatorImage: string | null;
   resumeEvaluatorName: string | null;
   recommendationText: string | null;
+  recruitmentSource: ResumeRecruitmentSource | null;
+  recruitmentSourceDetail: string | null;
   resumeScreeningError: string | null;
   resumeScreeningEvaluatedAt: string | null;
   resumeScreeningResult: ResumeScreeningResult | null;

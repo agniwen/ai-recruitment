@@ -682,10 +682,24 @@ export function importPoolItemToResumeLibrary(
           .limit(1);
         if (existing) {
           ({ resumeRecordId } = existing);
+          // Always refresh recruitment source from the pool item on re-import.
           await tx
             .update(studioInterview)
             .set({
               jobDescriptionId: admission.jobDescriptionId,
+              recruitmentSource: source.recruitmentSource,
+              recruitmentSourceDetail: source.recruitmentSourceDetail,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(studioInterview.id, resumeRecordId),
+                eq(studioInterview.organizationId, admission.organizationId),
+              ),
+            );
+          await tx
+            .update(studioInterview)
+            .set({
               resumeParseError: null,
               resumeParseStatus: "processing",
               updatedAt: new Date(),

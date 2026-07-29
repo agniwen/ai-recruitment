@@ -307,6 +307,17 @@ export function ImportResumePoolDialog({
             </FieldContent>
           </Field>
           <Field>
+            <FieldLabel>简历来源</FieldLabel>
+            <FieldContent>
+              <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                {recruitmentSource || "未填写（将原样同步到招聘台）"}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                入库时会把广场/简历池中的来源复制到招聘台候选人记录。
+              </p>
+            </FieldContent>
+          </Field>
+          <Field>
             <div className="flex items-center gap-2">
               <FieldLabel htmlFor="resume-pool-import-recommendation">推荐理由</FieldLabel>
               <Button
@@ -322,8 +333,14 @@ export function ImportResumePoolDialog({
                         mode === "bind"
                           ? selectedJobDescription?.name
                           : (item?.jobDescriptionName ?? item?.targetRole),
+                      jobSeries: selectedJobDescription?.jobSeries,
                       recruitmentSource,
+                      referrerName:
+                        item?.recruitmentSource === "referral"
+                          ? item.recruitmentSourceDetail
+                          : null,
                       resumeContact: selectedJobDescription?.resumeContact,
+                      serviceUnit: selectedJobDescription?.serviceUnit,
                       workYears: item?.workYears,
                     }),
                   )
@@ -340,8 +357,8 @@ export function ImportResumePoolDialog({
                 id="resume-pool-import-recommendation"
                 maxLength={RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH}
                 onChange={(event) => setRecommendationText(event.target.value)}
-                placeholder="填写推荐给业务方或面试官参考的理由"
-                rows={3}
+                placeholder="可点「插入模版」自动带出简历字段，再人工补全薪资、到岗等信息"
+                rows={12}
                 value={recommendationText}
               />
             </FieldContent>

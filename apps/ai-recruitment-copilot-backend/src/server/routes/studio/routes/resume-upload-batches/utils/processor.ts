@@ -139,6 +139,8 @@ async function upsertParsedResumeRecord({
   item,
   jobDescriptionId,
   organizationId,
+  recruitmentSource,
+  recruitmentSourceDetail,
   resumeProfile,
   resumeText,
   userId,
@@ -146,6 +148,8 @@ async function upsertParsedResumeRecord({
   item: NonNullable<ItemRow>;
   jobDescriptionId: string | null;
   organizationId: string;
+  recruitmentSource: BatchRow["recruitmentSource"];
+  recruitmentSourceDetail: BatchRow["recruitmentSourceDetail"];
   resumeProfile: ParsedResume["resumeProfile"];
   resumeText: string | null;
   userId: string;
@@ -164,6 +168,8 @@ async function upsertParsedResumeRecord({
       jobDescriptionId,
       notes: null,
       organizationId,
+      recruitmentSource,
+      recruitmentSourceDetail,
       resumeFileName: item.originalFileName,
       resumeProfile,
       resumeReview: null,
@@ -210,6 +216,8 @@ async function upsertParsedResumeRecord({
         candidatePhone: resumeProfile?.phone ?? null,
         jobDescriptionId,
         notes: null,
+        recruitmentSource,
+        recruitmentSourceDetail,
         resumeContentHash: item.contentHash,
         resumeFileName: item.originalFileName,
         resumeParseError: null,
@@ -322,6 +330,8 @@ async function fetchAndParse(
     item,
     jobDescriptionId,
     organizationId,
+    recruitmentSource: batchRow.recruitmentSource,
+    recruitmentSourceDetail: batchRow.recruitmentSourceDetail,
     resumeProfile,
     resumeText,
     userId,

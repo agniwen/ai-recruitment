@@ -228,6 +228,8 @@ const SELECTED_COLUMNS = {
   outcome: studioInterview.outcome,
   pipelineStage: studioInterview.pipelineStage,
   recommendationText: studioInterview.recommendationText,
+  recruitmentSource: studioInterview.recruitmentSource,
+  recruitmentSourceDetail: studioInterview.recruitmentSourceDetail,
   resumeContentHash: studioInterview.resumeContentHash,
   resumeEducationExperiences:
     sql<unknown>`${studioInterview.resumeProfile}->'educationExperiences'`.as(
@@ -844,6 +846,8 @@ function toRecord(
     outcome: row.outcome,
     pipelineStage: row.pipelineStage,
     recommendationText: row.recommendationText,
+    recruitmentSource: row.recruitmentSource,
+    recruitmentSourceDetail: row.recruitmentSourceDetail,
     resumeContentHash: row.resumeContentHash,
     resumeEvaluationStatus: row.resumeEvaluationStatus,
     resumeEvaluatorId: resolvedPeople.resumeEvaluatorId,
