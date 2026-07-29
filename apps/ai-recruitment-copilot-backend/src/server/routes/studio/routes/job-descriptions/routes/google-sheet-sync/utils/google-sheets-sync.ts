@@ -221,11 +221,11 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
     const hiringUnitName = cellText(row, headerIndexes.get(HEADERS.hiringUnitName));
     const rawDepartmentName = cellText(row, headerIndexes.get(HEADERS.departmentName));
     const departmentName = rawDepartmentName || DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME;
+    // JD/prompt is optional on sheet sync; DB column is NOT NULL so store "".
     const prompt = cellText(row, headerIndexes.get(HEADERS.prompt));
     const missingRequired = findMissingRequiredFields([
       ["岗位名称", name],
       ["编制组织", hiringUnitName],
-      ["JD", prompt],
     ]);
     if (missingRequired.length > 0) {
       skipped.push({
@@ -240,6 +240,14 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
         code,
         field: HEADERS.departmentName,
         message: `部门为空，已归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」。`,
+        rowNumber,
+      });
+    }
+    if (!prompt) {
+      warnings.push({
+        code,
+        field: HEADERS.prompt,
+        message: "JD 为空，已按空岗位说明导入。",
         rowNumber,
       });
     }

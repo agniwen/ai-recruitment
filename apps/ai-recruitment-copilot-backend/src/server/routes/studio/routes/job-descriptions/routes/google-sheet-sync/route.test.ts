@@ -3,20 +3,22 @@ import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 
 const mocks = vi.hoisted(() => ({
   createOrGetActiveRun: vi.fn(),
-  enqueue: vi.fn(),
+  ensureEnqueue: vi.fn(),
   failRun: vi.fn(),
+  failStale: vi.fn(),
   latestRun: vi.fn(),
   queueConfigured: vi.fn(),
 }));
 
 vi.mock("@arc/resume-parse-queue/job-description-google-sheet-sync", () => ({
-  enqueueJobDescriptionGoogleSheetSyncJob: mocks.enqueue,
+  ensureJobDescriptionGoogleSheetSyncJobEnqueued: mocks.ensureEnqueue,
   isJobDescriptionGoogleSheetSyncQueueConfigured: mocks.queueConfigured,
 }));
 
 vi.mock("./dao", () => ({
   createOrGetActiveGoogleSheetSyncRun: mocks.createOrGetActiveRun,
   failGoogleSheetSyncRun: mocks.failRun,
+  failStaleGoogleSheetSyncRuns: mocks.failStale,
   loadLatestGoogleSheetSyncRun: mocks.latestRun,
 }));
 
@@ -52,6 +54,8 @@ describe("Google Sheet sync route", () => {
     mocks.queueConfigured.mockReturnValue(true);
     mocks.createOrGetActiveRun.mockResolvedValue({ created: true, run });
     mocks.latestRun.mockResolvedValue(run);
+    mocks.failStale.mockResolvedValue([]);
+    mocks.ensureEnqueue.mockResolvedValue("enqueued");
   });
 
   it("is unavailable to non-administrator workspace roles", async () => {
@@ -59,7 +63,7 @@ describe("Google Sheet sync route", () => {
 
     expect(response.status).toBe(403);
     expect(mocks.createOrGetActiveRun).not.toHaveBeenCalled();
-    expect(mocks.enqueue).not.toHaveBeenCalled();
+    expect(mocks.ensureEnqueue).not.toHaveBeenCalled();
   });
 
   it("persists and enqueues an administrator sync run", async () => {
@@ -67,17 +71,28 @@ describe("Google Sheet sync route", () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual(run);
+    expect(mocks.failStale).toHaveBeenCalledWith({ organizationId: "org-1" });
     expect(mocks.createOrGetActiveRun).toHaveBeenCalledWith({
       organizationId: "org-1",
       requestedBy: "user-1",
     });
-    expect(mocks.enqueue).toHaveBeenCalledWith({ runId: run.id });
+    expect(mocks.ensureEnqueue).toHaveBeenCalledWith({ runId: run.id });
   });
 
-  it("returns the persisted latest state after a refresh", async () => {
+  it("re-enqueues when reusing an already-active run so Redis zombies recover", async () => {
+    mocks.createOrGetActiveRun.mockResolvedValue({ created: false, run });
+
+    const response = await makeApp("admin").request("/sync", { method: "POST" });
+
+    expect(response.status).toBe(202);
+    expect(mocks.ensureEnqueue).toHaveBeenCalledWith({ runId: run.id });
+  });
+
+  it("expires stale active runs before returning status", async () => {
     const response = await makeApp("owner").request("/sync");
 
     expect(response.status).toBe(200);
+    expect(mocks.failStale).toHaveBeenCalledWith({ organizationId: "org-1" });
     await expect(response.json()).resolves.toEqual({ run });
     expect(mocks.latestRun).toHaveBeenCalledWith("org-1");
   });

@@ -90,6 +90,41 @@ export async function enqueueJobDescriptionGoogleSheetSyncJob(
   );
 }
 
+const IN_FLIGHT_JOB_STATES = new Set([
+  "active",
+  "delayed",
+  "prioritized",
+  "waiting",
+  "waiting-children",
+]);
+
+/**
+ * Idempotent enqueue: keep existing in-flight jobs, replace finished/missing ones.
+ * Prevents DB-active / Redis-missing zombies from blocking the UI forever.
+ */
+export async function ensureJobDescriptionGoogleSheetSyncJobEnqueued(
+  data: JobDescriptionGoogleSheetSyncJobData,
+): Promise<"already_inflight" | "enqueued"> {
+  if (!isJobDescriptionGoogleSheetSyncQueueConfigured()) {
+    throw new Error("REDIS_URL is not set.");
+  }
+  const queue = getJobDescriptionGoogleSheetSyncQueue();
+  const jobId = buildJobDescriptionGoogleSheetSyncJobId(data);
+  const existing = await queue.getJob(jobId);
+  if (existing) {
+    const state = await existing.getState();
+    if (IN_FLIGHT_JOB_STATES.has(state)) {
+      return "already_inflight";
+    }
+    await existing.remove();
+  }
+  await queue.add(JOB_DESCRIPTION_GOOGLE_SHEET_SYNC_JOB_NAME, data, {
+    ...jobOptions(),
+    jobId,
+  });
+  return "enqueued";
+}
+
 export function createJobDescriptionGoogleSheetSyncWorker(
   processJob: JobDescriptionGoogleSheetSyncJobProcessor,
 ): Worker<JobDescriptionGoogleSheetSyncJobData> {

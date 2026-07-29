@@ -87,22 +87,41 @@ describe("parseGoogleSheetJobRows", () => {
     });
   });
 
-  it("skips placeholder codes, missing hierarchy, missing prompts, and every duplicate code", () => {
+  it("skips placeholder codes, missing hierarchy, and every duplicate code", () => {
     const result = parseGoogleSheetJobRows([
       HEADERS,
       row({ 稳定唯一值: "待生成" }),
       row({ 稳定唯一值: "REQ-000010", 编制组织: "" }),
-      row({
-        "JD(必填) 岗位职责+任职要求": "",
-        稳定唯一值: "REQ-000011",
-      }),
       row({ 稳定唯一值: "REQ-000012" }),
       row({ 岗位名称: "重复岗位", 稳定唯一值: "REQ-000012" }),
     ]);
 
     expect(result.records).toEqual([]);
-    expect(result.skipped.map((item) => item.rowNumber)).toEqual([2, 3, 4, 5, 6]);
+    expect(result.skipped.map((item) => item.rowNumber)).toEqual([2, 3, 4, 5]);
     expect(result.skipped.filter((item) => item.reason.includes("重复"))).toHaveLength(2);
+  });
+
+  it("imports rows with an empty JD prompt instead of skipping them", () => {
+    const result = parseGoogleSheetJobRows([
+      HEADERS,
+      row({
+        "JD(必填) 岗位职责+任职要求": "",
+        稳定唯一值: "REQ-000011",
+      }),
+    ]);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]).toMatchObject({
+      code: "REQ-000011",
+      prompt: "",
+    });
+    expect(result.warnings).toContainEqual({
+      code: "REQ-000011",
+      field: "JD(必填) 岗位职责+任职要求",
+      message: "JD 为空，已按空岗位说明导入。",
+      rowNumber: 2,
+    });
   });
 
   it("assigns empty department rows to the default department instead of skipping", () => {

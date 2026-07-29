@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildJobDescriptionGoogleSheetSyncJobId,
+  ensureJobDescriptionGoogleSheetSyncJobEnqueued,
   jobDescriptionGoogleSheetSyncJobSchema,
   resolveJobDescriptionGoogleSheetSyncWorkerConcurrency,
 } from "./job-description-google-sheet-sync";
@@ -25,5 +26,9 @@ describe("job description Google Sheet sync queue", () => {
         JOB_DESCRIPTION_GOOGLE_SHEET_SYNC_WORKER_CONCURRENCY: "2",
       }),
     ).toBe(2);
+  });
+
+  it("exports ensure-enqueue for DB/Redis recovery paths", () => {
+    expect(typeof ensureJobDescriptionGoogleSheetSyncJobEnqueued).toBe("function");
   });
 });

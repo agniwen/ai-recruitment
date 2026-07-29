@@ -61,6 +61,52 @@ async function recoverIncompleteResumeSemanticIndexJobs(): Promise<void> {
   });
 }
 
+async function recoverIncompleteGoogleSheetSyncJobs(): Promise<void> {
+  const { failStaleGoogleSheetSyncRuns, listActiveGoogleSheetSyncRuns } =
+    await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/routes/google-sheet-sync/dao");
+  const { ensureJobDescriptionGoogleSheetSyncJobEnqueued } =
+    await import("@arc/resume-parse-queue/job-description-google-sheet-sync");
+
+  const failedIds = await failStaleGoogleSheetSyncRuns();
+  if (failedIds.length > 0) {
+    console.info("[job-description-google-sheet-sync-worker] startup marked stale runs failed", {
+      count: failedIds.length,
+      runIds: failedIds,
+    });
+  }
+
+  const active = await listActiveGoogleSheetSyncRuns();
+  if (active.length === 0) {
+    console.info(
+      "[job-description-google-sheet-sync-worker] startup recovery found no active runs",
+    );
+    return;
+  }
+
+  let enqueued = 0;
+  let alreadyInflight = 0;
+  for (const run of active) {
+    try {
+      const outcome = await ensureJobDescriptionGoogleSheetSyncJobEnqueued({ runId: run.id });
+      if (outcome === "enqueued") {
+        enqueued += 1;
+      } else {
+        alreadyInflight += 1;
+      }
+    } catch (error) {
+      console.error("[job-description-google-sheet-sync-worker] startup re-enqueue failed", {
+        error,
+        runId: run.id,
+      });
+    }
+  }
+  console.info("[job-description-google-sheet-sync-worker] startup recovery finished", {
+    active: active.length,
+    alreadyInflight,
+    enqueued,
+  });
+}
+
 async function main() {
   const { hostname, port } = resolveWorkerServerConfig();
   const app = createWorkerApp();
@@ -111,6 +157,7 @@ async function main() {
         await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/review-worker");
       await processResumeReviewGenerationJob(payload);
     });
+    await recoverIncompleteGoogleSheetSyncJobs();
     googleSheetSyncWorker = createJobDescriptionGoogleSheetSyncWorker(async (payload) => {
       const { processGoogleSheetSyncRun } =
         await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/routes/google-sheet-sync/processor");

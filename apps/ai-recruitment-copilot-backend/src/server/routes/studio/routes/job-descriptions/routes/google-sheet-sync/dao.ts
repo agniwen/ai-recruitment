@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type {
   JobDescriptionGoogleSheetsSyncResult,
   JobDescriptionGoogleSheetsSyncRun,
@@ -7,6 +7,9 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { jobDescriptionGoogleSheetSyncRun } from "@arc/db-schema/schema";
 
 type SyncRunRow = typeof jobDescriptionGoogleSheetSyncRun.$inferSelect;
+
+/** Active runs older than this are treated as lost and auto-failed. */
+export const GOOGLE_SHEET_SYNC_STALE_MS = 15 * 60 * 1000;
 
 function toSyncRun(row: SyncRunRow): JobDescriptionGoogleSheetsSyncRun {
   return {
@@ -75,13 +78,73 @@ export async function loadLatestGoogleSheetSyncRun(
   return row ? toSyncRun(row) : null;
 }
 
+/**
+ * List active runs that workers should re-enqueue (or that are eligible for stale failure).
+ */
+export async function listActiveGoogleSheetSyncRuns(): Promise<
+  { id: string; organizationId: string; status: "queued" | "running"; updatedAt: Date }[]
+> {
+  const rows = await db
+    .select({
+      id: jobDescriptionGoogleSheetSyncRun.id,
+      organizationId: jobDescriptionGoogleSheetSyncRun.organizationId,
+      status: jobDescriptionGoogleSheetSyncRun.status,
+      updatedAt: jobDescriptionGoogleSheetSyncRun.updatedAt,
+    })
+    .from(jobDescriptionGoogleSheetSyncRun)
+    .where(inArray(jobDescriptionGoogleSheetSyncRun.status, ["queued", "running"]));
+  return rows.map((row) => ({
+    id: row.id,
+    organizationId: row.organizationId,
+    status: row.status as "queued" | "running",
+    updatedAt: row.updatedAt,
+  }));
+}
+
+/**
+ * Fail active runs that have not made progress for longer than `staleMs`.
+ * Uses `updatedAt` so both never-started and mid-run stalls are covered.
+ * Returns the failed run ids.
+ */
+export async function failStaleGoogleSheetSyncRuns(input?: {
+  organizationId?: string;
+  staleMs?: number;
+}): Promise<string[]> {
+  const staleMs = input?.staleMs ?? GOOGLE_SHEET_SYNC_STALE_MS;
+  const cutoff = new Date(Date.now() - staleMs);
+  const now = new Date();
+  const conditions = [
+    inArray(jobDescriptionGoogleSheetSyncRun.status, ["queued", "running"]),
+    lt(jobDescriptionGoogleSheetSyncRun.updatedAt, cutoff),
+  ];
+  if (input?.organizationId) {
+    conditions.push(eq(jobDescriptionGoogleSheetSyncRun.organizationId, input.organizationId));
+  }
+  const rows = await db
+    .update(jobDescriptionGoogleSheetSyncRun)
+    .set({
+      error: "同步任务超时未完成，已自动取消。请重新点击同步。",
+      finishedAt: now,
+      status: "failed",
+      updatedAt: now,
+    })
+    .where(and(...conditions))
+    .returning({ id: jobDescriptionGoogleSheetSyncRun.id });
+  return rows.map((row) => row.id);
+}
+
 export async function claimGoogleSheetSyncRun(
   runId: string,
 ): Promise<{ organizationId: string; requestedBy: string | null } | null> {
   const now = new Date();
   const [claimed] = await db
     .update(jobDescriptionGoogleSheetSyncRun)
-    .set({ error: null, startedAt: now, status: "running", updatedAt: now })
+    .set({
+      error: null,
+      startedAt: sql`coalesce(${jobDescriptionGoogleSheetSyncRun.startedAt}, now())`,
+      status: "running",
+      updatedAt: now,
+    })
     .where(
       and(
         eq(jobDescriptionGoogleSheetSyncRun.id, runId),
@@ -109,7 +172,12 @@ export async function completeGoogleSheetSyncRun(
       status: "succeeded",
       updatedAt: now,
     })
-    .where(eq(jobDescriptionGoogleSheetSyncRun.id, runId));
+    .where(
+      and(
+        eq(jobDescriptionGoogleSheetSyncRun.id, runId),
+        inArray(jobDescriptionGoogleSheetSyncRun.status, ["queued", "running"]),
+      ),
+    );
 }
 
 export async function failGoogleSheetSyncRun(runId: string, error: string): Promise<void> {
@@ -122,5 +190,10 @@ export async function failGoogleSheetSyncRun(runId: string, error: string): Prom
       status: "failed",
       updatedAt: now,
     })
-    .where(eq(jobDescriptionGoogleSheetSyncRun.id, runId));
+    .where(
+      and(
+        eq(jobDescriptionGoogleSheetSyncRun.id, runId),
+        inArray(jobDescriptionGoogleSheetSyncRun.status, ["queued", "running"]),
+      ),
+    );
 }
