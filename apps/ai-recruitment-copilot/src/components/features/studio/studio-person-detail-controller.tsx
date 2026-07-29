@@ -623,6 +623,7 @@ export function useStudioPersonDetailController({
     record?.pipelineStage === "screening" &&
     canProgressResumeRecordToInterview &&
     !record?.jobDescriptionAiInterviewDisabled &&
+    (resumeRecord?.jobDescriptionInterviewers?.length ?? 0) > 0 &&
     canLaunchResumeModeRecord &&
     !isRoundsLoading &&
     candidateRounds.length === 0;

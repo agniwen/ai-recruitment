@@ -16,27 +16,33 @@ const resumeLibraryPageSource = readSource("./resumes/resume-library-page.tsx");
 describe("AI interview launch guards", () => {
   it("hides launch actions in resume cards and candidate detail", () => {
     expect(resumeCardActionsSource).toContain("!record.jobDescriptionAiInterviewDisabled");
+    expect(resumeCardActionsSource).toContain(
+      "jobHasAiInterviewers(record.jobDescriptionInterviewers)",
+    );
     expect(detailControllerSource).toContain(
       "jobDescriptionAiInterviewDisabled: resumeRecord.jobDescriptionAiInterviewDisabled",
     );
     expect(detailControllerSource).toContain("!record?.jobDescriptionAiInterviewDisabled");
-    expect(actionBarSource).toContain(
-      'pipelineStage === "closed" || aiInterviewDisabled ? null : primaryAction',
+    expect(detailControllerSource).toContain(
+      "(resumeRecord?.jobDescriptionInterviewers?.length ?? 0) > 0",
     );
+    expect(actionBarSource).toContain("shouldShowInterviewProgressAction");
+    expect(actionBarSource).toContain("groupedPrimaryAction");
   });
 
   it("blocks stale launch callbacks before opening the launch dialog", () => {
     expect(resumeLibraryPageSource).toContain("if (record.jobDescriptionAiInterviewDisabled)");
+    expect(resumeLibraryPageSource).toContain("if (!record.jobDescriptionInterviewers.length)");
     expect(detailPageSource).toContain("if (detail?.jobDescriptionAiInterviewDisabled)");
   });
 
   it("rechecks the latest resume detail before showing or submitting the launch dialog", () => {
     expect(launchDialogSource).toContain("if (detail?.jobDescriptionAiInterviewDisabled)");
-    expect(launchDialogSource).toContain(
-      "resumeDetail && !resumeDetail.jobDescriptionAiInterviewDisabled ?",
-    );
+    expect(launchDialogSource).toContain("!detail.jobDescriptionInterviewers.length");
+    expect(launchDialogSource).toContain("resumeDetail.jobDescriptionInterviewers.length > 0 ?");
     expect(launchDialogSource).toContain("if (!resumeDetail)");
     expect(launchDialogSource).toContain("if (resumeDetail.jobDescriptionAiInterviewDisabled)");
+    expect(launchDialogSource).toContain("if (!resumeDetail.jobDescriptionInterviewers.length)");
   });
 
   it("invalidates candidate launch surfaces after a job setting changes", () => {

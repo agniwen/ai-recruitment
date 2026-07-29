@@ -155,6 +155,11 @@ export function LaunchInterviewDialog({
         onOpenChange(false);
         return;
       }
+      if (!resumeDetail.jobDescriptionInterviewers.length) {
+        toast.error("当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置");
+        onOpenChange(false);
+        return;
+      }
       setSubmitting(true);
       await runAsyncAction({
         cleanup: () => setSubmitting(false),
@@ -207,6 +212,11 @@ export function LaunchInterviewDialog({
         }
         if (detail?.jobDescriptionAiInterviewDisabled) {
           toast.error("当前关联岗位已禁用 AI 面试");
+          onOpenChange(false);
+          return;
+        }
+        if (detail && !detail.jobDescriptionInterviewers.length) {
+          toast.error("当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置");
           onOpenChange(false);
           return;
         }
@@ -323,7 +333,9 @@ export function LaunchInterviewDialog({
             >
               取消
             </Button>
-            {resumeDetail && !resumeDetail.jobDescriptionAiInterviewDisabled ? (
+            {resumeDetail &&
+            !resumeDetail.jobDescriptionAiInterviewDisabled &&
+            resumeDetail.jobDescriptionInterviewers.length > 0 ? (
               <Button disabled={isBusy} onClick={() => void form.handleSubmit()} type="button">
                 {submitting ? <LoaderCircleIcon className="size-4 animate-spin" /> : null}
                 发起

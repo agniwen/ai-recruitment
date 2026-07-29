@@ -422,6 +422,21 @@ export function canLaunchInterviewFromResume(status: ResumeParseStatus): boolean
   return status === "ready";
 }
 
+/** True when the bound job has at least one AI interviewer configured. */
+export function jobHasAiInterviewers(
+  interviewers: readonly { id: string }[] | null | undefined,
+): boolean {
+  return (interviewers?.length ?? 0) > 0;
+}
+
+export function getResumeAiInterviewInterviewerGateReason(
+  interviewers: readonly { id: string }[] | null | undefined,
+): string | null {
+  return jobHasAiInterviewers(interviewers)
+    ? null
+    : "当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置。";
+}
+
 export function canDeleteResumeRecord(status: ResumeParseStatus): boolean {
   return status !== "queued" && status !== "processing";
 }

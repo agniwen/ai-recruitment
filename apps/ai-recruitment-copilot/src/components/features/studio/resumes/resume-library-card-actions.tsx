@@ -30,6 +30,7 @@ import {
   canEditResumeRecord,
   canLaunchInterviewFromResume,
   canProgressResumeToInterview,
+  jobHasAiInterviewers,
 } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
 import type { ResumeLibraryCardProps } from "./resume-library-card.types";
@@ -231,6 +232,7 @@ export function ResumeLibraryCardActions({
       status: record.resumeEvaluationStatus,
     }) &&
     !record.jobDescriptionAiInterviewDisabled &&
+    jobHasAiInterviewers(record.jobDescriptionInterviewers) &&
     !record.hasInterviewRounds &&
     record.pipelineStage !== "closed";
   const canPreviewFromMenu =

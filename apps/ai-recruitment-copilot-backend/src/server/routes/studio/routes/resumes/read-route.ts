@@ -540,6 +540,9 @@ export const resumeLibraryReadRouter = factory
           case "job_disables_ai_interview": {
             return c.json({ error: "当前关联岗位已禁用 AI 面试。" }, 409);
           }
+          case "job_missing_ai_interviewers": {
+            return c.json({ error: "当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置。" }, 409);
+          }
           case "round_not_created": {
             return c.json({ error: "未生成面试轮次。" }, 400);
           }

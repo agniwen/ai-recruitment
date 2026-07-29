@@ -7,6 +7,7 @@ import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-back
 interface LaunchCandidate {
   jobDescriptionAiInterviewDisabled: boolean;
   jobDescriptionId: string | null;
+  jobDescriptionInterviewers?: { id: string }[] | null;
   pipelineStage: PipelineStage;
   resumeParseStatus: ResumeParseStatus;
 }
@@ -64,6 +65,7 @@ export type LaunchAiInterviewRoundResult =
       reason:
         | "closed_candidate"
         | "job_disables_ai_interview"
+        | "job_missing_ai_interviewers"
         | "not_found"
         | "resume_not_ready"
         | "round_not_created"
@@ -110,6 +112,9 @@ export function createLaunchAiInterviewRound<TSchedule extends LaunchSchedule>(
     }
     if (candidate.jobDescriptionAiInterviewDisabled) {
       return { ok: false, reason: "job_disables_ai_interview" };
+    }
+    if ((candidate.jobDescriptionInterviewers?.length ?? 0) === 0) {
+      return { ok: false, reason: "job_missing_ai_interviewers" };
     }
 
     const now = deps.clock.now();

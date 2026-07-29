@@ -60,11 +60,20 @@ describe("ResumeLibraryCardActions", () => {
       { jobDescriptionId: "job-1", resumeEvaluationStatus: null },
     ],
     ["failed resume evaluation", { jobDescriptionId: "job-1", resumeEvaluationStatus: "fail" }],
+    [
+      "job has no AI interviewers",
+      {
+        jobDescriptionId: "job-1",
+        jobDescriptionInterviewers: [],
+        resumeEvaluationStatus: "pass",
+      },
+    ],
   ])("hides the AI interview action when the candidate %s", (_, gateFields) => {
     const record = {
       hasInterviewRounds: false,
       hasResumeFile: false,
       jobDescriptionAiInterviewDisabled: false,
+      jobDescriptionInterviewers: [{ id: "iv-1", name: "面试官" }],
       pipelineStage: "screening",
       resumeFileName: null,
       resumeParseStatus: "ready",
