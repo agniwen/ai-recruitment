@@ -57,6 +57,7 @@ const jobDescriptions: JobDescriptionListRecord[] = [
     salaryCurrency: null,
     salaryMaxAmount: null,
     salaryMinAmount: null,
+    salaryRangeRaw: null,
     serviceUnit: null,
     sourceSheet: null,
     updatedAt: new Date("2026-06-20T00:00:00.000Z"),

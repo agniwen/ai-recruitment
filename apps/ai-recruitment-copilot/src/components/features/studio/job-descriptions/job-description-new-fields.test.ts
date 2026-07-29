@@ -32,6 +32,9 @@ describe("job description recruiting defaults", () => {
     expect(formSource).toContain('<form.Field name="workEndTime">');
     expect(formSource).toContain('type="time"');
     expect(formSource).toContain('<form.Field name="workTimezone">');
+    expect(formSource).toContain("WORK_TIMEZONE_OPTIONS");
+    expect(formSource).toContain("Asia/Shanghai");
+    expect(formSource).toContain("选择工作时区");
     expect(formSource).toContain('<form.Field name="requester">');
     expect(formSource).toContain('<form.Field name="resumeContact">');
     expect(formSource).toContain("CONTACT_MAX_LENGTH = 500");
@@ -39,6 +42,34 @@ describe("job description recruiting defaults", () => {
     expect(formSource).toContain("AI面试官（可选）");
     expect(formSource).toContain('<form.Field name="humanInterviewerIds">');
     expect(formSource).toContain("真人面试官（可选）");
+  });
+
+  it("exposes Google Sheet mapped fields on the basic tab", () => {
+    for (const field of [
+      "recruitmentStatus",
+      "controlCategory",
+      "jobSeries",
+      "jobLevel",
+      "serviceUnit",
+      "workLocation",
+      "sourceSheet",
+      "salaryRangeRaw",
+      "headcount",
+      "onboardedCount",
+      "gapCount",
+      "offeredPendingOnboardCount",
+      "requestedDate",
+      "expectedOnboardDate",
+      "notes",
+    ]) {
+      expect(formSource).toContain(`<form.Field name="${field}">`);
+    }
+    expect(formSource).toContain("基础信息");
+    expect(formSource).toContain("招聘进度");
+    expect(formSource).toContain("薪资范围");
+    expect(formSource).toContain("备注说明");
+    expect(formSource).toContain("DatePicker");
+    expect(formSource).not.toContain('type="date"');
   });
 
   it("disables AI interviews by default for every new-job entry point", () => {

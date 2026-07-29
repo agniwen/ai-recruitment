@@ -83,6 +83,7 @@ describe("parseGoogleSheetJobRows", () => {
       priority: "P1",
       prompt: "负责平台研发",
       requestedDate: "2026-07-25",
+      salaryRangeRaw: "15-25K",
     });
   });
 

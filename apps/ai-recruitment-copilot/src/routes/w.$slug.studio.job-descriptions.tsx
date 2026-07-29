@@ -71,13 +71,13 @@ const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDi
 
 function formatSalaryRange(record: JobDescriptionListRecord): string | null {
   if (
-    record.salaryCurrency === null ||
-    record.salaryMinAmount === null ||
-    record.salaryMaxAmount === null
+    record.salaryCurrency !== null &&
+    record.salaryMinAmount !== null &&
+    record.salaryMaxAmount !== null
   ) {
-    return null;
+    return `${record.salaryCurrency} ${salaryAmountFormatter.format(record.salaryMinAmount)} - ${salaryAmountFormatter.format(record.salaryMaxAmount)}`;
   }
-  return `${record.salaryCurrency} ${salaryAmountFormatter.format(record.salaryMinAmount)} - ${salaryAmountFormatter.format(record.salaryMaxAmount)}`;
+  return record.salaryRangeRaw?.trim() || null;
 }
 
 function formatHeadcount(record: JobDescriptionListRecord): string | null {

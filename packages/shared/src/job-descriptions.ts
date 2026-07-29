@@ -175,6 +175,7 @@ export const jobDescriptionBaseSchema = z
     salaryCurrency: nullableSalaryCurrencySchema,
     salaryMaxAmount: nullableSalaryAmountSchema,
     salaryMinAmount: nullableSalaryAmountSchema,
+    salaryRangeRaw: nullableTextSchema(500, "薪资范围原文"),
     serviceUnit: nullableTextSchema(120, "服务单位"),
     sourceSheet: nullableTextSchema(120, "来源表格"),
     workEndTime: nullableTimeSchema("工作结束时间"),
@@ -232,6 +233,7 @@ export interface JobDescriptionRecord {
   salaryCurrency: string | null;
   salaryMaxAmount: number | null;
   salaryMinAmount: number | null;
+  salaryRangeRaw: string | null;
   serviceUnit: string | null;
   sourceSheet: string | null;
   workEndTime: string | null;

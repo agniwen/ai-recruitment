@@ -49,6 +49,7 @@ function job(input: {
     salaryCurrency: null,
     salaryMaxAmount: null,
     salaryMinAmount: null,
+    salaryRangeRaw: null,
     serviceUnit: null,
     sourceSheet: null,
     updatedAt: SYNTHETIC_TIME,

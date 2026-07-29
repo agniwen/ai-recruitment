@@ -33,6 +33,7 @@ const HEADERS = {
   requestedDate: "提需日期",
   requester: "需求发起人",
   resumeContact: "简历对接人\n (花名 & @TG)",
+  salaryRangeRaw: "薪资范围",
   serviceUnit: "服务单位",
   sourceSheet: "来源表格",
   workLocation: "工作地点",
@@ -66,6 +67,7 @@ export interface GoogleSheetJobRecord {
   requester: string | null;
   resumeContact: string | null;
   rowNumber: number;
+  salaryRangeRaw: string | null;
   serviceUnit: string | null;
   sourceSheet: string | null;
   workLocation: string | null;
@@ -89,6 +91,7 @@ export interface GoogleSheetJobValues {
   requestedDate: string | null | undefined;
   requester: string | null;
   resumeContact: string | null;
+  salaryRangeRaw: string | null;
   serviceUnit: string | null;
   sourceSheet: string | null;
   workLocation: string | null;
@@ -314,6 +317,7 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
       requester: nullableText(cellText(row, headerIndexes.get(HEADERS.requester))),
       resumeContact: nullableText(cellText(row, headerIndexes.get(HEADERS.resumeContact))),
       rowNumber,
+      salaryRangeRaw: nullableText(cellText(row, headerIndexes.get(HEADERS.salaryRangeRaw))),
       serviceUnit: nullableText(cellText(row, headerIndexes.get(HEADERS.serviceUnit))),
       sourceSheet: nullableText(cellText(row, headerIndexes.get(HEADERS.sourceSheet))),
       workLocation: nullableText(cellText(row, headerIndexes.get(HEADERS.workLocation))),
@@ -345,6 +349,7 @@ export function buildGoogleSheetJobValues(
     requestedDate: record.requestedDate,
     requester: record.requester,
     resumeContact: record.resumeContact,
+    salaryRangeRaw: record.salaryRangeRaw,
     serviceUnit: record.serviceUnit,
     sourceSheet: record.sourceSheet,
     workLocation: record.workLocation,
@@ -448,6 +453,7 @@ export async function syncGoogleSheetJobDescriptions({
           requestedDate: jobDescription.requestedDate,
           requester: jobDescription.requester,
           resumeContact: jobDescription.resumeContact,
+          salaryRangeRaw: jobDescription.salaryRangeRaw,
           serviceUnit: jobDescription.serviceUnit,
           sourceSheet: jobDescription.sourceSheet,
           workLocation: jobDescription.workLocation,

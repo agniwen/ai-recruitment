@@ -796,6 +796,8 @@ export const jobDescription = pgTable(
     salaryCurrency: text("salary_currency"),
     salaryMaxAmount: integer("salary_max_amount"),
     salaryMinAmount: integer("salary_min_amount"),
+    /** Free-text salary range from Google Sheet「薪资范围」 (or manual entry). */
+    salaryRangeRaw: text("salary_range_raw"),
     serviceUnit: text("service_unit"),
     sourceSheet: text("source_sheet"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
