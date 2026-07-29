@@ -327,6 +327,7 @@ export const jobDescriptionsRouter = factory
           feishuChatBoundBy: null,
           feishuChatId: null,
           gapCount: input.gapCount ?? null,
+          googleSheetDeleted: null,
           headcount: input.headcount ?? null,
           id: crypto.randomUUID(),
           jobLevel: nullableText(input.jobLevel),
@@ -392,7 +393,13 @@ export const jobDescriptionsRouter = factory
             organizationId: activeOrg.id,
           });
 
-          return c.json(serializeJobDescription(record, interviewerIds, humanInterviewerIds), 201);
+          const created = await loadJobDescriptionById(activeOrg.id, record.id, {
+            actorUserId: c.var.user?.id,
+          });
+          return c.json(
+            created ?? serializeJobDescription(record, interviewerIds, humanInterviewerIds),
+            201,
+          );
         } catch (insertError) {
           if (!isJobCodeConflict(insertError)) {
             throw insertError;

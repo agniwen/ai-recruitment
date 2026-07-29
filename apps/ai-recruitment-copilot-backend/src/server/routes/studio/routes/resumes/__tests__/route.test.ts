@@ -27,6 +27,10 @@ const createFromStorageSource = readFileSync(
 );
 const evaluationDaoSource = readFileSync(new URL("../dao/evaluation.ts", import.meta.url), "utf-8");
 const timelineDaoSource = readFileSync(new URL("../dao/timeline.ts", import.meta.url), "utf-8");
+const timelineAuditDaoSource = readFileSync(
+  new URL("../dao/timeline-audit.ts", import.meta.url),
+  "utf-8",
+);
 const resumePoolDaoSource = readFileSync(
   new URL("../../resume-pool/dao.ts", import.meta.url),
   "utf-8",
@@ -447,12 +451,12 @@ describe("resume review detail route", () => {
     expect(evaluationDaoSource).toContain("recordResumeJobDescriptionChange");
     expect(routeSource).toContain("applyJobDescriptionChangeEffects");
     expect(timelineDaoSource).toContain("readResumeEvaluationTimeSlots");
-    expect(timelineDaoSource).toContain("关联岗位已变更");
-    expect(timelineDaoSource).toContain("jobDescriptionAuditLabel");
-    expect(timelineDaoSource).toContain("关联岗位：");
     expect(timelineDaoSource).toContain("availableTimeSlots:");
     expect(timelineDaoSource).toContain("actorImage:");
+    expect(timelineDaoSource).toContain("关联岗位：");
     expect(timelineDaoSource).not.toContain("，可预约时间：");
+    expect(timelineAuditDaoSource).toContain("关联岗位已变更");
+    expect(timelineAuditDaoSource).toContain("jobDescriptionChangeLabel");
   });
 
   it("shows reactivation reason from candidate transition audit logs", () => {

@@ -33,6 +33,7 @@ import { ResumeProfileView } from "@/components/features/resume/resume-profile-v
 import { DataField } from "@/components/features/display/data-field";
 import { DataFields } from "@/components/features/display/data-fields";
 import { EmptyValue } from "@/components/features/display/empty-value";
+import { DATE_TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display/time-display";
 import { JobDescriptionHoverCard } from "@/components/features/studio/job-descriptions/job-description-hover-card";
 import { JobDescriptionSelectField } from "@/components/features/studio/interviews/job-description-select-field";
 import { Badge } from "@/components/ui/badge";
@@ -1001,6 +1002,38 @@ function ResumeOverviewCandidateInfoSection({
           <DataField kind="number" label="工作年限" value={detail.resumeProfile?.workYears} />
           <DataField kind="email" label="邮箱" value={displayEmail} />
           <DataField kind="phone" label="电话" value={displayPhone} />
+          {detail.resumeEvaluationStatus === "pass" && detail.availableTimeSlots.length > 0 ? (
+            <DataField
+              label="可预约时间"
+              span="full"
+              value={
+                <ul className="space-y-1">
+                  {detail.availableTimeSlots.map((slot, index) => (
+                    <li
+                      className="flex flex-wrap items-center gap-1.5 text-sm"
+                      key={`${slot.startAt}-${slot.endAt}-${index}`}
+                    >
+                      <TimeDisplay
+                        as="span"
+                        className="text-sm"
+                        options={DATE_TIME_DISPLAY_OPTIONS}
+                        value={slot.startAt}
+                      />
+                      <span aria-hidden className="text-muted-foreground">
+                        -
+                      </span>
+                      <TimeDisplay
+                        as="span"
+                        className="text-sm"
+                        options={DATE_TIME_DISPLAY_OPTIONS}
+                        value={slot.endAt}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              }
+            />
+          ) : null}
           <DataField
             label="推荐语"
             span="full"

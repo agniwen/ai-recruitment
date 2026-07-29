@@ -112,6 +112,7 @@ vi.mock("@/components/features/markdown-editor", () => ({
 
 function makeDetail(overrides: Partial<ResumeLibraryDetail> = {}): ResumeLibraryDetail {
   return {
+    availableTimeSlots: [],
     candidateEmail: null,
     candidateExpectationsMeta: null,
     candidateName: "邓超",

@@ -362,6 +362,12 @@ export function JobDescriptionFormDialog({
   );
   const selectedDepartmentId = useStore(form.store, (state) => state.values.departmentId);
   const selectedInterviewerIds = useStore(form.store, (state) => state.values.interviewerIds);
+  const selectedDepartmentHiringUnitName = useMemo(() => {
+    if (!selectedDepartmentId) {
+      return null;
+    }
+    return departments.find((dept) => dept.id === selectedDepartmentId)?.hiringUnitName ?? null;
+  }, [departments, selectedDepartmentId]);
   const interviewerOptions = useMemo(
     () =>
       buildJobDescriptionInterviewerOptions(
@@ -590,6 +596,47 @@ export function JobDescriptionFormDialog({
                       );
                     }}
                   </form.Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="job-description-hiring-unit">编制组织</FieldLabel>
+                    <FieldContent className="gap-1">
+                      <Input
+                        disabled
+                        id="job-description-hiring-unit"
+                        readOnly
+                        value={selectedDepartmentHiringUnitName ?? ""}
+                        placeholder={
+                          selectedDepartmentId ? "所属部门未配置用人组织" : "请先选择所属部门"
+                        }
+                      />
+                      <p className="text-muted-foreground text-xs">
+                        由所属部门自动带出，不可在岗位中直接修改。
+                      </p>
+                    </FieldContent>
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="job-description-google-sheet-deleted">
+                      Google 文档是否已删除
+                    </FieldLabel>
+                    <FieldContent className="gap-1">
+                      <Input
+                        disabled
+                        id="job-description-google-sheet-deleted"
+                        readOnly
+                        value={
+                          record?.googleSheetDeleted === true
+                            ? "是（表格中已不存在该编码）"
+                            : (record?.googleSheetDeleted === false
+                              ? "否（同步时仍存在）"
+                              : "—")
+                        }
+                      />
+                      <p className="text-muted-foreground text-xs">
+                        由 Google 文档同步自动维护，不可编辑。
+                      </p>
+                    </FieldContent>
+                  </Field>
 
                   <form.Field name="priority">
                     {(field) => {

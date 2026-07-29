@@ -282,7 +282,40 @@ function JobDescriptionManagementPage({
         size: 128,
         title: "部门",
       }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.hiringUnitName ? (
+            <span className="block max-w-28 truncate">{r.hiringUnitName}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          ),
+        key: "hiringUnitName",
+        size: 140,
+        title: "编制组织",
+      }),
       jobDescriptionSourceColumn,
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) => {
+          if (r.googleSheetDeleted === true) {
+            return (
+              <Badge className="max-w-24 truncate" variant="danger">
+                已删除
+              </Badge>
+            );
+          }
+          if (r.googleSheetDeleted === false) {
+            return (
+              <Badge className="max-w-24 truncate" variant="secondary">
+                未删除
+              </Badge>
+            );
+          }
+          return <span className="text-muted-foreground text-sm">—</span>;
+        },
+        key: "googleSheetDeleted",
+        size: 120,
+        title: "Google 文档",
+      }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) =>
           r.recruitmentStatus ? (

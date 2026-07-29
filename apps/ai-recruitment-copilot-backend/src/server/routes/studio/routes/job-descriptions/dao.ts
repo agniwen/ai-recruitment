@@ -26,6 +26,7 @@ import type {
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
 import {
   department,
+  hiringUnit,
   interviewer,
   jobDescription,
   jobDescriptionHumanInterviewer,
@@ -170,7 +171,10 @@ function listJobDescriptionRows({
       description: jobDescription.description,
       expectedOnboardDate: jobDescription.expectedOnboardDate,
       gapCount: jobDescription.gapCount,
+      googleSheetDeleted: jobDescription.googleSheetDeleted,
       headcount: jobDescription.headcount,
+      hiringUnitId: department.hiringUnitId,
+      hiringUnitName: hiringUnit.name,
       id: jobDescription.id,
       jobLevel: jobDescription.jobLevel,
       jobSeries: jobDescription.jobSeries,
@@ -202,6 +206,7 @@ function listJobDescriptionRows({
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
+    .leftJoin(hiringUnit, eq(department.hiringUnitId, hiringUnit.id))
     .where(where)
     .orderBy(buildOrderBy(ORDER_COLUMNS, sortBy, sortOrder))
     .$dynamic();
@@ -363,7 +368,10 @@ function toJobDescriptionListRecord(
     description: row.description,
     expectedOnboardDate: row.expectedOnboardDate,
     gapCount: row.gapCount,
+    googleSheetDeleted: row.googleSheetDeleted,
     headcount: row.headcount,
+    hiringUnitId: row.hiringUnitId,
+    hiringUnitName: row.hiringUnitName,
     humanInterviewerIds,
     id: row.id,
     interviewerIds: interviewers.map((item) => item.id),
@@ -612,7 +620,10 @@ export async function loadJobDescriptionById(
       feishuChatBoundBy: jobDescription.feishuChatBoundBy,
       feishuChatId: jobDescription.feishuChatId,
       gapCount: jobDescription.gapCount,
+      googleSheetDeleted: jobDescription.googleSheetDeleted,
       headcount: jobDescription.headcount,
+      hiringUnitId: department.hiringUnitId,
+      hiringUnitName: hiringUnit.name,
       id: jobDescription.id,
       jobLevel: jobDescription.jobLevel,
       jobSeries: jobDescription.jobSeries,
@@ -645,6 +656,7 @@ export async function loadJobDescriptionById(
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
+    .leftJoin(hiringUnit, eq(department.hiringUnitId, hiringUnit.id))
     .where(where)
     .limit(1);
   if (!row) {
@@ -831,7 +843,10 @@ export function loadJobDescriptionMetrics(
 }
 
 export function serializeJobDescription(
-  row: typeof jobDescription.$inferSelect,
+  row: typeof jobDescription.$inferSelect & {
+    hiringUnitId?: string | null;
+    hiringUnitName?: string | null;
+  },
   interviewerIds: string[],
   humanInterviewerIds: string[],
 ): JobDescriptionRecord {
@@ -848,7 +863,10 @@ export function serializeJobDescription(
     description: row.description,
     expectedOnboardDate: row.expectedOnboardDate,
     gapCount: row.gapCount,
+    googleSheetDeleted: row.googleSheetDeleted ?? null,
     headcount: row.headcount,
+    hiringUnitId: row.hiringUnitId ?? null,
+    hiringUnitName: row.hiringUnitName ?? null,
     humanInterviewerIds,
     id: row.id,
     interviewerIds,

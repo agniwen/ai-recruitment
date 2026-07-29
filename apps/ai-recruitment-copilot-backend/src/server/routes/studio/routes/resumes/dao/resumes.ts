@@ -31,6 +31,7 @@ import { candidateOutcomeValues, pipelineStageValues } from "@arc/db-schema/stud
 import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";
 import type {
   PaginatedResumeLibraryResult,
+  ResumeAvailableTimeSlot,
   ResumeLibraryDetail,
   ResumeLibraryListRecord,
   ResumeStageProgress,
@@ -39,6 +40,7 @@ import type { ResumeDuplicateMatchSummary } from "@arc/shared/resume-duplicates"
 import { resumeReviewActionSchema } from "@arc/shared/resume-review";
 import type { ResumeReviewAction } from "@arc/shared/resume-review";
 import { resumeScreeningResultSchema } from "@arc/shared/resume-screening";
+import { pickLatestPassEvaluationTimeSlots } from "./evaluation";
 import { normalizeSkill } from "./skills";
 import { buildResumeProfileSnapshot } from "./resume-profile-snapshot";
 
@@ -962,6 +964,35 @@ export function listResumeRecords(
   return queryPaginatedResumeRecords(organizationId, filters, pagination, visibilityScope);
 }
 
+/**
+ * 仅在当前评估状态为通过时使用：取最近一次评估通过审计里的可预约时间。
+ * 换岗重置后的历史通过轮次不会被回退使用。
+ */
+async function loadAvailableTimeSlotsForPassedEvaluation(
+  interviewRecordId: string,
+  organizationId: string,
+): Promise<ResumeAvailableTimeSlot[]> {
+  const rows = await db
+    .select({
+      detail: interviewAuditLog.detail,
+    })
+    .from(interviewAuditLog)
+    .where(
+      and(
+        eq(interviewAuditLog.interviewRecordId, interviewRecordId),
+        eq(interviewAuditLog.organizationId, organizationId),
+        inArray(interviewAuditLog.action, [
+          "resume_evaluation_submitted",
+          "resume_evaluation_updated",
+        ]),
+      ),
+    )
+    .orderBy(desc(interviewAuditLog.createdAt))
+    .limit(50);
+
+  return pickLatestPassEvaluationTimeSlots(rows);
+}
+
 export async function loadResumeDetail(
   id: string,
   organizationId: string,
@@ -1021,23 +1052,31 @@ export async function loadResumeDetail(
 
   const { interviewQuestions, resumeProfile, resumeReview, ...rest } = row;
   const resumeScreeningResult = parseResumeScreeningResult(rest.resumeScreeningResult);
-  const [derivedFields, peopleFields, duplicateMatches, jobDescriptionHumanInterviewerIds] =
-    await Promise.all([
-      loadResumeDerivedFields([rest.id]),
-      loadResumePeopleFields([rest], organizationId),
-      listActiveDuplicateMatchCounts({
-        organizationId,
-        sourceIds: [rest.id],
-        sourceType: "studio_interview",
-      }),
-      rest.jobDescriptionId
-        ? db
-            .select({ userId: jobDescriptionHumanInterviewer.userId })
-            .from(jobDescriptionHumanInterviewer)
-            .where(eq(jobDescriptionHumanInterviewer.jobDescriptionId, rest.jobDescriptionId))
-            .then((rows) => rows.map((item) => item.userId))
-        : Promise.resolve([]),
-    ]);
+  const [
+    derivedFields,
+    peopleFields,
+    duplicateMatches,
+    jobDescriptionHumanInterviewerIds,
+    availableTimeSlots,
+  ] = await Promise.all([
+    loadResumeDerivedFields([rest.id]),
+    loadResumePeopleFields([rest], organizationId),
+    listActiveDuplicateMatchCounts({
+      organizationId,
+      sourceIds: [rest.id],
+      sourceType: "studio_interview",
+    }),
+    rest.jobDescriptionId
+      ? db
+          .select({ userId: jobDescriptionHumanInterviewer.userId })
+          .from(jobDescriptionHumanInterviewer)
+          .where(eq(jobDescriptionHumanInterviewer.jobDescriptionId, rest.jobDescriptionId))
+          .then((rows) => rows.map((item) => item.userId))
+      : Promise.resolve([]),
+    rest.resumeEvaluationStatus === "pass"
+      ? loadAvailableTimeSlotsForPassedEvaluation(rest.id, organizationId)
+      : Promise.resolve([]),
+  ]);
   return {
     ...toRecord(
       rest,
@@ -1045,6 +1084,7 @@ export async function loadResumeDetail(
       peopleFields.get(rest.id),
       toDuplicateMatchSummary(duplicateMatches.get(rest.id)),
     ),
+    availableTimeSlots,
     candidateExpectationsMeta: rest.candidateExpectationsMeta,
     closedAt: serializeDate(rest.closedAt),
     closedMeta: rest.closedMeta,

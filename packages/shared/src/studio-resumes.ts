@@ -197,6 +197,11 @@ export interface ResumeLibraryListRecord {
   creatorImage: string | null;
 }
 
+export interface ResumeAvailableTimeSlot {
+  endAt: string;
+  startAt: string;
+}
+
 /**
  * 单条详情 DTO：列表字段 + interviewQuestions。
  *
@@ -204,6 +209,12 @@ export interface ResumeLibraryListRecord {
  * (may be empty for legacy rows).
  */
 export interface ResumeLibraryDetail extends ResumeLibraryListRecord {
+  /**
+   * 最近一次评估通过时填写的可预约时间段；仅详情返回。
+   * 仅当当前 `resumeEvaluationStatus === "pass"` 时有值；换岗重置后、
+   * 未评估 / 不通过时为空数组（即使活动记录里有更早一轮通过的时间段）。
+   */
+  availableTimeSlots: ResumeAvailableTimeSlot[];
   candidateExpectationsMeta: CandidateExpectationsMeta | null;
   closedAt: string | null;
   closedMeta: ClosedMeta | null;
@@ -570,10 +581,7 @@ export interface CandidateTimelineEventMeta {
   value: string;
 }
 
-export interface CandidateTimelineTimeSlot {
-  endAt: string;
-  startAt: string;
-}
+export type CandidateTimelineTimeSlot = ResumeAvailableTimeSlot;
 
 export interface CandidateTimelineEvent {
   action?: string;

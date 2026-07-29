@@ -9,6 +9,10 @@ const formSource = readFileSync(
   new URL("job-description-form-dialog.tsx", import.meta.url),
   "utf-8",
 );
+const jobDescriptionsPageSource = readFileSync(
+  new URL("../../../../routes/w.$slug.studio.job-descriptions.tsx", import.meta.url),
+  "utf-8",
+);
 const humanDialogSource = readFileSync(
   new URL("../human-interview-stage-dialogs.tsx", import.meta.url),
   "utf-8",
@@ -70,6 +74,31 @@ describe("job description recruiting defaults", () => {
     expect(formSource).toContain("备注说明");
     expect(formSource).toContain("DatePicker");
     expect(formSource).not.toContain('type="date"');
+  });
+
+  it("shows read-only hiring unit derived from the selected department", () => {
+    expect(formSource).toContain("编制组织");
+    expect(formSource).toContain("selectedDepartmentHiringUnitName");
+    expect(formSource).toContain('id="job-description-hiring-unit"');
+    expect(formSource).toContain("disabled");
+    expect(formSource).toContain("readOnly");
+    expect(formSource).not.toContain('<form.Field name="hiringUnitId">');
+    expect(formSource).not.toContain('<form.Field name="hiringUnitName">');
+  });
+
+  it("shows hiring unit column on the job descriptions table", () => {
+    expect(jobDescriptionsPageSource).toContain('title: "编制组织"');
+    expect(jobDescriptionsPageSource).toContain('key: "hiringUnitName"');
+    expect(jobDescriptionsPageSource).toContain("r.hiringUnitName");
+  });
+
+  it("shows google sheet deleted status on the table and as a read-only detail field", () => {
+    expect(jobDescriptionsPageSource).toContain('key: "googleSheetDeleted"');
+    expect(jobDescriptionsPageSource).toContain('title: "Google 文档"');
+    expect(formSource).toContain("Google 文档是否已删除");
+    expect(formSource).toContain('id="job-description-google-sheet-deleted"');
+    expect(formSource).toContain("record?.googleSheetDeleted");
+    expect(formSource).not.toContain('<form.Field name="googleSheetDeleted">');
   });
 
   it("disables AI interviews by default for every new-job entry point", () => {

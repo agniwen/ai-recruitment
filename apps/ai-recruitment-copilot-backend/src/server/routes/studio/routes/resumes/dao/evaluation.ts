@@ -10,6 +10,43 @@ export interface ResumeEvaluationAvailableTimeSlot {
   startAt: string;
 }
 
+function isResumeEvaluationTimeSlot(value: unknown): value is ResumeEvaluationAvailableTimeSlot {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const slot = value as Partial<ResumeEvaluationAvailableTimeSlot>;
+  return typeof slot.startAt === "string" && typeof slot.endAt === "string";
+}
+
+/** Parse evaluation-pass time slots from audit `detail.availableTimeSlots`. */
+export function readResumeEvaluationTimeSlots(value: unknown): ResumeEvaluationAvailableTimeSlot[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isResumeEvaluationTimeSlot);
+}
+
+/**
+ * 从按时间倒序的评估审计里取出「最近一次评估通过」时填写的可预约时间。
+ *
+ * 换岗会重置评估状态，活动记录里可能有多轮 pass/fail。候选人信息只展示
+ * 最新一次 `toStatus === "pass"` 的时间段，不会回退到更早一轮通过的记录。
+ * 调用方还需保证当前 `resumeEvaluationStatus === "pass"` 才展示。
+ *
+ * `audits` must already be sorted newest-first.
+ */
+export function pickLatestPassEvaluationTimeSlots(
+  audits: readonly { detail: Record<string, unknown> | null | undefined }[],
+): ResumeEvaluationAvailableTimeSlot[] {
+  for (const audit of audits) {
+    if (audit.detail?.toStatus !== "pass") {
+      continue;
+    }
+    return readResumeEvaluationTimeSlots(audit.detail.availableTimeSlots);
+  }
+  return [];
+}
+
 export type ResumeEvaluationMutationResult =
   | { status: "updated"; currentStatus: ResumeEvaluationStatus | null }
   | { status: "unchanged"; currentStatus: ResumeEvaluationStatus | null }

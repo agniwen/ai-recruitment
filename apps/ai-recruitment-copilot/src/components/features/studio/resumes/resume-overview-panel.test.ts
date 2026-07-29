@@ -19,6 +19,14 @@ describe("ResumeOverviewPanel visual density", () => {
     expect(source).toContain("detail.hiringUnitName");
   });
 
+  it("shows read-only available time slots only when current evaluation is pass", () => {
+    expect(source).toContain('label="可预约时间"');
+    expect(source).toContain("detail.availableTimeSlots");
+    expect(source).toContain('detail.resumeEvaluationStatus === "pass"');
+    expect(source).toContain("detail.availableTimeSlots.length > 0");
+    expect(source).not.toContain('htmlFor="overview-available-time');
+  });
+
   it("adds permission-gated identity editing without dropping fork-only summary fields", () => {
     expect(source).toContain("canEditResumeRecord(detail.resumeParseStatus)");
     expect(source).toContain("updateStudioResumeIdentity");

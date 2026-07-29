@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { department, hiringUnit, jobDescription } from "@arc/db-schema/schema";
 import {
@@ -444,9 +444,11 @@ export async function syncGoogleSheetJobDescriptions({
         .select({
           code: jobDescription.code,
           controlCategory: jobDescription.controlCategory,
+          creationSource: jobDescription.creationSource,
           departmentId: jobDescription.departmentId,
           expectedOnboardDate: jobDescription.expectedOnboardDate,
           gapCount: jobDescription.gapCount,
+          googleSheetDeleted: jobDescription.googleSheetDeleted,
           headcount: jobDescription.headcount,
           id: jobDescription.id,
           jobLevel: jobDescription.jobLevel,
@@ -471,6 +473,7 @@ export async function syncGoogleSheetJobDescriptions({
       const jobsByCode = new Map(
         existingJobs.flatMap((row) => (row.code ? [[row.code, row] as const] : [])),
       );
+      const sheetCodes = new Set(parsed.records.map((record) => record.code));
 
       let hiringUnitsCreated = 0;
       let departmentsCreated = 0;
@@ -535,20 +538,23 @@ export async function syncGoogleSheetJobDescriptions({
         const mappedValues = buildGoogleSheetJobValues(record, departmentRow.id);
         const existing = jobsByCode.get(record.code);
         if (existing) {
-          if (!hasGoogleSheetJobChanges(existing, mappedValues)) {
+          // Sheet still has this code → not deleted. Clear flag even when other fields are unchanged.
+          const needsDeletedFlagClear = existing.googleSheetDeleted !== false;
+          if (!hasGoogleSheetJobChanges(existing, mappedValues) && !needsDeletedFlagClear) {
             jobsUnchanged += 1;
             continue;
           }
           const updateValues = definedJobValues(mappedValues);
           await tx
             .update(jobDescription)
-            .set({ ...updateValues, updatedAt: now })
+            .set({ ...updateValues, googleSheetDeleted: false, updatedAt: now })
             .where(
               and(
                 eq(jobDescription.id, existing.id),
                 eq(jobDescription.organizationId, organizationId),
               ),
             );
+          existing.googleSheetDeleted = false;
           jobsUpdated += 1;
           changedJobIds.push(existing.id);
           continue;
@@ -570,6 +576,7 @@ export async function syncGoogleSheetJobDescriptions({
           feishuChatBoundBy: null,
           feishuChatId: null,
           gapCount: record.gapCount ?? null,
+          googleSheetDeleted: false,
           headcount: record.headcount ?? null,
           id,
           offeredPendingOnboardCount: record.offeredPendingOnboardCount ?? null,
@@ -592,8 +599,10 @@ export async function syncGoogleSheetJobDescriptions({
         jobsByCode.set(record.code, {
           ...mappedValues,
           code: record.code,
+          creationSource: "google_sheets" as const,
           expectedOnboardDate: record.expectedOnboardDate ?? null,
           gapCount: record.gapCount ?? null,
+          googleSheetDeleted: false,
           headcount: record.headcount ?? null,
           id,
           offeredPendingOnboardCount: record.offeredPendingOnboardCount ?? null,
@@ -603,6 +612,33 @@ export async function syncGoogleSheetJobDescriptions({
         });
         jobsCreated += 1;
         changedJobIds.push(id);
+      }
+
+      // Codes present in our system (Google-synced) but missing from the sheet → deleted on Google.
+      const deletedJobIds = existingJobs
+        .filter(
+          (job) =>
+            job.creationSource === "google_sheets" &&
+            Boolean(job.code) &&
+            !sheetCodes.has(job.code as string) &&
+            job.googleSheetDeleted !== true,
+        )
+        .map((job) => job.id);
+      if (deletedJobIds.length > 0) {
+        await tx
+          .update(jobDescription)
+          .set({ googleSheetDeleted: true, updatedAt: now })
+          .where(
+            and(
+              eq(jobDescription.organizationId, organizationId),
+              inArray(jobDescription.id, deletedJobIds),
+            ),
+          );
+        for (const id of deletedJobIds) {
+          if (!changedJobIds.includes(id)) {
+            changedJobIds.push(id);
+          }
+        }
       }
 
       return {

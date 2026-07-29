@@ -27,6 +27,7 @@ import {
   pipelineStageMeta,
   scheduleEntryStatusMeta,
 } from "@arc/db-schema/studio-interviews";
+import { readResumeEvaluationTimeSlots } from "./evaluation";
 import { loadResumeDetail } from "./resumes";
 import {
   auditDescription,
@@ -113,6 +114,7 @@ function addEvent(
     action: input.action,
     actorImage: input.actorImage,
     actorName: input.actorName,
+    availableTimeSlots: input.availableTimeSlots,
     description: input.description,
     id: input.id,
     kind: input.kind,
@@ -712,10 +714,17 @@ export async function loadCandidateTimeline(
     if (!description) {
       continue;
     }
+    const isEvaluationAudit =
+      log.action === "resume_evaluation_submitted" || log.action === "resume_evaluation_updated";
+    const availableTimeSlots = isEvaluationAudit
+      ? readResumeEvaluationTimeSlots(log.detail?.availableTimeSlots)
+      : undefined;
     addEvent(events, {
       action: log.action,
       actorImage: log.actorImage,
       actorName: log.actorName,
+      availableTimeSlots:
+        availableTimeSlots && availableTimeSlots.length > 0 ? availableTimeSlots : undefined,
       description,
       id: `audit:${log.id}`,
       kind: "audit",

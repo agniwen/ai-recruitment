@@ -210,11 +210,22 @@ export interface JobDescriptionRecord {
   controlCategory: string | null;
   creationSource: JobDescriptionCreationSource;
   departmentId: string;
+  /**
+   * 关联部门所属的用人组织（编制组织）。只读派生字段，不可在岗位表单中编辑。
+   * Hiring unit of the linked department (establishment org). Read-only.
+   */
+  hiringUnitId: string | null;
+  hiringUnitName: string | null;
   interviewerIds: string[];
   name: string;
   description: string | null;
   expectedOnboardDate: string | null;
   gapCount: number | null;
+  /**
+   * Google 文档是否已删除（同步派生，只读）。
+   * true = 表格中已不存在该唯一编码；false = 同步时仍存在；null = 未参与同步。
+   */
+  googleSheetDeleted: boolean | null;
   headcount: number | null;
   humanInterviewerIds: string[];
   jobLevel: string | null;

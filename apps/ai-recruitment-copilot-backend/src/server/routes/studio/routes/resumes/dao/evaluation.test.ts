@@ -9,7 +9,100 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 }));
 
 // oxlint-disable-next-line import/first -- must follow vi.mock() for hoisted DB replacement.
-import { submitResumeEvaluation, updateResumeEvaluationStatus } from "./evaluation";
+import {
+  pickLatestPassEvaluationTimeSlots,
+  readResumeEvaluationTimeSlots,
+  submitResumeEvaluation,
+  updateResumeEvaluationStatus,
+} from "./evaluation";
+
+describe("readResumeEvaluationTimeSlots", () => {
+  it("filters valid start/end pairs from audit detail payloads", () => {
+    expect(
+      readResumeEvaluationTimeSlots([
+        { endAt: "2026-07-02T04:00:00.000Z", startAt: "2026-07-02T02:00:00.000Z" },
+        { endAt: "missing-start" },
+        "not-an-object",
+        null,
+      ]),
+    ).toEqual([{ endAt: "2026-07-02T04:00:00.000Z", startAt: "2026-07-02T02:00:00.000Z" }]);
+    expect(readResumeEvaluationTimeSlots(undefined)).toEqual([]);
+    expect(readResumeEvaluationTimeSlots(null)).toEqual([]);
+  });
+});
+
+describe("pickLatestPassEvaluationTimeSlots", () => {
+  const olderPassSlots = [
+    { endAt: "2026-06-01T04:00:00.000Z", startAt: "2026-06-01T02:00:00.000Z" },
+  ];
+  const latestPassSlots = [
+    { endAt: "2026-07-10T06:00:00.000Z", startAt: "2026-07-10T04:00:00.000Z" },
+  ];
+
+  it("uses only the newest pass audit after multi-round evaluations", () => {
+    // Newest-first: latest pass → fail → older pass (e.g. after job-change reset).
+    expect(
+      pickLatestPassEvaluationTimeSlots([
+        {
+          detail: {
+            availableTimeSlots: latestPassSlots,
+            toStatus: "pass",
+          },
+        },
+        {
+          detail: {
+            availableTimeSlots: [],
+            toStatus: "fail",
+          },
+        },
+        {
+          detail: {
+            availableTimeSlots: olderPassSlots,
+            toStatus: "pass",
+          },
+        },
+      ]),
+    ).toEqual(latestPassSlots);
+  });
+
+  it("does not fall back to an older pass when the latest pass has no slots", () => {
+    expect(
+      pickLatestPassEvaluationTimeSlots([
+        {
+          detail: {
+            availableTimeSlots: [],
+            toStatus: "pass",
+          },
+        },
+        {
+          detail: {
+            availableTimeSlots: olderPassSlots,
+            toStatus: "pass",
+          },
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("skips non-pass audits until the latest pass", () => {
+    expect(
+      pickLatestPassEvaluationTimeSlots([
+        {
+          detail: {
+            availableTimeSlots: [],
+            toStatus: "fail",
+          },
+        },
+        {
+          detail: {
+            availableTimeSlots: olderPassSlots,
+            toStatus: "pass",
+          },
+        },
+      ]),
+    ).toEqual(olderPassSlots);
+  });
+});
 
 function createTransaction(currentStatus: "fail" | "pass" | null) {
   const auditRows: Record<string, unknown>[] = [];

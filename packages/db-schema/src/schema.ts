@@ -770,6 +770,13 @@ export const jobDescription = pgTable(
     }),
     feishuChatId: text("feishu_chat_id"),
     gapCount: integer("gap_count"),
+    /**
+     * Google Sheet 同步删除标记：
+     * - true：本系统有唯一编码，但最近一次同步时表格中已不存在
+     * - false：最近一次同步时表格中仍存在
+     * - null：从未参与 Google 同步（如手动创建）
+     */
+    googleSheetDeleted: boolean("google_sheet_deleted"),
     headcount: integer("headcount"),
     id: text("id").primaryKey(),
     jobLevel: text("job_level"),
