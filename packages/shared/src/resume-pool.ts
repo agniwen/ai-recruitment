@@ -70,6 +70,7 @@ export interface ResumePoolListRecord {
   resumeStorageKey: string | null;
   resumeContentHash: string | null;
   resumeParseStatus: ResumeParseStatus;
+  resumeParseRetryable: boolean;
   resumeParseError: string | null;
   resumeParsedAt: string | null;
   workYears: number | null;

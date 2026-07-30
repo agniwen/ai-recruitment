@@ -166,6 +166,7 @@ export interface ResumeLibraryListRecord {
   resumeScreeningStale: boolean;
   resumeSummary: string | null;
   resumeParseStatus: ResumeParseStatus;
+  resumeParseRetryable: boolean;
   resumeSkills: string[];
   resumeProfileSnapshot: ResumeLibraryProfileSnapshot;
   hasResumeFile: boolean;

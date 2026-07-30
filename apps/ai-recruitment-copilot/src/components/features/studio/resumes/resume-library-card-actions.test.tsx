@@ -38,14 +38,17 @@ describe("ResumeLibraryCardActions", () => {
           canCopyLink={false}
           canCreateInterview
           canDeleteResumeLibrary={false}
+          canRetryResumeParse={false}
           canUpdateResumeLibrary={false}
           onCopyDetailLink={vi.fn()}
           onDelete={vi.fn()}
           onEdit={vi.fn()}
           onLaunchInterview={vi.fn()}
           onPreviewResume={vi.fn()}
+          onRetryParse={vi.fn()}
           onTransition={vi.fn()}
           record={record}
+          retrying={false}
         />,
       );
     });
@@ -90,14 +93,17 @@ describe("ResumeLibraryCardActions", () => {
           canCopyLink={false}
           canCreateInterview
           canDeleteResumeLibrary={false}
+          canRetryResumeParse={false}
           canUpdateResumeLibrary={false}
           onCopyDetailLink={vi.fn()}
           onDelete={vi.fn()}
           onEdit={vi.fn()}
           onLaunchInterview={vi.fn()}
           onPreviewResume={vi.fn()}
+          onRetryParse={vi.fn()}
           onTransition={vi.fn()}
           record={record}
+          retrying={false}
         />,
       );
     });

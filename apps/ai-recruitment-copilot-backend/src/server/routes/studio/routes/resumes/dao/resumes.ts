@@ -2,6 +2,7 @@ import { and, arrayContains, asc, count, desc, eq, ilike, inArray, ne, or, sql }
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { loadResumeParseRetryEligibility } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/retry";
 import {
   buildOrderBy,
   calcTotalPages,
@@ -339,6 +340,8 @@ const LIST_SELECTED_COLUMNS = {
   outcome: SELECTED_COLUMNS.outcome,
   pipelineStage: SELECTED_COLUMNS.pipelineStage,
   recommendationText: SELECTED_COLUMNS.recommendationText,
+  recruitmentSource: SELECTED_COLUMNS.recruitmentSource,
+  recruitmentSourceDetail: SELECTED_COLUMNS.recruitmentSourceDetail,
   resumeContentHash: SELECTED_COLUMNS.resumeContentHash,
   resumeEducationExperiences: SELECTED_COLUMNS.resumeEducationExperiences,
   resumeEducationGraduationYear: SELECTED_COLUMNS.resumeEducationGraduationYear,
@@ -426,6 +429,7 @@ const EMPTY_STAGE_PROGRESS: ResumeStageProgress = {
 interface ResumeDerivedFields {
   hasInterviewRounds: boolean;
   lastInterviewAt: string | null;
+  resumeParseRetryable: boolean | null;
   stageProgress: ResumeStageProgress;
 }
 
@@ -440,6 +444,7 @@ interface ResumePeopleFields {
 const EMPTY_DERIVED_FIELDS: ResumeDerivedFields = {
   hasInterviewRounds: false,
   lastInterviewAt: null,
+  resumeParseRetryable: null,
   stageProgress: EMPTY_STAGE_PROGRESS,
 };
 
@@ -502,6 +507,7 @@ function parseResumeScreeningResult(value: unknown) {
 // oxlint-disable-next-line complexity
 async function loadResumeDerivedFields(
   candidateIds: string[],
+  organizationId: string,
 ): Promise<Map<string, ResumeDerivedFields>> {
   const ids = uniq(candidateIds.filter(Boolean));
   const result = new Map<string, ResumeDerivedFields>();
@@ -509,6 +515,7 @@ async function loadResumeDerivedFields(
     result.set(id, {
       hasInterviewRounds: false,
       lastInterviewAt: null,
+      resumeParseRetryable: null,
       stageProgress: { ...EMPTY_STAGE_PROGRESS },
     });
   }
@@ -516,7 +523,7 @@ async function loadResumeDerivedFields(
     return result;
   }
 
-  const [aiRows, humanRows, offerRows, lastInterviewRows] = await Promise.all([
+  const [aiRows, humanRows, offerRows, lastInterviewRows, retryableIds] = await Promise.all([
     db
       .select({
         interviewRecordId: studioInterviewSchedule.interviewRecordId,
@@ -575,7 +582,19 @@ async function loadResumeDerivedFields(
         ),
       )
       .groupBy(interviewConversation.interviewRecordId),
+    loadResumeParseRetryEligibility({
+      ids,
+      organizationId,
+      target: "resume_library",
+    }),
   ]);
+
+  for (const [id, retryable] of retryableIds) {
+    const derived = result.get(id);
+    if (derived) {
+      derived.resumeParseRetryable = retryable;
+    }
+  }
 
   const aiByCandidate = new Map<string, (typeof aiRows)[number][]>();
   for (const row of aiRows) {
@@ -856,6 +875,10 @@ function toRecord(
     resumeEvaluatorImage: resolvedPeople.resumeEvaluatorImage,
     resumeEvaluatorName: resolvedPeople.resumeEvaluatorName,
     resumeFileName: row.resumeFileName,
+    resumeParseRetryable:
+      row.resumeParseStatus === "failed" &&
+      Boolean(row.resumeStorageKey) &&
+      (resolvedDerived.resumeParseRetryable ?? true),
     resumeParseStatus: row.resumeParseStatus,
     resumeProfileSnapshot: buildResumeProfileSnapshot(row),
     resumeReviewBaseScore: parseResumeReviewBaseScore(row.resumeReviewBaseScore),
@@ -928,7 +951,7 @@ export async function queryPaginatedResumeRecords(
 
   const recordIds = rows.map((row) => row.id);
   const [derivedFields, peopleFields, duplicateMatches] = await Promise.all([
-    loadResumeDerivedFields(recordIds),
+    loadResumeDerivedFields(recordIds, organizationId),
     loadResumePeopleFields(rows, organizationId),
     listActiveDuplicateMatchCounts({
       organizationId,
@@ -1059,7 +1082,7 @@ export async function loadResumeDetail(
     jobDescriptionHumanInterviewerIds,
     availableTimeSlots,
   ] = await Promise.all([
-    loadResumeDerivedFields([rest.id]),
+    loadResumeDerivedFields([rest.id], organizationId),
     loadResumePeopleFields([rest], organizationId),
     listActiveDuplicateMatchCounts({
       organizationId,

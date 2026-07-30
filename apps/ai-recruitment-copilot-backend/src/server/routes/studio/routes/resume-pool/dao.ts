@@ -33,6 +33,7 @@ import {
   replaceDuplicateMatchesForSource,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
+import { loadResumeParseRetryEligibility } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/retry";
 import { deleteResumeSemanticIndexBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/lifecycle";
 import { cloneResumeSemanticIndexFromPoolToInterview } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/clone";
 import { createResumeRecordFromStorage } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/create-from-storage";
@@ -511,19 +512,25 @@ export async function queryResumePoolItems(
     .where(where)
     .orderBy(desc(resumePoolItem.createdAt))
     .limit(100);
-  const [imports, sourceChannels, duplicateMatches, jobDescriptionNames] = await Promise.all([
-    Promise.all(rows.map((row) => loadImportForOrg(row.item.id, input.organizationId))),
-    loadSourceChannels(rows.map((row) => row.item.id)),
-    loadPoolDuplicateMatches({
-      organizationId: input.organizationId,
-      rows: rows.map((row) => row.item),
-    }),
-    loadBoundJobDescriptionNames(
-      rows.flatMap((row) => (row.item.jobDescriptionId ? [row.item.jobDescriptionId] : [])),
-      input.organizationId,
-      input.userId,
-    ),
-  ]);
+  const [imports, sourceChannels, duplicateMatches, jobDescriptionNames, retryableIds] =
+    await Promise.all([
+      Promise.all(rows.map((row) => loadImportForOrg(row.item.id, input.organizationId))),
+      loadSourceChannels(rows.map((row) => row.item.id)),
+      loadPoolDuplicateMatches({
+        organizationId: input.organizationId,
+        rows: rows.map((row) => row.item),
+      }),
+      loadBoundJobDescriptionNames(
+        rows.flatMap((row) => (row.item.jobDescriptionId ? [row.item.jobDescriptionId] : [])),
+        input.organizationId,
+        input.userId,
+      ),
+      loadResumeParseRetryEligibility({
+        ids: rows.map((row) => row.item.id),
+        organizationId: input.organizationId,
+        target: "resume_pool",
+      }),
+    ]);
   return {
     records: rows.map((row, index) =>
       toResumePoolListRecord(
@@ -535,37 +542,57 @@ export async function queryResumePoolItems(
         row.item.jobDescriptionId
           ? (jobDescriptionNames.get(row.item.jobDescriptionId) ?? null)
           : null,
+        row.item.resumeParseStatus === "failed" &&
+          Boolean(row.item.resumeStorageKey) &&
+          (retryableIds.get(row.item.id) ?? true),
       ),
     ),
     total: totalRow?.total ?? 0,
   };
 }
 
-export async function loadResumePoolItem(input: {
-  organizationId: string;
-  poolItemId: string;
-  userId: string;
-  visibilityScope?: RecruitingVisibilityScope;
-}): Promise<ResumePoolDetail | null> {
+export async function loadResumePoolItem(
+  input: {
+    organizationId: string;
+    poolItemId: string;
+  } & (
+    | { userId: string; visibilityScope?: RecruitingVisibilityScope }
+    | { userId?: never; visibilityScope: RecruitingVisibilityScope }
+  ),
+): Promise<ResumePoolDetail | null> {
   const row = input.visibilityScope
     ? await loadVisiblePoolItem({
         organizationId: input.organizationId,
         poolItemId: input.poolItemId,
         visibilityScope: input.visibilityScope,
       })
-    : await loadAccessiblePoolItem(input);
+    : (input.userId
+      ? await loadAccessiblePoolItem({
+          organizationId: input.organizationId,
+          poolItemId: input.poolItemId,
+          userId: input.userId,
+        })
+      : null);
   if (!row) {
     return null;
   }
-  const [importRow, uploaderMeta, duplicateMatches, jobDescriptionName] = await Promise.all([
-    loadImportForOrg(row.id, input.organizationId),
-    loadUploaderMeta(row.id),
-    loadPoolDuplicateMatches({
-      organizationId: input.organizationId,
-      rows: [row],
-    }),
-    loadBoundJobDescriptionName(row.jobDescriptionId, input.organizationId, input.userId),
-  ]);
+  const [importRow, uploaderMeta, duplicateMatches, jobDescriptionName, retryableIds] =
+    await Promise.all([
+      loadImportForOrg(row.id, input.organizationId),
+      loadUploaderMeta(row.id),
+      loadPoolDuplicateMatches({
+        organizationId: input.organizationId,
+        rows: [row],
+      }),
+      input.userId
+        ? loadBoundJobDescriptionName(row.jobDescriptionId, input.organizationId, input.userId)
+        : Promise.resolve(null),
+      loadResumeParseRetryEligibility({
+        ids: [row.id],
+        organizationId: input.organizationId,
+        target: "resume_pool",
+      }),
+    ]);
   const sourceChannels = await loadSourceChannels([row.id]);
   return toResumePoolDetail(
     row,
@@ -574,6 +601,9 @@ export async function loadResumePoolItem(input: {
     sourceChannels.get(row.id) ?? null,
     duplicateMatches.get(row.id) ?? null,
     jobDescriptionName,
+    row.resumeParseStatus === "failed" &&
+      Boolean(row.resumeStorageKey) &&
+      (retryableIds.get(row.id) ?? true),
   );
 }
 

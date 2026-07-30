@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   replaceDuplicateMatchesForSource: vi.fn(),
   resolveRecruitingVisibilityScope: vi.fn(),
   resolveResumeUploadStorage: vi.fn(),
+  retryFailedResumeParse: vi.fn(),
   submitResumeEvaluation: vi.fn(),
   transaction: vi.fn(),
   updatePatches: [] as Record<string, unknown>[],
@@ -225,6 +226,10 @@ vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/review-worker",
   () => ({ reassessResumeRecord: vi.fn() }),
 );
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/retry",
+  () => ({ retryFailedResumeParse: mocks.retryFailedResumeParse }),
+);
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/pptx-preview", () => ({
   createPptxPreviewPdfResponse: vi.fn(),
 }));
@@ -279,6 +284,7 @@ describe("resumeLibraryRouter behavior", () => {
     mocks.updatePatches.length = 0;
     mocks.resolveRecruitingVisibilityScope.mockResolvedValue({ kind: "all" });
     mocks.resolveResumeUploadStorage.mockResolvedValue(null);
+    mocks.retryFailedResumeParse.mockResolvedValue({ status: "queued" });
     mocks.jobDescriptionIdsExist.mockResolvedValue(true);
     mocks.loadHiringUnitById.mockResolvedValue({ id: "unit-1", name: "用人组织" });
     mocks.enqueueResumeReassessmentForRecord.mockResolvedValue("enqueued");
@@ -356,6 +362,40 @@ describe("resumeLibraryRouter behavior", () => {
       ["page", "resumes"],
       ["resumeLibrary", "read"],
     ]);
+  });
+
+  it("queues one retry for an eligible failed resume record", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      id: RECORD_ID,
+      resumeParseRetryable: true,
+      resumeParseStatus: "failed",
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/retry-parse`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.retryFailedResumeParse).toHaveBeenCalledWith({
+      organizationId: ORGANIZATION_ID,
+      requestedBy: USER_ID,
+      resumeRecordId: RECORD_ID,
+    });
+  });
+
+  it("rejects a resume record that already used its retry", async () => {
+    mocks.loadResumeDetail.mockResolvedValue({
+      id: RECORD_ID,
+      resumeParseRetryable: false,
+      resumeParseStatus: "failed",
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/retry-parse`, {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(409);
+    expect(mocks.retryFailedResumeParse).not.toHaveBeenCalled();
   });
 
   it("persists duplicate matches after creating a resume-library record", async () => {

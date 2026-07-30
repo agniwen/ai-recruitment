@@ -90,6 +90,7 @@ export function toResumePoolListRecord(
   sourceChannel: ResumePoolSourceChannel | null = null,
   duplicateMatch: ResumeDuplicateMatchSummary | null = null,
   jobDescriptionName: string | null = null,
+  resumeParseRetryable = false,
 ): ResumePoolListRecord {
   return {
     candidateEmail: row.candidateEmail,
@@ -114,6 +115,7 @@ export function toResumePoolListRecord(
     resumeContentHash: row.resumeContentHash,
     resumeFileName: row.resumeFileName,
     resumeParseError: row.resumeParseError,
+    resumeParseRetryable,
     resumeParseStatus: row.resumeParseStatus,
     resumeParsedAt: serializeDate(row.resumeParsedAt),
     resumeProfileSnapshot: buildResumeProfileSnapshotFromProfile(row.resumeProfile),
@@ -142,6 +144,7 @@ export function toResumePoolDetail(
   sourceChannel: ResumePoolSourceChannel | null = null,
   duplicateMatch: ResumeDuplicateMatchSummary | null = null,
   jobDescriptionName: string | null = null,
+  resumeParseRetryable = false,
 ): ResumePoolDetail {
   return {
     ...toResumePoolListRecord(
@@ -151,6 +154,7 @@ export function toResumePoolDetail(
       sourceChannel,
       duplicateMatch,
       jobDescriptionName,
+      resumeParseRetryable,
     ),
     resumeProfile: row.resumeProfile,
   };
