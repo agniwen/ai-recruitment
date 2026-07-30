@@ -9,6 +9,7 @@ import { formatResumeCandidateTitle } from "@/components/features/resume/resume-
 import { ResumeDocumentPreviewPane } from "@/components/features/resume/resume-document-preview-dialog";
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
 import { EmptyValue } from "@/components/features/display/empty-value";
+import { TimeDisplay } from "@/components/features/display/time-display";
 import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Modal } from "@/components/ui/modal";
@@ -55,6 +56,12 @@ const comparisonSourceAdapters: Record<
 
 function comparisonSourceAdapter(candidate: ResumeComparisonCandidate) {
   return comparisonSourceAdapters[normalizedSourceType(candidate.sourceType)];
+}
+
+function resumeUploaderName(detail: ResumeComparisonDetail) {
+  return "uploaderName" in detail
+    ? detail.uploaderName || detail.uploaderEmail
+    : detail.creatorName;
 }
 
 function resumeFileUrl(slug: string, candidate: ResumeComparisonCandidate) {
@@ -196,6 +203,18 @@ function ComparisonCard({
           {formatResumeCandidateTitle(candidate.candidateName, candidate.id)}
           {detail?.resumeFileName ? ` · ${detail.resumeFileName}` : ""}
         </CardDescription>
+        {detail ? (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
+            <span>
+              上传人：
+              <span className="text-foreground">{resumeUploaderName(detail) || "—"}</span>
+            </span>
+            <span className="inline-flex items-center">
+              上传时间：
+              <TimeDisplay className="text-foreground" value={detail.createdAt} />
+            </span>
+          </div>
+        ) : null}
       </CardHeader>
       <CardPanel
         className={

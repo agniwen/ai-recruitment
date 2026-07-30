@@ -52,6 +52,8 @@ function detail(candidateName: string, resumeFileName: string | null) {
     candidateEmail: `${candidateName}@example.com`,
     candidateName,
     candidatePhone: "13800000000",
+    createdAt: "2026-07-29T02:30:00.000Z",
+    creatorName: "招聘台上传人",
     hasResumeFile: true,
     jobDescriptionName: "产品经理",
     resumeFileName,
@@ -64,7 +66,10 @@ async function renderComparison(mode: "details" | "documents") {
   fetchStudioResume.mockResolvedValue(detail("当前候选人", "current.pdf"));
   fetchResumePoolItem.mockResolvedValue({
     ...detail("疑似候选人", "suspected.pdf"),
+    createdAt: "2026-07-30T03:45:00.000Z",
     resumeStorageKey: "resumes/suspected.pdf",
+    uploaderEmail: "pool-uploader@example.com",
+    uploaderName: null,
   });
 
   const queryClient = new QueryClient({
@@ -100,6 +105,9 @@ describe("ResumeComparisonDialog", () => {
     expect(document.body.textContent).toContain("疑似简历");
     expect(document.body.textContent).toContain("当前候选人@example.com");
     expect(document.body.textContent).toContain("疑似候选人@example.com");
+    expect(document.body.textContent).toContain("招聘台上传人");
+    expect(document.body.textContent).toContain("pool-uploader@example.com");
+    expect(document.querySelectorAll("time")).toHaveLength(2);
   });
 
   it("shows both original resume documents with the correct endpoints", async () => {
@@ -111,6 +119,9 @@ describe("ResumeComparisonDialog", () => {
     expect(previews).toHaveLength(2);
     expect(previews[0]?.dataset.url).toBe("/api/w/default/studio/resumes/current-id/resume");
     expect(previews[1]?.dataset.url).toBe("/api/w/default/studio/resume-pool/suspected-id/resume");
+    expect(document.body.textContent).toContain("招聘台上传人");
+    expect(document.body.textContent).toContain("pool-uploader@example.com");
+    expect(document.querySelectorAll("time")).toHaveLength(2);
   });
 
   it("previews legacy resume files without filenames as PDF documents", async () => {
