@@ -87,18 +87,43 @@ describe("parseGoogleSheetJobRows", () => {
     });
   });
 
-  it("skips placeholder codes, missing hierarchy, and every duplicate code", () => {
+  it("skips placeholder codes and every duplicate code", () => {
     const result = parseGoogleSheetJobRows([
       HEADERS,
       row({ 稳定唯一值: "待生成" }),
-      row({ 稳定唯一值: "REQ-000010", 编制组织: "" }),
       row({ 稳定唯一值: "REQ-000012" }),
       row({ 岗位名称: "重复岗位", 稳定唯一值: "REQ-000012" }),
     ]);
 
     expect(result.records).toEqual([]);
-    expect(result.skipped.map((item) => item.rowNumber)).toEqual([2, 3, 4, 5]);
+    expect(result.skipped.map((item) => item.rowNumber)).toEqual([2, 3, 4]);
     expect(result.skipped.filter((item) => item.reason.includes("重复"))).toHaveLength(2);
+  });
+
+  it("imports rows whose hiring unit cell is empty", () => {
+    const result = parseGoogleSheetJobRows([
+      HEADERS,
+      row({ 稳定唯一值: "REQ-000010", 编制组织: "" }),
+    ]);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]).toMatchObject({
+      code: "REQ-000010",
+      hiringUnitName: "",
+    });
+
+    const values = buildGoogleSheetJobValues(result.records[0], "department-1", null);
+    expect(values.hiringUnitId).toBeNull();
+    expect(
+      hasGoogleSheetJobChanges(
+        {
+          ...values,
+          hiringUnitId: "hiring-unit-old",
+        },
+        values,
+      ),
+    ).toBe(true);
   });
 
   it("imports rows with an empty JD prompt instead of skipping them", () => {

@@ -102,8 +102,9 @@ export function buildDepartmentHiringUnitScopeCondition(
 }
 
 /**
- * Job-description visibility: allow either the job's own hiring unit or the
- * linked department's hiring unit (legacy rows / manual posts).
+ * Job-description visibility:
+ * - Google-synced jobs use the explicit job-level hiring unit, including null.
+ * - Manual jobs fall back to the linked department's hiring unit.
  */
 export function buildJobDescriptionHiringUnitScopeCondition(
   scope: HiringUnitAccessScope,
@@ -121,10 +122,20 @@ export function buildJobDescriptionHiringUnitScopeCondition(
       : undefined;
   const departmentUnitInScope =
     scope.hiringUnitIds.length > 0
-      ? inArray(department.hiringUnitId, scope.hiringUnitIds)
+      ? and(
+          eq(jobDescription.creationSource, "manual"),
+          isNull(jobDescription.hiringUnitId),
+          inArray(department.hiringUnitId, scope.hiringUnitIds),
+        )
       : undefined;
   const publicAccess = scope.canAccessPublic
-    ? and(isNull(jobDescription.hiringUnitId), isNull(department.hiringUnitId))
+    ? and(
+        isNull(jobDescription.hiringUnitId),
+        or(
+          eq(jobDescription.creationSource, "google_sheets"),
+          and(eq(jobDescription.creationSource, "manual"), isNull(department.hiringUnitId)),
+        ),
+      )
     : undefined;
 
   return or(jobUnitInScope, departmentUnitInScope, publicAccess);

@@ -781,7 +781,7 @@ export const jobDescription = pgTable(
     /**
      * 岗位自身的编制组织（用人组织）。
      * Google 同步可直接写入表格「编制组织」；手动岗位通常从所属部门带出。
-     * 展示时优先本字段，缺省再回退部门所属用人组织。
+     * Google 同步岗位保留显式空值；手动岗位缺省时回退部门所属用人组织。
      */
     hiringUnitId: text("hiring_unit_id").references(() => hiringUnit.id, {
       onDelete: "set null",

@@ -91,8 +91,8 @@ export interface GoogleSheetJobValues {
   expectedOnboardDate: string | null | undefined;
   gapCount: number | null | undefined;
   headcount: number | null | undefined;
-  /** Direct job-level 编制组织 from sheet column (not via department). */
-  hiringUnitId: string;
+  /** Direct job-level 编制组织 from sheet column; null when the sheet cell is empty. */
+  hiringUnitId: string | null;
   jobLevel: string | null;
   jobSeries: string | null;
   name: string;
@@ -132,6 +132,10 @@ function nullableText(value: string): string | null {
 
 function normalizeIdentity(value: string): string {
   return value.normalize("NFKC").replaceAll(/\s+/g, " ").trim().toLocaleLowerCase("zh-CN");
+}
+
+function departmentIdentity(hiringUnitId: string | null, departmentName: string): string {
+  return `${hiringUnitId ?? ""}\u0000${normalizeIdentity(departmentName)}`;
 }
 
 function normalizeDate(value: string): string | null | undefined {
@@ -238,10 +242,7 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
     const departmentName = rawDepartmentName || DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME;
     // JD/prompt is optional on sheet sync; DB column is NOT NULL so store "".
     const prompt = cellText(row, headerIndexes.get(HEADERS.prompt));
-    const missingRequired = findMissingRequiredFields([
-      ["岗位名称", name],
-      ["编制组织", hiringUnitName],
-    ]);
+    const missingRequired = findMissingRequiredFields([["岗位名称", name]]);
     if (missingRequired.length > 0) {
       skipped.push({
         code,
@@ -354,12 +355,12 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
 /**
  * Build sheet → job field patch.
  * - `departmentId: undefined` means "do not touch department" (empty sheet 部门 on update).
- * - `hiringUnitId` is always the sheet 编制组织 (job-level, not via department).
+ * - `hiringUnitId` is the sheet 编制组织, or null when that cell is empty.
  */
 export function buildGoogleSheetJobValues(
   record: GoogleSheetJobRecord,
   departmentId: string | undefined,
-  hiringUnitId: string,
+  hiringUnitId: string | null,
 ): GoogleSheetJobValues {
   return {
     controlCategory: record.controlCategory,
@@ -443,15 +444,11 @@ export async function syncGoogleSheetJobDescriptions({
         })
         .from(department)
         .where(eq(department.organizationId, organizationId));
-      // Keyed by hiringUnitId + department name. Empty sheet departments map to
-      //「默认部门」under that sheet row's 编制组织 — never borrow a default dept
-      // from another hiring unit (编制组织 is written on the job itself).
+      // Keyed by nullable hiringUnitId + department name. Empty sheet departments
+      // map to「默认部门」under the row's nullable 编制组织.
       const departmentsByName = new Map<string, { id: string; name: string }>();
       for (const row of departmentRows) {
-        if (!row.hiringUnitId) {
-          continue;
-        }
-        const key = `${row.hiringUnitId}\u0000${normalizeIdentity(row.name)}`;
+        const key = departmentIdentity(row.hiringUnitId, row.name);
         if (!departmentsByName.has(key)) {
           departmentsByName.set(key, row);
         }
@@ -502,9 +499,11 @@ export async function syncGoogleSheetJobDescriptions({
       const defaultPolicyHash = computeResumeScreeningPolicyHash(defaultPolicy);
 
       for (const record of parsed.records) {
-        const hiringUnitKey = normalizeIdentity(record.hiringUnitName);
-        let unit = hiringUnitsByName.get(hiringUnitKey);
-        if (!unit) {
+        const hiringUnitKey = record.hiringUnitName
+          ? normalizeIdentity(record.hiringUnitName)
+          : null;
+        let unit = hiringUnitKey ? hiringUnitsByName.get(hiringUnitKey) : undefined;
+        if (hiringUnitKey && !unit) {
           unit = { id: crypto.randomUUID(), name: record.hiringUnitName };
           await tx.insert(hiringUnit).values({
             createdAt: now,
@@ -518,16 +517,17 @@ export async function syncGoogleSheetJobDescriptions({
           hiringUnitsByName.set(hiringUnitKey, unit);
           hiringUnitsCreated += 1;
         }
+        const hiringUnitIdForWrite = unit?.id ?? null;
 
         // Resolve department only when we need to write it:
-        // - sheet 部门 has a value → resolve/create under this 编制组织
-        // - sheet 部门 empty + create →「默认部门」under this 编制组织
+        // - sheet 部门 has a value → resolve/create under the nullable 编制组织
+        // - sheet 部门 empty + create →「默认部门」under the nullable 编制组织
         // - sheet 部门 empty + update → leave existing departmentId untouched
         const existing = jobsByCode.get(record.code);
         const shouldWriteDepartment = record.departmentSpecified || !existing;
         let departmentIdForWrite: string | undefined;
         if (shouldWriteDepartment) {
-          const departmentKey = `${unit.id}\u0000${normalizeIdentity(record.departmentName)}`;
+          const departmentKey = departmentIdentity(hiringUnitIdForWrite, record.departmentName);
           let departmentRow = departmentsByName.get(departmentKey);
           if (!departmentRow) {
             departmentRow = { id: crypto.randomUUID(), name: record.departmentName };
@@ -535,7 +535,7 @@ export async function syncGoogleSheetJobDescriptions({
               createdAt: now,
               createdBy: actorUserId ?? null,
               description: null,
-              hiringUnitId: unit.id,
+              hiringUnitId: hiringUnitIdForWrite,
               id: departmentRow.id,
               name: departmentRow.name,
               organizationId,
@@ -551,7 +551,11 @@ export async function syncGoogleSheetJobDescriptions({
         // - present in sheet → googleSheetDeleted=false, hiringUnitId=sheet 编制组织
         // - missing from sheet → google_sheets jobs get googleSheetDeleted=true (below)
         // - empty sheet 部门 on update does not clobber an existing departmentId
-        const mappedValues = buildGoogleSheetJobValues(record, departmentIdForWrite, unit.id);
+        const mappedValues = buildGoogleSheetJobValues(
+          record,
+          departmentIdForWrite,
+          hiringUnitIdForWrite,
+        );
         if (existing) {
           const needsDeletedFlagClear = existing.googleSheetDeleted !== false;
           if (!hasGoogleSheetJobChanges(existing, mappedValues) && !needsDeletedFlagClear) {
@@ -569,7 +573,7 @@ export async function syncGoogleSheetJobDescriptions({
               ),
             );
           existing.googleSheetDeleted = false;
-          existing.hiringUnitId = unit.id;
+          existing.hiringUnitId = hiringUnitIdForWrite;
           if (departmentIdForWrite) {
             existing.departmentId = departmentIdForWrite;
           }
@@ -602,7 +606,7 @@ export async function syncGoogleSheetJobDescriptions({
           gapCount: record.gapCount ?? null,
           googleSheetDeleted: false,
           headcount: record.headcount ?? null,
-          hiringUnitId: unit.id,
+          hiringUnitId: hiringUnitIdForWrite,
           id,
           offeredPendingOnboardCount: record.offeredPendingOnboardCount ?? null,
           onboardedCount: record.onboardedCount ?? null,
@@ -630,7 +634,7 @@ export async function syncGoogleSheetJobDescriptions({
           gapCount: record.gapCount ?? null,
           googleSheetDeleted: false,
           headcount: record.headcount ?? null,
-          hiringUnitId: unit.id,
+          hiringUnitId: hiringUnitIdForWrite,
           id,
           offeredPendingOnboardCount: record.offeredPendingOnboardCount ?? null,
           onboardedCount: record.onboardedCount ?? null,

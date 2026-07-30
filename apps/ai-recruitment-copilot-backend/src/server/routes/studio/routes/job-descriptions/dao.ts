@@ -67,6 +67,25 @@ function parseResumeScreeningPolicy(value: unknown) {
   return parsedPolicy.success ? parsedPolicy.data : createDefaultResumeScreeningPolicy();
 }
 
+export function resolveJobDescriptionHiringUnit(row: {
+  creationSource: "google_sheets" | "manual";
+  departmentHiringUnitId?: string | null;
+  departmentHiringUnitName?: string | null;
+  hiringUnitId?: string | null;
+  hiringUnitName?: string | null;
+}) {
+  if (row.creationSource === "google_sheets") {
+    return {
+      hiringUnitId: row.hiringUnitId ?? null,
+      hiringUnitName: row.hiringUnitName ?? null,
+    };
+  }
+  return {
+    hiringUnitId: row.hiringUnitId ?? row.departmentHiringUnitId ?? null,
+    hiringUnitName: row.hiringUnitName ?? row.departmentHiringUnitName ?? null,
+  };
+}
+
 function buildGoogleSheetStatusCondition(
   statuses: JobDescriptionGoogleSheetStatusFilter[] | undefined,
 ) {
@@ -421,6 +440,7 @@ function toJobDescriptionListRecord(
   resumeCount: number,
 ): JobDescriptionListRecord {
   const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
+  const effectiveHiringUnit = resolveJobDescriptionHiringUnit(row);
   return {
     aiInterviewDisabled: row.aiInterviewDisabled,
     allowCrossDepartmentInterviewers: row.allowCrossDepartmentInterviewers,
@@ -436,8 +456,8 @@ function toJobDescriptionListRecord(
     gapCount: row.gapCount,
     googleSheetDeleted: row.googleSheetDeleted,
     headcount: row.headcount,
-    hiringUnitId: row.hiringUnitId ?? row.departmentHiringUnitId,
-    hiringUnitName: row.hiringUnitName ?? row.departmentHiringUnitName,
+    hiringUnitId: effectiveHiringUnit.hiringUnitId,
+    hiringUnitName: effectiveHiringUnit.hiringUnitName,
     humanInterviewerIds,
     id: row.id,
     interviewerIds: interviewers.map((item) => item.id),
@@ -759,11 +779,7 @@ export async function loadJobDescriptionById(
   const interviewers = interviewersMap.get(id) ?? [];
   // eslint-disable-next-line no-use-before-define -- kept near public load functions for readability.
   return serializeJobDescription(
-    {
-      ...row,
-      hiringUnitId: row.hiringUnitId ?? row.departmentHiringUnitId,
-      hiringUnitName: row.hiringUnitName ?? row.departmentHiringUnitName,
-    },
+    row,
     interviewers.map((item) => item.id),
     humanInterviewerIdsMap.get(id) ?? [],
   );
@@ -953,6 +969,7 @@ export function serializeJobDescription(
   humanInterviewerIds: string[],
 ): JobDescriptionRecord {
   const resumeScreeningPolicy = parseResumeScreeningPolicy(row.resumeScreeningPolicy);
+  const effectiveHiringUnit = resolveJobDescriptionHiringUnit(row);
   return {
     aiInterviewDisabled: row.aiInterviewDisabled,
     allowCrossDepartmentInterviewers: row.allowCrossDepartmentInterviewers,
@@ -967,8 +984,8 @@ export function serializeJobDescription(
     gapCount: row.gapCount,
     googleSheetDeleted: row.googleSheetDeleted ?? null,
     headcount: row.headcount,
-    hiringUnitId: row.hiringUnitId ?? row.departmentHiringUnitId ?? null,
-    hiringUnitName: row.hiringUnitName ?? row.departmentHiringUnitName ?? null,
+    hiringUnitId: effectiveHiringUnit.hiringUnitId,
+    hiringUnitName: effectiveHiringUnit.hiringUnitName,
     humanInterviewerIds,
     id: row.id,
     interviewerIds,
