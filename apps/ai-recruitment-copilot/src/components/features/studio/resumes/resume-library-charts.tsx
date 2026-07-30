@@ -39,7 +39,7 @@ const BUCKET_ORDER: PipelineBucket[] = [
 
 const BUCKET_LABEL: Record<PipelineBucket, string> = {
   ai_interview: "AI 面试",
-  closed_hired: "已录用",
+  closed_hired: "已到岗",
   closed_rejected: "已淘汰 / 撤回",
   human_interview: "真人复面",
   offer: "Offer",

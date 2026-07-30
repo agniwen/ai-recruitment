@@ -19,7 +19,9 @@ function isResumeEvaluationTimeSlot(value: unknown): value is ResumeEvaluationAv
 }
 
 /** Parse evaluation-pass time slots from audit `detail.availableTimeSlots`. */
-export function readResumeEvaluationTimeSlots(value: unknown): ResumeEvaluationAvailableTimeSlot[] {
+export function readResumeEvaluationTimeSlots(
+  value?: unknown,
+): ResumeEvaluationAvailableTimeSlot[] {
   if (!Array.isArray(value)) {
     return [];
   }

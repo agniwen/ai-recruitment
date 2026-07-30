@@ -2,17 +2,15 @@
 
 /* oxlint-disable no-use-before-define -- helper components defined below export */
 // 「标记结案」/「重新激活」二合一对话框。
-//   - mode='close'：HR 选 outcome（录用/淘汰/撤回/归档）+ 可选的录用 / 淘汰细节
+//   - mode='close'：HR 选 outcome（到岗/淘汰/撤回/归档）+ 可选的到岗 / 淘汰细节
 //   - mode='reactivate'：HR 填写原因并恢复到简历初筛
-// 内部 fetch 候选人详情（React Query 缓存复用 detail 面板的数据）拿到 closedMeta /
-// candidate name；调用方只传 id 即可。
+// 调用方只传 id 与 candidateName 即可。
 //
 // Close & reactivate combined dialog. In close mode HR picks an outcome and
 // fills outcome-specific details. In reactivate mode HR enters a reason and
-// restores the candidate to resume screening. Candidate detail is fetched via
-// React Query and shares cache with the detail panel.
+// restores the candidate to resume screening.
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -22,7 +20,7 @@ import {
 } from "@arc/db-schema/studio-interviews";
 import type { CandidateOutcome, ClosedMeta, CloseCategory } from "@arc/db-schema/studio-interviews";
 import type { ApiError } from "@/lib/client/api/errors";
-import { fetchStudioResume, transitionInterviewRecord } from "@/lib/client/api";
+import { transitionInterviewRecord } from "@/lib/client/api";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DatePicker } from "@/components/date-time-picker";
@@ -66,7 +64,7 @@ interface TransitionCandidateDialogProps {
   onOpenChange: (open: boolean) => void;
   mode: "close" | "reactivate";
   candidate: { id: string; candidateName: string | null } | null;
-  // close 模式可以预设 outcome（例如 Offer 接受后弹「标记录用」）。
+  // close 模式可以预设 outcome（例如 Offer 接受后弹「标记到岗」）。
   // Pre-select an outcome in close mode (e.g., from offer accept flow).
   initialOutcome?: Exclude<CandidateOutcome, "in_pipeline">;
   onCompleted: () => void;
@@ -93,32 +91,23 @@ function CloseDialog({
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
 
-  // 拉详情用于 prefill hiredDetails（如果 Offer 已 accept 把 finalBaseSalary 等带进来）。
-  // Fetch detail to prefill hiredDetails (e.g., final salary copied from accepted offer).
-  const { data: resume } = useQuery({
-    enabled: open && !!candidate?.id,
-    queryFn: () => fetchStudioResume(slug, candidate?.id ?? ""),
-    queryKey: ["studio-resumes", slug, "detail", candidate?.id],
-  });
-
   const [outcome, setOutcome] = useState<Exclude<CandidateOutcome, "in_pipeline">>(
     initialOutcome ?? "rejected",
   );
   const [internalNotes, setInternalNotes] = useState("");
   const [feedbackToCandidate, setFeedbackToCandidate] = useState("");
-  // 录用细节
-  const [finalBaseSalary, setFinalBaseSalary] = useState("");
-  const [finalPosition, setFinalPosition] = useState("");
-  const [actualJoiningDate, setActualJoiningDate] = useState("");
-  const [onboardingContact, setOnboardingContact] = useState("");
+  // 到岗细节
+  const [joiningDate, setJoiningDate] = useState("");
+  const [joiningDepartment, setJoiningDepartment] = useState("");
+  const [joiningPosition, setJoiningPosition] = useState("");
   // 淘汰细节
   const [category, setCategory] = useState<CloseCategory | "">("");
   const [talentPoolEligible, setTalentPoolEligible] = useState(false);
   const [revisitAfter, setRevisitAfter] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // 打开对话框时根据 initialOutcome / 已有 Offer 信息预填。
-  // Sync form on open; prefill from the latest accepted offer when present.
+  // 打开对话框时根据 initialOutcome 重置表单。
+  // Reset form state whenever the dialog opens.
   useEffect(() => {
     if (!open) {
       return;
@@ -126,29 +115,13 @@ function CloseDialog({
     setOutcome(initialOutcome ?? "rejected");
     setInternalNotes("");
     setFeedbackToCandidate("");
-    setFinalPosition("");
-    setActualJoiningDate("");
-    setOnboardingContact("");
+    setJoiningDate("");
+    setJoiningDepartment("");
+    setJoiningPosition("");
     setCategory("");
     setTalentPoolEligible(false);
     setRevisitAfter("");
-    setFinalBaseSalary("");
   }, [open, initialOutcome]);
-
-  // outcome=hired 时把当前最新的 Offer base 带进来（HR 改完一键确认）。
-  // When outcome=hired, prefill finalBaseSalary from accepted offer if any.
-  useEffect(() => {
-    if (!open || outcome !== "hired" || !resume) {
-      return;
-    }
-    if (!finalBaseSalary) {
-      // 不直接依赖 stageProgress.offer.latestDraft——它没有 baseSalary 字段，
-      // 真正想要的是「最新的 accepted offer」，但 list 端只 list 了精简字段。
-      // 短期方案：让 HR 自己填；后续如果觉得不爽再做一次 detail fetch。
-      // No-op for now; HR types it. We could fetch the full offer list to fill
-      // in the latest accepted base, but that's a separate enhancement.
-    }
-  }, [open, outcome, resume, finalBaseSalary]);
 
   async function handleConfirm() {
     if (!candidate) {
@@ -170,15 +143,10 @@ function CloseDialog({
           internalNotes: internalNotes.trim() || null,
         };
         if (outcome === "hired") {
-          const parsedSalary = finalBaseSalary === "" ? null : Number(finalBaseSalary);
-          if (parsedSalary !== null && (Number.isNaN(parsedSalary) || parsedSalary < 0)) {
-            throw new Error("最终薪资需为非负整数");
-          }
           closedMeta.hiredDetails = {
-            actualJoiningDate: actualJoiningDate || null,
-            finalBaseSalary: parsedSalary,
-            finalPosition: finalPosition.trim() || null,
-            onboardingContact: onboardingContact.trim() || null,
+            joiningDate: joiningDate || null,
+            joiningDepartment: joiningDepartment.trim() || null,
+            joiningPosition: joiningPosition.trim() || null,
           };
         }
         if (outcome === "rejected") {
@@ -238,50 +206,38 @@ function CloseDialog({
             <Card className="gap-0 rounded-lg py-0">
               <CardContent className="grid gap-3 bg-muted/30 p-3 sm:grid-cols-2">
                 <div className="grid gap-1.5 sm:col-span-2">
-                  <Label className="text-xs" htmlFor="hired-position">
-                    最终职位（可选）
-                  </Label>
-                  <Input
-                    id="hired-position"
-                    maxLength={200}
-                    onChange={(e) => setFinalPosition(e.target.value)}
-                    placeholder="例如 高级前端 L4"
-                    value={finalPosition}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs" htmlFor="hired-salary">
-                    最终月薪 (¥，可选)
-                  </Label>
-                  <Input
-                    id="hired-salary"
-                    inputMode="numeric"
-                    min={0}
-                    onChange={(e) => setFinalBaseSalary(e.target.value)}
-                    type="number"
-                    value={finalBaseSalary}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs" htmlFor="hired-joining">
-                    实际入职日（可选）
+                  <Label className="text-xs" htmlFor="hired-joining-date">
+                    入职时间（可选）
                   </Label>
                   <DatePicker
-                    id="hired-joining"
-                    onValueChange={setActualJoiningDate}
-                    value={actualJoiningDate}
+                    id="hired-joining-date"
+                    onValueChange={setJoiningDate}
+                    placeholder="选择入职日期"
+                    value={joiningDate}
                   />
                 </div>
-                <div className="grid gap-1.5 sm:col-span-2">
-                  <Label className="text-xs" htmlFor="hired-contact">
-                    入职对接人（可选）
+                <div className="grid gap-1.5">
+                  <Label className="text-xs" htmlFor="hired-department">
+                    入职部门（可选）
                   </Label>
                   <Input
-                    id="hired-contact"
+                    id="hired-department"
                     maxLength={200}
-                    onChange={(e) => setOnboardingContact(e.target.value)}
-                    placeholder="HR 同事 / 业务对接人"
-                    value={onboardingContact}
+                    onChange={(e) => setJoiningDepartment(e.target.value)}
+                    placeholder="例如 技术部"
+                    value={joiningDepartment}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs" htmlFor="hired-joining-position">
+                    入职岗位（可选）
+                  </Label>
+                  <Input
+                    id="hired-joining-position"
+                    maxLength={200}
+                    onChange={(e) => setJoiningPosition(e.target.value)}
+                    placeholder="例如 高级前端工程师"
+                    value={joiningPosition}
                   />
                 </div>
               </CardContent>

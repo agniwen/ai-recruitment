@@ -112,6 +112,16 @@ function FormSection({
   );
 }
 
+function formatGoogleSheetDeletedLabel(value: boolean | null | undefined): string {
+  if (value === true) {
+    return "是（表格中已不存在该编码）";
+  }
+  if (value === false) {
+    return "否（同步时仍存在）";
+  }
+  return "—";
+}
+
 function parseOptionalInt(raw: string): number | null {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -640,13 +650,7 @@ export function JobDescriptionFormDialog({
                         disabled
                         id="job-description-google-sheet-deleted"
                         readOnly
-                        value={
-                          record?.googleSheetDeleted === true
-                            ? "是（表格中已不存在该编码）"
-                            : (record?.googleSheetDeleted === false
-                              ? "否（同步时仍存在）"
-                              : "—")
-                        }
+                        value={formatGoogleSheetDeletedLabel(record?.googleSheetDeleted)}
                       />
                       <p className="text-muted-foreground text-xs">
                         由 Google 文档同步自动维护，不可编辑。

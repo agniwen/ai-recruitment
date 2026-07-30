@@ -125,6 +125,76 @@ function isJobCodeConflict(error: unknown): boolean {
   );
 }
 
+function buildManualJobDescriptionRecord(args: {
+  code: string;
+  input: z.infer<typeof jobDescriptionFormSchema>;
+  now: Date;
+  organizationId: string;
+  departmentHiringUnitId: string | null;
+  createdBy: string | null;
+  resumeScreeningPolicyHash: string;
+}): typeof jobDescription.$inferSelect {
+  const {
+    code,
+    input,
+    now,
+    organizationId,
+    departmentHiringUnitId,
+    createdBy,
+    resumeScreeningPolicyHash,
+  } = args;
+  return {
+    aiInterviewDisabled: input.aiInterviewDisabled,
+    allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
+    code,
+    controlCategory: nullableText(input.controlCategory),
+    createdAt: now,
+    createdBy,
+    creationSource: "manual",
+    departmentId: input.departmentId,
+    description: input.description?.trim() || null,
+    expectedOnboardDate: nullableText(input.expectedOnboardDate),
+    feishuChatBoundAt: null,
+    feishuChatBoundBy: null,
+    feishuChatId: null,
+    gapCount: input.gapCount ?? null,
+    googleSheetDeleted: null,
+    headcount: input.headcount ?? null,
+    hiringUnitId: departmentHiringUnitId,
+    id: crypto.randomUUID(),
+    jobLevel: nullableText(input.jobLevel),
+    jobSeries: nullableText(input.jobSeries),
+    name: input.name.trim(),
+    notes: nullableText(input.notes),
+    offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,
+    onboardedCount: input.onboardedCount ?? null,
+    organizationId,
+    // presetQuestions is deprecated — column kept with default [] for legacy
+    // data; new rows always store an empty array.
+    presetQuestions: [],
+    priority: input.priority,
+    prompt: input.prompt.trim(),
+    recruitmentStatus: nullableText(input.recruitmentStatus),
+    requestedDate: nullableText(input.requestedDate),
+    requester: nullableText(input.requester),
+    resumeContact: nullableText(input.resumeContact),
+    resumeScreeningPolicy: input.resumeScreeningPolicy,
+    resumeScreeningPolicyHash,
+    resumeScreeningPolicyVersion: input.resumeScreeningPolicy.version,
+    salaryCurrency: nullableText(input.salaryCurrency),
+    salaryMaxAmount: input.salaryMaxAmount ?? null,
+    salaryMinAmount: input.salaryMinAmount ?? null,
+    salaryRangeRaw: nullableText(input.salaryRangeRaw),
+    serviceUnit: nullableText(input.serviceUnit),
+    sourceSheet: nullableText(input.sourceSheet),
+    updatedAt: now,
+    workEndTime: nullableText(input.workEndTime),
+    workLocation: nullableText(input.workLocation),
+    workStartTime: nullableText(input.workStartTime),
+    workTimezone: nullableText(input.workTimezone),
+  } satisfies typeof jobDescription.$inferSelect;
+}
+
 const jobDescriptionListQuerySchema = z.object({
   code: z.string().optional(),
   departmentId: z.string().optional(),
@@ -321,56 +391,15 @@ export const jobDescriptionsRouter = factory
         : codeCandidates;
 
       for (const code of preferredCodeCandidates) {
-        const record = {
-          aiInterviewDisabled: input.aiInterviewDisabled,
-          allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
+        const record = buildManualJobDescriptionRecord({
           code,
-          controlCategory: nullableText(input.controlCategory),
-          createdAt: now,
           createdBy: c.var.user?.id ?? null,
-          creationSource: "manual",
-          departmentId: input.departmentId,
-          description: input.description?.trim() || null,
-          expectedOnboardDate: nullableText(input.expectedOnboardDate),
-          feishuChatBoundAt: null,
-          feishuChatBoundBy: null,
-          feishuChatId: null,
-          gapCount: input.gapCount ?? null,
-          googleSheetDeleted: null,
-          headcount: input.headcount ?? null,
-          hiringUnitId: departmentHiringUnitId,
-          id: crypto.randomUUID(),
-          jobLevel: nullableText(input.jobLevel),
-          jobSeries: nullableText(input.jobSeries),
-          name: input.name.trim(),
-          notes: nullableText(input.notes),
-          offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,
-          onboardedCount: input.onboardedCount ?? null,
+          departmentHiringUnitId,
+          input,
+          now,
           organizationId: activeOrg.id,
-          // presetQuestions is deprecated — column kept with default [] for legacy
-          // data; new rows always store an empty array.
-          presetQuestions: [],
-          priority: input.priority,
-          prompt: input.prompt.trim(),
-          recruitmentStatus: nullableText(input.recruitmentStatus),
-          requestedDate: nullableText(input.requestedDate),
-          requester: nullableText(input.requester),
-          resumeContact: nullableText(input.resumeContact),
-          resumeScreeningPolicy: input.resumeScreeningPolicy,
           resumeScreeningPolicyHash,
-          resumeScreeningPolicyVersion: input.resumeScreeningPolicy.version,
-          salaryCurrency: nullableText(input.salaryCurrency),
-          salaryMaxAmount: input.salaryMaxAmount ?? null,
-          salaryMinAmount: input.salaryMinAmount ?? null,
-          salaryRangeRaw: nullableText(input.salaryRangeRaw),
-          serviceUnit: nullableText(input.serviceUnit),
-          sourceSheet: nullableText(input.sourceSheet),
-          updatedAt: now,
-          workEndTime: nullableText(input.workEndTime),
-          workLocation: nullableText(input.workLocation),
-          workStartTime: nullableText(input.workStartTime),
-          workTimezone: nullableText(input.workTimezone),
-        } satisfies typeof jobDescription.$inferSelect;
+        });
 
         try {
           await db.transaction(async (tx) => {

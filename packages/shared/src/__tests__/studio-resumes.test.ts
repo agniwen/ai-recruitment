@@ -510,14 +510,14 @@ describe("describeResumeProgress", () => {
 
   // ── closed ──
 
-  it("closed × hired → 已结案 · 已录用", () => {
+  it("closed × hired → 已结案 · 已到岗", () => {
     expect(
       describeResumeProgress({
         outcome: "hired",
         pipelineStage: "closed",
         stageProgress: EMPTY,
       }),
-    ).toEqual({ label: "已结案 · 已录用", tone: "success" });
+    ).toEqual({ label: "已结案 · 已到岗", tone: "success" });
   });
 
   it("closed × archived → 已归档", () => {

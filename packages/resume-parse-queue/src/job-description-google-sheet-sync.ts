@@ -108,9 +108,9 @@ export async function ensureJobDescriptionGoogleSheetSyncJobEnqueued(
   if (!isJobDescriptionGoogleSheetSyncQueueConfigured()) {
     throw new Error("REDIS_URL is not set.");
   }
-  const queue = getJobDescriptionGoogleSheetSyncQueue();
+  const syncQueue = getJobDescriptionGoogleSheetSyncQueue();
   const jobId = buildJobDescriptionGoogleSheetSyncJobId(data);
-  const existing = await queue.getJob(jobId);
+  const existing = await syncQueue.getJob(jobId);
   if (existing) {
     const state = await existing.getState();
     if (IN_FLIGHT_JOB_STATES.has(state)) {
@@ -118,7 +118,7 @@ export async function ensureJobDescriptionGoogleSheetSyncJobEnqueued(
     }
     await existing.remove();
   }
-  await queue.add(JOB_DESCRIPTION_GOOGLE_SHEET_SYNC_JOB_NAME, data, {
+  await syncQueue.add(JOB_DESCRIPTION_GOOGLE_SHEET_SYNC_JOB_NAME, data, {
     ...jobOptions(),
     jobId,
   });

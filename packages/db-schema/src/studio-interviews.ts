@@ -53,7 +53,7 @@ export const candidateOutcomeMeta: Record<
   { label: string; tone: "success" | "warning" | "info" | "outline" }
 > = {
   archived: { label: "已归档", tone: "outline" },
-  hired: { label: "已录用", tone: "success" },
+  hired: { label: "已到岗", tone: "success" },
   in_pipeline: { label: "进行中", tone: "info" },
   rejected: { label: "已淘汰", tone: "outline" },
   withdrawn: { label: "已撤回", tone: "outline" },
@@ -328,13 +328,12 @@ export const closeCategoryMeta: Record<CloseCategory, { label: string }> = {
   skills_mismatch: { label: "技能不匹配" },
 };
 
-// 录用专属细节（outcome=hired 时填）。
-// Hired-only details; recorded when outcome=hired.
+// 到岗专属细节（outcome=hired 时填）。
+// Onboarded-only details; recorded when outcome=hired.
 export const closedHiredDetailsSchema = z.object({
-  actualJoiningDate: z.string().trim().nullable().optional(),
-  finalBaseSalary: z.number().int().min(0).nullable().optional(),
-  finalPosition: z.string().trim().max(200).nullable().optional(),
-  onboardingContact: z.string().trim().max(200).nullable().optional(),
+  joiningDate: z.string().trim().nullable().optional(),
+  joiningDepartment: z.string().trim().max(200).nullable().optional(),
+  joiningPosition: z.string().trim().max(200).nullable().optional(),
 });
 export type ClosedHiredDetails = z.infer<typeof closedHiredDetailsSchema>;
 

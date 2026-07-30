@@ -231,7 +231,7 @@ export function RespondOfferDialog({
         <DialogHeader>
           <DialogTitle>记录候选人响应</DialogTitle>
           <DialogDescription>
-            候选人接受 → 建议结案为「已录用」；候选人议价 → 当前版本保持已发出，后续新建版本响应。
+            候选人接受 → 建议结案为「已到岗」；候选人议价 → 当前版本保持已发出，后续新建版本响应。
           </DialogDescription>
         </DialogHeader>
 
@@ -303,7 +303,7 @@ export function AcceptedConfirmDialog({
         <DialogHeader>
           <DialogTitle>候选人已接受 Offer</DialogTitle>
           <DialogDescription>
-            是否立刻标记为「已录用」并结案？你也可以稍后在 action bar 里手动标记。
+            是否立刻标记为「已到岗」并结案？你也可以稍后在 action bar 里手动标记。
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -312,7 +312,7 @@ export function AcceptedConfirmDialog({
           </Button>
           <Button onClick={onProceed}>
             <IconArrowUpRight className="size-4" />
-            标记为已录用
+            标记为已到岗
           </Button>
         </DialogFooter>
       </DialogContent>

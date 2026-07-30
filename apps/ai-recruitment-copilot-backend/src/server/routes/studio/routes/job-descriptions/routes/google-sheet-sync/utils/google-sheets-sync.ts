@@ -183,6 +183,176 @@ function findMissingRequiredFields(fields: [label: string, value: string][]): st
   return fields.filter(([, value]) => value === "").map(([label]) => label);
 }
 
+const COUNT_FIELDS = [
+  [HEADERS.headcount, "headcount"],
+  [HEADERS.onboardedCount, "onboardedCount"],
+  [HEADERS.gapCount, "gapCount"],
+  [HEADERS.offeredPendingOnboardCount, "offeredPendingOnboardCount"],
+] as const;
+
+function collectNormalizedValueWarnings(args: {
+  code: string;
+  rowNumber: number;
+  countFields: typeof COUNT_FIELDS;
+  counts: Pick<
+    GoogleSheetJobRecord,
+    "gapCount" | "headcount" | "offeredPendingOnboardCount" | "onboardedCount"
+  >;
+  row: unknown[];
+  headerIndexes: Map<string, number>;
+  rawRequestedDate: string;
+  requestedDate: string | null | undefined;
+  rawExpectedOnboardDate: string;
+  expectedOnboardDate: string | null | undefined;
+  rawPriority: string;
+  priority: JobDescriptionPriority | undefined;
+}): JobDescriptionGoogleSheetsSyncWarning[] {
+  const warnings: JobDescriptionGoogleSheetsSyncWarning[] = [];
+  for (const [header, field] of args.countFields) {
+    const rawValue = cellText(args.row, args.headerIndexes.get(header));
+    if (rawValue && args.counts[field] === undefined) {
+      warnings.push({
+        code: args.code,
+        field: header,
+        message: `无法识别整数“${rawValue}”，新岗位将留空，已有岗位保留原值。`,
+        rowNumber: args.rowNumber,
+      });
+    }
+  }
+  for (const [header, rawValue, normalizedValue] of [
+    [HEADERS.requestedDate, args.rawRequestedDate, args.requestedDate],
+    [HEADERS.expectedOnboardDate, args.rawExpectedOnboardDate, args.expectedOnboardDate],
+  ] as const) {
+    if (rawValue && normalizedValue === undefined) {
+      warnings.push({
+        code: args.code,
+        field: header,
+        message: `无法识别日期“${rawValue}”，新岗位将留空，已有岗位保留原值。`,
+        rowNumber: args.rowNumber,
+      });
+    }
+  }
+  if (args.rawPriority && args.priority === undefined) {
+    warnings.push({
+      code: args.code,
+      field: HEADERS.priority,
+      message: `无法识别优先级“${args.rawPriority}”，新岗位使用 P0，已有岗位保留原值。`,
+      rowNumber: args.rowNumber,
+    });
+  }
+  return warnings;
+}
+
+function parseGoogleSheetJobRow(args: {
+  row: unknown[];
+  rowNumber: number;
+  code: string;
+  headerIndexes: Map<string, number>;
+}): {
+  record?: GoogleSheetJobRecord;
+  skipped?: JobDescriptionGoogleSheetsSyncSkippedRow;
+  warnings: JobDescriptionGoogleSheetsSyncWarning[];
+} {
+  const { row, rowNumber, code, headerIndexes } = args;
+  const name = cellText(row, headerIndexes.get(HEADERS.name));
+  const hiringUnitName = cellText(row, headerIndexes.get(HEADERS.hiringUnitName));
+  const rawDepartmentName = cellText(row, headerIndexes.get(HEADERS.departmentName));
+  const departmentSpecified = Boolean(rawDepartmentName);
+  const departmentName = rawDepartmentName || DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME;
+  // JD/prompt is optional on sheet sync; DB column is NOT NULL so store "".
+  const prompt = cellText(row, headerIndexes.get(HEADERS.prompt));
+  const missingRequired = findMissingRequiredFields([["岗位名称", name]]);
+  if (missingRequired.length > 0) {
+    return {
+      skipped: {
+        code,
+        reason: `缺少必填字段：${missingRequired.join("、")}。`,
+        rowNumber,
+      },
+      warnings: [],
+    };
+  }
+
+  const warnings: JobDescriptionGoogleSheetsSyncWarning[] = [];
+  if (!departmentSpecified) {
+    warnings.push({
+      code,
+      field: HEADERS.departmentName,
+      message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位保留本系统部门；编制组织仍按表格写入。`,
+      rowNumber,
+    });
+  }
+  if (!prompt) {
+    warnings.push({
+      code,
+      field: HEADERS.prompt,
+      message: "JD 为空，已按空岗位说明导入。",
+      rowNumber,
+    });
+  }
+
+  const rawRequestedDate = cellText(row, headerIndexes.get(HEADERS.requestedDate));
+  const requestedDate = normalizeDate(rawRequestedDate);
+  const rawExpectedOnboardDate = cellText(row, headerIndexes.get(HEADERS.expectedOnboardDate));
+  const expectedOnboardDate = normalizeDate(rawExpectedOnboardDate);
+  const rawPriority = cellText(row, headerIndexes.get(HEADERS.priority));
+  const priority = normalizePriority(rawPriority);
+  const counts = Object.fromEntries(
+    COUNT_FIELDS.map(([header, field]) => [
+      field,
+      normalizeCount(cellText(row, headerIndexes.get(header))),
+    ]),
+  ) as Pick<
+    GoogleSheetJobRecord,
+    "gapCount" | "headcount" | "offeredPendingOnboardCount" | "onboardedCount"
+  >;
+
+  warnings.push(
+    ...collectNormalizedValueWarnings({
+      code,
+      countFields: COUNT_FIELDS,
+      counts,
+      expectedOnboardDate,
+      headerIndexes,
+      priority,
+      rawExpectedOnboardDate,
+      rawPriority,
+      rawRequestedDate,
+      requestedDate,
+      row,
+      rowNumber,
+    }),
+  );
+
+  return {
+    record: {
+      ...counts,
+      code,
+      controlCategory: nullableText(cellText(row, headerIndexes.get(HEADERS.controlCategory))),
+      departmentName,
+      departmentSpecified,
+      expectedOnboardDate,
+      hiringUnitName,
+      jobLevel: nullableText(cellText(row, headerIndexes.get(HEADERS.jobLevel))),
+      jobSeries: nullableText(cellText(row, headerIndexes.get(HEADERS.jobSeries))),
+      name,
+      notes: nullableText(cellText(row, headerIndexes.get(HEADERS.notes))),
+      priority,
+      prompt,
+      recruitmentStatus: nullableText(cellText(row, headerIndexes.get(HEADERS.recruitmentStatus))),
+      requestedDate,
+      requester: nullableText(cellText(row, headerIndexes.get(HEADERS.requester))),
+      resumeContact: nullableText(cellText(row, headerIndexes.get(HEADERS.resumeContact))),
+      rowNumber,
+      salaryRangeRaw: nullableText(cellText(row, headerIndexes.get(HEADERS.salaryRangeRaw))),
+      serviceUnit: nullableText(cellText(row, headerIndexes.get(HEADERS.serviceUnit))),
+      sourceSheet: nullableText(cellText(row, headerIndexes.get(HEADERS.sourceSheet))),
+      workLocation: nullableText(cellText(row, headerIndexes.get(HEADERS.workLocation))),
+    },
+    warnings,
+  };
+}
+
 export function parseGoogleSheetJobRows(values: unknown[][]): {
   records: GoogleSheetJobRecord[];
   skipped: JobDescriptionGoogleSheetsSyncSkippedRow[];
@@ -235,118 +405,15 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
       continue;
     }
 
-    const name = cellText(row, headerIndexes.get(HEADERS.name));
-    const hiringUnitName = cellText(row, headerIndexes.get(HEADERS.hiringUnitName));
-    const rawDepartmentName = cellText(row, headerIndexes.get(HEADERS.departmentName));
-    const departmentSpecified = Boolean(rawDepartmentName);
-    const departmentName = rawDepartmentName || DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME;
-    // JD/prompt is optional on sheet sync; DB column is NOT NULL so store "".
-    const prompt = cellText(row, headerIndexes.get(HEADERS.prompt));
-    const missingRequired = findMissingRequiredFields([["岗位名称", name]]);
-    if (missingRequired.length > 0) {
-      skipped.push({
-        code,
-        reason: `缺少必填字段：${missingRequired.join("、")}。`,
-        rowNumber,
-      });
+    const parsed = parseGoogleSheetJobRow({ code, headerIndexes, row, rowNumber });
+    warnings.push(...parsed.warnings);
+    if (parsed.skipped) {
+      skipped.push(parsed.skipped);
       continue;
     }
-    if (!departmentSpecified) {
-      warnings.push({
-        code,
-        field: HEADERS.departmentName,
-        message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位保留本系统部门；编制组织仍按表格写入。`,
-        rowNumber,
-      });
+    if (parsed.record) {
+      records.push(parsed.record);
     }
-    if (!prompt) {
-      warnings.push({
-        code,
-        field: HEADERS.prompt,
-        message: "JD 为空，已按空岗位说明导入。",
-        rowNumber,
-      });
-    }
-
-    const rawRequestedDate = cellText(row, headerIndexes.get(HEADERS.requestedDate));
-    const requestedDate = normalizeDate(rawRequestedDate);
-    const rawExpectedOnboardDate = cellText(row, headerIndexes.get(HEADERS.expectedOnboardDate));
-    const expectedOnboardDate = normalizeDate(rawExpectedOnboardDate);
-    const rawPriority = cellText(row, headerIndexes.get(HEADERS.priority));
-    const priority = normalizePriority(rawPriority);
-    const countFields = [
-      [HEADERS.headcount, "headcount"],
-      [HEADERS.onboardedCount, "onboardedCount"],
-      [HEADERS.gapCount, "gapCount"],
-      [HEADERS.offeredPendingOnboardCount, "offeredPendingOnboardCount"],
-    ] as const;
-    const counts = Object.fromEntries(
-      countFields.map(([header, field]) => [
-        field,
-        normalizeCount(cellText(row, headerIndexes.get(header))),
-      ]),
-    ) as Pick<
-      GoogleSheetJobRecord,
-      "gapCount" | "headcount" | "offeredPendingOnboardCount" | "onboardedCount"
-    >;
-
-    for (const [header, field] of countFields) {
-      const rawValue = cellText(row, headerIndexes.get(header));
-      if (rawValue && counts[field] === undefined) {
-        warnings.push({
-          code,
-          field: header,
-          message: `无法识别整数“${rawValue}”，新岗位将留空，已有岗位保留原值。`,
-          rowNumber,
-        });
-      }
-    }
-    for (const [header, rawValue, normalizedValue] of [
-      [HEADERS.requestedDate, rawRequestedDate, requestedDate],
-      [HEADERS.expectedOnboardDate, rawExpectedOnboardDate, expectedOnboardDate],
-    ] as const) {
-      if (rawValue && normalizedValue === undefined) {
-        warnings.push({
-          code,
-          field: header,
-          message: `无法识别日期“${rawValue}”，新岗位将留空，已有岗位保留原值。`,
-          rowNumber,
-        });
-      }
-    }
-    if (rawPriority && priority === undefined) {
-      warnings.push({
-        code,
-        field: HEADERS.priority,
-        message: `无法识别优先级“${rawPriority}”，新岗位使用 P0，已有岗位保留原值。`,
-        rowNumber,
-      });
-    }
-
-    records.push({
-      ...counts,
-      code,
-      controlCategory: nullableText(cellText(row, headerIndexes.get(HEADERS.controlCategory))),
-      departmentName,
-      departmentSpecified,
-      expectedOnboardDate,
-      hiringUnitName,
-      jobLevel: nullableText(cellText(row, headerIndexes.get(HEADERS.jobLevel))),
-      jobSeries: nullableText(cellText(row, headerIndexes.get(HEADERS.jobSeries))),
-      name,
-      notes: nullableText(cellText(row, headerIndexes.get(HEADERS.notes))),
-      priority,
-      prompt,
-      recruitmentStatus: nullableText(cellText(row, headerIndexes.get(HEADERS.recruitmentStatus))),
-      requestedDate,
-      requester: nullableText(cellText(row, headerIndexes.get(HEADERS.requester))),
-      resumeContact: nullableText(cellText(row, headerIndexes.get(HEADERS.resumeContact))),
-      rowNumber,
-      salaryRangeRaw: nullableText(cellText(row, headerIndexes.get(HEADERS.salaryRangeRaw))),
-      serviceUnit: nullableText(cellText(row, headerIndexes.get(HEADERS.serviceUnit))),
-      sourceSheet: nullableText(cellText(row, headerIndexes.get(HEADERS.sourceSheet))),
-      workLocation: nullableText(cellText(row, headerIndexes.get(HEADERS.workLocation))),
-    });
   }
 
   return { records, skipped, warnings };

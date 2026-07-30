@@ -375,7 +375,7 @@ export function describeResumeProgress(record: {
   if (pipelineStage === "closed") {
     switch (outcome) {
       case "hired": {
-        return { label: "已结案 · 已录用", tone: "success" };
+        return { label: "已结案 · 已到岗", tone: "success" };
       }
       case "rejected": {
         return { label: "已结案 · 已淘汰", tone: "outline" };
