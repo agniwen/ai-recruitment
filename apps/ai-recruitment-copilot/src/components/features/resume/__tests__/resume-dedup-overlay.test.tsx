@@ -90,5 +90,16 @@ describe("ResumeDuplicateMatchesDialog", () => {
       expect(avatar.className).toContain("size-4");
       expect(avatar.dataset.size).toBe("default");
     }
+
+    const detailButton = [...document.querySelectorAll("button")].find(
+      (element) => element.textContent === "查看",
+    );
+    const resumeButton = [...document.querySelectorAll("button")].find(
+      (element) => element.textContent === "简历",
+    );
+    expect(detailButton?.className).toContain("hidden");
+    expect(detailButton?.className).toContain("lg:inline-flex");
+    expect(resumeButton?.className).toContain("hidden");
+    expect(resumeButton?.className).toContain("lg:inline-flex");
   });
 });

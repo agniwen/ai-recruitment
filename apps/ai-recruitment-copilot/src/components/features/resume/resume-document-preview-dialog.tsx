@@ -17,6 +17,11 @@ const PdfPreviewDialog = lazy(async () => {
   return { default: mod.PdfPreviewDialog };
 });
 
+const PdfPreviewContent = lazy(async () => {
+  const mod = await import("@/components/features/pdf/pdf-preview-dialog");
+  return { default: mod.PdfPreviewContent };
+});
+
 export interface ResumeDocumentPreviewDialogProps {
   kind: ResumeDocumentPreviewKind;
   open: boolean;
@@ -172,6 +177,67 @@ export function ImageResumePreviewContent({ filename, url }: { filename?: string
         />
       ) : null}
     </div>
+  );
+}
+
+export function ResumeDocumentPreviewPane({
+  filename,
+  kind,
+  url,
+}: {
+  kind: ResumeDocumentPreviewKind;
+  url: string;
+  filename?: string;
+}) {
+  const [isDark, setIsDark] = useState(false);
+
+  if (kind === "pdf") {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center gap-2 text-muted-foreground text-sm">
+            <IconLoader2 className="animate-spin" />
+            正在加载 PDF
+          </div>
+        }
+      >
+        <PdfPreviewContent className="h-full" filename={filename} url={url} />
+      </Suspense>
+    );
+  }
+
+  if (kind === "image") {
+    return (
+      <div className="h-full overflow-auto">
+        <ImageResumePreviewContent filename={filename} url={url} />
+      </div>
+    );
+  }
+
+  if (kind === "docx") {
+    return (
+      <DocxViewerPreview
+        className="h-full"
+        fileName={filename}
+        isDark={isDark}
+        onIsDarkChange={setIsDark}
+        showDownload={false}
+        showUpload={false}
+        src={url}
+      />
+    );
+  }
+
+  return (
+    <XlsxViewerPreview
+      className="h-full"
+      fileName={filename}
+      isDark={isDark}
+      onIsDarkChange={setIsDark}
+      showDownload={false}
+      showUpload={false}
+      src={url}
+    />
   );
 }
 

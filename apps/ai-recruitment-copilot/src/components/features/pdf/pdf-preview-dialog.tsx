@@ -15,6 +15,44 @@ export interface PdfPreviewDialogProps {
   downloadUrl?: string;
 }
 
+export function PdfPreviewContent({
+  className,
+  filename,
+  onActivePageChange,
+  onDocumentLoadSuccess,
+  url,
+}: {
+  url: string;
+  className?: string;
+  filename?: string;
+  onActivePageChange?: (page: number) => void;
+  onDocumentLoadSuccess?: (pages: number) => void;
+}) {
+  const documentOptions = useMemo(
+    () => ({
+      cMapPacked: true,
+      cMapUrl: "https://unpkg.com/pdfjs-dist@5.4.296/cmaps/",
+      standardFontDataUrl: "https://unpkg.com/pdfjs-dist@5.4.296/standard_fonts/",
+    }),
+    [],
+  );
+
+  return (
+    <PDFViewer
+      className={className}
+      defaultThumbnailSidebarOpen
+      defaultZoom={1}
+      documentOptions={documentOptions}
+      downloadFileName={filename ?? "resume.pdf"}
+      file={url}
+      onActivePageChange={onActivePageChange}
+      onDocumentLoadSuccess={onDocumentLoadSuccess}
+      showDownload={false}
+      showUpload={false}
+    />
+  );
+}
+
 export function PdfPreviewDialog({
   open,
   onOpenChange,
@@ -25,15 +63,6 @@ export function PdfPreviewDialog({
 }: PdfPreviewDialogProps) {
   const [numPages, setNumPages] = useState(0);
   const [activePage, setActivePage] = useState(1);
-
-  const documentOptions = useMemo(
-    () => ({
-      cMapPacked: true,
-      cMapUrl: "https://unpkg.com/pdfjs-dist@5.4.296/cmaps/",
-      standardFontDataUrl: "https://unpkg.com/pdfjs-dist@5.4.296/standard_fonts/",
-    }),
-    [],
-  );
 
   const pageCountLabel = numPages ? `第 ${activePage} / ${numPages} 页` : "加载中…";
   const resolvedDownloadFileName = downloadFileName ?? filename ?? "resume.pdf";
@@ -79,17 +108,12 @@ export function PdfPreviewDialog({
         </div>
       }
     >
-      <PDFViewer
+      <PdfPreviewContent
         className="h-full"
-        defaultThumbnailSidebarOpen
-        defaultZoom={1}
-        documentOptions={documentOptions}
-        downloadFileName={resolvedDownloadFileName}
-        file={url}
+        filename={resolvedDownloadFileName}
         onActivePageChange={setActivePage}
         onDocumentLoadSuccess={setNumPages}
-        showDownload={false}
-        showUpload={false}
+        url={url}
       />
     </Modal>
   );

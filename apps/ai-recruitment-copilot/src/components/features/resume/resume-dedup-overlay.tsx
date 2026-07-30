@@ -15,7 +15,7 @@ import {
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import type { DedupMatchRecord, DedupSourceCandidate } from "@/lib/client/api";
 import { formatDate } from "@arc/shared/utils/time";
 import { cn } from "@arc/shared/utils";
@@ -40,6 +40,11 @@ const LEVEL_META: Record<
 };
 
 const SKILLS_PREVIEW_LIMIT = 8;
+
+const ResumeComparisonDialog = lazy(async () => {
+  const mod = await import("@/components/features/resume/resume-comparison-dialog");
+  return { default: mod.ResumeComparisonDialog };
+});
 
 function formatCreatedAt(value: string) {
   return formatDate(value);
@@ -333,9 +338,11 @@ function SourceCandidatePanel({ source }: { source: DedupSourceCandidate }) {
 function MatchCandidateRow({
   match,
   onOpenDetail,
+  onOpenResume,
 }: {
   match: DedupMatchRecord;
   onOpenDetail: (match: DedupMatchRecord) => void;
+  onOpenResume?: (match: DedupMatchRecord) => void;
 }) {
   const statusLabel = match.status === "active" ? "有效" : "已归档";
   return (
@@ -362,15 +369,28 @@ function MatchCandidateRow({
             </span>
           </div>
         </div>
-        <Button
-          className="shrink-0"
-          onClick={() => onOpenDetail(match)}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          查看
-        </Button>
+        <div className="hidden shrink-0 items-center gap-1 lg:flex">
+          <Button
+            className="hidden lg:inline-flex"
+            onClick={() => onOpenDetail(match)}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            查看
+          </Button>
+          {onOpenResume ? (
+            <Button
+              className="hidden lg:inline-flex"
+              onClick={() => onOpenResume(match)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              简历
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-2 min-w-0">
@@ -394,16 +414,26 @@ function MatchCandidateRow({
 export function ResumeDedupMatchList({
   matches,
   className,
+  source,
 }: {
   matches: DedupMatchRecord[];
   className?: string;
+  source?: DedupSourceCandidate | null;
 }) {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
   const [poolDetailOpen, setPoolDetailOpen] = useState(false);
   const [poolDetailRecordId, setPoolDetailRecordId] = useState<string | null>(null);
+  const [comparison, setComparison] = useState<{
+    match: DedupMatchRecord;
+    mode: "details" | "documents";
+  } | null>(null);
 
   function openDetail(match: DedupMatchRecord) {
+    if (source) {
+      setComparison({ match, mode: "details" });
+      return;
+    }
     if (match.sourceType === "resume_pool_item") {
       setPoolDetailRecordId(match.id);
       setPoolDetailOpen(true);
@@ -413,11 +443,22 @@ export function ResumeDedupMatchList({
     setDetailOpen(true);
   }
 
+  function openResume(match: DedupMatchRecord) {
+    if (source) {
+      setComparison({ match, mode: "documents" });
+    }
+  }
+
   return (
     <>
       <div className={cn("min-h-0 divide-y overflow-y-auto", className)}>
         {matches.map((match) => (
-          <MatchCandidateRow key={match.id} match={match} onOpenDetail={openDetail} />
+          <MatchCandidateRow
+            key={match.id}
+            match={match}
+            onOpenDetail={openDetail}
+            onOpenResume={source ? openResume : undefined}
+          />
         ))}
       </div>
 
@@ -437,6 +478,21 @@ export function ResumeDedupMatchList({
         open={poolDetailOpen}
         recordId={poolDetailRecordId}
       />
+      {source && comparison ? (
+        <Suspense fallback={null}>
+          <ResumeComparisonDialog
+            current={source}
+            mode={comparison.mode}
+            onOpenChange={(open) => {
+              if (!open) {
+                setComparison(null);
+              }
+            }}
+            open
+            suspected={comparison.match}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
@@ -491,7 +547,7 @@ export function ResumeDuplicateMatchesDialog({
           </div>
 
           {matches.length > 0 ? (
-            <ResumeDedupMatchList className="min-h-0 flex-1" matches={matches} />
+            <ResumeDedupMatchList className="min-h-0 flex-1" matches={matches} source={source} />
           ) : (
             <p className="py-10 text-center text-muted-foreground text-sm">暂无疑似重复简历</p>
           )}

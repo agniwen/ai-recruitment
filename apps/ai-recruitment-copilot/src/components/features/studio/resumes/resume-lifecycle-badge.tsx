@@ -2,6 +2,7 @@
 
 import type { ButtonHTMLAttributes } from "react";
 import { IconChevronRight as ChevronRightIcon } from "@tabler/icons-react";
+import { resumeBadgeShapeClass } from "@/components/features/resume/resume-badge-styles";
 import { badgeVariants } from "@/components/ui/badge";
 import { cn } from "@arc/shared/utils";
 
@@ -43,7 +44,8 @@ export function ResumeLifecycleBadge({
       aria-label={accessibleLabel}
       className={cn(
         badgeVariants({ variant: tone }),
-        "group/lifecycle max-w-full justify-start gap-1.5 px-2.5 py-1 pr-1.5 text-left font-normal",
+        "group/lifecycle max-w-full justify-start gap-1.5 pr-1.5 text-left",
+        resumeBadgeShapeClass,
         "duration-200 hover:ring-2 focus-visible:outline-none",
         lifecycleHoverRingClass[tone],
         className,
