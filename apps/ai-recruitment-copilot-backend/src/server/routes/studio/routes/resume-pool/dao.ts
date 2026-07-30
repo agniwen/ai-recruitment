@@ -560,19 +560,22 @@ export async function loadResumePoolItem(
     | { userId?: never; visibilityScope: RecruitingVisibilityScope }
   ),
 ): Promise<ResumePoolDetail | null> {
-  const row = input.visibilityScope
-    ? await loadVisiblePoolItem({
-        organizationId: input.organizationId,
-        poolItemId: input.poolItemId,
-        visibilityScope: input.visibilityScope,
-      })
-    : input.userId
-      ? await loadAccessiblePoolItem({
-          organizationId: input.organizationId,
-          poolItemId: input.poolItemId,
-          userId: input.userId,
-        })
-      : null;
+  let row: PoolRow | null;
+  if (input.visibilityScope) {
+    row = await loadVisiblePoolItem({
+      organizationId: input.organizationId,
+      poolItemId: input.poolItemId,
+      visibilityScope: input.visibilityScope,
+    });
+  } else if (input.userId) {
+    row = await loadAccessiblePoolItem({
+      organizationId: input.organizationId,
+      poolItemId: input.poolItemId,
+      userId: input.userId,
+    });
+  } else {
+    row = null;
+  }
   if (!row) {
     return null;
   }

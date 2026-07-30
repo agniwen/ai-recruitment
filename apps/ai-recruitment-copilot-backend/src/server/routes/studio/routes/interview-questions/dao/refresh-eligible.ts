@@ -106,6 +106,22 @@ async function refreshOneCandidate(
     now: Date;
   },
 ): Promise<"refreshed" | "noop"> {
+  const [stillEligible] = await tx
+    .select({ id: studioInterview.id })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, options.interviewRecordId),
+        eq(studioInterview.organizationId, options.organizationId),
+        sql`${studioInterview.pipelineStage} <> 'closed'`,
+        neverStartedInterviewCondition(),
+      ),
+    )
+    .limit(1);
+  if (!stillEligible) {
+    return "noop";
+  }
+
   const latest = await resolveOrCreateInterviewQuestionTemplateVersion(tx, options.templateId);
 
   const [binding] = await tx

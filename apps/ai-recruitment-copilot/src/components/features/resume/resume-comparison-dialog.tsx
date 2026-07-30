@@ -16,6 +16,7 @@ import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from "@/compo
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { fetchResumePoolItem, fetchStudioResume } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { getResumeDocumentKind } from "@arc/shared/resume-documents";
@@ -61,10 +62,13 @@ function comparisonSourceAdapter(candidate: ResumeComparisonCandidate) {
   return comparisonSourceAdapters[normalizedSourceType(candidate.sourceType)];
 }
 
-function resumeUploaderName(detail: ResumeComparisonDetail) {
-  return "uploaderName" in detail
-    ? detail.uploaderName || detail.uploaderEmail
-    : detail.creatorName;
+function resumeUploader(detail: ResumeComparisonDetail) {
+  const name =
+    "uploaderName" in detail ? detail.uploaderName || detail.uploaderEmail : detail.creatorName;
+  return {
+    image: "uploaderImage" in detail ? detail.uploaderImage : detail.creatorImage,
+    name,
+  };
 }
 
 function resumeFileUrl(slug: string, candidate: ResumeComparisonCandidate) {
@@ -115,14 +119,12 @@ function DetailsPane({
 }) {
   const sourceLabel =
     normalizedSourceType(candidate.sourceType) === "resume_pool_item" ? "人才库" : "招聘台";
-  const statusLabel =
-    "status" in detail
-      ? detail.status === "active"
-        ? "有效"
-        : "已归档"
-      : detail.pipelineStage === "closed"
-        ? "已关闭"
-        : "招聘流程中";
+  let statusLabel: string;
+  if ("status" in detail) {
+    statusLabel = detail.status === "active" ? "有效" : "已归档";
+  } else {
+    statusLabel = detail.pipelineStage === "closed" ? "已关闭" : "招聘流程中";
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
@@ -192,6 +194,44 @@ function DocumentPane({
   );
 }
 
+function ComparisonContent({
+  candidate,
+  detail,
+  isError,
+  isLoading,
+  mode,
+  slug,
+}: {
+  candidate: ResumeComparisonCandidate;
+  detail: ResumeComparisonDetail | null | undefined;
+  isError: boolean;
+  isLoading: boolean;
+  mode: ResumeComparisonMode;
+  slug: string;
+}) {
+  if (isError) {
+    return <ErrorPane />;
+  }
+  if (!isLoading && !detail) {
+    return (
+      <Empty className="h-full border-0">
+        <EmptyHeader>
+          <EmptyTitle>未找到简历</EmptyTitle>
+          <EmptyDescription>这条记录可能已被删除或超出当前访问范围。</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+  if (!detail) {
+    return <LoadingPane />;
+  }
+  return mode === "details" ? (
+    <DetailsPane candidate={candidate} detail={detail} />
+  ) : (
+    <DocumentPane candidate={candidate} detail={detail} slug={slug} />
+  );
+}
+
 function ComparisonCard({
   candidate,
   detail,
@@ -209,26 +249,7 @@ function ComparisonCard({
   mode: ResumeComparisonMode;
   slug: string;
 }) {
-  let content = <LoadingPane />;
-  if (isError) {
-    content = <ErrorPane />;
-  } else if (!isLoading && !detail) {
-    content = (
-      <Empty className="h-full border-0">
-        <EmptyHeader>
-          <EmptyTitle>未找到简历</EmptyTitle>
-          <EmptyDescription>这条记录可能已被删除或超出当前访问范围。</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  } else if (detail) {
-    content =
-      mode === "details" ? (
-        <DetailsPane candidate={candidate} detail={detail} />
-      ) : (
-        <DocumentPane candidate={candidate} detail={detail} slug={slug} />
-      );
-  }
+  const uploader = detail ? resumeUploader(detail) : null;
 
   return (
     <Card className="min-h-0 min-w-0 overflow-hidden">
@@ -243,7 +264,17 @@ function ComparisonCard({
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
               <span>
                 上传人：
-                <span className="text-foreground">{resumeUploaderName(detail) || "—"}</span>
+                <span className="inline-flex items-center gap-1 text-foreground">
+                  <Avatar className="size-4">
+                    {uploader?.image ? (
+                      <AvatarImage alt={uploader.name || "上传人"} src={uploader.image} />
+                    ) : null}
+                    <AvatarFallback className="text-[8px]">
+                      {uploader?.name?.slice(0, 1).toUpperCase() || "—"}
+                    </AvatarFallback>
+                  </Avatar>
+                  {uploader?.name || "—"}
+                </span>
               </span>
               <span className="inline-flex items-center">
                 上传时间：
@@ -276,7 +307,14 @@ function ComparisonCard({
             : "min-h-0 overflow-hidden bg-muted/30 p-0"
         }
       >
-        {content}
+        <ComparisonContent
+          candidate={candidate}
+          detail={detail}
+          isError={isError}
+          isLoading={isLoading}
+          mode={mode}
+          slug={slug}
+        />
       </CardPanel>
     </Card>
   );

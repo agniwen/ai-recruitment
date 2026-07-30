@@ -14,6 +14,8 @@ import {
   refreshInterviewContextSnapshot,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/context-snapshots";
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
  * Candidates whose AI interview rounds are all still pending (never started).
  */
@@ -45,6 +47,25 @@ function noSubmissionForTemplate(templateId: string) {
   );
 }
 
+function formScopeCondition(templateId: string, scope: "global" | "job_description") {
+  return scope === "global"
+    ? sql`true`
+    : exists(
+        db
+          .select({ one: sql`1` })
+          .from(candidateFormTemplateJobDescription)
+          .where(
+            and(
+              eq(candidateFormTemplateJobDescription.templateId, templateId),
+              eq(
+                candidateFormTemplateJobDescription.jobDescriptionId,
+                studioInterview.jobDescriptionId,
+              ),
+            ),
+          ),
+      );
+}
+
 /**
  * Eligible = has an active context snapshot (form content is frozen there),
  * has not submitted this form, has never started an AI interview round, and
@@ -58,24 +79,6 @@ async function listEligibleInterviewRecordIds(
   templateId: string,
   scope: "global" | "job_description",
 ): Promise<string[]> {
-  const scopeFilter =
-    scope === "global"
-      ? sql`true`
-      : exists(
-          db
-            .select({ one: sql`1` })
-            .from(candidateFormTemplateJobDescription)
-            .where(
-              and(
-                eq(candidateFormTemplateJobDescription.templateId, templateId),
-                eq(
-                  candidateFormTemplateJobDescription.jobDescriptionId,
-                  studioInterview.jobDescriptionId,
-                ),
-              ),
-            ),
-        );
-
   const rows = await db
     .selectDistinct({ id: studioInterview.id })
     .from(studioInterview)
@@ -92,11 +95,37 @@ async function listEligibleInterviewRecordIds(
         sql`${studioInterview.pipelineStage} <> 'closed'`,
         neverStartedInterviewCondition(),
         noSubmissionForTemplate(templateId),
-        scopeFilter,
+        formScopeCondition(templateId, scope),
       ),
     );
 
   return rows.map((row) => row.id);
+}
+
+async function isStillEligibleForFormRefresh(
+  tx: Tx,
+  input: {
+    interviewRecordId: string;
+    organizationId: string;
+    scope: "global" | "job_description";
+    templateId: string;
+  },
+): Promise<boolean> {
+  const [eligible] = await tx
+    .select({ id: studioInterview.id })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, input.interviewRecordId),
+        eq(studioInterview.organizationId, input.organizationId),
+        sql`${studioInterview.pipelineStage} <> 'closed'`,
+        neverStartedInterviewCondition(),
+        noSubmissionForTemplate(input.templateId),
+        formScopeCondition(input.templateId, input.scope),
+      ),
+    )
+    .limit(1);
+  return Boolean(eligible);
 }
 
 /**
@@ -137,6 +166,15 @@ export async function refreshEligibleCandidatesForFormTemplate(options: {
   const now = new Date();
   for (const interviewRecordId of interviewRecordIds) {
     const didRefresh = await db.transaction(async (tx) => {
+      const stillEligible = await isStillEligibleForFormRefresh(tx, {
+        interviewRecordId,
+        organizationId: options.organizationId,
+        scope: template.scope,
+        templateId: options.templateId,
+      });
+      if (!stillEligible) {
+        return false;
+      }
       const active = await loadActiveInterviewContextSnapshot(interviewRecordId);
       if (!active) {
         return false;

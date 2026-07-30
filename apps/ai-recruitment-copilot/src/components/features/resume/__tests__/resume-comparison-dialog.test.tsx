@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   enableReactActEnvironment,
@@ -29,6 +30,16 @@ vi.mock("@/lib/client/workspace-context", () => ({
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
+}));
+
+vi.mock("@/components/ui/avatar", () => ({
+  Avatar: ({ children }: { children: ReactNode }) => <div data-slot="avatar">{children}</div>,
+  AvatarFallback: ({ children }: { children: ReactNode }) => (
+    <span data-slot="avatar-fallback">{children}</span>
+  ),
+  AvatarImage: ({ alt, src }: { alt: string; src: string }) => (
+    <span aria-label={alt} data-slot="avatar-image" data-src={src} />
+  ),
 }));
 
 vi.mock("../resume-document-preview-dialog", () => ({
@@ -66,6 +77,7 @@ function detail(candidateName: string, resumeFileName: string | null) {
     candidateName,
     candidatePhone: "13800000000",
     createdAt: "2026-07-29T02:30:00.000Z",
+    creatorImage: "https://example.com/recruiter.png",
     creatorName: "招聘台上传人",
     hasResumeFile: true,
     jobDescriptionName: "产品经理",
@@ -82,6 +94,7 @@ async function renderComparison(mode: "details" | "documents") {
     createdAt: "2026-07-30T03:45:00.000Z",
     resumeStorageKey: "resumes/suspected.pdf",
     uploaderEmail: "pool-uploader@example.com",
+    uploaderImage: "https://example.com/pool-uploader.png",
     uploaderName: null,
   });
 
@@ -120,6 +133,11 @@ describe("ResumeComparisonDialog", () => {
     expect(document.body.textContent).toContain("疑似候选人@example.com");
     expect(document.body.textContent).toContain("招聘台上传人");
     expect(document.body.textContent).toContain("pool-uploader@example.com");
+    const uploaderImages = document.querySelectorAll<HTMLElement>('[data-slot="avatar-image"]');
+    expect([...uploaderImages].map((image) => image.dataset.src)).toEqual([
+      "https://example.com/recruiter.png",
+      "https://example.com/pool-uploader.png",
+    ]);
     expect(document.body.textContent).toContain("招聘台");
     expect(document.body.textContent).toContain("人才库");
     expect(document.body.textContent).toContain("招聘流程中");
