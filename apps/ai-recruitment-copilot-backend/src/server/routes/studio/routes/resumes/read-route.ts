@@ -241,6 +241,7 @@ export const resumeLibraryReadRouter = factory
       poolOwnerUserId: user.id,
       sourceId: id,
       sourceType: "studio_interview",
+      visibilityScope,
     });
     return c.json({ matches }, 200);
   })

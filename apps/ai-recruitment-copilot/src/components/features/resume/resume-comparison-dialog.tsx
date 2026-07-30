@@ -1,5 +1,6 @@
 "use client";
 
+import { IconDownload } from "@tabler/icons-react";
 import { useQueries } from "@tanstack/react-query";
 import type { ResumePoolDetail } from "@arc/shared/resume-pool";
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
@@ -10,12 +11,14 @@ import { ResumeDocumentPreviewPane } from "@/components/features/resume/resume-d
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
 import { EmptyValue } from "@/components/features/display/empty-value";
 import { TimeDisplay } from "@/components/features/display/time-display";
+import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardPanel, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { fetchResumePoolItem, fetchStudioResume } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { getResumeDocumentKind } from "@arc/shared/resume-documents";
 
 export type ResumeComparisonMode = "details" | "documents";
 
@@ -69,6 +72,11 @@ function resumeFileUrl(slug: string, candidate: ResumeComparisonCandidate) {
   return `/api/w/${slug}/studio/${collection}/${candidate.id}/resume`;
 }
 
+function resumePreviewUrl(slug: string, candidate: ResumeComparisonCandidate) {
+  const { collection } = comparisonSourceAdapter(candidate);
+  return `/api/w/${slug}/studio/${collection}/${candidate.id}/resume-preview.pdf`;
+}
+
 function FieldValue({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="min-w-0">
@@ -98,10 +106,29 @@ function ErrorPane() {
   );
 }
 
-function DetailsPane({ detail }: { detail: ResumeComparisonDetail }) {
+function DetailsPane({
+  candidate,
+  detail,
+}: {
+  candidate: ResumeComparisonCandidate;
+  detail: ResumeComparisonDetail;
+}) {
+  const sourceLabel =
+    normalizedSourceType(candidate.sourceType) === "resume_pool_item" ? "人才库" : "招聘台";
+  const statusLabel =
+    "status" in detail
+      ? (detail.status === "active"
+        ? "有效"
+        : "已归档")
+      : (detail.pipelineStage === "closed"
+        ? "已关闭"
+        : "招聘流程中");
+
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <dl className="grid grid-cols-2 gap-x-5 gap-y-3">
+        <FieldValue label="来源" value={sourceLabel} />
+        <FieldValue label="记录状态" value={statusLabel} />
         <FieldValue label="目标岗位" value={detail.targetRole} />
         <FieldValue label="关联岗位" value={detail.jobDescriptionName} />
         <FieldValue label="邮箱" value={detail.candidateEmail} />
@@ -133,16 +160,22 @@ function DocumentPane({
     );
   }
 
-  const previewKind = getPreviewableResumeDocumentKind({
-    fileName: detail.resumeFileName,
+  const documentKind = getResumeDocumentKind({
+    fileName: detail.resumeFileName ?? undefined,
   });
+  const previewKind =
+    documentKind === "pptx"
+      ? "pdf"
+      : getPreviewableResumeDocumentKind({
+          fileName: detail.resumeFileName,
+        });
 
   if (!previewKind) {
     return (
       <Empty className="h-full border-0">
         <EmptyHeader>
           <EmptyTitle>暂不支持预览</EmptyTitle>
-          <EmptyDescription>当前仅支持 PDF、DOCX、XLSX 和图片简历。</EmptyDescription>
+          <EmptyDescription>当前仅支持 PDF、DOCX、XLSX、PPTX 和图片简历。</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -152,7 +185,9 @@ function DocumentPane({
     <ResumeDocumentPreviewPane
       filename={detail.resumeFileName ?? undefined}
       kind={previewKind}
-      url={resumeFileUrl(slug, candidate)}
+      url={
+        documentKind === "pptx" ? resumePreviewUrl(slug, candidate) : resumeFileUrl(slug, candidate)
+      }
     />
   );
 }
@@ -189,7 +224,7 @@ function ComparisonCard({
   } else if (detail) {
     content =
       mode === "details" ? (
-        <DetailsPane detail={detail} />
+        <DetailsPane candidate={candidate} detail={detail} />
       ) : (
         <DocumentPane candidate={candidate} detail={detail} slug={slug} />
       );
@@ -204,15 +239,33 @@ function ComparisonCard({
           {detail?.resumeFileName ? ` · ${detail.resumeFileName}` : ""}
         </CardDescription>
         {detail ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
-            <span>
-              上传人：
-              <span className="text-foreground">{resumeUploaderName(detail) || "—"}</span>
-            </span>
-            <span className="inline-flex items-center">
-              上传时间：
-              <TimeDisplay className="text-foreground" value={detail.createdAt} />
-            </span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
+              <span>
+                上传人：
+                <span className="text-foreground">{resumeUploaderName(detail) || "—"}</span>
+              </span>
+              <span className="inline-flex items-center">
+                上传时间：
+                <TimeDisplay className="text-foreground" value={detail.createdAt} />
+              </span>
+            </div>
+            {mode === "documents" && comparisonSourceAdapter(candidate).hasResumeFile(detail) ? (
+              <Button
+                nativeButton={false}
+                render={
+                  <a
+                    download={detail.resumeFileName ?? undefined}
+                    href={resumeFileUrl(slug, candidate)}
+                  >
+                    <IconDownload />
+                    下载
+                  </a>
+                }
+                size="xs"
+                variant="outline"
+              />
+            ) : null}
           </div>
         ) : null}
       </CardHeader>

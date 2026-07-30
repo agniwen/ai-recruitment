@@ -313,6 +313,10 @@ describe("resume pool private uploader visibility", () => {
       poolOwnerUserId: "subordinate-user",
       sourceId: "subordinate-item",
       sourceType: "resume_pool_item",
+      visibilityScope: {
+        kind: "restricted",
+        userIds: [USER_ID, "subordinate-user"],
+      },
     });
   });
 
