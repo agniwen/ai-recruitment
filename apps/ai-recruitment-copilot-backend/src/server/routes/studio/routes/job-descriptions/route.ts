@@ -126,13 +126,17 @@ function isJobCodeConflict(error: unknown): boolean {
 }
 
 const jobDescriptionListQuerySchema = z.object({
+  code: z.string().optional(),
   departmentId: z.string().optional(),
+  googleSheetStatus: z.string().optional(),
   interviewerId: z.string().optional(),
   page: z.string().optional(),
   pageSize: z.string().optional(),
+  recruitmentStatus: z.string().optional(),
   search: z.string().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
+  sourceSheet: z.string().optional(),
 });
 
 const recommendationBodySchema = z.object({
@@ -187,9 +191,13 @@ export const jobDescriptionsRouter = factory
         activeOrg.id,
         {
           actorUserId: c.var.user?.id,
+          code: q.code,
           departmentId: q.departmentId,
+          googleSheetStatus: q.googleSheetStatus,
           interviewerId: q.interviewerId,
+          recruitmentStatus: q.recruitmentStatus,
           search: q.search,
+          sourceSheet: q.sourceSheet,
         },
         {
           page: q.page,

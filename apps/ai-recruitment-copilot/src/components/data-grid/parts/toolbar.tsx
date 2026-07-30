@@ -119,7 +119,7 @@ export function Toolbar(props: ToolbarProps) {
     <div className="flex flex-wrap items-start gap-3" data-slot="data-grid-toolbar">
       {hasFilters || hasFiltersExtra ? (
         <div
-          className="grid w-full min-w-0 grid-cols-2 gap-3 sm:flex sm:w-auto sm:flex-wrap sm:items-center"
+          className="grid w-full min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 lg:w-auto lg:flex-1 lg:grid-cols-4"
           data-slot="data-grid-toolbar-filters"
         >
           {filters?.map((filter) => {
@@ -127,7 +127,7 @@ export function Toolbar(props: ToolbarProps) {
             if (filter.type === "search") {
               return (
                 <DebouncedSearchInput
-                  className="relative min-w-0 sm:min-w-(--data-grid-filter-min-width)"
+                  className="relative w-full min-w-0"
                   key={filter.key}
                   loading={searchLoading}
                   onValueChange={(next) => onFilterChange?.(filter.key, next)}
@@ -157,7 +157,7 @@ export function Toolbar(props: ToolbarProps) {
                     <TooltipTrigger
                       render={
                         // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- disabled controls cannot receive focus; the wrapper exposes the reason to keyboard users.
-                        <span className="min-w-0 sm:w-auto sm:min-w-45" tabIndex={0}>
+                        <span className="block w-full min-w-0" tabIndex={0}>
                           {selectControl}
                         </span>
                       }
@@ -167,14 +167,14 @@ export function Toolbar(props: ToolbarProps) {
                 );
               }
               return (
-                <div className="min-w-0 sm:w-auto sm:min-w-45" key={filter.key}>
+                <div className="w-full min-w-0" key={filter.key}>
                   {selectControl}
                 </div>
               );
             }
             // multi-select
             return (
-              <div className="min-w-0 sm:w-auto sm:min-w-45" key={filter.key}>
+              <div className="w-full min-w-0" key={filter.key}>
                 <SearchableMultiSelect
                   emptyMessage={filter.emptyMessage ?? "没有匹配项"}
                   onChange={(next) => onFilterChange?.(filter.key, arrayToCsv(next))}
@@ -192,9 +192,7 @@ export function Toolbar(props: ToolbarProps) {
           {filtersExtra ? (
             // Full-width only for text/select-like controls on mobile; keep
             // icon-only buttons square (same size-9 as refresh / reset).
-            <div className="min-w-0 [&>button:not([data-size=icon])]:w-full sm:w-auto sm:[&>button:not([data-size=icon])]:w-auto">
-              {filtersExtra}
-            </div>
+            <div className="min-w-0 [&>button:not([data-size=icon])]:w-full">{filtersExtra}</div>
           ) : null}
         </div>
       ) : null}

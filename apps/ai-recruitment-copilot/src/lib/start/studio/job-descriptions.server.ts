@@ -7,6 +7,7 @@ import { listAllDepartments } from "@arc/ai-recruitment-copilot-backend/server/r
 import { listAllInterviewers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviewers/dao";
 import {
   listJobDescriptions,
+  loadJobDescriptionFilterOptions,
   loadJobDescriptionMetrics,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import type { JobDescriptionFilters } from "./job-descriptions.functions";
@@ -23,19 +24,24 @@ export async function loadStudioJobDescriptionsData({
   workspaceId: string;
 }) {
   const queryClient = createQueryClient();
-  const [departments, interviewers, metrics] = await Promise.all([
+  const [departments, interviewers, metrics, filterOptions] = await Promise.all([
     listAllDepartments(workspaceId, { actorUserId }),
     listAllInterviewers(workspaceId, { actorUserId }),
     loadJobDescriptionMetrics(workspaceId, { actorUserId }),
+    loadJobDescriptionFilterOptions(workspaceId, { actorUserId }),
     queryClient.prefetchQuery({
       queryFn: () =>
         listJobDescriptions(
           workspaceId,
           {
             actorUserId,
+            code: query.filters.code,
             departmentId: query.filters.departmentId,
+            googleSheetStatus: query.filters.googleSheetStatus,
             interviewerId: query.filters.interviewerId,
+            recruitmentStatus: query.filters.recruitmentStatus,
             search: query.search,
+            sourceSheet: query.filters.sourceSheet,
           },
           {
             page: query.page,
@@ -53,5 +59,6 @@ export async function loadStudioJobDescriptionsData({
     departments,
     interviewers,
     metrics,
+    ...filterOptions,
   };
 }

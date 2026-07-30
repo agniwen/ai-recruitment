@@ -10,10 +10,9 @@ import {
 } from "@arc/shared/resume-screening";
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
 import type { SQL } from "drizzle-orm";
-import { and, asc, count, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "lodash-es";
-import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   buildOrderBy,
@@ -39,15 +38,14 @@ import {
   resolveDepartmentHiringUnitScopeCondition,
   resolveJobDescriptionHiringUnitScopeCondition,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import { parseJobDescriptionListFilters } from "./utils/job-description-list-filters";
+import type {
+  JobDescriptionGoogleSheetStatusFilter,
+  JobDescriptionListFilterInput,
+} from "./utils/job-description-list-filters";
 
 const jobHiringUnit = alias(hiringUnit, "job_description_hiring_unit");
 const departmentHiringUnit = alias(hiringUnit, "job_description_department_hiring_unit");
-
-const jobDescriptionListFiltersSchema = z.object({
-  departmentId: z.string().trim().max(120).optional().nullable(),
-  interviewerId: z.string().trim().max(120).optional().nullable(),
-  search: z.string().trim().max(120).optional().nullable(),
-});
 
 const SORT_COLUMNS = ["createdAt", "name", "updatedAt"] as const;
 type SortColumn = (typeof SORT_COLUMNS)[number];
@@ -69,22 +67,56 @@ function parseResumeScreeningPolicy(value: unknown) {
   return parsedPolicy.success ? parsedPolicy.data : createDefaultResumeScreeningPolicy();
 }
 
+function buildGoogleSheetStatusCondition(
+  statuses: JobDescriptionGoogleSheetStatusFilter[] | undefined,
+) {
+  if (!statuses || statuses.length === 0) {
+    return;
+  }
+  return or(
+    statuses.includes("active") ? eq(jobDescription.googleSheetDeleted, false) : undefined,
+    statuses.includes("deleted") ? eq(jobDescription.googleSheetDeleted, true) : undefined,
+    statuses.includes("unlinked") ? isNull(jobDescription.googleSheetDeleted) : undefined,
+  );
+}
+
 function buildWhereConditions({
+  code,
+  googleSheetStatuses,
   organizationId,
+  recruitmentStatuses,
   search,
+  sourceSheet,
   departmentIds,
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
 }: {
+  code?: string;
+  googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
+  recruitmentStatuses?: string[];
   search?: string;
+  sourceSheet?: string;
   departmentIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
 }) {
   const conditions: SQL[] = [eq(jobDescription.organizationId, organizationId)];
+  if (code) {
+    conditions.push(ilike(jobDescription.code, `%${code}%`));
+  }
+  if (sourceSheet) {
+    conditions.push(eq(jobDescription.sourceSheet, sourceSheet));
+  }
+  if (recruitmentStatuses && recruitmentStatuses.length > 0) {
+    conditions.push(inArray(jobDescription.recruitmentStatus, recruitmentStatuses));
+  }
+  const googleSheetStatusCondition = buildGoogleSheetStatusCondition(googleSheetStatuses);
+  if (googleSheetStatusCondition) {
+    conditions.push(googleSheetStatusCondition);
+  }
   if (search) {
     const searchCond = or(
       ilike(jobDescription.name, `%${search}%`),
@@ -133,8 +165,12 @@ async function resolveJdIdsForInterviewers(
 }
 
 function listJobDescriptionRows({
+  code,
+  googleSheetStatuses,
   organizationId,
+  recruitmentStatuses,
   search,
+  sourceSheet,
   departmentIds,
   interviewerIds,
   jdIdsForInterviewers,
@@ -144,8 +180,12 @@ function listJobDescriptionRows({
   limit,
   offset,
 }: {
+  code?: string;
+  googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
+  recruitmentStatuses?: string[];
   search?: string;
+  sourceSheet?: string;
   departmentIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
@@ -156,12 +196,16 @@ function listJobDescriptionRows({
   offset?: number;
 }) {
   const where = buildWhereConditions({
+    code,
     departmentIds,
+    googleSheetStatuses,
     interviewerIds,
     jdIdsForInterviewers,
     organizationId,
+    recruitmentStatuses,
     scopeCondition,
     search,
+    sourceSheet,
   });
 
   let query = db
@@ -232,27 +276,39 @@ function listJobDescriptionRows({
 }
 
 async function countJobDescriptionRows({
+  code,
+  googleSheetStatuses,
   organizationId,
+  recruitmentStatuses,
   search,
+  sourceSheet,
   departmentIds,
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
 }: {
+  code?: string;
+  googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
+  recruitmentStatuses?: string[];
   search?: string;
+  sourceSheet?: string;
   departmentIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
 }) {
   const where = buildWhereConditions({
+    code,
     departmentIds,
+    googleSheetStatuses,
     interviewerIds,
     jdIdsForInterviewers,
     organizationId,
+    recruitmentStatuses,
     scopeCondition,
     search,
+    sourceSheet,
   });
   const [result] = await db
     .select({ count: count() })
@@ -417,35 +473,6 @@ function toJobDescriptionListRecord(
   };
 }
 
-// 多选过滤器在 URL/state 层用 CSV 字符串编码。后端这里把 CSV 切回 ID 数组。
-// / Multi-select filters arrive as a comma-separated string; split into ids here.
-function csvToIds(value?: string | null): string[] | undefined {
-  if (!value) {
-    return;
-  }
-  const ids = value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return ids.length > 0 ? ids : undefined;
-}
-
-function parseFilters(filters?: {
-  search?: string | null;
-  departmentId?: string | null;
-  interviewerId?: string | null;
-}) {
-  const parsed = jobDescriptionListFiltersSchema.safeParse(filters ?? {});
-  if (!parsed.success) {
-    return { departmentIds: undefined, interviewerIds: undefined, search: undefined };
-  }
-  return {
-    departmentIds: csvToIds(parsed.data.departmentId),
-    interviewerIds: csvToIds(parsed.data.interviewerId),
-    search: parsed.data.search?.trim() || undefined,
-  };
-}
-
 export function parseJobDescriptionPagination(
   params?: Record<string, unknown>,
 ): JobDescriptionPaginationParams {
@@ -454,15 +481,18 @@ export function parseJobDescriptionPagination(
 
 export async function queryPaginatedJobDescriptions(
   organizationId: string,
-  filters?: {
-    search?: string | null;
-    departmentId?: string | null;
-    interviewerId?: string | null;
-    actorUserId?: string | null;
-  },
+  filters?: JobDescriptionListFilterInput & { actorUserId?: string | null },
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedJobDescriptionResult> {
-  const { search, departmentIds, interviewerIds } = parseFilters(filters);
+  const {
+    code,
+    departmentIds,
+    googleSheetStatuses,
+    interviewerIds,
+    recruitmentStatuses,
+    search,
+    sourceSheet,
+  } = parseJobDescriptionListFilters(filters);
   const { page, pageSize, sortBy, sortOrder } = parseJobDescriptionPagination(pagination);
   const offset = (page - 1) * pageSize;
   const jdIdsForInterviewers = await resolveJdIdsForInterviewers(organizationId, interviewerIds);
@@ -473,24 +503,32 @@ export async function queryPaginatedJobDescriptions(
 
   const [records, total] = await Promise.all([
     listJobDescriptionRows({
+      code,
       departmentIds,
+      googleSheetStatuses,
       interviewerIds,
       jdIdsForInterviewers,
       limit: pageSize,
       offset,
       organizationId,
+      recruitmentStatuses,
       scopeCondition,
       search,
       sortBy,
       sortOrder,
+      sourceSheet,
     }),
     countJobDescriptionRows({
+      code,
       departmentIds,
+      googleSheetStatuses,
       interviewerIds,
       jdIdsForInterviewers,
       organizationId,
+      recruitmentStatuses,
       scopeCondition,
       search,
+      sourceSheet,
     }),
   ]);
 
@@ -519,15 +557,54 @@ export async function queryPaginatedJobDescriptions(
 
 export function listJobDescriptions(
   organizationId: string,
-  filters?: {
-    search?: string | null;
-    departmentId?: string | null;
-    interviewerId?: string | null;
-    actorUserId?: string | null;
-  },
+  filters?: JobDescriptionListFilterInput & { actorUserId?: string | null },
   pagination?: Record<string, unknown>,
 ) {
   return queryPaginatedJobDescriptions(organizationId, filters, pagination);
+}
+
+export async function loadJobDescriptionFilterOptions(
+  organizationId: string,
+  options?: { actorUserId?: string | null },
+) {
+  const scopeCondition = await resolveJobDescriptionHiringUnitScopeCondition({
+    actorUserId: options?.actorUserId,
+    organizationId,
+  });
+  const [row] = await db
+    .select({
+      recruitmentStatuses: sql<string[]>`
+        coalesce(
+          array_agg(
+            distinct ${jobDescription.recruitmentStatus}
+            order by ${jobDescription.recruitmentStatus}
+          ) filter (
+            where ${jobDescription.recruitmentStatus} is not null
+              and btrim(${jobDescription.recruitmentStatus}) <> ''
+          ),
+          '{}'::text[]
+        )
+      `,
+      sourceSheets: sql<string[]>`
+        coalesce(
+          array_agg(
+            distinct ${jobDescription.sourceSheet}
+            order by ${jobDescription.sourceSheet}
+          ) filter (
+            where ${jobDescription.sourceSheet} is not null
+              and btrim(${jobDescription.sourceSheet}) <> ''
+          ),
+          '{}'::text[]
+        )
+      `,
+    })
+    .from(jobDescription)
+    .leftJoin(department, eq(jobDescription.departmentId, department.id))
+    .where(and(eq(jobDescription.organizationId, organizationId), scopeCondition));
+  return {
+    recruitmentStatuses: row?.recruitmentStatuses ?? [],
+    sourceSheets: row?.sourceSheets ?? [],
+  };
 }
 
 export async function listAllJobDescriptions(

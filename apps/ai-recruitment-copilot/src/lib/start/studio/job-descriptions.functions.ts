@@ -9,13 +9,21 @@ import { workspaceDataGridInputSchema } from "@/lib/start/server-fn-validators";
 import { loadStudioJobDescriptionsData } from "./job-descriptions.server";
 
 export interface JobDescriptionFilters extends Record<string, string> {
+  code: string;
   departmentId: string;
+  googleSheetStatus: string;
   interviewerId: string;
+  recruitmentStatus: string;
+  sourceSheet: string;
 }
 
 const jobDescriptionFiltersSchema = z.object({
+  code: z.string(),
   departmentId: z.string(),
+  googleSheetStatus: z.string(),
   interviewerId: z.string(),
+  recruitmentStatus: z.string(),
+  sourceSheet: z.string(),
 });
 
 export type StudioJobDescriptionsState =
@@ -26,6 +34,8 @@ export type StudioJobDescriptionsState =
       dehydratedState: JsonValue;
       interviewers: InterviewerListRecord[];
       metrics: JobDescriptionMetrics;
+      recruitmentStatuses: string[];
+      sourceSheets: string[];
       status: "ready";
     };
 

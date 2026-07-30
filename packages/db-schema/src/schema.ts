@@ -830,6 +830,9 @@ export const jobDescription = pgTable(
     index("job_description_name_idx").on(table.name),
     index("job_description_created_at_idx").on(table.createdAt),
     index("job_description_organization_idx").on(table.organizationId),
+    index("job_description_org_source_sheet_idx")
+      .on(table.organizationId, table.sourceSheet)
+      .where(sql`${table.sourceSheet} IS NOT NULL`),
     check(
       "job_description_creation_source_check",
       sql`${table.creationSource} IN ('manual', 'google_sheets')`,

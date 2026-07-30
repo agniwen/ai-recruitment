@@ -26,7 +26,7 @@ describe("readResumeEvaluationTimeSlots", () => {
         null,
       ]),
     ).toEqual([{ endAt: "2026-07-02T04:00:00.000Z", startAt: "2026-07-02T02:00:00.000Z" }]);
-    expect(readResumeEvaluationTimeSlots(undefined)).toEqual([]);
+    expect(readResumeEvaluationTimeSlots()).toEqual([]);
     expect(readResumeEvaluationTimeSlots(null)).toEqual([]);
   });
 });

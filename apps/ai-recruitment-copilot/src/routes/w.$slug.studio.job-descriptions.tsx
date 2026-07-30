@@ -14,7 +14,10 @@ import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import { formatDocumentTitle } from "@/lib/start/document-title";
 import { loadStudioJobDescriptionsState } from "@/lib/start/studio/job-descriptions.functions";
-import type { StudioJobDescriptionsState } from "@/lib/start/studio/job-descriptions.functions";
+import type {
+  JobDescriptionFilters,
+  StudioJobDescriptionsState,
+} from "@/lib/start/studio/job-descriptions.functions";
 import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { JobDescriptionsPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
@@ -65,6 +68,7 @@ import { JobDescriptionTalentRecommendationsDialog } from "@/components/features
 import { useJobDescriptionDeepLink } from "@/components/features/studio/job-descriptions/use-job-description-deep-link";
 import { JobDescriptionToolbarActions } from "@/components/features/studio/job-descriptions/job-description-management-actions";
 import { jobDescriptionSourceColumn } from "@/components/features/studio/job-descriptions/job-description-source-column";
+import { createJobDescriptionListFilters } from "@/components/features/studio/job-descriptions/job-description-list-filters";
 import { useHasPermission } from "@/hooks/use-has-permission";
 
 const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
@@ -100,10 +104,14 @@ function JobDescriptionManagementPage({
   departments,
   interviewers,
   metrics,
+  recruitmentStatuses,
+  sourceSheets,
 }: {
   departments: DepartmentRecord[];
   interviewers: InterviewerListRecord[];
   metrics: JobDescriptionMetrics;
+  recruitmentStatuses: string[];
+  sourceSheets: string[];
 }) {
   const slug = useWorkspaceSlug();
   const memberRole = useWorkspaceMemberRole();
@@ -130,7 +138,7 @@ function JobDescriptionManagementPage({
       search: string;
       page: number;
       pageSize: number;
-      filters: { departmentId: string; interviewerId: string };
+      filters: JobDescriptionFilters;
       sortBy: string | undefined;
       sortOrder: "asc" | "desc" | undefined;
     }): Promise<PaginatedJobDescriptionResult> => {
@@ -140,10 +148,18 @@ function JobDescriptionManagementPage({
           page: String(params.page),
           pageSize: String(params.pageSize),
           ...(params.search ? { search: params.search } : {}),
+          ...(params.filters.code ? { code: params.filters.code } : {}),
+          ...(params.filters.sourceSheet ? { sourceSheet: params.filters.sourceSheet } : {}),
           // 多选过滤：CSV 形式，例如 "a,b,c"。空串表示不筛选。
           // / Multi-select filters serialize to CSV; empty string means "no filter".
           ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
+          ...(params.filters.googleSheetStatus
+            ? { googleSheetStatus: params.filters.googleSheetStatus }
+            : {}),
           ...(params.filters.interviewerId ? { interviewerId: params.filters.interviewerId } : {}),
+          ...(params.filters.recruitmentStatus
+            ? { recruitmentStatus: params.filters.recruitmentStatus }
+            : {}),
           sortBy: params.sortBy ?? "createdAt",
           sortOrder: params.sortOrder ?? "desc",
         },
@@ -169,13 +185,17 @@ function JobDescriptionManagementPage({
     [slug],
   );
 
-  const grid = useDataGridState<
-    JobDescriptionListRecord,
-    { departmentId: string; interviewerId: string }
-  >({
+  const grid = useDataGridState<JobDescriptionListRecord, JobDescriptionFilters>({
     allowedSortIds: ["createdAt", "name", "updatedAt"],
     defaultSorting: [{ desc: true, id: "createdAt" }],
-    initialFilters: { departmentId: "", interviewerId: "" },
+    initialFilters: {
+      code: "",
+      departmentId: "",
+      googleSheetStatus: "",
+      interviewerId: "",
+      recruitmentStatus: "",
+      sourceSheet: "",
+    },
     queryFn: fetchJobDescriptions,
     queryKeyBase: ["job-descriptions", slug],
   });
@@ -472,37 +492,14 @@ function JobDescriptionManagementPage({
   );
 
   const filtersConfig = useMemo(
-    () => [
-      {
-        key: "search" as const,
-        minWidth: "15rem",
-        placeholder: "搜索在招岗位名称或描述",
-        type: "search" as const,
-      },
-      {
-        emptyMessage: "没有匹配的部门",
-        key: "departmentId" as const,
-        options: departments.map((d) => ({ label: d.name, value: d.id })),
-        placeholder: "全部部门",
-        searchPlaceholder: "搜索部门…",
-        selectedFormat: (count: number) => `已选 ${count} 个部门`,
-        type: "multi-select" as const,
-      },
-      {
-        emptyMessage: "没有匹配的 AI面试官",
-        key: "interviewerId" as const,
-        options: interviewers.map((i) => ({
-          description: i.departmentName ?? "未知部门",
-          label: i.name,
-          value: i.id,
-        })),
-        placeholder: "全部 AI面试官",
-        searchPlaceholder: "搜索 AI面试官…",
-        selectedFormat: (count: number) => `已选 ${count} 位 AI面试官`,
-        type: "multi-select" as const,
-      },
-    ],
-    [departments, interviewers],
+    () =>
+      createJobDescriptionListFilters({
+        departments,
+        interviewers,
+        recruitmentStatuses,
+        sourceSheets,
+      }),
+    [departments, interviewers, recruitmentStatuses, sourceSheets],
   );
 
   return (
@@ -651,11 +648,6 @@ function JobDescriptionManagementPage({
   );
 }
 
-interface JobDescriptionFilters extends Record<string, string> {
-  departmentId: string;
-  interviewerId: string;
-}
-
 type SearchParamsPrimitive = boolean | number | string;
 type SearchParamsRecord = Record<
   string,
@@ -689,7 +681,14 @@ function parseJobDescriptionQuery(
   return parseDataGridSearchParams(searchParams, {
     allowedSortIds: ["createdAt", "name", "updatedAt"],
     defaultSorting: [{ desc: true, id: "createdAt" }],
-    initialFilters: { departmentId: "", interviewerId: "" },
+    initialFilters: {
+      code: "",
+      departmentId: "",
+      googleSheetStatus: "",
+      interviewerId: "",
+      recruitmentStatus: "",
+      sourceSheet: "",
+    },
   });
 }
 
@@ -708,6 +707,8 @@ function StudioJobDescriptionsRoute() {
         departments={state.departments}
         interviewers={state.interviewers}
         metrics={state.metrics}
+        recruitmentStatuses={state.recruitmentStatuses}
+        sourceSheets={state.sourceSheets}
       />
     </HydrationBoundary>
   );

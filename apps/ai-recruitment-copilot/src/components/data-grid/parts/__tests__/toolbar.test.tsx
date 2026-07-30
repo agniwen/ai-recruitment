@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Toolbar } from "../toolbar";
 
 describe("Toolbar", () => {
-  it("lays out filter items in two columns on mobile", () => {
+  it("lays out filters in two, three, and four responsive columns", () => {
     const html = renderToStaticMarkup(
       <Toolbar
         filterValues={{ creator: "", search: "" }}
@@ -25,7 +25,10 @@ describe("Toolbar", () => {
 
     expect(html).toContain("grid w-full");
     expect(html).toContain("grid-cols-2");
-    expect(html).toContain("sm:flex");
+    expect(html).toContain("sm:grid-cols-3");
+    expect(html).toContain("lg:grid-cols-4");
+    expect(html).not.toContain("sm:flex sm:w-auto");
+    expect(html).toContain("relative w-full min-w-0");
     expect(html).toContain("--data-grid-filter-min-width:15rem");
     expect(html).not.toContain('style="min-width:15rem"');
   });
