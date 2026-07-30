@@ -22,6 +22,7 @@ def _ctx(
     system="最终系统提示词",
     opening="你好郭靖",
     closing="再见郭靖",
+    questions=None,
 ):
     payload = {
         "schemaVersion": 2,
@@ -38,7 +39,8 @@ def _ctx(
             "opening": opening,
             "closing": closing,
         },
-        "questions": [
+        "questions": questions
+        or [
             {
                 "id": "question-1",
                 "content": "请介绍一次故障排查经历。",
@@ -140,6 +142,69 @@ async def test_ready_candidate_runs_the_required_question_task_group(monkeypatch
 
     assert [question.id for question in captured["questions"]] == ["question-1"]
     assert session.calls == []
+
+
+@pytest.mark.asyncio
+async def test_ready_candidate_runs_personalized_questions_before_template_questions(
+    monkeypatch,
+):
+    async def ready():
+        return True
+
+    questions = [
+        {
+            "id": "personalized-1",
+            "content": "请结合你的项目介绍最困难的技术决策。",
+            "difficulty": "hard",
+            "evaluationFocus": "判断候选人的实际技术深度",
+            "followUpDirections": "追问候选人的个人贡献",
+        },
+        {
+            "id": "template-1",
+            "content": "请介绍一次故障排查经历。",
+            "difficulty": "medium",
+            "evaluationFocus": None,
+            "followUpDirections": None,
+        },
+    ]
+    a = InterviewAgent(_ctx(questions=questions))
+    captured = {}
+
+    class FakeGroup:
+        def __await__(self):
+            async def run():
+                return SimpleNamespace(task_results={})
+
+            return run().__await__()
+
+    def fake_build_question_task_group(dispatch_questions, **_kwargs):
+        captured["questions"] = dispatch_questions
+        return FakeGroup()
+
+    async def fake_wrap_up(_tool, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        interview_agent_module, "ReadyCheckTask", lambda **_kwargs: ready()
+    )
+    monkeypatch.setattr(
+        interview_agent_module,
+        "build_question_task_group",
+        fake_build_question_task_group,
+    )
+    monkeypatch.setattr(interview_agent_module, "WrapUpTask", fake_wrap_up)
+    monkeypatch.setattr(
+        a,
+        "_get_activity_or_raise",
+        lambda: SimpleNamespace(session=_FakeSession()),
+    )
+
+    await a.on_enter()
+
+    assert [question.id for question in captured["questions"]] == [
+        "personalized-1",
+        "template-1",
+    ]
 
 
 @pytest.mark.asyncio

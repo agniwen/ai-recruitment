@@ -77,6 +77,39 @@ describe("interview dispatch V2 contract", () => {
     expect(contract.prompts.system).not.toContain("## 面试官角色设定");
   });
 
+  it("dispatches personalized AI questions before question-template questions", () => {
+    const contract = buildInterviewDispatchContract({
+      ...baseInput,
+      interviewQuestions: [
+        {
+          difficulty: "hard" as const,
+          evaluationFocus: "结合候选人的实际项目判断技术深度",
+          followUpDirections: "追问候选人在项目中的个人贡献",
+          order: 1,
+          question: "结合你的支付项目，最困难的技术决策是什么？",
+        },
+      ],
+      selectedInterviewer: null,
+    });
+
+    expect(contract.questions).toEqual([
+      {
+        content: "结合你的支付项目，最困难的技术决策是什么？",
+        difficulty: "hard",
+        evaluationFocus: "结合候选人的实际项目判断技术深度",
+        followUpDirections: "追问候选人在项目中的个人贡献",
+        id: "personalized-1",
+      },
+      {
+        content: "请介绍一次故障排查经历。",
+        difficulty: "medium",
+        evaluationFocus: "确认候选人能够定位并复盘线上故障",
+        followUpDirections: "追问定位信号、根因与预防措施",
+        id: "question-1",
+      },
+    ]);
+  });
+
   it("emits only the V2 contract without a legacy compatibility envelope", () => {
     const selectedInterviewer = {
       name: "面试官甲",
@@ -121,5 +154,27 @@ describe("interview dispatch V2 contract", () => {
         selectedInterviewer: null,
       }),
     ).toThrow();
+  });
+
+  it("accepts personalized AI questions without a question-template question", () => {
+    const contract = buildInterviewDispatchContract({
+      ...baseInput,
+      interviewQuestions: [
+        {
+          difficulty: "medium" as const,
+          order: 1,
+          question: "请介绍简历中最有挑战的项目。",
+        },
+      ],
+      jobDescriptionPresetQuestions: [],
+      selectedInterviewer: null,
+    });
+
+    expect(contract.questions).toEqual([
+      expect.objectContaining({
+        content: "请介绍简历中最有挑战的项目。",
+        id: "personalized-1",
+      }),
+    ]);
   });
 });

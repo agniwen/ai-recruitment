@@ -23,12 +23,15 @@ describe("interview dispatch contract boundary", () => {
 
   it("rejects an empty required-question set before reserving a LiveKit room", () => {
     const emptyQuestionGuard = candidateRouteSource.indexOf(
-      "interviewRecord.jobDescriptionPresetQuestions.length === 0",
+      "contextSnapshot.payload.personalizedQuestions.length === 0",
     );
     const roomReservation = candidateRouteSource.indexOf("const resolution = await db.transaction");
 
     expect(emptyQuestionGuard).toBeGreaterThan(0);
     expect(emptyQuestionGuard).toBeLessThan(roomReservation);
+    expect(candidateRouteSource).toContain(
+      "interviewRecord.jobDescriptionPresetQuestions.length === 0 &&",
+    );
   });
 
   it("builds studio previews through the same contract builder", () => {

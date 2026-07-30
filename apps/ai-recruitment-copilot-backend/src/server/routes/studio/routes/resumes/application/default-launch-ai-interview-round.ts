@@ -46,8 +46,8 @@ export const launchAiInterviewRound = createLaunchAiInterviewRound({
           ),
         );
       await tx.insert(studioInterviewSchedule).values(schedule);
-      // questionCount is the agent-dispatch required count; filled after snapshot
-      // from bound templates. personalizedQuestionCount is resume-generated only.
+      // questionCount is the agent-dispatch required total; filled after snapshot
+      // adds bound-template questions. personalizedQuestionCount is resume-generated only.
       await tx.insert(interviewAuditLog).values({
         action: "ai_interview_launched",
         createdAt: now,
@@ -93,12 +93,16 @@ export const launchAiInterviewRound = createLaunchAiInterviewRound({
     if (!existing) {
       return;
     }
+    const personalizedQuestionCount =
+      typeof existing.detail.personalizedQuestionCount === "number"
+        ? existing.detail.personalizedQuestionCount
+        : 0;
     await db
       .update(interviewAuditLog)
       .set({
         detail: {
           ...existing.detail,
-          questionCount: requiredQuestionCount,
+          questionCount: personalizedQuestionCount + requiredQuestionCount,
         },
       })
       .where(eq(interviewAuditLog.id, existing.id));

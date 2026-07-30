@@ -1,5 +1,50 @@
 import type { InterviewContextSnapshotPayload } from "@arc/db-schema/interview-snapshots";
 import type { InterviewQuestion } from "@arc/db-schema/interview/types";
+import { buildRequiredInterviewQuestions } from "@arc/shared/interview/agent-instructions";
+import type { InterviewEvaluationQuestion } from "./interview-report";
+
+type InterviewQuestionContext = Pick<
+  InterviewContextSnapshotPayload,
+  "personalizedQuestions" | "questionTemplates"
+>;
+
+export function buildInterviewEvaluationQuestionsFromContext(
+  context: InterviewQuestionContext,
+): InterviewEvaluationQuestion[] {
+  const jobDescriptionPresetQuestions = context.questionTemplates
+    .filter((template) => !template.disabledByUser)
+    .toSorted((left, right) => left.sortOrder - right.sortOrder)
+    .flatMap((template) =>
+      [...template.snapshot.questions]
+        .toSorted((left, right) => left.sortOrder - right.sortOrder)
+        .flatMap((question) => {
+          const content = question.content.trim();
+          return content
+            ? [
+                {
+                  content,
+                  difficulty: question.difficulty,
+                  evaluationFocus: question.evaluationFocus ?? null,
+                  followUpDirections: question.followUpDirections ?? null,
+                  id: question.id,
+                },
+              ]
+            : [];
+        }),
+    );
+
+  return buildRequiredInterviewQuestions({
+    interviewQuestions: context.personalizedQuestions,
+    jobDescriptionPresetQuestions,
+  }).map((question, index) => ({
+    difficulty: question.difficulty,
+    evaluationFocus: question.evaluationFocus ?? null,
+    followUpDirections: question.followUpDirections ?? null,
+    order: index + 1,
+    question: question.content,
+    questionId: question.id,
+  }));
+}
 
 export function buildInterviewReportQuestionsFromContext(
   context: InterviewContextSnapshotPayload,

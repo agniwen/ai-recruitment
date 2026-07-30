@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { InterviewContextSnapshotInterviewer } from "@arc/db-schema/interview-snapshots";
 import {
   buildAgentInstructions,
+  buildRequiredInterviewQuestions,
   resolveClosingPrompt,
   resolveOpeningPrompt,
 } from "@arc/shared/interview/agent-instructions";
@@ -113,6 +114,7 @@ export function buildInterviewDispatchContract(
 ): InterviewDispatchContract {
   const candidateName = input.candidateName.trim() || "候选人";
   const targetRole = input.targetRole?.trim() || "未指定岗位";
+  const requiredQuestions = buildRequiredInterviewQuestions(input);
   const selectedInterviewer = input.selectedInterviewer
     ? {
         name: input.selectedInterviewer.name.trim() || "AI 面试官",
@@ -134,7 +136,7 @@ export function buildInterviewDispatchContract(
         targetRole,
       }),
     },
-    questions: input.jobDescriptionPresetQuestions.map((question) => ({
+    questions: requiredQuestions.map((question) => ({
       content: question.content,
       difficulty: question.difficulty,
       evaluationFocus: question.evaluationFocus?.trim() || null,

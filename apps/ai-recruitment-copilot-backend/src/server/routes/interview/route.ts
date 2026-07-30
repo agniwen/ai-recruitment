@@ -284,7 +284,10 @@ export const interviewRouter = factory
     if (!contextSnapshot) {
       return c.json({ error: "Interview not available." }, 404);
     }
-    if (interviewRecord.jobDescriptionPresetQuestions.length === 0) {
+    if (
+      interviewRecord.jobDescriptionPresetQuestions.length === 0 &&
+      contextSnapshot.payload.personalizedQuestions.length === 0
+    ) {
       return c.json(
         {
           code: "questions_required",

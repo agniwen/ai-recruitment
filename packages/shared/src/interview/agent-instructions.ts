@@ -100,6 +100,30 @@ export interface AgentInstructionContext {
   companyContext?: string | null;
 }
 
+export interface RequiredInterviewQuestion extends AgentInstructionPresetQuestion {
+  id: string;
+}
+
+export function buildRequiredInterviewQuestions(
+  context: Pick<AgentInstructionContext, "interviewQuestions" | "jobDescriptionPresetQuestions">,
+): RequiredInterviewQuestion[] {
+  const personalizedQuestions = context.interviewQuestions
+    .toSorted((left, right) => left.order - right.order)
+    .map((question, index) => ({
+      content: question.question,
+      difficulty: question.difficulty,
+      evaluationFocus: question.evaluationFocus,
+      followUpDirections: question.followUpDirections,
+      id: `personalized-${index + 1}`,
+    }));
+  const templateQuestions = context.jobDescriptionPresetQuestions.map((question, index) => ({
+    ...question,
+    id: question.id ?? `template-${index + 1}`,
+  }));
+
+  return [...personalizedQuestions, ...templateQuestions];
+}
+
 /**
  * 把工作经历列表渲染成一段缩进文本，写入 prompt。
  * Render the work-experience list as an indented text block for the prompt.
@@ -191,7 +215,8 @@ export function buildAgentInstructions(context: AgentInstructionContext): string
   const skills = context.resumeProfile?.skills ?? [];
   const skillsText = skills.length > 0 ? skills.join("、") : "未提供";
   const experienceText = formatExperienceText(context.resumeProfile);
-  const presetQuestionsText = formatPresetQuestionsText(context.jobDescriptionPresetQuestions);
+  const requiredQuestions = buildRequiredInterviewQuestions(context);
+  const presetQuestionsText = formatPresetQuestionsText(requiredQuestions);
   const companyContext = context.companyContext?.trim() ?? "";
   const prefixSections = formatPrefixSections(
     context.interviewerPrompt?.trim() ?? "",

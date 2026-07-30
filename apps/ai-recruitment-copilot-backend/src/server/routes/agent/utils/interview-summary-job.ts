@@ -5,7 +5,7 @@ import { notifyInterviewSummaryReady } from "@arc/ai-recruitment-copilot-backend
 import { cacheTags, safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { runInterviewReportWorkflow } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/interview-report-workflow";
 import { formatCandidateFormSubmissions } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/interview-report";
-import type { InterviewEvaluationQuestion } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/interview-report";
+import { buildInterviewEvaluationQuestionsFromContext } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/interview-report-questions";
 import { createInterviewEvidenceSnapshot } from "@arc/ai-recruitment-copilot-backend/server/routes/agent/utils/evidence-snapshot";
 import { parseInterviewDataCollectionResults } from "@arc/shared/interview/question-outcomes";
 
@@ -14,37 +14,6 @@ const LOG_PREFIX = "[interview-summary]";
 // A row stuck in `running` past this threshold is assumed orphaned (process
 // crashed mid-LLM) and re-claimable.
 const RUNNING_STALE_MINUTES = 10;
-
-function buildEvaluationQuestionsFromContext(
-  context: Awaited<ReturnType<typeof createInterviewEvidenceSnapshot>>["payload"]["context"],
-): InterviewEvaluationQuestion[] {
-  let nextOrder = 1;
-  const presetQuestions: InterviewEvaluationQuestion[] = [];
-
-  for (const template of context.questionTemplates
-    .filter((row) => !row.disabledByUser)
-    .toSorted((a, b) => a.sortOrder - b.sortOrder)) {
-    for (const question of [...template.snapshot.questions].toSorted(
-      (a, b) => a.sortOrder - b.sortOrder,
-    )) {
-      const content = question.content.trim();
-      if (!content) {
-        continue;
-      }
-      presetQuestions.push({
-        difficulty: question.difficulty,
-        evaluationFocus: question.evaluationFocus ?? null,
-        followUpDirections: question.followUpDirections ?? null,
-        order: nextOrder,
-        question: content,
-        questionId: question.id,
-      });
-      nextOrder += 1;
-    }
-  }
-
-  return presetQuestions;
-}
 
 export interface RunSummaryJobOptions {
   conversationId: string;
@@ -115,7 +84,7 @@ export async function runSummaryJob(options: RunSummaryJobOptions): Promise<void
     }
 
     const evidence = await createInterviewEvidenceSnapshot({ conversationId, interviewRecordId });
-    const questions = buildEvaluationQuestionsFromContext(evidence.payload.context);
+    const questions = buildInterviewEvaluationQuestionsFromContext(evidence.payload.context);
     const dataCollectionResults = parseInterviewDataCollectionResults(rawDataCollectionResults);
 
     const report = await runInterviewReportWorkflow({

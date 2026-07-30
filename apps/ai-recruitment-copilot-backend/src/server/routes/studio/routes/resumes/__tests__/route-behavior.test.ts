@@ -55,7 +55,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
             Promise.resolve([
               {
                 detail: {
-                  personalizedQuestionCount: 0,
+                  personalizedQuestionCount: 1,
                   questionCount: 0,
                   roundId: "round-1",
                   roundLabel: "AI 一面",
@@ -441,7 +441,15 @@ describe("resumeLibraryRouter behavior", () => {
     mocks.loadResumeDetail.mockResolvedValue(EXISTING_RECORD);
 
     const response = await makeApp().request(`/resumes/${RECORD_ID}/launch-interview`, {
-      body: JSON.stringify({ interviewQuestions: [] }),
+      body: JSON.stringify({
+        interviewQuestions: [
+          {
+            difficulty: "hard",
+            order: 1,
+            question: "请结合你的项目介绍最困难的技术决策。",
+          },
+        ],
+      }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
     });
@@ -451,7 +459,7 @@ describe("resumeLibraryRouter behavior", () => {
       expect.objectContaining({
         action: "ai_interview_launched",
         detail: expect.objectContaining({
-          personalizedQuestionCount: 0,
+          personalizedQuestionCount: 1,
           questionCount: 0,
         }),
         interviewRecordId: RECORD_ID,
@@ -468,7 +476,7 @@ describe("resumeLibraryRouter behavior", () => {
     expect(mocks.flattenPresetQuestionsFromContextSnapshot).toHaveBeenCalled();
     expect(mocks.updatePatches).toContainEqual(
       expect.objectContaining({
-        detail: expect.objectContaining({ questionCount: 3 }),
+        detail: expect.objectContaining({ questionCount: 4 }),
       }),
     );
   });
