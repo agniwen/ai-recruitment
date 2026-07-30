@@ -221,6 +221,53 @@ function InterviewQuestionTemplateManagementPage({
     [grid, queryClient, slug],
   );
 
+  const [refreshRecord, setRefreshRecord] = useState<InterviewQuestionTemplateListRecord | null>(
+    null,
+  );
+  // Keep the target while the confirm dialog closes (onOpenChange clears state).
+  const pendingRefreshRecordRef = useRef<InterviewQuestionTemplateListRecord | null>(null);
+
+  const openRefreshConfirm = useCallback((record: InterviewQuestionTemplateListRecord) => {
+    pendingRefreshRecordRef.current = record;
+    setRefreshRecord(record);
+  }, []);
+
+  const handleRefreshEligibleCandidates = useCallback(async () => {
+    const record = pendingRefreshRecordRef.current ?? refreshRecord;
+    pendingRefreshRecordRef.current = null;
+    setRefreshRecord(null);
+    if (!record) {
+      return;
+    }
+    const toastId = toast.loading("正在刷新未面试候选人沟通题…");
+    try {
+      const res = await rpc.api.w[":slug"].studio["interview-questions"][":id"][
+        "refresh-eligible-candidates"
+      ].$post({
+        param: { id: record.id, slug },
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        refreshedCount?: number;
+        scannedCount?: number;
+      };
+      if (!res.ok) {
+        toast.error(body.error ?? "刷新失败", { id: toastId });
+        return;
+      }
+      const refreshedCount = body.refreshedCount ?? 0;
+      const scannedCount = body.scannedCount ?? 0;
+      toast.success(
+        refreshedCount === 0
+          ? `扫描 ${scannedCount} 人，没有需要更新的未面试候选人`
+          : `已刷新 ${refreshedCount} 位未面试候选人（扫描 ${scannedCount} 人）`,
+        { id: toastId },
+      );
+    } catch {
+      toast.error("刷新失败", { id: toastId });
+    }
+  }, [refreshRecord, slug]);
+
   const [createDraft, setCreateDraft] = useState<InterviewQuestionTemplateInput | null>(null);
   const [createDraftSessionId, setCreateDraftSessionId] = useState(0);
   const [aiCreateOpen, setAiCreateOpen] = useState(false);
@@ -384,6 +431,11 @@ function InterviewQuestionTemplateManagementPage({
         // The row's archived state picks one of the two: archive vs unarchive.
         menu: [
           {
+            label: "刷新未面试候选人沟通题",
+            onClick: (r) => openRefreshConfirm(r),
+            show: (r) => canUpdateQuestionTemplate && !r.archivedAt,
+          },
+          {
             label: "归档",
             onClick: (r) => crud.setDeleteRecord(r),
             show: (r) => canDeleteQuestionTemplate && !r.archivedAt,
@@ -398,7 +450,7 @@ function InterviewQuestionTemplateManagementPage({
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [canDeleteQuestionTemplate, canUpdateQuestionTemplate],
+    [canDeleteQuestionTemplate, canUpdateQuestionTemplate, openRefreshConfirm],
   );
 
   const filtersConfig = useMemo(
@@ -557,6 +609,18 @@ function InterviewQuestionTemplateManagementPage({
           slug={slug}
         />
       ) : null}
+
+      <EntityDeleteDialog
+        cancelLabel="取消"
+        confirmLabel="确认刷新"
+        description={(record) =>
+          `将把「${record.title}」的最新题目推送到所有适用且尚未开始 AI 面试的候选人。已开始或已完成面试的候选人不会改动。`
+        }
+        onClose={() => setRefreshRecord(null)}
+        onConfirm={handleRefreshEligibleCandidates}
+        record={canUpdateQuestionTemplate ? refreshRecord : null}
+        title="确认刷新未面试候选人沟通题？"
+      />
 
       <EntityDeleteDialog
         description={(record) =>

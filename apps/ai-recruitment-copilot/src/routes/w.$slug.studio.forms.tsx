@@ -218,6 +218,51 @@ function CandidateFormTemplateManagementPage({
     [grid, queryClient, slug],
   );
 
+  const [refreshRecord, setRefreshRecord] = useState<CandidateFormTemplateListRecord | null>(null);
+  // Keep the target while the confirm dialog closes (onOpenChange clears state).
+  const pendingRefreshRecordRef = useRef<CandidateFormTemplateListRecord | null>(null);
+
+  const openRefreshConfirm = useCallback((record: CandidateFormTemplateListRecord) => {
+    pendingRefreshRecordRef.current = record;
+    setRefreshRecord(record);
+  }, []);
+
+  const handleRefreshEligibleCandidates = useCallback(async () => {
+    const record = pendingRefreshRecordRef.current ?? refreshRecord;
+    pendingRefreshRecordRef.current = null;
+    setRefreshRecord(null);
+    if (!record) {
+      return;
+    }
+    const toastId = toast.loading("正在刷新未填写候选人表单题…");
+    try {
+      const res = await rpc.api.w[":slug"].studio.forms[":id"]["refresh-eligible-candidates"].$post(
+        {
+          param: { id: record.id, slug },
+        },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        refreshedCount?: number;
+        scannedCount?: number;
+      };
+      if (!res.ok) {
+        toast.error(body.error ?? "刷新失败", { id: toastId });
+        return;
+      }
+      const refreshedCount = body.refreshedCount ?? 0;
+      const scannedCount = body.scannedCount ?? 0;
+      toast.success(
+        refreshedCount === 0
+          ? `扫描 ${scannedCount} 人，没有需要更新的未填写候选人`
+          : `已刷新 ${refreshedCount} 位未填写候选人（扫描 ${scannedCount} 人）`,
+        { id: toastId },
+      );
+    } catch {
+      toast.error("刷新失败", { id: toastId });
+    }
+  }, [refreshRecord, slug]);
+
   const [submissionsRecord, setSubmissionsRecord] =
     useState<CandidateFormTemplateListRecord | null>(null);
   const [createDraft, setCreateDraft] = useState<CandidateFormTemplateInput | null>(null);
@@ -379,6 +424,11 @@ function CandidateFormTemplateManagementPage({
             onClick: (r) => setSubmissionsRecord(r),
           },
           {
+            label: "刷新未填写候选人表单题",
+            onClick: (r) => openRefreshConfirm(r),
+            show: (r) => canUpdateCandidateForm && !r.archivedAt,
+          },
+          {
             label: "归档",
             onClick: (r) => crud.setDeleteRecord(r),
             show: (r) => canDeleteCandidateForm && !r.archivedAt,
@@ -393,7 +443,7 @@ function CandidateFormTemplateManagementPage({
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [canDeleteCandidateForm, canUpdateCandidateForm],
+    [canDeleteCandidateForm, canUpdateCandidateForm, openRefreshConfirm],
   );
 
   const filtersConfig = useMemo(
@@ -585,6 +635,18 @@ function CandidateFormTemplateManagementPage({
         onOpenChange={(value) => !value && setSubmissionsRecord(null)}
         open={submissionsRecord !== null}
         template={submissionsRecord}
+      />
+
+      <EntityDeleteDialog
+        cancelLabel="取消"
+        confirmLabel="确认刷新"
+        description={(record) =>
+          `将把「${record.title}」的最新表单推送到所有适用、尚未填写且未开始 AI 面试的候选人。已填写或已开始面试的候选人不会改动。`
+        }
+        onClose={() => setRefreshRecord(null)}
+        onConfirm={handleRefreshEligibleCandidates}
+        record={canUpdateCandidateForm ? refreshRecord : null}
+        title="确认刷新未填写候选人表单题？"
       />
 
       <EntityDeleteDialog

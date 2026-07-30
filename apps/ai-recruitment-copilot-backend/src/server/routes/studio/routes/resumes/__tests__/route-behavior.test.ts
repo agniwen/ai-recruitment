@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   enqueueResumeReassessmentForRecord: vi.fn(),
   enqueueResumeSemanticIndexJobBestEffort: vi.fn(),
   findSemanticResumeDuplicates: vi.fn(),
+  flattenPresetQuestionsFromContextSnapshot: vi.fn(),
   insertedValues: [] as Record<string, unknown>[],
   invalidateStudioInterviewCaches: vi.fn(),
   jobDescriptionIdsExist: vi.fn(),
@@ -48,11 +49,30 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
     select: () => {
       const query = {
         leftJoin: () => query,
-        where: () => ({ limit: () => Promise.resolve([{ id: "unit-1" }]) }),
+        where: () => ({
+          limit: () =>
+            Promise.resolve([
+              {
+                detail: {
+                  personalizedQuestionCount: 0,
+                  questionCount: 0,
+                  roundId: "round-1",
+                  roundLabel: "AI 一面",
+                },
+                id: "unit-1",
+              },
+            ]),
+        }),
       };
       return { from: () => query };
     },
     transaction: mocks.transaction,
+    update: () => ({
+      set: (patch: Record<string, unknown>) => {
+        mocks.updatePatches.push(patch);
+        return { where: () => Promise.resolve() };
+      },
+    }),
   },
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
@@ -166,6 +186,7 @@ vi.mock(
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/context-snapshots",
   () => ({
+    flattenPresetQuestionsFromContextSnapshot: mocks.flattenPresetQuestionsFromContextSnapshot,
     loadOrCreateActiveInterviewContextSnapshot: mocks.loadOrCreateActiveInterviewContextSnapshot,
   }),
 );
@@ -226,6 +247,7 @@ const EXISTING_RECORD = {
   hiringUnitId: "unit-1",
   hrResumeAssessment: null,
   jobDescriptionId: "jd-old",
+  jobDescriptionInterviewers: [{ id: "interviewer-1", name: "AI 面试官" }],
   jobDescriptionName: "旧岗位",
   outcome: "in_pipeline",
   pipelineStage: "screening",
@@ -266,6 +288,14 @@ describe("resumeLibraryRouter behavior", () => {
     });
     mocks.buildScheduleRows.mockReturnValue([SCHEDULE_ROW]);
     mocks.loadInterviewRoundDetail.mockResolvedValue({ id: SCHEDULE_ROW.id });
+    mocks.loadOrCreateActiveInterviewContextSnapshot.mockResolvedValue({
+      payload: { questionTemplates: [] },
+    });
+    mocks.flattenPresetQuestionsFromContextSnapshot.mockReturnValue([
+      { content: "q1", difficulty: "easy", id: "q1" },
+      { content: "q2", difficulty: "easy", id: "q2" },
+      { content: "q3", difficulty: "easy", id: "q3" },
+    ]);
     mocks.queryPaginatedResumeRecords.mockResolvedValue({
       page: 2,
       pageSize: 20,
@@ -379,6 +409,10 @@ describe("resumeLibraryRouter behavior", () => {
     expect(mocks.insertedValues).toContainEqual(
       expect.objectContaining({
         action: "ai_interview_launched",
+        detail: expect.objectContaining({
+          personalizedQuestionCount: 0,
+          questionCount: 0,
+        }),
         interviewRecordId: RECORD_ID,
         operatorId: USER_ID,
         scheduleEntryId: SCHEDULE_ROW.id,
@@ -390,6 +424,12 @@ describe("resumeLibraryRouter behavior", () => {
       reason: "create",
       scheduleEntryId: SCHEDULE_ROW.id,
     });
+    expect(mocks.flattenPresetQuestionsFromContextSnapshot).toHaveBeenCalled();
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        detail: expect.objectContaining({ questionCount: 3 }),
+      }),
+    );
   });
 
   it("blocks launching AI interview after the candidate reaches a later stage", async () => {
