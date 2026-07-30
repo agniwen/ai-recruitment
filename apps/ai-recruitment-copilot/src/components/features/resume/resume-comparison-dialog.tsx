@@ -117,12 +117,12 @@ function DetailsPane({
     normalizedSourceType(candidate.sourceType) === "resume_pool_item" ? "人才库" : "招聘台";
   const statusLabel =
     "status" in detail
-      ? (detail.status === "active"
+      ? detail.status === "active"
         ? "有效"
-        : "已归档")
-      : (detail.pipelineStage === "closed"
+        : "已归档"
+      : detail.pipelineStage === "closed"
         ? "已关闭"
-        : "招聘流程中");
+        : "招聘流程中";
 
   return (
     <div className="flex min-w-0 flex-col gap-5">

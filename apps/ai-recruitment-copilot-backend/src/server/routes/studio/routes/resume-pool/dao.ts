@@ -566,13 +566,13 @@ export async function loadResumePoolItem(
         poolItemId: input.poolItemId,
         visibilityScope: input.visibilityScope,
       })
-    : (input.userId
+    : input.userId
       ? await loadAccessiblePoolItem({
           organizationId: input.organizationId,
           poolItemId: input.poolItemId,
           userId: input.userId,
         })
-      : null);
+      : null;
   if (!row) {
     return null;
   }

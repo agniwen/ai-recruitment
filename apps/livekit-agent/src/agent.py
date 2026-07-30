@@ -564,9 +564,7 @@ async def _on_session_end(ctx: JobContext) -> None:
 
     # Prefer business close reason in the report metadata; keep LiveKit reason
     # as a secondary field when both exist.
-    livekit_close_reason = (
-        state.close_reason.value if state.close_reason else "unknown"
-    )
+    livekit_close_reason = state.close_reason.value if state.close_reason else "unknown"
     report_close_reason = state.business_close_reason or livekit_close_reason
 
     await asyncio.gather(
