@@ -3,7 +3,6 @@
 import { IconBook2 } from "@tabler/icons-react";
 import { useRouterState } from "@tanstack/react-router";
 import { Fragment } from "react";
-import { resolvePlatformSidebarNavItem } from "@/components/features/platform/platform-sidebar-slots";
 import type { CrumbDef } from "@/components/features/mastra-studio/upstream/lib/route-header";
 import {
   RouteHeaderActionsSlot,
@@ -11,6 +10,7 @@ import {
   useRouteHeaderCrumbsOverride,
 } from "@/components/features/mastra-studio/upstream/lib/route-header";
 import { SidebarInsetHeader } from "@/components/layout/app-sidebar/sidebar-inset-header";
+import { resolvePlatformSidebarNavItem } from "@/components/features/platform/platform-sidebar-slots";
 import {
   Breadcrumb,
   BreadcrumbItem,

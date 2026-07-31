@@ -5,6 +5,7 @@ import { SidebarInsetHeader } from "@/components/layout/app-sidebar/sidebar-inse
 import { resolveStudioSidebarNavItem } from "@/components/features/studio/studio-sidebar-slots";
 import { WorkspaceSwitcher } from "@/components/features/workspace/workspace-switcher";
 import { useStudioHeaderOverrideValue } from "@/components/features/studio/studio-header-context";
+import { resolveStudioSidebarNavItem } from "@/components/features/studio/studio-sidebar-slots";
 import { UploadTaskInbox } from "@/components/features/studio/upload-task-inbox";
 import {
   Breadcrumb,
