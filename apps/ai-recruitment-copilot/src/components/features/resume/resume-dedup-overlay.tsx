@@ -357,7 +357,7 @@ function MatchCandidateRow({
               {formatResumeCandidateTitle(match.candidateName, match.id)}
             </h3>
             {match.level ? (
-              <Badge className={resumeBadgeShapeClass} variant={LEVEL_META[match.level].variant}>
+              <Badge variant={LEVEL_META[match.level].variant}>
                 {LEVEL_META[match.level].label}
                 {typeof match.score === "number" ? ` ${match.score}%` : ""}
               </Badge>

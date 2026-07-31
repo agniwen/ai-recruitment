@@ -62,6 +62,7 @@ describe("ResumeDuplicateMatchesDialog", () => {
               id: "suspected-id",
               jobDescriptionName: null,
               level: "high",
+              resumeFileName: "suspected.pdf",
               score: 94,
               status: "active",
               targetRole: null,
