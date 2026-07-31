@@ -29,6 +29,7 @@ import {
   ResumeDocumentFileIcon,
   getResumeDocumentFileIconKind,
 } from "@/components/features/resume/resume-document-file-icon";
+import { Badge } from "@/components/ui/badge";
 import {
   UnsupportedResumeDocumentPreviewTooltip,
   isPreviewableResumeDocumentInput,

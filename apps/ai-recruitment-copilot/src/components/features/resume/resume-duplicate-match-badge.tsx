@@ -21,7 +21,10 @@ export function ResumeDuplicateMatchBadge({
 
   if (!onClick) {
     return (
-      <Badge className={cn("shrink-0", resumeBadgeShapeClass, className)} variant={variant}>
+      <Badge
+        className={cn("max-w-full shrink-0", resumeBadgeShapeClass, className)}
+        variant={variant}
+      >
         {label}
       </Badge>
     );
@@ -29,7 +32,7 @@ export function ResumeDuplicateMatchBadge({
 
   return (
     <Badge
-      className={cn("shrink-0 cursor-pointer", resumeBadgeShapeClass, className)}
+      className={cn("max-w-full shrink-0 cursor-pointer", resumeBadgeShapeClass, className)}
       render={
         <button
           onClick={(event) => {

@@ -7,7 +7,6 @@ const componentsRoot = path.join(appRoot, "src/components");
 const excludedDirectories = new Set(["agents-ui", "react-bits", "spell-ui", "ui", "upstream"]);
 const allowedCustomLabels = new Set([
   "src/components/features/home/screens/chat-screen.tsx",
-  "src/components/features/home/screens/evaluation-screen.tsx",
   "src/components/features/studio/forms/form-template-editor-dialog.tsx",
 ]);
 
