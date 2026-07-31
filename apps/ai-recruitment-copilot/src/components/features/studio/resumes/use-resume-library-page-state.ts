@@ -26,12 +26,14 @@ export function useResumeLibraryPageState() {
   );
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [detailLinkReminderOpen, setDetailLinkReminderOpen] = useState(false);
 
   return {
     batchListOpen,
     bulkDeleteOpen,
     confirmOpen,
     deleteRecord,
+    detailLinkReminderOpen,
     duplicateMatchRecord,
     editRecordId,
     interviewDetailDialogOpen,
@@ -45,6 +47,7 @@ export function useResumeLibraryPageState() {
     setBulkDeleteOpen,
     setConfirmOpen,
     setDeleteRecord,
+    setDetailLinkReminderOpen,
     setDuplicateMatchRecord,
     setEditRecordId,
     setInterviewDetailDialogOpen,

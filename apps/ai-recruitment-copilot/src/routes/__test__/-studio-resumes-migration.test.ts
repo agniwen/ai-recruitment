@@ -73,7 +73,24 @@ describe("TanStack Start studio resumes migration", () => {
   it("adds a permission-scoped copy detail link action to resume-library rows", () => {
     const routeSource = readSource("routes/w.$slug.studio.resumes.tsx");
     const cardSource = readSource("components/features/studio/resumes/resume-library-card.tsx");
-    const source = `${routeSource}\n${cardSource}`;
+    const cardActionsSource = readSource(
+      "components/features/studio/resumes/resume-library-card-actions.tsx",
+    );
+    const pageSource = readSource("components/features/studio/resumes/resume-library-page.tsx");
+    const pageModelSource = readSource(
+      "components/features/studio/resumes/resume-library-page-model.tsx",
+    );
+    const dialogsSource = readSource(
+      "components/features/studio/resumes/resume-library-page-dialogs.tsx",
+    );
+    const source = [
+      routeSource,
+      cardSource,
+      cardActionsSource,
+      pageSource,
+      pageModelSource,
+      dialogsSource,
+    ].join("\n");
 
     expect(source).toContain("copyResumeDetailLink");
     expect(source).toContain("复制详情链接");
@@ -81,6 +98,9 @@ describe("TanStack Start studio resumes migration", () => {
     expect(source).not.toMatch(/`\/w\/\$\{slug\}\/studio\/resumes\/\$\{record\.id\}`/u);
     expect(source).toContain("record.createdBy === currentUserId");
     expect(source).toContain("canCopyResumeDetailLink");
+    expect(source).toContain("ResumeLibraryDetailLinkReminderDialog");
+    expect(source).toContain("setDetailLinkReminderOpen(true)");
+    expect(source).toContain("《招聘需求表》");
   });
 
   it("uses a standalone member review page with only the detail title in the header", () => {

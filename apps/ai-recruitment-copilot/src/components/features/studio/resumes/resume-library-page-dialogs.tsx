@@ -87,6 +87,31 @@ export function ResumeLibraryDeleteDialogs({
   );
 }
 
+/** Reminder after copying a detail link + recommendation text — dismiss-only. */
+export function ResumeLibraryDetailLinkReminderDialog({
+  onOpenChange,
+  open,
+}: {
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  return (
+    <AlertDialog onOpenChange={onOpenChange} open={open}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>请核对推荐语</AlertDialogTitle>
+          <AlertDialogDescription>
+            请检查，推荐语填写的内容（应聘岗位，推荐编制/组织/服务单位），是否与《招聘需求表》中保持一致。
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel variant="default">确认</AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export function ResumeLibraryPreviewDialog({
   onClose,
   record,

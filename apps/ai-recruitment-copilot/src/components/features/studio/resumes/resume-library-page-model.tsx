@@ -262,22 +262,27 @@ export function buildResumeDetailShareText(fullLink: string, recommendationText:
   return recommendation ? `${fullLink}\n\n${recommendation}` : fullLink;
 }
 
-export async function copyResumeDetailLink(slug: string, record: ResumeLibraryListRecord) {
+/** Returns true when the clipboard write succeeded (caller may show a follow-up reminder). */
+export async function copyResumeDetailLink(
+  slug: string,
+  record: ResumeLibraryListRecord,
+): Promise<boolean> {
   const fullLink = toAbsoluteUrl(`/resume-review/${slug}/${record.id}`);
   const shareText = buildResumeDetailShareText(fullLink, record.recommendationText);
   try {
     const result = await copyTextToClipboard(shareText);
     if (result === "copied") {
       toast.success("详情链接已复制");
-      return;
+      return true;
     }
     if (result === "manual") {
       toast.info("已弹出链接，请手动复制");
-      return;
+      return false;
     }
     throw new Error("copy-failed");
   } catch {
     toast.error("复制失败，请手动复制");
+    return false;
   }
 }
 

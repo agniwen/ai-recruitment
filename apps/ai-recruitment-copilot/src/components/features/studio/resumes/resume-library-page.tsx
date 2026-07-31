@@ -75,6 +75,7 @@ import { useResumeLibraryCollapsibleFiltersWithState } from "./resume-library-fi
 import { ResumeLibraryCardList } from "./resume-library-page-list";
 import {
   ResumeLibraryDeleteDialogs,
+  ResumeLibraryDetailLinkReminderDialog,
   ResumeLibraryPreviewDialog,
 } from "./resume-library-page-dialogs";
 import { useResumeLibraryPageState } from "./use-resume-library-page-state";
@@ -107,6 +108,7 @@ export function ResumeLibraryPage() {
     bulkDeleteOpen,
     confirmOpen,
     deleteRecord,
+    detailLinkReminderOpen,
     duplicateMatchRecord,
     editRecordId,
     interviewDetailDialogOpen,
@@ -120,6 +122,7 @@ export function ResumeLibraryPage() {
     setBulkDeleteOpen,
     setConfirmOpen,
     setDeleteRecord,
+    setDetailLinkReminderOpen,
     setDuplicateMatchRecord,
     setEditRecordId,
     setInterviewDetailDialogOpen,
@@ -595,7 +598,13 @@ export function ResumeLibraryPage() {
             resumeLibraryListQuery.isRefetching && !resumeLibraryListQuery.isFetchingNextPage
           }
           onBulkDelete={() => setBulkDeleteOpen(true)}
-          onCopyDetailLink={(record) => void copyResumeDetailLink(slug, record)}
+          onCopyDetailLink={(record) => {
+            void copyResumeDetailLink(slug, record).then((copied) => {
+              if (copied) {
+                setDetailLinkReminderOpen(true);
+              }
+            });
+          }}
           onDelete={setDeleteRecord}
           onEdit={(record) => setEditRecordId(record.id)}
           onLaunchInterview={startAiInterview}
@@ -727,6 +736,10 @@ export function ResumeLibraryPage() {
         onDelete={handleDelete}
         onDeleteRecordChange={setDeleteRecord}
         selectedCount={Object.keys(grid.rowSelection).filter((id) => grid.rowSelection[id]).length}
+      />
+      <ResumeLibraryDetailLinkReminderDialog
+        onOpenChange={setDetailLinkReminderOpen}
+        open={detailLinkReminderOpen}
       />
       <ResumeLibraryPreviewDialog
         onClose={() => setPreviewRecord(null)}
