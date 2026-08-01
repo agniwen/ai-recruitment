@@ -350,7 +350,7 @@ Python agent 使用 uv：
 ```bash
 cd apps/livekit-agent
 uv sync
-uv run src/agent.py download-files
+uv run -m livekit.agents download-files
 uv run src/agent.py dev
 uv run pytest
 uv run ruff check
