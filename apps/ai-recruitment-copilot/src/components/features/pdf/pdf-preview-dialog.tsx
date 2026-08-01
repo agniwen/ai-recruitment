@@ -1,10 +1,12 @@
 "use client";
 
 import { IconDownload, IconX } from "@tabler/icons-react";
+import type { Ref } from "react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { PDFViewer } from "@/components/ui/pdf-viewer";
+import type { PDFViewerHandle } from "@/components/ui/pdf-viewer";
 
 export interface PdfPreviewDialogProps {
   open: boolean;
@@ -20,6 +22,7 @@ export function PdfPreviewContent({
   filename,
   onActivePageChange,
   onDocumentLoadSuccess,
+  viewerRef,
   url,
 }: {
   url: string;
@@ -27,6 +30,7 @@ export function PdfPreviewContent({
   filename?: string;
   onActivePageChange?: (page: number) => void;
   onDocumentLoadSuccess?: (pages: number) => void;
+  viewerRef?: Ref<PDFViewerHandle>;
 }) {
   const documentOptions = useMemo(
     () => ({
@@ -47,6 +51,7 @@ export function PdfPreviewContent({
       file={url}
       onActivePageChange={onActivePageChange}
       onDocumentLoadSuccess={onDocumentLoadSuccess}
+      ref={viewerRef}
       showDownload={false}
       showUpload={false}
     />

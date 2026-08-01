@@ -5,6 +5,7 @@ import { useQueries } from "@tanstack/react-query";
 import type { ResumePoolDetail } from "@arc/shared/resume-pool";
 import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import type { ResumeSemanticSourceType } from "@arc/db-schema/schema";
+import { useEffect, useState } from "react";
 import { getPreviewableResumeDocumentKind } from "@/components/features/resume/resume-document-preview-button";
 import { formatResumeCandidateTitle } from "@/components/features/resume/resume-record-display-id";
 import { ResumeDocumentPreviewPane } from "@/components/features/resume/resume-document-preview-dialog";
@@ -17,6 +18,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Modal } from "@/components/ui/modal";
 import { Spinner } from "@/components/ui/spinner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { fetchResumePoolItem, fetchStudioResume } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { getResumeDocumentKind } from "@arc/shared/resume-documents";
@@ -31,6 +34,76 @@ export interface ResumeComparisonCandidate {
 
 type ResumeComparisonDetail = ResumeLibraryDetail | ResumePoolDetail;
 type ResumeComparisonSourceType = "resume_pool_item" | "studio_interview";
+
+function scrollProgress(element: HTMLElement): number {
+  const scrollRange = element.scrollHeight - element.clientHeight;
+  return scrollRange > 0 ? Math.min(1, Math.max(0, element.scrollTop / scrollRange)) : 0;
+}
+
+function syncScrollProgress(source: HTMLElement, target: HTMLElement): number {
+  const targetScrollTop =
+    scrollProgress(source) * Math.max(0, target.scrollHeight - target.clientHeight);
+  if (Math.abs(target.scrollTop - targetScrollTop) >= 0.5) {
+    target.scrollTop = targetScrollTop;
+  }
+  return targetScrollTop;
+}
+
+function useSynchronizedScroll(
+  currentViewport: HTMLElement | null,
+  suspectedViewport: HTMLElement | null,
+  enabled: boolean,
+) {
+  useEffect(() => {
+    if (!(enabled && currentViewport && suspectedViewport)) {
+      return;
+    }
+
+    const current = currentViewport;
+    const suspected = suspectedViewport;
+    let programmaticScroll: { element: HTMLElement; top: number } | null = null;
+
+    function synchronize(source: HTMLElement, target: HTMLElement) {
+      programmaticScroll = {
+        element: target,
+        top: syncScrollProgress(source, target),
+      };
+    }
+
+    function shouldIgnoreProgrammaticScroll(element: HTMLElement) {
+      if (
+        programmaticScroll?.element === element &&
+        Math.abs(element.scrollTop - programmaticScroll.top) < 0.5
+      ) {
+        programmaticScroll = null;
+        return true;
+      }
+      programmaticScroll = null;
+      return false;
+    }
+
+    function handleCurrentScroll() {
+      if (!shouldIgnoreProgrammaticScroll(current)) {
+        synchronize(current, suspected);
+      }
+    }
+
+    function handleSuspectedScroll() {
+      if (!shouldIgnoreProgrammaticScroll(suspected)) {
+        synchronize(suspected, current);
+      }
+    }
+
+    synchronize(current, suspected);
+    current.addEventListener("scroll", handleCurrentScroll, { passive: true });
+    suspected.addEventListener("scroll", handleSuspectedScroll, { passive: true });
+
+    return () => {
+      current.removeEventListener("scroll", handleCurrentScroll);
+      suspected.removeEventListener("scroll", handleSuspectedScroll);
+    };
+  }, [currentViewport, enabled, suspectedViewport]);
+}
 
 function normalizedSourceType(
   sourceType: ResumeSemanticSourceType | undefined,
@@ -144,10 +217,12 @@ function DetailsPane({
 function DocumentPane({
   candidate,
   detail,
+  onScrollViewportChange,
   slug,
 }: {
   candidate: ResumeComparisonCandidate;
   detail: ResumeComparisonDetail;
+  onScrollViewportChange: (element: HTMLElement | null) => void;
   slug: string;
 }) {
   const sourceAdapter = comparisonSourceAdapter(candidate);
@@ -187,6 +262,7 @@ function DocumentPane({
     <ResumeDocumentPreviewPane
       filename={detail.resumeFileName ?? undefined}
       kind={previewKind}
+      onScrollViewportChange={onScrollViewportChange}
       url={
         documentKind === "pptx" ? resumePreviewUrl(slug, candidate) : resumeFileUrl(slug, candidate)
       }
@@ -200,6 +276,7 @@ function ComparisonContent({
   isError,
   isLoading,
   mode,
+  onScrollViewportChange,
   slug,
 }: {
   candidate: ResumeComparisonCandidate;
@@ -207,6 +284,7 @@ function ComparisonContent({
   isError: boolean;
   isLoading: boolean;
   mode: ResumeComparisonMode;
+  onScrollViewportChange: (element: HTMLElement | null) => void;
   slug: string;
 }) {
   if (isError) {
@@ -228,7 +306,12 @@ function ComparisonContent({
   return mode === "details" ? (
     <DetailsPane candidate={candidate} detail={detail} />
   ) : (
-    <DocumentPane candidate={candidate} detail={detail} slug={slug} />
+    <DocumentPane
+      candidate={candidate}
+      detail={detail}
+      onScrollViewportChange={onScrollViewportChange}
+      slug={slug}
+    />
   );
 }
 
@@ -239,6 +322,7 @@ function ComparisonCard({
   isLoading,
   label,
   mode,
+  onScrollViewportChange,
   slug,
 }: {
   candidate: ResumeComparisonCandidate;
@@ -247,9 +331,17 @@ function ComparisonCard({
   isLoading: boolean;
   label: string;
   mode: ResumeComparisonMode;
+  onScrollViewportChange: (element: HTMLElement | null) => void;
   slug: string;
 }) {
   const uploader = detail ? resumeUploader(detail) : null;
+  const [outerViewport, setOuterViewport] = useState<HTMLDivElement | null>(null);
+  const [documentViewport, setDocumentViewport] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    onScrollViewportChange(documentViewport ?? outerViewport);
+    return () => onScrollViewportChange(null);
+  }, [documentViewport, onScrollViewportChange, outerViewport]);
 
   return (
     <Card className="min-h-0 min-w-0 overflow-hidden">
@@ -306,6 +398,8 @@ function ComparisonCard({
             ? "min-h-0 overflow-y-auto p-5"
             : "min-h-0 overflow-hidden bg-muted/30 p-0"
         }
+        data-resume-compare-scroll-container={label === "当前简历" ? "current" : "suspected"}
+        ref={setOuterViewport}
       >
         <ComparisonContent
           candidate={candidate}
@@ -313,6 +407,7 @@ function ComparisonCard({
           isError={isError}
           isLoading={isLoading}
           mode={mode}
+          onScrollViewportChange={setDocumentViewport}
           slug={slug}
         />
       </CardPanel>
@@ -334,6 +429,9 @@ export function ResumeComparisonDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const slug = useWorkspaceSlug();
+  const [isScrollSyncEnabled, setIsScrollSyncEnabled] = useState(true);
+  const [currentViewport, setCurrentViewport] = useState<HTMLElement | null>(null);
+  const [suspectedViewport, setSuspectedViewport] = useState<HTMLElement | null>(null);
   const candidates = [current, suspected] as const;
   const results = useQueries({
     queries: candidates.map((candidate) => ({
@@ -349,6 +447,13 @@ export function ResumeComparisonDialog({
       staleTime: 30_000,
     })),
   });
+  useSynchronizedScroll(currentViewport, suspectedViewport, isScrollSyncEnabled);
+
+  useEffect(() => {
+    if (open) {
+      setIsScrollSyncEnabled(true);
+    }
+  }, [open]);
 
   if (!current || !suspected) {
     return null;
@@ -368,25 +473,39 @@ export function ResumeComparisonDialog({
       size="full"
       title={mode === "details" ? "简历详情对比" : "原简历对比"}
     >
-      <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
-        <ComparisonCard
-          candidate={current}
-          detail={results[0]?.data}
-          isError={Boolean(results[0]?.isError)}
-          isLoading={Boolean(results[0]?.isLoading)}
-          label="当前简历"
-          mode={mode}
-          slug={slug}
-        />
-        <ComparisonCard
-          candidate={suspected}
-          detail={results[1]?.data}
-          isError={Boolean(results[1]?.isError)}
-          isLoading={Boolean(results[1]?.isLoading)}
-          label="疑似简历"
-          mode={mode}
-          slug={slug}
-        />
+      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
+        <div className="flex items-center rounded-xl border bg-background px-4 py-2.5">
+          <Field className="w-auto gap-2" orientation="horizontal">
+            <Checkbox
+              checked={isScrollSyncEnabled}
+              id="resume-dedup-sync-scroll"
+              onCheckedChange={setIsScrollSyncEnabled}
+            />
+            <FieldLabel htmlFor="resume-dedup-sync-scroll">同步滚动</FieldLabel>
+          </Field>
+        </div>
+        <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
+          <ComparisonCard
+            candidate={current}
+            detail={results[0]?.data}
+            isError={Boolean(results[0]?.isError)}
+            isLoading={Boolean(results[0]?.isLoading)}
+            label="当前简历"
+            mode={mode}
+            onScrollViewportChange={setCurrentViewport}
+            slug={slug}
+          />
+          <ComparisonCard
+            candidate={suspected}
+            detail={results[1]?.data}
+            isError={Boolean(results[1]?.isError)}
+            isLoading={Boolean(results[1]?.isLoading)}
+            label="疑似简历"
+            mode={mode}
+            onScrollViewportChange={setSuspectedViewport}
+            slug={slug}
+          />
+        </div>
       </div>
     </Modal>
   );

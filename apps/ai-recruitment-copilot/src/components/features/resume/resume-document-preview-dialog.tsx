@@ -1,11 +1,12 @@
 "use client";
 
 import { IconDownload, IconLoader2, IconPhotoOff, IconX } from "@tabler/icons-react";
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { DocxViewerPreview } from "@/components/ui/docx-viewer";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { XlsxViewerPreview } from "@/components/ui/xlsx-viewer";
+import type { PDFViewerHandle } from "@/components/ui/pdf-viewer";
 import { cn } from "@arc/shared/utils";
 import { runAsyncAction } from "@/lib/client/async-control";
 
@@ -184,40 +185,116 @@ export function ImageResumePreviewContent({ filename, url }: { filename?: string
 export function ResumeDocumentPreviewPane({
   filename,
   kind,
+  onScrollViewportChange,
   url,
 }: {
   kind: ResumeDocumentPreviewKind;
   url: string;
   filename?: string;
+  onScrollViewportChange?: (element: HTMLElement | null) => void;
 }) {
   const [isDark, setIsDark] = useState(false);
+  const viewerRootRef = useRef<HTMLDivElement>(null);
+  const pdfViewerRef = useRef<PDFViewerHandle>(null);
+
+  useEffect(() => {
+    const root = viewerRootRef.current;
+    if (!(onScrollViewportChange && root)) {
+      return;
+    }
+    const viewerRoot = root;
+    const notifyViewportChange = onScrollViewportChange;
+
+    function findViewport() {
+      if (kind === "pdf") {
+        return pdfViewerRef.current?.getViewportElement() ?? null;
+      }
+      if (kind === "docx") {
+        return viewerRoot.querySelector<HTMLElement>('[aria-label="DOCX document"]');
+      }
+      if (kind === "xlsx") {
+        return viewerRoot.querySelector<HTMLElement>('[data-slot="scroll-area"] > div');
+      }
+      return viewerRoot.querySelector<HTMLElement>("[data-resume-image-scroll-viewport]");
+    }
+
+    function registerViewport() {
+      const viewport = findViewport();
+      if (viewport) {
+        notifyViewportChange(viewport);
+        return true;
+      }
+      return false;
+    }
+
+    if (registerViewport()) {
+      return () => notifyViewportChange(null);
+    }
+
+    const observer = new MutationObserver(() => {
+      if (registerViewport()) {
+        observer.disconnect();
+      }
+    });
+    observer.observe(viewerRoot, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      notifyViewportChange(null);
+    };
+  }, [kind, onScrollViewportChange]);
 
   if (kind === "pdf") {
     return (
-      <Suspense
-        fallback={
-          <div className="flex h-full items-center justify-center gap-2 text-muted-foreground text-sm">
-            <IconLoader2 className="animate-spin" />
-            正在加载 PDF
-          </div>
-        }
-      >
-        <PdfPreviewContent className="h-full" filename={filename} url={url} />
-      </Suspense>
+      <div className="h-full" ref={viewerRootRef}>
+        <Suspense
+          fallback={
+            <div className="flex h-full items-center justify-center gap-2 text-muted-foreground text-sm">
+              <IconLoader2 className="animate-spin" />
+              正在加载 PDF
+            </div>
+          }
+        >
+          <PdfPreviewContent
+            className="h-full"
+            filename={filename}
+            url={url}
+            viewerRef={pdfViewerRef}
+          />
+        </Suspense>
+      </div>
     );
   }
 
   if (kind === "image") {
     return (
-      <div className="h-full overflow-auto">
-        <ImageResumePreviewContent filename={filename} url={url} />
+      <div className="h-full" ref={viewerRootRef}>
+        <div className="h-full overflow-auto" data-resume-image-scroll-viewport>
+          <ImageResumePreviewContent filename={filename} url={url} />
+        </div>
       </div>
     );
   }
 
   if (kind === "docx") {
     return (
-      <DocxViewerPreview
+      <div className="h-full" ref={viewerRootRef}>
+        <DocxViewerPreview
+          className="h-full"
+          fileName={filename}
+          isDark={isDark}
+          onIsDarkChange={setIsDark}
+          showDownload={false}
+          showUpload={false}
+          src={url}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full" ref={viewerRootRef}>
+      <XlsxViewerPreview
         className="h-full"
         fileName={filename}
         isDark={isDark}
@@ -226,19 +303,7 @@ export function ResumeDocumentPreviewPane({
         showUpload={false}
         src={url}
       />
-    );
-  }
-
-  return (
-    <XlsxViewerPreview
-      className="h-full"
-      fileName={filename}
-      isDark={isDark}
-      onIsDarkChange={setIsDark}
-      showDownload={false}
-      showUpload={false}
-      src={url}
-    />
+    </div>
   );
 }
 
