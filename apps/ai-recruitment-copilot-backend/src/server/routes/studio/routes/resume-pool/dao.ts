@@ -111,6 +111,7 @@ export interface ImportPoolItemInput {
   organizationId: string;
   poolItemId: string;
   recommendationText?: string | null;
+  reimport?: boolean;
 }
 
 export interface DeleteOwnPoolItemInput {
@@ -702,49 +703,51 @@ export function importPoolItemToResumeLibrary(
       await db.transaction(async (tx) => {
         const lockKey = `resume-pool-import:${admission.organizationId}:${source.id}`;
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
-        const [existing] = await tx
-          .select({ resumeRecordId: resumePoolImport.importedResumeRecordId })
-          .from(resumePoolImport)
-          .where(
-            and(
-              eq(resumePoolImport.poolItemId, source.id),
-              eq(resumePoolImport.organizationId, admission.organizationId),
-            ),
-          )
-          .orderBy(desc(resumePoolImport.importedAt))
-          .limit(1);
-        if (existing) {
-          ({ resumeRecordId } = existing);
-          // Always refresh recruitment source from the pool item on re-import.
-          await tx
-            .update(studioInterview)
-            .set({
-              jobDescriptionId: admission.jobDescriptionId,
-              recruitmentSource: source.recruitmentSource,
-              recruitmentSourceDetail: source.recruitmentSourceDetail,
-              updatedAt: new Date(),
-            })
+        if (!admission.reimport) {
+          const [existing] = await tx
+            .select({ resumeRecordId: resumePoolImport.importedResumeRecordId })
+            .from(resumePoolImport)
             .where(
               and(
-                eq(studioInterview.id, resumeRecordId),
-                eq(studioInterview.organizationId, admission.organizationId),
+                eq(resumePoolImport.poolItemId, source.id),
+                eq(resumePoolImport.organizationId, admission.organizationId),
               ),
-            );
-          await tx
-            .update(studioInterview)
-            .set({
-              resumeParseError: null,
-              resumeParseStatus: "processing",
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(studioInterview.id, resumeRecordId),
-                eq(studioInterview.organizationId, admission.organizationId),
-                ne(studioInterview.resumeParseStatus, "ready"),
-              ),
-            );
-          return;
+            )
+            .orderBy(desc(resumePoolImport.importedAt))
+            .limit(1);
+          if (existing) {
+            ({ resumeRecordId } = existing);
+            // Always refresh fork-specific recruiting metadata on an idempotent import.
+            await tx
+              .update(studioInterview)
+              .set({
+                jobDescriptionId: admission.jobDescriptionId,
+                recruitmentSource: source.recruitmentSource,
+                recruitmentSourceDetail: source.recruitmentSourceDetail,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(studioInterview.id, resumeRecordId),
+                  eq(studioInterview.organizationId, admission.organizationId),
+                ),
+              );
+            await tx
+              .update(studioInterview)
+              .set({
+                resumeParseError: null,
+                resumeParseStatus: "processing",
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(studioInterview.id, resumeRecordId),
+                  eq(studioInterview.organizationId, admission.organizationId),
+                  ne(studioInterview.resumeParseStatus, "ready"),
+                ),
+              );
+            return;
+          }
         }
 
         const importedAt = new Date();

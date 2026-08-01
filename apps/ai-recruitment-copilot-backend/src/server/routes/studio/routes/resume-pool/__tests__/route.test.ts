@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   findSemanticResumeDuplicates: vi.fn(),
   getObjectBytes: vi.fn(),
   getObjectStream: vi.fn(),
+  importPoolItemToResumeLibrary: vi.fn(),
   intersectRequestedCreatorIds: vi.fn(
     (
       requestedCreatorIds: string[] | null | undefined,
@@ -28,16 +29,26 @@ const mocks = vi.hoisted(() => ({
       return requestedCreatorIds.filter((id) => visible.has(id));
     },
   ),
+  limit: vi.fn(),
   listDuplicateMatchesForSource: vi.fn(),
   listResumePoolUploaders: vi.fn(),
   loadResumePoolItem: vi.fn(),
   queryResumePoolItems: vi.fn(),
+  resolveHiringUnitAccessScope: vi.fn(),
   resolveRecruitingVisibilityScope: vi.fn(),
   retryFailedResumeParse: vi.fn(),
   storeInterviewResume: vi.fn(),
 }));
 
-vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({ db: {} }));
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => ({ limit: mocks.limit }),
+      }),
+    }),
+  },
+}));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   getObjectBytes: mocks.getObjectBytes,
   getObjectStream: mocks.getObjectStream,
@@ -52,6 +63,9 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
   requirePermission: () => (_c: unknown, next: () => Promise<void>) => next(),
+}));
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope", () => ({
+  resolveHiringUnitAccessScope: mocks.resolveHiringUnitAccessScope,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/interview/utils", () => ({
   normalizeResumeFile: (value: FormDataEntryValue | null) => value,
@@ -86,7 +100,7 @@ vi.mock("../dao", () => ({
   bindResumePoolItemJobDescription: vi.fn(),
   createResumePoolItem: mocks.createResumePoolItem,
   deleteOwnPoolItem: mocks.deleteOwnPoolItem,
-  importPoolItemToResumeLibrary: vi.fn(),
+  importPoolItemToResumeLibrary: mocks.importPoolItemToResumeLibrary,
   listResumePoolUploaders: mocks.listResumePoolUploaders,
   loadResumePoolItem: mocks.loadResumePoolItem,
   publishPrivatePoolItem: vi.fn(),
@@ -122,6 +136,11 @@ describe("resume pool private uploader visibility", () => {
     mocks.resolveRecruitingVisibilityScope.mockResolvedValue({
       kind: "restricted",
       userIds: [USER_ID, "subordinate-user"],
+    });
+    mocks.limit.mockResolvedValue([{ id: "hu_resume_pool_import" }]);
+    mocks.resolveHiringUnitAccessScope.mockResolvedValue({
+      canAccessAll: true,
+      hiringUnitIds: [],
     });
     mocks.retryFailedResumeParse.mockResolvedValue({ status: "queued" });
   });
@@ -394,6 +413,59 @@ describe("resumePoolImportInputSchema", () => {
     expect(result.hiringUnitId).toBe("hu_resume_pool_import");
     expect(result.jobDescriptionId).toBeNull();
     expect(result.recommendationText).toBe("推荐给业务方重点关注项目经历");
+  });
+
+  it("preserves an explicit reimport request", () => {
+    const result = resumePoolImportInputSchema.parse({
+      dedupPolicy: "force",
+      hiringUnitId: "hu_resume_pool_import",
+      jobDescriptionId: null,
+      jobDescriptionMode: "none",
+      reimport: true,
+    });
+
+    expect(result.reimport).toBe(true);
+  });
+});
+
+describe("resume pool import route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.limit.mockResolvedValue([{ id: "hu_resume_pool_import" }]);
+    mocks.resolveHiringUnitAccessScope.mockResolvedValue({
+      canAccessAll: true,
+      hiringUnitIds: [],
+    });
+  });
+
+  it("forwards an explicit reimport request to the DAO", async () => {
+    mocks.importPoolItemToResumeLibrary.mockResolvedValue({
+      resumeRecordId: "resume-record-2",
+      status: "imported",
+    });
+
+    const response = await makeApp().request("/resume-pool/pool-item-1/import", {
+      body: JSON.stringify({
+        dedupPolicy: "force",
+        hiringUnitId: "hu_resume_pool_import",
+        jobDescriptionMode: "none",
+        reimport: true,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(201);
+    expect(mocks.importPoolItemToResumeLibrary).toHaveBeenCalledWith({
+      dedupPolicy: "force",
+      hiringUnitId: "hu_resume_pool_import",
+      importedBy: USER_ID,
+      jobDescriptionId: null,
+      organizationId: ORGANIZATION_ID,
+      poolItemId: "pool-item-1",
+      recommendationText: "",
+      reimport: true,
+    });
   });
 });
 

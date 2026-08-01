@@ -481,6 +481,7 @@ export const resumePoolRouter = factory
           organizationId: activeOrg.id,
           poolItemId: c.req.param("id"),
           recommendationText: input.recommendationText,
+          reimport: input.reimport === true,
         });
         if (result.status === "imported" && input.jobDescriptionId) {
           await enqueueResumeReviewGenerationForRecordBestEffort({

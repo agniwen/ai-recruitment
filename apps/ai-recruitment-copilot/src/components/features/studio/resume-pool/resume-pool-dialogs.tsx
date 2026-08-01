@@ -157,6 +157,7 @@ export function ImportResumePoolDialog({
   const [jobDescriptionId, setJobDescriptionId] = useState("");
   const [recommendationText, setRecommendationText] = useState("");
   const [duplicates, setDuplicates] = useState<ResumePoolImportDuplicateResult | null>(null);
+  const isReimport = Boolean(item?.importedResumeRecordId);
 
   useEffect(() => {
     if (!item) {
@@ -190,6 +191,7 @@ export function ImportResumePoolDialog({
         jobDescriptionId: mode === "bind" ? jobDescriptionId : null,
         jobDescriptionMode: mode,
         recommendationText,
+        reimport: isReimport,
       });
     },
     onError: (error) => {
@@ -207,7 +209,7 @@ export function ImportResumePoolDialog({
         setDuplicates(result);
         return;
       }
-      toast.success("已入库到招聘台");
+      toast.success(isReimport ? "已再次入库到招聘台" : "已入库到招聘台");
       onImported();
       onOpenChange(false);
     },
@@ -219,6 +221,10 @@ export function ImportResumePoolDialog({
   const selectedJobDescription = jobDescriptions.find((jd) => jd.id === jobDescriptionId);
   const selectedHiringUnit = hiringUnits.find((unit) => unit.id === hiringUnitId);
   const recruitmentSource = describePoolItemRecruitmentSource(item);
+  let dialogDescription: string | undefined;
+  if (item) {
+    dialogDescription = isReimport ? "已在招聘台，是否再次入库。" : getCandidateTitle(item);
+  }
 
   return (
     <>
@@ -231,14 +237,14 @@ export function ImportResumePoolDialog({
             </Button>
             <Button
               disabled={isPending || bindInvalid || hiringUnitInvalid}
-              onClick={() => mutation.mutate("check")}
+              onClick={() => mutation.mutate(isReimport ? "force" : "check")}
             >
               {isPending ? (
                 <IconLoader2 className="size-4 animate-spin" />
               ) : (
                 <IconDatabase className="size-4" />
               )}
-              确认入库
+              {isReimport ? "确认再次入库" : "确认入库"}
             </Button>
           </>
         }
@@ -250,8 +256,8 @@ export function ImportResumePoolDialog({
         }}
         open={item !== null}
         size="md"
-        title="入库到招聘台"
-        description={item ? getCandidateTitle(item) : undefined}
+        title={isReimport ? "再次入库到招聘台" : "入库到招聘台"}
+        description={dialogDescription}
       >
         <div className="space-y-5">
           <Field>
