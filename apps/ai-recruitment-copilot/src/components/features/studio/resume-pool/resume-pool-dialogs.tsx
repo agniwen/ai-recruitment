@@ -1,6 +1,6 @@
 "use client";
 
-import { IconDatabase, IconLoader2 } from "@tabler/icons-react";
+import { IconDatabase, IconExternalLink, IconLoader2 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
@@ -10,9 +10,11 @@ import type {
   ResumePoolListRecord,
 } from "@arc/shared/resume-pool";
 
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { TimeDisplay } from "@/components/features/display/time-display";
 import { ResumeDedupMatchList } from "@/components/features/resume/resume-dedup-overlay";
+import { formatResumeRecordDisplayId } from "@/components/features/resume/resume-record-display-id";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
@@ -42,7 +44,81 @@ import {
 } from "./resume-pool-page-model";
 import { buildResumePoolRecommendationTemplate } from "./resume-pool-recommendation-template";
 
+const StudioPersonDetailDialog = lazy(async () => {
+  const detailDialog = await import("@/components/features/studio/studio-person-detail-dialog");
+  return { default: detailDialog.StudioPersonDetailDialog };
+});
+
 const RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH = 2000;
+
+function ImportedResumeRecords({
+  item,
+  onOpenRecord,
+}: {
+  item: ResumePoolListRecord | null;
+  onOpenRecord: (recordId: string) => void;
+}) {
+  const importedRecords = item?.importedRecords ?? [];
+  if (!item?.importedResumeRecordId || importedRecords.length === 0) {
+    return null;
+  }
+  const candidateTitle = getCandidateTitle(item);
+  return (
+    <Field>
+      <FieldLabel>已入库记录</FieldLabel>
+      <FieldContent>
+        <div className="flex flex-col gap-2">
+          {importedRecords.map((record) => (
+            <Button
+              aria-label={`查看已入库记录 ${record.resumeRecordId}`}
+              className="h-auto w-full justify-between py-3"
+              key={record.resumeRecordId}
+              onClick={() => onOpenRecord(record.resumeRecordId)}
+              type="button"
+              variant="outline"
+            >
+              <span className="min-w-0 text-left">
+                <span className="block truncate">{candidateTitle}</span>
+                <span className="mt-0.5 block text-muted-foreground text-xs font-normal">
+                  {formatResumeRecordDisplayId(record.resumeRecordId)}
+                  {" · "}
+                  <TimeDisplay as="span" value={record.importedAt} />
+                </span>
+              </span>
+              <IconExternalLink data-icon="inline-end" />
+            </Button>
+          ))}
+        </div>
+      </FieldContent>
+    </Field>
+  );
+}
+
+function ImportedResumeDetailDialog({
+  onClose,
+  recordId,
+}: {
+  onClose: () => void;
+  recordId: string | null;
+}) {
+  if (!recordId) {
+    return null;
+  }
+  return (
+    <Suspense fallback={null}>
+      <StudioPersonDetailDialog
+        mode="resume"
+        onOpenChange={(open) => {
+          if (!open) {
+            onClose();
+          }
+        }}
+        open={true}
+        recordId={recordId}
+      />
+    </Suspense>
+  );
+}
 
 function describePoolItemRecruitmentSource(item: ResumePoolListRecord | null): string {
   const recruitmentSource = describeResumeRecruitmentSource(
@@ -157,6 +233,7 @@ export function ImportResumePoolDialog({
   const [jobDescriptionId, setJobDescriptionId] = useState("");
   const [recommendationText, setRecommendationText] = useState("");
   const [duplicates, setDuplicates] = useState<ResumePoolImportDuplicateResult | null>(null);
+  const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
   const isReimport = Boolean(item?.importedResumeRecordId);
 
   useEffect(() => {
@@ -166,6 +243,7 @@ export function ImportResumePoolDialog({
       setJobDescriptionId("");
       setRecommendationText("");
       setDuplicates(null);
+      setDetailRecordId(null);
       return;
     }
     const canUseSourceJd =
@@ -259,7 +337,8 @@ export function ImportResumePoolDialog({
         title={isReimport ? "再次入库到招聘台" : "入库到招聘台"}
         description={dialogDescription}
       >
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5">
+          <ImportedResumeRecords item={item} onOpenRecord={setDetailRecordId} />
           <Field>
             <FieldLabel>关联岗位</FieldLabel>
             <FieldContent>
@@ -396,6 +475,10 @@ export function ImportResumePoolDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <ImportedResumeDetailDialog
+        onClose={() => setDetailRecordId(null)}
+        recordId={detailRecordId}
+      />
     </>
   );
 }

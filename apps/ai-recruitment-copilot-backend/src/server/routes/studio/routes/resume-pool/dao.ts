@@ -404,11 +404,11 @@ async function loadVisiblePoolItem(input: {
   return null;
 }
 
-async function loadImportForOrg(
+async function loadImportsForOrg(
   poolItemId: string,
   organizationId: string,
-): Promise<{ importedAt: Date; resumeRecordId: string } | null> {
-  const [row] = await db
+): Promise<{ importedAt: Date; resumeRecordId: string }[]> {
+  return await db
     .select({
       importedAt: resumePoolImport.importedAt,
       resumeRecordId: resumePoolImport.importedResumeRecordId,
@@ -420,9 +420,7 @@ async function loadImportForOrg(
         eq(resumePoolImport.organizationId, organizationId),
       ),
     )
-    .orderBy(desc(resumePoolImport.importedAt))
-    .limit(1);
-  return row ?? null;
+    .orderBy(desc(resumePoolImport.importedAt), desc(resumePoolImport.id));
 }
 
 async function loadSourceChannels(
@@ -515,7 +513,7 @@ export async function queryResumePoolItems(
     .limit(100);
   const [imports, sourceChannels, duplicateMatches, jobDescriptionNames, retryableIds] =
     await Promise.all([
-      Promise.all(rows.map((row) => loadImportForOrg(row.item.id, input.organizationId))),
+      Promise.all(rows.map((row) => loadImportsForOrg(row.item.id, input.organizationId))),
       loadSourceChannels(rows.map((row) => row.item.id)),
       loadPoolDuplicateMatches({
         organizationId: input.organizationId,
@@ -536,7 +534,7 @@ export async function queryResumePoolItems(
     records: rows.map((row, index) =>
       toResumePoolListRecord(
         row.item,
-        imports[index] ?? null,
+        imports[index] ?? [],
         uploaderMetaFromRow(row),
         sourceChannels.get(row.item.id) ?? null,
         duplicateMatches.get(row.item.id) ?? null,
@@ -580,9 +578,9 @@ export async function loadResumePoolItem(
   if (!row) {
     return null;
   }
-  const [importRow, uploaderMeta, duplicateMatches, jobDescriptionName, retryableIds] =
+  const [importRows, uploaderMeta, duplicateMatches, jobDescriptionName, retryableIds] =
     await Promise.all([
-      loadImportForOrg(row.id, input.organizationId),
+      loadImportsForOrg(row.id, input.organizationId),
       loadUploaderMeta(row.id),
       loadPoolDuplicateMatches({
         organizationId: input.organizationId,
@@ -600,7 +598,7 @@ export async function loadResumePoolItem(
   const sourceChannels = await loadSourceChannels([row.id]);
   return toResumePoolDetail(
     row,
-    importRow,
+    importRows,
     uploaderMeta,
     sourceChannels.get(row.id) ?? null,
     duplicateMatches.get(row.id) ?? null,
