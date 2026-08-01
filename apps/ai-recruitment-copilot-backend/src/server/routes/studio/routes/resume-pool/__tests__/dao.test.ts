@@ -92,6 +92,7 @@ beforeAll(async () => {
       email: "resume-pool-a@example.com",
       emailVerified: false,
       id: USER_A,
+      image: "https://example.com/resume-pool-a.png",
       name: "resume-pool-a",
       updatedAt: NOW,
     },
@@ -210,7 +211,7 @@ describe("queryResumePoolItems", () => {
       {
         email: "resume-pool-a@example.com",
         id: USER_A,
-        image: null,
+        image: "https://example.com/resume-pool-a.png",
         name: "resume-pool-a",
       },
     ]);
@@ -683,7 +684,7 @@ describe("importPoolItemToResumeLibrary", () => {
     const input = {
       dedupPolicy: "force" as const,
       hiringUnitId: HIRING_UNIT_A,
-      importedBy: USER_B,
+      importedBy: USER_A,
       jobDescriptionId: null,
       organizationId: ORG_A,
       poolItemId: publicId,
@@ -719,6 +720,36 @@ describe("importPoolItemToResumeLibrary", () => {
     expect(poolRecord?.importedRecords.map((item) => item.resumeRecordId)).toEqual(
       expect.arrayContaining([first.resumeRecordId, second.resumeRecordId]),
     );
+    expect(poolRecord?.importedRecords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          creatorImage: "https://example.com/resume-pool-a.png",
+          creatorName: "resume-pool-a",
+        }),
+      ]),
+    );
+  });
+
+  it("does not expose an importer who is outside the current organization", async () => {
+    const publicId = await createResumePoolItem(basePoolInput({ scope: "public" }));
+    const result = await importPoolItemToResumeLibrary({
+      dedupPolicy: "force",
+      hiringUnitId: HIRING_UNIT_A,
+      importedBy: USER_B,
+      jobDescriptionId: null,
+      organizationId: ORG_A,
+      poolItemId: publicId,
+    });
+    expect(result.status).toBe("imported");
+
+    const poolRecord = await loadResumePoolItem({
+      organizationId: ORG_A,
+      poolItemId: publicId,
+      userId: USER_A,
+    });
+    expect(poolRecord?.importedRecords).toEqual([
+      expect.objectContaining({ creatorImage: null, creatorName: null }),
+    ]);
   });
 
   it("keeps a failed admission retryable and reuses its Resume Record", async () => {

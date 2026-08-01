@@ -407,13 +407,30 @@ async function loadVisiblePoolItem(input: {
 async function loadImportsForOrg(
   poolItemId: string,
   organizationId: string,
-): Promise<{ importedAt: Date; resumeRecordId: string }[]> {
+): Promise<
+  {
+    creatorImage: string | null;
+    creatorName: string | null;
+    importedAt: Date;
+    resumeRecordId: string;
+  }[]
+> {
   return await db
     .select({
+      creatorImage: user.image,
+      creatorName: user.name,
       importedAt: resumePoolImport.importedAt,
       resumeRecordId: resumePoolImport.importedResumeRecordId,
     })
     .from(resumePoolImport)
+    .leftJoin(
+      member,
+      and(
+        eq(resumePoolImport.importedBy, member.userId),
+        eq(resumePoolImport.organizationId, member.organizationId),
+      ),
+    )
+    .leftJoin(user, eq(member.userId, user.id))
     .where(
       and(
         eq(resumePoolImport.poolItemId, poolItemId),
