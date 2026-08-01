@@ -130,7 +130,7 @@ describe("ResumeProfileView visual density", () => {
     expect(source).toContain("border-border/50 pt-6");
     expect(source).toContain("<DataFields columns={2}");
     expect(source).toContain("<Frame");
-    expect(source).toContain("rounded-full bg-muted px-2.5 py-1 text-xs");
+    expect(source).toContain('<Badge variant="outline">{item}</Badge>');
     expect(source).not.toContain('className="px-3 py-2"');
   });
 });
