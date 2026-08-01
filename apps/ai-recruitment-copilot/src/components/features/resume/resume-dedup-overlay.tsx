@@ -29,6 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { fetchResumePoolItem } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { useHasPermission } from "@/hooks/use-has-permission";
 
 const LEVEL_META: Record<
   NonNullable<DedupMatchRecord["level"]>,
@@ -341,7 +342,7 @@ function MatchCandidateRow({
   onOpenResume,
 }: {
   match: DedupMatchRecord;
-  onOpenDetail: (match: DedupMatchRecord) => void;
+  onOpenDetail?: (match: DedupMatchRecord) => void;
   onOpenResume?: (match: DedupMatchRecord) => void;
 }) {
   const statusLabel = match.status === "active" ? "有效" : "已归档";
@@ -369,28 +370,32 @@ function MatchCandidateRow({
             </span>
           </div>
         </div>
-        <div className="hidden shrink-0 items-center gap-1 lg:flex">
-          <Button
-            className="hidden lg:inline-flex"
-            onClick={() => onOpenDetail(match)}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            查看
-          </Button>
-          {onOpenResume ? (
-            <Button
-              className="hidden lg:inline-flex"
-              onClick={() => onOpenResume(match)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              简历
-            </Button>
-          ) : null}
-        </div>
+        {onOpenDetail || onOpenResume ? (
+          <div className="hidden shrink-0 items-center gap-1 lg:flex">
+            {onOpenDetail ? (
+              <Button
+                className="hidden lg:inline-flex"
+                onClick={() => onOpenDetail(match)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                查看
+              </Button>
+            ) : null}
+            {onOpenResume ? (
+              <Button
+                className="hidden lg:inline-flex"
+                onClick={() => onOpenResume(match)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                简历
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-2 min-w-0">
@@ -420,6 +425,8 @@ export function ResumeDedupMatchList({
   className?: string;
   source?: DedupSourceCandidate | null;
 }) {
+  const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
+  const canReadResumePool = useHasPermission("resumePool", "read");
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
   const [poolDetailOpen, setPoolDetailOpen] = useState(false);
@@ -449,17 +456,26 @@ export function ResumeDedupMatchList({
     }
   }
 
+  function canReadSourceType(sourceType: DedupMatchRecord["sourceType"]) {
+    return sourceType === "resume_pool_item" ? canReadResumePool : canReadResumeLibrary;
+  }
+
+  const canReadCurrent = source ? canReadSourceType(source.sourceType) : true;
+
   return (
     <>
       <div className={cn("min-h-0 divide-y overflow-y-auto", className)}>
-        {matches.map((match) => (
-          <MatchCandidateRow
-            key={match.id}
-            match={match}
-            onOpenDetail={openDetail}
-            onOpenResume={source ? openResume : undefined}
-          />
-        ))}
+        {matches.map((match) => {
+          const canReadMatch = !source || (canReadCurrent && canReadSourceType(match.sourceType));
+          return (
+            <MatchCandidateRow
+              key={match.id}
+              match={match}
+              onOpenDetail={canReadMatch ? openDetail : undefined}
+              onOpenResume={source && canReadMatch ? openResume : undefined}
+            />
+          );
+        })}
       </div>
 
       <StudioPersonDetailDialog

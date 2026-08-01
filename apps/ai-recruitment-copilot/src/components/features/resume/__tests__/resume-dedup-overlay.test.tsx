@@ -8,7 +8,7 @@ import {
   renderInAct,
   unmountInAct,
 } from "@/test-utils/react-act";
-import { ResumeDuplicateMatchesDialog } from "../resume-dedup-overlay";
+import { ResumeDedupMatchList, ResumeDuplicateMatchesDialog } from "../resume-dedup-overlay";
 
 enableReactActEnvironment();
 installNoopResizeObserver();
@@ -23,6 +23,15 @@ vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
 
+const permissionMocks = vi.hoisted(() => ({
+  resumeLibrary: true,
+  resumePool: true,
+}));
+
+vi.mock("@/hooks/use-has-permission", () => ({
+  useHasPermission: (resource: "resumeLibrary" | "resumePool") => permissionMocks[resource],
+}));
+
 vi.mock("@/components/features/studio/studio-person-detail-dialog", () => ({
   StudioPersonDetailDialog: () => null,
 }));
@@ -34,6 +43,8 @@ afterEach(async () => {
     await unmountInAct(root);
   }
   roots.length = 0;
+  permissionMocks.resumeLibrary = true;
+  permissionMocks.resumePool = true;
 });
 
 describe("ResumeDuplicateMatchesDialog", () => {
@@ -101,5 +112,47 @@ describe("ResumeDuplicateMatchesDialog", () => {
     expect(detailButton?.className).toContain("lg:inline-flex");
     expect(resumeButton?.className).toContain("hidden");
     expect(resumeButton?.className).toContain("lg:inline-flex");
+  });
+
+  it("hides cross-resource comparison actions without permission to read both sides", async () => {
+    permissionMocks.resumeLibrary = false;
+    const queryClient = new QueryClient();
+    const { root } = await renderInAct(
+      <QueryClientProvider client={queryClient}>
+        <ResumeDedupMatchList
+          matches={[
+            {
+              candidateEmail: null,
+              candidateName: "招聘台候选人",
+              candidatePhone: null,
+              createdAt: "2026-07-24T00:00:00.000Z",
+              id: "studio-1",
+              jobDescriptionName: null,
+              sourceType: "studio_interview",
+              status: "active",
+              targetRole: null,
+            },
+          ]}
+          source={{
+            candidateEmail: null,
+            candidateName: "人才库候选人",
+            candidatePhone: null,
+            id: "pool-1",
+            jobDescriptionName: null,
+            resumeProfileSnapshot: null,
+            skills: [],
+            sourceType: "resume_pool_item",
+            targetRole: null,
+          }}
+        />
+      </QueryClientProvider>,
+    );
+    roots.push(root);
+
+    const actionLabels = [...document.querySelectorAll("button")].map((button) =>
+      button.textContent?.trim(),
+    );
+    expect(actionLabels).not.toContain("查看");
+    expect(actionLabels).not.toContain("简历");
   });
 });
