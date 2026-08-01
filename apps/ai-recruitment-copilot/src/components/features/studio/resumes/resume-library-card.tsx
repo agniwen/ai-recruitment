@@ -512,10 +512,7 @@ function ResumeLibraryCardComponent({
                   >
                     <span className="inline-flex min-w-0 items-center gap-1">
                       <span className="shrink-0">评估：</span>
-                      <Badge
-                        className="h-5 max-w-20 truncate px-1.5 text-[11px]"
-                        variant={resumeEvaluation.tone}
-                      >
+                      <Badge className="max-w-20 truncate" variant={resumeEvaluation.tone}>
                         {resumeEvaluation.label}
                       </Badge>
                     </span>

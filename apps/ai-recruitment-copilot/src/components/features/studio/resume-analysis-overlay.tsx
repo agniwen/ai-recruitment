@@ -10,6 +10,7 @@ import type { ResumeAnalysisPipeline } from "@/components/features/studio/use-re
 import { MarkdownView } from "@/components/features/display/markdown-view";
 import { ResumeDedupOverlay } from "@/components/features/resume/resume-dedup-overlay";
 import { TextFlip } from "@/components/features/motion/text-flip";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@arc/shared/utils";
 import {
@@ -213,11 +214,7 @@ export function ResumeAnalysisOverlay({ pipeline }: { pipeline: ResumeAnalysisPi
             <div className="w-full max-w-lg rounded-lg border bg-background/85 p-4 text-left shadow-sm">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="font-medium text-foreground text-sm">简历评价预览</p>
-                {pipeline.isGeneratingReview ? (
-                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-medium text-[11px] text-primary">
-                    生成中
-                  </span>
-                ) : null}
+                {pipeline.isGeneratingReview ? <Badge className="shrink-0">生成中</Badge> : null}
               </div>
               <div
                 className="max-h-56 overflow-y-auto pr-2"
