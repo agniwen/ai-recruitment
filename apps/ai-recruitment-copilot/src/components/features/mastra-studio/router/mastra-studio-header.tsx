@@ -1,7 +1,9 @@
 "use client";
 
 import { IconBook2 } from "@tabler/icons-react";
+import { useRouterState } from "@tanstack/react-router";
 import { Fragment } from "react";
+import { resolvePlatformSidebarNavItem } from "@/components/features/platform/platform-sidebar-slots";
 import type { CrumbDef } from "@/components/features/mastra-studio/upstream/lib/route-header";
 import {
   RouteHeaderActionsSlot,
@@ -33,7 +35,13 @@ function CrumbContent({ crumb }: { crumb: CrumbDef }) {
   return <>{crumb.label}</>;
 }
 
-function MastraBreadcrumb({ crumbs }: { crumbs: CrumbDef[] }) {
+function MastraBreadcrumb({
+  crumbs,
+  hideCurrentIcon,
+}: {
+  crumbs: CrumbDef[];
+  hideCurrentIcon: boolean;
+}) {
   if (crumbs.length === 0) {
     return (
       <Breadcrumb>
@@ -52,6 +60,7 @@ function MastraBreadcrumb({ crumbs }: { crumbs: CrumbDef[] }) {
         {crumbs.map((crumb, index) => {
           const isCurrent = index === crumbs.length - 1;
           const Icon = crumb.icon;
+          const showIcon = Icon && !(isCurrent && hideCurrentIcon);
 
           return (
             <Fragment key={crumb.id}>
@@ -59,7 +68,7 @@ function MastraBreadcrumb({ crumbs }: { crumbs: CrumbDef[] }) {
               <BreadcrumbItem className="min-w-0 shrink-0 last:shrink">
                 {isCurrent || !crumb.to ? (
                   <BreadcrumbPage className="flex min-w-0 items-center gap-1.5">
-                    {Icon ? <Icon className="size-4 shrink-0" /> : null}
+                    {showIcon ? <Icon className="size-4 shrink-0" /> : null}
                     <span className="truncate">
                       <CrumbContent crumb={crumb} />
                     </span>
@@ -69,7 +78,7 @@ function MastraBreadcrumb({ crumbs }: { crumbs: CrumbDef[] }) {
                     className="flex min-w-0 items-center gap-1.5"
                     render={<Link to={crumb.to} viewTransition />}
                   >
-                    {Icon ? <Icon className="size-4 shrink-0" /> : null}
+                    {showIcon ? <Icon className="size-4 shrink-0" /> : null}
                     <span className="truncate">
                       <CrumbContent crumb={crumb} />
                     </span>
@@ -87,9 +96,12 @@ function MastraBreadcrumb({ crumbs }: { crumbs: CrumbDef[] }) {
 export function MastraStudioHeader() {
   const { crumbs, docs } = useRouteHeader();
   const overrideCrumbs = useRouteHeaderCrumbsOverride();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const ActiveMenuIcon = resolvePlatformSidebarNavItem(pathname)?.icon;
 
   return (
     <SidebarInsetHeader
+      activeMenuIcon={ActiveMenuIcon ? <ActiveMenuIcon /> : undefined}
       actions={
         <>
           <RouteHeaderActionsSlot className="contents" />
@@ -113,7 +125,12 @@ export function MastraStudioHeader() {
           ) : null}
         </>
       }
-      breadcrumb={<MastraBreadcrumb crumbs={overrideCrumbs ?? crumbs} />}
+      breadcrumb={
+        <MastraBreadcrumb
+          crumbs={overrideCrumbs ?? crumbs}
+          hideCurrentIcon={Boolean(ActiveMenuIcon)}
+        />
+      }
     />
   );
 }

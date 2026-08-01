@@ -2,6 +2,7 @@
 
 import { useRouterState } from "@tanstack/react-router";
 import { SidebarInsetHeader } from "@/components/layout/app-sidebar/sidebar-inset-header";
+import { resolveStudioSidebarNavItem } from "@/components/features/studio/studio-sidebar-slots";
 import { WorkspaceSwitcher } from "@/components/features/workspace/workspace-switcher";
 import { useStudioHeaderOverrideValue } from "@/components/features/studio/studio-header-context";
 import { UploadTaskInbox } from "@/components/features/studio/upload-task-inbox";
@@ -52,10 +53,12 @@ function resolveRouteMeta(pathname: string): RouteMeta {
 export function SiteHeader() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { title } = resolveRouteMeta(pathname);
+  const ActiveMenuIcon = resolveStudioSidebarNavItem(pathname)?.icon;
   const headerOverride = useStudioHeaderOverrideValue();
 
   return (
     <SidebarInsetHeader
+      activeMenuIcon={ActiveMenuIcon ? <ActiveMenuIcon /> : undefined}
       actions={
         <>
           <WorkspaceSwitcher />

@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/sidebar";
 import { PlatformSidebarTabs, resolvePlatformSidebarTab } from "./platform-sidebar-tabs";
 
-interface NavItem {
+export interface NavItem {
   path: string;
   icon: NavIcon;
   title: string;
@@ -137,6 +137,19 @@ const mastraNavSections: NavSection[] = [
   },
 ];
 
+function matchesNavItem(pathname: string, item: NavItem): boolean {
+  const matches = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
+  return matches(item.path) || item.activePaths?.some(matches) === true;
+}
+
+export function resolvePlatformSidebarNavItem(pathname: string): NavItem | undefined {
+  const sections =
+    resolvePlatformSidebarTab(pathname) === "mastra" ? mastraNavSections : manageNavSections;
+  return sections
+    .flatMap((section) => section.items)
+    .find((item) => matchesNavItem(pathname, item));
+}
+
 function MastraSidebarSearch() {
   const { setOpen } = useNavigationCommand({ enableShortcut: false });
   const commandShortcutLabel = useKeyboardShortcutLabel("K");
@@ -169,11 +182,7 @@ export function PlatformSidebarSlots() {
   const { state } = useSidebar();
   const activeTab = resolvePlatformSidebarTab(pathname);
   const navSections = activeTab === "mastra" ? mastraNavSections : manageNavSections;
-
-  const isActive = (item: NavItem) => {
-    const matches = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
-    return matches(item.path) || item.activePaths?.some(matches) === true;
-  };
+  const activeNavItem = resolvePlatformSidebarNavItem(pathname);
 
   return (
     <>
@@ -194,7 +203,7 @@ export function PlatformSidebarSlots() {
                     <SidebarMenuItem key={item.path}>
                       <SidebarMenuButton
                         className="cursor-default select-none transition-[width,height,padding,background-color,border-color,color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] data-[active=false]:opacity-90 data-[active=false]:hover:opacity-100 motion-reduce:transition-none motion-reduce:active:scale-100"
-                        isActive={isActive(item)}
+                        isActive={item === activeNavItem}
                         render={
                           <Link to={item.path}>
                             <Icon />
