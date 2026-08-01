@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(new URL("../w.$slug.studio.resume-pool.tsx", import.meta.url), "utf-8");
+const source = readFileSync(
+  new URL("../../routes/w.$slug.studio.resume-pool.tsx", import.meta.url),
+  "utf-8",
+);
 const educationLineSource = readFileSync(
   new URL("../../components/features/resume/resume-education-line.tsx", import.meta.url),
   "utf-8",
