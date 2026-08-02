@@ -591,6 +591,7 @@ export function ResumeLibraryPage() {
           currentMemberRole={currentMemberRole}
           currentUserId={currentUserId}
           empty={resumeLibraryEmptyState}
+          error={resumeLibraryListQuery.error}
           fetchNextPage={resumeLibraryListQuery.fetchNextPage}
           filters={visibleFiltersConfig}
           filtersExtra={filtersExtra}
@@ -631,6 +632,9 @@ export function ResumeLibraryPage() {
           }}
           onOpenUploadEntry={() => setUploadEntryOpen(true)}
           onPreviewResume={setPreviewRecord}
+          onRetry={() => {
+            void resumeLibraryListQuery.refetch();
+          }}
           onRetryParse={retryParseMutation.mutate}
           onShowDuplicateMatches={setDuplicateMatchRecord}
           onTransition={(record, mode) =>

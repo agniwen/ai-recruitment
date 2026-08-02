@@ -15,6 +15,7 @@ import { ResumeLibraryCard } from "@/components/features/studio/resumes/resume-l
 import type { ResumeDetailDefaultTab } from "@/components/features/studio/resumes/resume-library-card";
 import { ResumeLibraryFloatingActionBar } from "@/components/features/studio/resumes/resume-library-floating-action-bar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListLoadError } from "@/components/data-grid/list-load-error";
 
 import {
   formatResumeLibraryJobDescriptionLabel,
@@ -36,6 +37,7 @@ interface ResumeLibraryCardListProps {
   currentMemberRole: string;
   currentUserId: string | null;
   empty: ReactNode;
+  error: unknown;
   fetchNextPage: () => Promise<unknown>;
   filters: ToolbarFilterConfig[];
   filtersExtra?: ReactNode;
@@ -50,6 +52,7 @@ interface ResumeLibraryCardListProps {
   onOpenDetail: (record: ResumeLibraryListRecord, tab?: ResumeDetailDefaultTab) => void;
   onOpenUploadEntry: () => void;
   onPreviewResume: (record: ResumeLibraryListRecord) => void;
+  onRetry: () => void;
   onRetryParse: (record: ResumeLibraryListRecord) => void;
   onShowDuplicateMatches: (record: ResumeLibraryListRecord) => void;
   onTransition: (record: ResumeLibraryListRecord, mode: "close" | "reactivate") => void;
@@ -74,6 +77,7 @@ export function ResumeLibraryCardList({
   currentMemberRole,
   currentUserId,
   empty,
+  error,
   fetchNextPage,
   filters,
   filtersExtra,
@@ -92,6 +96,7 @@ export function ResumeLibraryCardList({
   onOpenDetail,
   onOpenUploadEntry,
   onPreviewResume,
+  onRetry,
   onRetryParse,
   onShowDuplicateMatches,
   onTransition,
@@ -209,7 +214,9 @@ export function ResumeLibraryCardList({
   }
 
   let listContent: ReactNode = empty;
-  if (isInitialLoading) {
+  if (error && records.length === 0) {
+    listContent = <ListLoadError error={error} onRetry={onRetry} />;
+  } else if (isInitialLoading) {
     listContent = (
       <div className="grid gap-3">
         {Array.from({ length: 4 }, (_, index) => (

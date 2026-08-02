@@ -219,9 +219,9 @@ describe("TanStack Start migration patterns", () => {
       "src/routes/w.$slug.studio.job-descriptions.tsx",
       "src/routes/w.$slug.studio.resumes.tsx",
     ];
-    const workspaceClientListRouteFiles = [
-      "src/routes/w.$slug.studio.departments.tsx",
-      "src/routes/w.$slug.studio.interviews.tsx",
+    const workspaceClientListPageFiles = [
+      "src/components/features/studio/departments/department-management-page.tsx",
+      "src/components/features/studio/interviews/interview-management-page.tsx",
     ];
     const platformRouteFiles = [
       "src/routes/platform.organizations.tsx",
@@ -250,7 +250,7 @@ describe("TanStack Start migration patterns", () => {
       expect(source).toContain(".functions");
     }
 
-    for (const file of workspaceClientListRouteFiles) {
+    for (const file of workspaceClientListPageFiles) {
       const source = readSource(file);
 
       expect(source).not.toContain("createServerFn");
@@ -313,17 +313,19 @@ describe("TanStack Start migration patterns", () => {
     const resumeMetrics = readSource(
       "src/components/features/studio/resumes/resume-library-metrics-section.tsx",
     );
-    const jobDescriptionsRoute = readSource("src/routes/w.$slug.studio.job-descriptions.tsx");
+    const jobDescriptionsPage = readSource(
+      "src/components/features/studio/job-descriptions/job-description-management-page.tsx",
+    );
 
     expect(dashboardRoute).toContain("ClientOnly");
     expect(dashboardRoute).toContain('} from "@tanstack/react-router"');
     expect(resumesRoute).not.toContain("ResumeLibraryCharts");
     expect(resumeMetrics).toContain("ClientOnly");
     expect(resumeMetrics).toContain('from "@tanstack/react-router"');
-    expect(jobDescriptionsRoute).toContain("ClientOnly");
-    expect(jobDescriptionsRoute).toContain('} from "@tanstack/react-router"');
+    expect(jobDescriptionsPage).toContain("ClientOnly");
+    expect(jobDescriptionsPage).toContain('} from "@tanstack/react-router"');
     expect(resumeMetrics).toContain("<ResumeLibraryCharts metrics={metrics} />");
-    expect(jobDescriptionsRoute).toContain("<JobDescriptionCharts metrics={metrics} />");
+    expect(jobDescriptionsPage).toContain("<JobDescriptionCharts metrics={metrics} />");
   });
 
   it("applies pending opacity to nested app outlets instead of the root shell", () => {

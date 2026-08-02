@@ -10,7 +10,9 @@ function readSource(relativePath: string) {
 
 describe("studio action permission gates", () => {
   it("gates job description create/update/delete actions separately from read access", () => {
-    const source = readSource("routes/w.$slug.studio.job-descriptions.tsx");
+    const source = readSource(
+      "components/features/studio/job-descriptions/job-description-management-page.tsx",
+    );
 
     expect(source).toContain('useHasPermission("jd", "create")');
     expect(source).toContain('useHasPermission("jd", "update")');
@@ -22,10 +24,18 @@ describe("studio action permission gates", () => {
   });
 
   it("keeps scoped job detail entry points read-gated and non-clickable without read permission", () => {
-    const jobDescriptionSource = readSource("routes/w.$slug.studio.job-descriptions.tsx");
-    const departmentSource = readSource("routes/w.$slug.studio.departments.tsx");
-    const interviewerSource = readSource("routes/w.$slug.studio.interviewers.tsx");
-    const interviewsSource = readSource("routes/w.$slug.studio.interviews.tsx");
+    const jobDescriptionSource = readSource(
+      "components/features/studio/job-descriptions/job-description-management-page.tsx",
+    );
+    const departmentSource = readSource(
+      "components/features/studio/departments/department-management-page.tsx",
+    );
+    const interviewerSource = readSource(
+      "components/features/studio/interviewers/interviewer-management-page.tsx",
+    );
+    const interviewsSource = readSource(
+      "components/features/studio/interviews/interview-management-page.tsx",
+    );
     const scopedInterviewersSource = readSource(
       "components/features/studio/scoped-interviewers-modal.tsx",
     );
@@ -48,7 +58,7 @@ describe("studio action permission gates", () => {
         create: "canCreateDepartment ? (",
         deleteAction: "show: () => canDeleteDepartment",
         deleteRecord: "record={canDeleteDepartment ? crud.deleteRecord : null}",
-        file: "routes/w.$slug.studio.departments.tsx",
+        file: "components/features/studio/departments/department-management-page.tsx",
         resource: "department",
         updateAction: "show: () => canUpdateDepartment",
       },
@@ -56,7 +66,7 @@ describe("studio action permission gates", () => {
         create: "canCreateInterviewer ? (",
         deleteAction: "show: () => canDeleteInterviewer",
         deleteRecord: "record={canDeleteInterviewer ? crud.deleteRecord : null}",
-        file: "routes/w.$slug.studio.interviewers.tsx",
+        file: "components/features/studio/interviewers/interviewer-management-page.tsx",
         resource: "interviewer",
         updateAction: "show: () => canUpdateInterviewer",
       },
@@ -64,7 +74,7 @@ describe("studio action permission gates", () => {
         create: "canCreateCandidateForm ? (",
         deleteAction: "show: (r) => canDeleteCandidateForm && !r.archivedAt",
         deleteRecord: "record={canDeleteCandidateForm ? crud.deleteRecord : null}",
-        file: "routes/w.$slug.studio.forms.tsx",
+        file: "components/features/studio/forms/form-template-management-page.tsx",
         resource: "candidateForm",
         updateAction: "show: () => canUpdateCandidateForm",
       },
@@ -72,7 +82,7 @@ describe("studio action permission gates", () => {
         create: "canCreateQuestionTemplate ? (",
         deleteAction: "show: (r) => canDeleteQuestionTemplate && !r.archivedAt",
         deleteRecord: "record={canDeleteQuestionTemplate ? crud.deleteRecord : null}",
-        file: "routes/w.$slug.studio.interview-questions.tsx",
+        file: "components/features/studio/interview-questions/interview-question-template-management-page.tsx",
         resource: "questionTemplate",
         updateAction: "show: () => canUpdateQuestionTemplate",
       },
@@ -80,7 +90,7 @@ describe("studio action permission gates", () => {
         create: null,
         deleteAction: "show: () => canDeleteInterview",
         deleteRecord: "open={canDeleteInterview && deleteRecord !== null}",
-        file: "routes/w.$slug.studio.interviews.tsx",
+        file: "components/features/studio/interviews/interview-management-page.tsx",
         resource: "interview",
         updateAction: "show: () => canUpdateInterview",
       },

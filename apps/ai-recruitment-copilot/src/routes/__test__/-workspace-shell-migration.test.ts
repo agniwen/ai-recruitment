@@ -54,7 +54,9 @@ describe("TanStack Start workspace shell migration", () => {
   });
 
   it("clears one-shot studio query params through router search state", () => {
-    const interviews = readSource("routes/w.$slug.studio.interviews.tsx");
+    const interviews = readSource(
+      "components/features/studio/interviews/interview-management-page.tsx",
+    );
     const resumes = readSource("components/features/studio/resumes/resume-library-page.tsx");
 
     expect(`${interviews}\n${resumes}`).not.toContain("window.history.replaceState");

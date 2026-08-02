@@ -10,7 +10,7 @@ const formSource = readFileSync(
   "utf-8",
 );
 const jobDescriptionsPageSource = readFileSync(
-  new URL("../../../../routes/w.$slug.studio.job-descriptions.tsx", import.meta.url),
+  new URL("job-description-management-page.tsx", import.meta.url),
   "utf-8",
 );
 const humanDialogSource = readFileSync(

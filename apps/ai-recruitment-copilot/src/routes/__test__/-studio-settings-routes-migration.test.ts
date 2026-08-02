@@ -153,9 +153,13 @@ describe("TanStack Start studio settings and detail route migration", () => {
     }
 
     const studioRoute = readSource("routes/w.$slug.studio.tsx");
-    for (const file of ["departments", "interviews"] as const) {
-      const source = readSource(`routes/w.$slug.studio.${file}.tsx`);
-      expect(source).not.toContain(`studio/${file}.functions`);
+    const clientListPages = [
+      "components/features/studio/departments/department-management-page.tsx",
+      "components/features/studio/interviews/interview-management-page.tsx",
+    ] as const;
+    for (const file of clientListPages) {
+      const source = readSource(file);
+      expect(source).not.toContain(".functions");
       expect(source).toContain("useDataGridState");
       expect(source).toContain("rpcFetch");
     }

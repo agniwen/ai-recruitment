@@ -14,7 +14,10 @@ describe("TanStack Start studio interviews migration", () => {
   });
 
   it("keeps the migrated interviews route and page free of Next runtime imports", () => {
-    const sources = [readSource("routes/w.$slug.studio.interviews.tsx")];
+    const sources = [
+      readSource("routes/w.$slug.studio.interviews.tsx"),
+      readSource("components/features/studio/interviews/interview-management-page.tsx"),
+    ];
 
     expect(sources.join("\n")).not.toMatch(/next\/(?:dynamic|navigation|headers|server|cache)/u);
   });
@@ -28,7 +31,9 @@ describe("TanStack Start studio interviews migration", () => {
   });
 
   it("opens candidate profile editing inline from the AI interview edit dialog", () => {
-    const source = readSource("routes/w.$slug.studio.interviews.tsx");
+    const source = readSource(
+      "components/features/studio/interviews/interview-management-page.tsx",
+    );
 
     expect(source).toContain("resumeEditRecordId");
     expect(source).toContain("onEditResumeRecord={setResumeEditRecordId}");
