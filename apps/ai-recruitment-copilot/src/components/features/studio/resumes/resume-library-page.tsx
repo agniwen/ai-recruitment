@@ -41,6 +41,7 @@ import {
   bulkDeleteStudioResumes,
   deleteStudioResume,
   fetchStudioResumeDuplicateMatches,
+  fetchStudioResumeMetrics,
   fetchStudioResumeSkillSuggestions,
   fetchStudioResumes,
   rpcFetch,
@@ -52,6 +53,7 @@ import { runAsyncAction } from "@/lib/client/async-control";
 import { authClient } from "@/lib/client/auth-client";
 import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useHasPermission } from "@/hooks/use-has-permission";
+import { studioResumeKeys } from "@/lib/client/api/query-keys";
 import { StudioPersonDetailDialog } from "@/components/features/studio/studio-person-detail-dialog";
 import { StudioPersonEditDialog } from "@/components/features/studio/studio-person-edit-dialog";
 import { StudioScrollToTopButton } from "@/components/features/studio/studio-scroll-to-top-button";
@@ -62,6 +64,7 @@ import {
 import { LaunchInterviewDialog } from "@/components/features/studio/resumes/launch-interview-dialog";
 import { TransitionCandidateDialog } from "@/components/features/studio/resumes/transition-candidate-dialog";
 import { ResumeLibraryMetricsSection } from "@/components/features/studio/resumes/resume-library-metrics-section";
+import { RecruitingPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 
 import {
   PIPELINE_STAGE_TAB_DESCRIPTIONS,
@@ -312,6 +315,10 @@ export function ResumeLibraryPage() {
     }),
     staleTime: 30_000,
   });
+  const metricsQuery = useQuery({
+    queryFn: () => fetchStudioResumeMetrics(slug),
+    queryKey: studioResumeKeys.metrics(slug),
+  });
   const retryParseMutation = useMutation({
     mutationFn: (record: ResumeLibraryListRecord) => retryStudioResumeParse(slug, record.id),
     onError: (error) => toast.error(error instanceof Error ? error.message : "重新解析简历失败"),
@@ -542,6 +549,11 @@ export function ResumeLibraryPage() {
     </Empty>
   );
 
+  const isInitialPageLoading = resumeLibraryListQuery.isPending && metricsQuery.isPending;
+  if (isInitialPageLoading) {
+    return <RecruitingPageSkeleton />;
+  }
+
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
@@ -549,7 +561,11 @@ export function ResumeLibraryPage() {
           title="招聘台"
           description="已经进入招聘流程的候选人在这里跟进：看简历、匹配岗位、推进到面试。"
         />
-        <ResumeLibraryMetricsSection />
+        <ResumeLibraryMetricsSection
+          error={metricsQuery.error}
+          metrics={metricsQuery.data}
+          onRetry={() => metricsQuery.refetch()}
+        />
         <Tabs
           onValueChange={(value) => {
             setRowSelection({});
