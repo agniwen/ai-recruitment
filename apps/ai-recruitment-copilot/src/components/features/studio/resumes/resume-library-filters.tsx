@@ -3,8 +3,8 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { ToolbarFilterConfig } from "@/components/data-grid";
 import { Button } from "@/components/ui/button";
-import type { ResumeFilters } from "@/lib/start/studio/resumes.functions";
 import { EMPTY_FILTERS, RESUME_LIBRARY_PRIMARY_FILTER_KEYS } from "./resume-library-page-model";
+import type { ResumeFilters } from "./resume-library-page-model";
 
 const PRIMARY_FILTER_KEY_SET = new Set<string>(RESUME_LIBRARY_PRIMARY_FILTER_KEYS);
 

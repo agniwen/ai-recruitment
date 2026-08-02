@@ -86,6 +86,9 @@ describe("useDataGridState", () => {
     const harness = await renderGridHook({ searchParams: "?page=2" });
 
     expect(harness.current.page).toBe(2);
+    expect(harness.queryFn).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("does not reset pagination after moving to the next page", async () => {

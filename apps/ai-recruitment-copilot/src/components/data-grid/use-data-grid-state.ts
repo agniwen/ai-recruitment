@@ -12,6 +12,7 @@ import {
 import type { DataGridSortOrder } from "./query-contract";
 
 export interface DataGridFetchParams<F extends Record<string, string>> {
+  signal: AbortSignal;
   page: number;
   pageSize: number;
   search: string;
@@ -239,7 +240,7 @@ export function useDataGridState<TData, F extends Record<string, string>>(
 
   const listQuery = useQuery({
     placeholderData: keepPreviousData,
-    queryFn: () => opts.queryFn(queryParams),
+    queryFn: ({ signal }) => opts.queryFn({ ...queryParams, signal }),
     queryKey,
     refetchOnWindowFocus: opts.refetchOnWindowFocus ?? true,
     staleTime: opts.staleTime ?? 30 * 1000,

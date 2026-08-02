@@ -1,5 +1,4 @@
-import { HydrationBoundary, useQueryClient } from "@tanstack/react-query";
-import type { DehydratedState } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ClientOnly,
   createFileRoute,
@@ -8,16 +7,11 @@ import {
   useLoaderData,
   useRouter,
 } from "@tanstack/react-router";
-import type { DataGridQueryState } from "@/components/data-grid/query-contract";
-import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import { formatDocumentTitle } from "@/lib/start/document-title";
 import { loadStudioJobDescriptionsState } from "@/lib/start/studio/job-descriptions.functions";
-import type {
-  JobDescriptionFilters,
-  StudioJobDescriptionsState,
-} from "@/lib/start/studio/job-descriptions.functions";
+import type { StudioJobDescriptionsState } from "@/lib/start/studio/job-descriptions.functions";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { JobDescriptionsPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
@@ -60,6 +54,7 @@ import {
 } from "@/components/ui/empty";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { JobDescriptionFormDialog } from "@/components/features/studio/job-descriptions/job-description-form-dialog";
 import { createAiGeneratedJobDescriptionFormValues } from "@/components/features/studio/job-descriptions/job-description-form-values";
 import { JobDescriptionAiCreateDialog } from "@/components/features/studio/job-descriptions/job-description-ai-create-dialog";
@@ -71,6 +66,15 @@ import { createJobDescriptionListFilters } from "@/components/features/studio/jo
 import { useHasPermission } from "@/hooks/use-has-permission";
 
 const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
+
+interface JobDescriptionFilters extends Record<string, string> {
+  code: string;
+  departmentId: string;
+  googleSheetStatus: string;
+  interviewerId: string;
+  recruitmentStatus: string;
+  sourceSheet: string;
+}
 
 function formatSalaryRange(record: JobDescriptionListRecord): string | null {
   if (
@@ -133,41 +137,45 @@ function JobDescriptionManagementPage({
   const canSyncGoogleSheet = isWorkspaceAdministratorRole(memberRole);
 
   const fetchJobDescriptions = useCallback(
-    async (params: {
+    (params: {
+      signal: AbortSignal;
       search: string;
       page: number;
       pageSize: number;
       filters: JobDescriptionFilters;
       sortBy: string | undefined;
       sortOrder: "asc" | "desc" | undefined;
-    }): Promise<PaginatedJobDescriptionResult> => {
-      const res = await rpc.api.w[":slug"].studio["job-descriptions"].$get({
-        param: { slug },
-        query: {
-          page: String(params.page),
-          pageSize: String(params.pageSize),
-          ...(params.search ? { search: params.search } : {}),
-          ...(params.filters.code ? { code: params.filters.code } : {}),
-          ...(params.filters.sourceSheet ? { sourceSheet: params.filters.sourceSheet } : {}),
-          // 多选过滤：CSV 形式，例如 "a,b,c"。空串表示不筛选。
-          // / Multi-select filters serialize to CSV; empty string means "no filter".
-          ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
-          ...(params.filters.googleSheetStatus
-            ? { googleSheetStatus: params.filters.googleSheetStatus }
-            : {}),
-          ...(params.filters.interviewerId ? { interviewerId: params.filters.interviewerId } : {}),
-          ...(params.filters.recruitmentStatus
-            ? { recruitmentStatus: params.filters.recruitmentStatus }
-            : {}),
-          sortBy: params.sortBy ?? "createdAt",
-          sortOrder: params.sortOrder ?? "desc",
-        },
-      });
-      if (!res.ok) {
-        throw new Error("加载在招岗位列表失败");
-      }
-      return (await res.json()) as PaginatedJobDescriptionResult;
-    },
+    }): Promise<PaginatedJobDescriptionResult> =>
+      rpcFetch<PaginatedJobDescriptionResult>(
+        rpc.api.w[":slug"].studio["job-descriptions"].$get(
+          {
+            param: { slug },
+            query: {
+              page: String(params.page),
+              pageSize: String(params.pageSize),
+              ...(params.search ? { search: params.search } : {}),
+              ...(params.filters.code ? { code: params.filters.code } : {}),
+              ...(params.filters.sourceSheet ? { sourceSheet: params.filters.sourceSheet } : {}),
+              // 多选过滤：CSV 形式，例如 "a,b,c"。空串表示不筛选。
+              // / Multi-select filters serialize to CSV; empty string means "no filter".
+              ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
+              ...(params.filters.googleSheetStatus
+                ? { googleSheetStatus: params.filters.googleSheetStatus }
+                : {}),
+              ...(params.filters.interviewerId
+                ? { interviewerId: params.filters.interviewerId }
+                : {}),
+              ...(params.filters.recruitmentStatus
+                ? { recruitmentStatus: params.filters.recruitmentStatus }
+                : {}),
+              sortBy: params.sortBy ?? "createdAt",
+              sortOrder: params.sortOrder ?? "desc",
+            },
+          },
+          { init: { signal: params.signal } },
+        ),
+        "加载在招岗位列表失败",
+      ),
     [slug],
   );
 
@@ -674,23 +682,6 @@ function coerceSearchParams(search: Record<string, unknown>): SearchParamsRecord
   return out;
 }
 
-function parseJobDescriptionQuery(
-  searchParams: SearchParamsRecord,
-): DataGridQueryState<JobDescriptionFilters> {
-  return parseDataGridSearchParams(searchParams, {
-    allowedSortIds: ["createdAt", "name", "updatedAt"],
-    defaultSorting: [{ desc: true, id: "createdAt" }],
-    initialFilters: {
-      code: "",
-      departmentId: "",
-      googleSheetStatus: "",
-      interviewerId: "",
-      recruitmentStatus: "",
-      sourceSheet: "",
-    },
-  });
-}
-
 function StudioJobDescriptionsRoute() {
   const state = useLoaderData({
     from: "/w/$slug/studio/job-descriptions",
@@ -701,28 +692,22 @@ function StudioJobDescriptionsRoute() {
   }
 
   return (
-    <HydrationBoundary state={state.dehydratedState as unknown as DehydratedState}>
-      <JobDescriptionManagementPage
-        departments={state.departments}
-        interviewers={state.interviewers}
-        metrics={state.metrics}
-        recruitmentStatuses={state.recruitmentStatuses}
-        sourceSheets={state.sourceSheets}
-      />
-    </HydrationBoundary>
+    <JobDescriptionManagementPage
+      departments={state.departments}
+      interviewers={state.interviewers}
+      metrics={state.metrics}
+      recruitmentStatuses={state.recruitmentStatuses}
+      sourceSheets={state.sourceSheets}
+    />
   );
 }
 
 export const Route = createFileRoute("/w/$slug/studio/job-descriptions")({
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
   loader: async (loaderContext) => {
-    const { location, params } = loaderContext as unknown as {
-      location: { search: SearchParamsRecord };
-      params: { slug: string };
-    };
-    const query = parseJobDescriptionQuery(location.search);
+    const { params } = loaderContext as unknown as { params: { slug: string } };
     const state = (await loadStudioJobDescriptionsState({
-      data: { query, slug: params.slug },
+      data: { slug: params.slug },
     })) as StudioJobDescriptionsState;
     if (state.status === "unauthenticated") {
       throw redirect({

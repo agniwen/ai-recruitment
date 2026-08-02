@@ -125,24 +125,22 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(permissionSnapshot).toContain("organizationRole.permission");
   });
 
-  it("guards studio prefetch loaders with matching page permissions", () => {
+  it("guards Studio server data loaders and client-only lists with matching permissions", () => {
     const pageAccess = readSource("lib/start/studio/page-access.server.ts");
-    const pages = [
+    const serverDataPages = [
       ["dashboard", "dashboard"],
-      ["departments", "departments"],
       ["forms", "forms"],
       ["global-config", "globalConfig"],
       ["hiring-units", "hiringUnits"],
       ["interview-questions", "interviewQuestions"],
       ["interviewers", "interviewers"],
-      ["interviews", "interviews"],
       ["job-descriptions", "jobDescriptions"],
     ] as const;
 
     expect(pageAccess).toContain("resolveWorkspaceAccessFromRequest");
     expect(pageAccess).toContain('return { status: "not_found" }');
 
-    for (const [file, action] of pages) {
+    for (const [file, action] of serverDataPages) {
       const source = readSource(`lib/start/studio/${file}.functions.ts`);
       const guardIndex = source.indexOf(`"${action}"`);
       const prefetchIndex = source.search(
@@ -154,11 +152,21 @@ describe("TanStack Start studio settings and detail route migration", () => {
       expect(prefetchIndex).toBeGreaterThan(guardIndex);
     }
 
+    const studioRoute = readSource("routes/w.$slug.studio.tsx");
+    for (const file of ["departments", "interviews"] as const) {
+      const source = readSource(`routes/w.$slug.studio.${file}.tsx`);
+      expect(source).not.toContain(`studio/${file}.functions`);
+      expect(source).toContain("useDataGridState");
+      expect(source).toContain("rpcFetch");
+    }
+    expect(studioRoute).toContain(
+      'hasPermissionInStatements(state.permissions, "page", requestedPage.action)',
+    );
+
     const resumesRoute = readSource("routes/w.$slug.studio.resumes.tsx");
     const resumesState = readSource("lib/start/studio/resumes-state.server.ts");
     const resumesAccess = readSource("lib/start/studio/resumes-access.ts");
     const accessIndex = resumesState.indexOf("canReadStudioResumes(access)");
-    const prefetchIndex = resumesState.indexOf("await loadStudioResumesData");
 
     expect(resumesRoute).toContain("loadStudioResumesState");
     expect(resumesAccess).toContain(
@@ -168,7 +176,8 @@ describe("TanStack Start studio settings and detail route migration", () => {
       'hasPermissionInStatements(access.permissions, "resumeLibrary", "read")',
     );
     expect(accessIndex).toBeGreaterThanOrEqual(0);
-    expect(prefetchIndex).toBeGreaterThan(accessIndex);
+    expect(resumesState).toContain('return { status: "ready" }');
+    expect(resumesState).not.toContain("loadStudioResumesData");
   });
 
   it("keeps workspace permission role actions compact in the role column", () => {

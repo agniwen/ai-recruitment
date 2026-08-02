@@ -1,54 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-import type { JsonValue } from "@/lib/start/server-function-types";
-import { workspaceDataGridInputSchema } from "@/lib/start/server-fn-validators";
+import { slugInputSchema } from "@/lib/start/server-fn-validators";
 import { loadStudioResumesStateFromRequest } from "./resumes-state.server";
 
-export interface ResumeFilters extends Record<string, string> {
-  candidateEmail: string;
-  candidateName: string;
-  candidatePhone: string;
-  creatorIds: string;
-  hiringUnitId: string;
-  jdIds: string;
-  skills: string;
-  stage: string;
+export interface StudioResumesInput {
+  slug: string;
 }
-
-const resumeFiltersSchema = z.object({
-  candidateEmail: z.string(),
-  candidateName: z.string(),
-  candidatePhone: z.string(),
-  creatorIds: z.string(),
-  hiringUnitId: z.string(),
-  jdIds: z.string(),
-  skills: z.string(),
-  stage: z.string(),
-});
-
-const studioResumesInputSchema = workspaceDataGridInputSchema(resumeFiltersSchema).extend({
-  prefetchList: z.boolean(),
-});
-
-export type StudioResumesInput = z.infer<typeof studioResumesInputSchema>;
-
 export type StudioResumesServerState =
   | { status: "unauthenticated" }
   | { status: "not_found" }
-  | {
-      dehydratedState: JsonValue;
-      mode: "list";
-      status: "ready";
-    }
-  | {
-      mode: "nested";
-      status: "ready";
-    };
+  | { status: "ready" };
 
 export type StudioResumesState = StudioResumesServerState;
 
 export const loadStudioResumesState = createServerFn({ method: "GET" })
-  .validator(studioResumesInputSchema)
+  .validator(slugInputSchema)
   .handler(
     async ({ data }): Promise<StudioResumesServerState> =>
       await loadStudioResumesStateFromRequest(data),

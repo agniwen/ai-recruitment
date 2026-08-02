@@ -1,7 +1,6 @@
 import type { ReactVirtualizer, VirtualItem } from "@tanstack/react-virtual";
 import { useElementScrollRestoration, useRouter } from "@tanstack/react-router";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
-import type { ResumeFilters } from "@/lib/start/studio/resumes.functions";
 import {
   RESUME_LIBRARY_INFINITE_PAGE_SIZE,
   resumeLibrarySortIds,
@@ -27,6 +26,17 @@ export const ResumeDocumentPreviewDialog = lazy(async () => {
   const mod = await import("@/components/features/resume/resume-document-preview-dialog");
   return { default: mod.ResumeDocumentPreviewDialog };
 });
+
+export interface ResumeFilters extends Record<string, string> {
+  candidateEmail: string;
+  candidateName: string;
+  candidatePhone: string;
+  creatorIds: string;
+  hiringUnitId: string;
+  jdIds: string;
+  skills: string;
+  stage: string;
+}
 
 // 工具栏多选下拉在 state/URL 里以 CSV 字符串编码，符合 data-grid 工具栏约定。
 // 文本筛选项（姓名 / 邮箱 / 电话）各自独立，彼此 AND。
@@ -352,6 +362,7 @@ export function formatResumeLibraryJobDescriptionLabel(record: ResumeLibraryList
 }
 
 export interface FetchParams {
+  signal: AbortSignal;
   knownTotal?: number;
   page: number;
   pageSize: number;

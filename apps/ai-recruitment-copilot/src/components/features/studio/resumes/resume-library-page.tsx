@@ -198,21 +198,25 @@ export function ResumeLibraryPage() {
   const fetcher = useMemo(
     () =>
       (params: FetchParams): Promise<PaginatedResumeLibraryResult> =>
-        fetchStudioResumes(slug, {
-          candidateEmail: params.filters.candidateEmail || undefined,
-          candidateName: params.filters.candidateName || undefined,
-          candidatePhone: params.filters.candidatePhone || undefined,
-          creatorIds: parseCsvParam(params.filters.creatorIds),
-          hiringUnitId: params.filters.hiringUnitId || undefined,
-          jobDescriptionIds: parseCsvParam(params.filters.jdIds),
-          knownTotal: params.knownTotal,
-          page: params.page,
-          pageSize: params.pageSize,
-          pipelineStages: parseCsvParam(params.filters.stage),
-          skills: parseCsvParam(params.filters.skills),
-          sortBy: params.sortBy,
-          sortOrder: params.sortOrder,
-        }),
+        fetchStudioResumes(
+          slug,
+          {
+            candidateEmail: params.filters.candidateEmail || undefined,
+            candidateName: params.filters.candidateName || undefined,
+            candidatePhone: params.filters.candidatePhone || undefined,
+            creatorIds: parseCsvParam(params.filters.creatorIds),
+            hiringUnitId: params.filters.hiringUnitId || undefined,
+            jobDescriptionIds: parseCsvParam(params.filters.jdIds),
+            knownTotal: params.knownTotal,
+            page: params.page,
+            pageSize: params.pageSize,
+            pipelineStages: parseCsvParam(params.filters.stage),
+            skills: parseCsvParam(params.filters.skills),
+            sortBy: params.sortBy,
+            sortOrder: params.sortOrder,
+          },
+          { signal: params.signal },
+        ),
     [slug],
   );
 
@@ -290,12 +294,13 @@ export function ResumeLibraryPage() {
         ? { knownTotal: allPages[0]?.total, page: lastPage.page + 1 }
         : undefined,
     initialPageParam: { knownTotal: undefined as number | undefined, page: 1 },
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, signal }) =>
       fetcher({
         filters: grid.deferredFilters,
         knownTotal: pageParam.knownTotal,
         page: pageParam.page,
         pageSize: RESUME_LIBRARY_INFINITE_PAGE_SIZE,
+        signal,
         sortBy: activeSort?.id,
         sortOrder: activeSortOrder,
       }),

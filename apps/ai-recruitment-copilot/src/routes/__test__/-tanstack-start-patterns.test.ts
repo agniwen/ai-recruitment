@@ -209,17 +209,19 @@ describe("TanStack Start migration patterns", () => {
   });
 
   it("authorizes protected server functions at the data boundary", () => {
-    const workspaceRouteFiles = [
+    const workspaceServerFunctionRouteFiles = [
       "src/routes/w.$slug.studio.dashboard.tsx",
-      "src/routes/w.$slug.studio.departments.tsx",
       "src/routes/w.$slug.studio.forms.tsx",
       "src/routes/w.$slug.studio.global-config.tsx",
       "src/routes/w.$slug.studio.hiring-units.tsx",
       "src/routes/w.$slug.studio.interview-questions.tsx",
       "src/routes/w.$slug.studio.interviewers.tsx",
-      "src/routes/w.$slug.studio.interviews.tsx",
       "src/routes/w.$slug.studio.job-descriptions.tsx",
       "src/routes/w.$slug.studio.resumes.tsx",
+    ];
+    const workspaceClientListRouteFiles = [
+      "src/routes/w.$slug.studio.departments.tsx",
+      "src/routes/w.$slug.studio.interviews.tsx",
     ];
     const platformRouteFiles = [
       "src/routes/platform.organizations.tsx",
@@ -233,21 +235,28 @@ describe("TanStack Start migration patterns", () => {
     ];
     const workspaceFunctionFiles = [
       "src/lib/start/studio/dashboard.functions.ts",
-      "src/lib/start/studio/departments.functions.ts",
       "src/lib/start/studio/forms.functions.ts",
       "src/lib/start/studio/global-config.functions.ts",
       "src/lib/start/studio/hiring-units.functions.ts",
       "src/lib/start/studio/interview-questions.functions.ts",
       "src/lib/start/studio/interviewers.functions.ts",
-      "src/lib/start/studio/interviews.functions.ts",
       "src/lib/start/studio/job-descriptions.functions.ts",
     ];
 
-    for (const file of workspaceRouteFiles) {
+    for (const file of workspaceServerFunctionRouteFiles) {
       const source = readSource(file);
 
       expect(source).not.toContain("createServerFn");
       expect(source).toContain(".functions");
+    }
+
+    for (const file of workspaceClientListRouteFiles) {
+      const source = readSource(file);
+
+      expect(source).not.toContain("createServerFn");
+      expect(source).not.toContain(".functions");
+      expect(source).toContain("useDataGridState");
+      expect(source).toContain("rpcFetch");
     }
 
     for (const file of platformRouteFiles) {

@@ -115,12 +115,16 @@ function buildResumeListQuery(params: ResumeListParams): Record<string, string> 
 export function fetchStudioResumes(
   slug: string,
   params: ResumeListParams = {},
+  options?: { signal?: AbortSignal },
 ): Promise<PaginatedResumeLibraryResult> {
   return rpcFetch<PaginatedResumeLibraryResult>(
-    rpc.api.w[":slug"].studio.resumes.$get({
-      param: { slug },
-      query: buildResumeListQuery(params),
-    }),
+    rpc.api.w[":slug"].studio.resumes.$get(
+      {
+        param: { slug },
+        query: buildResumeListQuery(params),
+      },
+      { init: { signal: options?.signal } },
+    ),
     "加载简历列表失败",
   );
 }

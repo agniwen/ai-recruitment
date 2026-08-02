@@ -23,7 +23,7 @@ describe("TanStack Start studio interviews migration", () => {
     const source = readSource("routes/w.$slug.studio.interviews.tsx");
 
     expect(source).toContain("Outlet");
-    expect(source).toContain("isListRoute");
+    expect(source).toMatch(/pathname !== `\/w\/\$\{slug\}\/studio\/interviews`/u);
     expect(source).toContain("<Outlet />");
   });
 
