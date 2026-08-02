@@ -230,6 +230,7 @@ export function ResumeLibraryCardList({
   } else if (records.length > 0) {
     listContent = (
       <>
+        {error ? <ListLoadError compact error={error} onRetry={onRetry} /> : null}
         <div className="relative transition-opacity" style={{ height: virtualizer.getTotalSize() }}>
           {virtualItems.map((virtualRow) => {
             const record = records[virtualRow.index];

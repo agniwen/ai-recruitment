@@ -43,12 +43,12 @@ import {
   fetchStudioResumeDuplicateMatches,
   fetchStudioResumeSkillSuggestions,
   fetchStudioResumes,
+  rpcFetch,
   retryStudioResumeParse,
 } from "@/lib/client/api";
 import { fetchSelectableHiringUnits } from "@/lib/client/api/endpoints/hiring-units";
 import { rpc } from "@/lib/client/rpc";
 import { runAsyncAction } from "@/lib/client/async-control";
-import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { authClient } from "@/lib/client/auth-client";
 import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useHasPermission } from "@/hooks/use-has-permission";
