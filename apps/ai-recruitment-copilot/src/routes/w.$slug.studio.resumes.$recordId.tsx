@@ -29,7 +29,6 @@ import { fetchStudioResume } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useHasPermission } from "@/hooks/use-has-permission";
 import { formatDocumentTitle } from "@/lib/start/document-title";
-import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 
 type ResumeDetailPageSearchValue = boolean | number | string;
 type ResumeDetailPageSearch = Record<
@@ -412,17 +411,6 @@ function RecruiterResumeDetailPage() {
 
 export const Route = createFileRoute("/w/$slug/studio/resumes/$recordId")({
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
-  loader: async (loaderContext) => {
-    const { params } = loaderContext as unknown as {
-      params: { recordId: string; slug: string };
-    };
-    const pathname = `/w/${params.slug}/studio/resumes/${params.recordId}`;
-    await requireStudioPageAccess({
-      action: "resumes",
-      pathname,
-      slug: params.slug,
-    });
-  },
   head: () => ({
     meta: [{ title: formatDocumentTitle("候选人详情") }],
   }),

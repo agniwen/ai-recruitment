@@ -104,6 +104,7 @@ describe("TanStack Start studio settings and detail route migration", () => {
     const studioRoute = readSource("routes/w.$slug.studio.tsx");
     const authSession = readSource("lib/start/auth-session.ts");
     const authSessionServer = readSource("lib/start/auth-session.server.ts");
+    const pageAccess = readSource("lib/start/studio/page-access.server.ts");
     const permissionSnapshot = readSource(
       "../../ai-recruitment-copilot-backend/src/server/access/workspace-permission-snapshot.ts",
     );
@@ -117,35 +118,38 @@ describe("TanStack Start studio settings and detail route migration", () => {
       'hasPermissionInStatements(state.permissions, "page", requestedPage.action)',
     );
     expect(studioRoute).toMatch(/state\.status !== "ready"[\s\S]+throw notFound\(\);/u);
-    expect(authSession).toContain("getStudioPageAccessState");
     expect(authSession).toContain("getFirstAllowedStudioPagePath");
-    expect(authSessionServer).toContain("resolveStudioPageAccessFromRequest");
     expect(authSessionServer).toContain("computeWorkspacePermissionSnapshot");
+    expect(pageAccess).toContain("resolveAuthorizedStudioPageAccessFromRequest");
+    expect(pageAccess).toContain('hasPermissionInStatements(access.permissions, "page", action)');
     expect(permissionSnapshot).toContain("organizationRole.permission");
   });
 
   it("guards studio prefetch loaders with matching page permissions", () => {
-    const pageAccess = readSource("lib/start/studio/page-access.ts");
+    const pageAccess = readSource("lib/start/studio/page-access.server.ts");
     const pages = [
       ["dashboard", "dashboard"],
       ["departments", "departments"],
       ["forms", "forms"],
       ["global-config", "globalConfig"],
+      ["hiring-units", "hiringUnits"],
       ["interview-questions", "interviewQuestions"],
       ["interviewers", "interviewers"],
       ["interviews", "interviews"],
       ["job-descriptions", "jobDescriptions"],
     ] as const;
 
-    expect(pageAccess).toContain("getStudioPageAccessState");
-    expect(pageAccess).toContain("throw notFound()");
+    expect(pageAccess).toContain("resolveWorkspaceAccessFromRequest");
+    expect(pageAccess).toContain('return { status: "not_found" }');
 
     for (const [file, action] of pages) {
-      const source = readSource(`routes/w.$slug.studio.${file}.tsx`);
-      const guardIndex = source.indexOf(`action: "${action}"`);
-      const prefetchIndex = source.search(/await loadStudio[A-Za-z]+State\(/u);
+      const source = readSource(`lib/start/studio/${file}.functions.ts`);
+      const guardIndex = source.indexOf(`"${action}"`);
+      const prefetchIndex = source.search(
+        /await loadStudio[A-Za-z]+(?:Data|HydrationState|Initial|Metrics)\(/u,
+      );
 
-      expect(source).toContain("requireStudioPageAccess");
+      expect(source).toContain("resolveAuthorizedStudioPageAccessFromRequest");
       expect(guardIndex).toBeGreaterThanOrEqual(0);
       expect(prefetchIndex).toBeGreaterThan(guardIndex);
     }

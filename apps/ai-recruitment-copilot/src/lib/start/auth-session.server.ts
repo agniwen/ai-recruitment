@@ -4,7 +4,6 @@ import type {
   ActiveOrganizationState,
   NoAccessWaitState,
   ResumeReviewAccessState,
-  StudioPageAccessState,
   StudioPagePermissionAction,
   WorkspaceAccessState,
   WorkspaceSelectionState,
@@ -262,21 +261,6 @@ export async function resolveResumeReviewAccessFromRequest(
       id: session.user.id,
     },
     workspace,
-  };
-}
-
-export async function resolveStudioPageAccessFromRequest(
-  slug: string,
-  action: StudioPagePermissionAction,
-): Promise<StudioPageAccessState> {
-  const state = await resolveWorkspaceAccess(getRequestHeaders(), slug);
-  if (state.status !== "ready") {
-    return state;
-  }
-
-  return {
-    ...state,
-    allowed: hasPermissionInStatements(state.permissions, "page", action),
   };
 }
 

@@ -214,6 +214,7 @@ describe("TanStack Start migration patterns", () => {
       "src/routes/w.$slug.studio.departments.tsx",
       "src/routes/w.$slug.studio.forms.tsx",
       "src/routes/w.$slug.studio.global-config.tsx",
+      "src/routes/w.$slug.studio.hiring-units.tsx",
       "src/routes/w.$slug.studio.interview-questions.tsx",
       "src/routes/w.$slug.studio.interviewers.tsx",
       "src/routes/w.$slug.studio.interviews.tsx",
@@ -235,6 +236,7 @@ describe("TanStack Start migration patterns", () => {
       "src/lib/start/studio/departments.functions.ts",
       "src/lib/start/studio/forms.functions.ts",
       "src/lib/start/studio/global-config.functions.ts",
+      "src/lib/start/studio/hiring-units.functions.ts",
       "src/lib/start/studio/interview-questions.functions.ts",
       "src/lib/start/studio/interviewers.functions.ts",
       "src/lib/start/studio/interviews.functions.ts",
@@ -268,7 +270,7 @@ describe("TanStack Start migration patterns", () => {
       const source = readSource(file);
 
       expect(source).toContain("createServerFn");
-      expect(source).toContain("resolveWorkspaceAccessFromRequest");
+      expect(source).toContain("resolveAuthorizedStudioPageAccessFromRequest");
       expect(source).toContain('access.status !== "ready"');
       expect(source).not.toContain("await import");
     }

@@ -8,7 +8,6 @@ import {
 import type { RecruitingDashboardMetrics } from "@arc/shared/studio-dashboard";
 import { formatDocumentTitle } from "@/lib/start/document-title";
 import { loadStudioDashboardState } from "@/lib/start/studio/dashboard.functions";
-import { requireStudioPageAccess } from "@/lib/start/studio/page-access";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { DashboardPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { useMemo } from "react";
@@ -570,11 +569,6 @@ function StudioDashboardRoute() {
 
 export const Route = createFileRoute("/w/$slug/studio/dashboard")({
   loader: async ({ params }) => {
-    await requireStudioPageAccess({
-      action: "dashboard",
-      pathname: `/w/${params.slug}/studio/dashboard`,
-      slug: params.slug,
-    });
     const state = await loadStudioDashboardState({ data: { slug: params.slug } });
     if (state.status === "unauthenticated") {
       throw redirect({

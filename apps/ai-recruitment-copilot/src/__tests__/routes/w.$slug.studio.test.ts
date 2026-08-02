@@ -28,6 +28,10 @@ async function runStudioLoader(state: WorkspaceAccessState) {
 }
 
 describe("Studio route access", () => {
+  it("keeps server-side data loading while rendering the Studio UI on the client", () => {
+    expect(Route.options.ssr).toBe("data-only");
+  });
+
   it("accepts the requested page from the workspace parent match", async () => {
     await expect(runStudioLoader(readyAccess(["resumes"]))).resolves.toBeNull();
   });
