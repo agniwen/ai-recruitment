@@ -515,6 +515,11 @@ export function ResumeLibraryPage() {
     });
   }
 
+  const isInitialPageLoading = resumeLibraryListQuery.isPending && metricsQuery.isPending;
+  if (isInitialPageLoading) {
+    return <RecruitingPageSkeleton />;
+  }
+
   const resumeLibraryEmptyState = grid.filters.stage ? (
     <Empty className="border-border">
       <EmptyHeader>

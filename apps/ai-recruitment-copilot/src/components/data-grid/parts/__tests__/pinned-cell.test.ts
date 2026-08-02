@@ -10,19 +10,19 @@ import {
 } from "../pinned-cell";
 
 describe("pinned table headers", () => {
-  it("uses the opaque equivalent of the CardFrame header surface", () => {
-    const opaqueHeaderSurface = "bg-[color-mix(in_srgb,var(--card)_28%,var(--muted)_72%)]";
-
-    expect(PINNED_HEADER_CLASS).toContain(opaqueHeaderSurface);
-    expect(STICKY_HEADER_CLASS).toContain(opaqueHeaderSurface);
-    expect(PINNED_HEADER_CLASS).not.toMatch(/\/(?:\d+)/);
+  it("uses sidebar fill in light mode and muted in dark for sticky/pinned headers", () => {
+    expect(PINNED_HEADER_CLASS).toBe("bg-sidebar dark:bg-muted");
+    expect(STICKY_HEADER_CLASS).toContain("bg-sidebar");
+    expect(STICKY_HEADER_CLASS).toContain("dark:bg-muted");
+    expect(PINNED_HEADER_CLASS.includes("/")).toBe(false);
   });
 });
 
 describe("pinned edge separators", () => {
-  it("uses a single absolute 1px divider without a shadow", () => {
+  it("uses a single absolute 1px divider and clears the native edge border", () => {
     expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("before:w-px");
     expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("before:bg-border");
+    expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("border-r-0");
     expect(PINNED_EDGE_RIGHT_BORDER_CLASS).toContain("before:w-px");
     expect(PINNED_EDGE_RIGHT_BORDER_CLASS).toContain("before:bg-border");
     expect(PINNED_EDGE_LEFT_BORDER_CLASS).not.toMatch(/shadow/);

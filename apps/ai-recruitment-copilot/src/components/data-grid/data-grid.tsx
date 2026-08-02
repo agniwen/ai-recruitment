@@ -4,7 +4,6 @@ import type { ColumnDef, OnChangeFn, RowSelectionState, SortingState } from "@ta
 import type { ReactNode } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CardFrame } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -20,6 +19,7 @@ import {
   getPinnedEdgeClassName,
   getPinnedEdgeSides,
   getPinningStyles,
+  PINNED_CELL_CLASS,
   PINNED_HEADER_CLASS,
   readHorizontalScrollOverflow,
   STICKY_HEADER_CLASS,
@@ -304,7 +304,7 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
       ) : null}
 
       {rows.length > 0 ? (
-        <CardFrame className="w-full">
+        <div className="w-full overflow-hidden rounded-lg border">
           <Table
             render={
               <div
@@ -314,7 +314,6 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
                 style={maxHeight ? { maxHeight } : undefined}
               />
             }
-            variant="card"
           >
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -353,15 +352,19 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
               {rows.map((row) => (
                 <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
                   {row.getVisibleCells().map((cell) => {
+                    const pin = cell.column.getIsPinned();
                     const edge = getPinnedEdgeSides(cell.column);
                     return (
                       <TableCell
-                        className={getPinnedEdgeClassName({
-                          isLeftEdge: edge.isLeftEdge,
-                          isRightEdge: edge.isRightEdge,
-                          showLeftEdge: scrollOverflow.canScrollLeft,
-                          showRightEdge: scrollOverflow.canScrollRight,
-                        })}
+                        className={cn(
+                          pin && PINNED_CELL_CLASS,
+                          getPinnedEdgeClassName({
+                            isLeftEdge: edge.isLeftEdge,
+                            isRightEdge: edge.isRightEdge,
+                            showLeftEdge: scrollOverflow.canScrollLeft,
+                            showRightEdge: scrollOverflow.canScrollRight,
+                          }),
+                        )}
                         key={cell.id}
                         style={getPinningStyles(cell.column)}
                       >
@@ -373,7 +376,7 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
               ))}
             </TableBody>
           </Table>
-        </CardFrame>
+        </div>
       ) : (
         emptyContent
       )}

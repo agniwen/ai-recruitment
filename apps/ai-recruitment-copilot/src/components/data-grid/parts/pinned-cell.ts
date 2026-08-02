@@ -58,9 +58,11 @@ export function getPinningStyles<TData>(
   };
 }
 
-const OPAQUE_HEADER_SURFACE = "bg-[color-mix(in_srgb,var(--card)_28%,var(--muted)_72%)]";
+const OPAQUE_HEADER_SURFACE = "bg-sidebar dark:bg-muted";
 
 export const PINNED_HEADER_CLASS = OPAQUE_HEADER_SURFACE;
+
+export const PINNED_CELL_CLASS = "bg-background";
 
 /**
  * Sticky header cells use the opaque equivalent of the table header surface.
@@ -72,7 +74,7 @@ export const STICKY_HEADER_CLASS = `sticky top-0 z-2 ${OPAQUE_HEADER_SURFACE}`;
  * Uses ::before so the line stays with the sticky cell (collapse borders would scroll away).
  */
 export const PINNED_EDGE_LEFT_BORDER_CLASS =
-  "relative before:pointer-events-none before:absolute before:inset-y-0 before:right-0 before:z-[1] before:w-px before:bg-border";
+  "relative border-r-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-0 before:z-[1] before:w-px before:bg-border";
 
 export const PINNED_EDGE_RIGHT_BORDER_CLASS =
   "relative before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-[1] before:w-px before:bg-border";
