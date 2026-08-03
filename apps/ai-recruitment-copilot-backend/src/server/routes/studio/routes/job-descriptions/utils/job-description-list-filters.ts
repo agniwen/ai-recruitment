@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 const googleSheetStatusSchema = z.enum(["active", "deleted", "unlinked"]);
+const MAX_ID_FILTER_VALUES = 500;
+const MAX_ID_LENGTH = 120;
 
 const jobDescriptionListFiltersSchema = z.object({
   code: z.string().trim().max(120).optional().nullable(),
@@ -37,6 +39,12 @@ function csvToValues(value?: string | null): string[] | undefined {
   return values.length > 0 ? [...new Set(values)] : undefined;
 }
 
+function boundedIdCsvToValues(value?: string | null): string[] | undefined {
+  return csvToValues(value)
+    ?.filter((id) => id.length <= MAX_ID_LENGTH)
+    .slice(0, MAX_ID_FILTER_VALUES);
+}
+
 function parseEnumCsv<T extends string>(
   value: string | null | undefined,
   schema: z.ZodType<T>,
@@ -57,7 +65,7 @@ export function parseJobDescriptionListFilters(filters?: JobDescriptionListFilte
     code: parsed.data.code?.trim() || undefined,
     departmentIds: csvToValues(parsed.data.departmentId),
     googleSheetStatuses: parseEnumCsv(parsed.data.googleSheetStatus, googleSheetStatusSchema),
-    hiringUnitIds: csvToValues(parsed.data.hiringUnitId),
+    hiringUnitIds: boundedIdCsvToValues(parsed.data.hiringUnitId),
     interviewerIds: csvToValues(parsed.data.interviewerId),
     recruitmentStatuses: csvToValues(parsed.data.recruitmentStatus),
     search: parsed.data.search?.trim() || undefined,

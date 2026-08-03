@@ -59,4 +59,16 @@ describe("parseJobDescriptionListFilters", () => {
       search: "工程师",
     });
   });
+
+  it("bounds the hiring-unit SQL parameter list without dropping other filters", () => {
+    const hiringUnitIds = Array.from({ length: 501 }, (_, index) => `unit-${index}`);
+
+    const parsed = parseJobDescriptionListFilters({
+      hiringUnitId: hiringUnitIds.join(","),
+      search: "工程师",
+    });
+
+    expect(parsed.hiringUnitIds).toHaveLength(500);
+    expect(parsed.search).toBe("工程师");
+  });
 });
