@@ -103,7 +103,7 @@ describe("job description recruiting defaults", () => {
     expect(formSource).not.toContain('<form.Field name="googleSheetDeleted">');
   });
 
-  it("keeps Google Sheet fields ordered and pins identifiers around the table", () => {
+  it("keeps Google Sheet fields ordered and pins actions right of the stable id", () => {
     const columnsSource = jobDescriptionsPageSource.slice(
       jobDescriptionsPageSource.indexOf("const columns = useMemo"),
       jobDescriptionsPageSource.indexOf("const filtersConfig = useMemo"),
@@ -149,11 +149,11 @@ describe("job description recruiting defaults", () => {
     ]) {
       expect(columnsSource.indexOf(systemColumnMarker)).toBeGreaterThan(lastSheetPosition);
     }
-    expect(columnsSource.indexOf('key: "code"')).toBeGreaterThan(
-      columnsSource.indexOf("actionsColumn<JobDescriptionListRecord>"),
+    expect(columnsSource.indexOf("actionsColumn<JobDescriptionListRecord>")).toBeGreaterThan(
+      columnsSource.indexOf('key: "code"'),
     );
     expect(jobDescriptionsPageSource).toContain(
-      'columnPinning={{ left: ["name", "hiringUnitName"], right: ["actions", "code"] }}',
+      'columnPinning={{ left: ["name", "hiringUnitName"], right: ["code", "actions"] }}',
     );
     expect(columnsSource).not.toContain('title: "HC/缺口"');
   });

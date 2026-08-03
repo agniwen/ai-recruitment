@@ -518,6 +518,17 @@ export function JobDescriptionManagementPage({
         size: 128,
         title: "创建时间",
       }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.code ? (
+            <span className="block max-w-20 truncate font-mono text-xs">{r.code}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">未生成</span>
+          ),
+        key: "code",
+        size: 128,
+        title: "稳定唯一值",
+      }),
       actionsColumn<JobDescriptionListRecord>({
         inline: [
           {
@@ -544,17 +555,6 @@ export function JobDescriptionManagementPage({
           },
         ],
         size: 168,
-      }),
-      customColumn<JobDescriptionListRecord>({
-        cell: (r) =>
-          r.code ? (
-            <span className="block max-w-20 truncate font-mono text-xs">{r.code}</span>
-          ) : (
-            <span className="text-muted-foreground text-sm">未生成</span>
-          ),
-        key: "code",
-        size: 128,
-        title: "稳定唯一值",
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -586,7 +586,7 @@ export function JobDescriptionManagementPage({
 
         <DataGrid<JobDescriptionListRecord>
           {...grid.bind}
-          columnPinning={{ left: ["name", "hiringUnitName"], right: ["actions", "code"] }}
+          columnPinning={{ left: ["name", "hiringUnitName"], right: ["code", "actions"] }}
           columns={columns}
           empty={
             missingRefs ? (

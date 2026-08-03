@@ -18,6 +18,7 @@ import { PaginationBar } from "./parts/pagination-bar";
 import {
   getPinnedEdgeClassName,
   getPinnedEdgeSides,
+  getPinnedInteriorDividerClassName,
   getPinningStyles,
   PINNED_CELL_CLASS,
   PINNED_HEADER_CLASS,
@@ -326,6 +327,11 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
                         className={cn(
                           maxHeight && STICKY_HEADER_CLASS,
                           pin && PINNED_HEADER_CLASS,
+                          getPinnedInteriorDividerClassName({
+                            isLeftEdge: edge.isLeftEdge,
+                            isRightEdge: edge.isRightEdge,
+                            pin,
+                          }),
                           getPinnedEdgeClassName({
                             isLeftEdge: edge.isLeftEdge,
                             isRightEdge: edge.isRightEdge,
@@ -358,6 +364,11 @@ export function DataGrid<TData>(props: DataGridProps<TData>) {
                       <TableCell
                         className={cn(
                           pin && PINNED_CELL_CLASS,
+                          getPinnedInteriorDividerClassName({
+                            isLeftEdge: edge.isLeftEdge,
+                            isRightEdge: edge.isRightEdge,
+                            pin,
+                          }),
                           getPinnedEdgeClassName({
                             isLeftEdge: edge.isLeftEdge,
                             isRightEdge: edge.isRightEdge,

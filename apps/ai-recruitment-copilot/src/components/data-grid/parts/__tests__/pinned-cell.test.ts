@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getPinnedEdgeClassName,
   getPinningStyles,
+  getPinnedInteriorDividerClassName,
   PINNED_EDGE_LEFT_BORDER_CLASS,
   PINNED_EDGE_RIGHT_BORDER_CLASS,
   PINNED_HEADER_CLASS,
@@ -19,6 +20,38 @@ describe("pinned table headers", () => {
 });
 
 describe("pinned edge separators", () => {
+  it("paints separators between adjacent columns pinned to the same side", () => {
+    expect(
+      getPinnedInteriorDividerClassName({
+        isLeftEdge: false,
+        isRightEdge: false,
+        pin: "left",
+      }),
+    ).toContain("before:right-0");
+    expect(
+      getPinnedInteriorDividerClassName({
+        isLeftEdge: false,
+        isRightEdge: false,
+        pin: "right",
+      }),
+    ).toContain("before:left-0");
+
+    expect(
+      getPinnedInteriorDividerClassName({
+        isLeftEdge: true,
+        isRightEdge: false,
+        pin: "left",
+      }),
+    ).toBe("");
+    expect(
+      getPinnedInteriorDividerClassName({
+        isLeftEdge: false,
+        isRightEdge: true,
+        pin: "right",
+      }),
+    ).toBe("");
+  });
+
   it("uses a single absolute 1px divider and clears the native edge border", () => {
     expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("before:w-px");
     expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("before:bg-border");
