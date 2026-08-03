@@ -103,6 +103,13 @@ describe("job description recruiting defaults", () => {
     expect(formSource).not.toContain('<form.Field name="googleSheetDeleted">');
   });
 
+  it("shows scrollable full-content hover cards for long job fields", () => {
+    expect(jobDescriptionsPageSource).toContain("JobDescriptionLongTextHoverCard");
+    expect(jobDescriptionsPageSource).toContain("value={r.prompt}");
+    expect(jobDescriptionsPageSource).toContain("value={r.notes}");
+    expect(jobDescriptionsPageSource).toContain("value={r.description}");
+  });
+
   it("keeps Google Sheet fields ordered and pins actions right of the stable id", () => {
     const columnsSource = jobDescriptionsPageSource.slice(
       jobDescriptionsPageSource.indexOf("const columns = useMemo"),

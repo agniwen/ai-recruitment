@@ -50,6 +50,7 @@ import { JobDescriptionAiCreateDialog } from "@/components/features/studio/job-d
 import { JobDescriptionTalentRecommendationsDialog } from "@/components/features/studio/job-descriptions/job-description-talent-recommendations-dialog";
 import { useJobDescriptionDeepLink } from "@/components/features/studio/job-descriptions/use-job-description-deep-link";
 import { JobDescriptionToolbarActions } from "@/components/features/studio/job-descriptions/job-description-management-actions";
+import { JobDescriptionLongTextHoverCard } from "@/components/features/studio/job-descriptions/job-description-long-text-hover-card";
 import { jobDescriptionSourceColumn } from "@/components/features/studio/job-descriptions/job-description-source-column";
 import { createJobDescriptionListFilters } from "@/components/features/studio/job-descriptions/job-description-list-filters";
 import { useHasPermission } from "@/hooks/use-has-permission";
@@ -386,13 +387,17 @@ export function JobDescriptionManagementPage({
         title: "简历对接人（花名 & @TG）",
         truncate: "max-w-36",
       }),
-      textColumn<JobDescriptionListRecord>({
-        fallback: "—",
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) => (
+          <JobDescriptionLongTextHoverCard
+            label="JD(必填) 岗位职责+任职要求"
+            previewClassName="max-w-64 text-muted-foreground"
+            value={r.prompt}
+          />
+        ),
         key: "prompt",
-        muted: true,
         size: 280,
         title: "JD（岗位职责+任职要求）",
-        truncate: "max-w-64",
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) => {
@@ -407,13 +412,17 @@ export function JobDescriptionManagementPage({
         size: 168,
         title: "薪资范围",
       }),
-      textColumn<JobDescriptionListRecord>({
-        fallback: "—",
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) => (
+          <JobDescriptionLongTextHoverCard
+            label="备注说明\n非远程岗位请备注说明工作地点"
+            previewClassName="max-w-64 text-muted-foreground"
+            value={r.notes}
+          />
+        ),
         key: "notes",
-        muted: true,
         size: 280,
         title: "备注说明（非远程岗位请备注工作地点）",
-        truncate: "max-w-64",
       }),
       textColumn<JobDescriptionListRecord>({
         fallback: "—",
@@ -505,9 +514,11 @@ export function JobDescriptionManagementPage({
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) => (
-          <span className="block max-w-[13rem] truncate text-muted-foreground text-sm">
-            {r.description || "—"}
-          </span>
+          <JobDescriptionLongTextHoverCard
+            label="描述"
+            previewClassName="max-w-[13rem] text-muted-foreground text-sm"
+            value={r.description}
+          />
         ),
         key: "description",
         size: 240,
