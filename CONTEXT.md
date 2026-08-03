@@ -108,6 +108,7 @@ _Avoid_: Candidate identity, resume record, interview round
 
 **Resume Library**:
 The workspace roster of resume records that have been accepted into the recruiting workflow.
+Its Studio sidebar navigation label is **招聘**.
 _Avoid_: Candidate database, interview list
 
 **Resume Record**:
@@ -120,6 +121,7 @@ _Avoid_: Parsed JSON, resume data
 
 **Resume Pool**:
 A pre-library staging area for parsed resumes before they are imported into the resume library.
+Its Studio sidebar navigation label is **人才库**.
 _Avoid_: Resume library, upload queue
 
 **Private Resume Pool**:
