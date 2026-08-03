@@ -6,7 +6,7 @@ const jobDescriptionListFiltersSchema = z.object({
   code: z.string().trim().max(120).optional().nullable(),
   departmentId: z.string().trim().max(120).optional().nullable(),
   googleSheetStatus: z.string().trim().max(120).optional().nullable(),
-  hiringUnitId: z.string().trim().max(500).optional().nullable(),
+  hiringUnitId: z.string().trim().optional().nullable(),
   interviewerId: z.string().trim().max(120).optional().nullable(),
   recruitmentStatus: z.string().trim().max(500).optional().nullable(),
   search: z.string().trim().max(120).optional().nullable(),

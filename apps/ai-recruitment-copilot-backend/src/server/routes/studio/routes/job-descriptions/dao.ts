@@ -35,6 +35,7 @@ import {
   studioInterviewSchedule,
 } from "@arc/db-schema/schema";
 import {
+  buildJobDescriptionHiringUnitScopeCondition,
   resolveDepartmentHiringUnitScopeCondition,
   resolveJobDescriptionHiringUnitScopeCondition,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
@@ -151,14 +152,11 @@ function buildWhereConditions({
     conditions.push(inArray(jobDescription.departmentId, departmentIds));
   }
   if (hiringUnitIds && hiringUnitIds.length > 0) {
-    const hiringUnitCondition = or(
-      inArray(jobDescription.hiringUnitId, hiringUnitIds),
-      and(
-        eq(jobDescription.creationSource, "manual"),
-        isNull(jobDescription.hiringUnitId),
-        inArray(department.hiringUnitId, hiringUnitIds),
-      ),
-    );
+    const hiringUnitCondition = buildJobDescriptionHiringUnitScopeCondition({
+      canAccessAll: false,
+      canAccessPublic: false,
+      hiringUnitIds,
+    });
     if (hiringUnitCondition) {
       conditions.push(hiringUnitCondition);
     }

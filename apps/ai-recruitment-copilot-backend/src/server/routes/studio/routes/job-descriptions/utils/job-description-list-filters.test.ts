@@ -42,4 +42,21 @@ describe("parseJobDescriptionListFilters", () => {
       sourceSheet: undefined,
     });
   });
+
+  it("keeps all selected hiring units when their CSV exceeds 500 characters", () => {
+    const hiringUnitIds = Array.from(
+      { length: 20 },
+      (_, index) => `00000000-0000-0000-0000-${String(index).padStart(12, "0")}`,
+    );
+
+    expect(
+      parseJobDescriptionListFilters({
+        hiringUnitId: hiringUnitIds.join(","),
+        search: "工程师",
+      }),
+    ).toMatchObject({
+      hiringUnitIds,
+      search: "工程师",
+    });
+  });
 });
