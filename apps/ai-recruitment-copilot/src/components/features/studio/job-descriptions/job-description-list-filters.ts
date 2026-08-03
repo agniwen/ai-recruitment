@@ -4,11 +4,13 @@ import type { ToolbarFilterConfig } from "@/components/data-grid";
 
 export function createJobDescriptionListFilters({
   departments,
+  hiringUnits,
   interviewers,
   recruitmentStatuses,
   sourceSheets,
 }: {
   departments: DepartmentRecord[];
+  hiringUnits: { id: string; name: string }[];
   interviewers: InterviewerListRecord[];
   recruitmentStatuses: string[];
   sourceSheets: string[];
@@ -55,6 +57,18 @@ export function createJobDescriptionListFilters({
       ],
       placeholder: "全部 Google 文档状态",
       type: "select",
+    },
+    {
+      emptyMessage: "没有匹配的编制组织",
+      key: "hiringUnitId",
+      options: hiringUnits.map((hiringUnit) => ({
+        label: hiringUnit.name,
+        value: hiringUnit.id,
+      })),
+      placeholder: "全部编制组织",
+      searchPlaceholder: "搜索编制组织…",
+      selectedFormat: (count: number) => `已选 ${count} 个编制组织`,
+      type: "multi-select",
     },
     {
       emptyMessage: "没有匹配的部门",

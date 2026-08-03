@@ -18,6 +18,7 @@ function StudioJobDescriptionsRoute() {
   return (
     <JobDescriptionManagementPage
       departments={state.departments}
+      hiringUnits={state.hiringUnits}
       interviewers={state.interviewers}
       metrics={state.metrics}
       recruitmentStatuses={state.recruitmentStatuses}

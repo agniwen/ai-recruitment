@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
+import type { HiringUnitRecord } from "@arc/shared/hiring-units";
 import type { JobDescriptionMetrics } from "@arc/shared/job-descriptions";
 import { slugInputSchema } from "@/lib/start/server-fn-validators";
 import { loadStudioJobDescriptionsData } from "./job-descriptions.server";
@@ -11,6 +12,7 @@ export type StudioJobDescriptionsState =
   | { status: "not_found" }
   | {
       departments: DepartmentRecord[];
+      hiringUnits: HiringUnitRecord[];
       interviewers: InterviewerListRecord[];
       metrics: JobDescriptionMetrics;
       recruitmentStatuses: string[];

@@ -61,6 +61,7 @@ interface JobDescriptionFilters extends Record<string, string> {
   code: string;
   departmentId: string;
   googleSheetStatus: string;
+  hiringUnitId: string;
   interviewerId: string;
   recruitmentStatus: string;
   sourceSheet: string;
@@ -79,12 +80,14 @@ function formatSalaryRange(record: JobDescriptionListRecord): string | null {
 
 export function JobDescriptionManagementPage({
   departments,
+  hiringUnits,
   interviewers,
   metrics,
   recruitmentStatuses,
   sourceSheets,
 }: {
   departments: DepartmentRecord[];
+  hiringUnits: { id: string; name: string }[];
   interviewers: InterviewerListRecord[];
   metrics: JobDescriptionMetrics;
   recruitmentStatuses: string[];
@@ -136,6 +139,7 @@ export function JobDescriptionManagementPage({
               ...(params.filters.googleSheetStatus
                 ? { googleSheetStatus: params.filters.googleSheetStatus }
                 : {}),
+              ...(params.filters.hiringUnitId ? { hiringUnitId: params.filters.hiringUnitId } : {}),
               ...(params.filters.interviewerId
                 ? { interviewerId: params.filters.interviewerId }
                 : {}),
@@ -173,6 +177,7 @@ export function JobDescriptionManagementPage({
       code: "",
       departmentId: "",
       googleSheetStatus: "",
+      hiringUnitId: "",
       interviewerId: "",
       recruitmentStatus: "",
       sourceSheet: "",
@@ -576,11 +581,12 @@ export function JobDescriptionManagementPage({
     () =>
       createJobDescriptionListFilters({
         departments,
+        hiringUnits,
         interviewers,
         recruitmentStatuses,
         sourceSheets,
       }),
-    [departments, interviewers, recruitmentStatuses, sourceSheets],
+    [departments, hiringUnits, interviewers, recruitmentStatuses, sourceSheets],
   );
 
   return (

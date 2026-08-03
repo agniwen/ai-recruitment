@@ -6,6 +6,7 @@ const jobDescriptionListFiltersSchema = z.object({
   code: z.string().trim().max(120).optional().nullable(),
   departmentId: z.string().trim().max(120).optional().nullable(),
   googleSheetStatus: z.string().trim().max(120).optional().nullable(),
+  hiringUnitId: z.string().trim().max(500).optional().nullable(),
   interviewerId: z.string().trim().max(120).optional().nullable(),
   recruitmentStatus: z.string().trim().max(500).optional().nullable(),
   search: z.string().trim().max(120).optional().nullable(),
@@ -18,6 +19,7 @@ export interface JobDescriptionListFilterInput {
   code?: string | null;
   departmentId?: string | null;
   googleSheetStatus?: string | null;
+  hiringUnitId?: string | null;
   interviewerId?: string | null;
   recruitmentStatus?: string | null;
   search?: string | null;
@@ -55,6 +57,7 @@ export function parseJobDescriptionListFilters(filters?: JobDescriptionListFilte
     code: parsed.data.code?.trim() || undefined,
     departmentIds: csvToValues(parsed.data.departmentId),
     googleSheetStatuses: parseEnumCsv(parsed.data.googleSheetStatus, googleSheetStatusSchema),
+    hiringUnitIds: csvToValues(parsed.data.hiringUnitId),
     interviewerIds: csvToValues(parsed.data.interviewerId),
     recruitmentStatuses: csvToValues(parsed.data.recruitmentStatus),
     search: parsed.data.search?.trim() || undefined,

@@ -107,6 +107,7 @@ function buildWhereConditions({
   search,
   sourceSheet,
   departmentIds,
+  hiringUnitIds,
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
@@ -118,6 +119,7 @@ function buildWhereConditions({
   search?: string;
   sourceSheet?: string;
   departmentIds?: string[];
+  hiringUnitIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
@@ -147,6 +149,19 @@ function buildWhereConditions({
   }
   if (departmentIds && departmentIds.length > 0) {
     conditions.push(inArray(jobDescription.departmentId, departmentIds));
+  }
+  if (hiringUnitIds && hiringUnitIds.length > 0) {
+    const hiringUnitCondition = or(
+      inArray(jobDescription.hiringUnitId, hiringUnitIds),
+      and(
+        eq(jobDescription.creationSource, "manual"),
+        isNull(jobDescription.hiringUnitId),
+        inArray(department.hiringUnitId, hiringUnitIds),
+      ),
+    );
+    if (hiringUnitCondition) {
+      conditions.push(hiringUnitCondition);
+    }
   }
   if (interviewerIds && interviewerIds.length > 0) {
     if (!jdIdsForInterviewers || jdIdsForInterviewers.length === 0) {
@@ -191,6 +206,7 @@ function listJobDescriptionRows({
   search,
   sourceSheet,
   departmentIds,
+  hiringUnitIds,
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
@@ -206,6 +222,7 @@ function listJobDescriptionRows({
   search?: string;
   sourceSheet?: string;
   departmentIds?: string[];
+  hiringUnitIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
@@ -218,6 +235,7 @@ function listJobDescriptionRows({
     code,
     departmentIds,
     googleSheetStatuses,
+    hiringUnitIds,
     interviewerIds,
     jdIdsForInterviewers,
     organizationId,
@@ -302,6 +320,7 @@ async function countJobDescriptionRows({
   search,
   sourceSheet,
   departmentIds,
+  hiringUnitIds,
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
@@ -313,6 +332,7 @@ async function countJobDescriptionRows({
   search?: string;
   sourceSheet?: string;
   departmentIds?: string[];
+  hiringUnitIds?: string[];
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
@@ -321,6 +341,7 @@ async function countJobDescriptionRows({
     code,
     departmentIds,
     googleSheetStatuses,
+    hiringUnitIds,
     interviewerIds,
     jdIdsForInterviewers,
     organizationId,
@@ -508,6 +529,7 @@ export async function queryPaginatedJobDescriptions(
     code,
     departmentIds,
     googleSheetStatuses,
+    hiringUnitIds,
     interviewerIds,
     recruitmentStatuses,
     search,
@@ -526,6 +548,7 @@ export async function queryPaginatedJobDescriptions(
       code,
       departmentIds,
       googleSheetStatuses,
+      hiringUnitIds,
       interviewerIds,
       jdIdsForInterviewers,
       limit: pageSize,
@@ -542,6 +565,7 @@ export async function queryPaginatedJobDescriptions(
       code,
       departmentIds,
       googleSheetStatuses,
+      hiringUnitIds,
       interviewerIds,
       jdIdsForInterviewers,
       organizationId,
