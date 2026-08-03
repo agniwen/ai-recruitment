@@ -79,12 +79,6 @@ export const PINNED_EDGE_LEFT_BORDER_CLASS =
 export const PINNED_EDGE_RIGHT_BORDER_CLASS =
   "relative before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-[1] before:w-px before:bg-border";
 
-const PINNED_INTERIOR_LEFT_BORDER_CLASS =
-  "relative border-r-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-0 before:z-[1] before:w-px before:bg-border";
-
-const PINNED_INTERIOR_RIGHT_BORDER_CLASS =
-  "relative before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:z-[1] before:w-px before:bg-border";
-
 /**
  * Native collapsed table borders can scroll underneath sticky cells. Paint the
  * dividers between adjacent pinned columns on the sticky cells themselves.
@@ -95,8 +89,8 @@ export function getPinnedInteriorDividerClassName(options: {
   pin: false | "left" | "right";
 }): string {
   return cn(
-    options.pin === "left" && !options.isLeftEdge && PINNED_INTERIOR_LEFT_BORDER_CLASS,
-    options.pin === "right" && !options.isRightEdge && PINNED_INTERIOR_RIGHT_BORDER_CLASS,
+    options.pin === "left" && !options.isLeftEdge && PINNED_EDGE_LEFT_BORDER_CLASS,
+    options.pin === "right" && !options.isRightEdge && PINNED_EDGE_RIGHT_BORDER_CLASS,
   );
 }
 
