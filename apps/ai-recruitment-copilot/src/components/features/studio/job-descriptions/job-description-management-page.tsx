@@ -76,22 +76,6 @@ function formatSalaryRange(record: JobDescriptionListRecord): string | null {
   return record.salaryRangeRaw?.trim() || null;
 }
 
-function formatHeadcount(record: JobDescriptionListRecord): string | null {
-  if (
-    record.headcount === null &&
-    record.onboardedCount === null &&
-    record.gapCount === null &&
-    record.offeredPendingOnboardCount === null
-  ) {
-    return null;
-  }
-  const headcount = record.headcount ?? "-";
-  const gap = record.gapCount ?? "-";
-  const onboarded = record.onboardedCount ?? "-";
-  const offered = record.offeredPendingOnboardCount ?? "-";
-  return `HC ${headcount} / 缺口 ${gap} / 到岗 ${onboarded} / offer ${offered}`;
-}
-
 export function JobDescriptionManagementPage({
   departments,
   interviewers,
@@ -278,14 +262,55 @@ export function JobDescriptionManagementPage({
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) =>
-          r.code ? (
-            <span className="block max-w-20 truncate font-mono text-xs">{r.code}</span>
+          r.hiringUnitName ? (
+            <span className="block max-w-28 truncate">{r.hiringUnitName}</span>
           ) : (
-            <span className="text-muted-foreground text-sm">未生成</span>
+            <span className="text-muted-foreground text-sm">—</span>
           ),
-        key: "code",
-        size: 112,
-        title: "编码",
+        key: "hiringUnitName",
+        size: 140,
+        title: "编制组织",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.recruitmentStatus ? (
+            <Badge className="max-w-24 truncate" variant="secondary">
+              {r.recruitmentStatus}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          ),
+        key: "recruitmentStatus",
+        size: 120,
+        title: "招聘状态",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "controlCategory",
+        size: 144,
+        title: "岗位管控分类",
+        truncate: "max-w-32",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "jobSeries",
+        size: 104,
+        title: "序列",
+        truncate: "max-w-20",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "jobLevel",
+        size: 104,
+        title: "职级",
+        truncate: "max-w-20",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "serviceUnit",
+        size: 136,
+        title: "服务单位",
+        truncate: "max-w-28",
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) =>
@@ -298,16 +323,126 @@ export function JobDescriptionManagementPage({
         size: 128,
         title: "部门",
       }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "headcount",
+        size: 88,
+        title: "HC",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "onboardedCount",
+        size: 104,
+        title: "已到岗",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "gapCount",
+        size: 88,
+        title: "缺口",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "offeredPendingOnboardCount",
+        size: 152,
+        title: "已发offer待入职",
+      }),
+      dateColumn<JobDescriptionListRecord>({
+        emptyText: "—",
+        key: "requestedDate",
+        options: "YY/MM/DD",
+        size: 112,
+        title: "提需日期",
+      }),
+      dateColumn<JobDescriptionListRecord>({
+        emptyText: "—",
+        key: "expectedOnboardDate",
+        options: "YY/MM/DD",
+        size: 128,
+        title: "期望到岗日期",
+      }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) =>
-          r.hiringUnitName ? (
-            <span className="block max-w-28 truncate">{r.hiringUnitName}</span>
+          r.priority ? (
+            <span className="block max-w-14 truncate">{r.priority}</span>
           ) : (
             <span className="text-muted-foreground text-sm">—</span>
           ),
-        key: "hiringUnitName",
-        size: 140,
-        title: "编制组织",
+        key: "priority",
+        size: 88,
+        title: "优先级",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "requester",
+        size: 128,
+        title: "需求发起人",
+        truncate: "max-w-24",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "resumeContact",
+        size: 168,
+        title: "简历对接人（花名 & @TG）",
+        truncate: "max-w-36",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "prompt",
+        muted: true,
+        size: 280,
+        title: "JD（岗位职责+任职要求）",
+        truncate: "max-w-64",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) => {
+          const salary = formatSalaryRange(r);
+          return salary ? (
+            <span className="block max-w-[8.5rem] truncate font-mono text-sm">{salary}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          );
+        },
+        key: "salary",
+        size: 168,
+        title: "薪资范围",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "notes",
+        muted: true,
+        size: 280,
+        title: "备注说明（非远程岗位请备注工作地点）",
+        truncate: "max-w-64",
+      }),
+      textColumn<JobDescriptionListRecord>({
+        fallback: "—",
+        key: "sourceSheet",
+        size: 136,
+        title: "来源表格",
+        truncate: "max-w-28",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.workLocation ? (
+            <span className="block max-w-24 truncate">{r.workLocation}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">—</span>
+          ),
+        key: "workLocation",
+        size: 128,
+        title: "工作地点",
+      }),
+      customColumn<JobDescriptionListRecord>({
+        cell: (r) =>
+          r.code ? (
+            <span className="block max-w-20 truncate font-mono text-xs">{r.code}</span>
+          ) : (
+            <span className="text-muted-foreground text-sm">未生成</span>
+          ),
+        key: "code",
+        size: 128,
+        title: "稳定唯一值",
       }),
       jobDescriptionSourceColumn,
       customColumn<JobDescriptionListRecord>({
@@ -331,67 +466,6 @@ export function JobDescriptionManagementPage({
         key: "googleSheetDeleted",
         size: 120,
         title: "Google 文档",
-      }),
-      customColumn<JobDescriptionListRecord>({
-        cell: (r) =>
-          r.recruitmentStatus ? (
-            <Badge className="max-w-24 truncate" variant="secondary">
-              {r.recruitmentStatus}
-            </Badge>
-          ) : (
-            <span className="text-muted-foreground text-sm">—</span>
-          ),
-        key: "recruitmentStatus",
-        size: 120,
-        title: "招聘状态",
-      }),
-      customColumn<JobDescriptionListRecord>({
-        cell: (r) =>
-          r.priority ? (
-            <span className="block max-w-14 truncate">{r.priority}</span>
-          ) : (
-            <span className="text-muted-foreground text-sm">—</span>
-          ),
-        key: "priority",
-        size: 88,
-        title: "优先级",
-      }),
-      customColumn<JobDescriptionListRecord>({
-        cell: (r) => {
-          const salary = formatSalaryRange(r);
-          return salary ? (
-            <span className="block max-w-[8.5rem] truncate font-mono text-sm">{salary}</span>
-          ) : (
-            <span className="text-muted-foreground text-sm">—</span>
-          );
-        },
-        key: "salary",
-        size: 168,
-        title: "薪资范围",
-      }),
-      customColumn<JobDescriptionListRecord>({
-        cell: (r) => {
-          const headcount = formatHeadcount(r);
-          return headcount ? (
-            <span className="block max-w-[10.5rem] truncate text-sm">{headcount}</span>
-          ) : (
-            <span className="text-muted-foreground text-sm">—</span>
-          );
-        },
-        key: "headcount",
-        size: 200,
-        title: "HC/缺口",
-      }),
-      customColumn<JobDescriptionListRecord>({
-        cell: (r) =>
-          r.workLocation ? (
-            <span className="block max-w-24 truncate">{r.workLocation}</span>
-          ) : (
-            <span className="text-muted-foreground text-sm">—</span>
-          ),
-        key: "workLocation",
-        size: 128,
-        title: "工作地点",
       }),
       customColumn<JobDescriptionListRecord>({
         cell: (r) => {

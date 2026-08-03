@@ -103,6 +103,55 @@ describe("job description recruiting defaults", () => {
     expect(formSource).not.toContain('<form.Field name="googleSheetDeleted">');
   });
 
+  it("shows every Google Sheet field in sheet order before system-only columns", () => {
+    const columnsSource = jobDescriptionsPageSource.slice(
+      jobDescriptionsPageSource.indexOf("const columns = useMemo"),
+      jobDescriptionsPageSource.indexOf("const filtersConfig = useMemo"),
+    );
+    const sheetColumnKeys = [
+      "name",
+      "hiringUnitName",
+      "recruitmentStatus",
+      "controlCategory",
+      "jobSeries",
+      "jobLevel",
+      "serviceUnit",
+      "departmentName",
+      "headcount",
+      "onboardedCount",
+      "gapCount",
+      "offeredPendingOnboardCount",
+      "requestedDate",
+      "expectedOnboardDate",
+      "priority",
+      "requester",
+      "resumeContact",
+      "prompt",
+      "salary",
+      "notes",
+      "sourceSheet",
+      "workLocation",
+      "code",
+    ];
+    const positions = sheetColumnKeys.map((key) => columnsSource.indexOf(`key: "${key}"`));
+    const lastSheetPosition = positions.at(-1) ?? -1;
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].toSorted((left, right) => left - right));
+    for (const systemColumnMarker of [
+      "jobDescriptionSourceColumn",
+      'key: "googleSheetDeleted"',
+      'key: "interviewers"',
+      'key: "resumeCount"',
+      'key: "description"',
+      'key: "createdAt"',
+      "actionsColumn<JobDescriptionListRecord>",
+    ]) {
+      expect(columnsSource.indexOf(systemColumnMarker)).toBeGreaterThan(lastSheetPosition);
+    }
+    expect(columnsSource).not.toContain('title: "HC/缺口"');
+  });
+
   it("disables AI interviews by default for every new-job entry point", () => {
     expect(createJobDescriptionFormValues().aiInterviewDisabled).toBe(true);
     const aiDraft = createAiGeneratedJobDescriptionFormValues({
