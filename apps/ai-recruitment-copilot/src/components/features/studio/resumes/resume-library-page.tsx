@@ -554,11 +554,6 @@ export function ResumeLibraryPage() {
     </Empty>
   );
 
-  const isInitialPageLoading = resumeLibraryListQuery.isPending && metricsQuery.isPending;
-  if (isInitialPageLoading) {
-    return <RecruitingPageSkeleton />;
-  }
-
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">

@@ -31,7 +31,6 @@ import { Modal } from "@/components/ui/modal";
 import { fetchResumePoolItem } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useHasPermission } from "@/hooks/use-has-permission";
-import { resumeBadgeShapeClass } from "./resume-badge-styles";
 
 const LEVEL_META: Record<
   NonNullable<DedupMatchRecord["level"]>,

@@ -12,7 +12,6 @@ import { ResumeDedupOverlay } from "@/components/features/resume/resume-dedup-ov
 import { TextFlip } from "@/components/features/motion/text-flip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@arc/shared/utils";
 import {
   IconCheck as CheckIcon,

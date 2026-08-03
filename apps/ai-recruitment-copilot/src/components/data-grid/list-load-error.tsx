@@ -3,7 +3,6 @@
 import { IconAlertCircle } from "@tabler/icons-react";
 import { cn } from "@arc/shared/utils";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : "加载列表失败，请稍后重试。";

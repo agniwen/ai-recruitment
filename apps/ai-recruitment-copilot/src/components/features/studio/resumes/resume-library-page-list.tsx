@@ -54,7 +54,6 @@ interface ResumeLibraryCardListProps {
   onPreviewResume: (record: ResumeLibraryListRecord) => void;
   onRetry: () => void;
   onRetryParse: (record: ResumeLibraryListRecord) => void;
-  onRetry: () => void;
   onShowDuplicateMatches: (record: ResumeLibraryListRecord) => void;
   onTransition: (record: ResumeLibraryListRecord, mode: "close" | "reactivate") => void;
   records: ResumeLibraryListRecord[];
@@ -99,7 +98,6 @@ export function ResumeLibraryCardList({
   onPreviewResume,
   onRetry,
   onRetryParse,
-  onRetry,
   onShowDuplicateMatches,
   onTransition,
   records,

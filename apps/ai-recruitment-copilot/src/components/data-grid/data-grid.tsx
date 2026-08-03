@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CardFrame } from "@/components/ui/card";
 import { cn } from "@arc/shared/utils";
 import { PaginationBar } from "./parts/pagination-bar";
 import {

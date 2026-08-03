@@ -149,10 +149,10 @@ describe("ResumeComparisonDialog", () => {
 
     expect(document.body.textContent).toContain("同步滚动");
     const current = document.querySelector<HTMLElement>(
-      '[data-resume-comparison-scroll="current"]',
+      '[data-resume-compare-scroll-container="current"]',
     );
     const suspected = document.querySelector<HTMLElement>(
-      '[data-resume-comparison-scroll="suspected"]',
+      '[data-resume-compare-scroll-container="suspected"]',
     );
     expect(current).not.toBeNull();
     expect(suspected).not.toBeNull();
