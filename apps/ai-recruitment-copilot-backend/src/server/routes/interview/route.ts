@@ -47,9 +47,11 @@ import {
   loadScheduleEntriesForRedirect,
 } from "./utils";
 import { resolveJobDescriptionMatchBestEffort } from "./match-job-description";
+import { candidateInterviewFeedbackRouter } from "./routes/feedback/route";
 
 export const interviewRouter = factory
   .createApp()
+  .route("/", candidateInterviewFeedbackRouter)
   .post("/parse-resume", authMiddleware, async (c) => {
     const formData = await c.req.formData();
     const resume = formData.get("resume");
