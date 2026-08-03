@@ -23,6 +23,7 @@ import { removeImportedInterviewFromConversations } from "@arc/ai-recruitment-co
 import { recordCandidateActivityInTransaction } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import {
+  getStoredResumeParseFileUrl,
   parseResumeFastToProfile,
   validateResumeFile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
@@ -302,7 +303,8 @@ export const resumeLibraryRouter = factory
       let resumeText = parsedResumePayload?.resumeText ?? uploadResult?.resumeText ?? null;
       let parsedFileName: string | null = parsedResumePayload?.fileName ?? resume?.name ?? null;
       if (resume && !resumeProfile) {
-        const parsed = await parseResumeFastToProfile(resume);
+        const fileUrl = await getStoredResumeParseFileUrl(resume, resumeStorageKey);
+        const parsed = await parseResumeFastToProfile(resume, { fileUrl });
         ({ resumeProfile } = parsed);
         resumeText = parsed.parsedText;
         parsedFileName = resume.name;
