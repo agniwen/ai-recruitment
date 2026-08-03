@@ -3,6 +3,8 @@ import { resolveRouteMeta } from "./site-header";
 
 describe("resolveRouteMeta", () => {
   it.each([
+    ["/w/demo/studio/resumes", "招聘"],
+    ["/w/demo/studio/resume-pool", "人才库"],
     ["/w/demo/studio/calendar", "日程管理"],
     ["/w/demo/studio/dashboard", "数据看板"],
   ])("resolves %s to %s", (pathname, title) => {
