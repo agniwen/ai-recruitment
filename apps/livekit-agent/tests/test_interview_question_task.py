@@ -83,7 +83,7 @@ def test_reopened_question_increments_revision_and_preserves_follow_up_count():
     }
 
 
-def test_task_group_uses_stable_ids_and_disables_context_summarization():
+async def test_task_group_uses_stable_ids_and_disables_context_summarization():
     questions = (
         _question("easy"),
         DispatchQuestion(

@@ -213,6 +213,7 @@ function MoreMenu({
   );
 }
 
+// oxlint-disable-next-line complexity -- Card actions reflect permissions and the record's parse, review, and import states.
 export function ResumeLibraryCardActions({
   canCopyLink,
   canCreateInterview,

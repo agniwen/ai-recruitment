@@ -209,6 +209,7 @@ export function SelectResumePoolScopeDialog({
   );
 }
 
+// oxlint-disable-next-line complexity -- Import coordinates source metadata, destination selection, deduplication, and confirmation states.
 export function ImportResumePoolDialog({
   item,
   onImported,

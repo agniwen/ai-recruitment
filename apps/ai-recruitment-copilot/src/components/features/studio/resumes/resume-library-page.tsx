@@ -1,4 +1,4 @@
-/* oxlint-disable complexity -- page controller coordinates grid queries and dialogs. */
+/* oxlint-disable complexity max-lines -- page controller coordinates grid queries and dialogs. */
 import { IconUsers } from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearch } from "@tanstack/react-router";
@@ -625,12 +625,11 @@ export function ResumeLibraryPage() {
             resumeLibraryListQuery.isRefetching && !resumeLibraryListQuery.isFetchingNextPage
           }
           onBulkDelete={() => setBulkDeleteOpen(true)}
-          onCopyDetailLink={(record) => {
-            void copyResumeDetailLink(slug, record).then((copied) => {
-              if (copied) {
-                setDetailLinkReminderOpen(true);
-              }
-            });
+          onCopyDetailLink={async (record) => {
+            const copied = await copyResumeDetailLink(slug, record);
+            if (copied) {
+              setDetailLinkReminderOpen(true);
+            }
           }}
           onDelete={setDeleteRecord}
           onEdit={(record) => setEditRecordId(record.id)}
