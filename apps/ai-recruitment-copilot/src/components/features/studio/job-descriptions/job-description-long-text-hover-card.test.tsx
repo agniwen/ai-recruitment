@@ -11,6 +11,7 @@ import { JobDescriptionLongTextHoverCard } from "./job-description-long-text-hov
 const roots: ReturnType<typeof createRoot>[] = [];
 
 afterEach(() => {
+  vi.useRealTimers();
   for (const root of roots.splice(0)) {
     act(() => root.unmount());
   }
@@ -18,7 +19,8 @@ afterEach(() => {
 });
 
 describe("JobDescriptionLongTextHoverCard", () => {
-  it("opens a scrollable card with the complete field value", async () => {
+  it("opens a scrollable card with the complete field value", () => {
+    vi.useFakeTimers();
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
@@ -38,14 +40,18 @@ describe("JobDescriptionLongTextHoverCard", () => {
     const trigger = host.querySelector("button");
     expect(trigger?.className).toContain("truncate");
 
-    act(() => trigger?.click());
-
-    await vi.waitFor(() => {
-      expect(document.body.textContent).toContain(value);
-      expect(document.body.querySelector('[data-slot="scroll-area"]')?.className).toContain(
-        "max-h-72",
-      );
-      expect(document.body.querySelector('[data-slot="hover-card-content"]')).not.toBeNull();
+    act(() => {
+      const pointerEnter = new Event("pointerover", { bubbles: true });
+      Object.defineProperty(pointerEnter, "pointerType", { value: "mouse" });
+      trigger?.dispatchEvent(pointerEnter);
+      trigger?.dispatchEvent(new MouseEvent("mouseenter"));
+      vi.advanceTimersByTime(251);
     });
+
+    expect(document.body.textContent).toContain(value);
+    expect(document.body.querySelector('[data-slot="scroll-area"]')?.className).toContain(
+      "max-h-72",
+    );
+    expect(document.body.querySelector('[data-slot="hover-card-content"]')).not.toBeNull();
   });
 });
