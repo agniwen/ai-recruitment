@@ -22,6 +22,8 @@ const ROUTE_META: { prefix: string; meta: RouteMeta }[] = [
   { meta: { title: "简历广场" }, prefix: "/studio/resume-pool" },
   { meta: { title: "简历库" }, prefix: "/studio/resumes" },
   { meta: { title: "AI 面试" }, prefix: "/studio/interviews" },
+  { meta: { title: "日程管理" }, prefix: "/studio/calendar" },
+  { meta: { title: "数据看板" }, prefix: "/studio/dashboard" },
   { meta: { title: "用人组织管理" }, prefix: "/studio/hiring-units" },
   { meta: { title: "部门管理" }, prefix: "/studio/departments" },
   { meta: { title: "AI面试官设置" }, prefix: "/studio/interviewers" },
@@ -38,7 +40,7 @@ const ROUTE_META: { prefix: string; meta: RouteMeta }[] = [
 const DEFAULT_META: RouteMeta = { title: "简历库" };
 const WORKSPACE_PREFIX_REGEX = /^\/w\/[^/]+/;
 
-function resolveRouteMeta(pathname: string): RouteMeta {
+export function resolveRouteMeta(pathname: string): RouteMeta {
   // 实际 URL 形如 /w/[slug]/studio/...,匹配前先把 /w/[slug] 前缀去掉。
   // Strip the /w/[slug] prefix so we can match against bare /studio/<section>.
   const studioPath = pathname.replace(WORKSPACE_PREFIX_REGEX, "");

@@ -58,14 +58,14 @@ const navGroups: NavGroup[] = [
         icon: UsersIcon,
         path: "/studio/resumes",
         resource: "page",
-        title: "简历库",
+        title: "招聘",
       },
       {
         action: "resumePool",
         icon: LayoutGridIcon,
         path: "/studio/resume-pool",
         resource: "page",
-        title: "简历广场",
+        title: "人才库",
       },
       {
         action: "interviews",
