@@ -1716,6 +1716,7 @@ export const PDFViewer = React.forwardRef<PDFViewerHandle, PDFViewerProps>(funct
                   "h-full max-h-full min-h-0 min-w-0 flex-1 overflow-auto",
                   isFirstPageRendering && !loadError && "invisible",
                 )}
+                data-slot="pdf-viewer-viewport"
                 ref={viewportRef}
               >
                 <div

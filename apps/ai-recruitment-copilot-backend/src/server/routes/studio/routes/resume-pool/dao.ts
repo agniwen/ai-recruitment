@@ -404,22 +404,26 @@ async function loadVisiblePoolItem(input: {
   return null;
 }
 
-async function loadImportsForOrg(
-  poolItemId: string,
+interface PoolImportRecord {
+  creatorImage: string | null;
+  creatorName: string | null;
+  importedAt: Date;
+  resumeRecordId: string;
+}
+
+async function loadImportsForOrgByPoolItemIds(
+  poolItemIds: string[],
   organizationId: string,
-): Promise<
-  {
-    creatorImage: string | null;
-    creatorName: string | null;
-    importedAt: Date;
-    resumeRecordId: string;
-  }[]
-> {
-  return await db
+): Promise<Map<string, PoolImportRecord[]>> {
+  if (poolItemIds.length === 0) {
+    return new Map();
+  }
+  const rows = await db
     .select({
       creatorImage: user.image,
       creatorName: user.name,
       importedAt: resumePoolImport.importedAt,
+      poolItemId: resumePoolImport.poolItemId,
       resumeRecordId: resumePoolImport.importedResumeRecordId,
     })
     .from(resumePoolImport)
@@ -433,11 +437,26 @@ async function loadImportsForOrg(
     .leftJoin(user, eq(member.userId, user.id))
     .where(
       and(
-        eq(resumePoolImport.poolItemId, poolItemId),
+        inArray(resumePoolImport.poolItemId, poolItemIds),
         eq(resumePoolImport.organizationId, organizationId),
       ),
     )
     .orderBy(desc(resumePoolImport.importedAt), desc(resumePoolImport.id));
+  const importsByPoolItemId = new Map<string, PoolImportRecord[]>();
+  for (const row of rows) {
+    const imports = importsByPoolItemId.get(row.poolItemId) ?? [];
+    imports.push(row);
+    importsByPoolItemId.set(row.poolItemId, imports);
+  }
+  return importsByPoolItemId;
+}
+
+async function loadImportsForOrg(
+  poolItemId: string,
+  organizationId: string,
+): Promise<PoolImportRecord[]> {
+  const imports = await loadImportsForOrgByPoolItemIds([poolItemId], organizationId);
+  return imports.get(poolItemId) ?? [];
 }
 
 async function loadSourceChannels(
@@ -528,9 +547,12 @@ export async function queryResumePoolItems(
     .where(where)
     .orderBy(desc(resumePoolItem.createdAt))
     .limit(100);
-  const [imports, sourceChannels, duplicateMatches, jobDescriptionNames, retryableIds] =
+  const [importsByPoolItemId, sourceChannels, duplicateMatches, jobDescriptionNames, retryableIds] =
     await Promise.all([
-      Promise.all(rows.map((row) => loadImportsForOrg(row.item.id, input.organizationId))),
+      loadImportsForOrgByPoolItemIds(
+        rows.map((row) => row.item.id),
+        input.organizationId,
+      ),
       loadSourceChannels(rows.map((row) => row.item.id)),
       loadPoolDuplicateMatches({
         organizationId: input.organizationId,
@@ -548,10 +570,10 @@ export async function queryResumePoolItems(
       }),
     ]);
   return {
-    records: rows.map((row, index) =>
+    records: rows.map((row) =>
       toResumePoolListRecord(
         row.item,
-        imports[index] ?? [],
+        importsByPoolItemId.get(row.item.id) ?? [],
         uploaderMetaFromRow(row),
         sourceChannels.get(row.item.id) ?? null,
         duplicateMatches.get(row.item.id) ?? null,

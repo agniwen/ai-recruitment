@@ -144,6 +144,36 @@ describe("ResumeComparisonDialog", () => {
     expect(document.querySelectorAll("time")).toHaveLength(2);
   });
 
+  it("synchronizes both comparison panes by scroll progress", async () => {
+    await renderComparison("details");
+
+    expect(document.body.textContent).toContain("同步滚动");
+    const current = document.querySelector<HTMLElement>(
+      '[data-resume-comparison-scroll="current"]',
+    );
+    const suspected = document.querySelector<HTMLElement>(
+      '[data-resume-comparison-scroll="suspected"]',
+    );
+    expect(current).not.toBeNull();
+    expect(suspected).not.toBeNull();
+    if (!(current && suspected)) {
+      throw new Error("Expected both comparison scroll panes");
+    }
+    Object.defineProperties(current, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 500 },
+    });
+    Object.defineProperties(suspected, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 1000 },
+    });
+
+    current.scrollTop = 200;
+    current.dispatchEvent(new Event("scroll"));
+
+    expect(suspected.scrollTop).toBe(450);
+  });
+
   it("shows both original resume documents with the correct endpoints", async () => {
     await renderComparison("documents");
 
