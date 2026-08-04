@@ -12,7 +12,7 @@ import {
 } from "@arc/shared/resume-documents";
 import {
   buildAttachmentKeyByHash,
-  presignGetObjectUrl,
+  presignGetObjectUrlBestEffort,
   putObjectBytes,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
@@ -61,7 +61,7 @@ async function uploadAndParseResume(input: {
   }
   const [parseOutcome] = await Promise.allSettled([
     (async () => {
-      const fileUrl = await presignGetObjectUrl(input.storageKey);
+      const fileUrl = await presignGetObjectUrlBestEffort(input.storageKey);
       return parseResumeDocument({ ...parseInput, fileUrl });
     })(),
   ]);

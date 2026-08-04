@@ -24,7 +24,7 @@ import {
 import type { ResumeTextSource } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
 import {
   buildAttachmentKeyByHash,
-  presignGetObjectUrl,
+  presignGetObjectUrlBestEffort,
   putObjectBytes,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
@@ -534,7 +534,7 @@ export function streamParseResumeProfile(
             contentType: file.type || "application/octet-stream",
             storageKey,
           });
-          fileUrl = await presignGetObjectUrl(storageKey);
+          fileUrl = await presignGetObjectUrlBestEffort(storageKey);
         } catch (error) {
           storageKey = undefined;
           console.error("[parse-resume] failed to prepare stored PDF URL; using fallback", error);
@@ -670,7 +670,7 @@ export function getStoredResumeParseFileUrl(
     getResumeParseProvider() === "ocr-llm" &&
     getResumeDocumentKind({ fileName: file.name, mediaType: file.type }) === "pdf"
   ) {
-    return presignGetObjectUrl(storageKey);
+    return presignGetObjectUrlBestEffort(storageKey);
   }
   return Promise.resolve(undefined as string | undefined);
 }

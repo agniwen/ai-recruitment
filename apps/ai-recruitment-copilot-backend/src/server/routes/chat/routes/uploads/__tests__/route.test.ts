@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@arc/shared/file-hash", () => ({ sha256HexOfBytes: mocks.sha256HexOfBytes }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   buildAttachmentKeyByHash: mocks.buildAttachmentKeyByHash,
-  presignGetObjectUrl: mocks.presignGetObjectUrl,
+  presignGetObjectUrlBestEffort: mocks.presignGetObjectUrl,
   putObjectBytes: mocks.putObjectBytes,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline", () => ({
@@ -202,6 +202,30 @@ describe("uploadsRouter cache policy", () => {
         fileUrl: "https://storage.example.test/resume.pdf?signature=secret",
         mediaType: "application/pdf",
       }),
+    );
+  });
+
+  it("falls back to byte OCR when a stored PDF URL cannot be signed", async () => {
+    process.env.RESUME_PARSE_DISABLE_CACHE = "true";
+    mocks.buildAttachmentKeyByHash.mockResolvedValue("dev/chat-attachments/fresh.pdf");
+    mocks.presignGetObjectUrl.mockImplementation(async () => {});
+
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([new TextEncoder().encode("pdf-bytes")], "resume.pdf", {
+        type: "application/pdf",
+      }),
+    );
+
+    const res = await makeApp().request("/uploads", {
+      body: form,
+      method: "POST",
+    });
+
+    expect(res.status).toBe(200);
+    expect(mocks.parseResumeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: "resume.pdf", fileUrl: undefined }),
     );
   });
 

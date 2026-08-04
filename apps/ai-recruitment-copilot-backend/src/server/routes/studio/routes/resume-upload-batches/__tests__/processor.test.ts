@@ -7,7 +7,7 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type * as S3Module from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
   getObjectStream,
-  presignGetObjectUrl,
+  presignGetObjectUrlBestEffort,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import type * as ResumeAgentModule from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import {
@@ -56,7 +56,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", async () => {
   return {
     ...actual,
     getObjectStream: vi.fn(),
-    presignGetObjectUrl: vi.fn(),
+    presignGetObjectUrlBestEffort: vi.fn(),
   };
 });
 
@@ -326,7 +326,7 @@ beforeEach(() => {
   (enqueueResumeReviewGenerationForRecordBestEffort as ReturnType<typeof vi.fn>).mockResolvedValue(
     true,
   );
-  (presignGetObjectUrl as ReturnType<typeof vi.fn>).mockResolvedValue(
+  (presignGetObjectUrlBestEffort as ReturnType<typeof vi.fn>).mockResolvedValue(
     "https://storage.example.test/resume.pdf?signature=secret",
   );
 });
@@ -384,7 +384,7 @@ describe("processNextItem — happy path", () => {
 
     const result = await processBatchItem(beforeItem.id);
 
-    expect(presignGetObjectUrl).toHaveBeenCalledWith(beforeItem.storageKey);
+    expect(presignGetObjectUrlBestEffort).toHaveBeenCalledWith(beforeItem.storageKey);
     expect(parseResumeBytesToProfile).toHaveBeenCalledWith(
       expect.objectContaining({
         fileUrl: "https://storage.example.test/resume.pdf?signature=secret",

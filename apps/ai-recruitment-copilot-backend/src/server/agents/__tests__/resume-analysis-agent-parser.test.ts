@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@arc/shared/file-hash", () => ({ sha256HexOfBytes: mocks.sha256HexOfBytes }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   buildAttachmentKeyByHash: mocks.buildAttachmentKeyByHash,
-  presignGetObjectUrl: mocks.presignGetObjectUrl,
+  presignGetObjectUrlBestEffort: mocks.presignGetObjectUrl,
   putObjectBytes: mocks.putObjectBytes,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline", () => ({
@@ -210,6 +210,26 @@ describe("resume parsing agent", () => {
       expect.objectContaining({
         fileUrl: "https://storage.example.test/resume.pdf?signature=secret",
       }),
+      expect.any(Object),
+    );
+  });
+
+  it("streams a workspace PDF through byte OCR when signing is unavailable", async () => {
+    mocks.sha256HexOfBytes.mockResolvedValue("hash-1");
+    mocks.findAttachmentByContentHash.mockResolvedValue(null);
+    mocks.buildAttachmentKeyByHash.mockResolvedValue("chat-attachments/hash-1.pdf");
+    mocks.putObjectBytes.mockResolvedValue(undefined as never);
+    mocks.presignGetObjectUrl.mockImplementation(async () => {});
+
+    await readStreamEvents(
+      streamParseResumeProfile(
+        new File([new Uint8Array([1, 2, 3])], "resume.pdf", { type: "application/pdf" }),
+        { organizationId: "org-1", userId: "user-1" },
+      ),
+    );
+
+    expect(mocks.streamResumeParseWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ fileUrl: undefined }),
       expect.any(Object),
     );
   });

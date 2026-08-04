@@ -239,6 +239,17 @@ export async function presignGetObjectUrl(
   });
 }
 
+export async function presignGetObjectUrlBestEffort(
+  storageKey: string,
+  expiresInSeconds = 600,
+): Promise<string | undefined> {
+  try {
+    return await presignGetObjectUrl(storageKey, expiresInSeconds);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function presignRecordingGetObjectUrl(
   storageKey: string,
   expiresInSeconds = 600,

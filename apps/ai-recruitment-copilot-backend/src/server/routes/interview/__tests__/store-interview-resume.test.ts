@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@arc/shared/file-hash", () => ({ sha256HexOfBytes: mocks.sha256HexOfBytes }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   buildAttachmentKeyByHash: mocks.buildAttachmentKeyByHash,
-  presignGetObjectUrl: mocks.presignGetObjectUrl,
+  presignGetObjectUrlBestEffort: mocks.presignGetObjectUrl,
   putObjectBytes: mocks.putObjectBytes,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat-attachments", () => ({
@@ -231,6 +231,31 @@ describe("storeInterviewResume", () => {
       parsedStructured: { name: "李四" },
       storageKey: STORAGE_KEY,
       userId: "user-2",
+    });
+  });
+
+  it("miss + signing unavailable: parses the uploaded PDF from bytes", async () => {
+    mocks.findAttachmentByContentHash.mockResolvedValue(null);
+    mocks.putObjectBytes.mockResolvedValue(undefined as never);
+    mocks.presignGetObjectUrl.mockImplementation(async () => {});
+    mocks.parseResumeFastToProfile.mockResolvedValue({
+      parsedPageCount: 1,
+      parsedStructured: { name: "离线候选人" },
+      parsedText: "fallback raw",
+      parsedTextSource: "qwen3.5-ocr",
+      resumeProfile: { name: "离线候选人" } as never,
+    });
+
+    const result = await storeInterviewResume(
+      "interview-fallback",
+      makeFile(),
+      "user-fallback",
+      "org-test",
+    );
+
+    expect(result?.cachedResumeProfile).toEqual({ name: "离线候选人" });
+    expect(mocks.parseResumeFastToProfile).toHaveBeenCalledWith(expect.any(File), {
+      fileUrl: undefined,
     });
   });
 

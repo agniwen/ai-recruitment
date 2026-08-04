@@ -9,7 +9,7 @@ import {
 import type { ProcessNextResult } from "@arc/shared/bulk-resume-upload";
 import {
   getObjectStream,
-  presignGetObjectUrl,
+  presignGetObjectUrlBestEffort,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { parseResumeBytesToProfile } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
@@ -118,7 +118,7 @@ async function resolveResumeProfile(item: NonNullable<ItemRow>): Promise<{
       fileName: item.originalFileName,
       mediaType: object.contentType ?? undefined,
     }) === "pdf"
-      ? await presignGetObjectUrl(item.storageKey)
+      ? await presignGetObjectUrlBestEffort(item.storageKey)
       : undefined;
   const parseStartedAt = Date.now();
   logStep("parse.start", { fileSize: bytes.byteLength, itemId: item.id });

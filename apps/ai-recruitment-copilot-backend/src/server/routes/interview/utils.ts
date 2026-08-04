@@ -33,7 +33,7 @@ import {
 import { sha256HexOfBytes } from "@arc/shared/file-hash";
 import {
   buildAttachmentKeyByHash,
-  presignGetObjectUrl,
+  presignGetObjectUrlBestEffort,
   putObjectBytes,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
@@ -70,12 +70,12 @@ async function uploadAndParseInterviewResume(input: {
   }
 
   const [putOutcome] = await Promise.allSettled([putPromise]);
-  if (putOutcome.status === "rejected") {
-    return [putOutcome, { reason: putOutcome.reason, status: "rejected" }];
-  }
   const [parseOutcome] = await Promise.allSettled([
     (async () => {
-      const fileUrl = await presignGetObjectUrl(input.storageKey);
+      const fileUrl =
+        putOutcome.status === "fulfilled"
+          ? await presignGetObjectUrlBestEffort(input.storageKey)
+          : undefined;
       return parseResumeFastToProfile(input.file, { fileUrl });
     })(),
   ]);
