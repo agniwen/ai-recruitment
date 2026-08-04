@@ -238,7 +238,7 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(source).toContain("useDataGridState<ManagedMailIngestRow");
     expect(source).toContain("<DataGrid<ManagedMailIngestRow>");
     expect(source).toContain('type: "search"');
-    expect(source).toContain('columnPinning={{ right: ["actions"] }}');
+    expect(source).toContain('columnPinning={{ end: ["actions"] }}');
     expect(source).not.toContain("<Table>");
     expect(source).not.toContain("function getInitials");
     expect(source).not.toContain("IconPencil");

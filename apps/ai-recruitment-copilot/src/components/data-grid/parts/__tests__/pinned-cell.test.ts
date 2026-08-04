@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   getPinnedEdgeClassName,
-  getPinningStyles,
   getPinnedInteriorDividerClassName,
+  getPinningStyles,
+  PINNED_EDGE_END_BORDER_CLASS,
   PINNED_EDGE_LEFT_BORDER_CLASS,
   PINNED_EDGE_RIGHT_BORDER_CLASS,
+  PINNED_EDGE_START_BORDER_CLASS,
   PINNED_HEADER_CLASS,
   readHorizontalScrollOverflow,
   STICKY_HEADER_CLASS,
@@ -23,77 +25,79 @@ describe("pinned edge separators", () => {
   it("paints separators between adjacent columns pinned to the same side", () => {
     expect(
       getPinnedInteriorDividerClassName({
-        isLeftEdge: false,
-        isRightEdge: false,
-        pin: "left",
+        isEndEdge: false,
+        isStartEdge: false,
+        pin: "start",
       }),
-    ).toContain("before:right-0");
+    ).toContain("before:end-0");
     expect(
       getPinnedInteriorDividerClassName({
-        isLeftEdge: false,
-        isRightEdge: false,
-        pin: "right",
+        isEndEdge: false,
+        isStartEdge: false,
+        pin: "end",
       }),
-    ).toContain("before:left-0");
-
+    ).toContain("before:start-0");
     expect(
       getPinnedInteriorDividerClassName({
-        isLeftEdge: true,
-        isRightEdge: false,
-        pin: "left",
+        isEndEdge: false,
+        isStartEdge: true,
+        pin: "start",
       }),
     ).toBe("");
     expect(
       getPinnedInteriorDividerClassName({
-        isLeftEdge: false,
-        isRightEdge: true,
-        pin: "right",
+        isEndEdge: true,
+        isStartEdge: false,
+        pin: "end",
       }),
     ).toBe("");
   });
 
   it("uses a single absolute 1px divider and clears the native edge border", () => {
-    expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("before:w-px");
-    expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("before:bg-border");
-    expect(PINNED_EDGE_LEFT_BORDER_CLASS).toContain("border-r-0");
-    expect(PINNED_EDGE_RIGHT_BORDER_CLASS).toContain("before:w-px");
-    expect(PINNED_EDGE_RIGHT_BORDER_CLASS).toContain("before:bg-border");
-    expect(PINNED_EDGE_LEFT_BORDER_CLASS).not.toMatch(/shadow/);
-    expect(PINNED_EDGE_RIGHT_BORDER_CLASS).not.toMatch(/shadow/);
+    expect(PINNED_EDGE_START_BORDER_CLASS).toContain("before:w-px");
+    expect(PINNED_EDGE_START_BORDER_CLASS).toContain("before:bg-border");
+    expect(PINNED_EDGE_START_BORDER_CLASS).toContain("border-e-0");
+    expect(PINNED_EDGE_END_BORDER_CLASS).toContain("before:w-px");
+    expect(PINNED_EDGE_END_BORDER_CLASS).toContain("before:bg-border");
+    expect(PINNED_EDGE_START_BORDER_CLASS).not.toMatch(/shadow/);
+    expect(PINNED_EDGE_END_BORDER_CLASS).not.toMatch(/shadow/);
+    // Legacy aliases kept for compatibility.
+    expect(PINNED_EDGE_LEFT_BORDER_CLASS).toBe(PINNED_EDGE_START_BORDER_CLASS);
+    expect(PINNED_EDGE_RIGHT_BORDER_CLASS).toBe(PINNED_EDGE_END_BORDER_CLASS);
   });
 
   it("only paints the pin-edge divider while scroll has content under that side", () => {
     expect(
       getPinnedEdgeClassName({
-        isLeftEdge: true,
-        isRightEdge: false,
-        showLeftEdge: false,
+        isEndEdge: false,
+        isStartEdge: true,
+        showStartEdge: false,
       }),
     ).toBe("");
 
     expect(
       getPinnedEdgeClassName({
-        isLeftEdge: true,
-        isRightEdge: false,
-        showLeftEdge: true,
+        isEndEdge: false,
+        isStartEdge: true,
+        showStartEdge: true,
       }),
-    ).toBe(PINNED_EDGE_LEFT_BORDER_CLASS);
+    ).toBe(PINNED_EDGE_START_BORDER_CLASS);
 
     expect(
       getPinnedEdgeClassName({
-        isLeftEdge: false,
-        isRightEdge: true,
-        showRightEdge: false,
+        isEndEdge: true,
+        isStartEdge: false,
+        showEndEdge: false,
       }),
     ).toBe("");
 
     expect(
       getPinnedEdgeClassName({
-        isLeftEdge: false,
-        isRightEdge: true,
-        showRightEdge: true,
+        isEndEdge: true,
+        isStartEdge: false,
+        showEndEdge: true,
       }),
-    ).toBe(PINNED_EDGE_RIGHT_BORDER_CLASS);
+    ).toBe(PINNED_EDGE_END_BORDER_CLASS);
   });
 
   it("reads horizontal scroll overflow with a sub-pixel tolerance", () => {
@@ -103,7 +107,7 @@ describe("pinned edge separators", () => {
         scrollLeft: 0,
         scrollWidth: 200,
       } as HTMLElement),
-    ).toEqual({ canScrollLeft: false, canScrollRight: false });
+    ).toEqual({ canScrollEnd: false, canScrollStart: false });
 
     expect(
       readHorizontalScrollOverflow({
@@ -111,7 +115,7 @@ describe("pinned edge separators", () => {
         scrollLeft: 40,
         scrollWidth: 500,
       } as HTMLElement),
-    ).toEqual({ canScrollLeft: true, canScrollRight: true });
+    ).toEqual({ canScrollEnd: true, canScrollStart: true });
 
     expect(
       readHorizontalScrollOverflow({
@@ -119,7 +123,7 @@ describe("pinned edge separators", () => {
         scrollLeft: 300,
         scrollWidth: 500,
       } as HTMLElement),
-    ).toEqual({ canScrollLeft: true, canScrollRight: false });
+    ).toEqual({ canScrollEnd: false, canScrollStart: true });
   });
 });
 

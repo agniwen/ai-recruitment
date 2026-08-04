@@ -362,11 +362,22 @@ describe("resumeLibraryRouter behavior", () => {
       conversion: { withInterview: 0, withoutInterview: 0 },
       dailyAdded: [],
     });
-    expect(mocks.loadResumeLibraryMetrics).toHaveBeenCalledWith(ORGANIZATION_ID);
+    expect(mocks.loadResumeLibraryMetrics).toHaveBeenCalledWith(ORGANIZATION_ID, {
+      createdByUserId: undefined,
+    });
     expect(mocks.permissionChecks).toEqual([
       ["page", "resumes"],
       ["resumeLibrary", "read"],
     ]);
+  });
+
+  it("scopes resume-library metrics to the current user when requested", async () => {
+    const response = await makeApp().request("/resumes/metrics?scope=personal");
+
+    expect(response.status).toBe(200);
+    expect(mocks.loadResumeLibraryMetrics).toHaveBeenCalledWith(ORGANIZATION_ID, {
+      createdByUserId: USER_ID,
+    });
   });
 
   it("queues one retry for an eligible failed resume record", async () => {

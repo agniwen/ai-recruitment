@@ -1,7 +1,8 @@
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, RowData } from "@tanstack/react-table";
 import { IconArrowsSort as ArrowUpDownIcon } from "@tabler/icons-react";
 import { DATE_TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display/time-display";
 import { Button } from "@/components/ui/button";
+import type { DataGridFeatures } from "../table-features";
 
 export interface DateColumnOptions<TData> {
   key: keyof TData & string;
@@ -14,7 +15,9 @@ export interface DateColumnOptions<TData> {
   emptyText?: string;
 }
 
-export function dateColumn<TData>(opts: DateColumnOptions<TData>): ColumnDef<TData> {
+export function dateColumn<TData extends RowData>(
+  opts: DateColumnOptions<TData>,
+): ColumnDef<DataGridFeatures, TData> {
   const formatOptions = opts.options ?? DATE_TIME_DISPLAY_OPTIONS;
 
   return {

@@ -159,9 +159,8 @@ describe("job description recruiting defaults", () => {
     expect(columnsSource.indexOf("actionsColumn<JobDescriptionListRecord>")).toBeGreaterThan(
       columnsSource.indexOf('key: "code"'),
     );
-    expect(jobDescriptionsPageSource).toContain(
-      'columnPinning={{ left: ["name", "hiringUnitName"], right: ["code", "actions"] }}',
-    );
+    expect(jobDescriptionsPageSource).toContain('end: ["code", "actions"]');
+    expect(jobDescriptionsPageSource).toContain('start: ["name", "hiringUnitName"]');
     expect(columnsSource).not.toContain('title: "HC/缺口"');
   });
 

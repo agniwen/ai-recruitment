@@ -61,7 +61,7 @@ describe("TanStack Start platform route migration", () => {
     expect(gridSource).toContain("<DataGrid<PlatformMailIngestAccountRow>");
     expect(gridSource).toContain("<MemberCell");
     expect(gridSource).toContain("actionsColumn<PlatformMailIngestAccountRow>");
-    expect(gridSource).toContain('columnPinning={{ right: ["actions"] }}');
+    expect(gridSource).toContain('columnPinning={{ end: ["actions"] }}');
     expect(gridSource).toContain('type: "search"');
   });
 

@@ -20,8 +20,14 @@ export const studioCalendarKeys = {
     ["studio-calendar", slug, start, end] as const,
 };
 
+export const studioProfileKeys = {
+  activity: (slug: string) => ["studio-profile", slug, "activity"] as const,
+  mailIngestAccounts: (slug: string) => ["studio-profile", slug, "mail-ingest-accounts"] as const,
+};
+
 export const studioResumeKeys = {
-  metrics: (slug: string) => ["studio-resumes", slug, "metrics"] as const,
+  metrics: (slug: string, scope: "team" | "personal" = "team") =>
+    ["studio-resumes", slug, "metrics", scope] as const,
 };
 
 type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;

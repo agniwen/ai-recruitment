@@ -4,6 +4,8 @@ import {
   humanInterviewKeys,
   invalidateHumanInterviewCandidateQueries,
   studioCalendarKeys,
+  studioProfileKeys,
+  studioResumeKeys,
 } from "@/lib/client/api/query-keys";
 
 describe("chatConversationKeys", () => {
@@ -56,6 +58,32 @@ describe("studioCalendarKeys", () => {
       "acme",
       "2026-07-01",
       "2026-08-01",
+    ]);
+  });
+});
+
+describe("studio resume and profile keys", () => {
+  it("keeps team and personal metrics in separate cache entries", () => {
+    expect(studioResumeKeys.metrics("acme", "team")).toEqual([
+      "studio-resumes",
+      "acme",
+      "metrics",
+      "team",
+    ]);
+    expect(studioResumeKeys.metrics("acme", "personal")).toEqual([
+      "studio-resumes",
+      "acme",
+      "metrics",
+      "personal",
+    ]);
+  });
+
+  it("scopes profile activity and mail accounts by workspace", () => {
+    expect(studioProfileKeys.activity("acme")).toEqual(["studio-profile", "acme", "activity"]);
+    expect(studioProfileKeys.mailIngestAccounts("acme")).toEqual([
+      "studio-profile",
+      "acme",
+      "mail-ingest-accounts",
     ]);
   });
 });

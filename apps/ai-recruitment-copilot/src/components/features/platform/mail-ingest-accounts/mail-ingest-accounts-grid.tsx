@@ -593,7 +593,7 @@ export function PlatformMailIngestAccountsGrid() {
     <>
       <DataGrid<PlatformMailIngestAccountRow>
         {...grid.bind}
-        columnPinning={{ right: ["actions"] }}
+        columnPinning={{ end: ["actions"] }}
         columns={columns}
         empty={
           <Empty className="border-border">

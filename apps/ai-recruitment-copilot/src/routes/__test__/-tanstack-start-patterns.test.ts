@@ -324,7 +324,9 @@ describe("TanStack Start migration patterns", () => {
     expect(resumeMetrics).toContain('from "@tanstack/react-router"');
     expect(jobDescriptionsPage).toContain("ClientOnly");
     expect(jobDescriptionsPage).toContain('} from "@tanstack/react-router"');
-    expect(resumeMetrics).toContain("<ResumeLibraryCharts metrics={metrics} />");
+    expect(resumeMetrics).toContain(
+      '<ResumeLibraryCharts key={chartKey ?? "metrics"} metrics={metrics} />',
+    );
     expect(jobDescriptionsPage).toContain("<JobDescriptionCharts metrics={metrics} />");
   });
 

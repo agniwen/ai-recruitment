@@ -150,7 +150,7 @@ const navGroups: NavGroup[] = [
         icon: UserIcon,
         path: "/studio/me",
         resource: "page",
-        title: "我的信息",
+        title: "个人中心",
       },
       {
         action: "members",

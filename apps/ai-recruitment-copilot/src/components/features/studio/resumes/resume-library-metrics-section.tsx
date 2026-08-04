@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { ClientOnly } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@arc/shared/utils";
 import { ResumeLibraryCharts } from "./resume-library-charts";
 
 type MetricsRetry = () => Promise<unknown>;
@@ -56,11 +57,15 @@ function MetricsSkeleton() {
 }
 
 export function ResumeLibraryMetricsSection({
+  chartKey,
   error,
+  isSwitching = false,
   metrics,
   onRetry,
 }: {
+  chartKey?: string;
   error: unknown;
+  isSwitching?: boolean;
   metrics: ResumeLibraryMetrics | undefined;
   onRetry: MetricsRetry;
 }) {
@@ -75,7 +80,15 @@ export function ResumeLibraryMetricsSection({
   return (
     <ClientOnly fallback={<MetricsSkeleton />}>
       <MetricsErrorBoundary onReset={onRetry}>
-        <ResumeLibraryCharts metrics={metrics} />
+        <div
+          aria-busy={isSwitching || undefined}
+          className={cn(
+            "transition-opacity duration-200",
+            isSwitching && "pointer-events-none opacity-50",
+          )}
+        >
+          <ResumeLibraryCharts key={chartKey ?? "metrics"} metrics={metrics} />
+        </div>
       </MetricsErrorBoundary>
     </ClientOnly>
   );

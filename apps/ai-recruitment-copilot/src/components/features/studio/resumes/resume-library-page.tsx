@@ -1,7 +1,14 @@
 /* oxlint-disable complexity max-lines -- page controller coordinates grid queries and dialogs. */
 import { IconUsers } from "@tabler/icons-react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useRouter, useSearch } from "@tanstack/react-router";
+import { useAtom } from "jotai";
 import { buildInfiniteDataGridQueryKey } from "@/components/data-grid/query-contract";
 import { parseCsvParam } from "@arc/shared/csv";
 import {
@@ -66,6 +73,8 @@ import { LaunchInterviewDialog } from "@/components/features/studio/resumes/laun
 import { TransitionCandidateDialog } from "@/components/features/studio/resumes/transition-candidate-dialog";
 import { ResumeLibraryMetricsSection } from "@/components/features/studio/resumes/resume-library-metrics-section";
 import { RecruitingPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
+import { Button } from "@/components/ui/button";
+import { resumeMetricsScopeAtom } from "@/lib/client/atoms/resume-metrics-scope";
 
 import {
   PIPELINE_STAGE_TAB_DESCRIPTIONS,
@@ -319,10 +328,17 @@ export function ResumeLibraryPage() {
     }),
     staleTime: 30_000,
   });
+  const [metricsScope, setMetricsScope] = useAtom(resumeMetricsScopeAtom);
   const metricsQuery = useQuery({
-    queryFn: () => fetchStudioResumeMetrics(slug),
-    queryKey: studioResumeKeys.metrics(slug),
+    placeholderData: keepPreviousData,
+    queryFn: () => fetchStudioResumeMetrics(slug, metricsScope),
+    queryKey: studioResumeKeys.metrics(slug, metricsScope),
   });
+  const metricsSwitching =
+    metricsQuery.isFetching && (metricsQuery.isPlaceholderData || Boolean(metricsQuery.data));
+  const metricsChartKey = metricsQuery.isPlaceholderData
+    ? `pending:${metricsScope}`
+    : `${metricsScope}:${metricsQuery.dataUpdatedAt}`;
   const retryParseMutation = useMutation({
     mutationFn: (record: ResumeLibraryListRecord) => retryStudioResumeParse(slug, record.id),
     onError: (error) => toast.error(error instanceof Error ? error.message : "重新解析简历失败"),
@@ -570,11 +586,27 @@ export function ResumeLibraryPage() {
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
-          title="招聘台"
+          actionRender={
+            <Button
+              className="opacity-80 hover:opacity-100"
+              disabled={metricsQuery.isFetching}
+              onClick={() => setMetricsScope(metricsScope === "team" ? "personal" : "team")}
+              size="xs"
+              suppressHydrationWarning
+              type="button"
+              variant="ghost"
+            >
+              {metricsScope === "team" ? "切换个人维度" : "切换到团队维度"}
+            </Button>
+          }
+          className="items-end sm:items-end"
           description="已经进入招聘流程的候选人在这里跟进：看简历、匹配岗位、推进到面试。"
+          title="招聘台"
         />
         <ResumeLibraryMetricsSection
+          chartKey={metricsChartKey}
           error={metricsQuery.error}
+          isSwitching={metricsSwitching}
           metrics={metricsQuery.data}
           onRetry={() => metricsQuery.refetch()}
         />
@@ -687,7 +719,7 @@ export function ResumeLibraryPage() {
           {...grid.bind}
           columns={columns}
           getRowId={(r) => r.id}
-          columnPinning={{ left: ["select", "candidateName"], right: ["actions"] }}
+          columnPinning={{ end: ["actions"], start: ["select", "candidateName"] }}
           filters={filtersConfig}
           toolbarRight={...}
           bulkActions={...}
