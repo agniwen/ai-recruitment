@@ -82,6 +82,8 @@ import {
   normalizeGroupName,
   readErrorMessage,
 } from "@/components/features/studio/members/members-groups";
+import { useWorkspaceMemberInterviewerControl } from "@/components/features/studio/members/member-interviewer-control";
+
 export function MembersManagementPage() {
   const slug = useWorkspaceSlug();
   const workspaceId = useWorkspaceId();
@@ -183,6 +185,8 @@ export function MembersManagementPage() {
   const canUpdateWorkspace = useHasPermission("organization", "update");
   const { data: session } = authClient.useSession();
   const { data: dynamicWorkspaceRoles = [] } = useDynamicWorkspaceRoles(workspaceId, canUpdate);
+  const { interviewerColumn, isInterviewerByUserId } =
+    useWorkspaceMemberInterviewerControl(canUpdate);
 
   function handleTabChange(value: string) {
     const tab = parseWorkspaceManagementTab(value);
@@ -220,13 +224,14 @@ export function MembersManagementPage() {
         email: user?.email ?? "—",
         id: m.id,
         image: user?.image ?? null,
+        isInterviewer: isInterviewerByUserId.get(m.userId) ?? false,
         lastActiveAt: lastActiveMap[m.userId] ?? null,
         name: user?.name ?? user?.email ?? "—",
         role: m.role,
         userId: m.userId,
       };
     });
-  }, [org?.members, lastActiveMap]);
+  }, [org?.members, isInterviewerByUserId, lastActiveMap]);
   const normalizedMemberSearch = memberSearch.trim().toLowerCase();
   const hasMemberSearch = normalizedMemberSearch.length > 0;
   const filteredRows = useMemo(() => {
@@ -557,6 +562,7 @@ export function MembersManagementPage() {
         size: 150,
         title: "工作区角色",
       }),
+      interviewerColumn,
       customColumn<MemberRow>({
         cell: (r) => (
           <span className="text-muted-foreground text-sm">
@@ -590,8 +596,16 @@ export function MembersManagementPage() {
           : [],
       }),
     ],
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 列定义只依赖权限值，剧场切换时无需重建
-    [assignableRoles, canDelete, canUpdate, currentMemberRole, pending, session?.user?.id],
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- 页面级操作函数随同一次渲染闭包使用
+    [
+      assignableRoles,
+      canDelete,
+      canUpdate,
+      currentMemberRole,
+      interviewerColumn,
+      pending,
+      session?.user?.id,
+    ],
   );
 
   return (

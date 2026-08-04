@@ -20,7 +20,8 @@
     "auth:generate": "npx @better-auth/cli@latest generate",
     "test": "vitest run",
     "test:watch": "vitest",
-    "doctor": "npx react-doctor@latest"
+    "doctor": "npx react-doctor@latest",
+    "load:test": "tsx scripts/load-test.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.221",
@@ -160,6 +161,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@hono/zod-validator": "^0.7.6",
+    "@playwright/test": "^1.62.1",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/vite": "^4.3.0",

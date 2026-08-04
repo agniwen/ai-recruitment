@@ -12,6 +12,8 @@ node_modules/
 
 # testing
 /coverage
+**/artifacts/load-test/
+**/playwright/.auth/
 
 # next.js
 .next/

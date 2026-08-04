@@ -121,16 +121,20 @@ describe("TanStack Start studio CRUD route migration", () => {
   });
 
   it("lets workspace admins mark members as human interviewers", () => {
-    const membersSource = readSource("routes/w.$slug.studio.members.tsx");
+    const membersSource = readSource("components/features/studio/members/members-page.tsx");
     const pageIndex = membersSource.indexOf("function MembersManagementPage");
     const pageSource = membersSource.slice(pageIndex, pageIndex + 30_000);
+    const controlSource = readSource(
+      "components/features/studio/members/member-interviewer-control.tsx",
+    );
 
-    expect(membersSource).toContain('import { Switch } from "@/components/ui/switch";');
-    expect(pageSource).toContain("changeMemberInterviewer");
-    expect(pageSource).toContain('title: "真人面试官"');
-    expect(pageSource).toContain("<Switch");
-    expect(pageSource).toContain("studio.workspace.members[");
-    expect(pageSource).toContain("].interviewer.$patch");
+    expect(controlSource).toContain('import { Switch } from "@/components/ui/switch";');
+    expect(pageSource).toContain("interviewerColumn");
+    expect(controlSource).toContain("changeMemberInterviewer");
+    expect(controlSource).toContain('title: "真人面试官"');
+    expect(controlSource).toContain("<Switch");
+    expect(controlSource).toContain("studio.workspace.members[");
+    expect(controlSource).toContain("].interviewer.$patch");
     expect(pageSource).toContain("isInterviewer");
   });
 

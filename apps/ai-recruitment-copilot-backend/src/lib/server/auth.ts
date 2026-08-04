@@ -7,6 +7,7 @@ import { organization } from "better-auth/plugins/organization";
 import { and, eq } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { getAuthRequestHeaders } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-request-context";
+import { AUTH_RATE_LIMIT } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-rate-limit";
 import { getRequiredEnv } from "@arc/ai-recruitment-copilot-backend/lib/server/env";
 import { getFeishuTenantAccessToken } from "@arc/ai-recruitment-copilot-backend/lib/server/feishu-access-token";
 import {
@@ -206,6 +207,11 @@ function buildFeishuOAuthProvider(opts: FeishuOAuthProviderOptions): GenericOAut
 const advanced =
   process.env.NODE_ENV === "production"
     ? {
+        // Cloudflare overwrites this header with the connecting client IP. Using
+        // it directly avoids grouping unrelated clients behind the proxy hop.
+        ipAddress: {
+          ipAddressHeaders: ["cf-connecting-ip"],
+        },
         // 让 better-auth 把请求识别成它本来的样子 (https) 而不是反代上游的 http。
         // Make better-auth see the original https scheme instead of the proxy's http hop.
         trustedProxyHeaders: true,
@@ -266,6 +272,7 @@ export const auth = betterAuth({
   onAPIError: {
     errorURL: "/login",
   },
+  rateLimit: AUTH_RATE_LIMIT,
   plugins: [
     admin({
       // Better Auth currently interpolates this value into the OAuth redirect

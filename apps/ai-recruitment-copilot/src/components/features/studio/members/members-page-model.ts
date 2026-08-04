@@ -43,6 +43,7 @@ export interface MemberRow {
   email: string;
   name: string;
   image: string | null;
+  isInterviewer: boolean;
   role: string;
   createdAt: string | Date;
   lastActiveAt: string | null;
