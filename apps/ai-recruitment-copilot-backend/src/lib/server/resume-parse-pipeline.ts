@@ -697,7 +697,7 @@ export function extractResumeDocumentText(input: ResumeDocumentInput): Promise<P
   switch (kind) {
     case "pdf": {
       if (!input.fileUrl) {
-        throw new Error("Qwen3.5 OCR 解析 PDF 需要可访问的文件 URL。");
+        return parseResumeOcrOnly(input.bytes, { onProgress: input.onProgress });
       }
       return parseQwenPdfResume({
         bytes: input.bytes,

@@ -336,15 +336,20 @@ describe("extractResumeDocumentText", () => {
     expect(mocks.qwenPdfOcr).not.toHaveBeenCalled();
   });
 
-  it("rejects PDF extraction without a stored-file URL instead of silently truncating", () => {
-    expect(() =>
-      extractResumeDocumentText({
-        bytes: new Uint8Array([1, 2, 3]),
-        fileName: "resume.pdf",
-        mediaType: "application/pdf",
-      }),
-    ).toThrow("需要可访问的文件 URL");
-    expect(mocks.rasterizePdfWithMeta).not.toHaveBeenCalled();
+  it("keeps the rasterized OCR fallback for PDFs without a stored-file URL", async () => {
+    const result = await extractResumeDocumentText({
+      bytes: new Uint8Array([1, 2, 3]),
+      fileName: "resume.pdf",
+      mediaType: "application/pdf",
+    });
+
+    expect(result).toEqual({
+      pageCount: 1,
+      text: "PDF 候选人 TypeScript",
+      textSource: "qwen3.5-ocr",
+    });
+    expect(mocks.rasterizePdfWithMeta).toHaveBeenCalled();
+    expect(mocks.qwenPdfOcr).not.toHaveBeenCalled();
   });
 
   it("runs OCR directly for image resumes without PDF rasterization", async () => {
