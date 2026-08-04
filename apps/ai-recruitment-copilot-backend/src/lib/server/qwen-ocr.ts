@@ -7,6 +7,7 @@ import { getRequiredEnv } from "./env";
 const OCR_PROMPT =
   "请完整提取这张简历图片中的所有文字，包括所有图片、图表、表格中的文字。保持原始排版顺序，表格用文字形式还原。只输出提取的文字，不要解释。";
 const QWEN_BASE64_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+const DEFAULT_QWEN_OCR_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 
 let cachedClient: OpenAI | null = null;
 
@@ -28,17 +29,13 @@ function getClient(): OpenAI {
   }
   cachedClient = new OpenAI({
     apiKey,
-    baseURL: getRequiredEnv("QWEN_OCR_BASE_URL"),
+    baseURL: process.env.QWEN_OCR_BASE_URL?.trim() || DEFAULT_QWEN_OCR_BASE_URL,
   });
   return cachedClient;
 }
 
 export function isQwenOcrConfigured(): boolean {
-  return Boolean(
-    process.env.ALIBABA_API_KEY &&
-    process.env.QWEN_OCR_BASE_URL &&
-    process.env.QWEN_OCR_MODEL === "qwen3.5-ocr",
-  );
+  return Boolean(process.env.ALIBABA_API_KEY && process.env.QWEN_OCR_MODEL === "qwen3.5-ocr");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
