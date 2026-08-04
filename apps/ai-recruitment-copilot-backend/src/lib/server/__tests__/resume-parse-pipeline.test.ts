@@ -6,9 +6,9 @@ const mocks = vi.hoisted(() => ({
   convertLegacyOfficeToOoxml: vi.fn(),
   generateStructuredWithMastraAgent: vi.fn(),
   getPdfPageCount: vi.fn(),
+  processPdfPagesWithMeta: vi.fn(),
   qwenPdfOcr: vi.fn(),
   qwenVlOcr: vi.fn(),
-  rasterizePdfWithMeta: vi.fn(),
   resumeStructuredAgent: { id: "resume-structured-agent" },
   runAliyunResumeExtraction: vi.fn(),
 }));
@@ -27,7 +27,7 @@ vi.mock("../office-conversion", () => ({
 
 vi.mock("../pdf-rasterize", () => ({
   getPdfPageCount: mocks.getPdfPageCount,
-  rasterizePdfWithMeta: mocks.rasterizePdfWithMeta,
+  processPdfPagesWithMeta: mocks.processPdfPagesWithMeta,
 }));
 
 vi.mock("../qwen-ocr", () => ({
@@ -42,6 +42,37 @@ vi.mock("../aliyun-docmining", () => ({
 
 const { extractResumeDocumentText, generateResumeStructured, parseResumeFast, parseResumeOcrOnly } =
   await import("../resume-parse-pipeline");
+
+let pdfPageCount = 3;
+let pdfPages = [Buffer.from("page-1"), Buffer.from("page-2"), Buffer.from("page-3")];
+
+async function runMockPdfPageProcessor(
+  _bytes: Uint8Array,
+  options: {
+    concurrency?: number;
+    onReady?: (meta: { pageCount: number; selectedPages: number }) => void;
+  },
+  processPage: (png: Buffer, index: number) => Promise<string>,
+): Promise<{ pageCount: number; renderedSizes: number[]; results: string[] }> {
+  const results = Array.from<string>({ length: pdfPages.length });
+  const concurrency = Math.min(pdfPages.length, options.concurrency ?? 1);
+  let nextPage = 0;
+  options.onReady?.({ pageCount: pdfPageCount, selectedPages: pdfPages.length });
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (nextPage < pdfPages.length) {
+        const index = nextPage;
+        nextPage += 1;
+        results[index] = await processPage(pdfPages[index] as Buffer, index);
+      }
+    }),
+  );
+  return {
+    pageCount: pdfPageCount,
+    renderedSizes: pdfPages.map((page) => page.byteLength),
+    results,
+  };
+}
 
 const STRUCTURED_RESUME = {
   age: null,
@@ -134,10 +165,9 @@ describe("parseResumeOcrOnly", () => {
     process.env.RESUME_PARSE_OCR_PAGE_CONCURRENCY = "1";
     process.env.RESUME_PARSE_OCR_ATTEMPTS = "2";
     process.env.RESUME_PARSE_OCR_RETRY_DELAY_MS = "0";
-    mocks.rasterizePdfWithMeta.mockResolvedValue({
-      pageCount: 3,
-      pages: [Buffer.from("page-1"), Buffer.from("page-2"), Buffer.from("page-3")],
-    });
+    pdfPageCount = 3;
+    pdfPages = [Buffer.from("page-1"), Buffer.from("page-2"), Buffer.from("page-3")];
+    mocks.processPdfPagesWithMeta.mockImplementation(runMockPdfPageProcessor);
   });
 
   afterEach(() => {
@@ -177,10 +207,8 @@ describe("parseResumeOcrOnly", () => {
 
   it("defaults OCR page concurrency to 4", async () => {
     delete process.env.RESUME_PARSE_OCR_PAGE_CONCURRENCY;
-    mocks.rasterizePdfWithMeta.mockResolvedValue({
-      pageCount: 6,
-      pages: Array.from({ length: 6 }, (_, index) => Buffer.from(`page-${index + 1}`)),
-    });
+    pdfPageCount = 6;
+    pdfPages = Array.from({ length: 6 }, (_, index) => Buffer.from(`page-${index + 1}`));
     let active = 0;
     let maxActive = 0;
     mocks.qwenVlOcr.mockImplementation(async (png: Buffer) => {
@@ -289,10 +317,9 @@ describe("extractResumeDocumentText", () => {
     process.env.ALIBABA_API_KEY = "test-key";
     process.env.ALIBABA_BASE_URL = "https://example.test";
     process.env.ALIBABA_STRUCTURED_MODEL = "qwen-test";
-    mocks.rasterizePdfWithMeta.mockResolvedValue({
-      pageCount: 1,
-      pages: [Buffer.from("pdf-page")],
-    });
+    pdfPageCount = 1;
+    pdfPages = [Buffer.from("pdf-page")];
+    mocks.processPdfPagesWithMeta.mockImplementation(runMockPdfPageProcessor);
     mocks.getPdfPageCount.mockResolvedValue(3);
     mocks.qwenPdfOcr.mockResolvedValue("整份 PDF 候选人 TypeScript");
     mocks.qwenVlOcr.mockResolvedValue("PDF 候选人 TypeScript");
@@ -314,7 +341,7 @@ describe("extractResumeDocumentText", () => {
     expect(mocks.qwenPdfOcr).toHaveBeenCalledWith(
       "https://storage.example.test/resume.pdf?signature=secret",
     );
-    expect(mocks.rasterizePdfWithMeta).not.toHaveBeenCalled();
+    expect(mocks.processPdfPagesWithMeta).not.toHaveBeenCalled();
   });
 
   it("retries a transient whole-document Qwen3.5 OCR connection failure", async () => {
@@ -369,7 +396,7 @@ describe("extractResumeDocumentText", () => {
       text: "PDF 候选人 TypeScript",
       textSource: "qwen3.5-ocr",
     });
-    expect(mocks.rasterizePdfWithMeta).toHaveBeenCalled();
+    expect(mocks.processPdfPagesWithMeta).toHaveBeenCalled();
     expect(mocks.qwenPdfOcr).not.toHaveBeenCalled();
   });
 
@@ -387,7 +414,7 @@ describe("extractResumeDocumentText", () => {
       text: "图片简历 候选人 JavaScript",
       textSource: "qwen3.5-ocr",
     });
-    expect(mocks.rasterizePdfWithMeta).not.toHaveBeenCalled();
+    expect(mocks.processPdfPagesWithMeta).not.toHaveBeenCalled();
     expect(mocks.qwenVlOcr).toHaveBeenCalledWith(Buffer.from([4, 5, 6]), "image/jpeg");
   });
 

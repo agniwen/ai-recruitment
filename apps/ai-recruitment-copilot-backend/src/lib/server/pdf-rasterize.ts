@@ -27,6 +27,17 @@ export interface RasterizeResult {
   pageCount: number;
 }
 
+export interface ProcessPdfPagesOptions extends RasterizeOptions {
+  concurrency?: number;
+  onReady?: (meta: { pageCount: number; selectedPages: number }) => void;
+}
+
+export interface ProcessPdfPagesResult<T> {
+  pageCount: number;
+  renderedSizes: number[];
+  results: T[];
+}
+
 export async function getPdfPageCount(bytes: Uint8Array): Promise<number> {
   const mupdf = await loadMupdf();
   const owned = new Uint8Array(bytes);
@@ -38,10 +49,30 @@ export async function getPdfPageCount(bytes: Uint8Array): Promise<number> {
   }
 }
 
-export async function rasterizePdfWithMeta(
+function renderPdfPage(
+  mupdf: MupdfModule,
+  doc: MupdfModuleNs.Document,
+  matrix: MupdfModuleNs.Matrix,
+  index: number,
+): Buffer {
+  const page = doc.loadPage(index);
+  try {
+    const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false);
+    try {
+      return Buffer.from(pixmap.asPNG());
+    } finally {
+      pixmap.destroy();
+    }
+  } finally {
+    page.destroy();
+  }
+}
+
+export async function processPdfPagesWithMeta<T>(
   bytes: Uint8Array,
-  { scale = 2, maxPages = 6 }: RasterizeOptions = {},
-): Promise<RasterizeResult> {
+  { concurrency = 1, maxPages = 6, onReady, scale = 2 }: ProcessPdfPagesOptions,
+  processPage: (png: Buffer, index: number) => Promise<T>,
+): Promise<ProcessPdfPagesResult<T>> {
   const mupdf = await loadMupdf();
   // mupdf takes ownership of the buffer it parses; clone so callers keep
   // their own copy intact.
@@ -52,25 +83,58 @@ export async function rasterizePdfWithMeta(
     const pageCount = doc.countPages();
     const total = Math.min(pageCount, maxPages);
     const matrix = mupdf.Matrix.scale(scale, scale);
-    const pngs: Buffer[] = [];
+    const renderedSizes = Array.from<number>({ length: total });
+    const results = Array.from<T>({ length: total });
+    const requestedConcurrency =
+      Number.isFinite(concurrency) && concurrency > 0 ? Math.floor(concurrency) : 1;
+    const workerCount = Math.min(total, requestedConcurrency);
+    let nextPage = 0;
+    let stopped = false;
 
-    for (let i = 0; i < total; i += 1) {
-      const page = doc.loadPage(i);
-      try {
-        const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false);
-        try {
-          pngs.push(Buffer.from(pixmap.asPNG()));
-        } finally {
-          pixmap.destroy();
+    onReady?.({ pageCount, selectedPages: total });
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (!stopped) {
+        const index = nextPage;
+        if (index >= total) {
+          return;
         }
-      } finally {
-        page.destroy();
+        nextPage += 1;
+
+        try {
+          const png = renderPdfPage(mupdf, doc, matrix, index);
+          renderedSizes[index] = png.byteLength;
+          results[index] = await processPage(png, index);
+        } catch (error) {
+          stopped = true;
+          throw error;
+        }
       }
+    });
+    const settlements = await Promise.allSettled(workers);
+    const failed = settlements.find(
+      (settlement): settlement is PromiseRejectedResult => settlement.status === "rejected",
+    );
+    if (failed) {
+      throw failed.reason;
     }
-    return { pageCount, pages: pngs };
+
+    return { pageCount, renderedSizes, results };
   } finally {
     doc.destroy();
   }
+}
+
+export async function rasterizePdfWithMeta(
+  bytes: Uint8Array,
+  { scale = 2, maxPages = 6 }: RasterizeOptions = {},
+): Promise<RasterizeResult> {
+  const { pageCount, results } = await processPdfPagesWithMeta(
+    bytes,
+    { concurrency: 1, maxPages, scale },
+    (png) => Promise.resolve(png),
+  );
+  return { pageCount, pages: results };
 }
 
 export async function rasterizePdf(
