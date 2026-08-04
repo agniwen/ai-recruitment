@@ -63,8 +63,8 @@ describe("dark theme palette", () => {
     }
   });
 
-  it("keeps treemap series separated by neutral boundaries and text labels", () => {
-    const treemapSource = readFileSync(
+  it("keeps job description charts separated by theme-aware tracks and boundaries", () => {
+    const chartSource = readFileSync(
       path.join(
         repoRoot,
         "apps/ai-recruitment-copilot/src/components/features/studio/job-descriptions/job-description-charts.tsx",
@@ -72,12 +72,15 @@ describe("dark theme palette", () => {
       "utf-8",
     );
 
-    expect(treemapSource).toContain('stroke: "var(--background)"');
-    expect(treemapSource).toContain("strokeWidth: 2");
-    expect(treemapSource).toContain('fill: "var(--primary-foreground)"');
-    expect(treemapSource).toContain(
-      'fill: "color-mix(in oklab, var(--primary-foreground) 80%, transparent)"',
+    expect(chartSource).toContain('const CANDIDATE_BLUE = "var(--chart-1)"');
+    expect(chartSource).toContain(
+      'const COMPLETION_TRACK = "color-mix(in oklab, var(--muted-foreground) 16%, transparent)"',
     );
+    expect(chartSource).toContain(
+      'const STEM_MUTED = "color-mix(in oklab, var(--muted-foreground) 45%, transparent)"',
+    );
+    expect(chartSource).toContain('ruleY([0], { stroke: "var(--border)", strokeWidth: 1 })');
+    expect(chartSource).toContain('ruleX([0], { stroke: "var(--border)", strokeWidth: 1 })');
   });
 
   it("derives touch and selection feedback from the active theme", () => {

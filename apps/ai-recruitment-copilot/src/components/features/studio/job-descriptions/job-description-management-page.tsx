@@ -30,6 +30,7 @@ import {
   customColumn,
   DataGrid,
   dateColumn,
+  estimateActionsColumnSize,
   textColumn,
   useDataGridState,
 } from "@/components/data-grid";
@@ -548,13 +549,6 @@ export function JobDescriptionManagementPage({
       actionsColumn<JobDescriptionListRecord>({
         inline: [
           {
-            label: "推荐",
-            onClick: (r) => {
-              setRecommendationScope({ id: r.id, name: r.name });
-            },
-            show: () => canReadResumeLibrary,
-          },
-          {
             label: "编辑",
             onClick: (r) => {
               void crud.openEdit(r);
@@ -564,13 +558,21 @@ export function JobDescriptionManagementPage({
         ],
         menu: [
           {
+            label: "推荐",
+            onClick: (r) => {
+              setRecommendationScope({ id: r.id, name: r.name });
+            },
+            show: () => canReadResumeLibrary,
+          },
+          {
             label: "删除",
             onClick: (r) => crud.setDeleteRecord(r),
+            separator: "before",
             show: () => canDeleteJobDescription,
             variant: "destructive",
           },
         ],
-        size: 168,
+        size: estimateActionsColumnSize({ hasMenu: true, inlineLabels: ["编辑"] }),
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps
