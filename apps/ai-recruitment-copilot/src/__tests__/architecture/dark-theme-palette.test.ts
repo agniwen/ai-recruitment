@@ -72,10 +72,12 @@ describe("dark theme palette", () => {
       "utf-8",
     );
 
-    expect(treemapSource).toContain('stroke="var(--background)"');
-    expect(treemapSource).toContain("strokeWidth={2}");
-    expect(treemapSource).toContain("fill-primary-foreground text-[11px]");
-    expect(treemapSource).toContain("fill-primary-foreground/80 text-[10px]");
+    expect(treemapSource).toContain('stroke: "var(--background)"');
+    expect(treemapSource).toContain("strokeWidth: 2");
+    expect(treemapSource).toContain('fill: "var(--primary-foreground)"');
+    expect(treemapSource).toContain(
+      'fill: "color-mix(in oklab, var(--primary-foreground) 80%, transparent)"',
+    );
   });
 
   it("derives touch and selection feedback from the active theme", () => {

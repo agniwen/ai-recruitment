@@ -44,11 +44,13 @@ type ResumeLibraryCardActionsProps = Pick<
   ResumeLibraryCardProps,
   | "canCreateInterview"
   | "canDeleteResumeLibrary"
+  | "canForceReparse"
   | "canRetryResumeParse"
   | "canUpdateResumeLibrary"
   | "onCopyDetailLink"
   | "onDelete"
   | "onEdit"
+  | "onForceReparse"
   | "onLaunchInterview"
   | "onPreviewResume"
   | "onRetryParse"
@@ -144,22 +146,27 @@ function MoreMenu({
   canClose,
   canCopyLink,
   canDelete,
+  canForceReparse,
   canPreviewFromMenu,
   canReactivate,
+  forceReparsing,
   onCopyDetailLink,
   onDelete,
+  onForceReparse,
   onPreviewResume,
   onTransition,
   record,
 }: Pick<
   ResumeLibraryCardProps,
-  "onCopyDetailLink" | "onDelete" | "onPreviewResume" | "onTransition" | "record"
+  "onCopyDetailLink" | "onDelete" | "onForceReparse" | "onPreviewResume" | "onTransition" | "record"
 > & {
   canClose: boolean;
   canCopyLink: boolean;
   canDelete: boolean;
+  canForceReparse: boolean;
   canPreviewFromMenu: boolean;
   canReactivate: boolean;
+  forceReparsing: boolean;
 }) {
   return (
     <DropdownMenu modal={false}>
@@ -187,6 +194,12 @@ function MoreMenu({
         ) : null}
         {canPreviewFromMenu ? (
           <DropdownMenuItem onClick={() => onPreviewResume(record)}>查看简历</DropdownMenuItem>
+        ) : null}
+        {canForceReparse ? (
+          <DropdownMenuItem disabled={forceReparsing} onClick={() => onForceReparse(record)}>
+            <IconRefresh className={ACTION_ICON_CLASS} />
+            {forceReparsing ? "入队中" : "重新解析"}
+          </DropdownMenuItem>
         ) : null}
         {canClose ? (
           <DropdownMenuItem onClick={() => onTransition(record, "close")}>
@@ -218,11 +231,13 @@ export function ResumeLibraryCardActions({
   canCopyLink,
   canCreateInterview,
   canDeleteResumeLibrary,
+  canForceReparse,
   canRetryResumeParse,
   canUpdateResumeLibrary,
   onCopyDetailLink,
   onDelete,
   onEdit,
+  onForceReparse,
   onLaunchInterview,
   onPreviewResume,
   onRetryParse,
@@ -259,6 +274,9 @@ export function ResumeLibraryCardActions({
     canUpdateResumeLibrary &&
     canEditResumeRecord(record.resumeParseStatus) &&
     record.pipelineStage === "closed";
+  const parseInFlight =
+    record.resumeParseStatus === "queued" || record.resumeParseStatus === "processing";
+  const showForceReparseInMenu = canForceReparse && record.hasResumeFile && !parseInFlight;
 
   return (
     <div className="flex justify-end self-center">
@@ -295,10 +313,13 @@ export function ResumeLibraryCardActions({
           canClose={canClose}
           canCopyLink={canCopyLink}
           canDelete={canDelete}
+          canForceReparse={showForceReparseInMenu}
           canPreviewFromMenu={canPreviewFromMenu}
           canReactivate={canReactivate}
+          forceReparsing={retrying && showForceReparseInMenu}
           onCopyDetailLink={onCopyDetailLink}
           onDelete={onDelete}
+          onForceReparse={onForceReparse}
           onPreviewResume={onPreviewResume}
           onTransition={onTransition}
           record={record}

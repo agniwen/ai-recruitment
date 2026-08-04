@@ -20,6 +20,17 @@ const resultFrameSource = bodySource.slice(
 );
 
 describe("AI 面试详情 tabs", () => {
+  it("places the resume activity timeline in a right rail on wide screens", () => {
+    expect(controllerSource).toContain(
+      'const showTimelineRail = mode === "resume" && !isPublic && activeTab === "overview"',
+    );
+    expect(controllerSource).toContain("xl:grid-cols-[minmax(0,1fr)_28rem]");
+    expect(bodySource).toContain("{showTimelineRail ? (");
+    expect(bodySource).toContain("<aside");
+    expect(bodySource).toContain('density="rail"');
+    expect(bodySource).not.toContain("showTimelineAtBottom");
+  });
+
   it("keeps communication questions and form responses inside the result tab", () => {
     expect(controllerSource).not.toContain('value="questions"');
     expect(controllerSource).not.toContain('value="forms"');

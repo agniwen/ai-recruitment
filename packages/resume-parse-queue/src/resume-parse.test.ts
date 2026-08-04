@@ -67,6 +67,15 @@ describe("resume parse queue configuration", () => {
         userId: "user-1",
       }),
     ).not.toThrow();
+    expect(
+      resumeParseJobSchema.parse({
+        batchId: "batch-2",
+        bypassCache: true,
+        itemId: "item-2",
+        organizationId: "org-1",
+        userId: "user-1",
+      }).bypassCache,
+    ).toBe(true);
   });
 
   it("builds BullMQ-compatible custom job ids", () => {

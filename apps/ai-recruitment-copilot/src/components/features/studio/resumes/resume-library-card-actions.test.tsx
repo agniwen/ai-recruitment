@@ -38,11 +38,13 @@ describe("ResumeLibraryCardActions", () => {
           canCopyLink={false}
           canCreateInterview
           canDeleteResumeLibrary={false}
+          canForceReparse={false}
           canRetryResumeParse={false}
           canUpdateResumeLibrary={false}
           onCopyDetailLink={vi.fn()}
           onDelete={vi.fn()}
           onEdit={vi.fn()}
+          onForceReparse={vi.fn()}
           onLaunchInterview={vi.fn()}
           onPreviewResume={vi.fn()}
           onRetryParse={vi.fn()}
@@ -93,11 +95,13 @@ describe("ResumeLibraryCardActions", () => {
           canCopyLink={false}
           canCreateInterview
           canDeleteResumeLibrary={false}
+          canForceReparse={false}
           canRetryResumeParse={false}
           canUpdateResumeLibrary={false}
           onCopyDetailLink={vi.fn()}
           onDelete={vi.fn()}
           onEdit={vi.fn()}
+          onForceReparse={vi.fn()}
           onLaunchInterview={vi.fn()}
           onPreviewResume={vi.fn()}
           onRetryParse={vi.fn()}

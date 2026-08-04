@@ -24,11 +24,23 @@ describe("runBulkResumeUploadWorkflow", () => {
 
     const result = await runBulkResumeUploadWorkflow({ itemId: "item-1" });
 
-    expect(mocks.processBatchItem).toHaveBeenCalledWith("item-1");
+    expect(mocks.processBatchItem).toHaveBeenCalledWith("item-1", {
+      bypassCache: undefined,
+    });
     expect(result).toEqual({
       batch: { id: "batch-1" },
       done: false,
       item: { id: "item-1" },
+    });
+  });
+
+  it("forwards cache bypass for an admin force reparse", async () => {
+    mocks.processBatchItem.mockResolvedValue(null);
+
+    await runBulkResumeUploadWorkflow({ bypassCache: true, itemId: "item-2" });
+
+    expect(mocks.processBatchItem).toHaveBeenCalledWith("item-2", {
+      bypassCache: true,
     });
   });
 });

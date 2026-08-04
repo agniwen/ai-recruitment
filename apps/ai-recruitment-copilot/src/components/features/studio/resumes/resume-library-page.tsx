@@ -44,6 +44,7 @@ import {
   fetchStudioResumeMetrics,
   fetchStudioResumeSkillSuggestions,
   fetchStudioResumes,
+  forceStudioResumeReparse,
   rpcFetch,
   retryStudioResumeParse,
 } from "@/lib/client/api";
@@ -97,6 +98,9 @@ export function ResumeLibraryPage() {
   const canReadResumeUploadBatch = useHasPermission("resumeUploadBatch", "read");
   const canCreateResumeUploadBatch = useHasPermission("resumeUploadBatch", "create");
   const canRetryResumeParse = useHasPermission("resumeUploadBatch", "process");
+  // Force reparse replaces parsed profile data, so keep it restricted to workspace admins.
+  const canForceReparse =
+    canRetryResumeParse && (currentMemberRole === "admin" || currentMemberRole === "owner");
   const [retriedRecordIds, setRetriedRecordIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const invalidateAll = useCallback(() => {
@@ -325,6 +329,14 @@ export function ResumeLibraryPage() {
     onSuccess: (_result, record) => {
       setRetriedRecordIds((current) => new Set(current).add(record.id));
       toast.success("已重新加入解析队列");
+      invalidateAll();
+    },
+  });
+  const forceReparseMutation = useMutation({
+    mutationFn: (record: ResumeLibraryListRecord) => forceStudioResumeReparse(slug, record.id),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "强制重新解析失败"),
+    onSuccess: () => {
+      toast.success("已重新加入解析队列（将覆盖现有解析结果）");
       invalidateAll();
     },
   });
@@ -600,6 +612,7 @@ export function ResumeLibraryPage() {
         <ResumeLibraryCardList
           canCreateInterview={canCreateInterview}
           canDeleteResumeLibrary={canDeleteResumeLibrary}
+          canForceReparse={canForceReparse}
           canReadResumeUploadBatch={canReadResumeUploadBatch}
           canRetryResumeParse={canRetryResumeParse}
           canUpdateResumeLibrary={canUpdateResumeLibrary}
@@ -628,6 +641,7 @@ export function ResumeLibraryPage() {
           }}
           onDelete={setDeleteRecord}
           onEdit={(record) => setEditRecordId(record.id)}
+          onForceReparse={forceReparseMutation.mutate}
           onLaunchInterview={startAiInterview}
           onOpenBatchList={() => setBatchListOpen(true)}
           onOpenDetail={(record, tab = "overview") => {
@@ -660,7 +674,9 @@ export function ResumeLibraryPage() {
           }
           records={loadedResumeRecords}
           retryingRecordId={
-            retryParseMutation.isPending ? (retryParseMutation.variables?.id ?? null) : null
+            (forceReparseMutation.isPending ? forceReparseMutation.variables?.id : null) ??
+            (retryParseMutation.isPending ? retryParseMutation.variables?.id : null) ??
+            null
           }
           retriedRecordIds={retriedRecordIds}
           total={resumeLibraryTotal}

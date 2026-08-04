@@ -6,7 +6,7 @@ const source = readFileSync(new URL("resume-overview-panel.tsx", import.meta.url
 describe("ResumeOverviewPanel visual density", () => {
   it("shows the AI score summary and structured candidate fields", () => {
     expect(source).toContain("<ResumeOverviewAiScoreSection");
-    expect(source).toContain("<DimensionRadarChart compact");
+    expect(source).toContain("<OverviewDimensionRadar compact");
     expect(source).toContain("<DataFields");
     expect(source).toContain("<DataField");
     expect(source).toContain('className="space-y-8"');
@@ -62,7 +62,7 @@ describe("ResumeOverviewPanel visual density", () => {
     );
 
     expect(reviewSource).toContain('className="w-full space-y-6"');
-    expect(reviewSource).toContain("<DimensionRadarChart dimensions={dimensionScores}");
+    expect(reviewSource).toContain("<OverviewDimensionRadar dimensions={dimensionScores}");
     expect(reviewSource).toContain("<DimensionScoreGroup");
     expect(reviewSource).toContain("screeningResultSlot");
     expect(reviewSource).toContain("summaryAction");

@@ -30,6 +30,7 @@ import type { ResumeLibraryGridState } from "./resume-library-page-model";
 interface ResumeLibraryCardListProps {
   canCreateInterview: boolean;
   canDeleteResumeLibrary: boolean;
+  canForceReparse: boolean;
   canReadResumeUploadBatch: boolean;
   canRetryResumeParse: boolean;
   canUpdateResumeLibrary: boolean;
@@ -47,6 +48,7 @@ interface ResumeLibraryCardListProps {
   onCopyDetailLink: (record: ResumeLibraryListRecord) => void;
   onDelete: (record: ResumeLibraryListRecord) => void;
   onEdit: (record: ResumeLibraryListRecord) => void;
+  onForceReparse: (record: ResumeLibraryListRecord) => void;
   onLaunchInterview: (record: ResumeLibraryListRecord) => void;
   onOpenBatchList: () => void;
   onOpenDetail: (record: ResumeLibraryListRecord, tab?: ResumeDetailDefaultTab) => void;
@@ -70,6 +72,7 @@ interface ResumeLibraryCardListProps {
 export function ResumeLibraryCardList({
   canCreateInterview,
   canDeleteResumeLibrary,
+  canForceReparse,
   canReadResumeUploadBatch,
   canRetryResumeParse,
   canUpdateResumeLibrary,
@@ -91,6 +94,7 @@ export function ResumeLibraryCardList({
   onCopyDetailLink,
   onDelete,
   onEdit,
+  onForceReparse,
   onLaunchInterview,
   onOpenBatchList,
   onOpenDetail,
@@ -251,6 +255,7 @@ export function ResumeLibraryCardList({
                 <ResumeLibraryCard
                   canCreateInterview={canCreateInterview}
                   canDeleteResumeLibrary={canDeleteResumeLibrary}
+                  canForceReparse={canForceReparse}
                   canRetryResumeParse={canRetryResumeParse && !retriedRecordIds.has(record.id)}
                   canUpdateResumeLibrary={canUpdateResumeLibrary}
                   currentMemberRole={currentMemberRole}
@@ -258,6 +263,7 @@ export function ResumeLibraryCardList({
                   onCopyDetailLink={onCopyDetailLink}
                   onDelete={onDelete}
                   onEdit={onEdit}
+                  onForceReparse={onForceReparse}
                   onLaunchInterview={onLaunchInterview}
                   onOpenDetail={handleOpenDetail}
                   onPreviewResume={onPreviewResume}
