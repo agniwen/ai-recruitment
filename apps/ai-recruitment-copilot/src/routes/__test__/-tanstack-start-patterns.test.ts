@@ -105,12 +105,12 @@ describe("TanStack Start migration patterns", () => {
     );
   });
 
-  it("keeps TanStack Start prerender disabled for the dynamic home page", () => {
+  it("enables TanStack Start prerender for the static home page", () => {
     const viteConfig = readSource("vite.config.ts");
 
     expect(viteConfig).toContain("prerender:");
     expect(viteConfig).toContain('path: "/"');
-    expect(viteConfig).toContain("prerender: { enabled: false");
+    expect(viteConfig).toContain("prerender: { enabled: true");
   });
 
   it("prebundles Better Auth React hooks with TanStack store in dev", () => {
