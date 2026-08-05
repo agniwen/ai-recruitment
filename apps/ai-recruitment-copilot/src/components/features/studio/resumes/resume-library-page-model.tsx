@@ -61,13 +61,6 @@ export const EMPTY_FILTERS: ResumeFilters = {
 };
 export const RESUME_LIBRARY_FILTER_KEYS = Object.keys(EMPTY_FILTERS) as (keyof ResumeFilters &
   string)[];
-/** 工具栏默认收起时始终展示的筛选项（其余需点「更多条件」展开）。 */
-export const RESUME_LIBRARY_PRIMARY_FILTER_KEYS = [
-  "id",
-  "candidateName",
-  "candidateEmail",
-  "creatorIds",
-] as const satisfies readonly (keyof ResumeFilters)[];
 export const RESUME_LIBRARY_DEFAULT_SORTING = [{ desc: true, id: "createdAt" }];
 const RESUME_LIBRARY_CARD_HEIGHTS = {
   base: 714,

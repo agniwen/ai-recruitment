@@ -84,7 +84,6 @@ import {
   useResumeLibrarySearchState,
 } from "./resume-library-page-model";
 import type { FetchParams, SearchParamsRecord, WorkspaceMember } from "./resume-library-page-model";
-import { useResumeLibraryCollapsibleFiltersWithState } from "./resume-library-filters";
 import { ResumeLibraryCardList } from "./resume-library-page-list";
 import {
   ResumeLibraryDeleteDialogs,
@@ -501,9 +500,6 @@ export function ResumeLibraryPage() {
     [hiringUnits, skillSuggestions, jobDescriptions, workspaceMembers],
   );
 
-  const { filtersExtra, visibleFilters: visibleFiltersConfig } =
-    useResumeLibraryCollapsibleFiltersWithState(filtersConfig, grid.filters);
-
   async function handleDelete() {
     if (!deleteRecord) {
       return;
@@ -661,8 +657,7 @@ export function ResumeLibraryPage() {
           empty={resumeLibraryEmptyState}
           error={resumeLibraryListQuery.error}
           fetchNextPage={resumeLibraryListQuery.fetchNextPage}
-          filters={visibleFiltersConfig}
-          filtersExtra={filtersExtra}
+          filters={filtersConfig}
           grid={grid}
           hasActiveUploadBatches={hasActiveUploadBatches}
           hasNextPage={Boolean(resumeLibraryListQuery.hasNextPage)}
