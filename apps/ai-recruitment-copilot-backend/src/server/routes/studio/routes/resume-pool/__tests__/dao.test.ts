@@ -165,7 +165,7 @@ function basePoolInput(overrides: Partial<Parameters<typeof createResumePoolItem
 
 describe("queryResumePoolItems", () => {
   it("filters private items by selected creators in the current organization", async () => {
-    await createResumePoolItem(basePoolInput());
+    const ownId = await createResumePoolItem(basePoolInput());
     await createResumePoolItem(basePoolInput({ createdBy: USER_B, organizationId: ORG_A }));
     await createResumePoolItem(basePoolInput({ createdBy: USER_A, organizationId: ORG_B }));
 
@@ -187,6 +187,16 @@ describe("queryResumePoolItems", () => {
       userId: USER_A,
     });
     expect(visibleResult.records).toHaveLength(2);
+
+    const fuzzyIdResult = await queryResumePoolItems({
+      creatorIds: [USER_A, USER_B],
+      id: ownId.slice(-8),
+      organizationId: ORG_A,
+      scope: "private",
+      userId: USER_A,
+    });
+    expect(fuzzyIdResult.records.map((record) => record.id)).toEqual([ownId]);
+    expect(fuzzyIdResult.total).toBe(1);
 
     const emptyResult = await queryResumePoolItems({
       creatorIds: [],

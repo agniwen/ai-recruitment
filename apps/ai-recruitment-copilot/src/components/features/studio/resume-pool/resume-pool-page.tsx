@@ -159,6 +159,7 @@ export function ResumePoolPage() {
           slug,
           scope,
           scope === "private" ? params.filters.uploaderId || currentUserId || undefined : undefined,
+          params.filters.id || undefined,
         );
         const filtered = filterPoolRecords(result.records, params);
         const start = (params.page - 1) * params.pageSize;

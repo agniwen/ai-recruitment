@@ -138,6 +138,7 @@ export const resumePoolRouter = factory
           : undefined;
       const result = await queryResumePoolItems({
         creatorIds,
+        ...(q.id ? { id: q.id } : {}),
         organizationId: activeOrg.id,
         scope: q.scope,
         userId: user.id,

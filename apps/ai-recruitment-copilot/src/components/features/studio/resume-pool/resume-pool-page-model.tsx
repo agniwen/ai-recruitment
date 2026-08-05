@@ -221,11 +221,6 @@ export function matchesSearch(record: ResumePoolListRecord, rawSearch: string) {
     .some((value) => value?.toLowerCase().includes(search));
 }
 
-export function matchesResumePoolId(recordId: string, rawId: string) {
-  const id = rawId.trim().toLowerCase();
-  return !id || recordId.toLowerCase().includes(id);
-}
-
 export function sourceLabel(record: ResumePoolListRecord) {
   if (record.sourceChannel === "referral") {
     return "内推";
@@ -340,9 +335,6 @@ export function filterPoolRecords(
   },
 ) {
   const filtered = records.filter((record) => {
-    if (!matchesResumePoolId(record.id, input.filters.id)) {
-      return false;
-    }
     if (!matchesSearch(record, input.search)) {
       return false;
     }

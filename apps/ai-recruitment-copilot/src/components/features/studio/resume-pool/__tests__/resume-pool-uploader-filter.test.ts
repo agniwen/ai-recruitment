@@ -5,7 +5,6 @@ import {
   createResumePoolFilters,
   getResumePoolUploaderFilterAvailability,
   isResumePoolUploaderFilterDisabled,
-  matchesResumePoolId,
   normalizeResumePoolUploaderId,
   RESUME_POOL_LOAD_MORE_ROOT_MARGIN,
   RESUME_POOL_UPLOADER_QUERY_FRESHNESS,
@@ -38,6 +37,7 @@ describe("private resume pool uploader filter", () => {
     expect(filtersSource.indexOf('key: "id"')).toBeLessThan(
       filtersSource.indexOf('key: "uploaderId"'),
     );
+    expect(pageSource).toContain("params.filters.id || undefined");
   });
 
   it("defaults the private pool uploader to the current user", () => {
@@ -48,13 +48,6 @@ describe("private resume pool uploader filter", () => {
       sourceType: "all",
       uploaderId: "self",
     });
-  });
-
-  it("matches resume IDs by case-insensitive substring", () => {
-    expect(matchesResumePoolId("Resume-ABC-123", "abc-1")).toBe(true);
-    expect(matchesResumePoolId("Resume-ABC-123", "  ABC  ")).toBe(true);
-    expect(matchesResumePoolId("Resume-ABC-123", "missing")).toBe(false);
-    expect(matchesResumePoolId("Resume-ABC-123", " ")).toBe(true);
   });
 
   it("does not apply an uploader filter to the public pool", () => {

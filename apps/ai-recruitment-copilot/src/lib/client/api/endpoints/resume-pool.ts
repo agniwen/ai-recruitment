@@ -16,11 +16,12 @@ export function fetchResumePoolItems(
   slug: string,
   scope: ResumePoolScope,
   uploaderId?: string,
+  id?: string,
 ): Promise<PaginatedResumePoolResult> {
   return rpcFetch<PaginatedResumePoolResult>(
     rpc.api.w[":slug"].studio["resume-pool"].$get({
       param: { slug },
-      query: { scope, uploaderId },
+      query: { id, scope, uploaderId },
     }),
     "加载公共简历池失败",
   );

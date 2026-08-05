@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines -- resume-pool persistence keeps list/detail/write transactions co-located. */
-import { and, asc, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   mailIngestMessage,
@@ -92,6 +92,7 @@ export interface MarkResumePoolItemStatusInput {
 
 export interface QueryResumePoolItemsInput {
   creatorIds?: string[] | null;
+  id?: string;
   organizationId: string;
   scope: ResumePoolScope;
   userId: string;
@@ -524,12 +525,14 @@ export async function queryResumePoolItems(
           input.creatorIds === null
             ? undefined
             : inArray(resumePoolItem.createdBy, input.creatorIds ?? [input.userId]),
+          input.id ? ilike(resumePoolItem.id, `%${input.id}%`) : undefined,
         )
       : and(
           eq(resumePoolItem.scope, "public"),
           eq(resumePoolItem.status, "active"),
           // Public pool shares within the workspace only — never across organizations.
           eq(resumePoolItem.organizationId, input.organizationId),
+          input.id ? ilike(resumePoolItem.id, `%${input.id}%`) : undefined,
         );
 
   const [totalRow] = await db.select({ total: count() }).from(resumePoolItem).where(where);

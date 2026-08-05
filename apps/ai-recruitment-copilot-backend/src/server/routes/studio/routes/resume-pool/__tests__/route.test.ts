@@ -146,11 +146,12 @@ describe("resume pool private uploader visibility", () => {
   });
 
   it("defaults private listings to the current uploader without losing actor scope", async () => {
-    const response = await makeApp().request("/resume-pool?scope=private");
+    const response = await makeApp().request("/resume-pool?scope=private&id=pool-abc");
 
     expect(response.status).toBe(200);
     expect(mocks.queryResumePoolItems).toHaveBeenCalledWith({
       creatorIds: [USER_ID],
+      id: "pool-abc",
       organizationId: ORGANIZATION_ID,
       scope: "private",
       userId: USER_ID,

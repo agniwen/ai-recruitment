@@ -2,6 +2,7 @@ import { z } from "zod";
 import { resumePoolCreateSchema, resumePoolImportSchema } from "@arc/shared/resume-pool";
 
 export const resumePoolListQuerySchema = z.object({
+  id: z.string().trim().max(120).optional(),
   scope: z.enum(["private", "public"]).default("private"),
   uploaderId: z.string().trim().min(1).optional(),
 });
