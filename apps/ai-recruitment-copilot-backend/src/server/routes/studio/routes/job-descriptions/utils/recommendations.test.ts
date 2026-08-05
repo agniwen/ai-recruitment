@@ -11,6 +11,7 @@ import {
   recommendCandidatesForJobDescription,
   scoreCandidatesForJobDescription,
 } from "./recommendations";
+import type { RecommendationCandidateRecord, RecommendationHit } from "./recommendations";
 
 const candidateProfile: ResumeProfile = {
   age: null,
@@ -42,6 +43,35 @@ const candidateProfile: ResumeProfile = {
   ],
   workYears: 4,
 };
+
+const libraryCandidate = (
+  id: string,
+  currentJd: string | null = null,
+): RecommendationCandidateRecord => ({
+  candidateEmail: null,
+  candidateName: id,
+  candidatePhone: null,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  currentJobDescriptionId: currentJd,
+  currentJobDescriptionName: null,
+  id,
+  notes: null,
+  resumeFileName: null,
+  resumeParseStatus: "ready",
+  resumeProfile: candidateProfile,
+  skillsNormalized: [],
+  source: "resume_library",
+  targetRole: null,
+});
+
+const poolCandidate = (
+  id: string,
+  currentJd: string | null = null,
+): RecommendationCandidateRecord => ({
+  ...libraryCandidate(id, currentJd),
+  candidateName: id,
+  source: "public_resume_pool",
+});
 
 describe("recommendCandidatesForJobDescription", () => {
   it("returns weighted recommendations with reasons from JD semantic search", async () => {
@@ -113,6 +143,7 @@ describe("recommendCandidatesForJobDescription", () => {
               resumeParseStatus: "ready" as const,
               resumeProfile: candidateProfile,
               skillsNormalized: ["typescript", "postgresql", "qdrant"],
+              source: "resume_library" as const,
               targetRole: "全栈工程师",
             },
             {
@@ -128,6 +159,7 @@ describe("recommendCandidatesForJobDescription", () => {
               resumeParseStatus: "ready" as const,
               resumeProfile: candidateProfile,
               skillsNormalized: ["typescript"],
+              source: "resume_library" as const,
               targetRole: "全栈工程师",
             },
           ]),
@@ -153,7 +185,7 @@ describe("recommendCandidatesForJobDescription", () => {
     expect(searchSimilarResumes).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: "org-1",
-        sourceTypes: ["studio_interview"],
+        sourceTypes: ["studio_interview", "resume_pool_item"],
       }),
     );
     expect(result.status).toBe("ready");
@@ -174,6 +206,7 @@ describe("recommendCandidatesForJobDescription", () => {
         skillRole: 0.9,
         workProject: 0.8,
       },
+      source: "resume_library",
       targetRole: "全栈工程师",
       workYears: 4,
     });
@@ -186,26 +219,84 @@ describe("recommendCandidatesForJobDescription", () => {
     );
     expect(result.diagnostics.vectorHitCount).toBe(2);
   });
+
+  it("mixes resume library and public pool candidates with source tags", async () => {
+    const searchSimilarResumes = vi.fn(({ chunkType }: { chunkType: ResumeSemanticChunkType }) =>
+      Promise.resolve([
+        {
+          chunkType,
+          score: chunkType === "skill_role" ? 0.95 : 0.9,
+          sourceId: "lib-1",
+          sourceType: "studio_interview" as const,
+        },
+        {
+          chunkType,
+          score: chunkType === "skill_role" ? 0.92 : 0.88,
+          sourceId: "pool-1",
+          sourceType: "resume_pool_item" as const,
+        },
+        {
+          chunkType,
+          score: 0.99,
+          sourceId: "private-pool",
+          sourceType: "resume_pool_item" as const,
+        },
+      ]),
+    );
+    const loadCandidates = vi.fn((_org: string, hits: RecommendationHit[]) => {
+      expect(hits).toEqual(
+        expect.arrayContaining([
+          { sourceId: "lib-1", sourceType: "studio_interview" },
+          { sourceId: "pool-1", sourceType: "resume_pool_item" },
+          { sourceId: "private-pool", sourceType: "resume_pool_item" },
+        ]),
+      );
+      // Loader only returns public pool + library (private filtered at DAO).
+      return Promise.resolve([libraryCandidate("lib-1"), poolCandidate("pool-1")]);
+    });
+
+    const result = await recommendCandidatesForJobDescription(
+      {
+        excludeAlreadyLinked: true,
+        jobDescription: {
+          departmentName: null,
+          description: "d",
+          id: "jd-1",
+          name: "后端",
+          prompt: "p",
+        },
+        limit: 10,
+        organizationId: "org-1",
+      },
+      {
+        embed: vi.fn(({ chunks }: { chunks: ResumeSemanticTextChunk[] }) =>
+          Promise.resolve(chunks.map((c) => ({ ...c, embedding: [1, 2] }))),
+        ),
+        embeddingConfig: { apiKey: "k", baseUrl: "b", dimensions: 2, model: "m" },
+        enabled: true,
+        loadCandidates,
+        vectorStore: {
+          deleteResumeEmbeddings: vi.fn(),
+          ensureCollection: vi.fn(),
+          searchSimilarResumes,
+          upsertResumeEmbeddings: vi.fn(),
+        },
+      },
+    );
+
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates.map((c) => c.id)).toEqual(["lib-1", "pool-1"]);
+    expect(result.candidates.map((c) => c.source)).toEqual([
+      "resume_library",
+      "public_resume_pool",
+    ]);
+    expect(result.diagnostics.vectorHitCount).toBe(3);
+  });
 });
 
-const rec = (id: string, currentJd: string | null = null) => ({
-  candidateEmail: null,
-  candidateName: id,
-  candidatePhone: null,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  currentJobDescriptionId: currentJd,
-  currentJobDescriptionName: null,
-  id,
-  notes: null,
-  resumeFileName: null,
-  resumeParseStatus: "ready" as const,
-  resumeProfile: candidateProfile,
-  skillsNormalized: [],
-  targetRole: null,
-});
 const depsWith = (
   search: (a: { chunkType: string }) => number,
-  candidates: ReturnType<typeof rec>[],
+  candidates: RecommendationCandidateRecord[],
 ) => ({
   embed: vi.fn(({ chunks }: { chunks: ResumeSemanticTextChunk[] }) =>
     Promise.resolve(chunks.map((c) => ({ ...c, embedding: [1, 2] }))),
@@ -222,7 +313,10 @@ const depsWith = (
           chunkType,
           score: search({ chunkType }),
           sourceId: c.id,
-          sourceType: "studio_interview" as const,
+          sourceType:
+            c.source === "public_resume_pool"
+              ? ("resume_pool_item" as const)
+              : ("studio_interview" as const),
         })),
       ),
     ),
@@ -238,12 +332,15 @@ const call = (deps: ReturnType<typeof depsWith>, excludeAlreadyLinked = true, li
 
 describe("recommendCandidatesForJobDescription — 特征化(锁生产行为)", () => {
   it("score<55 被阈值剔除", async () => {
-    const res = await call(depsWith(() => 0.2, [rec("low")]));
+    const res = await call(depsWith(() => 0.2, [libraryCandidate("low")]));
     expect(res.candidates).toHaveLength(0);
   });
   it("limit 截断：两高分 limit=1 只返回第一", async () => {
     const res = await call(
-      depsWith(({ chunkType }) => (chunkType === "skill_role" ? 0.95 : 0.9), [rec("a"), rec("b")]),
+      depsWith(
+        ({ chunkType }) => (chunkType === "skill_role" ? 0.95 : 0.9),
+        [libraryCandidate("a"), libraryCandidate("b")],
+      ),
       true,
       1,
     );
@@ -251,7 +348,10 @@ describe("recommendCandidatesForJobDescription — 特征化(锁生产行为)", 
   });
   it("同分保留输入(loadCandidates)顺序", async () => {
     const res = await call(
-      depsWith(({ chunkType }) => (chunkType === "skill_role" ? 0.9 : 0.9), [rec("a"), rec("b")]),
+      depsWith(
+        ({ chunkType }) => (chunkType === "skill_role" ? 0.9 : 0.9),
+        [libraryCandidate("a"), libraryCandidate("b")],
+      ),
     );
     expect(res.candidates.map((c) => c.id)).toEqual(["a", "b"]);
   });
@@ -259,7 +359,7 @@ describe("recommendCandidatesForJobDescription — 特征化(锁生产行为)", 
     const res = await call(
       depsWith(
         ({ chunkType }) => (chunkType === "skill_role" ? 0.95 : 0.9),
-        [rec("linked", "jd1")],
+        [libraryCandidate("linked", "jd1")],
       ),
     );
     expect(res.candidates.map((c) => c.id)).not.toContain("linked");
@@ -268,11 +368,20 @@ describe("recommendCandidatesForJobDescription — 特征化(锁生产行为)", 
     const res = await call(
       depsWith(
         ({ chunkType }) => (chunkType === "skill_role" ? 0.95 : 0.9),
-        [rec("linked", "jd1")],
+        [libraryCandidate("linked", "jd1")],
       ),
       false,
     );
     expect(res.candidates.map((c) => c.id)).toContain("linked");
+  });
+  it("excludeAlreadyLinked=true 也剔除已绑定本 JD 的公共池简历", async () => {
+    const res = await call(
+      depsWith(
+        ({ chunkType }) => (chunkType === "skill_role" ? 0.95 : 0.9),
+        [poolCandidate("pool-linked", "jd1")],
+      ),
+    );
+    expect(res.candidates.map((c) => c.id)).not.toContain("pool-linked");
   });
 });
 
@@ -321,7 +430,7 @@ describe("scoreCandidatesForJobDescription — 打分内核", () => {
   it("内核返回完整排序和诊断中间量，不套阈值或截断", async () => {
     const ensureCollection = vi.fn(() => Promise.resolve());
     const deps = {
-      ...depsWith(() => 0.2, [rec("low")]),
+      ...depsWith(() => 0.2, [libraryCandidate("low")]),
       vectorStore: {
         deleteResumeEmbeddings: vi.fn(() => Promise.resolve()),
         ensureCollection,

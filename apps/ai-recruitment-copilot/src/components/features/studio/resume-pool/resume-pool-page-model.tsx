@@ -11,7 +11,6 @@ import type {
 } from "@arc/shared/resume-pool";
 
 import { ResumeDuplicateMatchBadge } from "@/components/features/resume/resume-duplicate-match-badge";
-import { formatResumeCandidateTitle } from "@/components/features/resume/resume-record-display-id";
 import { Badge } from "@/components/ui/badge";
 import type { DedupMatchRecord } from "@/lib/client/api";
 import { rpc } from "@/lib/client/rpc";
@@ -88,11 +87,6 @@ export function normalizeResumePoolUploaderId(value: unknown): string | undefine
 
 export function getCandidateTitle(record: ResumePoolListRecord) {
   return record.candidateName?.trim() || "未命名候选人";
-}
-
-export function getCandidateTitleWithId(record: ResumePoolListRecord) {
-  const candidateTitle = getCandidateTitle(record);
-  return formatResumeCandidateTitle(candidateTitle, record.id);
 }
 
 export function formatCandidateWorkYears(workYears: number | null) {

@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { getMemberInitials } from "@/components/data-grid/cells/member-cell";
 import { TimeDisplay } from "@/components/features/display/time-display";
 import { ResumeDedupMatchList } from "@/components/features/resume/resume-dedup-overlay";
-import { formatResumeRecordDisplayId } from "@/components/features/resume/resume-record-display-id";
+import { CopyableResumeRecordId } from "@/components/features/resume/copyable-resume-record-id";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
@@ -84,9 +84,12 @@ function ImportedResumeRecords({
               >
                 <span className="min-w-0 text-left">
                   <span className="block truncate">{candidateTitle}</span>
-                  <span className="mt-0.5 block text-muted-foreground text-xs font-normal">
-                    {formatResumeRecordDisplayId(record.resumeRecordId)}
-                    {" · "}
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-1 text-muted-foreground text-xs font-normal">
+                    <CopyableResumeRecordId
+                      displayIdClassName="text-xs text-muted-foreground"
+                      id={record.resumeRecordId}
+                    />
+                    <span>·</span>
                     <TimeDisplay as="span" value={record.importedAt} />
                   </span>
                   <span className="mt-1.5 flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs font-normal">

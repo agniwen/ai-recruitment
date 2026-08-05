@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(new URL("../w.$slug.studio.resumes.tsx", import.meta.url), "utf-8");
+const source = readFileSync(
+  new URL("../../components/features/studio/resumes/resume-library-page.tsx", import.meta.url),
+  "utf-8",
+);
 const cardSource = readFileSync(
   new URL("../../components/features/studio/resumes/resume-library-card.tsx", import.meta.url),
   "utf-8",
@@ -18,7 +21,8 @@ describe("ResumeLibraryPage duplicate badges", () => {
 
   it("shows candidate identity in the card without contact links", () => {
     expect(cardSource).toContain("{record.candidateName}");
-    expect(cardSource).toContain("formatResumeRecordDisplayId(record.id)");
+    expect(cardSource).toContain("CopyableResumeRecordId");
+    expect(cardSource).toContain("id={record.id}");
     expect(cardSource).not.toContain("mailto:");
     expect(cardSource).not.toContain("tel:");
   });

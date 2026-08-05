@@ -2,9 +2,10 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import type {
   JobDescriptionTalentRecommendation,
   JobDescriptionTalentRecommendationResult,
+  JobDescriptionTalentRecommendationSource,
 } from "@arc/shared/job-descriptions";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
-import { jobDescription, studioInterview } from "@arc/db-schema/schema";
+import { jobDescription, resumePoolItem, studioInterview } from "@arc/db-schema/schema";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { QdrantResumeVectorStore } from "@arc/ai-recruitment-copilot-backend/lib/server/qdrant/resume-vector-store";
 import {
@@ -26,6 +27,7 @@ import type {
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/text-builders";
 import type {
   ResumeEmbeddingChunk,
+  ResumeSemanticSourceType,
   ResumeVectorStore,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/vector-store";
 import {
@@ -35,7 +37,13 @@ import {
 
 export type RecommendJobDescription = JobDescriptionSemanticInput;
 
-interface RecommendationCandidateRecord {
+/** Vector / DB hit used when loading recommendation candidates. */
+export interface RecommendationHit {
+  sourceId: string;
+  sourceType: Extract<ResumeSemanticSourceType, "studio_interview" | "resume_pool_item">;
+}
+
+export interface RecommendationCandidateRecord {
   candidateEmail: string | null;
   candidateName: string;
   candidatePhone: string | null;
@@ -48,6 +56,8 @@ interface RecommendationCandidateRecord {
   resumeParseStatus: "failed" | "processing" | "queued" | "ready" | "unparsed";
   resumeProfile: ResumeProfile | null;
   skillsNormalized: string[];
+  /** Product-facing source for UI badges. */
+  source: JobDescriptionTalentRecommendationSource;
   targetRole: string | null;
 }
 
@@ -97,9 +107,24 @@ interface RecommendationDeps {
   enabled: boolean;
   loadCandidates: (
     organizationId: string,
-    ids: string[],
+    hits: RecommendationHit[],
   ) => Promise<RecommendationCandidateRecord[]>;
   vectorStore: ResumeVectorStore;
+}
+
+const RECOMMENDATION_SEARCH_SOURCE_TYPES: RecommendationHit["sourceType"][] = [
+  "studio_interview",
+  "resume_pool_item",
+];
+
+function vectorSourceTypeFor(
+  source: JobDescriptionTalentRecommendationSource,
+): RecommendationHit["sourceType"] {
+  return source === "public_resume_pool" ? "resume_pool_item" : "studio_interview";
+}
+
+function scoreLookupKey(sourceType: RecommendationHit["sourceType"], sourceId: string): string {
+  return `${sourceType}:${sourceId}`;
 }
 
 function normalizeSkill(value: string): string {
@@ -169,9 +194,25 @@ function toRecommendation(
       skillRole: scores.skillRole,
       workProject: scores.workProject,
     },
+    source: candidate.source,
     targetRole: candidate.targetRole ?? candidate.resumeProfile?.targetRoles?.[0] ?? null,
     workYears: candidate.resumeProfile?.workYears ?? null,
   };
+}
+
+function mergeRecommendationScores(
+  results: Parameters<typeof mergeVectorScores>[0],
+): Map<string, VectorScores> {
+  const library = mergeVectorScores(results, "studio_interview");
+  const pool = mergeVectorScores(results, "resume_pool_item");
+  const merged = new Map<string, VectorScores>();
+  for (const [id, scores] of library) {
+    merged.set(scoreLookupKey("studio_interview", id), scores);
+  }
+  for (const [id, scores] of pool) {
+    merged.set(scoreLookupKey("resume_pool_item", id), scores);
+  }
+  return merged;
 }
 
 export async function scoreCandidatesForJobDescription(
@@ -191,13 +232,26 @@ export async function scoreCandidatesForJobDescription(
         embedding: chunk.embedding,
         limit: SEARCH_LIMIT_BY_CHUNK[chunk.chunkType],
         organizationId: input.organizationId,
-        sourceTypes: ["studio_interview"],
+        sourceTypes: RECOMMENDATION_SEARCH_SOURCE_TYPES,
       }),
     ),
   );
-  const bySource = mergeVectorScores(resultGroups.flat(), "studio_interview");
-  const retrievedIds = new Set(bySource.keys());
-  const candidates = await deps.loadCandidates(input.organizationId, [...bySource.keys()]);
+  const bySource = mergeRecommendationScores(resultGroups.flat());
+  const hits: RecommendationHit[] = [...bySource.keys()].flatMap((key) => {
+    const separator = key.indexOf(":");
+    if (separator <= 0) {
+      return [];
+    }
+    const sourceType = key.slice(0, separator) as RecommendationHit["sourceType"];
+    const sourceId = key.slice(separator + 1);
+    if (!(sourceId && (sourceType === "studio_interview" || sourceType === "resume_pool_item"))) {
+      return [];
+    }
+    return [{ sourceId, sourceType }];
+  });
+  // Eval / diagnostics still key by bare id (library positives are studio_interview ids).
+  const retrievedIds = new Set(hits.map((hit) => hit.sourceId));
+  const candidates = await deps.loadCandidates(input.organizationId, hits);
   const loadedIds = new Set(candidates.map((c) => c.id));
   const exempt = input.excludeLinkedExceptIds;
   const ranked = candidates
@@ -206,7 +260,7 @@ export async function scoreCandidatesForJobDescription(
         !(exempt && c.currentJobDescriptionId === input.jobDescription.id && !exempt.has(c.id)),
     )
     .flatMap((c): CoreRankedEntry[] => {
-      const s = bySource.get(c.id);
+      const s = bySource.get(scoreLookupKey(vectorSourceTypeFor(c.source), c.id));
       return s ? [{ candidate: c, candidateId: c.id, score: weightedScore(s), similarity: s }] : [];
     })
     .toSorted((a, b) => b.score - a.score);
@@ -295,10 +349,14 @@ export function recommendationCandidateWhere(
   );
 }
 
-export async function loadRecommendationCandidates(
+function mapCreatedAt(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+async function loadLibraryRecommendationCandidates(
   organizationId: string,
   ids: string[],
-  opts: { includeClosed?: boolean } = {},
+  opts: { includeClosed?: boolean },
 ): Promise<RecommendationCandidateRecord[]> {
   if (ids.length === 0) {
     return [];
@@ -331,7 +389,81 @@ export async function loadRecommendationCandidates(
 
   return rows.map((row) => ({
     ...row,
-    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+    createdAt: mapCreatedAt(row.createdAt),
     skillsNormalized: row.skillsNormalized ?? [],
+    source: "resume_library" as const,
   }));
+}
+
+async function loadPublicPoolRecommendationCandidates(
+  organizationId: string,
+  ids: string[],
+): Promise<RecommendationCandidateRecord[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+  const rows = await db
+    .select({
+      candidateEmail: resumePoolItem.candidateEmail,
+      candidateName: resumePoolItem.candidateName,
+      candidatePhone: resumePoolItem.candidatePhone,
+      createdAt: resumePoolItem.createdAt,
+      currentJobDescriptionId: resumePoolItem.jobDescriptionId,
+      currentJobDescriptionName: jobDescription.name,
+      id: resumePoolItem.id,
+      notes: resumePoolItem.notes,
+      resumeFileName: resumePoolItem.resumeFileName,
+      resumeParseStatus: resumePoolItem.resumeParseStatus,
+      resumeProfile: resumePoolItem.resumeProfile,
+      skillsNormalized: resumePoolItem.skillsNormalized,
+      targetRole: resumePoolItem.targetRole,
+    })
+    .from(resumePoolItem)
+    .leftJoin(
+      jobDescription,
+      and(
+        eq(resumePoolItem.jobDescriptionId, jobDescription.id),
+        eq(jobDescription.organizationId, organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(resumePoolItem.organizationId, organizationId),
+        inArray(resumePoolItem.id, ids),
+        eq(resumePoolItem.scope, "public"),
+        eq(resumePoolItem.status, "active"),
+      ),
+    );
+
+  return rows.map((row) => ({
+    ...row,
+    createdAt: mapCreatedAt(row.createdAt),
+    skillsNormalized: row.skillsNormalized ?? [],
+    source: "public_resume_pool" as const,
+  }));
+}
+
+export async function loadRecommendationCandidates(
+  organizationId: string,
+  hits: RecommendationHit[],
+  opts: { includeClosed?: boolean } = {},
+): Promise<RecommendationCandidateRecord[]> {
+  if (hits.length === 0) {
+    return [];
+  }
+  const libraryIds = [
+    ...new Set(
+      hits.filter((hit) => hit.sourceType === "studio_interview").map((hit) => hit.sourceId),
+    ),
+  ];
+  const poolIds = [
+    ...new Set(
+      hits.filter((hit) => hit.sourceType === "resume_pool_item").map((hit) => hit.sourceId),
+    ),
+  ];
+  const [library, pool] = await Promise.all([
+    loadLibraryRecommendationCandidates(organizationId, libraryIds, opts),
+    loadPublicPoolRecommendationCandidates(organizationId, poolIds),
+  ]);
+  return [...library, ...pool];
 }

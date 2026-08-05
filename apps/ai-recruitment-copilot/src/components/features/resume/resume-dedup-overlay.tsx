@@ -23,7 +23,7 @@ import { StudioPersonDetailDialog } from "@/components/features/studio/studio-pe
 import { ResumeProfileSnapshotView } from "@/components/features/resume/resume-profile-snapshot";
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
 import { EmptyValue } from "@/components/features/display/empty-value";
-import { formatResumeCandidateTitle } from "@/components/features/resume/resume-record-display-id";
+import { ResumeCandidateTitleWithCopyableId } from "@/components/features/resume/copyable-resume-record-id";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -207,8 +207,8 @@ function CandidateIdentity({
 }) {
   return (
     <div className="flex min-w-0 items-start justify-between gap-3">
-      <h3 className="min-w-0 truncate font-medium text-sm leading-6">
-        {formatResumeCandidateTitle(name, id)}
+      <h3 className="min-w-0 font-medium text-sm leading-6">
+        <ResumeCandidateTitleWithCopyableId id={id} name={name} />
       </h3>
       {trailing}
     </div>
@@ -307,7 +307,11 @@ function ResumePoolMatchDetailDialog({
       open={open}
       size="2xl"
       title={
-        detail ? formatResumeCandidateTitle(detail.candidateName, detail.id) : "私有简历池详情"
+        detail ? (
+          <ResumeCandidateTitleWithCopyableId id={detail.id} name={detail.candidateName} />
+        ) : (
+          "私有简历池详情"
+        )
       }
     >
       {content}
@@ -352,8 +356,8 @@ function MatchCandidateRow({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <h3 className="min-w-0 truncate font-medium text-sm leading-6">
-              {formatResumeCandidateTitle(match.candidateName, match.id)}
+            <h3 className="min-w-0 font-medium text-sm leading-6">
+              <ResumeCandidateTitleWithCopyableId id={match.id} name={match.candidateName} />
             </h3>
             {match.level ? (
               <Badge variant={LEVEL_META[match.level].variant}>

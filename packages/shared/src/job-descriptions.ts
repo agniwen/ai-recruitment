@@ -325,6 +325,9 @@ export interface JobDescriptionMetrics {
   loadByInterviewer: { id: string; name: string; activeCandidates: number }[];
 }
 
+/** Where a talent recommendation came from for mixed resume-library + public-pool results. */
+export type JobDescriptionTalentRecommendationSource = "public_resume_pool" | "resume_library";
+
 export interface JobDescriptionTalentRecommendation {
   candidateEmail: string | null;
   candidateName: string;
@@ -345,6 +348,8 @@ export interface JobDescriptionTalentRecommendation {
     skillRole?: number;
     workProject?: number;
   };
+  /** 简历库 or 简历广场（公共简历池） */
+  source: JobDescriptionTalentRecommendationSource;
   targetRole: string | null;
   workYears: number | null;
 }

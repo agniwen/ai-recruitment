@@ -4,15 +4,17 @@ import type {
   JobDescriptionListRecord,
   JobDescriptionTalentRecommendation,
   JobDescriptionTalentRecommendationResult,
+  JobDescriptionTalentRecommendationSource,
 } from "@arc/shared/job-descriptions";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { StudioPersonDetailDialog } from "@/components/features/studio/studio-person-detail-dialog";
 import {
   ResumeDocumentFileIcon,
   getResumeDocumentFileIconKind,
 } from "@/components/features/resume/resume-document-file-icon";
+import { CopyableResumeRecordId } from "@/components/features/resume/copyable-resume-record-id";
 import {
   IconBriefcase2 as BriefcaseBusinessIcon,
   IconBuilding as Building2Icon,
@@ -36,8 +38,19 @@ import { Modal } from "@/components/ui/modal";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { rpcFetch } from "@/lib/client/api";
+import { authClient } from "@/lib/client/auth-client";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+
+const ResumePoolDetailDialog = lazy(async () => {
+  const mod = await import("@/components/features/studio/resume-pool/resume-pool-details");
+  return { default: mod.ResumePoolDetailDialog };
+});
+
+const SOURCE_LABEL: Record<JobDescriptionTalentRecommendationSource, string> = {
+  public_resume_pool: "简历广场",
+  resume_library: "简历库",
+};
 
 interface TalentRecommendationsDialogProps {
   jobDescription: Pick<JobDescriptionListRecord, "id" | "name"> | null;
@@ -160,12 +173,13 @@ function CandidateRecommendationCard({
   onView,
 }: {
   candidate: JobDescriptionTalentRecommendation;
-  onView: (id: string) => void;
+  onView: (candidate: JobDescriptionTalentRecommendation) => void;
 }) {
   const title = formatCandidateTitle(candidate);
   const note = notesPreview(candidate.notes);
   const skills = candidate.masteredSkills.slice(0, 8);
   const documentKind = getResumeDocumentFileIconKind({ fileName: candidate.resumeFileName });
+  const sourceLabel = SOURCE_LABEL[candidate.source];
   return (
     <Card className="min-w-0 overflow-hidden rounded-md py-0">
       <div className="grid min-w-0 gap-0 lg:grid-cols-[minmax(0,1fr)_17rem]">
@@ -181,13 +195,22 @@ function CandidateRecommendationCard({
               <CardTitle className="text-sm leading-5">
                 <button
                   className="line-clamp-2 max-w-full wrap-break-word text-left font-medium underline decoration-foreground/20 underline-offset-4 hover:decoration-foreground/60"
-                  onClick={() => onView(candidate.id)}
+                  onClick={() => onView(candidate)}
                   title="点击姓名查看详情"
                   type="button"
                 >
                   {title}
                 </button>
               </CardTitle>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <Badge className="font-normal" variant="secondary">
+                  {sourceLabel}
+                </Badge>
+                <CopyableResumeRecordId
+                  displayIdClassName="text-[11px] text-muted-foreground/70"
+                  id={candidate.id}
+                />
+              </div>
             </div>
           </CardHeader>
 
@@ -257,7 +280,7 @@ function CandidateRecommendationCard({
             <CandidateRecommendationReasons reasons={candidate.reasons} />
             <Button
               className="w-full"
-              onClick={() => onView(candidate.id)}
+              onClick={() => onView(candidate)}
               size="sm"
               type="button"
               variant="outline"
@@ -290,6 +313,72 @@ function RecommendationsSkeleton() {
   );
 }
 
+function RecommendationsBody({
+  data,
+  isError,
+  isInitialLoading,
+  onView,
+}: {
+  data: JobDescriptionTalentRecommendationResult;
+  isError: boolean;
+  isInitialLoading: boolean;
+  onView: (candidate: JobDescriptionTalentRecommendation) => void;
+}) {
+  if (isInitialLoading) {
+    return <RecommendationsSkeleton />;
+  }
+  if (isError) {
+    return (
+      <Empty className="border-border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <FileSearchIcon className="size-5" />
+          </EmptyMedia>
+          <EmptyTitle>推荐失败</EmptyTitle>
+          <EmptyDescription>请稍后重试。</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+  if (data.status === "disabled") {
+    return (
+      <Empty className="border-border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <FileSearchIcon className="size-5" />
+          </EmptyMedia>
+          <EmptyTitle>语义推荐未启用</EmptyTitle>
+          <EmptyDescription>需要完成 embedding 与 Qdrant 配置后才能生成推荐。</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+  if (data.candidates.length === 0) {
+    return (
+      <Empty className="border-border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <UserCheckIcon className="size-5" />
+          </EmptyMedia>
+          <EmptyTitle>暂无推荐人才</EmptyTitle>
+          <EmptyDescription>当前没有足够匹配的已索引简历（简历库与简历广场）。</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {data.candidates.map((candidate) => (
+        <CandidateRecommendationCard
+          candidate={candidate}
+          key={`${candidate.source}:${candidate.id}`}
+          onView={onView}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function JobDescriptionTalentRecommendationsDialog({
   jobDescription,
   onOpenChange,
@@ -297,7 +386,11 @@ export function JobDescriptionTalentRecommendationsDialog({
 }: TalentRecommendationsDialogProps) {
   const slug = useWorkspaceSlug();
   const navigate = useNavigate();
-  const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
+  const { data: session } = authClient.useSession();
+  const [detailTarget, setDetailTarget] = useState<{
+    id: string;
+    source: JobDescriptionTalentRecommendationSource;
+  } | null>(null);
 
   const recommendationsQuery = useQuery({
     enabled: open && jobDescription !== null,
@@ -322,75 +415,33 @@ export function JobDescriptionTalentRecommendationsDialog({
 
   const data = recommendationsQuery.data ?? EMPTY_RESULT;
   const isInitialLoading = recommendationsQuery.isFetching && !recommendationsQuery.data;
+  const libraryDetailId = detailTarget?.source === "resume_library" ? detailTarget.id : null;
+  const poolDetailId = detailTarget?.source === "public_resume_pool" ? detailTarget.id : null;
 
   return (
     <>
       <Modal
         bodyClassName="px-6 py-5"
-        description="基于岗位 JD 与已索引简历的语义相似度生成。"
+        description="基于岗位 JD 与简历库、简历广场已索引简历的语义相似度生成。"
         onOpenChange={onOpenChange}
         open={open}
         size="2xl"
         title={jobDescription ? `岗位「${jobDescription.name}」的人才推荐` : "人才推荐"}
       >
-        {isInitialLoading ? <RecommendationsSkeleton /> : null}
-
-        {!isInitialLoading && recommendationsQuery.isError ? (
-          <Empty className="border-border">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <FileSearchIcon className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>推荐失败</EmptyTitle>
-              <EmptyDescription>请稍后重试。</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : null}
-
-        {!isInitialLoading && !recommendationsQuery.isError && data.status === "disabled" ? (
-          <Empty className="border-border">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <FileSearchIcon className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>语义推荐未启用</EmptyTitle>
-              <EmptyDescription>需要完成 embedding 与 Qdrant 配置后才能生成推荐。</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : null}
-
-        {!isInitialLoading &&
-        !recommendationsQuery.isError &&
-        data.status === "ready" &&
-        data.candidates.length === 0 ? (
-          <Empty className="border-border">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <UserCheckIcon className="size-5" />
-              </EmptyMedia>
-              <EmptyTitle>暂无推荐人才</EmptyTitle>
-              <EmptyDescription>当前没有足够匹配的已索引简历。</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : null}
-
-        {!isInitialLoading && data.status === "ready" && data.candidates.length > 0 ? (
-          <div className="space-y-3">
-            {data.candidates.map((candidate) => (
-              <CandidateRecommendationCard
-                candidate={candidate}
-                key={candidate.id}
-                onView={setDetailRecordId}
-              />
-            ))}
-          </div>
-        ) : null}
+        <RecommendationsBody
+          data={data}
+          isError={recommendationsQuery.isError}
+          isInitialLoading={isInitialLoading}
+          onView={(item) => {
+            setDetailTarget({ id: item.id, source: item.source });
+          }}
+        />
       </Modal>
 
       <StudioPersonDetailDialog
         mode="resume"
         onEdit={(id) => {
-          setDetailRecordId(null);
+          setDetailTarget(null);
           void navigate({
             params: { slug },
             search: { recordId: id },
@@ -399,12 +450,28 @@ export function JobDescriptionTalentRecommendationsDialog({
         }}
         onOpenChange={(next) => {
           if (!next) {
-            setDetailRecordId(null);
+            setDetailTarget(null);
           }
         }}
-        open={detailRecordId !== null}
-        recordId={detailRecordId}
+        open={libraryDetailId !== null}
+        recordId={libraryDetailId}
       />
+
+      {poolDetailId ? (
+        <Suspense fallback={null}>
+          <ResumePoolDetailDialog
+            currentUserId={session?.user?.id ?? null}
+            onOpenChange={(next) => {
+              if (!next) {
+                setDetailTarget(null);
+              }
+            }}
+            record={null}
+            recordId={poolDetailId}
+            slug={slug}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

@@ -12,7 +12,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 import { TimeDisplay } from "@/components/features/display/time-display";
 import { ResumeDuplicateMatchBadge } from "@/components/features/resume/resume-duplicate-match-badge";
-import { formatResumeRecordDisplayId } from "@/components/features/resume/resume-record-display-id";
+import { CopyableResumeRecordId } from "@/components/features/resume/copyable-resume-record-id";
 import { JobDescriptionHoverCard } from "@/components/features/studio/job-descriptions/job-description-hover-card";
 import { ResumeLifecycleBadge } from "@/components/features/studio/resumes/resume-lifecycle-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -462,16 +462,16 @@ function ResumeLibraryCardComponent({
           <div className="min-w-0 flex-1">
             <div className="grid min-w-0 gap-x-4 gap-y-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(16rem,0.7fr)] xl:gap-x-8">
               <div className="flex min-w-0 flex-wrap items-center gap-2 xl:col-span-2">
-                <button
-                  className="min-w-0 truncate text-left font-semibold text-base underline decoration-transparent underline-offset-4 transition-colors hover:decoration-foreground/40"
-                  onClick={() => onOpenDetail(record, "overview")}
-                  type="button"
-                >
-                  <span>{record.candidateName}</span>{" "}
-                  <span className="font-normal text-muted-foreground/60 text-xs">
-                    ({formatResumeRecordDisplayId(record.id)})
-                  </span>
-                </button>
+                <div className="flex min-w-0 max-w-full items-center gap-1">
+                  <button
+                    className="min-w-0 truncate text-left font-semibold text-base underline decoration-transparent underline-offset-4 transition-colors hover:decoration-foreground/40"
+                    onClick={() => onOpenDetail(record, "overview")}
+                    type="button"
+                  >
+                    <span>{record.candidateName}</span>
+                  </button>
+                  <CopyableResumeRecordId id={record.id} parentheses />
+                </div>
                 {duplicateMatchBadge(record, () => onShowDuplicateMatches(record))}
                 <ResumeLifecycleBadge
                   className="max-w-full"

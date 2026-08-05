@@ -148,7 +148,12 @@ describe("workspace role permission helpers", () => {
     expect(resumeLibraryRead?.description).toContain("「简历库」列表、详情、时间线");
     expect(resumeLibraryRead?.description).toContain("推荐候选人接口");
     expect(resumePoolRead?.description).toContain("「公共简历池」列表、详情、简历文件");
-    expect(jobDescriptionPage?.description).toContain("推荐候选人还需要「简历库」查看权限");
-    expect(jdRead?.description).toContain("推荐候选人接口还同时需要「简历库」查看权限");
+    expect(resumePoolRead?.description).toContain("推荐候选人接口");
+    expect(jobDescriptionPage?.description).toContain(
+      "推荐候选人还需要「简历库」和「公共简历池」查看权限",
+    );
+    expect(jdRead?.description).toContain(
+      "推荐候选人接口还同时需要「简历库」和「公共简历池」查看权限",
+    );
   });
 });

@@ -67,8 +67,8 @@ async function main() {
   // 否则会被生产的 pipelineStage≠closed 过滤成 status_filtered，掩盖真实检索质量。
   const deps = {
     ...createDefaultRecommendationDeps(),
-    loadCandidates: (o: string, ids: string[]) =>
-      loadRecommendationCandidates(o, ids, { includeClosed: true }),
+    loadCandidates: (o: string, hits: Parameters<typeof loadRecommendationCandidates>[1]) =>
+      loadRecommendationCandidates(o, hits, { includeClosed: true }),
     vectorStore: store,
   };
   const result = await runEval({

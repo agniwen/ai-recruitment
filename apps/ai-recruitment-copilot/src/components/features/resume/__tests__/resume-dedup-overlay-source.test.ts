@@ -5,6 +5,8 @@ const source = readFileSync(new URL("../resume-dedup-overlay.tsx", import.meta.u
 
 describe("ResumeDedupMatchList display id", () => {
   it("shows the masked resume id next to duplicate candidate names", () => {
-    expect(source).toContain("formatResumeCandidateTitle(match.candidateName, match.id)");
+    expect(source).toContain("ResumeCandidateTitleWithCopyableId");
+    expect(source).toContain("id={match.id}");
+    expect(source).toContain("name={match.candidateName}");
   });
 });

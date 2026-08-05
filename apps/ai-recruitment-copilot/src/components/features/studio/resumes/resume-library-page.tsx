@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ResumeDuplicateMatchesDialog } from "@/components/features/resume/resume-dedup-overlay";
 import { toDedupSourceFromLibraryRecord } from "@/components/features/resume/resume-dedup-source";
-import { formatResumeCandidateTitle } from "@/components/features/resume/resume-record-display-id";
+import { ResumeCandidateTitleWithCopyableId } from "@/components/features/resume/copyable-resume-record-id";
 import { listBulkResumeBatches } from "@/lib/client/api/endpoints/bulk-resume-upload";
 import { BulkUploadConfirmDialog } from "@/components/features/studio/resumes/bulk-upload-confirm-dialog";
 import type { BulkUploadConfirmConfig } from "@/components/features/studio/resumes/bulk-upload-confirm-dialog";
@@ -742,12 +742,17 @@ export function ResumeLibraryPage() {
         open={duplicateMatchRecord !== null}
         source={duplicateMatchRecord ? toDedupSourceFromLibraryRecord(duplicateMatchRecord) : null}
         title={
-          duplicateMatchRecord
-            ? `${formatResumeCandidateTitle(
-                duplicateMatchRecord.candidateName,
-                duplicateMatchRecord.id,
-              )} 的疑似重复简历`
-            : "疑似重复简历"
+          duplicateMatchRecord ? (
+            <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1">
+              <ResumeCandidateTitleWithCopyableId
+                id={duplicateMatchRecord.id}
+                name={duplicateMatchRecord.candidateName}
+              />
+              <span className="shrink-0">的疑似重复简历</span>
+            </span>
+          ) : (
+            "疑似重复简历"
+          )
         }
       />
 

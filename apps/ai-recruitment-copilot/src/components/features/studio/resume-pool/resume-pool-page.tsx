@@ -12,6 +12,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { toast } from "sonner";
 import { useDataGridState } from "@/components/data-grid";
 import { Toolbar } from "@/components/data-grid/parts/toolbar";
+import { ResumeCandidateTitleWithCopyableId } from "@/components/features/resume/copyable-resume-record-id";
 import { ResumeDuplicateMatchesDialog } from "@/components/features/resume/resume-dedup-overlay";
 import { toDedupSourceFromPoolRecord } from "@/components/features/resume/resume-dedup-source";
 import { getPreviewableResumeDocumentKind } from "@/components/features/resume/resume-document-preview-button";
@@ -54,7 +55,6 @@ import {
   deletePoolRecordLabel,
   filterPoolRecords,
   getCandidateTitle,
-  getCandidateTitleWithId,
   getResumePoolUploaderFilterAvailability,
   normalizeScope,
   pruneSelectedPrivateResumeIds,
@@ -662,9 +662,17 @@ export function ResumePoolPage() {
         open={duplicateMatchRecord !== null}
         source={duplicateMatchRecord ? toDedupSourceFromPoolRecord(duplicateMatchRecord) : null}
         title={
-          duplicateMatchRecord
-            ? `${getCandidateTitleWithId(duplicateMatchRecord)} 的疑似重复简历`
-            : "疑似重复简历"
+          duplicateMatchRecord ? (
+            <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1">
+              <ResumeCandidateTitleWithCopyableId
+                id={duplicateMatchRecord.id}
+                name={getCandidateTitle(duplicateMatchRecord)}
+              />
+              <span className="shrink-0">的疑似重复简历</span>
+            </span>
+          ) : (
+            "疑似重复简历"
+          )
         }
       />
       <AlertDialog

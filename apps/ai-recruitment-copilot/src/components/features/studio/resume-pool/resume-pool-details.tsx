@@ -30,7 +30,10 @@ import {
   ResumeDocumentFileIcon,
   getResumeDocumentFileIconKind,
 } from "@/components/features/resume/resume-document-file-icon";
-import { formatResumeRecordDisplayId } from "@/components/features/resume/resume-record-display-id";
+import {
+  CopyableResumeRecordId,
+  ResumeCandidateTitleWithCopyableId,
+} from "@/components/features/resume/copyable-resume-record-id";
 import { ResumeEducationDisplayLine } from "@/components/features/resume/resume-education-line";
 import {
   isPreviewableResumeDocumentInput,
@@ -49,7 +52,7 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import {
   duplicateMatchBadge,
   getCandidateDisplayTitle,
-  getCandidateTitleWithId,
+  getCandidateTitle,
   getResumePoolImportActionState,
   resumeParseStatusBadge,
   sourceActorLabel,
@@ -440,7 +443,13 @@ export function ResumePoolDetailDialog({
         onOpenChange={onOpenChange}
         open={Boolean(itemId)}
         size="2xl"
-        title={detail ? getCandidateTitleWithId(detail) : "候选人详情"}
+        title={
+          detail ? (
+            <ResumeCandidateTitleWithCopyableId id={detail.id} name={getCandidateTitle(detail)} />
+          ) : (
+            "候选人详情"
+          )
+        }
       >
         {detail ? (
           <div className="space-y-8">
@@ -691,8 +700,11 @@ export function ResumePoolCard({
               {title}
             </button>
           </CardTitle>
-          <p className="mt-0.5 truncate text-muted-foreground/70 text-[11px] leading-4">
-            {formatResumeRecordDisplayId(record.id)}
+          <p className="mt-0.5 text-muted-foreground/70 text-[11px] leading-4">
+            <CopyableResumeRecordId
+              displayIdClassName="text-[11px] text-muted-foreground/70"
+              id={record.id}
+            />
           </p>
         </div>
         {record.sourceChannel === "referral" ? <Badge variant="secondary">内推</Badge> : null}

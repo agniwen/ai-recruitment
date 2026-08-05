@@ -7,7 +7,7 @@ import type { ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import type { ResumeSemanticSourceType } from "@arc/db-schema/schema";
 import { useEffect, useState } from "react";
 import { getPreviewableResumeDocumentKind } from "@/components/features/resume/resume-document-preview-button";
-import { formatResumeCandidateTitle } from "@/components/features/resume/resume-record-display-id";
+import { ResumeCandidateTitleWithCopyableId } from "@/components/features/resume/copyable-resume-record-id";
 import { ResumeDocumentPreviewPane } from "@/components/features/resume/resume-document-preview-dialog";
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
 import { EmptyValue } from "@/components/features/display/empty-value";
@@ -347,9 +347,11 @@ function ComparisonCard({
     <Card className="min-h-0 min-w-0 overflow-hidden">
       <CardHeader className="shrink-0 border-b px-5 py-4">
         <CardTitle className="text-sm">{label}</CardTitle>
-        <CardDescription className="truncate">
-          {formatResumeCandidateTitle(candidate.candidateName, candidate.id)}
-          {detail?.resumeFileName ? ` · ${detail.resumeFileName}` : ""}
+        <CardDescription className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
+          <ResumeCandidateTitleWithCopyableId id={candidate.id} name={candidate.candidateName} />
+          {detail?.resumeFileName ? (
+            <span className="truncate">· {detail.resumeFileName}</span>
+          ) : null}
         </CardDescription>
         {detail ? (
           <div className="flex items-center justify-between gap-3">
