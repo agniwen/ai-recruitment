@@ -188,7 +188,7 @@ function RecruiterResumeDetailHeaderOverride({ onBack }: { onBack: () => void })
           variant="ghost"
         >
           <IconArrowLeft className="size-4" />
-          <span className="hidden sm:inline">返回招聘台</span>
+          <span className="hidden sm:inline">返回简历库</span>
         </Button>
       </div>
     ),

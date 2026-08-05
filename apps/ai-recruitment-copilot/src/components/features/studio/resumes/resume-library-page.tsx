@@ -568,7 +568,7 @@ export function ResumeLibraryPage() {
         <EmptyMedia variant="icon">
           <IconUsers className="size-5" />
         </EmptyMedia>
-        <EmptyTitle>招聘台还没有任何候选人</EmptyTitle>
+        <EmptyTitle>简历库还没有任何候选人</EmptyTitle>
         <EmptyDescription>点击右上角「上传简历」加入第一份候选人简历。</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
@@ -600,8 +600,8 @@ export function ResumeLibraryPage() {
             </Button>
           }
           className="items-end sm:items-end"
-          description="已经进入招聘流程的候选人在这里跟进：看简历、匹配岗位、推进到面试。"
-          title="招聘台"
+          description="沉淀候选人档案、简历 PDF、岗位匹配和流程进展，筛选到面试推进都能从这里接上。"
+          title="简历库"
         />
         <ResumeLibraryMetricsSection
           chartKey={metricsChartKey}

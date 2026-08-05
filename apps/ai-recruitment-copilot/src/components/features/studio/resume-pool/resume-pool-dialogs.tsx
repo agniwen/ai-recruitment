@@ -302,7 +302,7 @@ export function ImportResumePoolDialog({
         setDuplicates(result);
         return;
       }
-      toast.success(isReimport ? "已再次入库到招聘台" : "已入库到招聘台");
+      toast.success(isReimport ? "已再次入库到简历库" : "已入库到简历库");
       onImported();
       onOpenChange(false);
     },
@@ -316,7 +316,7 @@ export function ImportResumePoolDialog({
   const recruitmentSource = describePoolItemRecruitmentSource(item);
   let dialogDescription: string | undefined;
   if (item) {
-    dialogDescription = isReimport ? "已在招聘台，是否再次入库。" : getCandidateTitle(item);
+    dialogDescription = isReimport ? "已在简历库，是否再次入库。" : getCandidateTitle(item);
   }
 
   return (
@@ -349,7 +349,7 @@ export function ImportResumePoolDialog({
         }}
         open={item !== null}
         size="md"
-        title={isReimport ? "再次入库到招聘台" : "入库到招聘台"}
+        title={isReimport ? "再次入库到简历库" : "入库到简历库"}
         description={dialogDescription}
       >
         <div className="flex flex-col gap-5">
@@ -410,10 +410,10 @@ export function ImportResumePoolDialog({
             <FieldLabel>简历来源</FieldLabel>
             <FieldContent>
               <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                {recruitmentSource || "未填写（将原样同步到招聘台）"}
+                {recruitmentSource || "未填写（将原样同步到简历库）"}
               </p>
               <p className="text-muted-foreground text-xs">
-                入库时会把广场/简历池中的来源复制到招聘台候选人记录。
+                入库时会把广场/简历池中的来源复制到简历库候选人记录。
               </p>
             </FieldContent>
           </Field>
@@ -468,10 +468,10 @@ export function ImportResumePoolDialog({
       <AlertDialog onOpenChange={(open) => !open && setDuplicates(null)} open={duplicates !== null}>
         <AlertDialogContent className="sm:max-w-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>招聘台中可能已有相同候选人</AlertDialogTitle>
+            <AlertDialogTitle>简历库中可能已有相同候选人</AlertDialogTitle>
             <AlertDialogDescription>
               系统会基于工作经历、项目经历、技能和岗位画像的语义相似度判断风险。
-              请根据判断依据确认是否为同一候选人。确认后会继续创建一条新的招聘台记录。
+              请根据判断依据确认是否为同一候选人。确认后会继续创建一条新的简历库记录。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ResumeDedupMatchList matches={toResumeDedupMatches(duplicates)} />

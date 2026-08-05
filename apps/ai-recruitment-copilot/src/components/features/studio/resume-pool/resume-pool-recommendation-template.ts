@@ -37,7 +37,7 @@ function formatOrgSeriesServiceUnit(values: ResumePoolRecommendationTemplateValu
 }
 
 /**
- * 入库招聘台时的「推荐语」模版。有数据的字段自动填入，其余留给人工补全。
+ * 入库到简历库时的「推荐语」模版。有数据的字段自动填入，其余留给人工补全。
  */
 export function buildResumePoolRecommendationTemplate(
   values: ResumePoolRecommendationTemplateValues,

@@ -4,7 +4,7 @@
  * 简历疑似重复风险提示 overlay / 详情弹窗。
  * Resume duplicate-risk overlay and the "view suspected duplicates" dialog.
  *
- * - ResumeDuplicateMatchesDialog: 招聘台 / 人才库点击「疑似重复」后打开，
+ * - ResumeDuplicateMatchesDialog: 简历库 / 简历广场点击「疑似重复」后打开，
  *   左侧当前候选人，右侧疑似列表；优先 PC 对照阅读。
  * - ResumeDedupOverlay: 上传解析后命中查重时的决策面板。
  */

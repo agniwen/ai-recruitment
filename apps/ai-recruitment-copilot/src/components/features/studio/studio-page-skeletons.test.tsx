@@ -15,8 +15,8 @@ import {
 
 describe("Studio page skeletons", () => {
   it.each([
-    ["招聘台", () => <RecruitingPageSkeleton />],
-    ["人才库", () => <ResumePoolPageSkeleton />],
+    ["简历库", () => <RecruitingPageSkeleton />],
+    ["简历广场", () => <ResumePoolPageSkeleton />],
     ["AI 面试", () => <StudioTablePageSkeleton label="AI 面试" summary />],
     ["用人组织管理", () => <StudioTablePageSkeleton label="用人组织管理" />],
     ["数据看板", () => <DashboardPageSkeleton />],

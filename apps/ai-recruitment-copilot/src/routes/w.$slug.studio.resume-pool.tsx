@@ -15,7 +15,7 @@ export const Route = createFileRoute("/w/$slug/studio/resume-pool")({
     uploaderId: normalizeResumePoolUploaderId(search.uploaderId),
   }),
   head: () => ({
-    meta: [{ title: formatDocumentTitle("人才库") }],
+    meta: [{ title: formatDocumentTitle("简历广场") }],
   }),
   component: ResumePoolPage,
   pendingComponent: ResumePoolPageSkeleton,

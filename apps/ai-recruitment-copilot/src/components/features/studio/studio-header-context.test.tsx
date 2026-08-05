@@ -17,7 +17,7 @@ function HeaderReader() {
 }
 
 function DetailOverride() {
-  useStudioHeaderOverride(<span>返回招聘台 黄文浩</span>);
+  useStudioHeaderOverride(<span>返回简历库 黄文浩</span>);
   return null;
 }
 
@@ -45,7 +45,7 @@ describe("StudioHeaderProvider", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("返回招聘台 黄文浩");
+    expect(container.textContent).toContain("返回简历库 黄文浩");
 
     await act(async () => {
       root.render(<Harness showDetail={false} />);

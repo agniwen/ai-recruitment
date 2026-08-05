@@ -174,7 +174,7 @@ export function useStudioPersonDetailController({
   const hasDeleteOfferPermission = useHasPermission("offer", "delete");
   const canReadHumanInterview = canUseManagementActions && hasReadHumanInterviewPermission;
   const canUpdateInterview = canUseManagementActions && hasUpdateInterviewPermission;
-  // Same gate as 招聘台列表 card「编辑」: resumeLibrary:update in authed mode.
+  // Same gate as 简历库列表 card「编辑」: resumeLibrary:update in authed mode.
   // Parse-ready is checked at the call site (canEditResumeRecord), matching
   // resume-library-card-actions.
   const canUpdateResumeLibrary = canUseManagementActions && hasUpdateResumeLibraryPermission;

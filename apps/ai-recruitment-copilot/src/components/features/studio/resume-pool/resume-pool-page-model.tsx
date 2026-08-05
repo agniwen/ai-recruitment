@@ -154,7 +154,7 @@ export function getResumePoolImportActionState(record: ResumePoolListRecord) {
     case "ready": {
       return {
         disabled: false,
-        label: "入库到招聘台",
+        label: "入库到简历库",
         loading: false,
       };
     }
@@ -260,7 +260,7 @@ export function canDeletePoolRecord(
 }
 
 export function deletePoolRecordLabel(record: ResumePoolListRecord | null) {
-  return record?.scope === "public" ? "人才库简历" : "私有简历";
+  return record?.scope === "public" ? "简历广场简历" : "私有简历";
 }
 
 export function sessionUserId(session: { user?: { id?: string | null } } | null | undefined) {

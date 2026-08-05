@@ -37,7 +37,7 @@ vi.mock("@/lib/client/api", () => ({
 
 vi.mock("@/components/features/studio/studio-person-detail-dialog", () => ({
   StudioPersonDetailDialog: ({ open, recordId }: { open: boolean; recordId: string | null }) =>
-    open ? <div>招聘台详情 {recordId}</div> : null,
+    open ? <div>简历库详情 {recordId}</div> : null,
 }));
 
 vi.mock("@/lib/client/rpc", () => ({
@@ -113,7 +113,7 @@ describe("ImportResumePoolDialog", () => {
       await Promise.resolve();
     });
 
-    expect(document.body.textContent).toContain("已在招聘台，是否再次入库。");
+    expect(document.body.textContent).toContain("已在简历库，是否再次入库。");
     expect(document.body.textContent).toContain("已入库记录");
     const importedRecordButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="查看已入库记录 resume-record-2"]',
@@ -129,7 +129,7 @@ describe("ImportResumePoolDialog", () => {
       await Promise.resolve();
     });
     await vi.waitFor(() => {
-      expect(document.body.textContent).toContain("招聘台详情 resume-record-2");
+      expect(document.body.textContent).toContain("简历库详情 resume-record-2");
     });
 
     const confirmButton = [...document.querySelectorAll("button")].find((button) =>

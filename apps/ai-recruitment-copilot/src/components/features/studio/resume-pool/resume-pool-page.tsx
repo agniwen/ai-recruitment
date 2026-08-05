@@ -466,8 +466,8 @@ export function ResumePoolPage() {
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
           className="max-w-3xl"
-          title="人才库"
-          description="还没进入流程、或暂时归档的简历放这里；合适了再推进到招聘台。"
+          title="简历广场"
+          description="先沉淀简历，再决定是否推送共享或入库到简历库。"
         />
         <Tabs
           onValueChange={(value) => void navigate({ search: { scope: normalizeScope(value) } })}
@@ -669,7 +669,7 @@ export function ResumePoolPage() {
             <AlertDialogTitle>确认删除这份{deletePoolRecordLabel(deleteTarget)}？</AlertDialogTitle>
             <AlertDialogDescription>
               这会永久删除 {deleteTarget ? getCandidateTitle(deleteTarget) : "该记录"}。
-              已入库到招聘台的记录不会删除。
+              已入库到简历库的记录不会删除。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

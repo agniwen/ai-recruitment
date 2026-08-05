@@ -188,7 +188,7 @@ function ResumePoolCardsSkeleton() {
 
 export function RecruitingPageSkeleton() {
   return (
-    <PageShell label="招聘台">
+    <PageShell label="简历库">
       <HeaderSkeleton />
       <ChartGridSkeleton />
       <TabsSkeleton count={6} />
@@ -200,7 +200,7 @@ export function RecruitingPageSkeleton() {
 
 export function ResumePoolPageSkeleton() {
   return (
-    <PageShell label="人才库">
+    <PageShell label="简历广场">
       <HeaderSkeleton />
       <TabsSkeleton count={2} />
       <ToolbarSkeleton filterCount={4} />

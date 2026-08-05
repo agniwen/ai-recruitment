@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- shared overview includes AI review presentation and the colocated identity editor. */
 "use client";
 
-// 招聘台的「概览」面板：简历评价 + 结构化简历经历。
+// 简历库的「概览」面板：简历评价 + 结构化简历经历。
 // 详情弹窗 resume 模式与「发起 AI 面试」弹窗共用，避免布局漂移。
 //
 // Resume-library overview panel — notes + structured resume experience. Shared
@@ -598,7 +598,7 @@ function ResumeOverviewCandidateInfoSection({
     value: unit.id,
   }));
 
-  // Match 招聘台列表 card 编辑按钮：resumeLibrary:update（via canEdit）+ 解析 ready。
+  // Match 简历库列表 card 编辑按钮：resumeLibrary:update（via canEdit）+ 解析 ready。
   const showEdit = Boolean(canEdit && slug && canEditResumeRecord(detail.resumeParseStatus));
   const resumeEvaluation = describeResumeEvaluationStatus(detail.resumeEvaluationStatus);
   const displayName = detail.candidateName || detail.resumeProfile?.name || null;

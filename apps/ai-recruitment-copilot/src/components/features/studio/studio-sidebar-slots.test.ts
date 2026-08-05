@@ -16,10 +16,10 @@ describe("Studio sidebar menu items", () => {
     expect(source.indexOf('title: "日程管理"')).toBeLessThan(source.indexOf('title: "数据看板"'));
   });
 
-  it("uses the recruiting and talent-pool product labels", () => {
-    expect(source).toContain('title: "招聘"');
-    expect(source).toContain('title: "人才库"');
-    expect(source).not.toContain('title: "简历库"');
-    expect(source).not.toContain('title: "简历广场"');
+  it("uses the resume library and resume plaza product labels", () => {
+    expect(source).toContain('title: "简历库"');
+    expect(source).toContain('title: "简历广场"');
+    expect(source).not.toContain('title: "招聘"');
+    expect(source).not.toContain('title: "人才库"');
   });
 });
