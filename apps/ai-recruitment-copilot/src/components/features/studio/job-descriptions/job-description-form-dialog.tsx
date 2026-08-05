@@ -194,6 +194,7 @@ export function JobDescriptionFormDialog({
   initialDraft,
   open,
   onOpenChange,
+  readOnly = false,
   record,
   departments,
   interviewers,
@@ -202,6 +203,7 @@ export function JobDescriptionFormDialog({
   initialDraft?: JobDescriptionFormValues | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  readOnly?: boolean;
   record: JobDescriptionRecord | null;
   departments: DepartmentRecord[];
   interviewers: InterviewerListRecord[];
@@ -408,6 +410,10 @@ export function JobDescriptionFormDialog({
   }, [open, form, resolvedInitialValues]);
 
   const missingRefs = departments.length === 0;
+  let dialogTitle = isEdit ? "编辑在招岗位" : "新建在招岗位";
+  if (readOnly) {
+    dialogTitle = "查看在招岗位";
+  }
 
   async function handleGenerateCode() {
     setIsGeneratingCode(true);
@@ -423,7 +429,7 @@ export function JobDescriptionFormDialog({
           error?: string;
         } | null;
         if (!response.ok || !payload?.code) {
-          toast.error(payload?.error ?? "生成岗位编码失败");
+          toast.error(payload?.error ?? "生成岗位唯一编码失败");
           return;
         }
         form.setFieldValue("code", payload.code);
@@ -473,8 +479,12 @@ export function JobDescriptionFormDialog({
       <Modal
         open={open}
         onOpenChange={onOpenChange}
-        title={isEdit ? "编辑在招岗位" : "新建在招岗位"}
-        description="维护岗位基础信息、招聘进度与面试配置；Google 文档同步字段可在此查看与修改。"
+        title={dialogTitle}
+        description={
+          readOnly
+            ? "查看岗位基础信息、招聘进度与面试配置。"
+            : "维护岗位基础信息、招聘进度与面试配置；Google 文档同步字段可在此查看与修改。"
+        }
         size="2xl"
         headerExtra={
           <TabsList className="mt-2">
@@ -485,19 +495,25 @@ export function JobDescriptionFormDialog({
           </TabsList>
         }
         footer={
-          <>
+          readOnly ? (
             <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
-              取消
+              关闭
             </Button>
-            <Button
-              disabled={isSubmitting || missingRefs}
-              form="job-description-form"
-              type="submit"
-            >
-              {isSubmitting ? <IconLoader2 className="size-4 animate-spin" /> : null}
-              {isEdit ? "保存" : "创建"}
-            </Button>
-          </>
+          ) : (
+            <>
+              <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+                取消
+              </Button>
+              <Button
+                disabled={isSubmitting || missingRefs}
+                form="job-description-form"
+                type="submit"
+              >
+                {isSubmitting ? <IconLoader2 className="size-4 animate-spin" /> : null}
+                {isEdit ? "保存" : "创建"}
+              </Button>
+            </>
+          )
         }
       >
         <form
@@ -505,6 +521,9 @@ export function JobDescriptionFormDialog({
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
+            if (readOnly) {
+              return;
+            }
             void form.handleSubmit();
           }}
         >
@@ -522,6 +541,7 @@ export function JobDescriptionFormDialog({
                           </FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={NAME_MAX_LENGTH}
@@ -549,10 +569,11 @@ export function JobDescriptionFormDialog({
                       }
                       return (
                         <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
-                          <FieldLabel htmlFor={field.name}>岗位编码（稳定唯一值）</FieldLabel>
+                          <FieldLabel htmlFor={field.name}>岗位唯一编码</FieldLabel>
                           <FieldContent className="gap-2">
                             <InputGroup>
                               <InputGroupInput
+                                disabled={readOnly}
                                 aria-invalid={!!errors?.length}
                                 className={
                                   field.state.value ? "font-mono" : "text-muted-foreground"
@@ -564,7 +585,7 @@ export function JobDescriptionFormDialog({
                               />
                               <InputGroupAddon align="inline-end">
                                 <InputGroupButton
-                                  disabled={!canGenerateCode}
+                                  disabled={readOnly || !canGenerateCode}
                                   onClick={handleGenerateCode}
                                   type="button"
                                 >
@@ -589,6 +610,7 @@ export function JobDescriptionFormDialog({
                           </FieldLabel>
                           <FieldContent className="gap-2">
                             <SearchableSelect
+                              disabled={readOnly}
                               id={field.name}
                               invalid={!!errors?.length}
                               onChange={(value) => {
@@ -666,6 +688,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>优先级</FieldLabel>
                           <FieldContent className="gap-2">
                             <Select
+                              disabled={readOnly}
                               onValueChange={(value) => value && field.handleChange(value)}
                               value={field.state.value}
                             >
@@ -697,6 +720,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>招聘状态</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={SHORT_TEXT_MAX_LENGTH}
@@ -720,6 +744,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>岗位管控分类</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={SHORT_TEXT_MAX_LENGTH}
@@ -743,6 +768,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>序列</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={SHORT_TEXT_MAX_LENGTH}
@@ -766,6 +792,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>职级</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={JOB_LEVEL_MAX_LENGTH}
@@ -789,6 +816,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>服务单位</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={SHORT_TEXT_MAX_LENGTH}
@@ -812,6 +840,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>工作地点</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={SHORT_TEXT_MAX_LENGTH}
@@ -835,6 +864,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>来源表格</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={SHORT_TEXT_MAX_LENGTH}
@@ -858,6 +888,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>薪资范围</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={SALARY_RANGE_RAW_MAX_LENGTH}
@@ -883,6 +914,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>HC</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               inputMode="numeric"
@@ -910,6 +942,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>已到岗</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               inputMode="numeric"
@@ -936,6 +969,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>缺口</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               inputMode="numeric"
@@ -962,6 +996,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>已发 offer 待入职</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               inputMode="numeric"
@@ -988,6 +1023,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>提需日期</FieldLabel>
                           <FieldContent className="gap-2">
                             <DatePicker
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               onBlur={field.handleBlur}
@@ -1010,6 +1046,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>期望到岗日期</FieldLabel>
                           <FieldContent className="gap-2">
                             <DatePicker
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               onBlur={field.handleBlur}
@@ -1034,6 +1071,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>需求发起人</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={CONTACT_MAX_LENGTH}
@@ -1057,6 +1095,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>简历对接人</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
+                              disabled={readOnly}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               maxLength={CONTACT_MAX_LENGTH}
@@ -1088,6 +1127,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>工作时区</FieldLabel>
                           <FieldContent className="gap-2">
                             <Select
+                              disabled={readOnly}
                               onValueChange={(value) =>
                                 field.handleChange(
                                   !value || value === WORK_TIMEZONE_NONE ? "" : value,
@@ -1134,6 +1174,7 @@ export function JobDescriptionFormDialog({
                             <FieldLabel htmlFor={field.name}>工作开始时间</FieldLabel>
                             <FieldContent className="gap-2">
                               <Input
+                                disabled={readOnly}
                                 aria-invalid={!!errors?.length}
                                 id={field.name}
                                 onBlur={field.handleBlur}
@@ -1158,6 +1199,7 @@ export function JobDescriptionFormDialog({
                             <FieldLabel htmlFor={field.name}>工作结束时间</FieldLabel>
                             <FieldContent className="gap-2">
                               <Input
+                                disabled={readOnly}
                                 aria-invalid={!!errors?.length}
                                 id={field.name}
                                 onBlur={field.handleBlur}
@@ -1188,6 +1230,7 @@ export function JobDescriptionFormDialog({
                               </p>
                             </div>
                             <Switch
+                              disabled={readOnly}
                               checked={field.state.value}
                               id={field.name}
                               onCheckedChange={(checked) => {
@@ -1223,6 +1266,7 @@ export function JobDescriptionFormDialog({
                               </p>
                             </div>
                             <Switch
+                              disabled={readOnly}
                               checked={field.state.value}
                               id={field.name}
                               onCheckedChange={field.handleChange}
@@ -1244,6 +1288,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel>AI面试官（可选）</FieldLabel>
                           <FieldContent className="gap-2">
                             <SearchableMultiSelect
+                              disabled={readOnly}
                               emptyMessage="没有匹配的 AI面试官"
                               invalid={!!errors?.length}
                               onChange={(next) => {
@@ -1284,6 +1329,7 @@ export function JobDescriptionFormDialog({
                           <FieldLabel>真人面试官（可选）</FieldLabel>
                           <FieldContent className="gap-2">
                             <SearchableMultiSelect
+                              disabled={readOnly}
                               emptyMessage="没有可选的真人面试官"
                               invalid={!!errors?.length}
                               onChange={field.handleChange}
@@ -1315,6 +1361,7 @@ export function JobDescriptionFormDialog({
                           <FieldContent className="gap-2">
                             <div className="relative">
                               <Textarea
+                                disabled={readOnly}
                                 aria-invalid={!!errors?.length}
                                 className="min-h-20 pb-6"
                                 id={field.name}
@@ -1347,6 +1394,7 @@ export function JobDescriptionFormDialog({
                           <FieldContent className="gap-2">
                             <MarkdownEditor
                               aria-invalid={!!errors?.length}
+                              disabled={readOnly}
                               id={field.name}
                               maxLength={PROMPT_MAX_LENGTH}
                               onBlur={field.handleBlur}
@@ -1370,6 +1418,7 @@ export function JobDescriptionFormDialog({
                           <FieldContent className="gap-2">
                             <div className="relative">
                               <Textarea
+                                disabled={readOnly}
                                 aria-invalid={!!errors?.length}
                                 className="min-h-20 pb-6"
                                 id={field.name}
@@ -1398,9 +1447,12 @@ export function JobDescriptionFormDialog({
                 {(field) => (
                   <ResumeScreeningPolicyFields
                     isGenerating={isGeneratingScreeningPolicy}
-                    onGenerateFromJobDescription={handleGenerateScreeningPolicy}
+                    onGenerateFromJobDescription={
+                      readOnly ? undefined : handleGenerateScreeningPolicy
+                    }
                     onChange={field.handleChange}
                     policy={field.state.value}
+                    readOnly={readOnly}
                   />
                 )}
               </form.Field>
@@ -1411,6 +1463,7 @@ export function JobDescriptionFormDialog({
                 <LinkedInterviewQuestionTemplatesList
                   isLoading={isInterviewQuestionsLoading}
                   jobDescriptionId={record?.id ?? ""}
+                  readOnly={readOnly}
                   templates={linkedInterviewQuestions}
                 />
               </TabsContent>
@@ -1421,6 +1474,7 @@ export function JobDescriptionFormDialog({
                 <LinkedFormsList
                   isLoading={isFormsLoading}
                   jobDescriptionId={record?.id ?? ""}
+                  readOnly={readOnly}
                   templates={linkedForms}
                 />
               </TabsContent>

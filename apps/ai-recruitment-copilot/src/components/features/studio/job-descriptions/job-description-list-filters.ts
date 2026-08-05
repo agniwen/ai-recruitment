@@ -25,7 +25,7 @@ export function createJobDescriptionListFilters({
     {
       key: "code",
       minWidth: "12rem",
-      placeholder: "筛选岗位编码",
+      placeholder: "筛选岗位唯一编码",
       type: "search",
     },
     {

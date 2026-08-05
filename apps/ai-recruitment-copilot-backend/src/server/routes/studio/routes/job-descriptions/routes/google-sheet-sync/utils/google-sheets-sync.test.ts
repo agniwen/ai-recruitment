@@ -29,7 +29,7 @@ const HEADERS = [
   "备注说明\n非远程岗位请备注说明工作地点",
   "来源表格",
   "工作地点",
-  "稳定唯一值",
+  "岗位唯一编码",
 ];
 
 function row(overrides: Partial<Record<(typeof HEADERS)[number], string>> = {}) {
@@ -39,6 +39,7 @@ function row(overrides: Partial<Record<(typeof HEADERS)[number], string>> = {}) 
     优先级: "P1（中）",
     "备注说明\n非远程岗位请备注说明工作地点": "备注",
     岗位名称: "高级后端工程师",
+    岗位唯一编码: "REQ-000006",
     岗位管控分类: "C类-正常招聘",
     工作地点: "远程",
     已到岗: "1",
@@ -49,7 +50,6 @@ function row(overrides: Partial<Record<(typeof HEADERS)[number], string>> = {}) 
     服务单位: "天枢",
     期望到岗日期: "尽快",
     来源表格: "技术中心",
-    稳定唯一值: "REQ-000006",
     "简历对接人\n (花名 & @TG)": "对接人",
     编制组织: " 技术中心 ",
     缺口: "2",
@@ -87,12 +87,22 @@ describe("parseGoogleSheetJobRows", () => {
     });
   });
 
+  it("accepts the legacy stable id header", () => {
+    const legacyHeaders = HEADERS.map((header) =>
+      header === "岗位唯一编码" ? "稳定唯一值" : header,
+    );
+    const result = parseGoogleSheetJobRows([legacyHeaders, row()]);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.records[0]?.code).toBe("REQ-000006");
+  });
+
   it("skips placeholder codes and every duplicate code", () => {
     const result = parseGoogleSheetJobRows([
       HEADERS,
-      row({ 稳定唯一值: "待生成" }),
-      row({ 稳定唯一值: "REQ-000012" }),
-      row({ 岗位名称: "重复岗位", 稳定唯一值: "REQ-000012" }),
+      row({ 岗位唯一编码: "待生成" }),
+      row({ 岗位唯一编码: "REQ-000012" }),
+      row({ 岗位名称: "重复岗位", 岗位唯一编码: "REQ-000012" }),
     ]);
 
     expect(result.records).toEqual([]);
@@ -103,7 +113,7 @@ describe("parseGoogleSheetJobRows", () => {
   it("imports rows whose hiring unit cell is empty", () => {
     const result = parseGoogleSheetJobRows([
       HEADERS,
-      row({ 稳定唯一值: "REQ-000010", 编制组织: "" }),
+      row({ 岗位唯一编码: "REQ-000010", 编制组织: "" }),
     ]);
 
     expect(result.skipped).toEqual([]);
@@ -131,7 +141,7 @@ describe("parseGoogleSheetJobRows", () => {
       HEADERS,
       row({
         "JD(必填) 岗位职责+任职要求": "",
-        稳定唯一值: "REQ-000011",
+        岗位唯一编码: "REQ-000011",
       }),
     ]);
 
@@ -152,8 +162,8 @@ describe("parseGoogleSheetJobRows", () => {
   it("allows empty department cells and marks them as unspecified", () => {
     const result = parseGoogleSheetJobRows([
       HEADERS,
-      row({ 稳定唯一值: "REQ-000020", 部门: "" }),
-      row({ 稳定唯一值: "REQ-000021", 部门: "   " }),
+      row({ 岗位唯一编码: "REQ-000020", 部门: "" }),
+      row({ 岗位唯一编码: "REQ-000021", 部门: "   " }),
     ]);
 
     expect(result.skipped).toEqual([]);
@@ -178,7 +188,7 @@ describe("parseGoogleSheetJobRows", () => {
   });
 
   it("keeps departmentSpecified true when the sheet provides a department", () => {
-    const result = parseGoogleSheetJobRows([HEADERS, row({ 稳定唯一值: "REQ-000030" })]);
+    const result = parseGoogleSheetJobRows([HEADERS, row({ 岗位唯一编码: "REQ-000030" })]);
     expect(result.records[0]).toMatchObject({
       departmentName: "平台组",
       departmentSpecified: true,
@@ -217,7 +227,7 @@ describe("Google Sheet mapped job changes", () => {
   it("omits departmentId on update when the sheet department cell is empty", () => {
     const [parsed] = parseGoogleSheetJobRows([
       HEADERS,
-      row({ 稳定唯一值: "REQ-000040", 部门: "" }),
+      row({ 岗位唯一编码: "REQ-000040", 部门: "" }),
     ]).records;
     expect(parsed.departmentSpecified).toBe(false);
 

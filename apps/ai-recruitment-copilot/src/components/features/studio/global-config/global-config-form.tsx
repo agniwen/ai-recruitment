@@ -162,7 +162,7 @@ export function GlobalConfigForm({ initial }: Props) {
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="job-code-prefix">岗位编码前缀</FieldLabel>
+          <FieldLabel htmlFor="job-code-prefix">岗位唯一编码前缀</FieldLabel>
           <FieldDescription>
             新建在招岗位会自动生成此前缀开头的编码；已有岗位不会被修改。
           </FieldDescription>

@@ -14,7 +14,7 @@ import type {
 import { computeResumeScreeningPolicyHash } from "@arc/shared/resume-screening";
 
 const HEADERS = {
-  code: "稳定唯一值",
+  code: "岗位唯一编码",
   controlCategory: "岗位管控分类",
   departmentName: "部门",
   expectedOnboardDate: "期望到岗日期",
@@ -38,6 +38,8 @@ const HEADERS = {
   sourceSheet: "来源表格",
   workLocation: "工作地点",
 } as const;
+
+const LEGACY_CODE_HEADER = "稳定唯一值";
 
 /** Sheet rows with an empty 部门 cell fall back to this existing department name. */
 export const DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME = "默认部门";
@@ -362,7 +364,13 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
   const headerIndexes = new Map(
     rawHeaders.map((header, index) => [String(header ?? "").trim(), index]),
   );
-  const missingHeaders = REQUIRED_HEADERS.filter((header) => !headerIndexes.has(header));
+  const codeColumnIndex = headerIndexes.get(HEADERS.code) ?? headerIndexes.get(LEGACY_CODE_HEADER);
+  const missingHeaders = REQUIRED_HEADERS.filter((header) => {
+    if (header === HEADERS.code) {
+      return codeColumnIndex === undefined;
+    }
+    return !headerIndexes.has(header);
+  });
   if (missingHeaders.length > 0) {
     throw new GoogleSheetFormatError(`汇总表缺少字段：${missingHeaders.join("、")}`);
   }
@@ -374,7 +382,7 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
   const validCodesByRow = new Map<number, string>();
   const codeRows = new Map<string, number[]>();
   for (const { row, rowNumber } of rows) {
-    const rawCode = cellText(row, headerIndexes.get(HEADERS.code));
+    const rawCode = cellText(row, codeColumnIndex);
     const parsedCode = jobDescriptionCodeSchema.safeParse(rawCode);
     if (!parsedCode.success || !parsedCode.data) {
       continue;
@@ -394,14 +402,14 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
     const code = validCodesByRow.get(rowNumber);
     if (!code) {
       skipped.push({
-        code: nullableText(cellText(row, headerIndexes.get(HEADERS.code))),
-        reason: "稳定唯一值缺失或格式无效。",
+        code: nullableText(cellText(row, codeColumnIndex)),
+        reason: "岗位唯一编码缺失或格式无效。",
         rowNumber,
       });
       continue;
     }
     if (duplicateCodes.has(code)) {
-      skipped.push({ code, reason: "稳定唯一值在表格中重复。", rowNumber });
+      skipped.push({ code, reason: "岗位唯一编码在表格中重复。", rowNumber });
       continue;
     }
 

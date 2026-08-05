@@ -115,11 +115,13 @@ function ScreeningActionLabel() {
 // eslint-disable-next-line complexity -- rule editor coordinates several controlled field groups.
 export function ResumeScreeningPolicyFields({
   isGenerating,
+  readOnly = false,
   onGenerateFromJobDescription,
   policy,
   onChange,
 }: {
   isGenerating?: boolean;
+  readOnly?: boolean;
   onGenerateFromJobDescription?: () => void;
   policy: ResumeScreeningPolicy;
   onChange: (policy: ResumeScreeningPolicy) => void;
@@ -286,6 +288,7 @@ export function ResumeScreeningPolicyFields({
               </p>
             </div>
             <Switch
+              disabled={readOnly}
               checked={policy.enabled}
               id="resume-screening-enabled"
               onCheckedChange={(enabled) => patchPolicy({ enabled })}
@@ -318,6 +321,7 @@ export function ResumeScreeningPolicyFields({
                 <FieldLabel className="md:sr-only">学历要求</FieldLabel>
                 <FieldContent>
                   <SearchableSelect
+                    disabled={readOnly}
                     id="minimum-education"
                     onChange={(value) =>
                       setMinimumEducation((value ?? "none") as MinimumEducationRule["level"])
@@ -337,6 +341,7 @@ export function ResumeScreeningPolicyFields({
                 </div>
                 <FieldContent>
                   <SearchableSelect
+                    disabled={readOnly}
                     onChange={(value) => {
                       if (minimumEducationRule) {
                         patchPolicy({
@@ -367,6 +372,7 @@ export function ResumeScreeningPolicyFields({
                 <FieldContent>
                   <InputGroup>
                     <InputGroupInput
+                      disabled={readOnly}
                       id="minimum-work-years"
                       min={0}
                       onChange={(event) => setMinimumWorkYears(event.target.value)}
@@ -386,7 +392,7 @@ export function ResumeScreeningPolicyFields({
                 </div>
                 <FieldContent>
                   <SearchableSelect
-                    disabled={!minimumWorkYearsRule}
+                    disabled={readOnly || !minimumWorkYearsRule}
                     onChange={(value) => {
                       if (minimumWorkYearsRule) {
                         patchPolicy({
@@ -419,6 +425,7 @@ export function ResumeScreeningPolicyFields({
           <FieldLabel htmlFor="required-skills">技能列表</FieldLabel>
           <InputGroup>
             <InputGroupTextarea
+              disabled={readOnly}
               className="min-h-28"
               id="required-skills"
               maxLength={SCREENING_TEXTAREA_MAX_LENGTH}
@@ -437,7 +444,7 @@ export function ResumeScreeningPolicyFields({
           <Field>
             <FieldLabel>满足条件</FieldLabel>
             <SearchableSelect
-              disabled={!requiredSkillsRule}
+              disabled={readOnly || !requiredSkillsRule}
               onChange={(value) => setRequiredSkillsMatchMode(value === "at_least" ? value : "all")}
               options={[
                 { label: "全部满足", value: "all" },
@@ -451,7 +458,7 @@ export function ResumeScreeningPolicyFields({
             <FieldLabel htmlFor="required-skills-match-count">数量</FieldLabel>
             <InputGroup>
               <InputGroupInput
-                disabled={requiredSkillsRule?.matchMode.type !== "at_least"}
+                disabled={readOnly || requiredSkillsRule?.matchMode.type !== "at_least"}
                 id="required-skills-match-count"
                 min={1}
                 onChange={(event) => setRequiredSkillsMatchCount(event.target.value)}
@@ -471,7 +478,7 @@ export function ResumeScreeningPolicyFields({
           <Field>
             <ScreeningActionLabel />
             <SearchableSelect
-              disabled={!requiredSkillsRule}
+              disabled={readOnly || !requiredSkillsRule}
               onChange={(value) => {
                 if (requiredSkillsRule) {
                   patchPolicy({
@@ -501,6 +508,7 @@ export function ResumeScreeningPolicyFields({
           <FieldLabel htmlFor="semantic-screening-rules">要求列表</FieldLabel>
           <InputGroup>
             <InputGroupTextarea
+              disabled={readOnly}
               className="min-h-32"
               id="semantic-screening-rules"
               maxLength={SCREENING_TEXTAREA_MAX_LENGTH}
@@ -518,7 +526,7 @@ export function ResumeScreeningPolicyFields({
         <Field className="max-w-[12rem]">
           <ScreeningActionLabel />
           <SearchableSelect
-            disabled={semanticRules.length === 0}
+            disabled={readOnly || semanticRules.length === 0}
             onChange={(value) =>
               patchPolicy({
                 rules: policy.rules.map((rule) =>

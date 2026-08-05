@@ -110,7 +110,7 @@ describe("job description recruiting defaults", () => {
     expect(jobDescriptionsPageSource).toContain("value={r.description}");
   });
 
-  it("keeps Google Sheet fields ordered and pins actions right of the stable id", () => {
+  it("keeps Google Sheet fields ordered and only pins actions on the right", () => {
     const columnsSource = jobDescriptionsPageSource.slice(
       jobDescriptionsPageSource.indexOf("const columns = useMemo"),
       jobDescriptionsPageSource.indexOf("const filtersConfig = useMemo"),
@@ -159,9 +159,24 @@ describe("job description recruiting defaults", () => {
     expect(columnsSource.indexOf("actionsColumn<JobDescriptionListRecord>")).toBeGreaterThan(
       columnsSource.indexOf('key: "code"'),
     );
-    expect(jobDescriptionsPageSource).toContain('end: ["code", "actions"]');
+    expect(jobDescriptionsPageSource).toContain('end: ["actions"]');
+    expect(jobDescriptionsPageSource).not.toContain('end: ["code", "actions"]');
     expect(jobDescriptionsPageSource).toContain('start: ["name", "hiringUnitName"]');
     expect(columnsSource).not.toContain('title: "HC/缺口"');
+  });
+
+  it("uses one job code label and supports a read-only detail modal", () => {
+    expect(jobDescriptionsPageSource).toContain('title: "岗位唯一编码"');
+    expect(formSource).toContain("岗位唯一编码");
+    expect(jobDescriptionsPageSource).not.toContain('title: "稳定唯一值"');
+    expect(formSource).not.toContain("岗位编码（稳定唯一值）");
+    expect(jobDescriptionsPageSource).toContain('label: "查看"');
+    expect(jobDescriptionsPageSource).toContain(
+      "readOnly={crud.editingRecord !== null && !canUpdateJobDescription}",
+    );
+    expect(formSource).toContain('dialogTitle = "查看在招岗位"');
+    expect(formSource).toContain("disabled={readOnly}");
+    expect(formSource).not.toContain("inert={readOnly}");
   });
 
   it("disables AI interviews by default for every new-job entry point", () => {

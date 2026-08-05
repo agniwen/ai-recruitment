@@ -314,7 +314,7 @@ export const jobDescriptionsRouter = factory
       usedRows.map((row) => row.code),
     );
     if (!code) {
-      return c.json({ error: "当前分钟岗位编码已用尽，请稍后重试。" }, 409);
+      return c.json({ error: "当前分钟岗位唯一编码已用尽，请稍后重试。" }, 409);
     }
     return c.json({ code }, 200);
   })
@@ -448,7 +448,7 @@ export const jobDescriptionsRouter = factory
         }
       }
 
-      return c.json({ error: "当前分钟岗位编码已用尽，请稍后重试。" }, 409);
+      return c.json({ error: "当前分钟岗位唯一编码已用尽，请稍后重试。" }, 409);
     },
   )
   .get("/:id", requirePermission("jd", "read"), async (c) => {
@@ -633,7 +633,7 @@ export const jobDescriptionsRouter = factory
         });
       } catch (updateError) {
         if (isJobCodeConflict(updateError)) {
-          return c.json({ error: "岗位编码已被占用，请重新生成。" }, 409);
+          return c.json({ error: "岗位唯一编码已被占用，请重新生成。" }, 409);
         }
         throw updateError;
       }

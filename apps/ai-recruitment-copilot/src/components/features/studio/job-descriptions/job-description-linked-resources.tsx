@@ -12,10 +12,12 @@ import { Card, CardContent } from "@/components/ui/card";
 export function LinkedFormsList({
   isLoading,
   jobDescriptionId,
+  readOnly = false,
   templates,
 }: {
   isLoading: boolean;
   jobDescriptionId: string;
+  readOnly?: boolean;
   templates: CandidateFormTemplateListRecord[];
 }) {
   const slug = useWorkspaceSlug();
@@ -30,17 +32,19 @@ export function LinkedFormsList({
             候选人进入面试前需要填写下列表单题；全局表单题在「表单题」菜单中维护。
           </p>
         </div>
-        <Button
-          nativeButton={false}
-          render={
-            <a href={newTemplateHref} target="_blank" rel="noreferrer">
-              <IconExternalLink className="size-3.5" />
-              管理表单
-            </a>
-          }
-          size="sm"
-          variant="outline"
-        />
+        {readOnly ? null : (
+          <Button
+            nativeButton={false}
+            render={
+              <a href={newTemplateHref} target="_blank" rel="noreferrer">
+                <IconExternalLink className="size-3.5" />
+                管理表单
+              </a>
+            }
+            size="sm"
+            variant="outline"
+          />
+        )}
       </div>
 
       {isLoading ? (
@@ -96,10 +100,12 @@ export function LinkedFormsList({
 export function LinkedInterviewQuestionTemplatesList({
   isLoading,
   jobDescriptionId,
+  readOnly = false,
   templates,
 }: {
   isLoading: boolean;
   jobDescriptionId: string;
+  readOnly?: boolean;
   templates: InterviewQuestionTemplateListRecord[];
 }) {
   const slug = useWorkspaceSlug();
@@ -114,17 +120,19 @@ export function LinkedInterviewQuestionTemplatesList({
             创建 AI 面试时会自动绑定到下列沟通题的最新版本；全局沟通题在「沟通题」菜单中维护。
           </p>
         </div>
-        <Button
-          nativeButton={false}
-          render={
-            <a href={newTemplateHref} target="_blank" rel="noreferrer">
-              <IconExternalLink className="size-3.5" />
-              管理模版
-            </a>
-          }
-          size="sm"
-          variant="outline"
-        />
+        {readOnly ? null : (
+          <Button
+            nativeButton={false}
+            render={
+              <a href={newTemplateHref} target="_blank" rel="noreferrer">
+                <IconExternalLink className="size-3.5" />
+                管理模版
+              </a>
+            }
+            size="sm"
+            variant="outline"
+          />
+        )}
       </div>
 
       {isLoading ? (

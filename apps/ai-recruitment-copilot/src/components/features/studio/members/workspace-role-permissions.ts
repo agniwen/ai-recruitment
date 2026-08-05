@@ -258,7 +258,7 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
   jd: {
     create: "允许在「岗位设置」页面新增岗位。",
     delete: "允许删除在招岗位。",
-    read: "允许加载岗位列表、全部岗位选项、岗位详情、岗位编码生成和推荐链接；推荐候选人接口还同时需要「简历库」查看权限。",
+    read: "允许加载岗位列表、全部岗位选项、岗位详情、岗位唯一编码生成和推荐链接；推荐候选人接口还同时需要「简历库」查看权限。",
     update: "允许编辑岗位描述、招聘要求、关联配置和发布状态。",
   },
   mailIngestAccount: {

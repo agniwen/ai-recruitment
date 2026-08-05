@@ -108,6 +108,7 @@ export function JobDescriptionManagementPage({
   const [createDraft, setCreateDraft] = useState<JobDescriptionFormValues | null>(null);
   const [createDraftSessionId, setCreateDraftSessionId] = useState(0);
   const [aiCreateOpen, setAiCreateOpen] = useState(false);
+  const canReadJobDescription = useHasPermission("jd", "read");
   const canCreateJobDescription = useHasPermission("jd", "create");
   const canUpdateJobDescription = useHasPermission("jd", "update");
   const canDeleteJobDescription = useHasPermission("jd", "delete");
@@ -255,7 +256,7 @@ export function JobDescriptionManagementPage({
     editorDialogKey = `edit-${crud.editingRecord.id}`;
   }
   const canOpenEditorDialog = crud.editingRecord
-    ? canUpdateJobDescription
+    ? canReadJobDescription || canUpdateJobDescription
     : canCreateJobDescription;
 
   const columns = useMemo(
@@ -544,7 +545,7 @@ export function JobDescriptionManagementPage({
           ),
         key: "code",
         size: 128,
-        title: "稳定唯一值",
+        title: "岗位唯一编码",
       }),
       actionsColumn<JobDescriptionListRecord>({
         inline: [
@@ -554,6 +555,13 @@ export function JobDescriptionManagementPage({
               void crud.openEdit(r);
             },
             show: () => canUpdateJobDescription,
+          },
+          {
+            label: "查看",
+            onClick: (r) => {
+              void crud.openEdit(r);
+            },
+            show: () => canReadJobDescription && !canUpdateJobDescription,
           },
         ],
         menu: [
@@ -572,11 +580,14 @@ export function JobDescriptionManagementPage({
             variant: "destructive",
           },
         ],
-        size: estimateActionsColumnSize({ hasMenu: true, inlineLabels: ["编辑"] }),
+        size: estimateActionsColumnSize({
+          hasMenu: true,
+          inlineLabels: [canUpdateJobDescription ? "编辑" : "查看"],
+        }),
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [canDeleteJobDescription, canReadResumeLibrary, canUpdateJobDescription],
+    [canDeleteJobDescription, canReadJobDescription, canReadResumeLibrary, canUpdateJobDescription],
   );
 
   const filtersConfig = useMemo(
@@ -606,7 +617,7 @@ export function JobDescriptionManagementPage({
         <DataGrid<JobDescriptionListRecord>
           {...grid.bind}
           columnPinning={{
-            end: ["code", "actions"],
+            end: ["actions"],
             start: ["name", "hiringUnitName"],
           }}
           columns={columns}
@@ -699,6 +710,7 @@ export function JobDescriptionManagementPage({
           onOpenChange={onFormOpenChange}
           onSaved={invalidateJobDescriptionData}
           open={crud.formDialogOpen}
+          readOnly={crud.editingRecord !== null && !canUpdateJobDescription}
           record={crud.editingRecord}
         />
       ) : null}

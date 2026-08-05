@@ -32,7 +32,7 @@ describe("buildGoogleSheetSyncResultDescription", () => {
         skipped: [
           {
             code: "待生成",
-            reason: "稳定唯一值缺失或格式无效。",
+            reason: "岗位唯一编码缺失或格式无效。",
             rowNumber: 2,
           },
           {
@@ -56,7 +56,7 @@ describe("buildGoogleSheetSyncResultDescription", () => {
     expect(text).toContain("用人组织新增 1，部门新增 1");
     expect(text).toContain("岗位新增 2，岗位更新 1");
     expect(text).toContain("跳过 2 条：");
-    expect(text).toContain("第 2 行（待生成）：稳定唯一值缺失或格式无效。");
+    expect(text).toContain("第 2 行（待生成）：岗位唯一编码缺失或格式无效。");
     expect(text).toContain("第 4 行（REQ-000010）：缺少必填字段：编制组织。");
     expect(text).toContain("警告 1 条：");
     expect(text).toContain("第 5 行（REQ-000020） 部门：部门为空，已归入「默认部门」。");
@@ -65,7 +65,7 @@ describe("buildGoogleSheetSyncResultDescription", () => {
   it("caps long skip lists and reports how many remain hidden", () => {
     const skipped = Array.from({ length: 25 }, (_, index) => ({
       code: `REQ-${String(index + 1).padStart(6, "0")}`,
-      reason: "稳定唯一值在表格中重复。",
+      reason: "岗位唯一编码在表格中重复。",
       rowNumber: index + 2,
     }));
     const text = buildGoogleSheetSyncResultDescription(
