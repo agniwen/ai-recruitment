@@ -10,4 +10,8 @@ describe("resume parse worker defaults", () => {
   it("defaults PDF OCR page concurrency to 4", () => {
     expect(getResumeParseConfigSummary({}).ocrPageConcurrency).toBe("4");
   });
+
+  it("defaults to the page-based Qwen-VL OCR model", () => {
+    expect(getResumeParseConfigSummary({}).qwenOcrModel).toBe("qwen-vl-ocr-latest");
+  });
 });

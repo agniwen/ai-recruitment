@@ -1,18 +1,13 @@
 import { zValidator } from "@hono/zod-validator";
 import { parseResumeDocument } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
 import type { ParsedResumeDocument } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
-import {
-  getResumeParseProvider,
-  isResumeParseCacheSourceCompatible,
-} from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-provider";
+import { isResumeParseCacheSourceCompatible } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-provider";
 import {
   getResumeDocumentExtension,
-  getResumeDocumentKind,
   isSupportedResumeDocumentInput,
 } from "@arc/shared/resume-documents";
 import {
   buildAttachmentKeyByHash,
-  presignGetObjectUrlBestEffort,
   putObjectBytes,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
@@ -30,42 +25,6 @@ import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend
 
 function getParsedStructured(parsed: ParsedResumeDocument) {
   return "structured" in parsed ? parsed.structured : null;
-}
-
-async function uploadAndParseResume(input: {
-  bytesForParse: Uint8Array;
-  bytesForUpload: Uint8Array;
-  fileName: string;
-  mediaType: string;
-  storageKey: string;
-}): Promise<[PromiseSettledResult<void>, PromiseSettledResult<ParsedResumeDocument>]> {
-  const parseInput = {
-    bytes: input.bytesForParse,
-    fileName: input.fileName,
-    mediaType: input.mediaType,
-  };
-  const putPromise = putObjectBytes({
-    body: input.bytesForUpload,
-    contentType: input.mediaType,
-    storageKey: input.storageKey,
-  });
-  const shouldParseStoredPdf =
-    getResumeParseProvider() === "ocr-llm" && getResumeDocumentKind(parseInput) === "pdf";
-  if (!shouldParseStoredPdf) {
-    return Promise.allSettled([putPromise, parseResumeDocument(parseInput)]);
-  }
-
-  const [uploadOutcome] = await Promise.allSettled([putPromise]);
-  if (uploadOutcome.status === "rejected") {
-    return [uploadOutcome, { reason: uploadOutcome.reason, status: "rejected" }];
-  }
-  const [parseOutcome] = await Promise.allSettled([
-    (async () => {
-      const fileUrl = await presignGetObjectUrlBestEffort(input.storageKey);
-      return parseResumeDocument({ ...parseInput, fileUrl });
-    })(),
-  ]);
-  return [uploadOutcome, parseOutcome];
 }
 
 // 构造上传/preflight 共用的响应结构。
@@ -256,13 +215,14 @@ export const uploadsRouter = factory
     const bytesForUpload = new Uint8Array(original);
     const bytesForParse = new Uint8Array(original);
 
-    const [uploadOutcome, parseOutcome] = await uploadAndParseResume({
-      bytesForParse,
-      bytesForUpload,
-      fileName: file.name,
-      mediaType: file.type,
-      storageKey,
-    });
+    const [uploadOutcome, parseOutcome] = await Promise.allSettled([
+      putObjectBytes({ body: bytesForUpload, contentType: file.type, storageKey }),
+      parseResumeDocument({
+        bytes: bytesForParse,
+        fileName: file.name,
+        mediaType: file.type,
+      }),
+    ]);
 
     if (uploadOutcome.status === "rejected") {
       console.error("[chat] failed to upload to storage", uploadOutcome.reason);

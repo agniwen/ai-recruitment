@@ -1,4 +1,4 @@
-// Inspect PDFs and, for legacy fallback paths, rasterize pages to PNG buffers.
+// Rasterize PDF pages to PNG buffers for page-based OCR.
 //
 // Backed by `mupdf` (WASM): no native build, no canvas/CMap fragility, ships
 // its own font + cmap data, runs anywhere Node runs.
@@ -36,17 +36,6 @@ export interface ProcessPdfPagesResult<T> {
   pageCount: number;
   renderedSizes: number[];
   results: T[];
-}
-
-export async function getPdfPageCount(bytes: Uint8Array): Promise<number> {
-  const mupdf = await loadMupdf();
-  const owned = new Uint8Array(bytes);
-  const doc = mupdf.Document.openDocument(owned, "application/pdf");
-  try {
-    return doc.countPages();
-  } finally {
-    doc.destroy();
-  }
 }
 
 function renderPdfPage(

@@ -5,9 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   convertLegacyOfficeToOoxml: vi.fn(),
   generateStructuredWithMastraAgent: vi.fn(),
-  getPdfPageCount: vi.fn(),
   processPdfPagesWithMeta: vi.fn(),
-  qwenPdfOcr: vi.fn(),
   qwenVlOcr: vi.fn(),
   resumeStructuredAgent: { id: "resume-structured-agent" },
   runAliyunResumeExtraction: vi.fn(),
@@ -26,13 +24,11 @@ vi.mock("../office-conversion", () => ({
 }));
 
 vi.mock("../pdf-rasterize", () => ({
-  getPdfPageCount: mocks.getPdfPageCount,
   processPdfPagesWithMeta: mocks.processPdfPagesWithMeta,
 }));
 
 vi.mock("../qwen-ocr", () => ({
   isQwenOcrConfigured: () => true,
-  qwenPdfOcr: mocks.qwenPdfOcr,
   qwenVlOcr: mocks.qwenVlOcr,
 }));
 
@@ -320,84 +316,22 @@ describe("extractResumeDocumentText", () => {
     pdfPageCount = 1;
     pdfPages = [Buffer.from("pdf-page")];
     mocks.processPdfPagesWithMeta.mockImplementation(runMockPdfPageProcessor);
-    mocks.getPdfPageCount.mockResolvedValue(3);
-    mocks.qwenPdfOcr.mockResolvedValue("整份 PDF 候选人 TypeScript");
     mocks.qwenVlOcr.mockResolvedValue("PDF 候选人 TypeScript");
   });
 
-  it("parses a stored PDF as one Qwen3.5 OCR document without rasterizing pages", async () => {
-    const result = await extractResumeDocumentText({
-      bytes: new Uint8Array([1, 2, 3]),
-      fileName: "resume.pdf",
-      fileUrl: "https://storage.example.test/resume.pdf?signature=secret",
-      mediaType: "application/pdf",
-    });
-
-    expect(result).toEqual({
-      pageCount: 3,
-      text: "整份 PDF 候选人 TypeScript",
-      textSource: "qwen3.5-ocr",
-    });
-    expect(mocks.qwenPdfOcr).toHaveBeenCalledWith(
-      "https://storage.example.test/resume.pdf?signature=secret",
-    );
-    expect(mocks.processPdfPagesWithMeta).not.toHaveBeenCalled();
-  });
-
-  it("retries a transient whole-document Qwen3.5 OCR connection failure", async () => {
-    const originalRetryDelay = process.env.RESUME_PARSE_OCR_RETRY_DELAY_MS;
-    process.env.RESUME_PARSE_OCR_RETRY_DELAY_MS = "0";
-    mocks.qwenPdfOcr
-      .mockRejectedValueOnce(new Error("Connection error."))
-      .mockResolvedValueOnce("重试后的完整 PDF 文本");
-
-    try {
-      const result = await extractResumeDocumentText({
-        bytes: new Uint8Array([1, 2, 3]),
-        fileName: "resume.pdf",
-        fileUrl: "https://storage.example.test/resume.pdf?signature=secret",
-        mediaType: "application/pdf",
-      });
-
-      expect(result.text).toBe("重试后的完整 PDF 文本");
-      expect(mocks.qwenPdfOcr).toHaveBeenCalledTimes(2);
-    } finally {
-      if (originalRetryDelay === undefined) {
-        delete process.env.RESUME_PARSE_OCR_RETRY_DELAY_MS;
-      } else {
-        process.env.RESUME_PARSE_OCR_RETRY_DELAY_MS = originalRetryDelay;
-      }
-    }
-  });
-
-  it("rejects a PDF above the Qwen3.5 OCR 50-page limit before dispatch", async () => {
-    mocks.getPdfPageCount.mockResolvedValue(51);
-
-    await expect(
-      extractResumeDocumentText({
-        bytes: new Uint8Array([1, 2, 3]),
-        fileName: "resume.pdf",
-        fileUrl: "https://storage.example.test/resume.pdf?signature=secret",
-        mediaType: "application/pdf",
-      }),
-    ).rejects.toThrow("最多支持 50 页");
-    expect(mocks.qwenPdfOcr).not.toHaveBeenCalled();
-  });
-
-  it("keeps the rasterized OCR fallback for PDFs without a stored-file URL", async () => {
+  it("keeps every PDF on the page-based rasterized OCR path", async () => {
     const result = await extractResumeDocumentText({
       bytes: new Uint8Array([1, 2, 3]),
       fileName: "resume.pdf",
       mediaType: "application/pdf",
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       pageCount: 1,
       text: "PDF 候选人 TypeScript",
-      textSource: "qwen3.5-ocr",
+      textSource: "qwen-ocr",
     });
-    expect(mocks.processPdfPagesWithMeta).toHaveBeenCalled();
-    expect(mocks.qwenPdfOcr).not.toHaveBeenCalled();
+    expect(mocks.processPdfPagesWithMeta).toHaveBeenCalledTimes(1);
   });
 
   it("runs OCR directly for image resumes without PDF rasterization", async () => {
@@ -412,7 +346,7 @@ describe("extractResumeDocumentText", () => {
     expect(result).toMatchObject({
       pageCount: 1,
       text: "图片简历 候选人 JavaScript",
-      textSource: "qwen3.5-ocr",
+      textSource: "qwen-ocr",
     });
     expect(mocks.processPdfPagesWithMeta).not.toHaveBeenCalled();
     expect(mocks.qwenVlOcr).toHaveBeenCalledWith(Buffer.from([4, 5, 6]), "image/jpeg");

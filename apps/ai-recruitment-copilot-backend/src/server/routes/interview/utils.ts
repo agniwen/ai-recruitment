@@ -25,7 +25,7 @@ import {
   updateStructuredByHash,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat-attachments";
 import { generateResumeStructured } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
-import { getResumeDocumentExtension, getResumeDocumentKind } from "@arc/shared/resume-documents";
+import { getResumeDocumentExtension } from "@arc/shared/resume-documents";
 import {
   flattenPresetQuestionsFromContextSnapshot,
   loadActiveInterviewContextSnapshot,
@@ -33,21 +33,17 @@ import {
 import { sha256HexOfBytes } from "@arc/shared/file-hash";
 import {
   buildAttachmentKeyByHash,
-  presignGetObjectUrlBestEffort,
   putObjectBytes,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
-import {
-  getResumeParseProvider,
-  isResumeParseCacheSourceCompatible,
-} from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-provider";
+import { isResumeParseCacheSourceCompatible } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-provider";
 import { createInternalErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/error-handler";
 import { resolveCandidateCompanyContext } from "./candidate-briefing";
 
 export type StudioInterviewRow = typeof studioInterview.$inferSelect;
 export type StudioInterviewScheduleRow = typeof studioInterviewSchedule.$inferSelect;
 
-async function uploadAndParseInterviewResume(input: {
+function uploadAndParseInterviewResume(input: {
   bytes: Uint8Array;
   file: File;
   storageKey: string;
@@ -57,29 +53,14 @@ async function uploadAndParseInterviewResume(input: {
     PromiseSettledResult<Awaited<ReturnType<typeof parseResumeFastToProfile>>>,
   ]
 > {
-  const putPromise = putObjectBytes({
-    body: input.bytes,
-    contentType: input.file.type || "application/octet-stream",
-    storageKey: input.storageKey,
-  });
-  const shouldParseStoredPdf =
-    getResumeParseProvider() === "ocr-llm" &&
-    getResumeDocumentKind({ fileName: input.file.name, mediaType: input.file.type }) === "pdf";
-  if (!shouldParseStoredPdf) {
-    return Promise.allSettled([putPromise, parseResumeFastToProfile(input.file)]);
-  }
-
-  const [putOutcome] = await Promise.allSettled([putPromise]);
-  const [parseOutcome] = await Promise.allSettled([
-    (async () => {
-      const fileUrl =
-        putOutcome.status === "fulfilled"
-          ? await presignGetObjectUrlBestEffort(input.storageKey)
-          : undefined;
-      return parseResumeFastToProfile(input.file, { fileUrl });
-    })(),
+  return Promise.allSettled([
+    putObjectBytes({
+      body: input.bytes,
+      contentType: input.file.type || "application/octet-stream",
+      storageKey: input.storageKey,
+    }),
+    parseResumeFastToProfile(input.file),
   ]);
-  return [putOutcome, parseOutcome];
 }
 
 // =====================================================================

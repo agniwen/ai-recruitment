@@ -5,10 +5,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type * as S3Module from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
-import {
-  getObjectStream,
-  presignGetObjectUrlBestEffort,
-} from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
+import { getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import type * as ResumeAgentModule from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import {
   generateResumeReview,
@@ -56,7 +53,6 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", async () => {
   return {
     ...actual,
     getObjectStream: vi.fn(),
-    presignGetObjectUrlBestEffort: vi.fn(),
   };
 });
 
@@ -326,9 +322,6 @@ beforeEach(() => {
   (enqueueResumeReviewGenerationForRecordBestEffort as ReturnType<typeof vi.fn>).mockResolvedValue(
     true,
   );
-  (presignGetObjectUrlBestEffort as ReturnType<typeof vi.fn>).mockResolvedValue(
-    "https://storage.example.test/resume.pdf?signature=secret",
-  );
 });
 
 describe("getClaimMissRetryError", () => {
@@ -384,12 +377,14 @@ describe("processNextItem — happy path", () => {
 
     const result = await processBatchItem(beforeItem.id);
 
-    expect(presignGetObjectUrlBestEffort).toHaveBeenCalledWith(beforeItem.storageKey);
     expect(parseResumeBytesToProfile).toHaveBeenCalledWith(
       expect.objectContaining({
-        fileUrl: "https://storage.example.test/resume.pdf?signature=secret",
+        fileName: beforeItem.originalFileName,
       }),
     );
+    expect(
+      (parseResumeBytesToProfile as ReturnType<typeof vi.fn>).mock.calls[0]?.[0],
+    ).not.toHaveProperty("fileUrl");
 
     // 结果完整性断言 / Result assertions.
     expect(result).not.toBeNull();

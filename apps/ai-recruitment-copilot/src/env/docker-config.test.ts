@@ -37,6 +37,7 @@ describe("Docker env configuration", () => {
     expect(dockerfile).toContain(
       "ARG QWEN_OCR_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1",
     );
+    expect(dockerfile).toContain("ARG QWEN_OCR_MODEL=qwen-vl-ocr-latest");
   });
 
   it("uses the dependency-aware readiness endpoint for the web healthcheck", () => {

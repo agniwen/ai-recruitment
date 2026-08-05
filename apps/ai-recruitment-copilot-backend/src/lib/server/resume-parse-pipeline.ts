@@ -24,7 +24,6 @@ import {
   readOfficeZipText as readZipText,
 } from "./office-xml";
 import { processPdfPagesWithMeta } from "./pdf-rasterize";
-import { parseQwenPdfResume } from "./qwen-pdf-resume";
 import { parseResumeWithAliyun } from "./resume-parse-aliyun";
 import { getResumeParseProvider } from "./resume-parse-provider";
 import { isQwenOcrConfigured, qwenVlOcr } from "./qwen-ocr";
@@ -112,7 +111,6 @@ export {
 export interface ResumeDocumentInput {
   bytes: Uint8Array;
   fileName?: string;
-  fileUrl?: string;
   mediaType?: string;
   onProgress?: (event: ResumeParseProgressEvent) => void;
 }
@@ -565,7 +563,7 @@ async function extractImageText(input: ResumeDocumentInput): Promise<ParsedResum
     totalPages: 1,
     type: "ocr.completed",
   });
-  return { pageCount: 1, text, textSource: "qwen3.5-ocr" };
+  return { pageCount: 1, text, textSource: "qwen-ocr" };
 }
 
 export async function generateResumeStructured(text: string): Promise<ResumeParserStructured> {
@@ -593,7 +591,7 @@ export async function generateResumeStructured(text: string): Promise<ResumePars
   return output;
 }
 
-/** Byte-only PDF fallback: lazily rasterize and OCR up to six pages. */
+/** Lazily rasterize and OCR up to six PDF pages. */
 export async function parseResumeOcrOnly(
   bytes: Uint8Array,
   options: { onProgress?: ResumeDocumentInput["onProgress"] } = {},
@@ -685,7 +683,7 @@ export async function parseResumeOcrOnly(
     pageCount,
     renderedPages,
   });
-  return { pageCount, text, textSource: "qwen3.5-ocr" };
+  return { pageCount, text, textSource: "qwen-ocr" };
 }
 
 export function extractResumeDocumentText(input: ResumeDocumentInput): Promise<ParsedResumeOcr> {
@@ -696,14 +694,7 @@ export function extractResumeDocumentText(input: ResumeDocumentInput): Promise<P
 
   switch (kind) {
     case "pdf": {
-      if (!input.fileUrl) {
-        return parseResumeOcrOnly(input.bytes, { onProgress: input.onProgress });
-      }
-      return parseQwenPdfResume({
-        bytes: input.bytes,
-        fileUrl: input.fileUrl,
-        onProgress: input.onProgress,
-      });
+      return parseResumeOcrOnly(input.bytes, { onProgress: input.onProgress });
     }
     case "doc": {
       return convertLegacyOfficeToOoxml({

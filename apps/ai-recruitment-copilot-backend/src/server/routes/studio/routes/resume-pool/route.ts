@@ -6,7 +6,6 @@ import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { hiringUnit, jobDescription } from "@arc/db-schema/schema";
 import { and, eq } from "drizzle-orm";
 import {
-  getStoredResumeParseFileUrl,
   parseResumeFastToProfile,
   validateResumeFile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
@@ -106,8 +105,7 @@ async function resolveResumePoolParsedResume(
   let resumeProfile = uploadResult.cachedResumeProfile ?? null;
   let resumeText = uploadResult.resumeText ?? null;
   if (!resumeProfile) {
-    const fileUrl = await getStoredResumeParseFileUrl(resume, uploadResult.storageKey);
-    const parsed = await parseResumeFastToProfile(resume, { fileUrl });
+    const parsed = await parseResumeFastToProfile(resume);
     ({ resumeProfile } = parsed);
     resumeText = parsed.parsedText;
   }

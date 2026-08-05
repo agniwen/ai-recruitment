@@ -12,19 +12,14 @@ import {
 import { generateResumeStructured } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
 import {
   getResumeDocumentExtension,
-  getResumeDocumentKind,
   isSupportedResumeDocumentInput,
   supportedResumeDocumentLabel,
 } from "@arc/shared/resume-documents";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
-import {
-  getResumeParseProvider,
-  isResumeParseCacheSourceCompatible,
-} from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-provider";
+import { isResumeParseCacheSourceCompatible } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-provider";
 import type { ResumeTextSource } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
 import {
   buildAttachmentKeyByHash,
-  presignGetObjectUrlBestEffort,
   putObjectBytes,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
@@ -374,7 +369,6 @@ async function persistParseToRegistry(args: {
   contentHash: string;
   file: File;
   context: StreamParseResumeContext;
-  storageKey?: string;
   parsed: {
     pageCount: number;
     structured: ResumeParserStructured;
@@ -386,25 +380,21 @@ async function persistParseToRegistry(args: {
     return;
   }
   try {
-    const storageKey =
-      args.storageKey ??
-      (await buildAttachmentKeyByHash(
-        args.contentHash,
-        getResumeDocumentExtension({
-          fileName: args.file.name,
-          mediaType: args.file.type,
-        }),
-      ));
+    const storageKey = await buildAttachmentKeyByHash(
+      args.contentHash,
+      getResumeDocumentExtension({
+        fileName: args.file.name,
+        mediaType: args.file.type,
+      }),
+    );
     // 顺序而非并行：S3 PUT 失败时不写 DB，避免注册表里出现指向不存在 key 的行。
     // Sequential (not Promise.all) so a failed S3 PUT skips the DB insert and
     // we never leave a registry row pointing at a missing storage key.
-    if (!args.storageKey) {
-      await putObjectBytes({
-        body: args.bytes,
-        contentType: args.file.type || "application/octet-stream",
-        storageKey,
-      });
-    }
+    await putObjectBytes({
+      body: args.bytes,
+      contentType: args.file.type || "application/octet-stream",
+      storageKey,
+    });
     await createAttachment({
       contentHash: args.contentHash,
       filename: args.file.name.slice(0, 255) || "resume",
@@ -517,34 +507,9 @@ export function streamParseResumeProfile(
         };
       }
 
-      let fileUrl: string | undefined;
-      let storageKey: string | undefined;
-      const shouldParseStoredPdf =
-        context?.organizationId &&
-        getResumeParseProvider() === "ocr-llm" &&
-        getResumeDocumentKind({ fileName: file.name, mediaType: file.type }) === "pdf";
-      if (shouldParseStoredPdf) {
-        try {
-          storageKey = await buildAttachmentKeyByHash(
-            contentHash,
-            getResumeDocumentExtension({ fileName: file.name, mediaType: file.type }),
-          );
-          await putObjectBytes({
-            body: bytes,
-            contentType: file.type || "application/octet-stream",
-            storageKey,
-          });
-          fileUrl = await presignGetObjectUrlBestEffort(storageKey);
-        } catch (error) {
-          storageKey = undefined;
-          console.error("[parse-resume] failed to prepare stored PDF URL; using fallback", error);
-        }
-      }
-
       const workflowInput = {
         bytes,
         fileName: file.name,
-        fileUrl,
         mediaType: file.type,
       };
       const parsed = await streamResumeParseWorkflow(workflowInput, {
@@ -553,7 +518,7 @@ export function streamParseResumeProfile(
       });
 
       if (context) {
-        await persistParseToRegistry({ bytes, contentHash, context, file, parsed, storageKey });
+        await persistParseToRegistry({ bytes, contentHash, context, file, parsed });
       }
 
       const result: ResumeParseResult = {
@@ -615,7 +580,6 @@ export interface ParsedResumeProfileResult {
 export async function parseResumeBytesToProfile(input: {
   bytes: Uint8Array;
   fileName: string;
-  fileUrl?: string;
   mediaType?: string;
 }): Promise<ParsedResumeProfileResult> {
   validateResumeDocumentInput({
@@ -627,7 +591,6 @@ export async function parseResumeBytesToProfile(input: {
     const parsed = await runResumeParseWorkflow({
       bytes: input.bytes,
       fileName: input.fileName,
-      fileUrl: input.fileUrl,
       mediaType: input.mediaType,
     });
     return {
@@ -648,31 +611,13 @@ export async function parseResumeBytesToProfile(input: {
   }
 }
 
-export async function parseResumeFastToProfile(
-  file: File,
-  options: { fileUrl?: string } = {},
-): Promise<ParsedResumeProfileResult> {
+export async function parseResumeFastToProfile(file: File): Promise<ParsedResumeProfileResult> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   return parseResumeBytesToProfile({
     bytes,
     fileName: file.name,
-    fileUrl: options.fileUrl,
     mediaType: file.type,
   });
-}
-
-export function getStoredResumeParseFileUrl(
-  file: File,
-  storageKey: string | null | undefined,
-): Promise<string | undefined> {
-  if (
-    storageKey &&
-    getResumeParseProvider() === "ocr-llm" &&
-    getResumeDocumentKind({ fileName: file.name, mediaType: file.type }) === "pdf"
-  ) {
-    return presignGetObjectUrlBestEffort(storageKey);
-  }
-  return Promise.resolve(undefined as string | undefined);
 }
 
 export async function generateInterviewQuestionsForProfile(
@@ -733,16 +678,12 @@ export type {
   ResumeReviewScoring,
 } from "./resume-analysis-review";
 
-export async function analyzeResumeFile(
-  file: File,
-  options: { fileUrl?: string } = {},
-): Promise<ResumeAnalysisResult> {
+export async function analyzeResumeFile(file: File): Promise<ResumeAnalysisResult> {
   const { runResumeAnalysisWorkflow } =
     await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/resume-analysis-workflow");
   return runResumeAnalysisWorkflow({
     bytes: new Uint8Array(await file.arrayBuffer()),
     fileName: file.name,
-    fileUrl: options.fileUrl,
     mediaType: file.type,
   });
 }
