@@ -13,6 +13,17 @@ import type * as ResumePoolPageModel from "../resume-pool-page-model";
 
 const importResumePoolItemMock = vi.hoisted(() => vi.fn());
 const listHiringUnitsMock = vi.hoisted(() => vi.fn());
+const jobDescriptionsMock = vi.hoisted(() => [
+  {
+    departmentName: "平台研发",
+    hiringUnitName: "研发中心",
+    id: "job-description-1",
+    jobSeries: "技术",
+    name: "前端工程师",
+    resumeContact: "招聘 BP",
+    serviceUnit: "产品技术部",
+  },
+]);
 
 vi.mock("@/components/ui/searchable-select", () => ({
   SearchableSelect: ({ id, onChange }: { id?: string; onChange: (value: string) => void }) => (
@@ -58,7 +69,7 @@ vi.mock("@/lib/client/rpc", () => ({
 
 vi.mock("../resume-pool-page-model", async (importOriginal) => ({
   ...(await importOriginal<typeof ResumePoolPageModel>()),
-  useJobDescriptions: () => ({ data: [] }),
+  useJobDescriptions: () => ({ data: jobDescriptionsMock }),
 }));
 
 const importedItem = {
@@ -89,6 +100,46 @@ afterEach(() => {
 });
 
 describe("ImportResumePoolDialog", () => {
+  it("prefills source job details when the modal opens", async () => {
+    listHiringUnitsMock.mockResolvedValue(Response.json({ records: [] }));
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <ImportResumePoolDialog
+            item={{
+              ...importedItem,
+              jobDescriptionId: "job-description-1",
+              scope: "private",
+            }}
+            onImported={vi.fn()}
+            onOpenChange={vi.fn()}
+          />
+        </QueryClientProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    const recommendationInput = document.querySelector<HTMLTextAreaElement>(
+      "#resume-pool-import-recommendation",
+    );
+    expect(recommendationInput?.value).toContain("应聘岗位：前端工程师");
+    expect(recommendationInput?.value).toContain(
+      "推荐编制组织/序列/服务单位：研发中心/技术/产品技术部",
+    );
+    expect(recommendationInput?.value).toContain("简历对接BP：招聘 BP");
+
+    act(() => {
+      root.unmount();
+    });
+  });
+
   it("confirms and requests a new import for an imported resume", async () => {
     importResumePoolItemMock.mockResolvedValue({
       resumeRecordId: "resume-record-2",
@@ -115,6 +166,36 @@ describe("ImportResumePoolDialog", () => {
 
     expect(document.body.textContent).toContain("已在简历库，是否再次入库。");
     expect(document.body.textContent).toContain("已入库记录");
+    expect(document.body.textContent).not.toContain("插入模版");
+    const recommendationInput = document.querySelector<HTMLTextAreaElement>(
+      "#resume-pool-import-recommendation",
+    );
+    expect(recommendationInput?.value).toContain("推荐简历");
+    expect(recommendationInput?.value).toContain("候选人姓名：测试候选人");
+    await act(async () => {
+      if (recommendationInput) {
+        const valueSetter = Object.getOwnPropertyDescriptor(
+          HTMLTextAreaElement.prototype,
+          "value",
+        )?.set;
+        valueSetter?.call(recommendationInput, "自定义推荐理由");
+        recommendationInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      await Promise.resolve();
+    });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <ImportResumePoolDialog
+            item={{ ...importedItem }}
+            onImported={vi.fn()}
+            onOpenChange={vi.fn()}
+          />
+        </QueryClientProvider>,
+      );
+      await Promise.resolve();
+    });
+    expect(recommendationInput?.value).toBe("自定义推荐理由");
     const importedRecordButton = document.querySelector<HTMLButtonElement>(
       '[aria-label="查看已入库记录 resume-record-2"]',
     );
@@ -155,7 +236,7 @@ describe("ImportResumePoolDialog", () => {
       hiringUnitId: "hiring-unit-1",
       jobDescriptionId: null,
       jobDescriptionMode: "none",
-      recommendationText: "",
+      recommendationText: "自定义推荐理由",
       reimport: true,
     });
 

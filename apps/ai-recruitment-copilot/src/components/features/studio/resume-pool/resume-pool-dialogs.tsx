@@ -3,6 +3,7 @@
 import { IconDatabase, IconExternalLink, IconLoader2 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
+import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
 import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import type {
@@ -10,7 +11,7 @@ import type {
   ResumePoolListRecord,
 } from "@arc/shared/resume-pool";
 
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getMemberInitials } from "@/components/data-grid/cells/member-cell";
 import { TimeDisplay } from "@/components/features/display/time-display";
@@ -151,6 +152,25 @@ function describePoolItemRecruitmentSource(item: ResumePoolListRecord | null): s
   return "";
 }
 
+function buildInitialRecommendationText(
+  item: ResumePoolListRecord,
+  jobDescription?: JobDescriptionListRecord,
+): string {
+  const recruitmentSource = describePoolItemRecruitmentSource(item);
+  return buildResumePoolRecommendationTemplate({
+    candidateContact: item.candidatePhone ?? item.candidateEmail,
+    candidateName: item.candidateName,
+    hiringUnitName: jobDescription?.hiringUnitName,
+    jobDescriptionName: jobDescription?.name ?? item.jobDescriptionName ?? item.targetRole,
+    jobSeries: jobDescription?.jobSeries,
+    recruitmentSource,
+    referrerName: item.recruitmentSource === "referral" ? item.recruitmentSourceDetail : null,
+    resumeContact: jobDescription?.resumeContact,
+    serviceUnit: jobDescription?.serviceUnit,
+    workYears: item.workYears,
+  });
+}
+
 export function SelectResumePoolScopeDialog({
   defaultScope,
   onOpenChange,
@@ -249,6 +269,8 @@ export function ImportResumePoolDialog({
   const [recommendationText, setRecommendationText] = useState("");
   const [duplicates, setDuplicates] = useState<ResumePoolImportDuplicateResult | null>(null);
   const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
+  const recommendationItemIdRef = useRef<string | null>(null);
+  const recommendationEditedRef = useRef(false);
   const isReimport = Boolean(item?.importedResumeRecordId);
 
   useEffect(() => {
@@ -259,14 +281,22 @@ export function ImportResumePoolDialog({
       setRecommendationText("");
       setDuplicates(null);
       setDetailRecordId(null);
+      recommendationItemIdRef.current = null;
+      recommendationEditedRef.current = false;
       return;
     }
+    const sourceJobDescription = jobDescriptions.find((jd) => jd.id === item.jobDescriptionId);
     const canUseSourceJd =
-      item.scope === "private" &&
-      item.jobDescriptionId &&
-      jobDescriptions.some((jd) => jd.id === item.jobDescriptionId);
+      item.scope === "private" && item.jobDescriptionId && sourceJobDescription;
     setMode(canUseSourceJd ? "bind" : "none");
     setJobDescriptionId(canUseSourceJd ? (item.jobDescriptionId ?? "") : "");
+    if (recommendationItemIdRef.current !== item.id) {
+      setRecommendationText(buildInitialRecommendationText(item, sourceJobDescription));
+      recommendationItemIdRef.current = item.id;
+      recommendationEditedRef.current = false;
+    } else if (!recommendationEditedRef.current && sourceJobDescription) {
+      setRecommendationText(buildInitialRecommendationText(item, sourceJobDescription));
+    }
     setDuplicates(null);
   }, [item, jobDescriptions]);
 
@@ -311,8 +341,6 @@ export function ImportResumePoolDialog({
   const bindInvalid = mode === "bind" && !jobDescriptionId;
   const hiringUnitInvalid = !hiringUnitId;
   const { isPending } = mutation;
-  const selectedJobDescription = jobDescriptions.find((jd) => jd.id === jobDescriptionId);
-  const selectedHiringUnit = hiringUnits.find((unit) => unit.id === hiringUnitId);
   const recruitmentSource = describePoolItemRecruitmentSource(item);
   let dialogDescription: string | undefined;
   if (item) {
@@ -418,46 +446,17 @@ export function ImportResumePoolDialog({
             </FieldContent>
           </Field>
           <Field>
-            <div className="flex items-center gap-2">
-              <FieldLabel htmlFor="resume-pool-import-recommendation">推荐理由</FieldLabel>
-              <Button
-                className="h-auto px-0 py-0 text-xs"
-                disabled={isPending}
-                onClick={() =>
-                  setRecommendationText(
-                    buildResumePoolRecommendationTemplate({
-                      candidateContact: item?.candidatePhone ?? item?.candidateEmail,
-                      candidateName: item?.candidateName,
-                      hiringUnitName: selectedHiringUnit?.name,
-                      jobDescriptionName:
-                        mode === "bind"
-                          ? selectedJobDescription?.name
-                          : (item?.jobDescriptionName ?? item?.targetRole),
-                      jobSeries: selectedJobDescription?.jobSeries,
-                      recruitmentSource,
-                      referrerName:
-                        item?.recruitmentSource === "referral"
-                          ? item.recruitmentSourceDetail
-                          : null,
-                      resumeContact: selectedJobDescription?.resumeContact,
-                      serviceUnit: selectedJobDescription?.serviceUnit,
-                      workYears: item?.workYears,
-                    }),
-                  )
-                }
-                type="button"
-                variant="link"
-              >
-                插入模版
-              </Button>
-            </div>
+            <FieldLabel htmlFor="resume-pool-import-recommendation">推荐理由</FieldLabel>
             <FieldContent>
               <Textarea
                 disabled={isPending}
                 id="resume-pool-import-recommendation"
                 maxLength={RESUME_POOL_IMPORT_RECOMMENDATION_MAX_LENGTH}
-                onChange={(event) => setRecommendationText(event.target.value)}
-                placeholder="可点「插入模版」自动带出简历字段，再人工补全薪资、到岗等信息"
+                onChange={(event) => {
+                  recommendationEditedRef.current = true;
+                  setRecommendationText(event.target.value);
+                }}
+                placeholder="例如：期望薪资 30K，预计两周内到岗"
                 rows={12}
                 value={recommendationText}
               />
