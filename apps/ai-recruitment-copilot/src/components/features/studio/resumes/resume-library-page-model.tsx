@@ -33,13 +33,14 @@ export interface ResumeFilters extends Record<string, string> {
   candidatePhone: string;
   creatorIds: string;
   hiringUnitId: string;
+  id: string;
   jdIds: string;
   skills: string;
   stage: string;
 }
 
 // 工具栏多选下拉在 state/URL 里以 CSV 字符串编码，符合 data-grid 工具栏约定。
-// 文本筛选项（姓名 / 邮箱 / 电话）各自独立，彼此 AND。
+// 文本筛选项（ID / 姓名 / 邮箱 / 电话）各自独立，彼此 AND。
 // 「hiringUnitId」= 用人组织（可搜索单选）。
 // 「jdIds」= 关联岗位（可搜索单选，值为单个岗位 id）。
 // 「skills」= 候选人必须同时拥有所有选中的技能（AND）。
@@ -53,6 +54,7 @@ export const EMPTY_FILTERS: ResumeFilters = {
   candidatePhone: "",
   creatorIds: "",
   hiringUnitId: "",
+  id: "",
   jdIds: "",
   skills: "",
   stage: "",
@@ -61,6 +63,7 @@ export const RESUME_LIBRARY_FILTER_KEYS = Object.keys(EMPTY_FILTERS) as (keyof R
   string)[];
 /** 工具栏默认收起时始终展示的筛选项（其余需点「更多条件」展开）。 */
 export const RESUME_LIBRARY_PRIMARY_FILTER_KEYS = [
+  "id",
   "candidateName",
   "candidateEmail",
   "creatorIds",

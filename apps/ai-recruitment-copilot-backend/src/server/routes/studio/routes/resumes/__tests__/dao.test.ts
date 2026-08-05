@@ -313,6 +313,11 @@ describe("queryPaginatedResumeRecords", () => {
     expect(result.records[0]?.candidateName).toBe("郭靖");
   });
 
+  it("filters by a partial resume ID", async () => {
+    const result = await queryPaginatedResumeRecords(ORG_A, { id: "A_1" });
+    expect(result.records.map((row) => row.id)).toEqual(["ri_test_a_1"]);
+  });
+
   it("filters by dedicated text fields (AND semantics)", async () => {
     const byName = await queryPaginatedResumeRecords(ORG_A, { candidateName: "郭" });
     expect(byName.records.map((row) => row.candidateName)).toEqual(["郭靖"]);

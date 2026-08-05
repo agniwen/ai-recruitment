@@ -394,6 +394,12 @@ export function ResumePoolPage() {
   const emptyTitle = scope === "private" ? "暂无私有简历池简历" : "公共简历池暂无简历";
   const filtersConfig = useMemo(
     () => [
+      {
+        key: "id" as const,
+        minWidth: "10rem",
+        placeholder: "简历 ID",
+        type: "search" as const,
+      },
       ...(scope === "private"
         ? [
             {

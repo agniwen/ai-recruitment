@@ -222,6 +222,7 @@ export function ResumeLibraryPage() {
             candidatePhone: params.filters.candidatePhone || undefined,
             creatorIds: parseCsvParam(params.filters.creatorIds),
             hiringUnitId: params.filters.hiringUnitId || undefined,
+            id: params.filters.id || undefined,
             jobDescriptionIds: parseCsvParam(params.filters.jdIds),
             knownTotal: params.knownTotal,
             page: params.page,
@@ -421,6 +422,12 @@ export function ResumeLibraryPage() {
 
   const filtersConfig = useMemo(
     () => [
+      {
+        key: "id" as const,
+        minWidth: "10rem",
+        placeholder: "简历 ID",
+        type: "search" as const,
+      },
       {
         key: "candidateName" as const,
         minWidth: "9rem",

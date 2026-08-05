@@ -353,6 +353,19 @@ describe("resumeLibraryRouter behavior", () => {
     );
   });
 
+  it("passes a partial resume ID to the list query", async () => {
+    const response = await makeApp().request("/resumes?id=test_a");
+
+    expect(response.status).toBe(200);
+    expect(mocks.queryPaginatedResumeRecords).toHaveBeenCalledWith(
+      ORGANIZATION_ID,
+      expect.objectContaining({ id: "test_a" }),
+      expect.any(Object),
+      { kind: "all" },
+      undefined,
+    );
+  });
+
   it("returns resume-library metrics behind page and resource permissions", async () => {
     const response = await makeApp().request("/resumes/metrics");
 

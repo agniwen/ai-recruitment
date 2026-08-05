@@ -1,13 +1,17 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildResumePoolUploaderFilterOptions,
   createResumePoolFilters,
   getResumePoolUploaderFilterAvailability,
   isResumePoolUploaderFilterDisabled,
+  matchesResumePoolId,
   normalizeResumePoolUploaderId,
   RESUME_POOL_LOAD_MORE_ROOT_MARGIN,
   RESUME_POOL_UPLOADER_QUERY_FRESHNESS,
 } from "../resume-pool-page-model";
+
+const pageSource = readFileSync(new URL("../resume-pool-page.tsx", import.meta.url), "utf-8");
 
 describe("private resume pool uploader filter", () => {
   const uploaders = [
@@ -24,13 +28,33 @@ describe("private resume pool uploader filter", () => {
     expect(RESUME_POOL_LOAD_MORE_ROOT_MARGIN).toBe("720px 0px");
   });
 
+  it("places the fuzzy ID filter first", () => {
+    const filtersStart = pageSource.indexOf("const filtersConfig = useMemo");
+    const filtersSource = pageSource.slice(
+      filtersStart,
+      pageSource.indexOf("return (", filtersStart),
+    );
+    expect(filtersSource.indexOf('key: "id"')).toBeGreaterThanOrEqual(0);
+    expect(filtersSource.indexOf('key: "id"')).toBeLessThan(
+      filtersSource.indexOf('key: "uploaderId"'),
+    );
+  });
+
   it("defaults the private pool uploader to the current user", () => {
     expect(createResumePoolFilters("private", "self")).toEqual({
+      id: "",
       importStatus: "",
       parseStatus: "",
       sourceType: "all",
       uploaderId: "self",
     });
+  });
+
+  it("matches resume IDs by case-insensitive substring", () => {
+    expect(matchesResumePoolId("Resume-ABC-123", "abc-1")).toBe(true);
+    expect(matchesResumePoolId("Resume-ABC-123", "  ABC  ")).toBe(true);
+    expect(matchesResumePoolId("Resume-ABC-123", "missing")).toBe(false);
+    expect(matchesResumePoolId("Resume-ABC-123", " ")).toBe(true);
   });
 
   it("does not apply an uploader filter to the public pool", () => {

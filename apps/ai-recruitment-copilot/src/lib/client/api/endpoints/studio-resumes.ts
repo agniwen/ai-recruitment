@@ -30,6 +30,8 @@ export interface ResumeListParams {
   knownTotal?: number;
   page?: number;
   pageSize?: number;
+  /** 简历 ID（模糊匹配）。 */
+  id?: string;
   /** 候选人姓名（模糊匹配）。 */
   candidateName?: string;
   /** 候选人邮箱（模糊匹配）。 */
@@ -66,6 +68,9 @@ function buildResumeListQuery(params: ResumeListParams): Record<string, string> 
   }
   if (params.knownTotal !== undefined) {
     query.knownTotal = String(params.knownTotal);
+  }
+  if (params.id) {
+    query.id = params.id;
   }
   if (params.candidateName) {
     query.candidateName = params.candidateName;

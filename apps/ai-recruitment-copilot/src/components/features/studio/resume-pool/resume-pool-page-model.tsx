@@ -25,7 +25,7 @@ export const RESUME_POOL_UPLOADER_QUERY_FRESHNESS = {
 
 export const RESUME_POOL_LOAD_MORE_ROOT_MARGIN = "720px 0px";
 
-export type ResumePoolFilters = Record<"importStatus" | "parseStatus", string> & {
+export type ResumePoolFilters = Record<"id" | "importStatus" | "parseStatus", string> & {
   sourceType: ResumePoolSourceFilter;
   uploaderId: string;
 };
@@ -35,6 +35,7 @@ export function createResumePoolFilters(
   currentUserId: string | null,
 ): ResumePoolFilters {
   return {
+    id: "",
     importStatus: "",
     parseStatus: "",
     sourceType: "all",
@@ -220,6 +221,11 @@ export function matchesSearch(record: ResumePoolListRecord, rawSearch: string) {
     .some((value) => value?.toLowerCase().includes(search));
 }
 
+export function matchesResumePoolId(recordId: string, rawId: string) {
+  const id = rawId.trim().toLowerCase();
+  return !id || recordId.toLowerCase().includes(id);
+}
+
 export function sourceLabel(record: ResumePoolListRecord) {
   if (record.sourceChannel === "referral") {
     return "内推";
@@ -334,6 +340,9 @@ export function filterPoolRecords(
   },
 ) {
   const filtered = records.filter((record) => {
+    if (!matchesResumePoolId(record.id, input.filters.id)) {
+      return false;
+    }
     if (!matchesSearch(record, input.search)) {
       return false;
     }

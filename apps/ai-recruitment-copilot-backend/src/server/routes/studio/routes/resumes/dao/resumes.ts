@@ -88,6 +88,7 @@ const filtersSchema = z.object({
   candidatePhone: z.string().trim().max(120).optional().nullable(),
   creatorIds: z.array(z.string()).max(50).optional().nullable(),
   hiringUnitIds: z.array(z.string()).max(50).optional().nullable(),
+  id: z.string().trim().max(120).optional().nullable(),
   jobDescriptionIds: z.array(z.string()).max(50).optional().nullable(),
   outcomes: z.array(z.string()).max(10).optional().nullable(),
   pipelineStages: z.array(z.string()).max(10).optional().nullable(),
@@ -106,7 +107,8 @@ function buildIlikeCondition(
   column:
     | typeof studioInterview.candidateEmail
     | typeof studioInterview.candidateName
-    | typeof studioInterview.candidatePhone,
+    | typeof studioInterview.candidatePhone
+    | typeof studioInterview.id,
   value: string | null | undefined,
 ) {
   const trimmed = value?.trim();
@@ -186,6 +188,7 @@ function buildWhere(organizationId: string, filters?: ResumeQueryFilters) {
   const conditions = [
     eq(studioInterview.organizationId, organizationId),
     buildSearchCondition(filters?.search),
+    buildIlikeCondition(studioInterview.id, filters?.id),
     buildIlikeCondition(studioInterview.candidateName, filters?.candidateName),
     buildIlikeCondition(studioInterview.candidateEmail, filters?.candidateEmail),
     buildIlikeCondition(studioInterview.candidatePhone, filters?.candidatePhone),
@@ -903,6 +906,7 @@ export interface ResumeListFilters {
   candidatePhone?: string | null;
   creatorIds?: string[] | null;
   hiringUnitIds?: string[] | null;
+  id?: string | null;
   jobDescriptionIds?: string[] | null;
   outcomes?: string[] | null;
   pipelineStages?: string[] | null;
