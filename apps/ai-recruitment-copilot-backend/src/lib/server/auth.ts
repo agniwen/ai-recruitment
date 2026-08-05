@@ -272,7 +272,6 @@ export const auth = betterAuth({
   onAPIError: {
     errorURL: "/login",
   },
-  rateLimit: AUTH_RATE_LIMIT,
   plugins: [
     admin({
       // Better Auth currently interpolates this value into the OAuth redirect
@@ -462,6 +461,7 @@ export const auth = betterAuth({
       },
     }),
   ],
+  rateLimit: AUTH_RATE_LIMIT,
   // 显式声明 session 寿命 & 刷新间隔。默认 expiresIn=7d / updateAge=1d，
   // 但 1 天的 updateAge 意味着 session.updatedAt 一天内顶多动一次——会让
   // 「最近活跃」列分辨率降到 1 天。这里调到 5 分钟，DB 写频可控、用户体感

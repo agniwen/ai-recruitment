@@ -63,7 +63,7 @@ describe("TanStack Start studio CRUD route migration", () => {
   it("wraps hiring unit management in the standard studio page container", () => {
     const source = readSource("routes/w.$slug.studio.hiring-units.tsx");
 
-    expect(source).toContain('className="container mx-auto max-w-7xl space-y-6"');
+    expect(source).toContain('className="mx-auto w-full max-w-[96rem] space-y-6"');
   });
 
   it("shows recruiting group hiring unit selections by item names inside the select only", () => {

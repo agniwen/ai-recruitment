@@ -166,7 +166,7 @@ function HiringUnitManagementPage() {
 
   return (
     <>
-      <div className="container mx-auto max-w-7xl space-y-6">
+      <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
           description="维护业务侧承担招聘需求的用人组织。后续招聘组可按用人组织划分负责范围。"
           title="用人组织"

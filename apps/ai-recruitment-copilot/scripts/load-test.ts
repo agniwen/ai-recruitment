@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "@playwright/test";
 import type { BrowserContext, Page } from "@playwright/test";
 
@@ -212,9 +213,7 @@ async function main() {
       await Promise.all(activeUsers.map((user) => visitTarget(user, config, samples)));
       const remainingMs = stageEndsAt - Date.now();
       if (remainingMs > 0) {
-        await new Promise((resolveDelay) => {
-          setTimeout(resolveDelay, Math.min(config.intervalMs, remainingMs));
-        });
+        await delay(Math.min(config.intervalMs, remainingMs));
       }
     }
 
