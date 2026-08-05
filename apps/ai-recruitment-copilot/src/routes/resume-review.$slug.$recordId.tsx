@@ -36,12 +36,19 @@ function ResumeReviewDetailContent({ recordId }: { recordId: string }) {
           layoutMode="page"
           mode="resume"
           recordId={recordId}
-          shell={({ body, title }) => (
-            <div className="flex flex-col gap-4">
-              <header className="border-b pb-4">
-                <h1 className="font-semibold text-xl tracking-normal">{title}</h1>
+          shell={({ body, description, headerExtra, title }) => (
+            <div className="flex min-w-0 flex-col gap-5">
+              <header className="flex min-w-0 flex-col gap-4 border-border/70 border-b pb-4">
+                <div className="min-w-0">
+                  <h1 className="font-semibold text-xl tracking-normal">{title}</h1>
+                  {description ? (
+                    <p className="mt-2 text-muted-foreground text-sm">{description}</p>
+                  ) : null}
+                </div>
+                {/* headerExtra owns 概览/AI评分 tabs + 预览简历 — same as full resume detail. */}
+                {headerExtra ? <div className="min-w-0">{headerExtra}</div> : null}
               </header>
-              <div>{body}</div>
+              {body}
             </div>
           )}
         />

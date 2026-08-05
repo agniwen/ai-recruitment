@@ -397,8 +397,8 @@ export function ResumePoolPage() {
     () => [
       {
         key: "id" as const,
-        minWidth: "10rem",
-        placeholder: "简历 ID",
+        minWidth: "12rem",
+        placeholder: "简历ID，如sdvs****xscs",
         type: "search" as const,
       },
       ...(scope === "private"

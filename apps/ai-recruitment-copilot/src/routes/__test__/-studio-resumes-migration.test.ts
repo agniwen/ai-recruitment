@@ -103,15 +103,16 @@ describe("TanStack Start studio resumes migration", () => {
     expect(source).toContain("《招聘需求表》");
   });
 
-  it("uses a standalone member review page with only the detail title in the header", () => {
+  it("uses a standalone member review page with detail tabs and resume preview in the header", () => {
     const source = readSource("routes/resume-review.$slug.$recordId.tsx");
 
     expect(source).toContain("StudioPersonDetailPanel");
     expect(source).toContain('accessMode="review"');
     expect(source).toContain('layoutMode="page"');
-    expect(source).toContain("shell={({ body, title })");
+    expect(source).toContain("shell={({ body, description, headerExtra, title })");
     expect(source).toContain("<h1");
     expect(source).toContain("{title}");
+    expect(source).toContain("{headerExtra}");
     expect(source).toContain("ResumeReviewEvaluationBar");
     expect(source).toContain('createFileRoute("/resume-review/$slug/$recordId")');
     expect(source).toContain("<WorkspaceSlugProvider");

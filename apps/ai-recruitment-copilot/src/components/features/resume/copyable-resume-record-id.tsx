@@ -10,7 +10,7 @@ import { copyTextToClipboard } from "@/lib/client/clipboard";
 export async function copyResumeRecordId(id: string): Promise<void> {
   const result = await copyTextToClipboard(id);
   if (result === "copied") {
-    toast.success("已复制候选人 ID");
+    toast.success("已复制简历 ID");
     return;
   }
   if (result === "manual") {
@@ -26,7 +26,7 @@ function stopInteractiveBubble(event: MouseEvent | PointerEvent) {
 }
 
 /**
- * Masked candidate/record id with a copy control. Clicks never bubble so
+ * Masked resume id with a copy control. Clicks never bubble so
  * surrounding card / name buttons stay inert.
  */
 export function CopyableResumeRecordId({
@@ -43,7 +43,7 @@ export function CopyableResumeRecordId({
   showDisplayId?: boolean;
 }) {
   const display = formatResumeRecordDisplayId(id);
-  const label = parentheses ? `(${display})` : display;
+  const text = parentheses ? `(${display})` : display;
 
   return (
     <span
@@ -58,11 +58,11 @@ export function CopyableResumeRecordId({
           )}
           title={id}
         >
-          {label}
+          {text}
         </span>
       ) : null}
       <button
-        aria-label="复制候选人 ID"
+        aria-label="复制简历 ID"
         className={cn(
           "inline-flex size-5 shrink-0 items-center justify-center rounded-sm",
           "text-muted-foreground/65 transition-colors",
@@ -75,7 +75,7 @@ export function CopyableResumeRecordId({
           void copyResumeRecordId(id);
         }}
         onPointerDown={stopInteractiveBubble}
-        title="复制候选人 ID"
+        title="复制简历 ID"
         type="button"
       >
         <IconCopy className="size-3" stroke={1.75} />

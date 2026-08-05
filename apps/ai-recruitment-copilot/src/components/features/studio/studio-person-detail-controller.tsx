@@ -504,13 +504,15 @@ export function useStudioPersonDetailController({
       return tabs;
     }
     tabs.add("ai-analysis");
-    if (shouldShowAiInterviewTab(tabVisibilityRecord)) {
+    // Review share links only need overview + AI score; later pipeline tabs
+    // rely on fuller studio permissions and would strand reviewers.
+    if (!isReview && shouldShowAiInterviewTab(tabVisibilityRecord)) {
       tabs.add("rounds");
     }
-    if (shouldShowHumanInterviewTab(tabVisibilityRecord, canReadHumanInterview)) {
+    if (!isReview && shouldShowHumanInterviewTab(tabVisibilityRecord, canReadHumanInterview)) {
       tabs.add("human-interview");
     }
-    if (shouldShowOfferTab(tabVisibilityRecord, canReadOffer)) {
+    if (!isReview && shouldShowOfferTab(tabVisibilityRecord, canReadOffer)) {
       tabs.add("offer");
     }
     return tabs;
@@ -824,7 +826,7 @@ export function useStudioPersonDetailController({
               AI评分
             </TabsTrigger>
           ) : null}
-          {mode === "resume" && shouldShowAiInterviewTab(tabVisibilityRecord) ? (
+          {mode === "resume" && !isReview && shouldShowAiInterviewTab(tabVisibilityRecord) ? (
             <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="rounds">
               AI 面试
             </TabsTrigger>
@@ -832,12 +834,15 @@ export function useStudioPersonDetailController({
           {/* 真人复面 / Offer tab：阶段已到达或经过时才显示，避免新候选人页面过于喧闹。
             Human interview / Offer tabs surface only once the candidate has reached that stage. */}
           {mode === "resume" &&
+          !isReview &&
           shouldShowHumanInterviewTab(tabVisibilityRecord, canReadHumanInterview) ? (
             <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="human-interview">
               真人复面
             </TabsTrigger>
           ) : null}
-          {mode === "resume" && shouldShowOfferTab(tabVisibilityRecord, canReadOffer) ? (
+          {mode === "resume" &&
+          !isReview &&
+          shouldShowOfferTab(tabVisibilityRecord, canReadOffer) ? (
             <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="offer">
               Offer
             </TabsTrigger>
