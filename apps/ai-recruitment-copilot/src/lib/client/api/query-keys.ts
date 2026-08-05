@@ -26,8 +26,10 @@ export const studioProfileKeys = {
 };
 
 export const studioResumeKeys = {
+  // Keep metrics outside ["studio-resumes", …] so list polling / bulk-upload
+  // invalidations do not remount the top dashboard cards.
   metrics: (slug: string, scope: "team" | "personal" = "team") =>
-    ["studio-resumes", slug, "metrics", scope] as const,
+    ["studio-resume-metrics", slug, scope] as const,
 };
 
 type QueryInvalidator = Pick<QueryClient, "invalidateQueries">;

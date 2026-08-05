@@ -109,7 +109,6 @@ export function OfferStagePanel({
           <OfferCard
             canDelete={canDelete}
             canUpdate={canUpdate}
-            candidateEmail={candidateEmail}
             candidateId={candidateId}
             disabled={disabled}
             draft={draft}
@@ -117,7 +116,6 @@ export function OfferStagePanel({
             onCancelled={invalidateDrafts}
             onRespond={() => setRespondTarget(draft)}
             onSaved={invalidateDrafts}
-            onSent={invalidateDrafts}
           />
         ))}
       </div>

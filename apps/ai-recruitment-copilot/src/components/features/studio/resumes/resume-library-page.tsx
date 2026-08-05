@@ -1,5 +1,5 @@
 /* oxlint-disable complexity max-lines -- page controller coordinates grid queries and dialogs. */
-import { IconUsers } from "@tabler/icons-react";
+import { IconRefresh, IconUsers } from "@tabler/icons-react";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -336,9 +336,9 @@ export function ResumeLibraryPage() {
   });
   const metricsSwitching =
     metricsQuery.isFetching && (metricsQuery.isPlaceholderData || Boolean(metricsQuery.data));
-  const metricsChartKey = metricsQuery.isPlaceholderData
-    ? `pending:${metricsScope}`
-    : `${metricsScope}:${metricsQuery.dataUpdatedAt}`;
+  // Only remount charts when scope flips (or while the previous-scope placeholder
+  // is showing). Do not include dataUpdatedAt — manual refresh should update in place.
+  const metricsChartKey = metricsQuery.isPlaceholderData ? `pending:${metricsScope}` : metricsScope;
   const retryParseMutation = useMutation({
     mutationFn: (record: ResumeLibraryListRecord) => retryStudioResumeParse(slug, record.id),
     onError: (error) => toast.error(error instanceof Error ? error.message : "重新解析简历失败"),
@@ -590,17 +590,35 @@ export function ResumeLibraryPage() {
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
           actionRender={
-            <Button
-              className="opacity-80 hover:opacity-100"
-              disabled={metricsQuery.isFetching}
-              onClick={() => setMetricsScope(metricsScope === "team" ? "personal" : "team")}
-              size="xs"
-              suppressHydrationWarning
-              type="button"
-              variant="ghost"
-            >
-              {metricsScope === "team" ? "切换个人维度" : "切换到团队维度"}
-            </Button>
+            <div className="flex items-center gap-0.5">
+              <Button
+                className="opacity-80 hover:opacity-100"
+                disabled={metricsQuery.isFetching}
+                onClick={() => setMetricsScope(metricsScope === "team" ? "personal" : "team")}
+                size="xs"
+                suppressHydrationWarning
+                type="button"
+                variant="ghost"
+              >
+                {metricsScope === "team" ? "切换个人维度" : "切换到团队维度"}
+              </Button>
+              <Button
+                aria-label="刷新招聘指标"
+                className="size-7 opacity-80 hover:opacity-100"
+                disabled={metricsQuery.isFetching}
+                onClick={() => {
+                  void metricsQuery.refetch();
+                }}
+                size="icon-xs"
+                title="刷新招聘指标"
+                type="button"
+                variant="ghost"
+              >
+                <IconRefresh
+                  className={metricsQuery.isFetching ? "size-3.5 animate-spin" : "size-3.5"}
+                />
+              </Button>
+            </div>
           }
           className="items-end sm:items-end"
           description="沉淀候选人档案、简历 PDF、岗位匹配和流程进展，筛选到面试推进都能从这里接上。"

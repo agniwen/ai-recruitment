@@ -65,15 +65,13 @@ describe("studioCalendarKeys", () => {
 describe("studio resume and profile keys", () => {
   it("keeps team and personal metrics in separate cache entries", () => {
     expect(studioResumeKeys.metrics("acme", "team")).toEqual([
-      "studio-resumes",
+      "studio-resume-metrics",
       "acme",
-      "metrics",
       "team",
     ]);
     expect(studioResumeKeys.metrics("acme", "personal")).toEqual([
-      "studio-resumes",
+      "studio-resume-metrics",
       "acme",
-      "metrics",
       "personal",
     ]);
   });

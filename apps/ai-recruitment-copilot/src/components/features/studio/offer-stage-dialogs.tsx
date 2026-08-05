@@ -30,7 +30,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { SendOfferConfirmDialog } from "./offer-stage-cards";
 import {
   OfferDraftFormFields,
   buildOfferDraftPayload,
@@ -56,7 +55,7 @@ export function CreateOrEditOfferDialog({
   open,
   onOpenChange,
   candidateId,
-  candidateEmail,
+  candidateEmail: _candidateEmail,
   mode,
   existingDraft,
   onSaved,
@@ -64,15 +63,6 @@ export function CreateOrEditOfferDialog({
   const slug = useWorkspaceSlug();
   const [form, setForm] = useState<OfferFormState>(() => createBlankOfferFormState());
   const setFormField = createOfferFormFieldSetter(setForm);
-  const [sendImmediately, setSendImmediately] = useState(false);
-  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
-
-  function handleOpenChange(next: boolean) {
-    if (!next) {
-      setSendConfirmOpen(false);
-    }
-    onOpenChange(next);
-  }
 
   // 编辑模式打开时同步现值；新建模式打开时清空。
   // Sync form on open: prefill in edit mode, blank in create mode.
@@ -82,10 +72,8 @@ export function CreateOrEditOfferDialog({
     }
     if (mode === "edit" && existingDraft) {
       setForm(offerFormStateFromDraft(existingDraft));
-      setSendImmediately(false);
     } else {
       setForm(createBlankOfferFormState());
-      setSendImmediately(false);
     }
   }, [open, mode, existingDraft]);
 
@@ -95,78 +83,44 @@ export function CreateOrEditOfferDialog({
       if (mode === "edit" && existingDraft) {
         return patchOfferDraft(slug, candidateId, existingDraft.id, payload);
       }
-      return createOfferDraft(slug, candidateId, { ...payload, sendImmediately });
+      // Always save as draft — send UI is currently hidden on the offer stage.
+      return createOfferDraft(slug, candidateId, { ...payload, sendImmediately: false });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "保存失败"),
     onSuccess: () => {
-      toast.success(saveSuccessMessage(mode, sendImmediately));
-      setSendConfirmOpen(false);
+      toast.success(saveSuccessMessage(mode, false));
       onSaved();
       onOpenChange(false);
     },
   });
 
-  function handleSave() {
-    if (mode === "create" && sendImmediately) {
-      setSendConfirmOpen(true);
-      return;
-    }
-    mutation.mutate();
-  }
-
   return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
+    <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{mode === "edit" ? "编辑 Offer 草稿" : "新建 Offer"}</DialogTitle>
           <DialogDescription>
-            {mode === "edit"
-              ? "草稿状态可编辑。发送后请用「记录响应」/「撤回」操作。"
-              : "新建版本会自动 supersede 已发出未结的旧版本。"}
+            {mode === "edit" ? "草稿状态可编辑。" : "新建版本会自动 supersede 已发出未结的旧版本。"}
           </DialogDescription>
         </DialogHeader>
 
         <OfferDraftFormFields form={form} idPrefix="offer" onFieldChange={setFormField} />
-        <div className="grid gap-3 py-2 sm:grid-cols-2">
-          {mode === "create" ? (
-            <div className="flex items-center gap-2 sm:col-span-2">
-              <input
-                aria-label="立即发送 Offer"
-                checked={sendImmediately}
-                className="size-4 accent-foreground"
-                id="offer-send-now"
-                onChange={(e) => setSendImmediately(e.target.checked)}
-                type="checkbox"
-              />
-              <Label className="cursor-pointer text-sm" htmlFor="offer-send-now">
-                立即发送（跳过草稿状态）
-              </Label>
-            </div>
-          ) : null}
-        </div>
 
         <DialogFooter>
           <Button
             disabled={mutation.isPending}
-            onClick={() => handleOpenChange(false)}
+            onClick={() => onOpenChange(false)}
             variant="outline"
           >
             取消
           </Button>
           <Button
             disabled={mutation.isPending || !form.position.trim() || !form.baseSalary}
-            onClick={handleSave}
+            onClick={() => mutation.mutate()}
           >
             {mutation.isPending ? "保存中…" : "保存"}
           </Button>
         </DialogFooter>
-        <SendOfferConfirmDialog
-          candidateEmail={candidateEmail}
-          isPending={mutation.isPending}
-          onConfirm={() => mutation.mutate()}
-          onOpenChange={setSendConfirmOpen}
-          open={sendConfirmOpen}
-        />
       </DialogContent>
     </Dialog>
   );
