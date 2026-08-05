@@ -1,4 +1,6 @@
 import { rm } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { build as buildWithEsbuild } from "esbuild";
 import { createBuilder } from "vite";
 
 // The Vite CLI leaves Rolldown worker threads alive after TanStack/Nitro
@@ -10,6 +12,14 @@ try {
   const builder = await createBuilder({}, null);
   await builder.buildApp();
   await builder.runDevTools();
+  await buildWithEsbuild({
+    bundle: true,
+    entryPoints: [fileURLToPath(new URL("migrate.ts", import.meta.url))],
+    format: "esm",
+    outfile: fileURLToPath(new URL("../.output/migrate.mjs", import.meta.url)),
+    platform: "node",
+    target: "node22",
+  });
   // Server modules loaded for prerendering can leave connection pools or worker
   // handles alive. All build promises have resolved at this point, so terminate
   // explicitly instead of making CI wait for unrelated runtime handles.

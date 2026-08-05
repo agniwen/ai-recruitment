@@ -567,6 +567,9 @@ importers:
       drizzle-kit:
         specifier: 'catalog:'
         version: 1.0.0-rc.1
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@2.2.0)

@@ -118,6 +118,10 @@ RUN addgroup --system --gid 1001 nodejs \
 
 # TanStack Start with Nitro emits a standalone Node server in `.output`.
 COPY --from=builder --chown=startjs:nodejs /repo/apps/ai-recruitment-copilot/.output ./.output
+COPY --from=builder --chown=startjs:nodejs /repo/apps/ai-recruitment-copilot/drizzle ./drizzle
+COPY --from=builder --chown=startjs:nodejs /repo/apps/ai-recruitment-copilot/scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER startjs
 
@@ -125,4 +129,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOST="0.0.0.0"
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]

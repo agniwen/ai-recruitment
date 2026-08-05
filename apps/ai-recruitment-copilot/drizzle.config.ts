@@ -1,6 +1,7 @@
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import type { Config } from "drizzle-kit";
+import { MIGRATIONS_SCHEMA, MIGRATIONS_TABLE } from "./scripts/migration-settings";
 
 // 中文：drizzle-kit 不会自动加载 .env，且 turbo 调度时 cwd 可能不在本目录，显式指向同级 .env。
 // English: drizzle-kit doesn't auto-load .env, and turbo may run from the repo root —
@@ -21,8 +22,8 @@ export default {
     // 1.0 RC 默认就是 "drizzle"，库里现有的 __drizzle_migrations 也在这里；
     // 显式写出避免未来误改。
     // 1.0 RC defaults to "drizzle"; pin it so the table location is explicit.
-    schema: "drizzle",
-    table: "__drizzle_migrations",
+    schema: MIGRATIONS_SCHEMA,
+    table: MIGRATIONS_TABLE,
   },
   out: "./drizzle",
   schema: "../../packages/db-schema/src/schema.ts",
