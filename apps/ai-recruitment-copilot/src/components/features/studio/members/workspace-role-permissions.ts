@@ -96,6 +96,11 @@ export const WORKSPACE_PERMISSION_GROUPS = [
         label: "标记结案",
       },
       {
+        actions: ["create"] as const,
+        key: "disableResumeEvaluation",
+        label: "禁用评估",
+      },
+      {
         actions: ["create", "read", "update", "delete"] as const,
         key: "jd",
         label: "在招岗位",
@@ -180,6 +185,7 @@ export const PERMISSION_ACTION_LABELS: Record<string, string> = {
 
 const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
   "candidateClose:create": "允许",
+  "disableResumeEvaluation:create": "启用",
   "resumePool:create": "上传",
 };
 
@@ -238,6 +244,10 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
     delete: "允许删除部门。",
     read: "允许加载「部门管理」页面的部门列表、全部部门选项和部门详情。",
     update: "允许编辑部门名称、描述等资料。",
+  },
+  disableResumeEvaluation: {
+    create:
+      "勾选后该角色不能评估简历：简历库详情页与独立详情链接 floating bar 上的「评估通过 / 不通过」按钮会隐藏，相关接口也会拒绝。",
   },
   globalConfig: {
     read: "允许加载「上下文设置」里的全局配置。",

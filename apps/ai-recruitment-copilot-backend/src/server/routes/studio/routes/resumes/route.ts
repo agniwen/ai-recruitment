@@ -26,6 +26,7 @@ import {
   parseResumeFastToProfile,
   validateResumeFile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import {
@@ -456,6 +457,15 @@ export const resumeLibraryRouter = factory
       if (!activeOrg) {
         return c.json({ message: "Unauthorized" }, 401);
       }
+      const authorize = createRequestWorkspaceAuthorizer({
+        headers: c.req.raw.headers,
+        memberRole: c.var.member?.role,
+        organizationId: activeOrg.id,
+        userId: c.var.user?.id,
+      });
+      if (await authorize({ action: "create", resource: "disableResumeEvaluation" })) {
+        return c.json({ error: "当前角色已禁用简历评估。" }, 403);
+      }
       const id = c.req.param("id");
       const visibilityScope = await loadVisibilityScope(
         activeOrg.id,
@@ -544,6 +554,17 @@ export const resumeLibraryRouter = factory
         requestedEvaluationStatus !== existing.resumeEvaluationStatus
       ) {
         return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
+      }
+      if (
+        requestedEvaluationStatus !== existing.resumeEvaluationStatus &&
+        (await createRequestWorkspaceAuthorizer({
+          headers: c.req.raw.headers,
+          memberRole: c.var.member?.role,
+          organizationId: activeOrg.id,
+          userId: c.var.user?.id,
+        })({ action: "create", resource: "disableResumeEvaluation" }))
+      ) {
+        return c.json({ error: "当前角色已禁用简历评估。" }, 403);
       }
       const nextJobDescription =
         jobDescriptionChanged && nextJobDescriptionId
@@ -720,6 +741,17 @@ export const resumeLibraryRouter = factory
         requestedEvaluationStatus !== existing.resumeEvaluationStatus
       ) {
         return c.json({ error: "请先关联在招岗位后再评估。" }, 409);
+      }
+      if (
+        requestedEvaluationStatus !== existing.resumeEvaluationStatus &&
+        (await createRequestWorkspaceAuthorizer({
+          headers: c.req.raw.headers,
+          memberRole: c.var.member?.role,
+          organizationId: activeOrg.id,
+          userId: c.var.user?.id,
+        })({ action: "create", resource: "disableResumeEvaluation" }))
+      ) {
+        return c.json({ error: "当前角色已禁用简历评估。" }, 403);
       }
       const nextJobDescription =
         jobDescriptionChanged && nextJobDescriptionId

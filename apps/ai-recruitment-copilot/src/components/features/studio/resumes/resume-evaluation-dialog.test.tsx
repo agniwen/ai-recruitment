@@ -135,6 +135,14 @@ describe("ResumeEvaluationDialog", () => {
     ).toBe(true);
     expect(
       shouldShowResumeEvaluationActions({
+        canEvaluate: false,
+        hasJobDescription: true,
+        layoutMode: "page",
+        status: null,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowResumeEvaluationActions({
         hasJobDescription: true,
         layoutMode: "page",
         pipelineStage: "screening",

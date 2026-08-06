@@ -152,6 +152,41 @@ export function tabForPipelineStage(stage: PipelineStage): StudioPersonDetailTab
 }
 
 /**
+ * Whether the operator may open the tab that corresponds to `stage`.
+ * Used by the stage action bar so "当前阶段" / post-advance navigation
+ * never lands on a tab the role cannot view.
+ */
+export function canViewPipelineStageTab(
+  stage: PipelineStage,
+  options: {
+    canReadHumanInterview: boolean;
+    canReadOffer: boolean;
+    hasAiInterviewRounds?: boolean;
+    jobDescriptionAiInterviewDisabled?: boolean;
+  },
+): boolean {
+  const tab = tabForPipelineStage(stage);
+  if (tab === "overview") {
+    return true;
+  }
+  const record = {
+    hasAiInterviewRounds: options.hasAiInterviewRounds,
+    jobDescriptionAiInterviewDisabled: options.jobDescriptionAiInterviewDisabled,
+    pipelineStage: stage,
+  };
+  if (tab === "rounds") {
+    return shouldShowAiInterviewTab(record);
+  }
+  if (tab === "human-interview") {
+    return shouldShowHumanInterviewTab(record, options.canReadHumanInterview);
+  }
+  if (tab === "offer") {
+    return shouldShowOfferTab(record, options.canReadOffer);
+  }
+  return true;
+}
+
+/**
  * shell 接收的可填槽位。footer 仅简历模式有值 ——
  * 面试模式的「编辑候选人信息」按钮是嵌在概览 tab 内部的,不走 footer。
  *

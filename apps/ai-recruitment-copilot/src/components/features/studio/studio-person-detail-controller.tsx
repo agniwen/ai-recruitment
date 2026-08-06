@@ -57,6 +57,7 @@ import { pipelineStageMeta, scheduleEntryStatusMeta } from "@arc/db-schema/studi
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 
 import {
+  canViewPipelineStageTab,
   findCachedResumeCandidateName,
   renderHeaderDescription,
   shouldShowAiInterviewTab,
@@ -173,6 +174,8 @@ export function useStudioPersonDetailController({
   const hasUpdateOfferPermission = useHasPermission("offer", "update");
   const hasDeleteOfferPermission = useHasPermission("offer", "delete");
   const hasCreateCandidateClosePermission = useHasPermission("candidateClose", "create");
+  // Deny flag: when the role has disableResumeEvaluation, evaluation UI is hidden.
+  const isResumeEvaluationDisabled = useHasPermission("disableResumeEvaluation", "create");
   const canReadHumanInterview = canUseManagementActions && hasReadHumanInterviewPermission;
   const canUpdateInterview = canUseManagementActions && hasUpdateInterviewPermission;
   // Same gate as 简历库列表 card「编辑」: resumeLibrary:update in authed mode.
@@ -187,6 +190,7 @@ export function useStudioPersonDetailController({
   const canUpdateOffer = canUseManagementActions && hasUpdateOfferPermission;
   const canDeleteOffer = canUseManagementActions && hasDeleteOfferPermission;
   const canCloseCandidate = canUseManagementActions && hasCreateCandidateClosePermission;
+  const canEvaluateResume = canUseManagementActions && !isResumeEvaluationDisabled;
   if (!isPublic && !optionalSlug) {
     throw new Error(
       'StudioPersonDetailPanel(accessMode="authed"|"review") must run under a /w/[slug] route',
@@ -700,6 +704,7 @@ export function useStudioPersonDetailController({
   const actionBarPipelineStage = visiblePipelineStage ?? record?.pipelineStage;
   const actionBarAiRound = candidateRounds.at(-1);
   const resumeEvaluationActions = shouldShowResumeEvaluationActions({
+    canEvaluate: canEvaluateResume,
     hasJobDescription: Boolean(resumeRecord?.jobDescriptionId),
     layoutMode,
     pipelineStage: resumeRecord?.pipelineStage ?? record?.pipelineStage,
@@ -784,7 +789,22 @@ export function useStudioPersonDetailController({
           }
           toast.success(`已推进到「${pipelineStageMeta[target].label}」`);
           setOptimisticPipelineStage(target);
-          setActiveTab(tabForPipelineStage(target));
+          // Only switch tab when the operator can actually view it (e.g. offer
+          // create without offer:read must not land on a hidden offer tab).
+          const advancedTab = tabForPipelineStage(target);
+          if (
+            canViewPipelineStageTab(target, {
+              canReadHumanInterview,
+              canReadOffer,
+              hasAiInterviewRounds:
+                target === "ai_interview" ||
+                candidateRounds.length > 0 ||
+                Boolean(tabVisibilityRecord?.hasAiInterviewRounds),
+              jobDescriptionAiInterviewDisabled: record.jobDescriptionAiInterviewDisabled,
+            })
+          ) {
+            setActiveTab(advancedTab);
+          }
           onUpdated?.();
         }}
         onRequestClose={() =>
@@ -793,7 +813,13 @@ export function useStudioPersonDetailController({
         onRequestReactivate={() =>
           onRequestReactivate?.({ candidateName: record.candidateName, id: record.id })
         }
-        onViewCurrentStage={() => setActiveTab(tabForPipelineStage(actionBarPipelineStage))}
+        onViewCurrentStage={() => {
+          const tab = tabForPipelineStage(actionBarPipelineStage);
+          // No permission / stage tab hidden → keep current tab (do not navigate).
+          if (availableTabs.has(tab)) {
+            setActiveTab(tab);
+          }
+        }}
         pipelineStage={actionBarPipelineStage}
         primaryAction={launchResumeModeButtonContent}
       />
@@ -801,7 +827,7 @@ export function useStudioPersonDetailController({
   const headerActionBar = layoutMode === "modal" ? actionBar : null;
   const floatingActionBar = layoutMode === "page" ? actionBar : null;
   const resumeEvaluationDialog =
-    mode === "resume" && canUseManagementActions && record ? (
+    mode === "resume" && canEvaluateResume && record ? (
       <ResumeEvaluationDialog
         decision={evaluationDecision}
         onDecisionChange={setEvaluationDecision}

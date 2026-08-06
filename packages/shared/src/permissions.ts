@@ -77,6 +77,8 @@ export const statement = {
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
+  // When granted, the role cannot evaluate resumes (deny flag; checked = blocked).
+  disableResumeEvaluation: ["create"],
   globalConfig: ["read", "update"],
   hiringUnit: ["create", "read", "update", "delete"],
   humanInterview: ["create", "read", "update", "delete"],

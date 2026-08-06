@@ -11,6 +11,7 @@ import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-ba
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import { resumeEvaluationStatusSubmitSchema } from "@arc/shared/studio-resumes";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
+import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { getWorkspaceRequestContext } from "@arc/ai-recruitment-copilot-backend/server/context/workspace-request-context";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
@@ -459,6 +460,15 @@ export const resumeLibraryReadRouter = factory
       const { activeOrg } = c.var;
       if (!activeOrg) {
         return c.json({ message: "Unauthorized" }, 401);
+      }
+      const authorize = createRequestWorkspaceAuthorizer({
+        headers: c.req.raw.headers,
+        memberRole: c.var.member?.role,
+        organizationId: activeOrg.id,
+        userId: c.var.user?.id,
+      });
+      if (await authorize({ action: "create", resource: "disableResumeEvaluation" })) {
+        return c.json({ error: "当前角色已禁用简历评估。" }, 403);
       }
       const id = c.req.param("id");
       const existing = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
