@@ -20,6 +20,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "resumes",
   "resumePool",
   "interviews",
+  "calendar",
   "dashboard",
   "hiringUnits",
   "departments",
@@ -37,6 +38,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
 
 export const STUDIO_PAGE_PERMISSION_LABELS = {
   // page:chat still keys the former Chat browse flag; UI now gates the Agent tab.
+  calendar: "日程管理",
   chat: "Agent",
   dashboard: "数据看板",
   departments: "部门管理",
@@ -59,6 +61,7 @@ const memberStudioPagePermissions = [
   "resumes",
   "resumePool",
   "interviews",
+  "calendar",
   "hiringUnits",
   "departments",
   "interviewers",

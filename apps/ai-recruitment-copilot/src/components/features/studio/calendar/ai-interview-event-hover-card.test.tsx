@@ -23,6 +23,23 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 
+const permissionMocks = vi.hoisted(() => ({
+  canViewCandidate: true,
+  canViewInterview: true,
+}));
+
+vi.mock("@/hooks/use-has-permission", () => ({
+  useHasPermission: (resource: string, action: string) => {
+    if (resource === "page" && action === "resumes") {
+      return permissionMocks.canViewCandidate;
+    }
+    if (resource === "page" && action === "interviews") {
+      return permissionMocks.canViewInterview;
+    }
+    return false;
+  },
+}));
+
 const event: StudioAiCalendarEvent = {
   candidates: [
     {
@@ -72,6 +89,8 @@ const preview: StudioAiCalendarEventPreview = {
 
 afterEach(() => {
   document.body.innerHTML = "";
+  permissionMocks.canViewCandidate = true;
+  permissionMocks.canViewInterview = true;
   vi.clearAllMocks();
 });
 
@@ -147,6 +166,43 @@ describe("AiInterviewEventHoverCard", () => {
       expect(document.body.textContent).toContain("张三");
       expect(document.body.textContent).toContain("AI 面试记录 · 技术初筛");
       expect(document.body.textContent).toContain("AI 面试详情加载失败，请稍后重试。");
+    });
+
+    act(() => root.unmount());
+  });
+
+  it("hides candidate and interview links without the matching page permissions", async () => {
+    permissionMocks.canViewCandidate = false;
+    permissionMocks.canViewInterview = false;
+    fetchPreviewMock.mockResolvedValue(preview);
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <AiInterviewEventHoverCard
+            event={event}
+            slug="demo"
+            trigger={<button type="button">张三 · 技术初筛</button>}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector("button")?.focus();
+      await vi.waitFor(() => expect(fetchPreviewMock).toHaveBeenCalled());
+    });
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain("前端工程师");
+      expect(document.body.textContent).not.toContain("查看候选人");
+      expect(document.body.textContent).not.toContain("查看面试");
     });
 
     act(() => root.unmount());

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useHasPermission } from "@/hooks/use-has-permission";
 import { fetchStudioAiCalendarEventPreview } from "@/lib/client/api/endpoints/studio-calendar";
 import { studioCalendarKeys } from "@/lib/client/api/query-keys";
 
@@ -81,10 +82,14 @@ function PreviewSkeleton() {
 }
 
 function PreviewContent({
+  canViewCandidate,
+  canViewInterview,
   preview,
   source,
   slug,
 }: {
+  canViewCandidate: boolean;
+  canViewInterview: boolean;
   preview: StudioAiCalendarEventPreview;
   source: StudioAiCalendarEvent["source"];
   slug: string;
@@ -150,24 +155,30 @@ function PreviewContent({
         </p>
       )}
 
-      <div className="flex justify-end gap-1 border-border/70 border-t pt-2">
-        <Link
-          className={buttonVariants({ size: "xs", variant: "ghost" })}
-          params={{ recordId: preview.candidate.id, slug }}
-          search={{ tab: "rounds" }}
-          to="/w/$slug/studio/resumes/$recordId"
-        >
-          查看候选人
-        </Link>
-        <Link
-          className={buttonVariants({ size: "xs", variant: "outline" })}
-          params={{ slug }}
-          search={{ roundId: preview.round.id }}
-          to="/w/$slug/studio/interviews"
-        >
-          查看面试
-        </Link>
-      </div>
+      {canViewCandidate || canViewInterview ? (
+        <div className="flex justify-end gap-1 border-border/70 border-t pt-2">
+          {canViewCandidate ? (
+            <Link
+              className={buttonVariants({ size: "xs", variant: "ghost" })}
+              params={{ recordId: preview.candidate.id, slug }}
+              search={{ tab: "rounds" }}
+              to="/w/$slug/studio/resumes/$recordId"
+            >
+              查看候选人
+            </Link>
+          ) : null}
+          {canViewInterview ? (
+            <Link
+              className={buttonVariants({ size: "xs", variant: "outline" })}
+              params={{ slug }}
+              search={{ roundId: preview.round.id }}
+              to="/w/$slug/studio/interviews"
+            >
+              查看面试
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -181,6 +192,8 @@ export function AiInterviewEventHoverCard({
   slug: string;
   trigger: ReactElement;
 }) {
+  const canViewCandidate = useHasPermission("page", "resumes");
+  const canViewInterview = useHasPermission("page", "interviews");
   const [open, setOpen] = useState(false);
   const [candidate] = event.candidates;
   const roundId = candidate?.roundId ?? "";
@@ -219,7 +232,13 @@ export function AiInterviewEventHoverCard({
           </div>
         ) : null}
         {previewQuery.data ? (
-          <PreviewContent preview={previewQuery.data} slug={slug} source={event.source} />
+          <PreviewContent
+            canViewCandidate={canViewCandidate}
+            canViewInterview={canViewInterview}
+            preview={previewQuery.data}
+            slug={slug}
+            source={event.source}
+          />
         ) : null}
       </HoverCardContent>
     </HoverCard>

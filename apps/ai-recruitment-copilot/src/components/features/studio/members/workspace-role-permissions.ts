@@ -190,6 +190,8 @@ const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
 };
 
 const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
+  calendar:
+    "控制是否能在侧边栏看到并访问「日程管理」页面；未勾选时侧边栏不展示入口，直接访问会进入 404。日程列表与 AI 面试事件预览接口也受该页面权限控制。日历事件 hovercard 上的「查看候选人 / 查看面试」仍分别受「简历库」「AI 面试」页面权限控制。",
   chat: "控制是否能使用侧边栏 Agent tab 并访问 Agent 页面；未勾选时 Agent tab 会禁用，直接访问或点击会跳回 Studio 简历库。页面内接口暂不按该页面权限限制。",
   dashboard: "控制是否能在侧边栏看到并访问「数据看板」页面；未勾选时直接访问会进入 404。",
   departments:
@@ -203,7 +205,7 @@ const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
   interviewers:
     "控制是否能在侧边栏看到并访问「AI面试官设置」页面；面试官列表、详情和增删改仍受「面试官」相关权限控制。",
   interviews:
-    "控制是否能在侧边栏看到并访问「AI 面试」页面；列表、详情、报告、录音、轮次和操作仍受「AI 面试」相关权限控制。",
+    "控制是否能在侧边栏看到并访问「AI 面试」页面；列表、详情、报告、录音、轮次和操作仍受「AI 面试」相关权限控制。日程管理 hovercard 的「查看面试」也依赖该权限。",
   jobDescriptions:
     "控制是否能在侧边栏看到并访问「岗位设置」页面；岗位列表、详情和增删改仍受「在招岗位」相关权限控制，推荐候选人还需要「简历库」和「公共简历池」查看权限。",
   mailIngestAccounts:
@@ -216,7 +218,7 @@ const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
   resumePool:
     "控制是否能在侧边栏看到并访问「公共简历池」页面；未勾选时直接访问会进入 404。页面内数据接口仍受「公共简历池」业务权限控制。",
   resumes:
-    "控制是否能在侧边栏看到并访问「简历库」页面；未勾选时直接访问会进入 404。简历库数据接口仍受「简历库」业务权限控制，上传批次有独立权限。",
+    "控制是否能在侧边栏看到并访问「简历库」页面；未勾选时直接访问会进入 404。简历库数据接口仍受「简历库」业务权限控制，上传批次有独立权限。日程管理 hovercard 的「查看候选人」也依赖该权限。",
 };
 
 const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<string, string>>> = {

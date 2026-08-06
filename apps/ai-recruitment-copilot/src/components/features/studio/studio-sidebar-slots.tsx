@@ -75,7 +75,7 @@ const navGroups: NavGroup[] = [
         title: "AI 面试",
       },
       {
-        action: "interviews",
+        action: "calendar",
         icon: CalendarEventIcon,
         path: "/studio/calendar",
         resource: "page",

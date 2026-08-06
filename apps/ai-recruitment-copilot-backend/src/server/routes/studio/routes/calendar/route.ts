@@ -9,7 +9,7 @@ export const studioCalendarRouter = factory
   .createApp()
   .get(
     "/ai-events/:roundId/preview",
-    requirePermission("interview", "read"),
+    requirePermission("page", "calendar"),
     zValidator("query", studioAiCalendarPreviewQuerySchema, jsonValidatorError("预览参数无效。")),
     async (c) => {
       const { activeOrg, member, user } = c.var;
@@ -37,7 +37,7 @@ export const studioCalendarRouter = factory
   )
   .get(
     "/",
-    requirePermission("interview", "read"),
+    requirePermission("page", "calendar"),
     zValidator("query", studioCalendarQuerySchema, jsonValidatorError("日程查询参数无效。")),
     async (c) => {
       const { activeOrg, member, user } = c.var;
