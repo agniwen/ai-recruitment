@@ -33,8 +33,13 @@ import {
   resolvePublicInterviewRecordId,
   resolveStudioInterviewRecordId,
 } from "@/lib/client/api";
-import { useOptionalWorkspaceSlug } from "@/lib/client/workspace-context";
+import {
+  useOptionalWorkspaceMemberRole,
+  useOptionalWorkspacePermissions,
+  useOptionalWorkspaceSlug,
+} from "@/lib/client/workspace-context";
 import { runAsyncAction } from "@/lib/client/async-control";
+import { isResumeEvaluationDisabled } from "@arc/shared/permission-statements";
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -174,8 +179,8 @@ export function useStudioPersonDetailController({
   const hasUpdateOfferPermission = useHasPermission("offer", "update");
   const hasDeleteOfferPermission = useHasPermission("offer", "delete");
   const hasCreateCandidateClosePermission = useHasPermission("candidateClose", "create");
-  // Deny flag: when the role has disableResumeEvaluation, evaluation UI is hidden.
-  const isResumeEvaluationDisabled = useHasPermission("disableResumeEvaluation", "create");
+  const memberRole = useOptionalWorkspaceMemberRole();
+  const workspacePermissions = useOptionalWorkspacePermissions();
   const canReadHumanInterview = canUseManagementActions && hasReadHumanInterviewPermission;
   const canUpdateInterview = canUseManagementActions && hasUpdateInterviewPermission;
   // Same gate as 简历库列表 card「编辑」: resumeLibrary:update in authed mode.
@@ -190,7 +195,9 @@ export function useStudioPersonDetailController({
   const canUpdateOffer = canUseManagementActions && hasUpdateOfferPermission;
   const canDeleteOffer = canUseManagementActions && hasDeleteOfferPermission;
   const canCloseCandidate = canUseManagementActions && hasCreateCandidateClosePermission;
-  const canEvaluateResume = canUseManagementActions && !isResumeEvaluationDisabled;
+  // Deny flag on custom roles; owner/admin always evaluate (see isResumeEvaluationDisabled).
+  const canEvaluateResume =
+    canUseManagementActions && !isResumeEvaluationDisabled(workspacePermissions, memberRole);
   if (!isPublic && !optionalSlug) {
     throw new Error(
       'StudioPersonDetailPanel(accessMode="authed"|"review") must run under a /w/[slug] route',

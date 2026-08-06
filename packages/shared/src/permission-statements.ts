@@ -1,3 +1,4 @@
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import type { statement } from "@arc/shared/permissions";
 
 /**
@@ -22,6 +23,24 @@ export function hasPermissionInStatements<R extends PermissionResource>(
     return false;
   }
   return (allowed as readonly string[]).includes(action);
+}
+
+/**
+ * Resume evaluation deny flag (`disableResumeEvaluation:create`).
+ *
+ * - Default: anyone may evaluate (Google login etc.) — flag not present.
+ * - Custom roles (e.g. 专员): check the matrix box to disable evaluation.
+ * - owner/admin always evaluate: they hold the flag only so Better Auth allows
+ *   them to assign it (subset rule), not to block themselves.
+ */
+export function isResumeEvaluationDisabled(
+  statements: WorkspacePermissionStatements | null | undefined,
+  memberRole: string | null | undefined,
+): boolean {
+  if (isWorkspaceAdministratorRole(memberRole)) {
+    return false;
+  }
+  return hasPermissionInStatements(statements, "disableResumeEvaluation", "create");
 }
 
 /**

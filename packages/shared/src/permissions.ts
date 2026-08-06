@@ -77,8 +77,6 @@ export const statement = {
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
-  // When granted, the role cannot evaluate resumes (deny flag; checked = blocked).
-  disableResumeEvaluation: ["create"],
   globalConfig: ["read", "update"],
   hiringUnit: ["create", "read", "update", "delete"],
   humanInterview: ["create", "read", "update", "delete"],
@@ -89,6 +87,10 @@ export const statement = {
   offer: ["create", "read", "update", "delete"],
   page: STUDIO_PAGE_PERMISSION_ACTIONS,
   questionTemplate: ["create", "read", "update", "delete"],
+  // Deny flag (勾选 = 不能评估). Default for all roles is allow evaluation.
+  // owner/admin hold create so Better Auth lets them assign the flag to others;
+  // isResumeEvaluationDisabled() ignores this flag for owner/admin themselves.
+  disableResumeEvaluation: ["create"],
   resumeLibrary: ["create", "read", "update", "delete"],
   resumePool: ["create", "read", "publish", "import", "delete"],
   resumeUploadBatch: ["create", "read", "process", "cancel", "delete"],
@@ -109,6 +111,8 @@ export const owner = ac.newRole({
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
+  // Hold for assignment only — evaluation is never disabled for owner (see helper).
+  disableResumeEvaluation: ["create"],
   globalConfig: ["read", "update"],
   hiringUnit: ["create", "read", "update", "delete"],
   humanInterview: ["create", "read", "update", "delete"],
@@ -146,6 +150,8 @@ export const admin = ac.newRole({
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
+  // Hold for assignment only — evaluation is never disabled for admin (see helper).
+  disableResumeEvaluation: ["create"],
   globalConfig: ["read", "update"],
   hiringUnit: ["create", "read", "update", "delete"],
   humanInterview: ["create", "read", "update", "delete"],
@@ -178,6 +184,7 @@ const recruitingMemberStatements = {
   offer: ["create", "read", "update", "delete"],
   page: memberStudioPagePermissions,
   questionTemplate: ["create", "read", "update", "delete"],
+  // member can evaluate by default; does not hold disableResumeEvaluation.
   resumeLibrary: ["create", "read", "update", "delete"],
   resumePool: ["create", "read", "publish", "import", "delete"],
   resumeUploadBatch: ["create", "read", "process", "cancel", "delete"],

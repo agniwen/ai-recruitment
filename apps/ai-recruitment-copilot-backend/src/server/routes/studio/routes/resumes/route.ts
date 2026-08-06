@@ -27,6 +27,7 @@ import {
   validateResumeFile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import {
@@ -463,7 +464,12 @@ export const resumeLibraryRouter = factory
         organizationId: activeOrg.id,
         userId: c.var.user?.id,
       });
-      if (await authorize({ action: "create", resource: "disableResumeEvaluation" })) {
+      // Deny flag: custom roles with 禁用评估 cannot evaluate. owner/admin hold the
+      // flag only for assignment and always pass this check.
+      if (
+        (await authorize({ action: "create", resource: "disableResumeEvaluation" })) &&
+        !isWorkspaceAdministratorRole(c.var.member?.role)
+      ) {
         return c.json({ error: "当前角色已禁用简历评估。" }, 403);
       }
       const id = c.req.param("id");
@@ -562,7 +568,8 @@ export const resumeLibraryRouter = factory
           memberRole: c.var.member?.role,
           organizationId: activeOrg.id,
           userId: c.var.user?.id,
-        })({ action: "create", resource: "disableResumeEvaluation" }))
+        })({ action: "create", resource: "disableResumeEvaluation" })) &&
+        !isWorkspaceAdministratorRole(c.var.member?.role)
       ) {
         return c.json({ error: "当前角色已禁用简历评估。" }, 403);
       }
@@ -749,7 +756,8 @@ export const resumeLibraryRouter = factory
           memberRole: c.var.member?.role,
           organizationId: activeOrg.id,
           userId: c.var.user?.id,
-        })({ action: "create", resource: "disableResumeEvaluation" }))
+        })({ action: "create", resource: "disableResumeEvaluation" })) &&
+        !isWorkspaceAdministratorRole(c.var.member?.role)
       ) {
         return c.json({ error: "当前角色已禁用简历评估。" }, 403);
       }

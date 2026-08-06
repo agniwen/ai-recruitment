@@ -49,7 +49,7 @@ const EMPTY_TIME_SLOT: TimeSlotFormValue = { endAt: "", startAt: "" };
 /**
  * Floating-bar resume pass/fail actions: page layout only, job-bound, not passed, not closed.
  * 仅在独立详情页 + 已关联岗位 + 尚未评估通过 + 未结案时展示「评估通过 / 不通过」。
- * `canEvaluate` is false when the role has disableResumeEvaluation (勾选「禁用评估」).
+ * `canEvaluate` is false when the role has 禁用评估 (disableResumeEvaluation).
  */
 export function shouldShowResumeEvaluationActions(input: {
   canEvaluate?: boolean;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clonePermissionStatements,
   hasPermissionInStatements,
+  isResumeEvaluationDisabled,
   normalizePermissionStatements,
 } from "@arc/shared/permission-statements";
 
@@ -16,6 +17,16 @@ describe("permission-statements", () => {
     expect(hasPermissionInStatements(statements, "interview", "delete")).toBe(false);
     expect(hasPermissionInStatements(statements, "page", "resumes")).toBe(true);
     expect(hasPermissionInStatements(undefined, "page", "resumes")).toBe(false);
+  });
+
+  it("treats disableResumeEvaluation as a deny flag except for owner/admin", () => {
+    const disabled = { disableResumeEvaluation: ["create"] as "create"[] };
+    expect(isResumeEvaluationDisabled(disabled, "02-recruitment-specialist")).toBe(true);
+    expect(isResumeEvaluationDisabled(disabled, "member")).toBe(true);
+    expect(isResumeEvaluationDisabled(disabled, "owner")).toBe(false);
+    expect(isResumeEvaluationDisabled(disabled, "admin")).toBe(false);
+    expect(isResumeEvaluationDisabled({}, "member")).toBe(false);
+    expect(isResumeEvaluationDisabled(undefined, "member")).toBe(false);
   });
 
   it("normalizes unknown and invalid permission blobs", () => {

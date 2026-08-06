@@ -12,6 +12,7 @@ import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-back
 import { resumeEvaluationStatusSubmitSchema } from "@arc/shared/studio-resumes";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import { getWorkspaceRequestContext } from "@arc/ai-recruitment-copilot-backend/server/context/workspace-request-context";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
@@ -467,7 +468,10 @@ export const resumeLibraryReadRouter = factory
         organizationId: activeOrg.id,
         userId: c.var.user?.id,
       });
-      if (await authorize({ action: "create", resource: "disableResumeEvaluation" })) {
+      if (
+        (await authorize({ action: "create", resource: "disableResumeEvaluation" })) &&
+        !isWorkspaceAdministratorRole(c.var.member?.role)
+      ) {
         return c.json({ error: "当前角色已禁用简历评估。" }, 403);
       }
       const id = c.req.param("id");

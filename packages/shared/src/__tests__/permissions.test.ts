@@ -264,9 +264,9 @@ describe("permission matrix cross-cut", () => {
     ["admin", "candidateClose", "create", true],
     ["member", "candidateClose", "create", true],
     ["noAccess", "candidateClose", "create", false],
-    // disableResumeEvaluation — deny flag; built-in roles must not have it
-    ["owner", "disableResumeEvaluation", "create", false],
-    ["admin", "disableResumeEvaluation", "create", false],
+    // disableResumeEvaluation — deny flag; owner/admin hold it for assignment only
+    ["owner", "disableResumeEvaluation", "create", true],
+    ["admin", "disableResumeEvaluation", "create", true],
     ["member", "disableResumeEvaluation", "create", false],
     ["noAccess", "disableResumeEvaluation", "create", false],
     // candidateForm / questionTemplate

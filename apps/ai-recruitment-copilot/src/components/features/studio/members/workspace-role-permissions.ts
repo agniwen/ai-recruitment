@@ -247,7 +247,7 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
   },
   disableResumeEvaluation: {
     create:
-      "勾选后该角色不能评估简历：简历库详情页与独立详情链接 floating bar 上的「评估通过 / 不通过」按钮会隐藏，相关接口也会拒绝。",
+      "勾选后该角色不能评估简历（默认所有角色都能评估）。仅对自定义角色生效；拥有者/管理员始终可评估。勾选后详情 floating bar 隐藏评估按钮，相关接口也会拒绝。",
   },
   globalConfig: {
     read: "允许加载「上下文设置」里的全局配置。",
