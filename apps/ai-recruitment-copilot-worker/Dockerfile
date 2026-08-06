@@ -49,6 +49,7 @@ ENV NODE_ENV=production
 ENV WORKER_HOST="0.0.0.0"
 ENV WORKER_PORT=8790
 ENV LIBREOFFICE_BIN=/usr/bin/soffice
+ENV TZ=Asia/Shanghai
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \

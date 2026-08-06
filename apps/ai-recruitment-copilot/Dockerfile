@@ -128,6 +128,7 @@ USER startjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOST="0.0.0.0"
+ENV TZ=Asia/Shanghai
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]

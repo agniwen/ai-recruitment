@@ -19,6 +19,10 @@ async function startFeishuBotsIfEnabled(): Promise<(() => Promise<void>) | null>
 async function main() {
   loadStandaloneEnv();
 
+  if (!process.env.TZ) {
+    process.env.TZ = "Asia/Shanghai";
+  }
+
   const runtime = new RuntimeCloseStack();
   try {
     const { hostname, port } = resolveStandaloneServerConfig();

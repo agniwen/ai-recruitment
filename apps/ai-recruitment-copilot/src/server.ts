@@ -73,6 +73,9 @@ function isOgImageRequest(request: Request) {
 
 export default createServerEntry({
   async fetch(request, options) {
+    if (!process.env.TZ) {
+      process.env.TZ = "Asia/Shanghai";
+    }
     applyServerEnv();
 
     if (isHealthRequest(request)) {
