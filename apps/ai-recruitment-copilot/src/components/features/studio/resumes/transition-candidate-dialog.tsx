@@ -102,7 +102,6 @@ function CloseDialog({
   const [joiningPosition, setJoiningPosition] = useState("");
   // 淘汰细节
   const [category, setCategory] = useState<CloseCategory | "">("");
-  const [talentPoolEligible, setTalentPoolEligible] = useState(false);
   const [revisitAfter, setRevisitAfter] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -119,7 +118,6 @@ function CloseDialog({
     setJoiningDepartment("");
     setJoiningPosition("");
     setCategory("");
-    setTalentPoolEligible(false);
     setRevisitAfter("");
   }, [open, initialOutcome]);
 
@@ -153,7 +151,6 @@ function CloseDialog({
           closedMeta.category = category || null;
           closedMeta.rejectionDetails = {
             revisitAfter: revisitAfter || null,
-            talentPoolEligible,
           };
         }
 
@@ -182,7 +179,7 @@ function CloseDialog({
         <DialogHeader>
           <DialogTitle>标记结案：{candidateLabel}</DialogTitle>
           <DialogDescription>
-            选择候选人的最终结论。所在阶段会被同步置为「已结案」，便于人才库归类与统计。
+            选择候选人的最终结论。所在阶段会被同步置为「已结案」，便于归类与统计。
           </DialogDescription>
         </DialogHeader>
 
@@ -264,31 +261,16 @@ function CloseDialog({
                     ))}
                   </NativeSelect>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    aria-label="进入人才库"
-                    checked={talentPoolEligible}
-                    className="size-4 accent-foreground"
-                    id="talent-pool"
-                    onChange={(e) => setTalentPoolEligible(e.target.checked)}
-                    type="checkbox"
-                  />
-                  <Label className="cursor-pointer text-sm" htmlFor="talent-pool">
-                    进入人才库（未来可召回）
+                <div className="grid gap-1.5">
+                  <Label className="text-xs" htmlFor="revisit-after">
+                    建议多久后再联系（可选）
                   </Label>
+                  <DatePicker
+                    id="revisit-after"
+                    onValueChange={setRevisitAfter}
+                    value={revisitAfter}
+                  />
                 </div>
-                {talentPoolEligible ? (
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs" htmlFor="revisit-after">
-                      建议多久后再联系（可选）
-                    </Label>
-                    <DatePicker
-                      id="revisit-after"
-                      onValueChange={setRevisitAfter}
-                      value={revisitAfter}
-                    />
-                  </div>
-                ) : null}
               </CardContent>
             </Card>
           ) : null}
