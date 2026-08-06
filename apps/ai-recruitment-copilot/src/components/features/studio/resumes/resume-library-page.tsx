@@ -103,6 +103,7 @@ export function ResumeLibraryPage() {
   const canCreateResumeLibrary = useHasPermission("resumeLibrary", "create");
   const canUpdateResumeLibrary = useHasPermission("resumeLibrary", "update");
   const canDeleteResumeLibrary = useHasPermission("resumeLibrary", "delete");
+  const canCloseCandidate = useHasPermission("candidateClose", "create");
   const canReadResumeUploadBatch = useHasPermission("resumeUploadBatch", "read");
   const canCreateResumeUploadBatch = useHasPermission("resumeUploadBatch", "create");
   const canRetryResumeParse = useHasPermission("resumeUploadBatch", "process");
@@ -663,6 +664,7 @@ export function ResumeLibraryPage() {
           </TabsList>
         </Tabs>
         <ResumeLibraryCardList
+          canCloseCandidate={canCloseCandidate}
           canCreateInterview={canCreateInterview}
           canDeleteResumeLibrary={canDeleteResumeLibrary}
           canForceReparse={canForceReparse}

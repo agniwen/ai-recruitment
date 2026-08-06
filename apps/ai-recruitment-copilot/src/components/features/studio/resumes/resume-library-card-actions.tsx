@@ -42,6 +42,7 @@ const ACTION_BUTTON_CLASS = "h-8 gap-1 px-2 text-xs";
 
 type ResumeLibraryCardActionsProps = Pick<
   ResumeLibraryCardProps,
+  | "canCloseCandidate"
   | "canCreateInterview"
   | "canDeleteResumeLibrary"
   | "canForceReparse"
@@ -228,6 +229,7 @@ function MoreMenu({
 
 // oxlint-disable-next-line complexity -- Card actions reflect permissions and the record's parse, review, and import states.
 export function ResumeLibraryCardActions({
+  canCloseCandidate,
   canCopyLink,
   canCreateInterview,
   canDeleteResumeLibrary,
@@ -266,10 +268,8 @@ export function ResumeLibraryCardActions({
     record.pipelineStage !== "closed";
   const canPreviewFromMenu =
     !canEditResumeRecord(record.resumeParseStatus) && record.hasResumeFile && previewable;
-  const canClose =
-    canUpdateResumeLibrary &&
-    canEditResumeRecord(record.resumeParseStatus) &&
-    record.pipelineStage !== "closed";
+  // Close is gated only by candidateClose:create — no other resource permission required.
+  const canClose = canCloseCandidate && record.pipelineStage !== "closed";
   const canReactivate =
     canUpdateResumeLibrary &&
     canEditResumeRecord(record.resumeParseStatus) &&

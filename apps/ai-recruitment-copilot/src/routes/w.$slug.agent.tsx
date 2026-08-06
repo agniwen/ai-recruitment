@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { hasPermissionInStatements } from "@arc/shared/permission-statements";
 import { ChatHeader, ChatHeaderTitleProvider } from "@/components/features/chat/chat-header";
 import { PendingOutlet } from "@/components/layout/pending-outlet";
 import { SidebarInset } from "@/components/ui/sidebar";
@@ -31,6 +32,19 @@ function AgentShellRoute() {
 
 export const Route = createFileRoute("/w/$slug/agent")({
   component: AgentShellRoute,
+  // Reuse page:chat (「聊天助手」/ Chat page browse). Without it, bounce to Studio 简历库.
+  loader: async ({ params, parentMatchPromise }) => {
+    const parentMatch = await parentMatchPromise;
+    const state = parentMatch.loaderData;
+    if (
+      !state ||
+      state.status !== "ready" ||
+      !hasPermissionInStatements(state.permissions, "page", "chat")
+    ) {
+      throw redirect({ href: `/w/${params.slug}/studio/resumes` });
+    }
+    return null;
+  },
   head: ({ matches }) => ({
     meta: documentTitleMeta(matches),
   }),

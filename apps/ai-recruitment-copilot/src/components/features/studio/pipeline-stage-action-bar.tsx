@@ -46,6 +46,8 @@ export interface PipelineStageActionBarProps {
   aiInterviewDisabled?: boolean;
   canCreateHumanInterview?: boolean;
   canCreateOffer?: boolean;
+  /** When false, hide the 标记结案 button (needs candidateClose:create). */
+  canCloseCandidate?: boolean;
   hasJobDescription?: boolean;
   missingJobAction?: ReactNode;
   resumeEvaluationPassed?: boolean;
@@ -102,6 +104,7 @@ export function PipelineStageActionBar({
   aiInterviewDisabled = false,
   canCreateHumanInterview = true,
   canCreateOffer = true,
+  canCloseCandidate = true,
   hasJobDescription = true,
   missingJobAction,
   resumeEvaluationPassed = true,
@@ -173,7 +176,7 @@ export function PipelineStageActionBar({
     Boolean(aiRoundCopyLinkAction) ||
     Boolean(aiRoundResetAction) ||
     actions.right.length > 0;
-  const canClose = pipelineStage !== "closed";
+  const canClose = canCloseCandidate && pipelineStage !== "closed";
 
   return (
     <div

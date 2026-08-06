@@ -70,11 +70,14 @@ describe("PipelineStageActionBar floating actions", () => {
   it("gates human interview and offer stage actions by create permissions", () => {
     expect(source).toContain("canCreateHumanInterview?: boolean;");
     expect(source).toContain("canCreateOffer?: boolean;");
+    expect(source).toContain("canCloseCandidate?: boolean;");
     expect(source).toContain("hasJobDescription?: boolean;");
     expect(source).toContain("canCreateHumanInterview = true");
     expect(source).toContain("canCreateOffer = true");
-    expect(source).toContain("&& canCreateHumanInterview");
-    expect(source).toContain("if (canCreateOffer) {");
+    expect(source).toContain("canCloseCandidate = true");
+    expect(source).toContain("canCreate: canCreateHumanInterview");
+    expect(source).toContain("if (canCreateOffer && hasJobDescription) {");
+    expect(source).toContain('canCloseCandidate && pipelineStage !== "closed"');
     expect(source).toContain('hasEvent({ type: "SKIP_TO_HUMAN_INTERVIEW" })');
     expect(source).toContain('hasEvent({ type: "ADVANCE_TO_OFFER" })');
     expect(source).toContain("canApplyCandidatePipelineEvent");

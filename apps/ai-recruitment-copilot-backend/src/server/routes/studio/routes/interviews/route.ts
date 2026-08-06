@@ -337,7 +337,9 @@ export const studioInterviewsRouter = factory
   })
   .post(
     "/:id/transition",
-    requirePermission("interview", "update"),
+    // Auth is stage-specific inside transitionCandidateStage (offer:create /
+    // humanInterview:create / interview:update). Do not blanket-require
+    // interview:update here — late-stage roles like ODC only hold offer:*.
     zValidator("json", transitionInputSchema, jsonValidatorError("阶段流转参数无效。")),
     async (c) => {
       // 候选人阶段流转：用于「标记结案 + outcome」「重新激活」「推进到下一阶段」。

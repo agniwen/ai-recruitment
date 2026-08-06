@@ -18,8 +18,17 @@ vi.mock("@tanstack/react-router", () => ({
     select({ location: { pathname: routerMocks.pathname } }),
 }));
 
+const permissionMocks = vi.hoisted(() => ({
+  canAccessAgent: true,
+}));
+
 vi.mock("@/lib/client/workspace-context", () => ({
   useWorkspaceSlug: () => "acme",
+}));
+
+vi.mock("@/hooks/use-has-permission", () => ({
+  useHasPermission: (resource: string, action: string) =>
+    resource === "page" && action === "chat" ? permissionMocks.canAccessAgent : false,
 }));
 
 vi.mock("@/components/ui/tabs", async () => {
@@ -76,6 +85,7 @@ afterEach(async () => {
   routerMocks.navigate.mockReset();
   routerMocks.preloadRoute.mockReset();
   routerMocks.pathname = "/w/acme/agent";
+  permissionMocks.canAccessAgent = true;
   document.body.innerHTML = "";
 });
 
@@ -153,5 +163,21 @@ describe("SidebarTabs", () => {
       params: { slug: "acme" },
       to: "/w/$slug/studio/resumes",
     });
+  });
+
+  it("redirects Agent tab clicks to Studio resumes without page:chat", async () => {
+    permissionMocks.canAccessAgent = false;
+    routerMocks.pathname = "/w/acme/studio/resumes";
+    const { root } = await renderInAct(<SidebarTabs />);
+    roots.push(root);
+    const agentTab = findTab("Agent");
+
+    act(() => agentTab?.click());
+
+    expect(routerMocks.navigate).toHaveBeenCalledWith({
+      params: { slug: "acme" },
+      to: "/w/$slug/studio/resumes",
+    });
+    expect(routerMocks.preloadRoute).not.toHaveBeenCalled();
   });
 });

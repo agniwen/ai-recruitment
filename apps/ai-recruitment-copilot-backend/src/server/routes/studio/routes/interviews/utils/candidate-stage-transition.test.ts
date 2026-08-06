@@ -72,8 +72,135 @@ describe("transitionCandidateStage", () => {
       }),
     ).resolves.toEqual({ kind: "forbidden" });
     expect(authorize).toHaveBeenCalledWith({ action: "create", resource: "offer" });
+    expect(authorize).not.toHaveBeenCalledWith({ action: "update", resource: "interview" });
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.invalidateCaches).not.toHaveBeenCalled();
+  });
+
+  it("advances to offer with only offer:create (no interview:update required)", async () => {
+    const { insertedValues, tx, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "human_interview",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    mocks.loadReadiness.mockResolvedValue({
+      completedRoundsMissingFeedback: 0,
+      pendingRounds: 0,
+      totalRounds: 1,
+    });
+    mocks.getReadinessError.mockReturnValue(null);
+    const authorize = vi.fn(
+      async ({ action, resource }) => resource === "offer" && action === "create",
+    );
+
+    await expect(
+      transitionCandidateStage({
+        authorize,
+        candidateId: "candidate-a",
+        input: { pipelineStage: "offer" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({ kind: "ok" });
+
+    expect(authorize).toHaveBeenCalledWith({ action: "create", resource: "offer" });
+    expect(authorize).not.toHaveBeenCalledWith({ action: "update", resource: "interview" });
+    expect(updatedWhere).toHaveBeenCalledOnce();
+    expect(insertedValues).toHaveBeenCalledOnce();
+  });
+
+  it("advances to human interview with only humanInterview:create", async () => {
+    const { tx, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "screening",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    const authorize = vi.fn(
+      async ({ action, resource }) => resource === "humanInterview" && action === "create",
+    );
+
+    await expect(
+      transitionCandidateStage({
+        authorize,
+        candidateId: "candidate-a",
+        input: { pipelineStage: "human_interview" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({ kind: "ok" });
+
+    expect(authorize).toHaveBeenCalledWith({ action: "create", resource: "humanInterview" });
+    expect(authorize).not.toHaveBeenCalledWith({ action: "update", resource: "interview" });
+    expect(updatedWhere).toHaveBeenCalledOnce();
+  });
+
+  it("requires interview:update for non-stage-owned transitions", async () => {
+    const authorize = vi.fn().mockResolvedValue(false);
+
+    await expect(
+      transitionCandidateStage({
+        authorize,
+        candidateId: "candidate-a",
+        input: { pipelineStage: "ai_interview" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({ kind: "forbidden" });
+    expect(authorize).toHaveBeenCalledWith({ action: "update", resource: "interview" });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("closes a candidate with only candidateClose:create", async () => {
+    const { insertedValues, tx, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "screening",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    const authorize = vi.fn(
+      async ({ action, resource }) => resource === "candidateClose" && action === "create",
+    );
+
+    await expect(
+      transitionCandidateStage({
+        authorize,
+        candidateId: "candidate-a",
+        input: { outcome: "rejected", pipelineStage: "closed" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({ kind: "ok" });
+
+    expect(authorize).toHaveBeenCalledWith({ action: "create", resource: "candidateClose" });
+    expect(authorize).not.toHaveBeenCalledWith({ action: "update", resource: "interview" });
+    expect(updatedWhere).toHaveBeenCalledOnce();
+    expect(insertedValues).toHaveBeenCalledOnce();
+  });
+
+  it("forbids close without candidateClose:create", async () => {
+    const authorize = vi.fn().mockResolvedValue(false);
+
+    await expect(
+      transitionCandidateStage({
+        authorize,
+        candidateId: "candidate-a",
+        input: { outcome: "rejected", pipelineStage: "closed" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({ kind: "forbidden" });
+    expect(authorize).toHaveBeenCalledWith({ action: "create", resource: "candidateClose" });
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it("checks offer readiness inside the locked transaction and records copilot provenance", async () => {
@@ -136,7 +263,7 @@ describe("transitionCandidateStage", () => {
 
     await expect(
       transitionCandidateStage({
-        authorize: vi.fn(),
+        authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
         input: { pipelineStage: "screening" },
         operatorId: "user-a",
@@ -161,7 +288,7 @@ describe("transitionCandidateStage", () => {
 
     await expect(
       transitionCandidateStage({
-        authorize: vi.fn(),
+        authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
         input: { pipelineStage: "ai_interview" },
         operatorId: "user-a",
@@ -187,7 +314,7 @@ describe("transitionCandidateStage", () => {
 
     await expect(
       transitionCandidateStage({
-        authorize: vi.fn(),
+        authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
         input: { pipelineStage: "ai_interview" },
         operatorId: "user-a",
@@ -215,7 +342,7 @@ describe("transitionCandidateStage", () => {
 
     await expect(
       transitionCandidateStage({
-        authorize: vi.fn(),
+        authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
         input: { pipelineStage: "ai_interview" },
         operatorId: "user-a",

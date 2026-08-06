@@ -28,6 +28,7 @@ import {
 } from "./resume-library-page-model";
 import type { ResumeLibraryGridState } from "./resume-library-page-model";
 interface ResumeLibraryCardListProps {
+  canCloseCandidate: boolean;
   canCreateInterview: boolean;
   canDeleteResumeLibrary: boolean;
   canForceReparse: boolean;
@@ -69,6 +70,7 @@ interface ResumeLibraryCardListProps {
 }
 
 export function ResumeLibraryCardList({
+  canCloseCandidate,
   canCreateInterview,
   canDeleteResumeLibrary,
   canForceReparse,
@@ -251,6 +253,7 @@ export function ResumeLibraryCardList({
                 }}
               >
                 <ResumeLibraryCard
+                  canCloseCandidate={canCloseCandidate}
                   canCreateInterview={canCreateInterview}
                   canDeleteResumeLibrary={canDeleteResumeLibrary}
                   canForceReparse={canForceReparse}

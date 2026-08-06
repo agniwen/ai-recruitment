@@ -36,7 +36,8 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
 ] as const;
 
 export const STUDIO_PAGE_PERMISSION_LABELS = {
-  chat: "Chat",
+  // page:chat still keys the former Chat browse flag; UI now gates the Agent tab.
+  chat: "Agent",
   dashboard: "数据看板",
   departments: "部门管理",
   forms: "表单题",
@@ -72,6 +73,7 @@ const memberStudioPagePermissions = [
 export const statement = {
   ...defaultStatements,
   auditLog: ["read"],
+  candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
@@ -101,6 +103,7 @@ export function isWorkspaceAdministratorRole(role: string | null | undefined): b
 export const owner = ac.newRole({
   ...ownerAc.statements,
   auditLog: ["read"],
+  candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
@@ -137,6 +140,7 @@ export const admin = ac.newRole({
   // edits) is enforced server-side in `beforeUpdateMemberRole`. The matrix only
   // authorizes the verb; the hook is the security boundary.
   auditLog: ["read"],
+  candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
@@ -159,6 +163,7 @@ export const admin = ac.newRole({
 const recruitingMemberStatements = {
   ...memberAc.statements,
   auditLog: ["read"],
+  candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["read"],

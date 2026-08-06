@@ -3,13 +3,18 @@ import { hasPermissionInStatements } from "@arc/shared/permission-statements";
 import type { StudioPagePermissionAction } from "@/lib/start/auth-session-types";
 import { STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
 
-type PreferredWorkspaceArea = "chat" | "studio";
+type PreferredWorkspaceArea = "agent" | "chat" | "studio";
 
 function canAccessPage(
   permissions: WorkspacePermissionStatements,
   action: StudioPagePermissionAction,
 ): boolean {
   return hasPermissionInStatements(permissions, "page", action);
+}
+
+/** page:chat gates the Agent tab (legacy Chat / 「聊天助手」 page permission). */
+function canAccessAgent(permissions: WorkspacePermissionStatements): boolean {
+  return canAccessPage(permissions, "chat");
 }
 
 export function findFirstAllowedStudioPath(
@@ -32,8 +37,9 @@ export function resolveWorkspaceLandingHref({
   preferredArea?: PreferredWorkspaceArea;
   slug: string;
 }): string | null {
-  if (preferredArea === "chat" && canAccessPage(permissions, "chat")) {
-    return `/w/${slug}/chat`;
+  const prefersAgent = preferredArea === "agent" || preferredArea === "chat";
+  if (prefersAgent && canAccessAgent(permissions)) {
+    return `/w/${slug}/agent`;
   }
 
   const studioPath = findFirstAllowedStudioPath(permissions);
@@ -41,8 +47,8 @@ export function resolveWorkspaceLandingHref({
     return `/w/${slug}/studio${studioPath}`;
   }
 
-  if (preferredArea === "studio" && canAccessPage(permissions, "chat")) {
-    return `/w/${slug}/chat`;
+  if (preferredArea === "studio" && canAccessAgent(permissions)) {
+    return `/w/${slug}/agent`;
   }
 
   return null;

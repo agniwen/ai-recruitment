@@ -35,6 +35,7 @@ describe("ResumeLibraryCardActions", () => {
     act(() => {
       root.render(
         <ResumeLibraryCardActions
+          canCloseCandidate={false}
           canCopyLink={false}
           canCreateInterview
           canDeleteResumeLibrary={false}
@@ -92,6 +93,7 @@ describe("ResumeLibraryCardActions", () => {
     act(() => {
       root.render(
         <ResumeLibraryCardActions
+          canCloseCandidate={false}
           canCopyLink={false}
           canCreateInterview
           canDeleteResumeLibrary={false}

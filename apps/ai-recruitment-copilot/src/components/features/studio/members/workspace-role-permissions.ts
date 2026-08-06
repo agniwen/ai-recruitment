@@ -91,6 +91,11 @@ export const WORKSPACE_PERMISSION_GROUPS = [
         label: "Offer 管理",
       },
       {
+        actions: ["create"] as const,
+        key: "candidateClose",
+        label: "标记结案",
+      },
+      {
         actions: ["create", "read", "update", "delete"] as const,
         key: "jd",
         label: "在招岗位",
@@ -98,7 +103,7 @@ export const WORKSPACE_PERMISSION_GROUPS = [
       {
         actions: ["create", "read", "update", "delete"] as const,
         key: "chat",
-        label: "聊天助手",
+        label: "Agent",
       },
     ],
     title: "招聘流程",
@@ -174,11 +179,12 @@ export const PERMISSION_ACTION_LABELS: Record<string, string> = {
 };
 
 const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
+  "candidateClose:create": "允许",
   "resumePool:create": "上传",
 };
 
 const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
-  chat: "控制是否能使用侧边栏 Chat tab 并访问 Chat 页面；未勾选时 Chat tab 会禁用，直接访问会进入 404。页面内接口暂不按该页面权限限制。",
+  chat: "控制是否能使用侧边栏 Agent tab 并访问 Agent 页面；未勾选时 Agent tab 会禁用，直接访问或点击会跳回 Studio 简历库。页面内接口暂不按该页面权限限制。",
   dashboard: "控制是否能在侧边栏看到并访问「数据看板」页面；未勾选时直接访问会进入 404。",
   departments:
     "控制是否能在侧边栏看到并访问「部门管理」页面；页面内部门列表、详情和增删改仍受「部门」相关权限控制。",
@@ -211,6 +217,10 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
   auditLog: {
     read: "允许查看工作区审计日志。当前主要作为系统能力预留，具体入口会按该权限控制。",
   },
+  candidateClose: {
+    create:
+      "允许将候选人标记结案（录用/淘汰/放弃/归档等）。仅需本权限，不依赖 AI 面试编辑或其他阶段权限。",
+  },
   candidateForm: {
     create: "允许在「表单题」页面新建表单题。",
     delete: "允许删除表单题。",
@@ -218,10 +228,10 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
     update: "允许编辑、归档/恢复表单题，并使用表单 AI 生成或更新表单内容。",
   },
   chat: {
-    create: "允许发起聊天助手相关创建流程；当前权限矩阵预留给聊天会话创建能力。",
-    delete: "允许删除聊天助手相关数据；当前权限矩阵预留给聊天会话删除能力。",
-    read: "允许查看聊天助手相关数据；当前权限矩阵预留给聊天会话读取能力。",
-    update: "允许更新聊天助手相关数据；当前权限矩阵预留给聊天会话编辑能力。",
+    create: "允许发起 Agent 会话相关创建流程；当前权限矩阵预留给会话创建能力。",
+    delete: "允许删除 Agent 会话相关数据；当前权限矩阵预留给会话删除能力。",
+    read: "允许查看 Agent 会话相关数据；当前权限矩阵预留给会话读取能力。",
+    update: "允许更新 Agent 会话相关数据；当前权限矩阵预留给会话编辑能力。",
   },
   department: {
     create: "允许在「部门管理」页面新增部门。",

@@ -259,6 +259,11 @@ describe("permission matrix cross-cut", () => {
     ["member", "offer", "update", true],
     ["member", "offer", "delete", true],
     ["noAccess", "offer", "read", false],
+    // candidateClose — dedicated 标记结案 permission
+    ["owner", "candidateClose", "create", true],
+    ["admin", "candidateClose", "create", true],
+    ["member", "candidateClose", "create", true],
+    ["noAccess", "candidateClose", "create", false],
     // candidateForm / questionTemplate
     ["member", "candidateForm", "delete", true],
     ["member", "questionTemplate", "delete", true],

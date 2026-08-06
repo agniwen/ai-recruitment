@@ -29,14 +29,23 @@ export type CandidateStageTransitionResult =
   | { kind: "noop" }
   | { kind: "ok" };
 
-function resolveTargetStagePermission(target: CandidateTransitionInput["pipelineStage"]) {
+/**
+ * Stage-specific transition auth:
+ * - offer / human_interview / closed use their own create verbs so late-stage
+ *   roles are not forced through interview:update
+ * - every other transition (AI stage, reactivate, …) stays on interview:update
+ */
+function resolveTransitionPermission(target: CandidateTransitionInput["pipelineStage"]) {
   if (target === "human_interview") {
     return { action: "create", resource: "humanInterview" } as const;
   }
   if (target === "offer") {
     return { action: "create", resource: "offer" } as const;
   }
-  return null;
+  if (target === "closed") {
+    return { action: "create", resource: "candidateClose" } as const;
+  }
+  return { action: "update", resource: "interview" } as const;
 }
 
 export async function transitionCandidateStage(command: {
@@ -47,8 +56,8 @@ export async function transitionCandidateStage(command: {
   organizationId: string;
   provenance: CandidateStageTransitionProvenance;
 }): Promise<CandidateStageTransitionResult> {
-  const targetPermission = resolveTargetStagePermission(command.input.pipelineStage);
-  if (targetPermission && !(await command.authorize(targetPermission))) {
+  const transitionPermission = resolveTransitionPermission(command.input.pipelineStage);
+  if (!(await command.authorize(transitionPermission))) {
     return { kind: "forbidden" };
   }
 

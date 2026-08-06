@@ -139,9 +139,9 @@ describe("workspace role permission helpers", () => {
     const jobDescriptionPage = items.find((item) => item.key === "page:jobDescriptions");
     const jdRead = items.find((item) => item.key === "jd:read");
 
-    expect(chatPage?.description).toContain("Chat");
+    expect(chatPage?.description).toContain("Agent");
     expect(chatPage?.description).toContain("禁用");
-    expect(chatPage?.description).toContain("404");
+    expect(chatPage?.description).toContain("简历库");
     expect(resumePoolPage?.description).toContain("访问「公共简历池」页面");
     expect(resumePoolPage?.description).toContain("数据接口仍受「公共简历池」业务权限控制");
     expect(resumePoolPage?.description).toContain("404");

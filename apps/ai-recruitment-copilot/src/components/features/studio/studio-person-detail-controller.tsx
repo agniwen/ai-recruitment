@@ -172,6 +172,7 @@ export function useStudioPersonDetailController({
   const hasCreateOfferPermission = useHasPermission("offer", "create");
   const hasUpdateOfferPermission = useHasPermission("offer", "update");
   const hasDeleteOfferPermission = useHasPermission("offer", "delete");
+  const hasCreateCandidateClosePermission = useHasPermission("candidateClose", "create");
   const canReadHumanInterview = canUseManagementActions && hasReadHumanInterviewPermission;
   const canUpdateInterview = canUseManagementActions && hasUpdateInterviewPermission;
   // Same gate as 简历库列表 card「编辑」: resumeLibrary:update in authed mode.
@@ -185,6 +186,7 @@ export function useStudioPersonDetailController({
   const canCreateOffer = canUseManagementActions && hasCreateOfferPermission;
   const canUpdateOffer = canUseManagementActions && hasUpdateOfferPermission;
   const canDeleteOffer = canUseManagementActions && hasDeleteOfferPermission;
+  const canCloseCandidate = canUseManagementActions && hasCreateCandidateClosePermission;
   if (!isPublic && !optionalSlug) {
     throw new Error(
       'StudioPersonDetailPanel(accessMode="authed"|"review") must run under a /w/[slug] route',
@@ -762,6 +764,7 @@ export function useStudioPersonDetailController({
               }
             : undefined
         }
+        canCloseCandidate={canCloseCandidate}
         canCreateHumanInterview={canCreateHumanInterview}
         canCreateOffer={canCreateOffer}
         evaluationActions={resumeEvaluationActions}
@@ -883,6 +886,7 @@ export function useStudioPersonDetailController({
   return {
     activeTab,
     bodyLayoutClassName,
+    canCloseCandidate,
     canCreateHumanInterview,
     canCreateOffer,
     canDeleteHumanInterview,

@@ -342,6 +342,7 @@ function ResumeCardProfileSnapshot({ snapshot }: { snapshot: ResumeLibraryProfil
 }
 
 function ResumeLibraryCardComponent({
+  canCloseCandidate,
   canCreateInterview,
   canDeleteResumeLibrary,
   canForceReparse,
@@ -584,6 +585,7 @@ function ResumeLibraryCardComponent({
         </div>
 
         <ResumeLibraryCardActions
+          canCloseCandidate={canCloseCandidate}
           canCopyLink={canCopyLink}
           canCreateInterview={canCreateInterview}
           canDeleteResumeLibrary={canDeleteResumeLibrary}

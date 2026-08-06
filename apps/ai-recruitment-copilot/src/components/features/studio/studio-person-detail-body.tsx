@@ -709,6 +709,7 @@ function InterviewResultTabContent({
 export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailViewModel }) {
   const {
     bodyLayoutClassName,
+    canCloseCandidate,
     canCreateHumanInterview,
     canCreateOffer,
     canDeleteHumanInterview,
@@ -880,12 +881,15 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
                 candidateId={record.id}
                 candidateName={record.candidateName}
                 disabled={record.pipelineStage === "closed"}
-                onRequestCloseAsHired={() =>
-                  onRequestClose?.({
-                    candidateName: record.candidateName,
-                    id: record.id,
-                    initialOutcome: "hired",
-                  })
+                onRequestCloseAsHired={
+                  canCloseCandidate
+                    ? () =>
+                        onRequestClose?.({
+                          candidateName: record.candidateName,
+                          id: record.id,
+                          initialOutcome: "hired",
+                        })
+                    : undefined
                 }
               />
             </TabsContent>

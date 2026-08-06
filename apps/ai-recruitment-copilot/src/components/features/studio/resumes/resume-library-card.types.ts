@@ -3,6 +3,7 @@ import type { ResumeLibraryListRecord } from "@arc/shared/studio-resumes";
 export type ResumeDetailDefaultTab = "overview" | "rounds" | "human-interview" | "offer";
 
 export interface ResumeLibraryCardProps {
+  canCloseCandidate: boolean;
   canCreateInterview: boolean;
   canDeleteResumeLibrary: boolean;
   canForceReparse: boolean;
