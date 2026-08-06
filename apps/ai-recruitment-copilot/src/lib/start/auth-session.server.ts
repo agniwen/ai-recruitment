@@ -252,10 +252,38 @@ export async function resolveResumeReviewAccessFromRequest(
     return { status: "not_found" };
   }
 
+  // Prefer real workspace membership so deny flags (禁用评估) apply to 专员 etc.
+  // Non-members stay as authenticated-reviewer with empty permissions (default allow).
+  const membership = await db.query.member.findFirst({
+    columns: {
+      role: true,
+    },
+    where: { organizationId: workspace.id, userId: session.user.id },
+  });
+  if (membership && !isNoAccessWorkspaceRole(membership.role)) {
+    const snapshot = await computeWorkspacePermissionSnapshot({
+      memberRole: membership.role,
+      organizationId: workspace.id,
+      userId: session.user.id,
+    });
+    return {
+      member: {
+        role: membership.role,
+      },
+      permissions: snapshot.statements,
+      status: "ready",
+      user: {
+        id: session.user.id,
+      },
+      workspace,
+    };
+  }
+
   return {
     member: {
       role: "authenticated-reviewer",
     },
+    permissions: {},
     status: "ready",
     user: {
       id: session.user.id,

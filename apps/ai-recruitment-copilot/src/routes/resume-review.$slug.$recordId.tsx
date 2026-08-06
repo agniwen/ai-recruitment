@@ -1,3 +1,4 @@
+import { isResumeEvaluationDisabled } from "@arc/shared/permission-statements";
 import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -9,11 +10,14 @@ import {
 import { StudioPersonDetailPanel } from "@/components/features/studio/studio-person-detail-panel";
 import { ResumeReviewEvaluationBar } from "@/components/features/studio/resumes/resume-evaluation-dialog";
 import { fetchStudioResumeReview } from "@/lib/client/api";
-import { WorkspaceSlugProvider, useWorkspaceSlug } from "@/lib/client/workspace-context";
+import {
+  useOptionalWorkspaceMemberRole,
+  useOptionalWorkspacePermissions,
+  WorkspaceSlugProvider,
+  useWorkspaceSlug,
+} from "@/lib/client/workspace-context";
 import { getResumeReviewAccessState } from "@/lib/start/auth-session";
 import { formatDocumentTitle } from "@/lib/start/document-title";
-
-const RESUME_REVIEW_WORKSPACE_PERMISSIONS = {};
 
 function resumeReviewDetailQueryKey(slug: string, recordId: string) {
   return ["studio-resumes", slug, "detail", recordId, "review"] as const;
@@ -21,6 +25,9 @@ function resumeReviewDetailQueryKey(slug: string, recordId: string) {
 
 function ResumeReviewDetailContent({ recordId }: { recordId: string }) {
   const slug = useWorkspaceSlug();
+  const memberRole = useOptionalWorkspaceMemberRole();
+  const permissions = useOptionalWorkspacePermissions();
+  const canEvaluate = !isResumeEvaluationDisabled(permissions, memberRole);
   const detailQuery = useQuery({
     queryFn: () => fetchStudioResumeReview(slug, recordId),
     queryKey: resumeReviewDetailQueryKey(slug, recordId),
@@ -54,12 +61,14 @@ function ResumeReviewDetailContent({ recordId }: { recordId: string }) {
         />
       </main>
 
-      <ResumeReviewEvaluationBar
-        hasJobDescription={Boolean(detail?.jobDescriptionId)}
-        isLoading={detailQuery.isLoading}
-        recordId={recordId}
-        status={detail?.resumeEvaluationStatus}
-      />
+      {canEvaluate ? (
+        <ResumeReviewEvaluationBar
+          hasJobDescription={Boolean(detail?.jobDescriptionId)}
+          isLoading={detailQuery.isLoading}
+          recordId={recordId}
+          status={detail?.resumeEvaluationStatus}
+        />
+      ) : null}
     </>
   );
 }
@@ -76,7 +85,7 @@ function ResumeReviewDetailPage() {
     <WorkspaceSlugProvider
       id={state.workspace.id}
       memberRole={state.member.role}
-      permissions={RESUME_REVIEW_WORKSPACE_PERMISSIONS}
+      permissions={state.permissions}
       refreshPermissions={false}
       slug={state.workspace.slug}
     >

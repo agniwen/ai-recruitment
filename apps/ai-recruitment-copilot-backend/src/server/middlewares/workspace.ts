@@ -44,9 +44,20 @@ export const workspaceMiddleware = factory.createMiddleware(async (c, next) => {
   if (!bySlug) {
     return c.json({ message: "Workspace not found" }, 404);
   }
+  // Resume-review links: any authenticated user may open the page. If they are
+  // also a workspace member, attach membership so deny flags (e.g. 禁用评估)
+  // still apply. Non-members keep member=null and may evaluate by default.
   if (isAuthenticatedResumeReviewPath(c.req.path)) {
     c.set("activeOrg", bySlug);
-    c.set("member", null);
+    const reviewMember = await db.query.member.findFirst({
+      columns: ACTIVE_MEMBER_COLUMNS,
+      where: { organizationId: bySlug.id, userId: user.id },
+    });
+    if (reviewMember && !isNoAccessWorkspaceRole(reviewMember.role)) {
+      c.set("member", reviewMember);
+    } else {
+      c.set("member", null);
+    }
     return next();
   }
 

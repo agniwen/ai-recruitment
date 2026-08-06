@@ -79,6 +79,8 @@ export type ResumeReviewAccessState =
       member: {
         role: string;
       };
+      /** Effective permission snapshot when the reviewer is a workspace member. */
+      permissions: WorkspacePermissionStatements;
       status: "ready";
       user: {
         id: string;
