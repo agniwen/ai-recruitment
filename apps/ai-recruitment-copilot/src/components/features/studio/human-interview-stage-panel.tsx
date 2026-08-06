@@ -109,11 +109,19 @@ export function HumanInterviewStagePanel({
 }: PanelProps) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
+  // Keep human-interview live while the tab is open: poll every 30s, and use
+  // TanStack Query's built-in window-focus refetch (global default is off).
+  const humanInterviewQueryOptions = {
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true as const,
+  };
   const { data: rounds = [], isLoading } = useQuery({
+    ...humanInterviewQueryOptions,
     queryFn: () => listHumanInterviewRounds(slug, candidateId),
     queryKey: humanInterviewKeys.rounds(slug, candidateId),
   });
   const { data: meetings = [] } = useQuery({
+    ...humanInterviewQueryOptions,
     queryFn: () => listHumanInterviewMeetings(slug, { interviewRecordId: candidateId }),
     queryKey: humanInterviewKeys.meetings(slug, candidateId),
   });
