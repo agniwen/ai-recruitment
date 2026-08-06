@@ -605,10 +605,7 @@ export function JobDescriptionManagementPage({
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader
-          description="维护在招岗位、JD 和要求；候选人、面试官和面试都会挂到对应岗位上。"
-          title="岗位设置"
-        />
+        <PageHeader description="管理招聘岗位、JD、任职要求及关联信息。" title="在招岗位" />
 
         <ClientOnly fallback={<Skeleton className="h-80 w-full" />}>
           <JobDescriptionCharts metrics={metrics} />

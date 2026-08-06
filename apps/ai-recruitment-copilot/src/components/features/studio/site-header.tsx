@@ -17,7 +17,7 @@ interface RouteMeta {
   title: string;
 }
 
-const DEFAULT_META: RouteMeta = { title: "简历库" };
+const DEFAULT_META: RouteMeta = { title: "候选人管理" };
 
 export function resolveRouteMeta(pathname: string): RouteMeta {
   const navItem = resolveStudioSidebarNavItem(pathname);

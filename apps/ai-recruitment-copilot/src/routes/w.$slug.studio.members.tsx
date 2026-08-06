@@ -8,7 +8,7 @@ import { formatDocumentTitle } from "@/lib/start/document-title";
 export const Route = createFileRoute("/w/$slug/studio/members")({
   validateSearch: (search: Record<string, unknown>) => coerceWorkspaceManagementSearch(search),
   head: () => ({
-    meta: [{ title: formatDocumentTitle("工作区管理") }],
+    meta: [{ title: formatDocumentTitle("成员与招聘组") }],
   }),
   component: MembersManagementPage,
   pendingComponent: MembersPageSkeleton,

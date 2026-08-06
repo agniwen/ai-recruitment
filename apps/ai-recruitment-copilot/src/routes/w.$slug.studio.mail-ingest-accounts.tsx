@@ -644,10 +644,7 @@ function ManagedMailIngestPage() {
 
   return (
     <div className="mx-auto w-full max-w-[96rem] flex flex-col gap-6">
-      <PageHeader
-        title="邮箱监听"
-        description="把收简历的邮箱接进来自动入库。管理员能看全部账号，其他人只管理自己的。"
-      />
+      <PageHeader title="简历邮箱采集" description="连接招聘邮箱，自动收取并解析邮件中的简历。" />
 
       <DataGrid<ManagedMailIngestRow>
         {...grid.bind}
@@ -706,7 +703,7 @@ function ManagedMailIngestRoute() {
 export const Route = createFileRoute("/w/$slug/studio/mail-ingest-accounts")({
   component: ManagedMailIngestRoute,
   head: () => ({
-    meta: [{ title: formatDocumentTitle("邮箱监听") }],
+    meta: [{ title: formatDocumentTitle("简历邮箱采集") }],
   }),
-  pendingComponent: () => <StudioTablePageSkeleton label="邮箱监听" />,
+  pendingComponent: () => <StudioTablePageSkeleton label="简历邮箱采集" />,
 });

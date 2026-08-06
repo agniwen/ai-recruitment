@@ -9,7 +9,7 @@ function StudioCalendarRoute() {
 
 export const Route = createFileRoute("/w/$slug/studio/calendar")({
   head: () => ({
-    meta: [{ title: formatDocumentTitle("日程管理") }],
+    meta: [{ title: formatDocumentTitle("面试日程") }],
   }),
   component: StudioCalendarRoute,
 });

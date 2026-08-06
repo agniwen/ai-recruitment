@@ -167,10 +167,7 @@ function HiringUnitManagementPage() {
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader
-          description="维护业务侧承担招聘需求的用人组织。后续招聘组可按用人组织划分负责范围。"
-          title="用人组织"
-        />
+        <PageHeader description="设置招聘需求所属的业务组织及招聘负责范围。" title="用人组织" />
 
         <DataGrid<HiringUnitListRecord>
           {...grid.bind}
@@ -285,7 +282,7 @@ function StudioHiringUnitsRoute() {
 export const Route = createFileRoute("/w/$slug/studio/hiring-units")({
   component: StudioHiringUnitsRoute,
   head: () => ({
-    meta: [{ title: formatDocumentTitle("用人组织管理") }],
+    meta: [{ title: formatDocumentTitle("用人组织") }],
   }),
   loader: async (loaderContext) => {
     const { location, params } = loaderContext as unknown as {
@@ -306,7 +303,7 @@ export const Route = createFileRoute("/w/$slug/studio/hiring-units")({
     }
     return state;
   },
-  pendingComponent: () => <StudioTablePageSkeleton label="用人组织管理" />,
+  pendingComponent: () => <StudioTablePageSkeleton label="用人组织" />,
   shouldReload: false,
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
 });

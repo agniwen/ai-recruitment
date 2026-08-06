@@ -53,7 +53,7 @@ describe("TanStack Start studio settings and detail route migration", () => {
     );
 
     expect(sidebar).toContain('path: "/studio/permissions"');
-    expect(sidebar).toContain('title: "权限管理"');
+    expect(sidebar).toContain('title: "角色与权限"');
     expect(sidebar).toContain('action: "permissions"');
     expect(sidebar).toContain('resource: "page"');
     expect(permissionsRoute).toContain("<WorkspacePermissionsSection");
@@ -80,13 +80,13 @@ describe("TanStack Start studio settings and detail route migration", () => {
 
   it("keeps context settings as the last item in the system configuration group", () => {
     const sidebar = readSource("components/features/studio/studio-sidebar-slots.tsx");
-    const systemGroupStart = sidebar.indexOf('label: "系统配置"');
+    const systemGroupStart = sidebar.indexOf('label: "系统设置"');
     const systemGroupSource = sidebar.slice(
       sidebar.lastIndexOf("items:", systemGroupStart),
       systemGroupStart,
     );
-    const permissionIndex = systemGroupSource.indexOf('title: "权限管理"');
-    const settingsIndex = systemGroupSource.indexOf('title: "上下文设置"');
+    const permissionIndex = systemGroupSource.indexOf('title: "角色与权限"');
+    const settingsIndex = systemGroupSource.indexOf('title: "公司信息与话术"');
 
     expect(permissionIndex).toBeGreaterThanOrEqual(0);
     expect(settingsIndex).toBeGreaterThan(permissionIndex);

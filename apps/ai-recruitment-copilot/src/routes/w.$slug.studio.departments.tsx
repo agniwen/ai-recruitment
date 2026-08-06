@@ -7,9 +7,9 @@ import { formatDocumentTitle } from "@/lib/start/document-title";
 export const Route = createFileRoute("/w/$slug/studio/departments")({
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
   head: () => ({
-    meta: [{ title: formatDocumentTitle("部门管理") }],
+    meta: [{ title: formatDocumentTitle("部门设置") }],
   }),
   component: DepartmentManagementPage,
-  pendingComponent: () => <StudioTablePageSkeleton label="部门管理" />,
+  pendingComponent: () => <StudioTablePageSkeleton label="部门设置" />,
   shouldReload: false,
 });

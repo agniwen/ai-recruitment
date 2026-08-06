@@ -622,8 +622,8 @@ export function ResumeLibraryPage() {
             </div>
           }
           className="items-end sm:items-end"
-          description="沉淀候选人档案、简历 PDF、岗位匹配和流程进展，筛选到面试推进都能从这里接上。"
-          title="简历库"
+          description="管理已正式入库候选人的筛选、面试、Offer及结案进度。"
+          title="候选人管理"
         />
         <ResumeLibraryMetricsSection
           chartKey={metricsChartKey}

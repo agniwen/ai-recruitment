@@ -49,7 +49,7 @@ export const Route = createFileRoute("/w/$slug/studio/resumes")({
     return state;
   },
   head: () => ({
-    meta: [{ title: formatDocumentTitle("简历库") }],
+    meta: [{ title: formatDocumentTitle("候选人管理") }],
   }),
   component: StudioResumesRoute,
   shouldReload: false,

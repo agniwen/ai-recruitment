@@ -207,6 +207,6 @@ describe("job description recruiting defaults", () => {
   });
 
   it("renames the interviewer navigation entry", () => {
-    expect(sidebarSource).toContain('title: "AI面试官设置"');
+    expect(sidebarSource).toContain('title: "AI 面试官"');
   });
 });

@@ -32,7 +32,7 @@ export const Route = createFileRoute("/w/$slug/studio/global-config")({
     return state;
   },
   head: () => ({
-    meta: [{ title: formatDocumentTitle("上下文设置") }],
+    meta: [{ title: formatDocumentTitle("公司信息与话术") }],
   }),
   component: StudioGlobalConfigRoute,
   pendingComponent: GlobalConfigPageSkeleton,

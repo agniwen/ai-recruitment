@@ -27,8 +27,8 @@ export const Route = createFileRoute("/w/$slug/studio/forms")({
     }
     return state;
   },
-  head: () => ({ meta: [{ title: formatDocumentTitle("表单题") }] }),
+  head: () => ({ meta: [{ title: formatDocumentTitle("AI面试-面前通用题") }] }),
   component: StudioFormsRoute,
-  pendingComponent: () => <StudioTablePageSkeleton filterCount={3} label="表单题" />,
+  pendingComponent: () => <StudioTablePageSkeleton filterCount={3} label="AI面试-面前通用题" />,
   shouldReload: false,
 });

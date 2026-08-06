@@ -42,9 +42,9 @@ describe("TanStack Start studio CRUD route migration", () => {
 
   it("keeps hiring unit management under recruiting configuration navigation", () => {
     const sidebarSource = readSource("components/features/studio/studio-sidebar-slots.tsx");
-    const workspaceLabelIndex = sidebarSource.indexOf('label: "工作台"');
-    const recruitingConfigLabelIndex = sidebarSource.indexOf('label: "招聘配置"');
-    const libraryLabelIndex = sidebarSource.indexOf('label: "题库"');
+    const workspaceLabelIndex = sidebarSource.indexOf('label: "招聘工作台"');
+    const recruitingConfigLabelIndex = sidebarSource.indexOf('label: "招聘基础设置"');
+    const libraryLabelIndex = sidebarSource.indexOf('label: "AI面试题库"');
     const workspaceGroup = sidebarSource.slice(
       sidebarSource.indexOf("const navGroups"),
       workspaceLabelIndex,

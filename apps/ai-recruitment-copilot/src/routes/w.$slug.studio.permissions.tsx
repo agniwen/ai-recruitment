@@ -11,8 +11,8 @@ function StudioPermissionsRoute() {
         headerRender={({ actionRender }) => (
           <PageHeader
             actionRender={actionRender}
-            description="自定义角色，并决定每个角色能进哪些页面、能做什么操作。"
-            title="权限管理"
+            description="设置不同角色可访问的页面和可执行的操作。"
+            title="角色与权限"
           />
         )}
       />
@@ -23,7 +23,7 @@ function StudioPermissionsRoute() {
 export const Route = createFileRoute("/w/$slug/studio/permissions")({
   component: StudioPermissionsRoute,
   head: () => ({
-    meta: [{ title: formatDocumentTitle("权限管理") }],
+    meta: [{ title: formatDocumentTitle("角色与权限") }],
   }),
   pendingComponent: PermissionsPageSkeleton,
 });

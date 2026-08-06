@@ -38,23 +38,23 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
 
 export const STUDIO_PAGE_PERMISSION_LABELS = {
   // page:chat still keys the former Chat browse flag; UI now gates the Agent tab.
-  calendar: "日程管理",
+  calendar: "面试日程",
   chat: "Agent",
-  dashboard: "数据看板",
-  departments: "部门管理",
-  forms: "表单题",
-  globalConfig: "上下文设置",
-  hiringUnits: "用人组织管理",
-  interviewQuestions: "沟通题",
-  interviewers: "面试官管理",
-  interviews: "AI 面试",
-  jobDescriptions: "岗位设置",
-  mailIngestAccounts: "邮箱监听",
+  dashboard: "招聘看板",
+  departments: "部门设置",
+  forms: "AI面试-面前通用题",
+  globalConfig: "公司信息与话术",
+  hiringUnits: "用人组织",
+  interviewQuestions: "AI 面试-沟通通用题",
+  interviewers: "AI 面试官",
+  interviews: "AI 面试管理",
+  jobDescriptions: "在招岗位",
+  mailIngestAccounts: "简历邮箱采集",
   me: "个人中心",
-  members: "工作区管理",
-  permissions: "权限管理",
-  resumePool: "公共简历池",
-  resumes: "简历库",
+  members: "成员与招聘组",
+  permissions: "角色与权限",
+  resumePool: "简历池",
+  resumes: "候选人管理",
 } as const;
 
 const memberStudioPagePermissions = [

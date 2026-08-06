@@ -473,8 +473,8 @@ export function ResumePoolPage() {
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
           className="max-w-3xl"
-          title="简历广场"
-          description="先沉淀简历，再决定是否推送共享或入库到简历库。"
+          title="简历池"
+          description="收集和查看尚未进入正式招聘流程的公共、私有简历。"
         />
         <Tabs
           onValueChange={(value) => void navigate({ search: { scope: normalizeScope(value) } })}

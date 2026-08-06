@@ -530,10 +530,7 @@ function RecruitingDashboardPage({ metrics }: { metrics: RecruitingDashboardMetr
 
   return (
     <div className="mx-auto w-full max-w-[96rem] flex flex-col gap-4 md:gap-6">
-      <PageHeader
-        title="数据看板"
-        description="看看候选人漏斗、待办、岗位分布和 Offer 进度，了解这阵子招聘做得怎么样。"
-      />
+      <PageHeader title="招聘看板" description="查看招聘漏斗、阶段转化、待办事项和岗位招聘进展。" />
 
       <StudioSummaryCards
         items={[
@@ -628,7 +625,7 @@ export const Route = createFileRoute("/w/$slug/studio/dashboard")({
     return state;
   },
   head: () => ({
-    meta: [{ title: formatDocumentTitle("数据看板") }],
+    meta: [{ title: formatDocumentTitle("招聘看板") }],
   }),
   component: StudioDashboardRoute,
   pendingComponent: DashboardPageSkeleton,

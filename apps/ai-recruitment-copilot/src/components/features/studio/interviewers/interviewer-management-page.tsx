@@ -216,10 +216,7 @@ export function InterviewerManagementPage({ departments }: { departments: Depart
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader
-          description="给不同部门配好 AI 面试官的人设、追问风格和声音，面试时更贴合岗位。"
-          title="AI面试官设置"
-        />
+        <PageHeader description="配置AI面试官的人设、追问风格和声音。" title="AI 面试官" />
 
         <DataGrid<InterviewerListRecord>
           {...grid.bind}

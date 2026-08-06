@@ -558,10 +558,7 @@ export function InterviewManagementPage() {
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader
-          title="AI 面试"
-          description="查看每位候选人的 AI 面试安排、进展和报告，方便随时跟进。"
-        />
+        <PageHeader title="AI 面试管理" description="查看候选人的AI面试轮次、进度和面试报告。" />
         <DataGrid<StudioInterviewRoundListRecord>
           {...grid.bind}
           columns={columns}

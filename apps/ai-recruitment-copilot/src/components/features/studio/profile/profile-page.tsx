@@ -338,7 +338,7 @@ export function ProfilePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
-      <PageHeader description="管理你在工作区中的展示信息与个人活动。" title="个人中心" />
+      <PageHeader description="管理个人资料、个人活动和所属工作区。" title="个人中心" />
 
       <ProfileHero email={user?.email} image={user?.image} name={heroName} />
 

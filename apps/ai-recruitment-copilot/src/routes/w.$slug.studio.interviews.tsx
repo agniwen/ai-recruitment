@@ -18,9 +18,9 @@ function StudioInterviewsRoute() {
 export const Route = createFileRoute("/w/$slug/studio/interviews")({
   validateSearch: (search: Record<string, unknown>) => coerceStudioInterviewsSearch(search),
   head: () => ({
-    meta: [{ title: formatDocumentTitle("AI 面试") }],
+    meta: [{ title: formatDocumentTitle("AI 面试管理") }],
   }),
   component: StudioInterviewsRoute,
-  pendingComponent: () => <StudioTablePageSkeleton filterCount={3} label="AI 面试" summary />,
+  pendingComponent: () => <StudioTablePageSkeleton filterCount={3} label="AI 面试管理" summary />,
   shouldReload: false,
 });

@@ -461,10 +461,7 @@ export function CandidateFormTemplateManagementPage({
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader
-          description="面试开始前让候选人先填的问题，可按岗位复用；提交后会跟着这份面试一起留档。"
-          title="表单题"
-        />
+        <PageHeader description="设置AI面试前的通用题库。" title="AI面试-面前通用题" />
 
         <DataGrid<CandidateFormTemplateListRecord>
           {...grid.bind}
