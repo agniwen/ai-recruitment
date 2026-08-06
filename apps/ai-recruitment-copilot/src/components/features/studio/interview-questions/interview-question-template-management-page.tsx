@@ -439,7 +439,7 @@ export function InterviewQuestionTemplateManagementPage({
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
           description="设置AI面试过程中使用的提问及追问题目的通用模板。此外沟通题还会针对简历解析生成的沟通题。"
-          title="AI 面试-沟通通用题"
+          title="AI面试-沟通通用题"
         />
 
         <DataGrid<InterviewQuestionTemplateListRecord>

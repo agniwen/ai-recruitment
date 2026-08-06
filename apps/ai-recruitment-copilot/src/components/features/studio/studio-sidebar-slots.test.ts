@@ -13,7 +13,7 @@ describe("Studio sidebar menu items", () => {
 
   it("places schedule management immediately above the dashboard", () => {
     expect(source.indexOf('title: "面试日程"')).toBeGreaterThan(
-      source.indexOf('title: "AI 面试管理"'),
+      source.indexOf('title: "AI面试管理"'),
     );
     expect(source.indexOf('title: "面试日程"')).toBeLessThan(source.indexOf('title: "招聘看板"'));
   });

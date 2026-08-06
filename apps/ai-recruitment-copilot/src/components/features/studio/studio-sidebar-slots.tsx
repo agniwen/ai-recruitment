@@ -72,7 +72,7 @@ const navGroups: NavGroup[] = [
         icon: BotIcon,
         path: "/studio/interviews",
         resource: "page",
-        title: "AI 面试管理",
+        title: "AI面试管理",
       },
       {
         action: "calendar",
@@ -138,7 +138,7 @@ const navGroups: NavGroup[] = [
         icon: ListChecksIcon,
         path: "/studio/interview-questions",
         resource: "page",
-        title: "AI 面试-沟通通用题",
+        title: "AI面试-沟通通用题",
       },
     ],
     label: "AI面试题库",

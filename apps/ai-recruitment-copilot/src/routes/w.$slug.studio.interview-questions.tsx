@@ -33,8 +33,8 @@ export const Route = createFileRoute("/w/$slug/studio/interview-questions")({
     }
     return state;
   },
-  head: () => ({ meta: [{ title: formatDocumentTitle("AI 面试-沟通通用题") }] }),
+  head: () => ({ meta: [{ title: formatDocumentTitle("AI面试-沟通通用题") }] }),
   component: StudioInterviewQuestionsRoute,
-  pendingComponent: () => <StudioTablePageSkeleton filterCount={3} label="AI 面试-沟通通用题" />,
+  pendingComponent: () => <StudioTablePageSkeleton filterCount={3} label="AI面试-沟通通用题" />,
   shouldReload: false,
 });
