@@ -591,7 +591,7 @@ export function InterviewManagementPage() {
                 </EmptyMedia>
                 <EmptyTitle>还没有候选人面试记录</EmptyTitle>
                 <EmptyDescription>
-                  请前往简历库新建简历记录，选择「保存并发起面试」即可创建面试。
+                  请前往候选人管理新建简历记录，选择「保存并发起面试」即可创建面试。
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -599,7 +599,7 @@ export function InterviewManagementPage() {
                   nativeButton={false}
                   render={
                     <Link params={{ slug }} to="/w/$slug/studio/resumes">
-                      前往简历库
+                      前往候选人管理
                     </Link>
                   }
                 />

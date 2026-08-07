@@ -48,8 +48,8 @@ const ResumePoolDetailDialog = lazy(async () => {
 });
 
 const SOURCE_LABEL: Record<JobDescriptionTalentRecommendationSource, string> = {
-  public_resume_pool: "简历广场",
-  resume_library: "简历库",
+  public_resume_pool: "简历池",
+  resume_library: "候选人管理",
 };
 
 interface TalentRecommendationsDialogProps {
@@ -361,7 +361,7 @@ function RecommendationsBody({
             <UserCheckIcon className="size-5" />
           </EmptyMedia>
           <EmptyTitle>暂无推荐人才</EmptyTitle>
-          <EmptyDescription>当前没有足够匹配的已索引简历（简历库与简历广场）。</EmptyDescription>
+          <EmptyDescription>当前没有足够匹配的已索引简历（候选人管理与简历池）。</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -422,7 +422,7 @@ export function JobDescriptionTalentRecommendationsDialog({
     <>
       <Modal
         bodyClassName="px-6 py-5"
-        description="基于岗位 JD 与简历库、简历广场已索引简历的语义相似度生成。"
+        description="基于岗位 JD 与候选人管理、简历池已索引简历的语义相似度生成。"
         onOpenChange={onOpenChange}
         open={open}
         size="2xl"

@@ -46,7 +46,7 @@ export function getWorkspaceRoleLabel(role: AnyWorkspaceRole): string {
 export function getWorkspaceRoleDescription(role: AnyWorkspaceRole): string {
   return isBuiltInWorkspaceRole(role)
     ? WORKSPACE_ROLE_DESCRIPTIONS[role]
-    : "自定义工作区角色；具体权限由系统设置中的权限管理决定。";
+    : "自定义工作区角色；具体权限由系统设置中的角色与权限决定。";
 }
 
 export function buildWorkspaceRoleOptions(

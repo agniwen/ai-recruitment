@@ -149,7 +149,7 @@ export function getResumePoolImportActionState(record: ResumePoolListRecord) {
     case "ready": {
       return {
         disabled: false,
-        label: "入库到简历库",
+        label: "入库到候选人管理",
         loading: false,
       };
     }
@@ -193,10 +193,6 @@ export function getResumePoolImportActionState(record: ResumePoolListRecord) {
 
 export function canUploadToResumePool(canCreatePool: boolean, canCreateBatch: boolean) {
   return canCreatePool && canCreateBatch;
-}
-
-export function canImportResumePoolToLibrary(canImportPool: boolean, canCreateLibrary: boolean) {
-  return canImportPool && canCreateLibrary;
 }
 
 export function matchesSearch(record: ResumePoolListRecord, rawSearch: string) {
@@ -255,7 +251,7 @@ export function canDeletePoolRecord(
 }
 
 export function deletePoolRecordLabel(record: ResumePoolListRecord | null) {
-  return record?.scope === "public" ? "简历广场简历" : "私有简历";
+  return record?.scope === "public" ? "公共简历" : "私有简历";
 }
 
 export function sessionUserId(session: { user?: { id?: string | null } } | null | undefined) {

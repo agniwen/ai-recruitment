@@ -68,7 +68,7 @@ function similarityEvidence(match: DedupMatchRecord): { label: string; value: st
 }
 
 function sourceTypeLabel(match: Pick<DedupMatchRecord, "sourceType">) {
-  return match.sourceType === "resume_pool_item" ? "私有简历池" : "简历库";
+  return match.sourceType === "resume_pool_item" ? "私有简历池" : "候选人管理";
 }
 
 function textOrNull(value: string | null | undefined) {

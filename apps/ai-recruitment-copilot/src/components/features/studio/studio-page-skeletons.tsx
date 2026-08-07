@@ -188,7 +188,7 @@ function ResumePoolCardsSkeleton() {
 
 export function RecruitingPageSkeleton() {
   return (
-    <PageShell label="简历库">
+    <PageShell label="候选人管理">
       <HeaderSkeleton />
       <ChartGridSkeleton />
       <TabsSkeleton count={6} />
@@ -200,7 +200,7 @@ export function RecruitingPageSkeleton() {
 
 export function ResumePoolPageSkeleton() {
   return (
-    <PageShell label="简历广场">
+    <PageShell label="简历池">
       <HeaderSkeleton />
       <TabsSkeleton count={2} />
       <ToolbarSkeleton filterCount={4} />
@@ -230,7 +230,7 @@ export function StudioTablePageSkeleton({
 
 export function JobDescriptionsPageSkeleton() {
   return (
-    <PageShell label="岗位设置">
+    <PageShell label="在招岗位">
       <HeaderSkeleton />
       <ChartGridSkeleton />
       <ToolbarSkeleton filterCount={3} />
@@ -241,7 +241,7 @@ export function JobDescriptionsPageSkeleton() {
 
 export function DashboardPageSkeleton() {
   return (
-    <PageShell label="数据看板">
+    <PageShell label="招聘看板">
       <HeaderSkeleton />
       <SummarySkeleton count={4} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
@@ -284,7 +284,7 @@ export function ProfilePageSkeleton() {
 
 export function MembersPageSkeleton() {
   return (
-    <PageShell label="工作区管理">
+    <PageShell label="成员与招聘组">
       <HeaderSkeleton />
       <TabsSkeleton count={2} />
       <ToolbarSkeleton filterCount={1} />
@@ -295,7 +295,7 @@ export function MembersPageSkeleton() {
 
 export function PermissionsPageSkeleton() {
   return (
-    <PageShell label="权限管理">
+    <PageShell label="角色与权限">
       <HeaderSkeleton action actionFullWidth />
       <div className="overflow-hidden rounded-lg border border-border/70">
         <div className="min-w-[72rem]">
@@ -335,7 +335,7 @@ export function PermissionsPageSkeleton() {
 
 export function GlobalConfigPageSkeleton() {
   return (
-    <PageShell label="上下文设置">
+    <PageShell label="公司信息与话术">
       <HeaderSkeleton action />
       <div className="space-y-5">
         {Array.from({ length: 5 }).map((_, index) => (

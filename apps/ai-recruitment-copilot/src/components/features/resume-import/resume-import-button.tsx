@@ -335,7 +335,7 @@ export function ResumeImportButton({
       // the interview is deferred to the user clicking 「发起 AI 面试」 in the
       // resume detail dialog, which routes into LaunchInterviewDialog.
       setPhase("saving");
-      setProgressStatus("正在写入简历库…");
+      setProgressStatus("正在写入候选人管理…");
       setProgressTools([]);
       setPartialFields([]);
       accumulatedTextRef.current = "";
@@ -353,7 +353,7 @@ export function ResumeImportButton({
       });
       invalidateLibraryCaches();
       onImported(filePart.id, record.id);
-      toast.success("简历已加入简历库");
+      toast.success("简历已加入候选人管理");
       cachedParseResultRef.current = null;
       resetProgress();
       setDetailRecordId(record.id);
@@ -396,7 +396,7 @@ export function ResumeImportButton({
 
     try {
       setPhase("saving");
-      setProgressStatus("正在写入简历库…");
+      setProgressStatus("正在写入候选人管理…");
       setProgressTools([]);
       setPartialFields([]);
       accumulatedTextRef.current = "";
@@ -424,7 +424,7 @@ export function ResumeImportButton({
       });
       invalidateLibraryCaches();
       onImported(filePart.id, record.id);
-      toast.success("简历已加入简历库");
+      toast.success("简历已加入候选人管理");
       cachedParseResultRef.current = null;
       resetProgress();
       setDetailRecordId(record.id);

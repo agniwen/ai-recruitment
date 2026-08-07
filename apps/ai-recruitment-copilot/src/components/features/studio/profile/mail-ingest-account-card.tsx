@@ -221,7 +221,7 @@ export function MailIngestAccountCard() {
   return (
     <>
       <SettingsSection
-        description="轮询 Boss 直聘简历邮件，自动加入你的私有简历库解析队列。"
+        description="轮询 Boss 直聘简历邮件，自动加入你的私有简历池解析队列。"
         title="简历邮箱采集"
       >
         <SettingsGroup>

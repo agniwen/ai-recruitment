@@ -138,8 +138,8 @@ describe("ResumeComparisonDialog", () => {
       "https://example.com/recruiter.png",
       "https://example.com/pool-uploader.png",
     ]);
-    expect(document.body.textContent).toContain("简历库");
-    expect(document.body.textContent).toContain("简历广场");
+    expect(document.body.textContent).toContain("候选人管理");
+    expect(document.body.textContent).toContain("简历池");
     expect(document.body.textContent).toContain("招聘流程中");
     expect(document.querySelectorAll("time")).toHaveLength(2);
   });

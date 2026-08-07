@@ -48,7 +48,6 @@ import { useHasPermission } from "@/hooks/use-has-permission";
 import { useWorkspaceId, useWorkspaceSlug } from "@/lib/client/workspace-context";
 
 import {
-  canImportResumePoolToLibrary,
   canUploadToResumePool,
   buildResumePoolUploaderFilterOptions,
   createResumePoolFilters,
@@ -100,7 +99,6 @@ export function ResumePoolPage() {
   const canDeleteResumePool = useHasPermission("resumePool", "delete");
   const canImportResumePool = useHasPermission("resumePool", "import");
   const canPublishResumePool = useHasPermission("resumePool", "publish");
-  const canCreateResumeLibrary = useHasPermission("resumeLibrary", "create");
   const canReadResumeUploadBatch = useHasPermission("resumeUploadBatch", "read");
   const canCreateResumeUploadBatch = useHasPermission("resumeUploadBatch", "create");
   const canRetryResumeParse = useHasPermission("resumeUploadBatch", "process");
@@ -217,10 +215,8 @@ export function ResumePoolPage() {
     canCreateResumePool,
     canCreateResumeUploadBatch,
   );
-  const canImportToLibrary = canImportResumePoolToLibrary(
-    canImportResumePool,
-    canCreateResumeLibrary,
-  );
+  // 入库只依赖 resumePool:import，不要求候选人管理「新增」（可只开放简历池挑选入库）。
+  const canImportToLibrary = canImportResumePool;
   const canBulkDeletePrivateResumes = canDeleteResumePool && hasSelectedPrivateResumes;
   const loadMoreRecords = useCallback(() => {
     if (!hasMoreRecords || isPoolBusy) {
@@ -585,7 +581,11 @@ export function ResumePoolPage() {
       <ResumeUploadEntryDialog
         description="选择 1 份或多份 PDF，都会进入后台解析队列。"
         fileUploadDescription="可选择 1 份或多份 PDF，上传后在后台异步解析。"
-        fileUploadTitle="请选择要加入公共简历池的简历文件"
+        fileUploadTitle={
+          uploadScope === "private"
+            ? "请选择要加入私有简历池的简历文件"
+            : "请选择要加入公共简历池的简历文件"
+        }
         onMultipleFilesPicked={(files) => handleQueuedUploadFilesPicked(files, uploadScope)}
         onOpenChange={setUploadEntryOpen}
         onSingleFilePicked={(file) => handleQueuedUploadFilesPicked([file], uploadScope)}
@@ -684,7 +684,7 @@ export function ResumePoolPage() {
             <AlertDialogTitle>确认删除这份{deletePoolRecordLabel(deleteTarget)}？</AlertDialogTitle>
             <AlertDialogDescription>
               这会永久删除 {deleteTarget ? getCandidateTitle(deleteTarget) : "该记录"}。
-              已入库到简历库的记录不会删除。
+              已入库到候选人管理的记录不会删除。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

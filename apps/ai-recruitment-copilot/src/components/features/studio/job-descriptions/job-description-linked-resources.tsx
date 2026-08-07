@@ -29,7 +29,7 @@ export function LinkedFormsList({
         <div>
           <p className="font-medium text-sm">岗位关联的表单题</p>
           <p className="mt-1 text-muted-foreground text-xs">
-            候选人进入面试前需要填写下列表单题；全局表单题在「表单题」菜单中维护。
+            候选人进入面试前需要填写下列表单题；全局表单题在「AI面试-面前通用题」菜单中维护。
           </p>
         </div>
         {readOnly ? null : (
@@ -117,7 +117,8 @@ export function LinkedInterviewQuestionTemplatesList({
         <div>
           <p className="font-medium text-sm">岗位关联的沟通题</p>
           <p className="mt-1 text-muted-foreground text-xs">
-            创建 AI 面试时会自动绑定到下列沟通题的最新版本；全局沟通题在「沟通题」菜单中维护。
+            创建 AI 面试时会自动绑定到下列沟通题的最新版本；全局沟通题在「AI
+            面试-沟通通用题」菜单中维护。
           </p>
         </div>
         {readOnly ? null : (

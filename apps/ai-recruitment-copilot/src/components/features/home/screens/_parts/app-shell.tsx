@@ -40,33 +40,33 @@ interface NavGroup {
 export const STUDIO_NAV_GROUPS: NavGroup[] = [
   {
     items: [
-      { icon: IconUsers, label: "简历库" },
-      { icon: IconRobot, label: "AI 面试" },
+      { icon: IconUsers, label: "候选人管理" },
+      { icon: IconRobot, label: "AI 面试管理" },
     ],
-    label: "工作台",
+    label: "招聘工作台",
   },
   {
     items: [
-      { icon: IconBuilding, label: "部门管理" },
-      { icon: IconUserCircle, label: "AI面试官设置" },
-      { icon: IconFileText, label: "岗位设置" },
+      { icon: IconBuilding, label: "部门设置" },
+      { icon: IconUserCircle, label: "AI 面试官" },
+      { icon: IconFileText, label: "在招岗位" },
     ],
-    label: "招聘配置",
+    label: "招聘基础设置",
   },
   {
     items: [
-      { icon: IconClipboardList, label: "表单题" },
-      { icon: IconListCheck, label: "沟通题" },
+      { icon: IconClipboardList, label: "AI面试-面前通用题" },
+      { icon: IconListCheck, label: "AI面试-沟通通用题" },
     ],
-    label: "题库",
+    label: "AI面试题库",
   },
   {
     items: [
       { icon: IconUser, label: "个人中心" },
-      { icon: IconUserCog, label: "工作区管理" },
-      { icon: IconMessageChatbot, label: "上下文设置" },
+      { icon: IconUserCog, label: "成员与招聘组" },
+      { icon: IconMessageChatbot, label: "公司信息与话术" },
     ],
-    label: "系统配置",
+    label: "系统设置",
   },
 ];
 

@@ -23,7 +23,7 @@ export function fetchResumePoolItems(
       param: { slug },
       query: { id, scope, uploaderId },
     }),
-    "加载公共简历池失败",
+    "加载简历池失败",
   );
 }
 

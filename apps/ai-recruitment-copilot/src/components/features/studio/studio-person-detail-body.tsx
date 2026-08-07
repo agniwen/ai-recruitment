@@ -828,7 +828,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
                 ) : /* oxlint-disable-next-line no-nested-ternary -- Secondary branch renders empty-state or result. */
                 candidateRounds.length === 0 ? (
                   <p className="text-muted-foreground text-sm leading-normal">
-                    该候选人还没有发起面试。在简历库点「保存并发起面试」即可创建。
+                    该候选人还没有发起面试。在候选人管理点「保存并发起面试」即可创建。
                   </p>
                 ) : resumeInterviewResultRecord ? (
                   <InterviewResultTabContent

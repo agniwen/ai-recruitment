@@ -251,7 +251,7 @@ function MailIngestAccountDialog({
             },
             param: { id: row.account.id, slug },
           }),
-          "邮箱监听配置更新失败",
+          "简历邮箱采集配置更新失败",
         );
         return;
       }
@@ -268,15 +268,15 @@ function MailIngestAccountDialog({
           },
           param: { slug },
         }),
-        "邮箱监听配置保存失败",
+        "简历邮箱采集配置保存失败",
       );
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "邮箱监听配置保存失败");
+      toast.error(error instanceof Error ? error.message : "简历邮箱采集配置保存失败");
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["managed-mail-ingest-accounts", slug] });
-      toast.success(row?.account ? "邮箱监听配置已更新" : "邮箱监听配置已创建");
+      toast.success(row?.account ? "简历邮箱采集配置已更新" : "简历邮箱采集配置已创建");
       onOpenChange(false);
     },
   });
@@ -288,11 +288,11 @@ function MailIngestAccountDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "编辑邮箱监听" : "新建邮箱监听"}</DialogTitle>
+          <DialogTitle>{isEdit ? "编辑简历邮箱采集" : "新建简历邮箱采集"}</DialogTitle>
           <DialogDescription>
             {row
               ? `${row.user.name || row.user.email} · ${row.user.email}`
-              : "选择成员并填写邮箱监听配置。"}
+              : "选择成员并填写简历邮箱采集配置。"}
           </DialogDescription>
         </DialogHeader>
 
@@ -489,7 +489,7 @@ function ManagedMailIngestPage() {
           ...(params.sortOrder ? { sortOrder: params.sortOrder } : {}),
         },
       }),
-      "加载邮箱监听配置失败",
+      "加载简历邮箱采集配置失败",
     );
   }
 
@@ -656,11 +656,13 @@ function ManagedMailIngestPage() {
               <EmptyMedia variant="icon">
                 <InboxIcon />
               </EmptyMedia>
-              <EmptyTitle>{grid.search ? "没有匹配的邮箱监听配置" : "暂无工作区成员"}</EmptyTitle>
+              <EmptyTitle>
+                {grid.search ? "没有匹配的简历邮箱采集配置" : "暂无工作区成员"}
+              </EmptyTitle>
               <EmptyDescription>
                 {grid.search
                   ? "调整搜索关键词后重试。"
-                  : "邀请成员加入工作区后，可在这里配置邮箱监听。"}
+                  : "邀请成员加入工作区后，可在这里配置简历邮箱采集。"}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

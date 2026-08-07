@@ -133,7 +133,9 @@ describe("workspace role permission helpers", () => {
   it("describes where each permission item takes effect", () => {
     const items = buildPermissionItems();
     const resumeLibraryRead = items.find((item) => item.key === "resumeLibrary:read");
+    const resumeLibraryCreate = items.find((item) => item.key === "resumeLibrary:create");
     const resumePoolRead = items.find((item) => item.key === "resumePool:read");
+    const resumePoolImport = items.find((item) => item.key === "resumePool:import");
     const resumePoolPage = items.find((item) => item.key === "page:resumePool");
     const chatPage = items.find((item) => item.key === "page:chat");
     const jobDescriptionPage = items.find((item) => item.key === "page:jobDescriptions");
@@ -143,17 +145,21 @@ describe("workspace role permission helpers", () => {
     expect(chatPage?.description).toContain("禁用");
     expect(chatPage?.description).toContain("候选人管理");
     expect(resumePoolPage?.description).toContain("访问「简历池」页面");
-    expect(resumePoolPage?.description).toContain("数据接口仍受「公共简历池」业务权限控制");
+    expect(resumePoolPage?.description).toContain("数据接口仍受「简历池」业务权限控制");
     expect(resumePoolPage?.description).toContain("404");
-    expect(resumeLibraryRead?.description).toContain("「简历库」列表、详情、时间线");
+    expect(resumeLibraryRead?.description).toContain("「候选人管理」列表、详情、时间线");
     expect(resumeLibraryRead?.description).toContain("推荐候选人接口");
-    expect(resumePoolRead?.description).toContain("「公共简历池」列表、详情、简历文件");
+    expect(resumeLibraryCreate?.description).toContain("不包含从简历池入库");
+    expect(resumeLibraryCreate?.description).toContain("简历池 · 导入");
+    expect(resumePoolImport?.description).toContain("相互独立");
+    expect(resumePoolImport?.description).toContain("仅有导入权限时不能在候选人管理直接新建");
+    expect(resumePoolRead?.description).toContain("「简历池」列表、详情、简历文件");
     expect(resumePoolRead?.description).toContain("推荐候选人接口");
     expect(jobDescriptionPage?.description).toContain(
       "推荐候选人还需要「候选人管理」和「简历池」查看权限",
     );
     expect(jdRead?.description).toContain(
-      "推荐候选人接口还同时需要「简历库」和「公共简历池」查看权限",
+      "推荐候选人接口还同时需要「候选人管理」和「简历池」查看权限",
     );
   });
 });

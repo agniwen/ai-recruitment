@@ -130,7 +130,7 @@ describe("StudioCalendarPage", () => {
       );
     });
 
-    expect(host.textContent).toContain("日程管理");
+    expect(host.textContent).toContain("面试日程");
     expect(host.querySelector('[data-slot="frame"]')).not.toBeNull();
     expect(host.querySelector('[data-slot="frame-panel"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="正在加载面试日程"]')).not.toBeNull();

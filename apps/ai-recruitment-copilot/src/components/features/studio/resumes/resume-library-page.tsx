@@ -410,7 +410,7 @@ export function ResumeLibraryPage() {
       return;
     }
     if (!record.jobDescriptionInterviewers.length) {
-      toast.error("当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置");
+      toast.error("当前关联岗位未绑定 AI 面试官，请先到「在招岗位」中配置");
       return;
     }
     if (!canLaunchInterviewFromResume(record.resumeParseStatus)) {
@@ -572,7 +572,7 @@ export function ResumeLibraryPage() {
         <EmptyMedia variant="icon">
           <IconUsers className="size-5" />
         </EmptyMedia>
-        <EmptyTitle>简历库还没有任何候选人</EmptyTitle>
+        <EmptyTitle>候选人管理还没有任何候选人</EmptyTitle>
         <EmptyDescription>点击右上角「上传简历」加入第一份候选人简历。</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>

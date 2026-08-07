@@ -120,7 +120,7 @@ export function MailIngestLogPage() {
           variant="ghost"
         >
           <IconArrowLeft />
-          <span className="hidden sm:inline">返回邮箱监听</span>
+          <span className="hidden sm:inline">返回简历邮箱采集</span>
         </Button>
       </div>
     ),
@@ -134,7 +134,7 @@ export function MailIngestLogPage() {
         rpc.api.w[":slug"].studio["mail-ingest-accounts"].managed[":id"].$get({
           param: { id, slug },
         }),
-        "加载邮箱监听配置失败",
+        "加载简历邮箱采集配置失败",
       ),
     queryKey: ["managed-mail-ingest-account", slug, id],
   });

@@ -1055,7 +1055,7 @@ export function createRecruitingCopilotTools({
     }),
     search_resume_records: createTool({
       description:
-        "在当前 workspace 的简历库中检索候选人。默认返回候选人摘要卡片，不返回完整简历全文。",
+        "在当前 workspace 的候选人管理中检索候选人。默认返回候选人摘要卡片，不返回完整简历全文。",
       execute: (input: z.infer<typeof searchResumeRecordsInputSchema>) =>
         searchResumeRecordsForCopilot({ ...input, organizationId, visibilityScope }),
       id: "search_resume_records",

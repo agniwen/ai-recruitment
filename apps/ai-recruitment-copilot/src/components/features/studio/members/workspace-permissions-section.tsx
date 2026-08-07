@@ -445,7 +445,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       <div className="flex flex-col gap-6">
         {header}
         <Alert>
-          <AlertTitle>没有权限管理权限</AlertTitle>
+          <AlertTitle>没有角色与权限管理权限</AlertTitle>
           <AlertDescription>只有工作区拥有者和管理员可以配置工作区角色权限。</AlertDescription>
         </Alert>
       </div>

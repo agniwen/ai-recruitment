@@ -47,7 +47,7 @@ export function ResumePoolUploadConfirmDialog({
       description={
         scope === "private"
           ? "请选择简历来源。命中疑似重复时仍会加入私有简历，并在列表中标记“疑似重复”。"
-          : "请选择简历来源后，文件将进入公共简历广场的后台解析队列；入库到简历库时会一并复制来源。"
+          : "请选择简历来源后，文件将进入公共简历池的后台解析队列；入库到候选人管理时会一并复制来源。"
       }
       footer={
         <>

@@ -15,7 +15,7 @@ describe("workspace role display", () => {
         value: "member",
       },
       {
-        description: "自定义工作区角色；具体权限由系统设置中的权限管理决定。",
+        description: "自定义工作区角色；具体权限由系统设置中的角色与权限决定。",
         label: "面试审核员",
         value: "interview-reviewer",
       },

@@ -156,7 +156,7 @@ export function LaunchInterviewDialog({
         return;
       }
       if (!resumeDetail.jobDescriptionInterviewers.length) {
-        toast.error("当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置");
+        toast.error("当前关联岗位未绑定 AI 面试官，请先到「在招岗位」中配置");
         onOpenChange(false);
         return;
       }
@@ -216,7 +216,7 @@ export function LaunchInterviewDialog({
           return;
         }
         if (detail && !detail.jobDescriptionInterviewers.length) {
-          toast.error("当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置");
+          toast.error("当前关联岗位未绑定 AI 面试官，请先到「在招岗位」中配置");
           onOpenChange(false);
           return;
         }

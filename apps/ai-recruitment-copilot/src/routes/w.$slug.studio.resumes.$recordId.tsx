@@ -188,7 +188,7 @@ function RecruiterResumeDetailHeaderOverride({ onBack }: { onBack: () => void })
           variant="ghost"
         >
           <IconArrowLeft className="size-4" />
-          <span className="hidden sm:inline">返回简历库</span>
+          <span className="hidden sm:inline">返回候选人管理</span>
         </Button>
       </div>
     ),
@@ -302,7 +302,7 @@ function RecruiterResumeDetailPage() {
                     return;
                   }
                   if (detail && !detail.jobDescriptionInterviewers.length) {
-                    toast.error("当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置");
+                    toast.error("当前关联岗位未绑定 AI 面试官，请先到「在招岗位」中配置");
                     return;
                   }
                   if (detail && !canLaunchInterviewFromResume(detail.resumeParseStatus)) {

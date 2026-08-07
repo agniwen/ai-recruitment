@@ -191,7 +191,7 @@ function DetailsPane({
   detail: ResumeComparisonDetail;
 }) {
   const sourceLabel =
-    normalizedSourceType(candidate.sourceType) === "resume_pool_item" ? "简历广场" : "简历库";
+    normalizedSourceType(candidate.sourceType) === "resume_pool_item" ? "简历池" : "候选人管理";
   let statusLabel: string;
   if ("status" in detail) {
     statusLabel = detail.status === "active" ? "有效" : "已归档";

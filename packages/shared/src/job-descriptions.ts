@@ -348,7 +348,7 @@ export interface JobDescriptionTalentRecommendation {
     skillRole?: number;
     workProject?: number;
   };
-  /** 简历库 or 简历广场（公共简历池） */
+  /** 候选人管理 or 简历池（公共简历） */
   source: JobDescriptionTalentRecommendationSource;
   targetRole: string | null;
   workYears: number | null;

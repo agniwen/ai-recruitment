@@ -445,8 +445,8 @@ export const resumePoolRouter = factory
   })
   .post(
     "/:id/import",
+    // 仅 resumePool:import：允许「不能在候选人管理新建、但可从简历池入库」的角色。
     requirePermission("resumePool", "import"),
-    requirePermission("resumeLibrary", "create"),
     zValidator("json", resumePoolImportInputSchema, jsonValidatorError("请求参数无效。")),
     async (c) => {
       const { activeOrg, user } = c.var;

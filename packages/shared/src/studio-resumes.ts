@@ -446,7 +446,7 @@ export function getResumeAiInterviewInterviewerGateReason(
 ): string | null {
   return jobHasAiInterviewers(interviewers)
     ? null
-    : "当前关联岗位未绑定 AI 面试官，请先在岗位设置中配置。";
+    : "当前关联岗位未绑定 AI 面试官，请先到「在招岗位」中配置。";
 }
 
 export function canDeleteResumeRecord(status: ResumeParseStatus): boolean {

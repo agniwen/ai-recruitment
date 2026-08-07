@@ -15,16 +15,16 @@ import {
 
 describe("Studio page skeletons", () => {
   it.each([
-    ["简历库", () => <RecruitingPageSkeleton />],
-    ["简历广场", () => <ResumePoolPageSkeleton />],
-    ["AI 面试", () => <StudioTablePageSkeleton label="AI 面试" summary />],
-    ["用人组织管理", () => <StudioTablePageSkeleton label="用人组织管理" />],
-    ["数据看板", () => <DashboardPageSkeleton />],
-    ["岗位设置", () => <JobDescriptionsPageSkeleton />],
+    ["候选人管理", () => <RecruitingPageSkeleton />],
+    ["简历池", () => <ResumePoolPageSkeleton />],
+    ["AI 面试管理", () => <StudioTablePageSkeleton label="AI 面试管理" summary />],
+    ["用人组织", () => <StudioTablePageSkeleton label="用人组织" />],
+    ["招聘看板", () => <DashboardPageSkeleton />],
+    ["在招岗位", () => <JobDescriptionsPageSkeleton />],
     ["个人中心", () => <ProfilePageSkeleton />],
-    ["工作区管理", () => <MembersPageSkeleton />],
-    ["权限管理", () => <PermissionsPageSkeleton />],
-    ["上下文设置", () => <GlobalConfigPageSkeleton />],
+    ["成员与招聘组", () => <MembersPageSkeleton />],
+    ["角色与权限", () => <PermissionsPageSkeleton />],
+    ["公司信息与话术", () => <GlobalConfigPageSkeleton />],
     ["面试详情", () => <InterviewDetailPageSkeleton />],
   ])("renders an accessible %s loading state", (label, createSkeleton) => {
     const html = renderToStaticMarkup(createSkeleton());

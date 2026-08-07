@@ -88,7 +88,7 @@ function UploadTaskRow({
                 <span aria-hidden>·</span>
               </>
             ) : null}
-            <span>{record.target === "resume_pool" ? "简历广场" : "简历库"}</span>
+            <span>{record.target === "resume_pool" ? "简历池" : "候选人管理"}</span>
             {record.attemptCount > 1 ? (
               <>
                 <span aria-hidden>·</span>
