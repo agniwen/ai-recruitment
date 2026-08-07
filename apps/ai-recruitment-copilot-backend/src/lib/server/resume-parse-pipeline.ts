@@ -6,9 +6,10 @@ import {
   generateStructuredWithMastraAgent,
   resumeStructuredAgent,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/simple-generators";
-import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
-import type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
+import { getResumeStructuredModelEndpoint } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import type { AttachmentTextSource } from "@arc/db-schema/db-enums";
+import type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
+import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
 import { getResumeDocumentKind } from "@arc/shared/resume-documents";
 import { convertLegacyOfficeToOoxml } from "./office-conversion";
 import {
@@ -24,9 +25,9 @@ import {
   readOfficeZipText as readZipText,
 } from "./office-xml";
 import { processPdfPagesWithMeta } from "./pdf-rasterize";
+import { getQwenOcrEndpointConfig, isQwenOcrConfigured, qwenVlOcr } from "./qwen-ocr";
 import { parseResumeWithAliyun } from "./resume-parse-aliyun";
 import { getResumeParseProvider } from "./resume-parse-provider";
-import { isQwenOcrConfigured, qwenVlOcr } from "./qwen-ocr";
 
 const STRUCTURED_TEXT_MAX_CHARS = 16_000;
 const DEV_OCR_LOG_PREFIX = "[resume-ocr]";
@@ -224,6 +225,12 @@ function devOcrLog(message: string, data?: Record<string, unknown>): void {
   if (!isDevOcrLogEnabled()) {
     return;
   }
+  // eslint-disable-next-line no-console
+  console.info(DEV_OCR_LOG_PREFIX, message, data ?? "");
+}
+
+/** Always-on endpoint logs for production model-call diagnosis (no secrets). */
+function ocrEndpointLog(message: string, data?: Record<string, unknown>): void {
   // eslint-disable-next-line no-console
   console.info(DEV_OCR_LOG_PREFIX, message, data ?? "");
 }
@@ -528,6 +535,13 @@ async function extractImageText(input: ResumeDocumentInput): Promise<ParsedResum
 
   const mediaType = inferImageMediaType(input);
   const startedAt = nowMs();
+  const ocrEndpoint = getQwenOcrEndpointConfig();
+  ocrEndpointLog("image ocr start", {
+    baseURL: ocrEndpoint.baseURL,
+    bytes: input.bytes.byteLength,
+    mediaType,
+    model: ocrEndpoint.model,
+  });
   emitResumeParseProgress(input.onProgress, {
     renderedPages: 1,
     totalPages: 1,
@@ -568,27 +582,47 @@ async function extractImageText(input: ResumeDocumentInput): Promise<ParsedResum
 
 export async function generateResumeStructured(text: string): Promise<ResumeParserStructured> {
   const startedAt = nowMs();
-  devOcrLog("structured start", {
+  const structuredEndpoint = getResumeStructuredModelEndpoint();
+  ocrEndpointLog("structured start", {
+    baseURL: structuredEndpoint.baseURL,
     inputChars: text.length,
+    model: structuredEndpoint.model,
+    providerMode: structuredEndpoint.providerMode,
   });
-  const output = await generateStructuredWithMastraAgent({
-    agent: resumeStructuredAgent,
-    // 中文简历每字约 1 token，加上 projectExperiences/workExperiences 等结构开销，
-    // 项目/经历较多的简历输出会很长，给到 16384 留足余量避免 summary 中途截断。
-    // Chinese resumes use ~1 token per character; with verbose project / work
-    // experience summaries the output can be very long, so allow 16384 to leave
-    // headroom and avoid truncating mid-string.
-    maxOutputTokens: 16_384,
-    prompt: `${RESUME_STRUCTURED_INSTRUCTIONS}\n\n简历文本：\n${clipForStructured(text)}`,
-    schema: structuredSchema,
-    temperature: 0,
-  });
-  devOcrLog("structured completed", {
-    duration: formatDuration(startedAt),
-    inputChars: text.length,
-    outputChars: JSON.stringify(output).length,
-  });
-  return output;
+  try {
+    const output = await generateStructuredWithMastraAgent({
+      agent: resumeStructuredAgent,
+      // 中文简历每字约 1 token，加上 projectExperiences/workExperiences 等结构开销，
+      // 项目/经历较多的简历输出会很长，给到 16384 留足余量避免 summary 中途截断。
+      // Chinese resumes use ~1 token per character; with verbose project / work
+      // experience summaries the output can be very long, so allow 16384 to leave
+      // headroom and avoid truncating mid-string.
+      maxOutputTokens: 16_384,
+      prompt: `${RESUME_STRUCTURED_INSTRUCTIONS}\n\n简历文本：\n${clipForStructured(text)}`,
+      schema: structuredSchema,
+      temperature: 0,
+    });
+    devOcrLog("structured completed", {
+      duration: formatDuration(startedAt),
+      inputChars: text.length,
+      model: structuredEndpoint.model,
+      outputChars: JSON.stringify(output).length,
+    });
+    return output;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // eslint-disable-next-line no-console
+    console.error(DEV_OCR_LOG_PREFIX, "structured model call failed", {
+      baseURL: structuredEndpoint.baseURL,
+      errorMessage: message,
+      model: structuredEndpoint.model,
+      providerMode: structuredEndpoint.providerMode,
+    });
+    throw new Error(
+      `Resume structured extraction failed (model=${structuredEndpoint.model}, baseURL=${structuredEndpoint.baseURL ?? "n/a"}, mode=${structuredEndpoint.providerMode}): ${message}`,
+      { cause: error },
+    );
+  }
 }
 
 /** Lazily rasterize and OCR up to six PDF pages. */
@@ -601,7 +635,14 @@ export async function parseResumeOcrOnly(
     throw new Error("Qwen OCR is not configured (missing ALIBABA_API_KEY).");
   }
 
-  devOcrLog("start", { bytes: bytes.byteLength, maxPages: 6, scale: 2 });
+  const ocrEndpoint = getQwenOcrEndpointConfig();
+  ocrEndpointLog("start", {
+    baseURL: ocrEndpoint.baseURL,
+    bytes: bytes.byteLength,
+    maxPages: 6,
+    model: ocrEndpoint.model,
+    scale: 2,
+  });
   const ocrStartedAt = nowMs();
   const pageConcurrency = parsePositiveInteger(
     process.env.RESUME_PARSE_OCR_PAGE_CONCURRENCY,

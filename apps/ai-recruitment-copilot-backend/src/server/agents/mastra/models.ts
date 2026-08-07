@@ -178,4 +178,37 @@ export function configureAlibabaCodingPlanApiKey(env: NodeJS.ProcessEnv = proces
   }
 }
 
+/** Safe-to-log model endpoint identity (never includes API keys). */
+export interface MastraModelEndpointInfo {
+  baseURL: string | null;
+  model: string;
+  providerMode: "alibaba-compatible" | "alibaba-coding-plan";
+}
+
+export function describeMastraModelEndpoint(
+  config: CoreMastraModelConfig,
+): Omit<MastraModelEndpointInfo, "providerMode"> {
+  if (typeof config === "string") {
+    return { baseURL: null, model: config };
+  }
+  if (config && typeof config === "object") {
+    const modelId =
+      "modelId" in config && typeof config.modelId === "string" ? config.modelId : "unknown";
+    const baseURL = "url" in config && typeof config.url === "string" ? config.url : null;
+    return { baseURL, model: modelId };
+  }
+  return { baseURL: null, model: "unknown" };
+}
+
+export function getResumeStructuredModelEndpoint(
+  env: EnvLike = process.env,
+): MastraModelEndpointInfo {
+  const models = getMastraModelConfig(env);
+  const described = describeMastraModelEndpoint(models.structuredModel);
+  return {
+    ...described,
+    providerMode: readEnv(env, "ALIBABA_BASE_URL") ? "alibaba-compatible" : "alibaba-coding-plan",
+  };
+}
+
 export const mastraModels = getMastraModelConfig();

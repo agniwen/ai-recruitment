@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CHAT_MODEL,
+  describeMastraModelEndpoint,
   getMastraModelConfig,
   getAlibabaCodingPlanApiKey,
   getMastraModelApiKey,
+  getResumeStructuredModelEndpoint,
   toAlibabaCodingPlanModelId,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 
@@ -101,5 +103,37 @@ describe("Mastra model configuration", () => {
         ALIBABA_CODING_PLAN_API_KEY: "coding-plan-key",
       }),
     ).toBe("alibaba-key");
+  });
+
+  it("describes compatible model endpoints without secrets", () => {
+    expect(
+      describeMastraModelEndpoint({
+        apiKey: "secret",
+        modelId: "qwen-plus",
+        providerId: "alibaba",
+        url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      }),
+    ).toEqual({
+      baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      model: "qwen-plus",
+    });
+    expect(describeMastraModelEndpoint("alibaba-coding-plan/qwen3.7-plus")).toEqual({
+      baseURL: null,
+      model: "alibaba-coding-plan/qwen3.7-plus",
+    });
+  });
+
+  it("exposes structured model endpoint for resume parse diagnostics", () => {
+    expect(
+      getResumeStructuredModelEndpoint({
+        ALIBABA_API_KEY: "legacy-key",
+        ALIBABA_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        ALIBABA_STRUCTURED_MODEL: "qwen-plus",
+      }),
+    ).toEqual({
+      baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      model: "qwen-plus",
+      providerMode: "alibaba-compatible",
+    });
   });
 });

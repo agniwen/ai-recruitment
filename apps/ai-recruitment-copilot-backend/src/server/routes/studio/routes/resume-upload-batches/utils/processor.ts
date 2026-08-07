@@ -44,10 +44,24 @@ import {
   loadClaimMissSnapshot,
   releaseBatchItemForRetry,
 } from "./processor-claims";
+import { getQwenOcrEndpointConfig } from "@arc/ai-recruitment-copilot-backend/lib/server/qwen-ocr";
+import { getResumeStructuredModelEndpoint } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 
 export { getClaimMissRetryError } from "./processor-claims";
 
 const ERROR_MESSAGE_MAX = 500;
+
+function resumeParseModelLogFields(): Record<string, string | null> {
+  const ocr = getQwenOcrEndpointConfig();
+  const structured = getResumeStructuredModelEndpoint();
+  return {
+    ocrBaseURL: ocr.baseURL,
+    ocrModel: ocr.model,
+    structuredBaseURL: structured.baseURL,
+    structuredModel: structured.model,
+    structuredProviderMode: structured.providerMode,
+  };
+}
 
 function truncate(s: string): string {
   return s.length > ERROR_MESSAGE_MAX ? `${s.slice(0, ERROR_MESSAGE_MAX - 1)}…` : s;
@@ -112,7 +126,11 @@ async function resolveResumeProfile(
   });
   const bytes = new Uint8Array(await new Response(object.body).arrayBuffer());
   const parseStartedAt = Date.now();
-  logStep("parse.start", { fileSize: bytes.byteLength, itemId: item.id });
+  logStep("parse.start", {
+    fileSize: bytes.byteLength,
+    itemId: item.id,
+    ...resumeParseModelLogFields(),
+  });
   const parsed = await parseResumeBytesToProfile({
     bytes,
     fileName: item.originalFileName,
@@ -124,6 +142,7 @@ async function resolveResumeProfile(
     itemId: item.id,
     pageCount: parsed.parsedPageCount,
     textSource: parsed.parsedTextSource,
+    ...resumeParseModelLogFields(),
   });
   if (item.contentHash) {
     const cacheWriteStartedAt = Date.now();
@@ -561,6 +580,7 @@ async function processClaimedItem(
       batchId: batchRow.id,
       errorMessage: outcome.errorMessage,
       itemId: item.id,
+      ...resumeParseModelLogFields(),
     });
   }
 

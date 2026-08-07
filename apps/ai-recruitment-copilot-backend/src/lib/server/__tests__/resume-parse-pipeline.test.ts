@@ -28,8 +28,20 @@ vi.mock("../pdf-rasterize", () => ({
 }));
 
 vi.mock("../qwen-ocr", () => ({
+  getQwenOcrEndpointConfig: () => ({
+    baseURL: "https://example.test/compatible-mode/v1",
+    model: "qwen-vl-ocr-test",
+  }),
   isQwenOcrConfigured: () => true,
   qwenVlOcr: mocks.qwenVlOcr,
+}));
+
+vi.mock("@arc/ai-recruitment-copilot-backend/server/agents/mastra/models", () => ({
+  getResumeStructuredModelEndpoint: () => ({
+    baseURL: "https://example.test/compatible-mode/v1",
+    model: "structured-test",
+    providerMode: "alibaba-compatible",
+  }),
 }));
 
 vi.mock("../aliyun-docmining", () => ({

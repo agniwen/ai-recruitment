@@ -51,4 +51,21 @@ describe("qwenVlOcr", () => {
       expect.objectContaining({ model: "qwen3-vl-flash" }),
     );
   });
+
+  it("annotates model call failures with model and baseURL", async () => {
+    mocks.chatCompletionsCreate.mockRejectedValue(new Error("404 Model not exist."));
+    const { qwenVlOcr } = await import("../qwen-ocr");
+
+    await expect(qwenVlOcr(Buffer.from("page"))).rejects.toThrow(
+      /model=qwen-vl-ocr-latest.*baseURL=https:\/\/workspace\.example\.test\/compatible-mode\/v1.*404 Model not exist/,
+    );
+  });
+
+  it("exposes endpoint config without secrets", async () => {
+    const { getQwenOcrEndpointConfig } = await import("../qwen-ocr");
+    expect(getQwenOcrEndpointConfig()).toEqual({
+      baseURL: "https://workspace.example.test/compatible-mode/v1",
+      model: "qwen-vl-ocr-latest",
+    });
+  });
 });
