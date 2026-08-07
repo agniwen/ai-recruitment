@@ -54,6 +54,11 @@ export function getResumeParseConfigSummary(
     ocrRetryDelayMs: getEnvNumberString(env.RESUME_PARSE_OCR_RETRY_DELAY_MS, 1000),
     parseProvider: env.RESUME_PARSE_PROVIDER?.trim() || "ocr-llm",
     parseStepLogsEnabled: TRUE_VALUES.has(env.RESUME_PARSE_LOG_STEPS?.trim().toLowerCase() ?? ""),
+    qwenOcrApiKeySource: env.QWEN_OCR_API_KEY?.trim()
+      ? "QWEN_OCR_API_KEY"
+      : (env.ALIBABA_API_KEY?.trim()
+        ? "ALIBABA_API_KEY"
+        : "unset"),
     qwenOcrBaseUrlHost: getUrlHost(
       env.QWEN_OCR_BASE_URL,
       "https://dashscope.aliyuncs.com/compatible-mode/v1",

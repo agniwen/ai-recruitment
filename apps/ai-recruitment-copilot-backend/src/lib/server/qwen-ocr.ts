@@ -13,24 +13,33 @@ let cachedClient: OpenAI | null = null;
 let cachedClientKey: string | null = null;
 
 export interface QwenOcrEndpointConfig {
+  apiKeySource: "QWEN_OCR_API_KEY" | "ALIBABA_API_KEY" | "unset";
   baseURL: string;
   model: string;
+}
+
+/** Prefer dedicated OCR key so Token Plan keys can stay on ALIBABA_API_KEY. */
+export function getQwenOcrApiKey(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env.QWEN_OCR_API_KEY?.trim() || env.ALIBABA_API_KEY?.trim() || undefined;
 }
 
 export function getQwenOcrEndpointConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): QwenOcrEndpointConfig {
+  const hasDedicatedKey = Boolean(env.QWEN_OCR_API_KEY?.trim());
+  const hasFallbackKey = Boolean(env.ALIBABA_API_KEY?.trim());
   return {
+    apiKeySource: hasDedicatedKey
+      ? "QWEN_OCR_API_KEY"
+      : (hasFallbackKey
+        ? "ALIBABA_API_KEY"
+        : "unset"),
     baseURL: env.QWEN_OCR_BASE_URL?.trim() || DEFAULT_QWEN_OCR_BASE_URL,
     model: env.QWEN_OCR_MODEL?.trim() || "(QWEN_OCR_MODEL unset)",
   };
 }
 
-function getClient(baseURL: string): OpenAI {
-  const apiKey = process.env.ALIBABA_API_KEY;
-  if (!apiKey) {
-    throw new Error("ALIBABA_API_KEY is not configured; cannot run Qwen OCR.");
-  }
+function getClient(baseURL: string, apiKey: string): OpenAI {
   const cacheKey = `${baseURL}\0${apiKey}`;
   if (cachedClient && cachedClientKey === cacheKey) {
     return cachedClient;
@@ -43,21 +52,24 @@ function getClient(baseURL: string): OpenAI {
   return cachedClient;
 }
 
-export function isQwenOcrConfigured(): boolean {
-  return Boolean(process.env.ALIBABA_API_KEY);
+export function isQwenOcrConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(getQwenOcrApiKey(env));
 }
 
 function formatOcrErrorMessage(config: QwenOcrEndpointConfig, message: string): string {
-  return `Qwen OCR failed (model=${config.model}, baseURL=${config.baseURL}): ${message}`;
+  return `Qwen OCR failed (model=${config.model}, baseURL=${config.baseURL}, key=${config.apiKeySource}): ${message}`;
 }
 
 export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Promise<string> {
   const config = getQwenOcrEndpointConfig();
-  // Prefer required env for the live call so missing model still surfaces clearly.
   const model = getRequiredEnv("QWEN_OCR_MODEL");
-  const endpoint = { baseURL: config.baseURL, model };
+  const apiKey = getQwenOcrApiKey();
+  if (!apiKey) {
+    throw new Error("Qwen OCR is not configured (set QWEN_OCR_API_KEY or ALIBABA_API_KEY).");
+  }
+  const endpoint = { ...config, model };
   try {
-    const client = getClient(endpoint.baseURL);
+    const client = getClient(endpoint.baseURL, apiKey);
     const base64 = imageBytes.toString("base64");
     const response = await client.chat.completions.create({
       max_tokens: 4096,
@@ -76,8 +88,9 @@ export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Pr
     return response.choices[0]?.message?.content ?? "";
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // Always emit endpoint identity so production 404s are diagnosable without secret env dumps.
+    // Always emit endpoint identity so production failures are diagnosable (never log the key).
     console.error(OCR_LOG_PREFIX, "model call failed", {
+      apiKeySource: endpoint.apiKeySource,
       baseURL: endpoint.baseURL,
       errorMessage: message,
       mediaType,

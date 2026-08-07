@@ -64,8 +64,24 @@ describe("qwenVlOcr", () => {
   it("exposes endpoint config without secrets", async () => {
     const { getQwenOcrEndpointConfig } = await import("../qwen-ocr");
     expect(getQwenOcrEndpointConfig()).toEqual({
+      apiKeySource: "ALIBABA_API_KEY",
       baseURL: "https://workspace.example.test/compatible-mode/v1",
       model: "qwen-vl-ocr-latest",
     });
+  });
+
+  it("prefers QWEN_OCR_API_KEY over ALIBABA_API_KEY", async () => {
+    process.env.QWEN_OCR_API_KEY = "ocr-only-key";
+    mocks.chatCompletionsCreate.mockResolvedValue({
+      choices: [{ message: { content: "ok" } }],
+    });
+    const { getQwenOcrApiKey, getQwenOcrEndpointConfig, qwenVlOcr } = await import("../qwen-ocr");
+
+    expect(getQwenOcrApiKey()).toBe("ocr-only-key");
+    expect(getQwenOcrEndpointConfig().apiKeySource).toBe("QWEN_OCR_API_KEY");
+    await expect(qwenVlOcr(Buffer.from("page"))).resolves.toBe("ok");
+    expect(mocks.openAiConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: "ocr-only-key" }),
+    );
   });
 });

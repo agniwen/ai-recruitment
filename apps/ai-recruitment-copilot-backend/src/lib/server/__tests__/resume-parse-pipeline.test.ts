@@ -29,6 +29,7 @@ vi.mock("../pdf-rasterize", () => ({
 
 vi.mock("../qwen-ocr", () => ({
   getQwenOcrEndpointConfig: () => ({
+    apiKeySource: "QWEN_OCR_API_KEY",
     baseURL: "https://example.test/compatible-mode/v1",
     model: "qwen-vl-ocr-test",
   }),

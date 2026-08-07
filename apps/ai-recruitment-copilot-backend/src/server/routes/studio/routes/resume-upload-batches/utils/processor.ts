@@ -55,6 +55,7 @@ function resumeParseModelLogFields(): Record<string, string | null> {
   const ocr = getQwenOcrEndpointConfig();
   const structured = getResumeStructuredModelEndpoint();
   return {
+    ocrApiKeySource: ocr.apiKeySource,
     ocrBaseURL: ocr.baseURL,
     ocrModel: ocr.model,
     structuredBaseURL: structured.baseURL,
