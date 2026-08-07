@@ -91,7 +91,7 @@ export interface ResumeParseQueueJobsResult {
 
 const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 30_000;
-const DEFAULT_CONCURRENCY = 9;
+const DEFAULT_CONCURRENCY = 50;
 
 let queue: Queue<ResumeParseJobData> | null = null;
 

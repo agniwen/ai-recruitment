@@ -31,8 +31,8 @@ describe("resume parse queue configuration", () => {
     });
   });
 
-  it("defaults resume parsing concurrency to 9", () => {
-    expect(resolveResumeParseWorkerConcurrency({})).toBe(9);
+  it("defaults resume parsing concurrency to 50", () => {
+    expect(resolveResumeParseWorkerConcurrency({})).toBe(50);
     expect(resolveResumeParseWorkerConcurrency({ RESUME_PARSE_WORKER_CONCURRENCY: "20" })).toBe(20);
   });
 

@@ -178,8 +178,8 @@ export function buildResumeReviewGenerationJobId(input: {
 export function resolveResumeReviewGenerationWorkerConcurrency(
   env: NodeJS.ProcessEnv = process.env,
 ): number {
-  const value = Number.parseInt(env.RESUME_REVIEW_GENERATION_WORKER_CONCURRENCY || "9", 10);
-  return Number.isFinite(value) && value > 0 ? value : 9;
+  const value = Number.parseInt(env.RESUME_REVIEW_GENERATION_WORKER_CONCURRENCY || "50", 10);
+  return Number.isFinite(value) && value > 0 ? value : 50;
 }
 
 export function isResumeReviewGenerationQueueConfigured(): boolean {
