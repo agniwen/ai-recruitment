@@ -3,6 +3,7 @@
 
 import OpenAI from "openai";
 import { getRequiredEnv } from "./env";
+import { sanitizeApiUrl, sanitizeModelId } from "./sanitize-api-url";
 
 const OCR_PROMPT =
   "请完整提取这张简历图片中的所有文字，包括所有图片、图表、表格中的文字。保持原始排版顺序，表格用文字形式还原。只输出提取的文字，不要解释。";
@@ -34,8 +35,8 @@ export function getQwenOcrEndpointConfig(
       : (hasFallbackKey
         ? "ALIBABA_API_KEY"
         : "unset"),
-    baseURL: env.QWEN_OCR_BASE_URL?.trim() || DEFAULT_QWEN_OCR_BASE_URL,
-    model: env.QWEN_OCR_MODEL?.trim() || "(QWEN_OCR_MODEL unset)",
+    baseURL: sanitizeApiUrl(env.QWEN_OCR_BASE_URL, DEFAULT_QWEN_OCR_BASE_URL),
+    model: sanitizeModelId(env.QWEN_OCR_MODEL, "(QWEN_OCR_MODEL unset)"),
   };
 }
 
@@ -61,8 +62,10 @@ function formatOcrErrorMessage(config: QwenOcrEndpointConfig, message: string): 
 }
 
 export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Promise<string> {
+  // Ensure required env is present, then sanitize (strips zero-width paste junk).
+  getRequiredEnv("QWEN_OCR_MODEL");
   const config = getQwenOcrEndpointConfig();
-  const model = getRequiredEnv("QWEN_OCR_MODEL");
+  const { model } = config;
   const apiKey = getQwenOcrApiKey();
   if (!apiKey) {
     throw new Error("Qwen OCR is not configured (set QWEN_OCR_API_KEY or ALIBABA_API_KEY).");

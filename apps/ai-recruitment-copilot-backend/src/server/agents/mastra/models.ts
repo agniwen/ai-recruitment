@@ -1,4 +1,8 @@
 import type { MastraModelConfig as CoreMastraModelConfig } from "@mastra/core/llm";
+import {
+  sanitizeApiUrl,
+  sanitizeModelId,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/sanitize-api-url";
 
 const ALIBABA_CODING_PLAN_PREFIX = "alibaba-coding-plan/";
 const ALIBABA_PROVIDER_ID = "alibaba";
@@ -52,20 +56,22 @@ function getModelNames(
   defaultModel: string,
   defaultFastModel = defaultModel,
 ): ModelNames {
-  const explicitChatModel = readEnv(env, "MASTRA_CHAT_MODEL") ?? readEnv(env, "ALIBABA_MODEL");
-  const chatModel = explicitChatModel ?? defaultModel;
+  const explicitChatModel = sanitizeModelId(
+    readEnv(env, "MASTRA_CHAT_MODEL") ?? readEnv(env, "ALIBABA_MODEL"),
+  );
+  const chatModel = explicitChatModel || defaultModel;
   const longContextModel =
-    readEnv(env, "MASTRA_LONG_CONTEXT_MODEL") ?? readEnv(env, "ALIBABA_MODEL") ?? chatModel;
+    sanitizeModelId(readEnv(env, "MASTRA_LONG_CONTEXT_MODEL") ?? readEnv(env, "ALIBABA_MODEL")) ||
+    chatModel;
   const structuredModel =
-    readEnv(env, "MASTRA_STRUCTURED_MODEL") ??
-    readEnv(env, "ALIBABA_STRUCTURED_MODEL") ??
-    chatModel;
+    sanitizeModelId(
+      readEnv(env, "MASTRA_STRUCTURED_MODEL") ?? readEnv(env, "ALIBABA_STRUCTURED_MODEL"),
+    ) || chatModel;
   const fastModel =
-    readEnv(env, "MASTRA_FAST_MODEL") ??
-    readEnv(env, "ALIBABA_FAST_MODEL") ??
-    (explicitChatModel ? undefined : defaultFastModel) ??
+    sanitizeModelId(readEnv(env, "MASTRA_FAST_MODEL") ?? readEnv(env, "ALIBABA_FAST_MODEL")) ||
+    (explicitChatModel ? undefined : defaultFastModel) ||
     chatModel;
-  const scorerModel = readEnv(env, "MASTRA_SCORER_MODEL") ?? fastModel;
+  const scorerModel = sanitizeModelId(readEnv(env, "MASTRA_SCORER_MODEL")) || fastModel;
 
   return {
     chatModel,
@@ -109,7 +115,7 @@ export function getMastraModelApiKey(env: EnvLike = process.env): string | undef
 }
 
 export function getMastraModelConfig(env: EnvLike = process.env): MastraModelConfig {
-  const alibabaBaseURL = readEnv(env, "ALIBABA_BASE_URL");
+  const alibabaBaseURL = sanitizeApiUrl(readEnv(env, "ALIBABA_BASE_URL"));
   if (alibabaBaseURL) {
     const modelNames = getModelNames(
       env,

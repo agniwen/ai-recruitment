@@ -1,3 +1,4 @@
+import { sanitizeApiUrl, sanitizeModelId } from "../sanitize-api-url";
 import type { ResumeEmbeddingChunk } from "./vector-store";
 import type { ResumeSemanticTextChunk } from "./text-builders";
 
@@ -17,7 +18,7 @@ interface EmbeddingResponse {
 }
 
 function normalizeBaseUrl(url: string): string {
-  return url.replace(/\/+$/u, "");
+  return sanitizeApiUrl(url);
 }
 
 function parseEmbedding(value: unknown): number[] | null {
@@ -30,13 +31,14 @@ function parseEmbedding(value: unknown): number[] | null {
 
 export function getResumeEmbeddingConfig() {
   return {
-    apiKey: process.env.RESUME_EMBEDDING_API_KEY || process.env.ALIBABA_API_KEY || "",
-    baseUrl:
-      process.env.RESUME_EMBEDDING_BASE_URL ||
-      process.env.ALIBABA_EMBEDDING_BASE_URL ||
+    apiKey:
+      process.env.RESUME_EMBEDDING_API_KEY?.trim() || process.env.ALIBABA_API_KEY?.trim() || "",
+    baseUrl: sanitizeApiUrl(
+      process.env.RESUME_EMBEDDING_BASE_URL || process.env.ALIBABA_EMBEDDING_BASE_URL,
       "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    ),
     dimensions: Number.parseInt(process.env.RESUME_EMBEDDING_DIMENSIONS || "1024", 10),
-    model: process.env.RESUME_EMBEDDING_MODEL || "text-embedding-v4",
+    model: sanitizeModelId(process.env.RESUME_EMBEDDING_MODEL, "text-embedding-v4"),
   };
 }
 
