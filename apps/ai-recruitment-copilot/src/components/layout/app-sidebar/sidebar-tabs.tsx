@@ -66,7 +66,7 @@ export function SidebarTabs() {
           // Keep clickable: without page:chat, handleChange redirects to Studio 简历库.
           // Do not set data-disabled (tabs.tsx uses it for pointer-events:none).
           aria-disabled={!canAccessAgent}
-          className={!canAccessAgent ? "opacity-64" : undefined}
+          className={canAccessAgent ? undefined : "opacity-64"}
           onFocus={() => void preloadTab("agent")}
           onPointerEnter={() => void preloadTab("agent")}
           onTouchStart={() => void preloadTab("agent")}

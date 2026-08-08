@@ -55,6 +55,7 @@ import {
   getCandidateTitle,
   getResumePoolImportActionState,
   resumeParseStatusBadge,
+  resumeSourceChannelBadge,
   sourceActorLabel,
   sourceLabel,
   uploaderUserLabel,
@@ -118,6 +119,7 @@ function ResumePoolDetailSummaryPanel({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-medium text-sm">候选人摘要</h3>
             {resumeParseStatusBadge(detail)}
+            {resumeSourceChannelBadge(detail)}
             {duplicateMatchBadge(detail, onOpenDuplicateMatches)}
             {detail.importedResumeRecordId ? (
               <Badge variant="success">已入库</Badge>
@@ -707,7 +709,7 @@ export function ResumePoolCard({
             />
           </p>
         </div>
-        {record.sourceChannel === "referral" ? <Badge variant="secondary">内推</Badge> : null}
+        {resumeSourceChannelBadge(record)}
         {duplicateMatchBadge(record, () => onOpenDuplicateMatches(record))}
         {scope === "private" && canDelete ? (
           <Checkbox

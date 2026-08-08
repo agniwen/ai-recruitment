@@ -129,6 +129,16 @@ export function resumeParseStatusBadge(record: ResumePoolListRecord) {
   }
 }
 
+export function resumeSourceChannelBadge(record: ResumePoolListRecord) {
+  if (record.sourceChannel === "historical_import") {
+    return <Badge variant="outline">历史简历</Badge>;
+  }
+  if (record.sourceChannel === "referral") {
+    return <Badge variant="secondary">内推</Badge>;
+  }
+  return null;
+}
+
 export function duplicateMatchBadge(record: ResumePoolListRecord, onClick?: () => void) {
   if (!record.duplicateMatch) {
     return null;
@@ -212,6 +222,9 @@ export function matchesSearch(record: ResumePoolListRecord, rawSearch: string) {
 }
 
 export function sourceLabel(record: ResumePoolListRecord) {
+  if (record.sourceChannel === "historical_import") {
+    return "历史简历";
+  }
   if (record.sourceChannel === "referral") {
     return "内推";
   }

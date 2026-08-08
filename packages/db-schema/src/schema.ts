@@ -1196,7 +1196,7 @@ export const studioOfferDraft = pgTable(
 
 export type ResumePoolScope = "private" | "public";
 export type ResumePoolStatus = "active" | "archived";
-export type ResumePoolSourceChannel = "mail_ingest" | "referral";
+export type ResumePoolSourceChannel = "historical_import" | "mail_ingest" | "referral";
 export type ResumePoolEventType =
   | "created"
   | "parsed"
@@ -1267,7 +1267,7 @@ export const resumePoolItem = pgTable(
     index("resume_pool_item_resume_parse_status_idx").on(table.resumeParseStatus),
     check(
       "resume_pool_item_source_channel_check",
-      sql`${table.sourceChannel} IS NULL OR ${table.sourceChannel} IN ('mail_ingest', 'referral')`,
+      sql`${table.sourceChannel} IS NULL OR ${table.sourceChannel} IN ('historical_import', 'mail_ingest', 'referral')`,
     ),
     index("resume_pool_item_source_pool_item_idx").on(table.sourcePoolItemId),
     index("resume_pool_item_skills_normalized_idx").using("gin", table.skillsNormalized),

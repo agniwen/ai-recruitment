@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { ResumePoolCard } from "../resume-pool-details";
+import { sourceLabel } from "../resume-pool-page-model";
 
 vi.mock("@/lib/client/workspace-context", () => ({
   useWorkspaceSlug: () => "test-workspace",
@@ -141,5 +142,36 @@ describe("ResumePoolCard", () => {
 
     expect(reimportButton).toBeDefined();
     expect(reimportButton).not.toMatch(/\sdisabled(?:=|\s|>)/u);
+  });
+
+  it("marks folder-imported records as historical resumes", () => {
+    const historicalRecord = { ...record, sourceChannel: "historical_import" } as const;
+    const html = renderToStaticMarkup(
+      <ResumePoolCard
+        canDelete={false}
+        canImport={false}
+        canPublish={false}
+        canRetryParse={false}
+        deleting={false}
+        onDelete={() => {}}
+        onImport={() => {}}
+        onOpenDetail={() => {}}
+        onOpenDuplicateMatches={() => {}}
+        onOpenPdf={() => {}}
+        onPublish={() => {}}
+        onRetryParse={() => {}}
+        onSelectionChange={() => {}}
+        publishing={false}
+        record={historicalRecord}
+        retrying={false}
+        scope="public"
+        selected={false}
+        selectionDisabled={false}
+      />,
+    );
+
+    expect(html).toContain("历史简历");
+    expect(html).not.toContain("内推");
+    expect(sourceLabel(historicalRecord)).toBe("历史简历");
   });
 });

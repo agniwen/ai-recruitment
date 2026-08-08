@@ -39,6 +39,18 @@ function getEnvNumberString(raw: string | undefined, fallback: number): string {
   return value || String(fallback);
 }
 
+function getQwenOcrApiKeySource(
+  env: Record<string, string | undefined>,
+): "ALIBABA_API_KEY" | "QWEN_OCR_API_KEY" | "unset" {
+  if (env.QWEN_OCR_API_KEY?.trim()) {
+    return "QWEN_OCR_API_KEY";
+  }
+  if (env.ALIBABA_API_KEY?.trim()) {
+    return "ALIBABA_API_KEY";
+  }
+  return "unset";
+}
+
 export function getResumeParseConfigSummary(
   env: Record<string, string | undefined> = process.env,
 ): Record<string, boolean | string> {
@@ -54,11 +66,7 @@ export function getResumeParseConfigSummary(
     ocrRetryDelayMs: getEnvNumberString(env.RESUME_PARSE_OCR_RETRY_DELAY_MS, 1000),
     parseProvider: env.RESUME_PARSE_PROVIDER?.trim() || "ocr-llm",
     parseStepLogsEnabled: TRUE_VALUES.has(env.RESUME_PARSE_LOG_STEPS?.trim().toLowerCase() ?? ""),
-    qwenOcrApiKeySource: env.QWEN_OCR_API_KEY?.trim()
-      ? "QWEN_OCR_API_KEY"
-      : (env.ALIBABA_API_KEY?.trim()
-        ? "ALIBABA_API_KEY"
-        : "unset"),
+    qwenOcrApiKeySource: getQwenOcrApiKeySource(env),
     qwenOcrBaseUrlHost: getUrlHost(
       env.QWEN_OCR_BASE_URL,
       "https://dashscope.aliyuncs.com/compatible-mode/v1",

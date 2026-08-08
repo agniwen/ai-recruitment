@@ -55,7 +55,7 @@ export interface ResumePoolImportedRecord {
   resumeRecordId: string;
 }
 
-export type ResumePoolSourceChannel = "mail_ingest" | "referral";
+export type ResumePoolSourceChannel = "historical_import" | "mail_ingest" | "referral";
 
 export interface ResumePoolListRecord {
   id: string;

@@ -139,6 +139,9 @@ function ImportedResumeDetailDialog({
 }
 
 function describePoolItemRecruitmentSource(item: ResumePoolListRecord | null): string {
+  if (item?.sourceChannel === "historical_import") {
+    return "历史简历";
+  }
   const recruitmentSource = describeResumeRecruitmentSource(
     item?.recruitmentSource,
     item?.recruitmentSourceDetail,

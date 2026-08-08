@@ -91,8 +91,8 @@ describe("transitionCandidateStage", () => {
       totalRounds: 1,
     });
     mocks.getReadinessError.mockReturnValue(null);
-    const authorize = vi.fn(
-      async ({ action, resource }) => resource === "offer" && action === "create",
+    const authorize = vi.fn(({ action, resource }) =>
+      Promise.resolve(resource === "offer" && action === "create"),
     );
 
     await expect(
@@ -120,8 +120,8 @@ describe("transitionCandidateStage", () => {
       pipelineStage: "screening",
     });
     mocks.transaction.mockImplementation(async (callback) => await callback(tx));
-    const authorize = vi.fn(
-      async ({ action, resource }) => resource === "humanInterview" && action === "create",
+    const authorize = vi.fn(({ action, resource }) =>
+      Promise.resolve(resource === "humanInterview" && action === "create"),
     );
 
     await expect(
@@ -165,8 +165,8 @@ describe("transitionCandidateStage", () => {
       pipelineStage: "screening",
     });
     mocks.transaction.mockImplementation(async (callback) => await callback(tx));
-    const authorize = vi.fn(
-      async ({ action, resource }) => resource === "candidateClose" && action === "create",
+    const authorize = vi.fn(({ action, resource }) =>
+      Promise.resolve(resource === "candidateClose" && action === "create"),
     );
 
     await expect(

@@ -29,12 +29,14 @@ export function getQwenOcrEndpointConfig(
 ): QwenOcrEndpointConfig {
   const hasDedicatedKey = Boolean(env.QWEN_OCR_API_KEY?.trim());
   const hasFallbackKey = Boolean(env.ALIBABA_API_KEY?.trim());
+  let apiKeySource: QwenOcrEndpointConfig["apiKeySource"] = "unset";
+  if (hasDedicatedKey) {
+    apiKeySource = "QWEN_OCR_API_KEY";
+  } else if (hasFallbackKey) {
+    apiKeySource = "ALIBABA_API_KEY";
+  }
   return {
-    apiKeySource: hasDedicatedKey
-      ? "QWEN_OCR_API_KEY"
-      : (hasFallbackKey
-        ? "ALIBABA_API_KEY"
-        : "unset"),
+    apiKeySource,
     baseURL: sanitizeApiUrl(env.QWEN_OCR_BASE_URL, DEFAULT_QWEN_OCR_BASE_URL),
     model: sanitizeModelId(env.QWEN_OCR_MODEL, "(QWEN_OCR_MODEL unset)"),
   };

@@ -97,6 +97,7 @@ function shouldShowInterviewProgressAction(input: {
   );
 }
 
+// oxlint-disable-next-line complexity -- action visibility follows permissions and each pipeline stage in one component.
 export function PipelineStageActionBar({
   pipelineStage,
   evaluationActions,

@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- resume parsing keeps extraction, OCR fallback, retries, and structured normalization in one pipeline module. */
 import { setTimeout as delay } from "node:timers/promises";
 import { convert as htmlToText } from "html-to-text";
 import mammoth from "mammoth";

@@ -80,6 +80,10 @@ export const statement = {
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
   department: ["create", "read", "update", "delete"],
+  // Deny flag (勾选 = 不能评估). Default for all roles is allow evaluation.
+  // owner/admin hold create so Better Auth lets them assign the flag to others;
+  // isResumeEvaluationDisabled() ignores this flag for owner/admin themselves.
+  disableResumeEvaluation: ["create"],
   globalConfig: ["read", "update"],
   hiringUnit: ["create", "read", "update", "delete"],
   humanInterview: ["create", "read", "update", "delete"],
@@ -90,10 +94,6 @@ export const statement = {
   offer: ["create", "read", "update", "delete"],
   page: STUDIO_PAGE_PERMISSION_ACTIONS,
   questionTemplate: ["create", "read", "update", "delete"],
-  // Deny flag (勾选 = 不能评估). Default for all roles is allow evaluation.
-  // owner/admin hold create so Better Auth lets them assign the flag to others;
-  // isResumeEvaluationDisabled() ignores this flag for owner/admin themselves.
-  disableResumeEvaluation: ["create"],
   resumeLibrary: ["create", "read", "update", "delete"],
   resumePool: ["create", "read", "publish", "import", "delete"],
   resumeUploadBatch: ["create", "read", "process", "cancel", "delete"],

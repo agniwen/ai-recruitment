@@ -70,6 +70,7 @@ export function toItemDto(row: ItemRow): BulkResumeBatchItemDto {
 }
 
 export interface CreateBatchInput {
+  batchId?: string;
   organizationId: string;
   userId: string;
   jdMode: "bind" | "auto" | "none";
@@ -94,7 +95,7 @@ function candidateNameFromFileName(fileName: string): string {
 // Create a batch plus all items in one transaction. Active-batch conflict bubbles
 // up from the partial unique index as a Postgres unique-violation error.
 export async function insertBatchWithItems(input: CreateBatchInput): Promise<string> {
-  const batchId = crypto.randomUUID();
+  const batchId = input.batchId ?? crypto.randomUUID();
   const now = new Date();
   const target = input.target ?? "resume_library";
   const scope = input.resumePoolScope ?? "private";
