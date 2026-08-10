@@ -4,6 +4,7 @@ import type { ConnectionOptions, JobsOptions, JobState, JobType } from "bullmq";
 import { z } from "zod";
 
 export const RESUME_PARSE_QUEUE_NAME = "resume-parse";
+export const RESUME_PARSE_LOCAL_QUEUE_NAME = "resume-parse-local";
 export const RESUME_PARSE_QUEUE_DISPLAY_NAME = "简历解析";
 export const RESUME_PARSE_JOB_NAME = "parse-resume-upload-item";
 const RESUME_PARSE_COUNT_TYPES = [
@@ -17,6 +18,14 @@ const RESUME_PARSE_COUNT_TYPES = [
   "waiting-children",
 ] as const;
 export const RESUME_PARSE_JOB_LIST_STATES = ["all", ...RESUME_PARSE_COUNT_TYPES] as const;
+const RESUME_PARSE_DRAIN_COUNT_TYPES = [
+  "waiting",
+  "active",
+  "delayed",
+  "paused",
+  "prioritized",
+  "waiting-children",
+] as const;
 
 const RESUME_PARSE_JOB_TYPES: JobType[] = [...RESUME_PARSE_COUNT_TYPES];
 
@@ -31,8 +40,19 @@ export const resumeParseJobSchema = z.object({
 
 export type ResumeParseJobData = z.infer<typeof resumeParseJobSchema>;
 export type ResumeParseJobProcessor = (payload: ResumeParseJobData) => Promise<void>;
+export type ResumeParseQueueName =
+  | typeof RESUME_PARSE_QUEUE_NAME
+  | typeof RESUME_PARSE_LOCAL_QUEUE_NAME;
 type ResumeParseCountState = (typeof RESUME_PARSE_COUNT_TYPES)[number];
 export type ResumeParseJobListState = "all" | ResumeParseCountState;
+
+export interface ResumeParseQueueOptions {
+  queueName?: ResumeParseQueueName;
+}
+
+export interface CreateResumeParseWorkerOptions extends ResumeParseQueueOptions {
+  concurrency?: number;
+}
 
 export interface ResumeParseRedisSummary {
   db: number;
@@ -92,8 +112,13 @@ export interface ResumeParseQueueJobsResult {
 const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 30_000;
 const DEFAULT_CONCURRENCY = 50;
+const DEFAULT_DRAIN_POLL_MS = 1000;
 
-let queue: Queue<ResumeParseJobData> | null = null;
+const queues = new Map<ResumeParseQueueName, Queue<ResumeParseJobData>>();
+
+function resolveQueueName(queueName?: ResumeParseQueueName): ResumeParseQueueName {
+  return queueName ?? RESUME_PARSE_QUEUE_NAME;
+}
 
 function redisUrl(env: NodeJS.ProcessEnv = process.env): string | null {
   const value = env.REDIS_URL?.trim();
@@ -178,14 +203,20 @@ export function getResumeParseRedisSummary(
   };
 }
 
-export function getResumeParseQueue(): Queue<ResumeParseJobData> {
-  if (!queue) {
-    queue = new Queue<ResumeParseJobData>(RESUME_PARSE_QUEUE_NAME, {
-      connection: createRedisConnection(),
-      prefix: buildResumeParseQueuePrefix(),
-    });
+export function getResumeParseQueue(
+  queueName: ResumeParseQueueName = RESUME_PARSE_QUEUE_NAME,
+): Queue<ResumeParseJobData> {
+  const name = resolveQueueName(queueName);
+  const existing = queues.get(name);
+  if (existing) {
+    return existing;
   }
-  return queue;
+  const created = new Queue<ResumeParseJobData>(name, {
+    connection: createRedisConnection(),
+    prefix: buildResumeParseQueuePrefix(),
+  });
+  queues.set(name, created);
+  return created;
 }
 
 export function defaultResumeParseJobOptions(env: NodeJS.ProcessEnv = process.env): JobsOptions {
@@ -218,12 +249,15 @@ export function shouldRemoveCancelledResumeParseJob(state: string | null | undef
   );
 }
 
-export async function enqueueResumeParseJobs(jobs: ResumeParseJobData[]): Promise<void> {
+export async function enqueueResumeParseJobs(
+  jobs: ResumeParseJobData[],
+  options: ResumeParseQueueOptions = {},
+): Promise<void> {
   if (jobs.length === 0) {
     return;
   }
-  const q = getResumeParseQueue();
-  const options = defaultResumeParseJobOptions();
+  const q = getResumeParseQueue(resolveQueueName(options.queueName));
+  const jobOptions = defaultResumeParseJobOptions();
   await Promise.all(
     jobs.map(async (data) => {
       const job = await q.getJob(buildResumeParseJobId(data.itemId));
@@ -241,14 +275,17 @@ export async function enqueueResumeParseJobs(jobs: ResumeParseJobData[]): Promis
       data,
       name: RESUME_PARSE_JOB_NAME,
       opts: {
-        ...options,
+        ...jobOptions,
         jobId: buildResumeParseJobId(data.itemId),
       },
     })),
   );
 }
 
-export async function removeResumeParseJobs(itemIds: string[]): Promise<{
+export async function removeResumeParseJobs(
+  itemIds: string[],
+  options: ResumeParseQueueOptions = {},
+): Promise<{
   failed: number;
   missing: number;
   removed: number;
@@ -258,7 +295,7 @@ export async function removeResumeParseJobs(itemIds: string[]): Promise<{
   if (itemIds.length === 0) {
     return { failed: 0, missing: 0, removed: 0, requested: 0, skipped: 0 };
   }
-  const q = getResumeParseQueue();
+  const q = getResumeParseQueue(resolveQueueName(options.queueName));
   const result = {
     failed: 0,
     missing: 0,
@@ -289,9 +326,51 @@ export async function removeResumeParseJobs(itemIds: string[]): Promise<{
   return result;
 }
 
-export function getResumeParseQueueStats() {
-  const q = getResumeParseQueue();
+export function getResumeParseQueueStats(options: ResumeParseQueueOptions = {}) {
+  const q = getResumeParseQueue(resolveQueueName(options.queueName));
   return q.getJobCounts("waiting", "active", "delayed", "failed", "completed", "paused");
+}
+
+export async function getResumeParseQueueOpenCount(
+  options: ResumeParseQueueOptions = {},
+): Promise<number> {
+  const q = getResumeParseQueue(resolveQueueName(options.queueName));
+  const counts = await q.getJobCounts(...RESUME_PARSE_DRAIN_COUNT_TYPES);
+  return RESUME_PARSE_DRAIN_COUNT_TYPES.reduce((sum, key) => sum + (counts[key] ?? 0), 0);
+}
+
+export async function waitUntilResumeParseQueueIdle(
+  options: ResumeParseQueueOptions & {
+    pollIntervalMs?: number;
+    signal?: AbortSignal;
+  } = {},
+): Promise<void> {
+  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_DRAIN_POLL_MS;
+  const abortedError = () => new Error("等待本地解析队列排空时被中止。");
+  while (true) {
+    if (options.signal?.aborted) {
+      throw abortedError();
+    }
+    const open = await getResumeParseQueueOpenCount(options);
+    if (open === 0) {
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, pollIntervalMs);
+      if (!options.signal) {
+        return;
+      }
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(abortedError());
+      };
+      if (options.signal.aborted) {
+        onAbort();
+        return;
+      }
+      options.signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
 }
 
 function emptyCounts(): ResumeParseQueueCounts {
@@ -459,19 +538,30 @@ export async function listResumeParseQueueJobs({
 
 export async function getResumeParseQueueJobsByItemIds(
   itemIds: string[],
+  options: ResumeParseQueueOptions = {},
 ): Promise<ResumeParseQueueJobRecord[]> {
   if (itemIds.length === 0 || !isResumeParseQueueConfigured()) {
     return [];
   }
-  const q = getResumeParseQueue();
+  const q = getResumeParseQueue(resolveQueueName(options.queueName));
   const jobs = await Promise.all(itemIds.map((itemId) => q.getJob(buildResumeParseJobId(itemId))));
   const records = await Promise.all(jobs.map((job) => serializeJob(job)));
   return records.filter((record): record is ResumeParseQueueJobRecord => record !== null);
 }
 
-export async function closeResumeParseQueue(): Promise<void> {
-  await queue?.close();
-  queue = null;
+export async function closeResumeParseQueue(queueName?: ResumeParseQueueName): Promise<void> {
+  if (queueName) {
+    const existing = queues.get(queueName);
+    if (!existing) {
+      return;
+    }
+    await existing.close();
+    queues.delete(queueName);
+    return;
+  }
+  const openQueues = [...queues.entries()];
+  queues.clear();
+  await Promise.all(openQueues.map(([, openQueue]) => openQueue.close()));
 }
 
 export function resolveResumeParseWorkerConcurrency(env: NodeJS.ProcessEnv = process.env): number {
@@ -480,15 +570,18 @@ export function resolveResumeParseWorkerConcurrency(env: NodeJS.ProcessEnv = pro
 
 export function createResumeParseWorker(
   processJob: ResumeParseJobProcessor,
+  options: CreateResumeParseWorkerOptions = {},
 ): Worker<ResumeParseJobData> {
+  const queueName = resolveQueueName(options.queueName);
+  const concurrency = options.concurrency ?? resolveResumeParseWorkerConcurrency();
   const worker = new Worker<ResumeParseJobData>(
-    RESUME_PARSE_QUEUE_NAME,
+    queueName,
     async (job) => {
       const payload = resumeParseJobSchema.parse(job.data);
       await processJob(payload);
     },
     {
-      concurrency: resolveResumeParseWorkerConcurrency(),
+      concurrency,
       connection: createRedisConnection(),
       prefix: buildResumeParseQueuePrefix(),
     },
@@ -496,8 +589,8 @@ export function createResumeParseWorker(
 
   worker.on("ready", () => {
     console.info("[resume-parse-worker] ready", {
-      concurrency: resolveResumeParseWorkerConcurrency(),
-      queue: RESUME_PARSE_QUEUE_NAME,
+      concurrency,
+      queue: queueName,
     });
   });
   worker.on("active", (job) => {
@@ -505,12 +598,14 @@ export function createResumeParseWorker(
       attemptsMade: job.attemptsMade,
       itemId: job.data.itemId,
       jobId: job.id,
+      queue: queueName,
     });
   });
   worker.on("completed", (job) => {
     console.info("[resume-parse-worker] job completed", {
       itemId: job.data.itemId,
       jobId: job.id,
+      queue: queueName,
     });
   });
   worker.on("failed", (job, error) => {
@@ -518,10 +613,11 @@ export function createResumeParseWorker(
       error,
       itemId: job?.data.itemId,
       jobId: job?.id,
+      queue: queueName,
     });
   });
   worker.on("error", (error) => {
-    console.error("[resume-parse-worker] worker error", error);
+    console.error("[resume-parse-worker] worker error", { error, queue: queueName });
   });
 
   return worker;

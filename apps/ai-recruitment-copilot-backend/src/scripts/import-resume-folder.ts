@@ -6,6 +6,11 @@ import { and, eq } from "drizzle-orm";
 import { member, organization, user } from "@arc/db-schema/schema";
 import type { Database } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { MAX_BULK_BATCH_SIZE } from "@arc/shared/bulk-resume-upload";
+import {
+  RESUME_PARSE_LOCAL_QUEUE_NAME,
+  RESUME_PARSE_QUEUE_NAME,
+} from "@arc/resume-parse-queue/resume-parse";
+import type { ResumeParseQueueName } from "@arc/resume-parse-queue/resume-parse";
 import { loadStandaloneEnv } from "../standalone/env";
 import {
   appendResumeFolderImportCheckpoint,
@@ -23,6 +28,7 @@ import type {
   ResumeFolderImportBatchState,
   ResumeFolderImportDescriptor,
   ResumeFolderImportFileState,
+  ResumeFolderImportMode,
   ResumeFolderImportState,
 } from "./import-resume-folder-lib";
 
@@ -32,6 +38,8 @@ interface ImportCliOptions {
   concurrency: number;
   logEvery: number;
   logFile: string;
+  mode: ResumeFolderImportMode;
+  parseConcurrency: number;
   recruitmentSourceDetail: string;
   rootPath: string;
   stateFile: string;
@@ -68,12 +76,23 @@ const HELP = `
     --user-email "operator@example.com" \\
     --commit
 
+本地模式（本机充当解析 worker，独立队列 resume-parse-local）：
+  pnpm --filter @arc/ai-recruitment-copilot-backend import:resume-folder -- \\
+    --root "/absolute/path/to/resumes" \\
+    --workspace "workspace-slug" \\
+    --user-email "operator@example.com" \\
+    --mode local \\
+    --parse-concurrency 4 \\
+    --commit
+
 参数：
   --root <path>             简历根目录，递归扫描（必填）
   --workspace <slug>        工作区 slug；--commit 时必填
   --user-email <email>      操作人邮箱；与 --user-id 二选一
   --user-id <id>            操作人 ID；与 --user-email 二选一
   --commit                  真正上传并创建解析任务；缺省为 dry-run
+  --mode <remote|local>     remote=线上 worker（默认）；local=本机消费独立队列
+  --parse-concurrency <n>   仅 local：本机解析并发，默认 4，最大 32
   --state-file <path>       恢复状态日志，默认 <root>/.arc-resume-import-state.jsonl
   --log-file <path>         日志文件，默认 <state-file>.log
   --concurrency <n>         上传并发，默认 4，最大 16
@@ -87,6 +106,7 @@ const HELP = `
   - 上传成功后立即保存 contentHash/storageKey，重跑不会重复上传。
   - 批次 ID 在写数据库前保存，重跑只补建缺失批次或补入队。
   - 上传或入队失败会记录错误；再次执行同一命令会自动重试。
+  - local 模式会在本机排空 resume-parse-local 后再退出；中断后用同一 --mode local 重跑。
 `;
 
 function parsePositiveInteger(
@@ -113,6 +133,18 @@ function parseRecruitmentSourceDetail(value: string | undefined): string {
   return detail;
 }
 
+function parseImportMode(value: string | undefined): ResumeFolderImportMode {
+  const mode = value?.trim().toLowerCase() || "remote";
+  if (mode === "remote" || mode === "local") {
+    return mode;
+  }
+  throw new Error("--mode 只能是 remote 或 local。");
+}
+
+function resolveParseQueueName(mode: ResumeFolderImportMode): ResumeParseQueueName {
+  return mode === "local" ? RESUME_PARSE_LOCAL_QUEUE_NAME : RESUME_PARSE_QUEUE_NAME;
+}
+
 function parseCliOptions(argv: string[]): ImportCliOptions | null {
   const normalizedArgv = argv[0] === "--" ? argv.slice(1) : argv;
   const { values } = parseArgs({
@@ -125,6 +157,8 @@ function parseCliOptions(argv: string[]): ImportCliOptions | null {
       help: { default: false, short: "h", type: "boolean" },
       "log-every": { type: "string" },
       "log-file": { type: "string" },
+      mode: { type: "string" },
+      "parse-concurrency": { type: "string" },
       root: { type: "string" },
       "source-detail": { type: "string" },
       "state-file": { type: "string" },
@@ -152,6 +186,10 @@ function parseCliOptions(argv: string[]): ImportCliOptions | null {
   const stateFile = path.resolve(
     values["state-file"] ?? path.join(rootPath, ".arc-resume-import-state.jsonl"),
   );
+  const mode = parseImportMode(values.mode);
+  if (values["parse-concurrency"] && mode !== "local") {
+    throw new Error("--parse-concurrency 仅在 --mode local 时可用。");
+  }
   return {
     batchSize: parsePositiveInteger(
       values["batch-size"],
@@ -163,6 +201,13 @@ function parseCliOptions(argv: string[]): ImportCliOptions | null {
     concurrency: parsePositiveInteger(values.concurrency, "--concurrency", 4, 16),
     logEvery: parsePositiveInteger(values["log-every"], "--log-every", 25, 10_000),
     logFile: path.resolve(values["log-file"] ?? `${stateFile}.log`),
+    mode,
+    parseConcurrency: parsePositiveInteger(
+      values["parse-concurrency"],
+      "--parse-concurrency",
+      4,
+      32,
+    ),
     recruitmentSourceDetail: parseRecruitmentSourceDetail(values["source-detail"]),
     rootPath,
     stateFile,
@@ -485,6 +530,52 @@ async function queueBatches(input: {
   }
 }
 
+async function requeuePendingItemsForQueuedBatches(input: {
+  actor: ImportActor;
+  enqueue: (
+    jobs: { batchId: string; itemId: string; organizationId: string; userId: string }[],
+  ) => Promise<void>;
+  loadBatch: (
+    batchId: string,
+    organizationId: string,
+    userId: string,
+  ) => Promise<{
+    batch: { status: string };
+    items: { id: string; orderIndex: number; status: string }[];
+  } | null>;
+  log: ReturnType<typeof createLogger>;
+  state: ResumeFolderImportState;
+}): Promise<number> {
+  let enqueued = 0;
+  for (const batch of Object.values(input.state.batches)) {
+    if (batch.status !== "queued") {
+      continue;
+    }
+    const detail = await input.loadBatch(batch.id, input.actor.organizationId, input.actor.userId);
+    if (!detail || detail.batch.status === "cancelled") {
+      continue;
+    }
+    const jobs = detail.items
+      .filter((item) => item.status === "pending")
+      .map((item) => ({
+        batchId: batch.id,
+        itemId: item.id,
+        organizationId: input.actor.organizationId,
+        userId: input.actor.userId,
+      }));
+    if (jobs.length === 0) {
+      continue;
+    }
+    await input.enqueue(jobs);
+    enqueued += jobs.length;
+    input.log("INFO", "batch.requeued_pending", {
+      batchId: batch.id,
+      pendingJobsAdded: jobs.length,
+    });
+  }
+  return enqueued;
+}
+
 async function ensureDirectory(rootPath: string): Promise<void> {
   const metadata = await stat(rootPath);
   if (!metadata.isDirectory()) {
@@ -499,9 +590,12 @@ async function main(): Promise<void> {
   }
   await ensureDirectory(options.rootPath);
   const log = createLogger(options.logFile);
+  const parseQueueName = resolveParseQueueName(options.mode);
   log("INFO", "import.started", {
     commit: options.commit,
     logFile: options.logFile,
+    mode: options.mode,
+    parseQueueName,
     rootPath: options.rootPath,
     sourceChannel: "historical_import",
     stateFile: options.stateFile,
@@ -529,14 +623,21 @@ async function main(): Promise<void> {
   }
 
   loadStandaloneEnv();
-  const [{ closeDatabase, db, pingDatabase }, queueApi, batchDao, storageApi] = await Promise.all([
-    import("@arc/ai-recruitment-copilot-backend/lib/server/db"),
-    import("@arc/resume-parse-queue/resume-parse"),
-    import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches"),
-    import("@arc/ai-recruitment-copilot-backend/server/routes/interview/utils"),
-  ]);
+  let closeDatabase: (() => Promise<void>) | null = null;
+  let localWorker: { close: () => Promise<void> } | null = null;
+  let queueApi: typeof import("@arc/resume-parse-queue/resume-parse") | null = null;
   try {
-    if (!queueApi.isResumeParseQueueConfigured()) {
+    const [databaseApi, resumeParseQueueApi, batchDao, storageApi] = await Promise.all([
+      import("@arc/ai-recruitment-copilot-backend/lib/server/db"),
+      import("@arc/resume-parse-queue/resume-parse"),
+      import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches"),
+      import("@arc/ai-recruitment-copilot-backend/server/routes/interview/utils"),
+    ]);
+    ({ closeDatabase } = databaseApi);
+    queueApi = resumeParseQueueApi;
+    const activeQueueApi = resumeParseQueueApi;
+    const { db, pingDatabase } = databaseApi;
+    if (!activeQueueApi.isResumeParseQueueConfigured()) {
       throw new Error("未配置 REDIS_URL，无法创建解析任务。");
     }
     const { workspaceSlug } = options;
@@ -557,6 +658,7 @@ async function main(): Promise<void> {
     });
 
     const stateInput = {
+      importMode: options.mode,
       organizationId: actor.organizationId,
       recruitmentSourceDetail: options.recruitmentSourceDetail,
       rootPath: options.rootPath,
@@ -589,6 +691,30 @@ async function main(): Promise<void> {
     const saveState = createSerializedStateSaver(options.stateFile, state);
     await saveState.snapshot();
     log("INFO", "state.reconciled", { ...mergeResult });
+
+    const enqueueJobs = async (
+      jobs: { batchId: string; itemId: string; organizationId: string; userId: string }[],
+    ) => {
+      await activeQueueApi.enqueueResumeParseJobs(jobs, { queueName: parseQueueName });
+    };
+
+    if (options.mode === "local") {
+      localWorker = activeQueueApi.createResumeParseWorker(
+        async ({ bypassCache, itemId }) => {
+          const { runBulkResumeUploadWorkflow } =
+            await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow");
+          await runBulkResumeUploadWorkflow({ bypassCache, itemId });
+        },
+        {
+          concurrency: options.parseConcurrency,
+          queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+        },
+      );
+      log("INFO", "local_worker.started", {
+        concurrency: options.parseConcurrency,
+        queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+      });
+    }
 
     const filesToUpload = listFilesNeedingUpload(state);
     const alreadyStored = Object.values(state.files).filter((file) =>
@@ -635,7 +761,7 @@ async function main(): Promise<void> {
     await queueBatches({
       actor,
       batches: batchesToQueue,
-      enqueue: queueApi.enqueueResumeParseJobs,
+      enqueue: enqueueJobs,
       insertBatch: batchDao.insertBatchWithItems,
       loadBatch: batchDao.loadBatchDetail,
       log,
@@ -644,8 +770,29 @@ async function main(): Promise<void> {
       state,
     });
 
+    if (options.mode === "local") {
+      const requeued = await requeuePendingItemsForQueuedBatches({
+        actor,
+        enqueue: enqueueJobs,
+        loadBatch: batchDao.loadBatchDetail,
+        log,
+        state,
+      });
+      log("INFO", "local_queue.drain_started", {
+        parseConcurrency: options.parseConcurrency,
+        queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+        requeuedPending: requeued,
+      });
+      await activeQueueApi.waitUntilResumeParseQueueIdle({
+        queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+      });
+      log("INFO", "local_queue.drain_completed", {
+        queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+      });
+    }
+
     const summary = summarizeResumeFolderImportState(state);
-    log("INFO", "import.completed", summary);
+    log("INFO", "import.completed", { ...summary, mode: options.mode, parseQueueName });
     if (summary.failed > 0 || summary.batch_planned > 0 || summary.discovered > 0) {
       process.exitCode = 1;
       log("WARN", "import.recovery_required", {
@@ -653,8 +800,11 @@ async function main(): Promise<void> {
       });
     }
   } finally {
-    await queueApi.closeResumeParseQueue();
-    await closeDatabase();
+    if (localWorker) {
+      await localWorker.close();
+    }
+    await queueApi?.closeResumeParseQueue();
+    await closeDatabase?.();
   }
 }
 

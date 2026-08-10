@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  RESUME_PARSE_LOCAL_QUEUE_NAME,
+  RESUME_PARSE_QUEUE_NAME,
   buildResumeParseJobId,
   buildResumeParseQueuePrefix,
   createRedisConnectionFromUrl,
@@ -11,6 +13,12 @@ import {
 } from "./resume-parse";
 
 describe("resume parse queue configuration", () => {
+  it("keeps the online and local queue names distinct", () => {
+    expect(RESUME_PARSE_QUEUE_NAME).toBe("resume-parse");
+    expect(RESUME_PARSE_LOCAL_QUEUE_NAME).toBe("resume-parse-local");
+    expect(RESUME_PARSE_LOCAL_QUEUE_NAME).not.toBe(RESUME_PARSE_QUEUE_NAME);
+  });
+
   it("parses password-only Redis URLs", () => {
     expect(createRedisConnectionFromUrl("redis://:abc%40123@localhost:6380/2")).toEqual({
       db: 2,

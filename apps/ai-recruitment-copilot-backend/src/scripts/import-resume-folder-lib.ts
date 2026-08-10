@@ -9,6 +9,8 @@ import {
 
 export const RESUME_FOLDER_IMPORT_STATE_VERSION = 1;
 
+export type ResumeFolderImportMode = "local" | "remote";
+
 export type ImportFileStatus =
   | "discovered"
   | "uploaded"
@@ -49,6 +51,7 @@ export interface ResumeFolderImportBatchState {
 export interface ResumeFolderImportState {
   batches: Record<string, ResumeFolderImportBatchState>;
   configuration: {
+    importMode: ResumeFolderImportMode;
     organizationId: string;
     recruitmentSourceDetail: string;
     userId: string;
@@ -84,6 +87,7 @@ export interface ScannedResumeFile {
 }
 
 interface CreateImportStateInput {
+  importMode: ResumeFolderImportMode;
   organizationId: string;
   recruitmentSourceDetail: string;
   rootPath: string;
@@ -163,6 +167,7 @@ export async function scanResumeDirectory(
 }
 
 export function createResumeFolderImportState({
+  importMode,
   organizationId,
   recruitmentSourceDetail,
   rootPath,
@@ -174,6 +179,7 @@ export function createResumeFolderImportState({
   return {
     batches: {},
     configuration: {
+      importMode,
       organizationId,
       recruitmentSourceDetail,
       userId,
@@ -197,6 +203,7 @@ export function assertResumeFolderImportStateCompatible(
   }
   const mismatches = [
     ["rootPath", state.rootPath, path.resolve(expected.rootPath)],
+    ["importMode", state.configuration.importMode, expected.importMode],
     ["workspaceSlug", state.configuration.workspaceSlug, expected.workspaceSlug],
     ["organizationId", state.configuration.organizationId, expected.organizationId],
     ["userId", state.configuration.userId, expected.userId],
@@ -352,7 +359,7 @@ export async function loadResumeFolderImportState(
     try {
       const legacy = JSON.parse(contents) as ResumeFolderImportState;
       if (legacy.version === RESUME_FOLDER_IMPORT_STATE_VERSION) {
-        return legacy;
+        return normalizeResumeFolderImportState(legacy);
       }
     } catch {
       // JSONL journals are intentionally not a single JSON document.
@@ -364,7 +371,7 @@ export async function loadResumeFolderImportState(
       }
       const entry = JSON.parse(line) as ResumeFolderImportCheckpoint | ResumeFolderImportSnapshot;
       if (entry.type === "snapshot") {
-        ({ state } = entry);
+        state = normalizeResumeFolderImportState(entry.state);
         continue;
       }
       if (!state) {
@@ -385,6 +392,17 @@ export async function loadResumeFolderImportState(
     }
     throw error;
   }
+}
+
+function normalizeResumeFolderImportState(state: ResumeFolderImportState): ResumeFolderImportState {
+  const importMode = state.configuration.importMode === "local" ? "local" : "remote";
+  return {
+    ...state,
+    configuration: {
+      ...state.configuration,
+      importMode,
+    },
+  };
 }
 
 export async function saveResumeFolderImportState(

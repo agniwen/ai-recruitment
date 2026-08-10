@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   appendResumeFolderImportCheckpoint,
+  assertResumeFolderImportStateCompatible,
   createResumeFolderImportState,
   listFilesNeedingUpload,
   loadResumeFolderImportState,
@@ -31,6 +32,7 @@ async function makeTemporaryDirectory(): Promise<string> {
 
 function makeState(rootPath: string) {
   return createResumeFolderImportState({
+    importMode: "remote",
     organizationId: "org-1",
     recruitmentSourceDetail: "历史简历导入",
     rootPath,
@@ -190,5 +192,31 @@ describe("resume folder import state", () => {
 
     expect(result.conflicts).toEqual(["resume.pdf"]);
     expect(state.files["resume.pdf"]?.descriptor?.contentHash).toBe("old-hash");
+  });
+
+  it("rejects resuming a remote state file with local mode", () => {
+    const rootPath = "/tmp/resumes";
+    const state = makeState(rootPath);
+    expect(() =>
+      assertResumeFolderImportStateCompatible(state, {
+        importMode: "local",
+        organizationId: "org-1",
+        recruitmentSourceDetail: "历史简历导入",
+        rootPath,
+        userId: "user-1",
+        workspaceSlug: "workspace-1",
+      }),
+    ).toThrow(/importMode/);
+  });
+
+  it("defaults legacy state files without importMode to remote", async () => {
+    const rootPath = await makeTemporaryDirectory();
+    const statePath = path.join(rootPath, ".state.jsonl");
+    const legacy = makeState(rootPath);
+    delete (legacy.configuration as { importMode?: string }).importMode;
+    await writeFile(statePath, `${JSON.stringify({ state: legacy, type: "snapshot" })}\n`, "utf-8");
+
+    const restored = await loadResumeFolderImportState(statePath);
+    expect(restored?.configuration.importMode).toBe("remote");
   });
 });
