@@ -27,15 +27,16 @@ Same Redis instance and existing prefix (`arc:resume-parse:<db-hash>`). Only the
 
 ## Recording
 
-- Online DB: batch + item status machine unchanged (`pending` → `processing` → `succeeded`/`failed`).
+- Online DB: batch + item status machine unchanged (`pending` → `processing` → `succeeded`/`failed`). Default pool scope is **public**.
 - Redis: job lifecycle on `resume-parse-local` only.
-- Local JSONL: upload/batch checkpoints; configuration stores `importMode` so resume cannot mix modes with the same state file.
+- Local JSONL: upload/batch checkpoints; configuration stores `importMode` and `resumePoolScope` so resume cannot mix modes/scopes with the same state file.
 
 ## CLI
 
 ```text
---mode remote|local          default remote
---parse-concurrency <n>     local only; embedded worker concurrency (default 4, max 32)
+--mode remote|local                 default remote
+--pool-scope public|private         default public
+--parse-concurrency <n>            local only; embedded worker concurrency (default 4, max 32)
 ```
 
 Other flags unchanged (`--root`, `--workspace`, `--commit`, upload `--concurrency`, etc.).

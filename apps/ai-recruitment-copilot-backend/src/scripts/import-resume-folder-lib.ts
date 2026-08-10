@@ -10,6 +10,7 @@ import {
 export const RESUME_FOLDER_IMPORT_STATE_VERSION = 1;
 
 export type ResumeFolderImportMode = "local" | "remote";
+export type ResumeFolderImportPoolScope = "private" | "public";
 
 export type ImportFileStatus =
   | "discovered"
@@ -54,6 +55,7 @@ export interface ResumeFolderImportState {
     importMode: ResumeFolderImportMode;
     organizationId: string;
     recruitmentSourceDetail: string;
+    resumePoolScope: ResumeFolderImportPoolScope;
     userId: string;
     workspaceSlug: string;
   };
@@ -90,6 +92,7 @@ interface CreateImportStateInput {
   importMode: ResumeFolderImportMode;
   organizationId: string;
   recruitmentSourceDetail: string;
+  resumePoolScope: ResumeFolderImportPoolScope;
   rootPath: string;
   runId?: string;
   userId: string;
@@ -170,6 +173,7 @@ export function createResumeFolderImportState({
   importMode,
   organizationId,
   recruitmentSourceDetail,
+  resumePoolScope,
   rootPath,
   runId = crypto.randomUUID(),
   userId,
@@ -182,6 +186,7 @@ export function createResumeFolderImportState({
       importMode,
       organizationId,
       recruitmentSourceDetail,
+      resumePoolScope,
       userId,
       workspaceSlug,
     },
@@ -204,6 +209,7 @@ export function assertResumeFolderImportStateCompatible(
   const mismatches = [
     ["rootPath", state.rootPath, path.resolve(expected.rootPath)],
     ["importMode", state.configuration.importMode, expected.importMode],
+    ["resumePoolScope", state.configuration.resumePoolScope, expected.resumePoolScope],
     ["workspaceSlug", state.configuration.workspaceSlug, expected.workspaceSlug],
     ["organizationId", state.configuration.organizationId, expected.organizationId],
     ["userId", state.configuration.userId, expected.userId],
@@ -351,6 +357,152 @@ export function summarizeResumeFolderImportState(state: ResumeFolderImportState)
   return { ...counts, total: Object.keys(state.files).length };
 }
 
+export function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) {
+    return "0ms";
+  }
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
+  }
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainSeconds = Math.round(seconds - minutes * 60);
+  if (minutes < 60) {
+    return `${minutes}m${remainSeconds}s`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainMinutes = minutes % 60;
+  return `${hours}h${remainMinutes}m`;
+}
+
+function readErrorMessage(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+  if ("message" in error && typeof error.message === "string" && error.message.trim()) {
+    return error.message.trim();
+  }
+  return null;
+}
+
+/** Collapse drizzle/postgres failures into a short Chinese-friendly message. */
+export function formatImportError(error: unknown): string {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  let fallback = error instanceof Error ? error.message : String(error);
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const record = current as {
+      cause?: unknown;
+      code?: string;
+      constraint?: string;
+      detail?: string;
+      message?: string;
+    };
+    const message = readErrorMessage(current) ?? fallback;
+    fallback = message;
+    if (record.code === "23514") {
+      return `数据库约束校验失败${record.constraint ? `（${record.constraint}）` : ""}`;
+    }
+    if (record.code === "23505") {
+      return `唯一约束冲突${record.detail ? `：${record.detail}` : ""}`;
+    }
+    if (record.code === "23503") {
+      return `外键约束失败${record.detail ? `：${record.detail}` : ""}`;
+    }
+    if (message.includes("source_channel") && message.includes("check")) {
+      return "数据库尚未支持 historical_import 来源渠道，请先执行相关 migration";
+    }
+    if (message.startsWith("Failed query:")) {
+      current = record.cause;
+      continue;
+    }
+    if (record.cause) {
+      current = record.cause;
+      continue;
+    }
+    break;
+  }
+  const compact = fallback.replaceAll(/\s+/g, " ").trim();
+  if (compact.startsWith("Failed query:")) {
+    return "数据库写入失败";
+  }
+  return compact.length > 240 ? `${compact.slice(0, 240)}…` : compact;
+}
+
+export interface LocalParseProgressSnapshot {
+  avgMsPerItem: number | null;
+  batchId: string;
+  batchRemaining: number;
+  batchTotal: number;
+  elapsedMs: number;
+  etaMs: number | null;
+  failed: number;
+  finished: number;
+  itemDurationMs: number;
+  itemId: string;
+  remainingTotal: number;
+  status: "failed" | "succeeded";
+  total: number;
+}
+
+export function createLocalParseProgressTracker(input: {
+  batchPendingCounts: Record<string, number>;
+  now?: () => number;
+  total: number;
+}) {
+  const now = input.now ?? Date.now;
+  const startedAt = now();
+  let finished = 0;
+  let failed = 0;
+  const batchDone: Record<string, number> = {};
+
+  return {
+    record(event: {
+      batchId: string;
+      itemDurationMs: number;
+      itemId: string;
+      queueRemaining?: number;
+      status: "failed" | "succeeded";
+    }): LocalParseProgressSnapshot {
+      if (event.status === "succeeded") {
+        finished += 1;
+      } else {
+        failed += 1;
+      }
+      batchDone[event.batchId] = (batchDone[event.batchId] ?? 0) + 1;
+      const done = finished + failed;
+      const elapsedMs = Math.max(0, now() - startedAt);
+      const remainingTotal =
+        typeof event.queueRemaining === "number"
+          ? Math.max(0, event.queueRemaining)
+          : Math.max(0, input.total - done);
+      const batchTotal = input.batchPendingCounts[event.batchId] ?? 0;
+      const batchRemaining = Math.max(0, batchTotal - (batchDone[event.batchId] ?? 0));
+      const avgMsPerItem = done > 0 ? Math.round(elapsedMs / done) : null;
+      const etaMs = avgMsPerItem === null ? null : Math.round(avgMsPerItem * remainingTotal);
+      return {
+        avgMsPerItem,
+        batchId: event.batchId,
+        batchRemaining,
+        batchTotal,
+        elapsedMs,
+        etaMs,
+        failed,
+        finished,
+        itemDurationMs: event.itemDurationMs,
+        itemId: event.itemId,
+        remainingTotal,
+        status: event.status,
+        total: input.total,
+      };
+    },
+  };
+}
+
 export async function loadResumeFolderImportState(
   statePath: string,
 ): Promise<ResumeFolderImportState | null> {
@@ -396,11 +548,14 @@ export async function loadResumeFolderImportState(
 
 function normalizeResumeFolderImportState(state: ResumeFolderImportState): ResumeFolderImportState {
   const importMode = state.configuration.importMode === "local" ? "local" : "remote";
+  // Legacy state files had no scope and always wrote private; keep that on resume.
+  const resumePoolScope = state.configuration.resumePoolScope === "public" ? "public" : "private";
   return {
     ...state,
     configuration: {
       ...state.configuration,
       importMode,
+      resumePoolScope,
     },
   };
 }

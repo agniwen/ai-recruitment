@@ -15,7 +15,10 @@ import { loadStandaloneEnv } from "../standalone/env";
 import {
   appendResumeFolderImportCheckpoint,
   assertResumeFolderImportStateCompatible,
+  createLocalParseProgressTracker,
   createResumeFolderImportState,
+  formatDurationMs,
+  formatImportError,
   listFilesNeedingUpload,
   loadResumeFolderImportState,
   mergeResumeFolderScan,
@@ -25,10 +28,12 @@ import {
   summarizeResumeFolderImportState,
 } from "./import-resume-folder-lib";
 import type {
+  LocalParseProgressSnapshot,
   ResumeFolderImportBatchState,
   ResumeFolderImportDescriptor,
   ResumeFolderImportFileState,
   ResumeFolderImportMode,
+  ResumeFolderImportPoolScope,
   ResumeFolderImportState,
 } from "./import-resume-folder-lib";
 
@@ -41,6 +46,7 @@ interface ImportCliOptions {
   mode: ResumeFolderImportMode;
   parseConcurrency: number;
   recruitmentSourceDetail: string;
+  resumePoolScope: ResumeFolderImportPoolScope;
   rootPath: string;
   stateFile: string;
   userEmail: string | null;
@@ -67,7 +73,7 @@ interface SerializedStateSaver {
 type LogLevel = "ERROR" | "INFO" | "WARN";
 
 const HELP = `
-批量导入目录中的简历到私有简历池，并标记为“历史简历”。默认只扫描；必须传 --commit 才会上传和入队。
+批量导入目录中的简历到简历池，并标记为“历史简历”。默认进入公有池。默认只扫描；必须传 --commit 才会上传和入队。
 
 用法：
   pnpm --filter @arc/ai-recruitment-copilot-backend import:resume-folder -- \\
@@ -92,6 +98,7 @@ const HELP = `
   --user-id <id>            操作人 ID；与 --user-email 二选一
   --commit                  真正上传并创建解析任务；缺省为 dry-run
   --mode <remote|local>     remote=线上 worker（默认）；local=本机消费独立队列
+  --pool-scope <public|private>  简历池范围，默认 public（公有池）
   --parse-concurrency <n>   仅 local：本机解析并发，默认 4，最大 32
   --state-file <path>       恢复状态日志，默认 <root>/.arc-resume-import-state.jsonl
   --log-file <path>         日志文件，默认 <state-file>.log
@@ -141,6 +148,14 @@ function parseImportMode(value: string | undefined): ResumeFolderImportMode {
   throw new Error("--mode 只能是 remote 或 local。");
 }
 
+function parsePoolScope(value: string | undefined): ResumeFolderImportPoolScope {
+  const scope = value?.trim().toLowerCase() || "public";
+  if (scope === "public" || scope === "private") {
+    return scope;
+  }
+  throw new Error("--pool-scope 只能是 public 或 private。");
+}
+
 function resolveParseQueueName(mode: ResumeFolderImportMode): ResumeParseQueueName {
   return mode === "local" ? RESUME_PARSE_LOCAL_QUEUE_NAME : RESUME_PARSE_QUEUE_NAME;
 }
@@ -159,6 +174,7 @@ function parseCliOptions(argv: string[]): ImportCliOptions | null {
       "log-file": { type: "string" },
       mode: { type: "string" },
       "parse-concurrency": { type: "string" },
+      "pool-scope": { type: "string" },
       root: { type: "string" },
       "source-detail": { type: "string" },
       "state-file": { type: "string" },
@@ -187,6 +203,7 @@ function parseCliOptions(argv: string[]): ImportCliOptions | null {
     values["state-file"] ?? path.join(rootPath, ".arc-resume-import-state.jsonl"),
   );
   const mode = parseImportMode(values.mode);
+  const resumePoolScope = parsePoolScope(values["pool-scope"]);
   if (values["parse-concurrency"] && mode !== "local") {
     throw new Error("--parse-concurrency 仅在 --mode local 时可用。");
   }
@@ -209,6 +226,7 @@ function parseCliOptions(argv: string[]): ImportCliOptions | null {
       32,
     ),
     recruitmentSourceDetail: parseRecruitmentSourceDetail(values["source-detail"]),
+    resumePoolScope,
     rootPath,
     stateFile,
     userEmail: values["user-email"]?.trim().toLowerCase() || null,
@@ -227,13 +245,34 @@ function serializeLogValue(value: unknown): string {
 function createLogger(logFile: string) {
   mkdirSync(path.dirname(logFile), { recursive: true });
   return (level: LogLevel, event: string, data: Record<string, unknown> = {}): void => {
+    const resumeName =
+      typeof data.简历 === "string"
+        ? data.简历
+        : (typeof data.resume === "string"
+          ? data.resume
+          : null);
     const details = Object.entries(data)
+      .filter(([key]) => key !== "简历" && key !== "resume")
       .map(([key, value]) => `${key}=${serializeLogValue(value)}`)
       .join(" ");
-    const line = `[${new Date().toISOString()}] [${level}] ${event}${details ? ` ${details}` : ""}`;
+    const prefix = resumeName ? `简历=${JSON.stringify(resumeName)} ` : "";
+    const line = `[${new Date().toISOString()}] [${level}] ${event} ${prefix}${details}`.trimEnd();
     console.log(line);
     appendFileSync(logFile, `${line}\n`, { encoding: "utf-8", mode: 0o600 });
   };
+}
+
+function resumeNameOf(file: Pick<ResumeFolderImportFileState, "relativePath">): string {
+  return path.basename(file.relativePath);
+}
+
+function findResumeNameByItemId(state: ResumeFolderImportState, itemId: string): string {
+  for (const file of Object.values(state.files)) {
+    if (file.itemId === itemId) {
+      return resumeNameOf(file);
+    }
+  }
+  return itemId;
 }
 
 async function resolveActor(
@@ -317,6 +356,29 @@ async function runConcurrent<T>(
   await Promise.all(Array.from({ length: Math.min(concurrency, records.length) }, () => worker()));
 }
 
+function logLocalParseProgress(
+  log: ReturnType<typeof createLogger>,
+  snapshot: LocalParseProgressSnapshot,
+  resumeName: string,
+): void {
+  const level = snapshot.status === "succeeded" ? "INFO" : "ERROR";
+  const event = snapshot.status === "succeeded" ? "解析完成" : "解析失败";
+  log(level, event, {
+    已失败: snapshot.failed,
+    已完成: snapshot.finished,
+    已用时: formatDurationMs(snapshot.elapsedMs),
+    平均每条: snapshot.avgMsPerItem === null ? null : formatDurationMs(snapshot.avgMsPerItem),
+    总计: snapshot.total,
+    批次: snapshot.batchId,
+    本批剩余: snapshot.batchRemaining,
+    本批总数: snapshot.batchTotal,
+    本条用时: formatDurationMs(snapshot.itemDurationMs),
+    简历: resumeName,
+    还剩: snapshot.remainingTotal,
+    预计剩余: snapshot.etaMs === null ? null : formatDurationMs(snapshot.etaMs),
+  });
+}
+
 function scannedPath(rootPath: string, file: ResumeFolderImportFileState): string {
   return path.join(rootPath, ...file.relativePath.split("/"));
 }
@@ -367,32 +429,31 @@ async function uploadFiles(input: {
       file.status = "uploaded";
       succeeded += 1;
       if (input.verbose) {
-        input.log("INFO", "upload.succeeded", {
+        input.log("INFO", "上传成功", {
           contentHash: descriptor.contentHash,
-          path: file.relativePath,
-          storageKey: descriptor.storageKey,
+          简历: resumeNameOf(file),
         });
       }
     } catch (error) {
       failed += 1;
-      file.error = error instanceof Error ? error.message : String(error);
+      file.error = formatImportError(error);
       file.failureStage = "upload";
       file.status = "failed";
-      input.log("ERROR", "upload.failed", {
-        attempt: file.attempts,
-        error: file.error,
-        path: file.relativePath,
+      input.log("ERROR", "上传失败", {
+        尝试次数: file.attempts,
+        简历: resumeNameOf(file),
+        错误: file.error,
       });
     } finally {
       finished += 1;
       await input.saveState.checkpoint([file]);
       if (finished % input.logEvery === 0 || finished === input.files.length) {
-        input.log("INFO", "upload.progress", {
-          failed,
-          finished,
-          remaining: input.files.length - finished,
-          succeeded,
-          total: input.files.length,
+        input.log("INFO", "上传进度", {
+          失败: failed,
+          已完成: finished,
+          总计: input.files.length,
+          成功: succeeded,
+          还剩: input.files.length - finished,
         });
       }
     }
@@ -432,7 +493,7 @@ async function queueBatches(input: {
     organizationId: string;
     recruitmentSource: "other";
     recruitmentSourceDetail: string;
-    resumePoolScope: "private";
+    resumePoolScope: ResumeFolderImportPoolScope;
     sourceChannel: "historical_import";
     target: "resume_pool";
     userId: string;
@@ -447,6 +508,7 @@ async function queueBatches(input: {
   } | null>;
   log: ReturnType<typeof createLogger>;
   recruitmentSourceDetail: string;
+  resumePoolScope: ResumeFolderImportPoolScope;
   saveState: SerializedStateSaver;
   state: ResumeFolderImportState;
 }): Promise<void> {
@@ -467,7 +529,7 @@ async function queueBatches(input: {
           organizationId: input.actor.organizationId,
           recruitmentSource: "other",
           recruitmentSourceDetail: input.recruitmentSourceDetail,
-          resumePoolScope: "private",
+          resumePoolScope: input.resumePoolScope,
           sourceChannel: "historical_import",
           target: "resume_pool",
           userId: input.actor.userId,
@@ -506,25 +568,26 @@ async function queueBatches(input: {
       }
       queued += files.length;
       await input.saveState.checkpoint(files, [batch]);
-      input.log("INFO", "batch.queued", {
-        batchId: batch.id,
-        files: files.length,
-        pendingJobsAdded: jobs.length,
-        queuedFilesThisRun: queued,
+      input.log("INFO", "批次已入队", {
+        入队任务: jobs.length,
+        批次: batch.id,
+        文件数: files.length,
+        本轮累计入队: queued,
       });
     } catch (error) {
-      batch.error = error instanceof Error ? error.message : String(error);
+      batch.error = formatImportError(error);
       batch.status = "failed";
       for (const file of files) {
         file.error = batch.error;
         file.failureStage = "batch";
       }
       await input.saveState.checkpoint(files, [batch]);
-      input.log("ERROR", "batch.failed", {
-        attempt: batch.attempts,
-        batchId: batch.id,
-        error: batch.error,
-        files: files.length,
+      input.log("ERROR", "批次失败", {
+        尝试次数: batch.attempts,
+        批次: batch.id,
+        文件数: files.length,
+        示例简历: files[0] ? resumeNameOf(files[0]) : null,
+        错误: batch.error,
       });
     }
   }
@@ -596,6 +659,7 @@ async function main(): Promise<void> {
     logFile: options.logFile,
     mode: options.mode,
     parseQueueName,
+    resumePoolScope: options.resumePoolScope,
     rootPath: options.rootPath,
     sourceChannel: "historical_import",
     stateFile: options.stateFile,
@@ -661,6 +725,7 @@ async function main(): Promise<void> {
       importMode: options.mode,
       organizationId: actor.organizationId,
       recruitmentSourceDetail: options.recruitmentSourceDetail,
+      resumePoolScope: options.resumePoolScope,
       rootPath: options.rootPath,
       userId: actor.userId,
       workspaceSlug,
@@ -698,12 +763,54 @@ async function main(): Promise<void> {
       await activeQueueApi.enqueueResumeParseJobs(jobs, { queueName: parseQueueName });
     };
 
+    type LocalParseProgress = ReturnType<typeof createLocalParseProgressTracker>;
+    const localParseProgress: { current: LocalParseProgress | null } = { current: null };
+
     if (options.mode === "local") {
       localWorker = activeQueueApi.createResumeParseWorker(
-        async ({ bypassCache, itemId }) => {
-          const { runBulkResumeUploadWorkflow } =
-            await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow");
-          await runBulkResumeUploadWorkflow({ bypassCache, itemId });
+        async ({ batchId, bypassCache, itemId }) => {
+          const startedAt = Date.now();
+          try {
+            const { runBulkResumeUploadWorkflow } =
+              await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow");
+            await runBulkResumeUploadWorkflow({ bypassCache, itemId });
+            if (localParseProgress.current) {
+              const queueRemaining = await activeQueueApi.getResumeParseQueueOpenCount({
+                queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+              });
+              logLocalParseProgress(
+                log,
+                localParseProgress.current.record({
+                  batchId,
+                  itemDurationMs: Date.now() - startedAt,
+                  itemId,
+                  queueRemaining,
+                  status: "succeeded",
+                }),
+                findResumeNameByItemId(state, itemId),
+              );
+            }
+          } catch (error) {
+            if (localParseProgress.current) {
+              const queueRemaining = await activeQueueApi
+                .getResumeParseQueueOpenCount({
+                  queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+                })
+                .catch((): number | undefined => undefined);
+              logLocalParseProgress(
+                log,
+                localParseProgress.current.record({
+                  batchId,
+                  itemDurationMs: Date.now() - startedAt,
+                  itemId,
+                  queueRemaining,
+                  status: "failed",
+                }),
+                findResumeNameByItemId(state, itemId),
+              );
+            }
+            throw error;
+          }
         },
         {
           concurrency: options.parseConcurrency,
@@ -766,6 +873,7 @@ async function main(): Promise<void> {
       loadBatch: batchDao.loadBatchDetail,
       log,
       recruitmentSourceDetail: options.recruitmentSourceDetail,
+      resumePoolScope: options.resumePoolScope,
       saveState,
       state,
     });
@@ -778,10 +886,35 @@ async function main(): Promise<void> {
         log,
         state,
       });
+      const batchPendingCounts: Record<string, number> = {};
+      let pendingTotal = 0;
+      for (const batch of Object.values(state.batches)) {
+        if (batch.status !== "queued") {
+          continue;
+        }
+        const detail = await batchDao.loadBatchDetail(batch.id, actor.organizationId, actor.userId);
+        const pending = (detail?.items ?? []).filter(
+          (item) => item.status === "pending" || item.status === "processing",
+        ).length;
+        if (pending > 0) {
+          batchPendingCounts[batch.id] = pending;
+          pendingTotal += pending;
+        }
+      }
+      const queueRemaining = await activeQueueApi.getResumeParseQueueOpenCount({
+        queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+      });
+      const progressTotal = Math.max(pendingTotal, queueRemaining);
+      localParseProgress.current = createLocalParseProgressTracker({
+        batchPendingCounts,
+        total: progressTotal,
+      });
       log("INFO", "local_queue.drain_started", {
         parseConcurrency: options.parseConcurrency,
         queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,
+        queueRemaining,
         requeuedPending: requeued,
+        total: progressTotal,
       });
       await activeQueueApi.waitUntilResumeParseQueueIdle({
         queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,

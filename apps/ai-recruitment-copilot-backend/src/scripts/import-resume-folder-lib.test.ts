@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   appendResumeFolderImportCheckpoint,
   assertResumeFolderImportStateCompatible,
+  createLocalParseProgressTracker,
   createResumeFolderImportState,
+  formatDurationMs,
   listFilesNeedingUpload,
   loadResumeFolderImportState,
   mergeResumeFolderScan,
@@ -35,6 +37,7 @@ function makeState(rootPath: string) {
     importMode: "remote",
     organizationId: "org-1",
     recruitmentSourceDetail: "历史简历导入",
+    resumePoolScope: "public",
     rootPath,
     runId: "run-1",
     userId: "user-1",
@@ -202,6 +205,7 @@ describe("resume folder import state", () => {
         importMode: "local",
         organizationId: "org-1",
         recruitmentSourceDetail: "历史简历导入",
+        resumePoolScope: "public",
         rootPath,
         userId: "user-1",
         workspaceSlug: "workspace-1",
@@ -218,5 +222,56 @@ describe("resume folder import state", () => {
 
     const restored = await loadResumeFolderImportState(statePath);
     expect(restored?.configuration.importMode).toBe("remote");
+  });
+});
+
+describe("local parse progress tracker", () => {
+  it("formats durations for logs", () => {
+    expect(formatDurationMs(800)).toBe("800ms");
+    expect(formatDurationMs(1500)).toBe("1.5s");
+    expect(formatDurationMs(65_000)).toBe("1m5s");
+  });
+
+  it("tracks remaining totals and batch remaining after each item", () => {
+    let now = 1000;
+    const tracker = createLocalParseProgressTracker({
+      batchPendingCounts: { "batch-a": 3, "batch-b": 2 },
+      now: () => now,
+      total: 5,
+    });
+
+    now = 4000;
+    const first = tracker.record({
+      batchId: "batch-a",
+      itemDurationMs: 2500,
+      itemId: "item-1",
+      status: "succeeded",
+    });
+    expect(first).toMatchObject({
+      batchRemaining: 2,
+      batchTotal: 3,
+      failed: 0,
+      finished: 1,
+      remainingTotal: 4,
+      total: 5,
+    });
+    expect(first.elapsedMs).toBe(3000);
+    expect(first.avgMsPerItem).toBe(3000);
+    expect(first.etaMs).toBe(12_000);
+
+    now = 7000;
+    const second = tracker.record({
+      batchId: "batch-a",
+      itemDurationMs: 2000,
+      itemId: "item-2",
+      queueRemaining: 2,
+      status: "failed",
+    });
+    expect(second).toMatchObject({
+      batchRemaining: 1,
+      failed: 1,
+      finished: 1,
+      remainingTotal: 2,
+    });
   });
 });
