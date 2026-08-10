@@ -46,6 +46,27 @@ function makeState(rootPath: string) {
 }
 
 describe("resume folder import state", () => {
+  it("only accepts PDF files and skips other formats", async () => {
+    const rootPath = await makeTemporaryDirectory();
+    await writeFile(path.join(rootPath, "keep.pdf"), "pdf");
+    await writeFile(path.join(rootPath, "skip.docx"), "docx");
+    await writeFile(path.join(rootPath, "skip.png"), "png");
+    await writeFile(path.join(rootPath, "notes.txt"), "txt");
+
+    const scanned = await scanResumeDirectory(rootPath);
+    const byPath = Object.fromEntries(scanned.map((file) => [file.relativePath, file]));
+
+    expect(byPath["keep.pdf"]?.invalidReason).toBeNull();
+    expect(byPath["skip.docx"]?.invalidReason).toMatch(/PDF|跳过/);
+    expect(byPath["skip.png"]?.invalidReason).toMatch(/PDF|跳过/);
+    expect(byPath["notes.txt"]?.invalidReason).toMatch(/PDF|跳过/);
+
+    const state = makeState(rootPath);
+    const merged = mergeResumeFolderScan(state, scanned);
+    expect(merged.invalid).toBe(3);
+    expect(listFilesNeedingUpload(state).map((file) => file.relativePath)).toEqual(["keep.pdf"]);
+  });
+
   it("keeps uploaded and queued files out of a resumed upload", async () => {
     const rootPath = await makeTemporaryDirectory();
     await writeFile(path.join(rootPath, "a.pdf"), "a");

@@ -1,11 +1,7 @@
 import path from "node:path";
 import { mkdir, open, opendir, readFile, rename, stat } from "node:fs/promises";
 import { MAX_BULK_BATCH_SIZE, MAX_RESUME_FILE_SIZE_BYTES } from "@arc/shared/bulk-resume-upload";
-import {
-  getResumeDocumentKind,
-  isSupportedResumeDocumentInput,
-  resumeDocumentFormats,
-} from "@arc/shared/resume-documents";
+import { getResumeDocumentKind, resumeDocumentFormats } from "@arc/shared/resume-documents";
 
 export const RESUME_FOLDER_IMPORT_STATE_VERSION = 1;
 
@@ -117,8 +113,8 @@ function toRelativePath(rootPath: string, absolutePath: string): string {
 }
 
 function invalidReasonForFile(fileName: string, fileSize: number): string | null {
-  if (!isSupportedResumeDocumentInput({ fileName })) {
-    return "不支持的文件格式";
+  if (getResumeDocumentKind({ fileName }) !== "pdf") {
+    return "非 PDF，已跳过";
   }
   if (fileSize <= 0) {
     return "文件为空";

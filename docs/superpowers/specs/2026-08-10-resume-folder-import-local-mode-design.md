@@ -36,7 +36,7 @@ Same Redis instance and existing prefix (`arc:resume-parse:<db-hash>`). Only the
 ```text
 --mode remote|local                 default remote
 --pool-scope public|private         default public
---parse-concurrency <n>            local only; embedded worker concurrency (default 4, max 32)
+--parse-concurrency <n>            local only; embedded worker concurrency (default 50, max 50)
 ```
 
 Other flags unchanged (`--root`, `--workspace`, `--commit`, upload `--concurrency`, etc.).

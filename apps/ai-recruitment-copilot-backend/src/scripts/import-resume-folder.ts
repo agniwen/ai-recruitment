@@ -88,18 +88,18 @@ const HELP = `
     --workspace "workspace-slug" \\
     --user-email "operator@example.com" \\
     --mode local \\
-    --parse-concurrency 4 \\
+    --parse-concurrency 50 \\
     --commit
 
 参数：
-  --root <path>             简历根目录，递归扫描（必填）
+  --root <path>             简历根目录，递归扫描（必填；仅处理 PDF，其它格式跳过）
   --workspace <slug>        工作区 slug；--commit 时必填
   --user-email <email>      操作人邮箱；与 --user-id 二选一
   --user-id <id>            操作人 ID；与 --user-email 二选一
   --commit                  真正上传并创建解析任务；缺省为 dry-run
   --mode <remote|local>     remote=线上 worker（默认）；local=本机消费独立队列
   --pool-scope <public|private>  简历池范围，默认 public（公有池）
-  --parse-concurrency <n>   仅 local：本机解析并发，默认 4，最大 32
+  --parse-concurrency <n>   仅 local：本机解析并发，默认 50，最大 50
   --state-file <path>       恢复状态日志，默认 <root>/.arc-resume-import-state.jsonl
   --log-file <path>         日志文件，默认 <state-file>.log
   --concurrency <n>         上传并发，默认 4，最大 16
@@ -222,8 +222,8 @@ function parseCliOptions(argv: string[]): ImportCliOptions | null {
     parseConcurrency: parsePositiveInteger(
       values["parse-concurrency"],
       "--parse-concurrency",
-      4,
-      32,
+      50,
+      50,
     ),
     recruitmentSourceDetail: parseRecruitmentSourceDetail(values["source-detail"]),
     resumePoolScope,
