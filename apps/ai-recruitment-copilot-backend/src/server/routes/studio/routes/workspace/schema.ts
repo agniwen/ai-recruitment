@@ -16,6 +16,10 @@ export const memberInterviewerInputSchema = z.object({
   isInterviewer: z.boolean(),
 });
 
+export const memberNameInputSchema = z.object({
+  name: z.string().trim().min(1, "请输入用户名称。").max(100, "用户名称不能超过 100 个字符。"),
+});
+
 export const recruitingGroupRoleSchema = z.enum([
   "recruitingSupervisor",
   "recruitingLead",

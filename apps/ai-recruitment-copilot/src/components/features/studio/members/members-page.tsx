@@ -57,6 +57,8 @@ import {
 } from "@/components/features/studio/members/role-display";
 import type { WorkspaceRole } from "@/components/features/studio/members/role-display";
 import { WorkspaceSettingsDialog } from "@/components/features/studio/members/workspace-settings-dialog";
+import { EditMemberNameDialog } from "@/components/features/studio/members/edit-member-name-dialog";
+import { buildMemberActionMenu } from "@/components/features/studio/members/member-actions";
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -112,6 +114,7 @@ export function MembersManagementPage() {
   const [groupNameDrafts, setGroupNameDrafts] = useState<Record<string, string>>({});
   const [newGroupName, setNewGroupName] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
+  const [editNameMember, setEditNameMember] = useState<MemberRow | null>(null);
 
   // 「最近活跃」按 userId 索引：服务端取 COALESCE(MAX(session.updatedAt),
   // user.lastActiveAt)——前者给当前活跃 session 5 分钟级的滚动更新，后者
@@ -585,15 +588,12 @@ export function MembersManagementPage() {
         title: "最近活跃",
       }),
       actionsColumn<MemberRow>({
-        menu: canDelete
-          ? [
-              {
-                label: "移除成员",
-                onClick: (r) => removeMember(r),
-                variant: "destructive",
-              },
-            ]
-          : [],
+        menu: buildMemberActionMenu({
+          canDelete,
+          canUpdate,
+          onEditName: setEditNameMember,
+          onRemove: removeMember,
+        }),
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- 页面级操作函数随同一次渲染闭包使用
@@ -627,6 +627,11 @@ export function MembersManagementPage() {
             ) : null}
           </span>
         }
+      />
+      <EditMemberNameDialog
+        member={editNameMember}
+        onOpenChange={(open) => !open && setEditNameMember(null)}
+        onUpdated={refetch}
       />
 
       <Tabs className="space-y-4" onValueChange={handleTabChange} value={activeTab}>

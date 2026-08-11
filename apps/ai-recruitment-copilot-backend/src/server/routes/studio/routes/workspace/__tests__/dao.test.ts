@@ -16,6 +16,7 @@ import {
   listRecruitingGroupBoard,
   UNGROUPED_RECRUITING_GROUP_ID,
   updateRecruitingGroupHiringUnits,
+  updateWorkspaceMemberName,
 } from "../dao";
 
 const ORG = "test_workspace_groups_org";
@@ -186,6 +187,25 @@ describe("workspace recruiting group dao", () => {
       name: "未分组",
     });
     expect(groups[1]?.members).toEqual([expect.objectContaining({ role: null, userId: MEMBER })]);
+  }, 30_000);
+
+  it("updates names only for users who belong to the workspace", async () => {
+    const updated = await updateWorkspaceMemberName({
+      name: "新的成员名称",
+      organizationId: ORG,
+      userId: MEMBER,
+    });
+    const missing = await updateWorkspaceMemberName({
+      name: "不能保存的名称",
+      organizationId: ORG,
+      userId: "not_a_workspace_member",
+    });
+
+    const [stored] = await db.select({ name: user.name }).from(user).where(eq(user.id, MEMBER));
+
+    expect(updated).toEqual({ name: "新的成员名称" });
+    expect(missing).toBeNull();
+    expect(stored?.name).toBe("新的成员名称");
   }, 30_000);
 
   it("stores and returns hiring units managed by a recruiting group", async () => {

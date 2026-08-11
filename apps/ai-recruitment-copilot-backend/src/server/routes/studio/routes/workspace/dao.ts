@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, inArray, notExists, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gte, inArray, notExists, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { startOfBeijingDay } from "@arc/shared/beijing-calendar";
 import {
@@ -90,6 +90,33 @@ export async function updateWorkspaceMemberInterviewer({
     .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)))
     .returning({ userId: member.userId });
   return rows.length > 0 ? "updated" : "missing";
+}
+
+export async function updateWorkspaceMemberName({
+  name,
+  organizationId,
+  userId,
+}: {
+  name: string;
+  organizationId: string;
+  userId: string;
+}): Promise<{ name: string } | null> {
+  const [updated] = await db
+    .update(user)
+    .set({ name, updatedAt: new Date() })
+    .where(
+      and(
+        eq(user.id, userId),
+        exists(
+          db
+            .select({ userId: member.userId })
+            .from(member)
+            .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId))),
+        ),
+      ),
+    )
+    .returning({ name: user.name });
+  return updated ?? null;
 }
 
 export function ensureDefaultRecruitingGroupForWorkspace({
