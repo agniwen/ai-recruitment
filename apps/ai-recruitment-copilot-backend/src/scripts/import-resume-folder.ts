@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- This resumable import CLI keeps its orchestration and recovery flow together. */
+
 import path from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
@@ -10,7 +12,10 @@ import {
   RESUME_PARSE_LOCAL_QUEUE_NAME,
   RESUME_PARSE_QUEUE_NAME,
 } from "@arc/resume-parse-queue/resume-parse";
-import type { ResumeParseQueueName } from "@arc/resume-parse-queue/resume-parse";
+import type {
+  closeResumeParseQueue,
+  ResumeParseQueueName,
+} from "@arc/resume-parse-queue/resume-parse";
 import { loadStandaloneEnv } from "../standalone/env";
 import {
   appendResumeFolderImportCheckpoint,
@@ -245,12 +250,12 @@ function serializeLogValue(value: unknown): string {
 function createLogger(logFile: string) {
   mkdirSync(path.dirname(logFile), { recursive: true });
   return (level: LogLevel, event: string, data: Record<string, unknown> = {}): void => {
-    const resumeName =
-      typeof data.简历 === "string"
-        ? data.简历
-        : (typeof data.resume === "string"
-          ? data.resume
-          : null);
+    let resumeName: string | null = null;
+    if (typeof data.简历 === "string") {
+      resumeName = data.简历;
+    } else if (typeof data.resume === "string") {
+      resumeName = data.resume;
+    }
     const details = Object.entries(data)
       .filter(([key]) => key !== "简历" && key !== "resume")
       .map(([key, value]) => `${key}=${serializeLogValue(value)}`)
@@ -646,6 +651,7 @@ async function ensureDirectory(rootPath: string): Promise<void> {
   }
 }
 
+// oxlint-disable-next-line complexity -- The CLI coordinates resumable scan, upload, queue, and recovery branches.
 async function main(): Promise<void> {
   const options = parseCliOptions(process.argv.slice(2));
   if (!options) {
@@ -689,7 +695,7 @@ async function main(): Promise<void> {
   loadStandaloneEnv();
   let closeDatabase: (() => Promise<void>) | null = null;
   let localWorker: { close: () => Promise<void> } | null = null;
-  let queueApi: typeof import("@arc/resume-parse-queue/resume-parse") | null = null;
+  let queueApi: { closeResumeParseQueue: typeof closeResumeParseQueue } | null = null;
   try {
     const [databaseApi, resumeParseQueueApi, batchDao, storageApi] = await Promise.all([
       import("@arc/ai-recruitment-copilot-backend/lib/server/db"),

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { Queue, Worker } from "bullmq";
 import type { ConnectionOptions, JobsOptions, JobState, JobType } from "bullmq";
 import { z } from "zod";
@@ -26,6 +27,10 @@ const RESUME_PARSE_DRAIN_COUNT_TYPES = [
   "prioritized",
   "waiting-children",
 ] as const;
+
+function createResumeParseQueueAbortedError(): Error {
+  return new Error("等待本地解析队列排空时被中止。");
+}
 
 const RESUME_PARSE_JOB_TYPES: JobType[] = [...RESUME_PARSE_COUNT_TYPES];
 
@@ -346,30 +351,22 @@ export async function waitUntilResumeParseQueueIdle(
   } = {},
 ): Promise<void> {
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_DRAIN_POLL_MS;
-  const abortedError = () => new Error("等待本地解析队列排空时被中止。");
   while (true) {
     if (options.signal?.aborted) {
-      throw abortedError();
+      throw createResumeParseQueueAbortedError();
     }
     const open = await getResumeParseQueueOpenCount(options);
     if (open === 0) {
       return;
     }
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(resolve, pollIntervalMs);
-      if (!options.signal) {
-        return;
+    try {
+      await delay(pollIntervalMs, undefined, { signal: options.signal });
+    } catch (error) {
+      if (options.signal?.aborted) {
+        throw createResumeParseQueueAbortedError();
       }
-      const onAbort = () => {
-        clearTimeout(timer);
-        reject(abortedError());
-      };
-      if (options.signal.aborted) {
-        onAbort();
-        return;
-      }
-      options.signal.addEventListener("abort", onAbort, { once: true });
-    });
+      throw error;
+    }
   }
 }
 

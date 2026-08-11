@@ -499,6 +499,20 @@ export function createLocalParseProgressTracker(input: {
   };
 }
 
+function normalizeResumeFolderImportState(state: ResumeFolderImportState): ResumeFolderImportState {
+  const importMode = state.configuration.importMode === "local" ? "local" : "remote";
+  // Legacy state files had no scope and always wrote private; keep that on resume.
+  const resumePoolScope = state.configuration.resumePoolScope === "public" ? "public" : "private";
+  return {
+    ...state,
+    configuration: {
+      ...state.configuration,
+      importMode,
+      resumePoolScope,
+    },
+  };
+}
+
 export async function loadResumeFolderImportState(
   statePath: string,
 ): Promise<ResumeFolderImportState | null> {
@@ -540,20 +554,6 @@ export async function loadResumeFolderImportState(
     }
     throw error;
   }
-}
-
-function normalizeResumeFolderImportState(state: ResumeFolderImportState): ResumeFolderImportState {
-  const importMode = state.configuration.importMode === "local" ? "local" : "remote";
-  // Legacy state files had no scope and always wrote private; keep that on resume.
-  const resumePoolScope = state.configuration.resumePoolScope === "public" ? "public" : "private";
-  return {
-    ...state,
-    configuration: {
-      ...state.configuration,
-      importMode,
-      resumePoolScope,
-    },
-  };
 }
 
 export async function saveResumeFolderImportState(
