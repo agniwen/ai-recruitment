@@ -6,6 +6,7 @@ import {
   createResumeParseWorker,
   isResumeParseQueueConfigured,
   RESUME_PARSE_HISTORICAL_QUEUE_NAME,
+  tryWithHistoricalResumeDiscoveryLock,
   withHistoricalResumeObjectLock,
 } from "@arc/resume-parse-queue/resume-parse";
 import {
@@ -22,13 +23,15 @@ import {
   createJobDescriptionGoogleSheetSyncWorker,
 } from "@arc/resume-parse-queue/job-description-google-sheet-sync";
 import { createWorkerApp } from "./app";
-import { isLegacyParseEnabled, resolveWorkerServerConfig } from "./config";
+import { resolveLegacyParseConfig, resolveWorkerServerConfig } from "./config";
 import { getWorkerConnectionSummary, loadWorkerEnv } from "./env";
 import { getResumeParseConfigSummary } from "./parse-config";
 import { startMailIngestScheduler } from "./mail-ingest/scheduler";
 import type { MailIngestScheduler } from "./mail-ingest/scheduler";
 
 loadWorkerEnv();
+
+const LEGACY_MAINTENANCE_INTERVAL_MS = 5 * 60 * 1000;
 
 function isResumeSemanticIndexEnabled(): boolean {
   const value = process.env.RESUME_SEMANTIC_INDEX_ENABLED?.trim().toLowerCase();
@@ -126,6 +129,7 @@ async function recoverIncompleteGoogleSheetSyncJobs(): Promise<void> {
 }
 
 async function main() {
+  const legacyParseConfig = resolveLegacyParseConfig();
   const { hostname, port } = resolveWorkerServerConfig();
   const app = createWorkerApp();
   const server = serve({
@@ -145,7 +149,7 @@ async function main() {
 
   let worker: ReturnType<typeof createResumeParseWorker> | null = null;
   let historicalWorker: ReturnType<typeof createResumeParseWorker> | null = null;
-  let historicalRecoveryTimer: NodeJS.Timeout | null = null;
+  let historicalMaintenanceTimer: NodeJS.Timeout | null = null;
   let semanticIndexWorker: ReturnType<typeof createResumeSemanticIndexWorker> | null = null;
   let reviewGenerationWorker: ReturnType<typeof createResumeReviewGenerationWorker> | null = null;
   let googleSheetSyncWorker: ReturnType<typeof createJobDescriptionGoogleSheetSyncWorker> | null =
@@ -158,9 +162,8 @@ async function main() {
         await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow");
       await runBulkResumeUploadWorkflow({ bypassCache, itemId });
     });
-    if (isLegacyParseEnabled()) {
+    if (legacyParseConfig) {
       await configureHistoricalResumeParseGlobalConcurrency(12);
-      await recoverIncompleteHistoricalResumeParseJobs();
       historicalWorker = createResumeParseWorker(
         async ({ itemId }) => {
           const { loadHistoricalImportStorageKey } =
@@ -177,22 +180,55 @@ async function main() {
         },
         { concurrency: 12, queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME },
       );
-      let historicalRecoveryRunning = false;
-      const runHistoricalRecovery = async (): Promise<void> => {
-        if (historicalRecoveryRunning) {
+      let historicalMaintenanceRunning = false;
+      const runHistoricalMaintenance = async (): Promise<void> => {
+        if (historicalMaintenanceRunning) {
           return;
         }
-        historicalRecoveryRunning = true;
+        historicalMaintenanceRunning = true;
         try {
+          const discovery = await tryWithHistoricalResumeDiscoveryLock(
+            legacyParseConfig.workspaceSlug,
+            async () => {
+              const { importLegacyResumes } =
+                await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/legacy-import");
+              return importLegacyResumes({
+                commit: true,
+                uploaderEmail: legacyParseConfig.uploaderEmail,
+                workspaceSlug: legacyParseConfig.workspaceSlug,
+              });
+            },
+          );
+          if (discovery.acquired) {
+            console.info(
+              "[historical-resume-worker] automatic discovery finished",
+              discovery.value,
+            );
+          } else {
+            console.info(
+              "[historical-resume-worker] automatic discovery handled by another worker",
+            );
+          }
           await recoverIncompleteHistoricalResumeParseJobs();
-        } catch (error) {
-          console.error("[historical-resume-worker] periodic recovery failed", { error });
         } finally {
-          historicalRecoveryRunning = false;
+          historicalMaintenanceRunning = false;
         }
       };
-      historicalRecoveryTimer = setInterval(() => void runHistoricalRecovery(), 60_000);
-      historicalRecoveryTimer.unref();
+      await runHistoricalMaintenance();
+      const runPeriodicHistoricalMaintenance = async (): Promise<void> => {
+        try {
+          await runHistoricalMaintenance();
+        } catch (error) {
+          console.error("[historical-resume-worker] automatic discovery or recovery failed", {
+            error,
+          });
+        }
+      };
+      historicalMaintenanceTimer = setInterval(
+        () => void runPeriodicHistoricalMaintenance(),
+        LEGACY_MAINTENANCE_INTERVAL_MS,
+      );
+      historicalMaintenanceTimer.unref();
     } else {
       console.info("[historical-resume-worker] disabled by ENABLE_LEGACY_PARSE");
     }
@@ -237,8 +273,8 @@ async function main() {
       try {
         console.info(`[worker] shutting down after ${signal}`);
         mailIngestScheduler?.close();
-        if (historicalRecoveryTimer) {
-          clearInterval(historicalRecoveryTimer);
+        if (historicalMaintenanceTimer) {
+          clearInterval(historicalMaintenanceTimer);
         }
         await closeServer();
         await worker?.close();

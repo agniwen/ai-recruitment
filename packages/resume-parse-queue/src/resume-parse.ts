@@ -239,6 +239,61 @@ function historicalObjectLockKey(storageKey: string): string {
   return `${buildResumeParseQueuePrefix()}:historical-object-lock:${digest}`;
 }
 
+function historicalDiscoveryLockKey(workspaceKey: string): string {
+  const digest = createHash("sha256").update(workspaceKey).digest("hex");
+  return `${buildResumeParseQueuePrefix()}:historical-discovery-lock:${digest}`;
+}
+
+export async function tryWithHistoricalResumeDiscoveryLock<T>(
+  workspaceKey: string,
+  discoverWithLock: () => Promise<T>,
+): Promise<{ acquired: false } | { acquired: true; value: T }> {
+  const queue = getResumeParseQueue(RESUME_PARSE_HISTORICAL_QUEUE_NAME);
+  const redis = await queue.client;
+  const key = historicalDiscoveryLockKey(workspaceKey);
+  const token = randomUUID();
+  const ttlMs = parsePositiveInteger(
+    process.env.HISTORICAL_RESUME_OBJECT_LOCK_TTL_MS,
+    DEFAULT_OBJECT_LOCK_TTL_MS,
+  );
+  const acquireCommand = "arcAcquireHistoricalResumeDiscoveryLock";
+  const renewCommand = "arcRenewHistoricalResumeDiscoveryLock";
+  const releaseCommand = "arcReleaseHistoricalResumeDiscoveryLock";
+  redis.defineCommand(acquireCommand, {
+    lua: "return redis.call('set', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX')",
+    numberOfKeys: 1,
+  });
+  redis.defineCommand(renewCommand, {
+    lua: "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end",
+    numberOfKeys: 1,
+  });
+  redis.defineCommand(releaseCommand, {
+    lua: "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+    numberOfKeys: 1,
+  });
+  if ((await redis.runCommand(acquireCommand, [key, token, String(ttlMs)])) !== "OK") {
+    return { acquired: false };
+  }
+  async function renewLock(): Promise<void> {
+    try {
+      await redis.runCommand(renewCommand, [key, token, String(ttlMs)]);
+    } catch (error) {
+      console.error("[historical-resume-discovery-lock] renewal failed", {
+        error,
+        workspaceKey,
+      });
+    }
+  }
+  const renewal = setInterval(() => void renewLock(), Math.max(1000, Math.floor(ttlMs / 3)));
+  renewal.unref();
+  try {
+    return { acquired: true, value: await discoverWithLock() };
+  } finally {
+    clearInterval(renewal);
+    await redis.runCommand(releaseCommand, [key, token]);
+  }
+}
+
 export async function withHistoricalResumeObjectLock<T>(
   storageKey: string,
   processWithLock: () => Promise<T>,
