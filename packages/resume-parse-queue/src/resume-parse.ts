@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { Queue, Worker } from "bullmq";
 import type { ConnectionOptions, JobsOptions, JobState, JobType } from "bullmq";
@@ -6,6 +6,7 @@ import { z } from "zod";
 
 export const RESUME_PARSE_QUEUE_NAME = "resume-parse";
 export const RESUME_PARSE_LOCAL_QUEUE_NAME = "resume-parse-local";
+export const RESUME_PARSE_HISTORICAL_QUEUE_NAME = "resume-parse-historical";
 export const RESUME_PARSE_QUEUE_DISPLAY_NAME = "简历解析";
 export const RESUME_PARSE_JOB_NAME = "parse-resume-upload-item";
 const RESUME_PARSE_COUNT_TYPES = [
@@ -47,6 +48,7 @@ export type ResumeParseJobData = z.infer<typeof resumeParseJobSchema>;
 export type ResumeParseJobProcessor = (payload: ResumeParseJobData) => Promise<void>;
 export type ResumeParseQueueName =
   | typeof RESUME_PARSE_QUEUE_NAME
+  | typeof RESUME_PARSE_HISTORICAL_QUEUE_NAME
   | typeof RESUME_PARSE_LOCAL_QUEUE_NAME;
 type ResumeParseCountState = (typeof RESUME_PARSE_COUNT_TYPES)[number];
 export type ResumeParseJobListState = "all" | ResumeParseCountState;
@@ -118,6 +120,8 @@ const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 30_000;
 const DEFAULT_CONCURRENCY = 50;
 const DEFAULT_DRAIN_POLL_MS = 1000;
+const DEFAULT_HISTORICAL_CONCURRENCY = 12;
+const DEFAULT_OBJECT_LOCK_TTL_MS = 10 * 60 * 1000;
 
 const queues = new Map<ResumeParseQueueName, Queue<ResumeParseJobData>>();
 
@@ -222,6 +226,68 @@ export function getResumeParseQueue(
   });
   queues.set(name, created);
   return created;
+}
+
+export async function configureHistoricalResumeParseGlobalConcurrency(
+  concurrency = DEFAULT_HISTORICAL_CONCURRENCY,
+): Promise<void> {
+  await getResumeParseQueue(RESUME_PARSE_HISTORICAL_QUEUE_NAME).setGlobalConcurrency(concurrency);
+}
+
+function historicalObjectLockKey(storageKey: string): string {
+  const digest = createHash("sha256").update(storageKey).digest("hex");
+  return `${buildResumeParseQueuePrefix()}:historical-object-lock:${digest}`;
+}
+
+export async function withHistoricalResumeObjectLock<T>(
+  storageKey: string,
+  processWithLock: () => Promise<T>,
+): Promise<T> {
+  const queue = getResumeParseQueue(RESUME_PARSE_HISTORICAL_QUEUE_NAME);
+  const redis = await queue.client;
+  const key = historicalObjectLockKey(storageKey);
+  const token = randomUUID();
+  const ttlMs = parsePositiveInteger(
+    process.env.HISTORICAL_RESUME_OBJECT_LOCK_TTL_MS,
+    DEFAULT_OBJECT_LOCK_TTL_MS,
+  );
+
+  const acquireCommand = "arcAcquireHistoricalResumeLock";
+  const renewCommand = "arcRenewHistoricalResumeLock";
+  const releaseCommand = "arcReleaseHistoricalResumeLock";
+  redis.defineCommand(acquireCommand, {
+    lua: "return redis.call('set', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX')",
+    numberOfKeys: 1,
+  });
+  redis.defineCommand(renewCommand, {
+    lua: "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end",
+    numberOfKeys: 1,
+  });
+  redis.defineCommand(releaseCommand, {
+    lua: "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+    numberOfKeys: 1,
+  });
+
+  while ((await redis.runCommand(acquireCommand, [key, token, String(ttlMs)])) !== "OK") {
+    await delay(1000);
+  }
+
+  async function renewLock(): Promise<void> {
+    try {
+      await redis.runCommand(renewCommand, [key, token, String(ttlMs)]);
+    } catch (error) {
+      console.error("[historical-resume-lock] renewal failed", { error, storageKey });
+    }
+  }
+  const renewal = setInterval(() => void renewLock(), Math.max(1000, Math.floor(ttlMs / 3)));
+  renewal.unref();
+
+  try {
+    return await processWithLock();
+  } finally {
+    clearInterval(renewal);
+    await redis.runCommand(releaseCommand, [key, token]);
+  }
 }
 
 export function defaultResumeParseJobOptions(env: NodeJS.ProcessEnv = process.env): JobsOptions {

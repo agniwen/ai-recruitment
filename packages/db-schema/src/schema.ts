@@ -1326,6 +1326,7 @@ export type ResumeUploadBatchStatus = "pending" | "running" | "completed" | "can
 export type ResumeUploadBatchJdMode = "bind" | "auto" | "none";
 export type ResumeUploadBatchDedupPolicy = "skip" | "create";
 export type ResumeUploadBatchTarget = "resume_library" | "resume_pool";
+export type ResumeUploadBatchSourceChannel = "historical_import";
 export type ResumeUploadBatchItemStatus =
   | "pending"
   | "processing"
@@ -1358,6 +1359,7 @@ export const resumeUploadBatch = pgTable(
     recruitmentSourceDetail: text("recruitment_source_detail"),
     resumePoolScope: text("resume_pool_scope").$type<ResumePoolScope>(),
     skippedCount: integer("skipped_count").notNull().default(0),
+    sourceChannel: text("source_channel").$type<ResumeUploadBatchSourceChannel>(),
     status: text("status").$type<ResumeUploadBatchStatus>().notNull(),
     succeededCount: integer("succeeded_count").notNull().default(0),
     target: text("target").$type<ResumeUploadBatchTarget>().notNull().default("resume_library"),
@@ -1389,8 +1391,10 @@ export const resumeUploadBatchItem = pgTable(
       .notNull()
       .references(() => resumeUploadBatch.id, { onDelete: "cascade" }),
     contentHash: text("content_hash"),
+    currentStep: text("current_step"),
     dedupMatchSnapshot: jsonb("dedup_match_snapshot"),
     errorMessage: text("error_message"),
+    failureCount: integer("failure_count").notNull().default(0),
     fileSize: integer("file_size").notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     id: text("id").primaryKey(),
@@ -1405,6 +1409,7 @@ export const resumeUploadBatchItem = pgTable(
     resumeRecordId: text("resume_record_id").references(() => studioInterview.id, {
       onDelete: "set null",
     }),
+    sourceFolder: text("source_folder"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     status: text("status").$type<ResumeUploadBatchItemStatus>().notNull(),
     storageKey: text("storage_key").notNull(),
@@ -1412,6 +1417,37 @@ export const resumeUploadBatchItem = pgTable(
   (table) => [
     index("resume_upload_batch_item_batch_order_idx").on(table.batchId, table.orderIndex),
     index("resume_upload_batch_item_batch_status_idx").on(table.batchId, table.status),
+    uniqueIndex("resume_upload_batch_item_historical_source_uq")
+      .on(table.organizationId, table.storageKey)
+      .where(sql`${table.sourceFolder} IS NOT NULL`),
+  ],
+);
+
+export type ResumeUploadBatchItemAttemptStatus =
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "interrupted";
+
+export const resumeUploadBatchItemAttempt = pgTable(
+  "resume_upload_batch_item_attempt",
+  {
+    attemptNumber: integer("attempt_number").notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    errorDetails: jsonb("error_details"),
+    errorMessage: text("error_message"),
+    failedStep: text("failed_step"),
+    id: text("id").primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => resumeUploadBatchItem.id, { onDelete: "cascade" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    status: text("status").$type<ResumeUploadBatchItemAttemptStatus>().notNull(),
+    workerId: text("worker_id"),
+  },
+  (table) => [
+    uniqueIndex("resume_upload_batch_item_attempt_number_uq").on(table.itemId, table.attemptNumber),
+    index("resume_upload_batch_item_attempt_status_idx").on(table.status, table.startedAt),
   ],
 );
 

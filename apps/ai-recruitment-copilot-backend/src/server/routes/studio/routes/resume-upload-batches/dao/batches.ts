@@ -1,9 +1,11 @@
-import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+/* oxlint-disable max-lines -- Batch lifecycle and recovery mutations share one transactional DAO. */
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   resumePoolEvent,
   resumePoolItem,
   resumeUploadBatch,
+  resumeUploadBatchItemAttempt,
   resumeUploadBatchItem,
   studioInterview,
 } from "@arc/db-schema/schema";
@@ -82,12 +84,18 @@ export interface CreateBatchInput {
   resumePoolScope?: ResumePoolScope | null;
   sourceChannel?: ResumePoolSourceChannel | null;
   target?: ResumeUploadBatchTarget;
-  files: { storageKey: string; originalFileName: string; fileSize: number; contentHash: string }[];
+  files: {
+    storageKey: string;
+    originalFileName: string;
+    fileSize: number;
+    contentHash: string | null;
+    sourceFolder?: string | null;
+  }[];
 }
 
 function candidateNameFromFileName(fileName: string): string {
   const trimmed = fileName.trim();
-  const withoutExt = trimmed.replace(/\.pdf$/i, "").trim();
+  const withoutExt = trimmed.replace(/\.(?:docx?|jpe?g|pdf|png|pptx?)$/i, "").trim();
   return withoutExt || "未解析简历";
 }
 
@@ -111,6 +119,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
       recruitmentSource: input.recruitmentSource ?? null,
       recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
       resumePoolScope: target === "resume_pool" ? scope : null,
+      sourceChannel: input.sourceChannel === "historical_import" ? "historical_import" : null,
       status: "pending",
       target,
       totalCount: input.files.length,
@@ -215,6 +224,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
         poolItemId,
         queuedAt: now,
         resumeRecordId: recordId,
+        sourceFolder: file.sourceFolder ?? null,
         status: "pending" as ResumeUploadBatchItemStatus,
         storageKey: file.storageKey,
       })),
@@ -598,6 +608,10 @@ export async function recoverIncompleteBatchItems(
       .where(
         and(
           inArray(resumeUploadBatch.status, ["pending", "running"]),
+          or(
+            isNull(resumeUploadBatch.sourceChannel),
+            sql`${resumeUploadBatch.sourceChannel} <> 'historical_import'`,
+          ),
           staleProcessingCondition(thresholdSeconds),
         ),
       );
@@ -630,7 +644,15 @@ export async function recoverIncompleteBatchItems(
             tx
               .select({ id: resumeUploadBatch.id })
               .from(resumeUploadBatch)
-              .where(inArray(resumeUploadBatch.status, ["pending", "running"])),
+              .where(
+                and(
+                  inArray(resumeUploadBatch.status, ["pending", "running"]),
+                  or(
+                    isNull(resumeUploadBatch.sourceChannel),
+                    sql`${resumeUploadBatch.sourceChannel} <> 'historical_import'`,
+                  ),
+                ),
+              ),
           ),
           staleProcessingCondition(thresholdSeconds),
         ),
@@ -648,6 +670,79 @@ export async function recoverIncompleteBatchItems(
     .innerJoin(resumeUploadBatch, eq(resumeUploadBatch.id, resumeUploadBatchItem.batchId))
     .where(
       and(
+        inArray(resumeUploadBatch.status, ["pending", "running"]),
+        or(
+          isNull(resumeUploadBatch.sourceChannel),
+          sql`${resumeUploadBatch.sourceChannel} <> 'historical_import'`,
+        ),
+        eq(resumeUploadBatchItem.status, "pending"),
+      ),
+    );
+}
+
+export async function recoverIncompleteHistoricalBatchItems(
+  thresholdSeconds = resumeParseStaleThresholdSeconds(),
+): Promise<ResumeParseJobData[]> {
+  await db.transaction(async (tx) => {
+    const staleItems = await tx
+      .select({ id: resumeUploadBatchItem.id })
+      .from(resumeUploadBatchItem)
+      .innerJoin(resumeUploadBatch, eq(resumeUploadBatch.id, resumeUploadBatchItem.batchId))
+      .where(
+        and(
+          eq(resumeUploadBatch.sourceChannel, "historical_import"),
+          inArray(resumeUploadBatch.status, ["pending", "running"]),
+          staleProcessingCondition(thresholdSeconds),
+        ),
+      );
+    const staleItemIds = staleItems.map((item) => item.id);
+    if (staleItemIds.length === 0) {
+      return;
+    }
+    const now = new Date();
+    await tx
+      .update(resumeUploadBatchItemAttempt)
+      .set({ endedAt: now, status: "interrupted" })
+      .where(
+        and(
+          inArray(resumeUploadBatchItemAttempt.itemId, staleItemIds),
+          eq(resumeUploadBatchItemAttempt.status, "processing"),
+        ),
+      );
+    await tx
+      .update(resumeUploadBatchItem)
+      .set({
+        currentStep: null,
+        startedAt: null,
+        status: "pending",
+      })
+      .where(inArray(resumeUploadBatchItem.id, staleItemIds));
+    await tx
+      .update(resumeUploadBatch)
+      .set({ status: "pending", updatedAt: now })
+      .where(
+        inArray(
+          resumeUploadBatch.id,
+          tx
+            .select({ batchId: resumeUploadBatchItem.batchId })
+            .from(resumeUploadBatchItem)
+            .where(inArray(resumeUploadBatchItem.id, staleItemIds)),
+        ),
+      );
+  });
+
+  return db
+    .select({
+      batchId: resumeUploadBatchItem.batchId,
+      itemId: resumeUploadBatchItem.id,
+      organizationId: resumeUploadBatch.organizationId,
+      userId: resumeUploadBatch.createdBy,
+    })
+    .from(resumeUploadBatchItem)
+    .innerJoin(resumeUploadBatch, eq(resumeUploadBatch.id, resumeUploadBatchItem.batchId))
+    .where(
+      and(
+        eq(resumeUploadBatch.sourceChannel, "historical_import"),
         inArray(resumeUploadBatch.status, ["pending", "running"]),
         eq(resumeUploadBatchItem.status, "pending"),
       ),

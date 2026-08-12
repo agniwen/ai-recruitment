@@ -160,6 +160,46 @@ export async function buildInterviewResumeKeyByHash(hash: string): Promise<strin
   return `${prefix}studio-resumes/${hash}.pdf`;
 }
 
+export async function listStorageObjects(input: {
+  continuationToken?: string;
+  prefix: string;
+}): Promise<{
+  continuationToken: string | null;
+  objects: {
+    etag: string | null;
+    key: string;
+    lastModified: Date | null;
+    size: number;
+  }[];
+}> {
+  const [{ ListObjectsV2Command }, { client, config }] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    getClient(),
+  ]);
+  const result = await client.send(
+    new ListObjectsV2Command({
+      Bucket: config.bucket,
+      ContinuationToken: input.continuationToken,
+      Prefix: input.prefix,
+    }),
+  );
+  return {
+    continuationToken: result.IsTruncated ? (result.NextContinuationToken ?? null) : null,
+    objects: (result.Contents ?? []).flatMap((object) =>
+      object.Key
+        ? [
+            {
+              etag: object.ETag ?? null,
+              key: object.Key,
+              lastModified: object.LastModified ?? null,
+              size: object.Size ?? 0,
+            },
+          ]
+        : [],
+    ),
+  };
+}
+
 export async function putObjectBytes(input: {
   storageKey: string;
   contentType: string;

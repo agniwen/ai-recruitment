@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Parser stages and their outcome transaction remain one workflow. */
+import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -19,6 +21,11 @@ import {
   toBatchDto,
   toItemDto,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches";
+import {
+  finishHistoricalImportAttempt,
+  setHistoricalImportAttemptStep,
+  startHistoricalImportAttempt,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/historical-attempts";
 import { projectAttachmentToResumeProfile } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-parser-agent";
 import {
   findAttachmentByStorageKey,
@@ -50,6 +57,28 @@ import { getResumeStructuredModelEndpoint } from "@arc/ai-recruitment-copilot-ba
 export { getClaimMissRetryError } from "./processor-claims";
 
 const ERROR_MESSAGE_MAX = 500;
+const HISTORICAL_IMPORT_MAX_FAILURES = 3;
+
+async function resetHistoricalItemForRetry(item: NonNullable<ItemRow>, batchId: string) {
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(resumeUploadBatchItem)
+      .set({ errorMessage: null, finishedAt: null, startedAt: null, status: "pending" })
+      .where(eq(resumeUploadBatchItem.id, item.id));
+    if (item.poolItemId) {
+      await tx
+        .update(resumePoolItem)
+        .set({ resumeParseError: null, resumeParseStatus: "queued", updatedAt: now })
+        .where(eq(resumePoolItem.id, item.poolItemId));
+    }
+    await tx
+      .update(resumeUploadBatch)
+      .set({ completedAt: null, status: "pending", updatedAt: now })
+      .where(eq(resumeUploadBatch.id, batchId));
+  });
+  await reconcileBatchProgress(batchId);
+}
 
 function resumeParseModelLogFields(): Record<string, string | null> {
   const ocr = getQwenOcrEndpointConfig();
@@ -82,6 +111,14 @@ function elapsed(startedAt: number): number {
 type ItemRow = Awaited<ReturnType<typeof claimNextPendingItem>>;
 type BatchRow = typeof resumeUploadBatch.$inferSelect;
 type ParsedResume = Awaited<ReturnType<typeof parseResumeBytesToProfile>>;
+interface ProcessItemOptions {
+  bypassCache?: boolean;
+  onStep?: (step: string) => Promise<void>;
+}
+
+async function reportProcessingStep(options: ProcessItemOptions, step: string): Promise<void> {
+  await options.onStep?.(step);
+}
 
 // 拿到 resumeProfile 的两条路径：
 //   1) 命中注册表 → 投影 parsedStructured（零额外调用）
@@ -90,13 +127,15 @@ type ParsedResume = Awaited<ReturnType<typeof parseResumeBytesToProfile>>;
 // Admin force-reparse sets bypassCache so path 1 is skipped and S3 is re-parsed.
 async function resolveResumeProfile(
   item: NonNullable<ItemRow>,
-  options: { bypassCache?: boolean } = {},
+  options: ProcessItemOptions = {},
 ): Promise<{
+  contentHash: string | null;
   parsed: ParsedResume | null;
   resumeProfile: ParsedResume["resumeProfile"];
   resumeText: string | null;
 }> {
   const startedAt = Date.now();
+  await reportProcessingStep(options, "cache.lookup");
   if (options.bypassCache) {
     logStep("cache.lookup.bypassed", { itemId: item.id });
   } else if (isResumeParseCacheEnabled(process.env)) {
@@ -108,13 +147,19 @@ async function resolveResumeProfile(
         : null;
     if (fromCache) {
       logStep("cache.lookup.hit", { durationMs: elapsed(startedAt), itemId: item.id });
-      return { parsed: null, resumeProfile: fromCache, resumeText: cached?.parsedText ?? null };
+      return {
+        contentHash: item.contentHash ?? cached?.contentHash ?? null,
+        parsed: null,
+        resumeProfile: fromCache,
+        resumeText: cached?.parsedText ?? null,
+      };
     }
     logStep("cache.lookup.miss", { durationMs: elapsed(startedAt), itemId: item.id });
   } else {
     logStep("cache.lookup.disabled", { itemId: item.id });
   }
   const s3StartedAt = Date.now();
+  await reportProcessingStep(options, "s3.download");
   logStep("s3.get.start", { itemId: item.id });
   const object = await getObjectStream(item.storageKey);
   if (!object) {
@@ -126,7 +171,29 @@ async function resolveResumeProfile(
     itemId: item.id,
   });
   const bytes = new Uint8Array(await new Response(object.body).arrayBuffer());
+  const contentHash = item.contentHash ?? createHash("sha256").update(bytes).digest("hex");
+  if (!item.contentHash) {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(resumeUploadBatchItem)
+        .set({ contentHash })
+        .where(eq(resumeUploadBatchItem.id, item.id));
+      if (item.poolItemId) {
+        await tx
+          .update(resumePoolItem)
+          .set({ resumeContentHash: contentHash, updatedAt: new Date() })
+          .where(eq(resumePoolItem.id, item.poolItemId));
+      }
+      if (item.resumeRecordId) {
+        await tx
+          .update(studioInterview)
+          .set({ resumeContentHash: contentHash, updatedAt: new Date() })
+          .where(eq(studioInterview.id, item.resumeRecordId));
+      }
+    });
+  }
   const parseStartedAt = Date.now();
+  await reportProcessingStep(options, "document.parse");
   logStep("parse.start", {
     fileSize: bytes.byteLength,
     itemId: item.id,
@@ -145,11 +212,12 @@ async function resolveResumeProfile(
     textSource: parsed.parsedTextSource,
     ...resumeParseModelLogFields(),
   });
-  if (item.contentHash) {
+  if (contentHash) {
+    await reportProcessingStep(options, "cache.persist");
     const cacheWriteStartedAt = Date.now();
     logStep("cache.write.start", { itemId: item.id });
     await updateParseResultByHash({
-      contentHash: item.contentHash,
+      contentHash,
       parsedPageCount: parsed.parsedPageCount,
       parsedStatus: "ready",
       parsedStructured: parsed.parsedStructured,
@@ -158,7 +226,12 @@ async function resolveResumeProfile(
     });
     logStep("cache.write.done", { durationMs: elapsed(cacheWriteStartedAt), itemId: item.id });
   }
-  return { parsed, resumeProfile: parsed.resumeProfile, resumeText: parsed.parsedText };
+  return {
+    contentHash,
+    parsed,
+    resumeProfile: parsed.resumeProfile,
+    resumeText: parsed.parsedText,
+  };
 }
 
 async function upsertParsedResumeRecord({
@@ -280,7 +353,7 @@ async function fetchAndParse(
   batchRow: BatchRow,
   organizationId: string,
   userId: string,
-  options: { bypassCache?: boolean } = {},
+  options: ProcessItemOptions = {},
 ): Promise<{
   autoMatchJobDescription: boolean;
   jobDescriptionId: string | null;
@@ -296,7 +369,8 @@ async function fetchAndParse(
     throw new Error("简历文件存储路径为空，无法读取。请重试上传。");
   }
 
-  const { resumeProfile, resumeText } = await resolveResumeProfile(item, options);
+  const { contentHash, resumeProfile, resumeText } = await resolveResumeProfile(item, options);
+  const resolvedItem = item.contentHash ? item : { ...item, contentHash };
   await assertBatchItemNotCancelled(batchRow.id, item.id);
 
   const autoMatchJobDescription = batchRow.jdMode === "auto";
@@ -311,6 +385,7 @@ async function fetchAndParse(
   }
 
   if (batchRow.target === "resume_pool") {
+    await reportProcessingStep(options, "public_pool.persist");
     let { poolItemId } = item;
     await assertBatchItemNotCancelled(batchRow.id, item.id);
     if (poolItemId) {
@@ -329,7 +404,7 @@ async function fetchAndParse(
         candidateEmail: null,
         candidateName: null,
         candidatePhone: null,
-        contentHash: item.contentHash,
+        contentHash,
         createdBy: userId,
         jobDescriptionId,
         notes: null,
@@ -354,7 +429,7 @@ async function fetchAndParse(
   }
 
   const succeededRecordId = await upsertParsedResumeRecord({
-    item,
+    item: resolvedItem,
     jobDescriptionId,
     organizationId,
     recruitmentSource: batchRow.recruitmentSource,
@@ -538,7 +613,7 @@ async function loadCancelledProcessResult(
 async function processClaimedItem(
   item: NonNullable<ItemRow>,
   batchRow: BatchRow,
-  options: { bypassCache?: boolean } = {},
+  options: ProcessItemOptions = {},
 ): Promise<ProcessNextResult | null> {
   const startedAt = Date.now();
   logStep("item.process.start", {
@@ -593,6 +668,7 @@ async function processClaimedItem(
 
   if (!outcome.errorMessage) {
     try {
+      await reportProcessingStep(options, "enrichment.enqueue");
       await enqueueParsedResumeEnrichment({
         ...outcome,
         generationToken: item.id,
@@ -625,6 +701,105 @@ async function processClaimedItem(
     done: isTerminalBatchStatus(detail.batch.status),
     item: updatedItem,
   };
+}
+
+export async function processHistoricalBatchItem(
+  itemId: string,
+  workerId: string | null,
+): Promise<ProcessNextResult | null> {
+  const claimed = await db.transaction(async (tx) => {
+    const item = await claimPendingItemById(tx, itemId);
+    if (!item) {
+      return null;
+    }
+    const [batchRow] = await tx
+      .select()
+      .from(resumeUploadBatch)
+      .where(eq(resumeUploadBatch.id, item.batchId))
+      .limit(1);
+    if (
+      !batchRow ||
+      batchRow.sourceChannel !== "historical_import" ||
+      batchRow.status === "cancelled" ||
+      batchRow.status === "completed"
+    ) {
+      return null;
+    }
+    return { batchRow, item };
+  });
+  if (!claimed) {
+    return null;
+  }
+
+  const attemptId = await startHistoricalImportAttempt({
+    attemptNumber: claimed.item.attemptCount,
+    itemId,
+    step: "document.parse",
+    workerId,
+  });
+  let currentStep = "document.parse";
+  let attemptFinished = false;
+  try {
+    const result = await processClaimedItem(claimed.item, claimed.batchRow, {
+      bypassCache: false,
+      onStep: async (step) => {
+        currentStep = step;
+        await setHistoricalImportAttemptStep(attemptId, itemId, step);
+      },
+    });
+    const failed = result?.item?.status === "failed";
+    if (!failed) {
+      await finishHistoricalImportAttempt({ attemptId, itemId, status: "succeeded" });
+      attemptFinished = true;
+      return result;
+    }
+    const failure = new Error(result?.item?.errorMessage ?? "历史简历解析失败。");
+    const failureCount = await finishHistoricalImportAttempt({
+      attemptId,
+      error: failure,
+      failedStep: currentStep,
+      itemId,
+      status: "failed",
+    });
+    attemptFinished = true;
+    if (failureCount < HISTORICAL_IMPORT_MAX_FAILURES) {
+      await resetHistoricalItemForRetry(claimed.item, claimed.batchRow.id);
+      throw failure;
+    }
+    return result;
+  } catch (error) {
+    if (!attemptFinished) {
+      const failureCount = await finishHistoricalImportAttempt({
+        attemptId,
+        error,
+        failedStep: currentStep,
+        itemId,
+        status: "failed",
+      });
+      if (failureCount < HISTORICAL_IMPORT_MAX_FAILURES) {
+        await releaseBatchItemForRetry(claimed.batchRow.id, itemId);
+      } else {
+        await writeOutcome(claimed.item, claimed.batchRow.id, {
+          errorMessage: truncate(error instanceof Error ? error.message : String(error)),
+          succeededPoolItemId: null,
+          succeededRecordId: null,
+        });
+        const detail = await loadBatchDetail(
+          claimed.batchRow.id,
+          claimed.batchRow.organizationId,
+          claimed.batchRow.createdBy,
+        );
+        return detail
+          ? {
+              batch: detail.batch,
+              done: isTerminalBatchStatus(detail.batch.status),
+              item: detail.items.find((item) => item.id === itemId) ?? null,
+            }
+          : null;
+      }
+    }
+    throw error;
+  }
 }
 
 export async function processBatchItem(

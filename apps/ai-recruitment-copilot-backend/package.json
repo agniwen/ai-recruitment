@@ -26,6 +26,7 @@
     "eval:resume-reviews": "tsx src/scripts/resume-review-eval.ts",
     "eval:resume-reviews:synthetic": "tsx src/scripts/resume-review-synthetic-eval.ts",
     "import:resume-folder": "tsx src/scripts/import-resume-folder.ts",
+    "import:legacy-resumes": "tsx src/scripts/import-legacy-resumes.ts",
     "repair:default-recruiting-groups": "tsx src/scripts/repair-default-recruiting-groups.ts",
     "studio:dev": "mastra dev --env ../ai-recruitment-copilot/.env",
     "start": "tsx src/index.ts",

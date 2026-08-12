@@ -2,8 +2,11 @@ import { promisify } from "node:util";
 import { serve } from "@hono/node-server";
 import {
   closeResumeParseQueue,
+  configureHistoricalResumeParseGlobalConcurrency,
   createResumeParseWorker,
   isResumeParseQueueConfigured,
+  RESUME_PARSE_HISTORICAL_QUEUE_NAME,
+  withHistoricalResumeObjectLock,
 } from "@arc/resume-parse-queue/resume-parse";
 import {
   closeResumeSemanticIndexQueue,
@@ -47,6 +50,21 @@ async function recoverIncompleteResumeParseJobs(): Promise<void> {
   }
   await enqueueResumeParseJobs(jobs);
   console.info("[resume-parse-worker] startup recovery enqueued items", {
+    count: jobs.length,
+  });
+}
+
+async function recoverIncompleteHistoricalResumeParseJobs(): Promise<void> {
+  const { recoverIncompleteHistoricalBatchItems } =
+    await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches");
+  const { enqueueResumeParseJobs } = await import("@arc/resume-parse-queue/resume-parse");
+  const jobs = await recoverIncompleteHistoricalBatchItems();
+  if (jobs.length === 0) {
+    console.info("[historical-resume-worker] startup recovery found no pending items");
+    return;
+  }
+  await enqueueResumeParseJobs(jobs, { queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME });
+  console.info("[historical-resume-worker] startup recovery enqueued items", {
     count: jobs.length,
   });
 }
@@ -130,6 +148,8 @@ async function main() {
   const closeServer = promisify(server.close.bind(server));
 
   let worker: ReturnType<typeof createResumeParseWorker> | null = null;
+  let historicalWorker: ReturnType<typeof createResumeParseWorker> | null = null;
+  let historicalRecoveryTimer: NodeJS.Timeout | null = null;
   let semanticIndexWorker: ReturnType<typeof createResumeSemanticIndexWorker> | null = null;
   let reviewGenerationWorker: ReturnType<typeof createResumeReviewGenerationWorker> | null = null;
   let googleSheetSyncWorker: ReturnType<typeof createJobDescriptionGoogleSheetSyncWorker> | null =
@@ -142,6 +162,40 @@ async function main() {
         await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow");
       await runBulkResumeUploadWorkflow({ bypassCache, itemId });
     });
+    await configureHistoricalResumeParseGlobalConcurrency(12);
+    await recoverIncompleteHistoricalResumeParseJobs();
+    historicalWorker = createResumeParseWorker(
+      async ({ itemId }) => {
+        const { loadHistoricalImportStorageKey } =
+          await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/historical-attempts");
+        const storageKey = await loadHistoricalImportStorageKey(itemId);
+        if (!storageKey) {
+          return;
+        }
+        await withHistoricalResumeObjectLock(storageKey, async () => {
+          const { processHistoricalBatchItem } =
+            await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor");
+          await processHistoricalBatchItem(itemId, process.env.HOSTNAME?.trim() || null);
+        });
+      },
+      { concurrency: 12, queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME },
+    );
+    let historicalRecoveryRunning = false;
+    const runHistoricalRecovery = async (): Promise<void> => {
+      if (historicalRecoveryRunning) {
+        return;
+      }
+      historicalRecoveryRunning = true;
+      try {
+        await recoverIncompleteHistoricalResumeParseJobs();
+      } catch (error) {
+        console.error("[historical-resume-worker] periodic recovery failed", { error });
+      } finally {
+        historicalRecoveryRunning = false;
+      }
+    };
+    historicalRecoveryTimer = setInterval(() => void runHistoricalRecovery(), 60_000);
+    historicalRecoveryTimer.unref();
     if (isResumeSemanticIndexEnabled()) {
       await recoverIncompleteResumeSemanticIndexJobs();
       semanticIndexWorker = createResumeSemanticIndexWorker(async (payload) => {
@@ -183,8 +237,12 @@ async function main() {
       try {
         console.info(`[worker] shutting down after ${signal}`);
         mailIngestScheduler?.close();
+        if (historicalRecoveryTimer) {
+          clearInterval(historicalRecoveryTimer);
+        }
         await closeServer();
         await worker?.close();
+        await historicalWorker?.close();
         await semanticIndexWorker?.close();
         await reviewGenerationWorker?.close();
         await googleSheetSyncWorker?.close();
