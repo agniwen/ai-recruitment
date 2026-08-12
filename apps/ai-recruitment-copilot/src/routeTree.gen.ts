@@ -67,6 +67,7 @@ import { Route as WSlugStudioHiringUnitsRouteImport } from './routes/w.$slug.stu
 import { Route as WSlugStudioGlobalConfigRouteImport } from './routes/w.$slug.studio.global-config'
 import { Route as WSlugStudioFormsRouteImport } from './routes/w.$slug.studio.forms'
 import { Route as WSlugStudioDepartmentsRouteImport } from './routes/w.$slug.studio.departments'
+import { Route as WSlugStudioDataExportRouteImport } from './routes/w.$slug.studio.data-export'
 import { Route as WSlugStudioDashboardRouteImport } from './routes/w.$slug.studio.dashboard'
 import { Route as WSlugStudioCalendarRouteImport } from './routes/w.$slug.studio.calendar'
 import { Route as WSlugChatSessionIdRouteImport } from './routes/w.$slug.chat.$sessionId'
@@ -477,6 +478,11 @@ const WSlugStudioFormsRoute = WSlugStudioFormsRouteImport.update({
 const WSlugStudioDepartmentsRoute = WSlugStudioDepartmentsRouteImport.update({
   id: '/departments',
   path: '/departments',
+  getParentRoute: () => WSlugStudioRoute,
+} as any)
+const WSlugStudioDataExportRoute = WSlugStudioDataExportRouteImport.update({
+  id: '/data-export',
+  path: '/data-export',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
 const WSlugStudioDashboardRoute = WSlugStudioDashboardRouteImport.update({
@@ -1209,6 +1215,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
   '/w/$slug/studio/calendar': typeof WSlugStudioCalendarRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
+  '/w/$slug/studio/data-export': typeof WSlugStudioDataExportRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
   '/w/$slug/studio/global-config': typeof WSlugStudioGlobalConfigRoute
@@ -1366,6 +1373,7 @@ export interface FileRoutesByTo {
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
   '/w/$slug/studio/calendar': typeof WSlugStudioCalendarRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
+  '/w/$slug/studio/data-export': typeof WSlugStudioDataExportRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
   '/w/$slug/studio/global-config': typeof WSlugStudioGlobalConfigRoute
@@ -1526,6 +1534,7 @@ export interface FileRoutesById {
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
   '/w/$slug/studio/calendar': typeof WSlugStudioCalendarRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
+  '/w/$slug/studio/data-export': typeof WSlugStudioDataExportRoute
   '/w/$slug/studio/departments': typeof WSlugStudioDepartmentsRoute
   '/w/$slug/studio/forms': typeof WSlugStudioFormsRoute
   '/w/$slug/studio/global-config': typeof WSlugStudioGlobalConfigRoute
@@ -1696,6 +1705,7 @@ export interface FileRouteTypes {
     | '/w/$slug/chat/$sessionId'
     | '/w/$slug/studio/calendar'
     | '/w/$slug/studio/dashboard'
+    | '/w/$slug/studio/data-export'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
     | '/w/$slug/studio/global-config'
@@ -1853,6 +1863,7 @@ export interface FileRouteTypes {
     | '/w/$slug/chat/$sessionId'
     | '/w/$slug/studio/calendar'
     | '/w/$slug/studio/dashboard'
+    | '/w/$slug/studio/data-export'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
     | '/w/$slug/studio/global-config'
@@ -2012,6 +2023,7 @@ export interface FileRouteTypes {
     | '/w/$slug/chat/$sessionId'
     | '/w/$slug/studio/calendar'
     | '/w/$slug/studio/dashboard'
+    | '/w/$slug/studio/data-export'
     | '/w/$slug/studio/departments'
     | '/w/$slug/studio/forms'
     | '/w/$slug/studio/global-config'
@@ -2538,6 +2550,13 @@ declare module '@tanstack/react-router' {
       path: '/departments'
       fullPath: '/w/$slug/studio/departments'
       preLoaderRoute: typeof WSlugStudioDepartmentsRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
+    '/w/$slug/studio/data-export': {
+      id: '/w/$slug/studio/data-export'
+      path: '/data-export'
+      fullPath: '/w/$slug/studio/data-export'
+      preLoaderRoute: typeof WSlugStudioDataExportRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
     '/w/$slug/studio/dashboard': {
@@ -3981,6 +4000,7 @@ const WSlugStudioResumesRouteWithChildren =
 interface WSlugStudioRouteChildren {
   WSlugStudioCalendarRoute: typeof WSlugStudioCalendarRoute
   WSlugStudioDashboardRoute: typeof WSlugStudioDashboardRoute
+  WSlugStudioDataExportRoute: typeof WSlugStudioDataExportRoute
   WSlugStudioDepartmentsRoute: typeof WSlugStudioDepartmentsRoute
   WSlugStudioFormsRoute: typeof WSlugStudioFormsRoute
   WSlugStudioGlobalConfigRoute: typeof WSlugStudioGlobalConfigRoute
@@ -4000,6 +4020,7 @@ interface WSlugStudioRouteChildren {
 const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
   WSlugStudioCalendarRoute: WSlugStudioCalendarRoute,
   WSlugStudioDashboardRoute: WSlugStudioDashboardRoute,
+  WSlugStudioDataExportRoute: WSlugStudioDataExportRoute,
   WSlugStudioDepartmentsRoute: WSlugStudioDepartmentsRoute,
   WSlugStudioFormsRoute: WSlugStudioFormsRoute,
   WSlugStudioGlobalConfigRoute: WSlugStudioGlobalConfigRoute,
