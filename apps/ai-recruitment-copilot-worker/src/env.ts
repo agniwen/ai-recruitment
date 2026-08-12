@@ -8,6 +8,8 @@ const WEB_ENV_FILES = [
 
 const WORKER_ENV_FILES = ["../.env.local", "../.env"] as const;
 
+const SYSTEM_TIME_ZONE = "Asia/Shanghai";
+
 function envPath(relativePath: string): string {
   return fileURLToPath(new URL(relativePath, import.meta.url));
 }
@@ -16,6 +18,8 @@ export function loadWorkerEnv(): void {
   for (const relativePath of [...WEB_ENV_FILES, ...WORKER_ENV_FILES]) {
     loadEnvFile({ path: envPath(relativePath), quiet: true });
   }
+
+  process.env.TZ = SYSTEM_TIME_ZONE;
 }
 
 function summarizeUrl(raw: string | undefined): Record<string, string | boolean> | null {

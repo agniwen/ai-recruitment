@@ -77,6 +77,10 @@ logger = logging.getLogger("agent")
 
 load_dotenv()
 
+os.environ["TZ"] = "Asia/Shanghai"
+if hasattr(time, "tzset"):
+    time.tzset()
+
 AGENT_NAME = resolve_agent_name()
 _SELF_HOSTED = resolve_self_hosted()
 

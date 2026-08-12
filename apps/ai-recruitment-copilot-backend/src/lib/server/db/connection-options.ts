@@ -1,4 +1,7 @@
 export interface PostgresConnectionOptions {
+  connection: {
+    TimeZone: "Asia/Shanghai";
+  };
   connect_timeout: number;
   idle_timeout: number;
   max: number;
@@ -30,6 +33,9 @@ export function getPostgresConnectionOptions(
 
   return {
     connect_timeout: readPositiveInteger(env, "POSTGRES_CONNECT_TIMEOUT_SECONDS", 10),
+    connection: {
+      TimeZone: "Asia/Shanghai",
+    },
     idle_timeout: readPositiveInteger(env, "POSTGRES_IDLE_TIMEOUT_SECONDS", 60),
     max: readPositiveInteger(env, "POSTGRES_POOL_MAX", defaultMax),
     max_lifetime: readPositiveInteger(env, "POSTGRES_MAX_LIFETIME_SECONDS", 60 * 20),

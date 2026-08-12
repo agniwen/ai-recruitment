@@ -30,10 +30,6 @@ import type { MailIngestScheduler } from "./mail-ingest/scheduler";
 
 loadWorkerEnv();
 
-if (!process.env.TZ) {
-  process.env.TZ = "Asia/Shanghai";
-}
-
 function isResumeSemanticIndexEnabled(): boolean {
   const value = process.env.RESUME_SEMANTIC_INDEX_ENABLED?.trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";

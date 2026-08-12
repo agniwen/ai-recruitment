@@ -9,6 +9,7 @@ FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim AS base
 # Keeps Python from buffering stdout and stderr to avoid situations where
 # the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Shanghai
 
 # --- Build stage ---
 # Install dependencies, build native extensions, and prepare the application

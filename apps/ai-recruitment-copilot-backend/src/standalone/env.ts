@@ -4,6 +4,8 @@ import { config as loadEnvFile } from "dotenv";
 const backendRoot = path.resolve(import.meta.dirname, "../..");
 const webAppRoot = path.resolve(backendRoot, "../ai-recruitment-copilot");
 
+const SYSTEM_TIME_ZONE = "Asia/Shanghai";
+
 /**
  * Load env for standalone backend / scripts.
  * Prefer the web app env (`apps/ai-recruitment-copilot`) because that is where
@@ -21,4 +23,6 @@ export function loadStandaloneEnv() {
   ]) {
     loadEnvFile({ path: envPath, quiet: true });
   }
+
+  process.env.TZ = SYSTEM_TIME_ZONE;
 }

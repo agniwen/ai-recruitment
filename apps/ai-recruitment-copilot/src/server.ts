@@ -1,6 +1,9 @@
 import startHandler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import { applyServerEnv } from "./env/server";
 
+const SYSTEM_TIME_ZONE = "Asia/Shanghai";
+process.env.TZ = SYSTEM_TIME_ZONE;
+
 const globalWithCommonJsDirname = globalThis as typeof globalThis & {
   __dirname?: string;
 };
@@ -73,10 +76,8 @@ function isOgImageRequest(request: Request) {
 
 export default createServerEntry({
   async fetch(request, options) {
-    if (!process.env.TZ) {
-      process.env.TZ = "Asia/Shanghai";
-    }
     applyServerEnv();
+    process.env.TZ = SYSTEM_TIME_ZONE;
 
     if (isHealthRequest(request)) {
       return Response.json({ ok: true });

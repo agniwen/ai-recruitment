@@ -5,6 +5,9 @@ describe("getPostgresConnectionOptions", () => {
   it("uses conservative development defaults", () => {
     expect(getPostgresConnectionOptions({ NODE_ENV: "development" })).toEqual({
       connect_timeout: 10,
+      connection: {
+        TimeZone: "Asia/Shanghai",
+      },
       idle_timeout: 60,
       max: 5,
       max_lifetime: 1200,
@@ -35,6 +38,9 @@ describe("getPostgresConnectionOptions", () => {
       }),
     ).toEqual({
       connect_timeout: 3,
+      connection: {
+        TimeZone: "Asia/Shanghai",
+      },
       idle_timeout: 20,
       max: 2,
       max_lifetime: 300,
@@ -51,6 +57,9 @@ describe("getPostgresConnectionOptions", () => {
       }),
     ).toEqual({
       connect_timeout: 10,
+      connection: {
+        TimeZone: "Asia/Shanghai",
+      },
       idle_timeout: 60,
       max: 5,
       max_lifetime: 1200,
