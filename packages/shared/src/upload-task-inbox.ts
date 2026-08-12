@@ -1,6 +1,26 @@
 import type { ResumeUploadBatchItemStatus, ResumeUploadBatchTarget } from "@arc/db-schema/schema";
 
 export const UPLOAD_TASK_INBOX_PAGE_SIZE = 20;
+export const HISTORICAL_RESUME_IMPORT_PAGE_SIZE = 20;
+
+export interface HistoricalResumeImportRecord {
+  currentStep: string | null;
+  filename: string;
+  finishedAt: string | null;
+  id: string;
+  poolItemId: string | null;
+  sourceFolder: string;
+  startedAt: string | null;
+  status: "processing" | "succeeded";
+}
+
+export interface HistoricalResumeImportPage {
+  page: number;
+  pageSize: number;
+  records: HistoricalResumeImportRecord[];
+  total: number;
+  totalPages: number;
+}
 
 export type UploadTaskQueueState =
   | "active"

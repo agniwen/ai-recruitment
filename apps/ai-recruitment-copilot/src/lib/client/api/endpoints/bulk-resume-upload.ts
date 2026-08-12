@@ -14,7 +14,10 @@ import type {
   CreateBulkResumeBatchInput,
   ProcessNextResult,
 } from "@arc/shared/bulk-resume-upload";
-import type { UploadTaskInboxPage } from "@arc/shared/upload-task-inbox";
+import type {
+  HistoricalResumeImportPage,
+  UploadTaskInboxPage,
+} from "@arc/shared/upload-task-inbox";
 import { apiFetch } from "@/lib/client/api/client";
 import { rpc } from "@/lib/client/rpc";
 import { rpcFetch } from "../rpc-fetch";
@@ -84,6 +87,19 @@ export function getUploadTaskInboxPage(
       query: cursor ? { cursor } : {},
     }),
     "加载上传任务失败",
+  );
+}
+
+export function getHistoricalResumeImportPage(
+  slug: string,
+  page: number,
+): Promise<HistoricalResumeImportPage> {
+  return rpcFetch<HistoricalResumeImportPage>(
+    rpc.api.w[":slug"].studio["resume-upload-batches"].inbox.historical.$get({
+      param: { slug },
+      query: { page: String(page) },
+    }),
+    "加载历史简历导入记录失败",
   );
 }
 

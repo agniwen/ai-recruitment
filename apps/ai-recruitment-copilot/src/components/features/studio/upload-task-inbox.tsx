@@ -1,6 +1,12 @@
 "use client";
 
-import { IconAlertCircle, IconInbox, IconLoader2, IconRefresh } from "@tabler/icons-react";
+import {
+  IconAlertCircle,
+  IconInbox,
+  IconLoader2,
+  IconRefresh,
+  IconTable,
+} from "@tabler/icons-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { UploadTaskInboxPage, UploadTaskInboxRecord } from "@arc/shared/upload-task-inbox";
@@ -25,6 +31,7 @@ import { useHasPermission } from "@/hooks/use-has-permission";
 import { getUploadTaskInboxPage } from "@/lib/client/api/endpoints/bulk-resume-upload";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { getUploadTaskPreviewTarget, getUploadTaskStatusMeta } from "./upload-task-inbox-model";
+import { HistoricalResumeImportTableDialog } from "./historical-resume-import-table-dialog";
 
 const ResumeDocumentPreviewDialog = lazy(async () => {
   const mod = await import("@/components/features/resume/resume-document-preview-dialog");
@@ -122,6 +129,7 @@ export function UploadTaskInbox() {
   const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
   const canReadResumePool = useHasPermission("resumePool", "read");
   const [open, setOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [previewRecord, setPreviewRecord] = useState<UploadTaskInboxRecord | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const query = useInfiniteQuery({
@@ -283,20 +291,34 @@ export function UploadTaskInbox() {
                   当前工作区中由你提交的简历解析任务
                 </PopoverDescription>
               </div>
-              <Button
-                aria-label="刷新上传任务"
-                disabled={query.isFetching}
-                onClick={() => void query.refetch()}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <IconRefresh className={query.isFetching ? "size-4 animate-spin" : "size-4"} />
-              </Button>
+              <div className="flex shrink-0 gap-1">
+                <Button
+                  aria-label="查看历史简历导入记录"
+                  onClick={() => {
+                    setOpen(false);
+                    setHistoryOpen(true);
+                  }}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <IconTable />
+                </Button>
+                <Button
+                  aria-label="刷新上传任务"
+                  disabled={query.isFetching}
+                  onClick={() => void query.refetch()}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <IconRefresh className={query.isFetching ? "size-4 animate-spin" : "size-4"} />
+                </Button>
+              </div>
             </div>
           </PopoverHeader>
           {content}
         </PopoverContent>
       </Popover>
+      <HistoricalResumeImportTableDialog onOpenChange={setHistoryOpen} open={historyOpen} />
       {previewRecord && previewTarget ? (
         <Suspense fallback={null}>
           <ResumeDocumentPreviewDialog

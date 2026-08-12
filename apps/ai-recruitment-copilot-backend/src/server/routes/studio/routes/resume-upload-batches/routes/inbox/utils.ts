@@ -1,9 +1,35 @@
-import type { UploadTaskInboxPage } from "@arc/shared/upload-task-inbox";
-import { queryUploadTaskInbox } from "./dao";
+import type {
+  HistoricalResumeImportPage,
+  UploadTaskInboxPage,
+} from "@arc/shared/upload-task-inbox";
+import { queryHistoricalResumeImports, queryUploadTaskInbox } from "./dao";
 import { normalizeQueueProgress, resolveInboxPreviewTarget, resolveInboxQueueState } from "./state";
 
 function toIsoString(value: Date | null): string | null {
   return value?.toISOString() ?? null;
+}
+
+export async function listHistoricalResumeImports(input: {
+  organizationId: string;
+  page: number;
+}): Promise<HistoricalResumeImportPage> {
+  const result = await queryHistoricalResumeImports(input);
+  return {
+    ...result,
+    records: result.records.flatMap((record) =>
+      record.sourceFolder && (record.status === "processing" || record.status === "succeeded")
+        ? [
+            {
+              ...record,
+              finishedAt: toIsoString(record.finishedAt),
+              sourceFolder: record.sourceFolder,
+              startedAt: toIsoString(record.startedAt),
+              status: record.status,
+            },
+          ]
+        : [],
+    ),
+  };
 }
 
 function getQueueJobItemId(data: unknown): string | null {

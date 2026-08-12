@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { encodeUploadTaskInboxCursor } from "../routes/inbox/cursor";
-import { uploadTaskInboxQuerySchema } from "../routes/inbox/schema";
+import {
+  historicalResumeImportQuerySchema,
+  uploadTaskInboxQuerySchema,
+} from "../routes/inbox/schema";
 import {
   normalizeQueueProgress,
   resolveInboxPreviewTarget,
@@ -8,6 +11,12 @@ import {
 } from "../routes/inbox/state";
 
 describe("upload task inbox queue state", () => {
+  it("normalizes historical import pages", () => {
+    expect(historicalResumeImportQuerySchema.parse({})).toEqual({ page: 1 });
+    expect(historicalResumeImportQuerySchema.parse({ page: "3" })).toEqual({ page: 3 });
+    expect(() => historicalResumeImportQuerySchema.parse({ page: "0" })).toThrow();
+  });
+
   it("accepts only server-issued keyset cursors", () => {
     const cursor = encodeUploadTaskInboxCursor({
       batchCreatedAt: new Date("2026-07-30T00:00:00.000Z"),

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   resumePoolItem,
@@ -6,7 +6,10 @@ import {
   resumeUploadBatchItem,
   studioInterview,
 } from "@arc/db-schema/schema";
-import { UPLOAD_TASK_INBOX_PAGE_SIZE } from "@arc/shared/upload-task-inbox";
+import {
+  HISTORICAL_RESUME_IMPORT_PAGE_SIZE,
+  UPLOAD_TASK_INBOX_PAGE_SIZE,
+} from "@arc/shared/upload-task-inbox";
 import { decodeUploadTaskInboxCursor, encodeUploadTaskInboxCursor } from "./cursor";
 
 export async function queryUploadTaskInbox(input: {
@@ -107,5 +110,54 @@ export async function queryUploadTaskInbox(input: {
         : null,
     records,
     total,
+  };
+}
+
+export async function queryHistoricalResumeImports(input: {
+  organizationId: string;
+  page: number;
+}) {
+  const filter = and(
+    eq(resumeUploadBatch.organizationId, input.organizationId),
+    eq(resumeUploadBatch.sourceChannel, "historical_import"),
+    inArray(resumeUploadBatchItem.status, ["processing", "succeeded"]),
+  );
+  const offset = (input.page - 1) * HISTORICAL_RESUME_IMPORT_PAGE_SIZE;
+  const [records, [{ total }]] = await Promise.all([
+    db
+      .select({
+        currentStep: resumeUploadBatchItem.currentStep,
+        filename: resumeUploadBatchItem.originalFileName,
+        finishedAt: resumeUploadBatchItem.finishedAt,
+        id: resumeUploadBatchItem.id,
+        poolItemId: resumeUploadBatchItem.poolItemId,
+        sourceFolder: resumeUploadBatchItem.sourceFolder,
+        startedAt: resumeUploadBatchItem.startedAt,
+        status: resumeUploadBatchItem.status,
+      })
+      .from(resumeUploadBatchItem)
+      .innerJoin(resumeUploadBatch, eq(resumeUploadBatch.id, resumeUploadBatchItem.batchId))
+      .where(filter)
+      .orderBy(
+        sql`case when ${resumeUploadBatchItem.status} = 'processing' then 0 else 1 end`,
+        desc(
+          sql`case when ${resumeUploadBatchItem.status} = 'processing' then ${resumeUploadBatchItem.startedAt} else ${resumeUploadBatchItem.finishedAt} end`,
+        ),
+        desc(resumeUploadBatchItem.id),
+      )
+      .limit(HISTORICAL_RESUME_IMPORT_PAGE_SIZE)
+      .offset(offset),
+    db
+      .select({ total: count() })
+      .from(resumeUploadBatchItem)
+      .innerJoin(resumeUploadBatch, eq(resumeUploadBatch.id, resumeUploadBatchItem.batchId))
+      .where(filter),
+  ]);
+  return {
+    page: input.page,
+    pageSize: HISTORICAL_RESUME_IMPORT_PAGE_SIZE,
+    records,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / HISTORICAL_RESUME_IMPORT_PAGE_SIZE)),
   };
 }

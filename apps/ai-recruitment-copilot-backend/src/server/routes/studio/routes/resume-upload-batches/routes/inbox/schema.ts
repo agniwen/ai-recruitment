@@ -8,3 +8,7 @@ export const uploadTaskInboxQuerySchema = z.object({
     .refine((value) => decodeUploadTaskInboxCursor(value) !== null, "分页游标无效")
     .optional(),
 });
+
+export const historicalResumeImportQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+});
