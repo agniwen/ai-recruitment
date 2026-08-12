@@ -10,8 +10,15 @@ export function isLegacyParseEnabled(
 }
 
 export interface LegacyParseConfig {
+  queueHighWatermark: number;
+  queueLowWatermark: number;
   uploaderEmail: string;
   workspaceSlug: string;
+}
+
+function parsePositiveInteger(raw: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(raw ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export function resolveLegacyParseConfig(
@@ -28,7 +35,12 @@ export function resolveLegacyParseConfig(
   if (!uploaderEmail) {
     throw new Error("ENABLE_LEGACY_PARSE=true 时必须配置 LEGACY_PARSE_UPLOADER_EMAIL。");
   }
-  return { uploaderEmail, workspaceSlug };
+  const queueHighWatermark = parsePositiveInteger(env.LEGACY_PARSE_QUEUE_HIGH_WATERMARK, 500);
+  const queueLowWatermark = parsePositiveInteger(env.LEGACY_PARSE_QUEUE_LOW_WATERMARK, 200);
+  if (queueLowWatermark >= queueHighWatermark) {
+    throw new Error("LEGACY_PARSE_QUEUE_LOW_WATERMARK 必须小于 HIGH_WATERMARK。");
+  }
+  return { queueHighWatermark, queueLowWatermark, uploaderEmail, workspaceSlug };
 }
 
 function parsePort(raw: string | undefined, fallback: number): number {

@@ -31,7 +31,8 @@ import type { MailIngestScheduler } from "./mail-ingest/scheduler";
 
 loadWorkerEnv();
 
-const LEGACY_MAINTENANCE_INTERVAL_MS = 5 * 60 * 1000;
+const LEGACY_DISCOVERY_INTERVAL_MS = 5 * 60 * 1000;
+const LEGACY_QUEUE_REFILL_INTERVAL_MS = 60 * 1000;
 
 function isResumeSemanticIndexEnabled(): boolean {
   const value = process.env.RESUME_SEMANTIC_INDEX_ENABLED?.trim().toLowerCase();
@@ -53,18 +54,41 @@ async function recoverIncompleteResumeParseJobs(): Promise<void> {
   });
 }
 
-async function recoverIncompleteHistoricalResumeParseJobs(): Promise<void> {
+async function refillHistoricalResumeParseQueue(input: {
+  highWatermark: number;
+  lowWatermark: number;
+}): Promise<void> {
   const { recoverIncompleteHistoricalBatchItems } =
     await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches");
-  const { enqueueResumeParseJobs } = await import("@arc/resume-parse-queue/resume-parse");
-  const jobs = await recoverIncompleteHistoricalBatchItems();
+  const { enqueueResumeParseJobs, getResumeParseQueueOpenCount, listOpenResumeParseJobItemIds } =
+    await import("@arc/resume-parse-queue/resume-parse");
+  const openCount = await getResumeParseQueueOpenCount({
+    queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME,
+  });
+  if (openCount > input.lowWatermark) {
+    console.info("[historical-resume-worker] queue refill not needed", {
+      highWatermark: input.highWatermark,
+      lowWatermark: input.lowWatermark,
+      openCount,
+    });
+    return;
+  }
+  const openItemIds = await listOpenResumeParseJobItemIds({
+    queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME,
+  });
+  const jobs = await recoverIncompleteHistoricalBatchItems({
+    excludeItemIds: openItemIds,
+    limit: Math.max(0, input.highWatermark - openCount),
+  });
   if (jobs.length === 0) {
-    console.info("[historical-resume-worker] startup recovery found no pending items");
+    console.info("[historical-resume-worker] queue refill found no pending items", { openCount });
     return;
   }
   await enqueueResumeParseJobs(jobs, { queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME });
-  console.info("[historical-resume-worker] startup recovery enqueued items", {
-    count: jobs.length,
+  console.info("[historical-resume-worker] queue refilled", {
+    enqueued: jobs.length,
+    openCountBefore: openCount,
+    target: input.highWatermark,
   });
 }
 
@@ -181,35 +205,38 @@ async function main() {
         { concurrency: 12, queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME },
       );
       let historicalMaintenanceRunning = false;
+      let lastHistoricalDiscoveryAt = 0;
       const runHistoricalMaintenance = async (): Promise<void> => {
         if (historicalMaintenanceRunning) {
           return;
         }
         historicalMaintenanceRunning = true;
         try {
-          const discovery = await tryWithHistoricalResumeDiscoveryLock(
+          const maintenance = await tryWithHistoricalResumeDiscoveryLock(
             legacyParseConfig.workspaceSlug,
             async () => {
-              const { importLegacyResumes } =
-                await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/legacy-import");
-              return importLegacyResumes({
-                commit: true,
-                uploaderEmail: legacyParseConfig.uploaderEmail,
-                workspaceSlug: legacyParseConfig.workspaceSlug,
+              const discoveryDue =
+                Date.now() - lastHistoricalDiscoveryAt >= LEGACY_DISCOVERY_INTERVAL_MS;
+              if (discoveryDue) {
+                const { importLegacyResumes } =
+                  await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/legacy-import");
+                const result = await importLegacyResumes({
+                  commit: true,
+                  uploaderEmail: legacyParseConfig.uploaderEmail,
+                  workspaceSlug: legacyParseConfig.workspaceSlug,
+                });
+                lastHistoricalDiscoveryAt = Date.now();
+                console.info("[historical-resume-worker] automatic discovery finished", result);
+              }
+              await refillHistoricalResumeParseQueue({
+                highWatermark: legacyParseConfig.queueHighWatermark,
+                lowWatermark: legacyParseConfig.queueLowWatermark,
               });
             },
           );
-          if (discovery.acquired) {
-            console.info(
-              "[historical-resume-worker] automatic discovery finished",
-              discovery.value,
-            );
-          } else {
-            console.info(
-              "[historical-resume-worker] automatic discovery handled by another worker",
-            );
+          if (!maintenance.acquired) {
+            console.info("[historical-resume-worker] queue maintenance handled by another worker");
           }
-          await recoverIncompleteHistoricalResumeParseJobs();
         } finally {
           historicalMaintenanceRunning = false;
         }
@@ -226,7 +253,7 @@ async function main() {
       };
       historicalMaintenanceTimer = setInterval(
         () => void runPeriodicHistoricalMaintenance(),
-        LEGACY_MAINTENANCE_INTERVAL_MS,
+        LEGACY_QUEUE_REFILL_INTERVAL_MS,
       );
       historicalMaintenanceTimer.unref();
     } else {

@@ -33,6 +33,32 @@ describe("isLegacyParseEnabled", () => {
         LEGACY_PARSE_UPLOADER_EMAIL: " admin@example.com ",
         LEGACY_PARSE_WORKSPACE_SLUG: " workspace ",
       }),
-    ).toEqual({ uploaderEmail: "admin@example.com", workspaceSlug: "workspace" });
+    ).toEqual({
+      queueHighWatermark: 500,
+      queueLowWatermark: 200,
+      uploaderEmail: "admin@example.com",
+      workspaceSlug: "workspace",
+    });
+  });
+
+  it("validates custom queue watermarks", () => {
+    expect(() =>
+      resolveLegacyParseConfig({
+        ENABLE_LEGACY_PARSE: "true",
+        LEGACY_PARSE_QUEUE_HIGH_WATERMARK: "100",
+        LEGACY_PARSE_QUEUE_LOW_WATERMARK: "100",
+        LEGACY_PARSE_UPLOADER_EMAIL: "admin@example.com",
+        LEGACY_PARSE_WORKSPACE_SLUG: "workspace",
+      }),
+    ).toThrow("LOW_WATERMARK");
+    expect(
+      resolveLegacyParseConfig({
+        ENABLE_LEGACY_PARSE: "true",
+        LEGACY_PARSE_QUEUE_HIGH_WATERMARK: "800",
+        LEGACY_PARSE_QUEUE_LOW_WATERMARK: "300",
+        LEGACY_PARSE_UPLOADER_EMAIL: "admin@example.com",
+        LEGACY_PARSE_WORKSPACE_SLUG: "workspace",
+      }),
+    ).toMatchObject({ queueHighWatermark: 800, queueLowWatermark: 300 });
   });
 });

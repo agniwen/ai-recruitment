@@ -465,6 +465,17 @@ export async function getResumeParseQueueOpenCount(
   return RESUME_PARSE_DRAIN_COUNT_TYPES.reduce((sum, key) => sum + (counts[key] ?? 0), 0);
 }
 
+export async function listOpenResumeParseJobItemIds(
+  options: ResumeParseQueueOptions = {},
+): Promise<string[]> {
+  const q = getResumeParseQueue(resolveQueueName(options.queueName));
+  const jobs = await q.getJobs([...RESUME_PARSE_DRAIN_COUNT_TYPES], 0, -1, false);
+  return jobs.flatMap((job) => {
+    const parsed = resumeParseJobSchema.safeParse(job.data);
+    return parsed.success ? [parsed.data.itemId] : [];
+  });
+}
+
 export async function waitUntilResumeParseQueueIdle(
   options: ResumeParseQueueOptions & {
     pollIntervalMs?: number;

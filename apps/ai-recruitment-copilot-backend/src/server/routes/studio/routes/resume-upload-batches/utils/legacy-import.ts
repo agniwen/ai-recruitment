@@ -4,15 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { member, organization, resumeUploadBatchItem, user } from "@arc/db-schema/schema";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { listStorageObjects } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
-import {
-  insertBatchWithItems,
-  loadBatchDetail,
-} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches";
-import {
-  enqueueResumeParseJobs,
-  isResumeParseQueueConfigured,
-  RESUME_PARSE_HISTORICAL_QUEUE_NAME,
-} from "@arc/resume-parse-queue/resume-parse";
+import { insertBatchWithItems } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches";
 
 const BATCH_SIZE = 100;
 
@@ -116,9 +108,6 @@ export async function importLegacyResumes(input: {
   if (!input.commit) {
     return { alreadyRegistered: existing.size, created: 0, discovered: discovered.length };
   }
-  if (!isResumeParseQueueConfigured()) {
-    throw new Error("REDIS_URL 未配置。");
-  }
   for (let offset = 0; offset < pending.length; offset += BATCH_SIZE) {
     const files = pending.slice(offset, offset + BATCH_SIZE);
     const batchId = createHash("sha256")
@@ -138,19 +127,6 @@ export async function importLegacyResumes(input: {
       target: "resume_pool",
       userId: actor.userId,
     });
-    const detail = await loadBatchDetail(batchId, actor.organizationId, actor.userId);
-    if (!detail) {
-      throw new Error(`创建历史导入批次后无法读取：${batchId}`);
-    }
-    await enqueueResumeParseJobs(
-      detail.items.map((item) => ({
-        batchId,
-        itemId: item.id,
-        organizationId: actor.organizationId,
-        userId: actor.userId,
-      })),
-      { queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME },
-    );
   }
   return {
     alreadyRegistered: existing.size,

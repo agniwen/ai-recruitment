@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines -- Batch lifecycle and recovery mutations share one transactional DAO. */
-import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   resumePoolEvent,
@@ -680,9 +680,12 @@ export async function recoverIncompleteBatchItems(
     );
 }
 
-export async function recoverIncompleteHistoricalBatchItems(
-  thresholdSeconds = resumeParseStaleThresholdSeconds(),
-): Promise<ResumeParseJobData[]> {
+export async function recoverIncompleteHistoricalBatchItems(options: {
+  excludeItemIds?: string[];
+  limit: number;
+  thresholdSeconds?: number;
+}): Promise<ResumeParseJobData[]> {
+  const thresholdSeconds = options.thresholdSeconds ?? resumeParseStaleThresholdSeconds();
   await db.transaction(async (tx) => {
     const staleItems = await tx
       .select({ id: resumeUploadBatchItem.id })
@@ -731,6 +734,14 @@ export async function recoverIncompleteHistoricalBatchItems(
       );
   });
 
+  const pendingConditions = [
+    eq(resumeUploadBatch.sourceChannel, "historical_import"),
+    inArray(resumeUploadBatch.status, ["pending", "running"]),
+    eq(resumeUploadBatchItem.status, "pending"),
+  ];
+  if (options.excludeItemIds && options.excludeItemIds.length > 0) {
+    pendingConditions.push(notInArray(resumeUploadBatchItem.id, options.excludeItemIds));
+  }
   return db
     .select({
       batchId: resumeUploadBatchItem.batchId,
@@ -740,13 +751,9 @@ export async function recoverIncompleteHistoricalBatchItems(
     })
     .from(resumeUploadBatchItem)
     .innerJoin(resumeUploadBatch, eq(resumeUploadBatch.id, resumeUploadBatchItem.batchId))
-    .where(
-      and(
-        eq(resumeUploadBatch.sourceChannel, "historical_import"),
-        inArray(resumeUploadBatch.status, ["pending", "running"]),
-        eq(resumeUploadBatchItem.status, "pending"),
-      ),
-    );
+    .where(and(...pendingConditions))
+    .orderBy(asc(resumeUploadBatch.createdAt), asc(resumeUploadBatchItem.orderIndex))
+    .limit(options.limit);
 }
 
 // 取消：未处理项 → cancelled，batch.status → cancelled。已 succeeded/failed/duplicate_skipped 不动。
