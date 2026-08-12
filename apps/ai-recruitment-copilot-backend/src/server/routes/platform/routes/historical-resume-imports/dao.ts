@@ -9,6 +9,21 @@ import {
 } from "@arc/db-schema/schema";
 import type { HistoricalResumeImportQuery } from "./schema";
 
+export function historicalResumeImportOrderBy(view: HistoricalResumeImportQuery["view"]) {
+  const timeOrder = desc(
+    sql`coalesce(${resumeUploadBatchItem.finishedAt}, ${resumeUploadBatchItem.startedAt}, ${resumeUploadBatch.createdAt})`,
+  );
+  const stableOrder = desc(resumeUploadBatchItem.id);
+  if (view === "records") {
+    return [
+      sql`case when ${resumeUploadBatchItem.status} = 'processing' then 0 else 1 end`,
+      timeOrder,
+      stableOrder,
+    ];
+  }
+  return [timeOrder, stableOrder];
+}
+
 export async function queryPaginatedHistoricalResumeImports(query: HistoricalResumeImportQuery) {
   const statusFilter =
     query.view === "failed"
@@ -69,15 +84,7 @@ export async function queryPaginatedHistoricalResumeImports(query: HistoricalRes
       .innerJoin(organization, eq(organization.id, resumeUploadBatch.organizationId))
       .innerJoin(user, eq(user.id, resumeUploadBatch.createdBy))
       .where(filter)
-      .orderBy(
-        query.view === "records"
-          ? sql`case when ${resumeUploadBatchItem.status} = 'processing' then 0 else 1 end`
-          : sql`0`,
-        desc(
-          sql`coalesce(${resumeUploadBatchItem.finishedAt}, ${resumeUploadBatchItem.startedAt}, ${resumeUploadBatch.createdAt})`,
-        ),
-        desc(resumeUploadBatchItem.id),
-      )
+      .orderBy(...historicalResumeImportOrderBy(query.view))
       .limit(query.pageSize)
       .offset((query.page - 1) * query.pageSize),
     db
