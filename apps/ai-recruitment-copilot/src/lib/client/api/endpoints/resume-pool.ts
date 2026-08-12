@@ -15,14 +15,33 @@ import { rpcFetch } from "../rpc-fetch";
 export function fetchResumePoolItems(
   slug: string,
   scope: ResumePoolScope,
-  uploaderId?: string,
-  id?: string,
+  options: {
+    id?: string;
+    importStatus?: "imported" | "not_imported";
+    page?: number;
+    pageSize?: number;
+    parseStatus?: "failed" | "processing" | "queued" | "ready" | "unparsed";
+    search?: string;
+    sortBy?: "candidateName" | "createdAt" | "updatedAt";
+    sortOrder?: "asc" | "desc";
+    sourceType?: "non_referral" | "referral";
+    uploaderId?: string;
+  } = {},
+  requestOptions?: { signal?: AbortSignal },
 ): Promise<PaginatedResumePoolResult> {
   return rpcFetch<PaginatedResumePoolResult>(
-    rpc.api.w[":slug"].studio["resume-pool"].$get({
-      param: { slug },
-      query: { id, scope, uploaderId },
-    }),
+    rpc.api.w[":slug"].studio["resume-pool"].$get(
+      {
+        param: { slug },
+        query: {
+          ...options,
+          page: options.page ? String(options.page) : undefined,
+          pageSize: options.pageSize ? String(options.pageSize) : undefined,
+          scope,
+        },
+      },
+      { init: { signal: requestOptions?.signal } },
+    ),
     "加载简历池失败",
   );
 }

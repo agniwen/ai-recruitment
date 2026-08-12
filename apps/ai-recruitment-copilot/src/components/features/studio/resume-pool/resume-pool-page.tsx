@@ -2,11 +2,12 @@
 "use client";
 
 import { IconLoader2, IconRefresh, IconTrash } from "@tabler/icons-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { buildInfiniteDataGridQueryKey } from "@/components/data-grid/query-contract";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
-import type { ResumePoolListRecord } from "@arc/shared/resume-pool";
+import type { PaginatedResumePoolResult, ResumePoolListRecord } from "@arc/shared/resume-pool";
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -52,7 +53,6 @@ import {
   buildResumePoolUploaderFilterOptions,
   createResumePoolFilters,
   deletePoolRecordLabel,
-  filterPoolRecords,
   getCandidateTitle,
   getResumePoolUploaderFilterAvailability,
   normalizeScope,
@@ -83,12 +83,18 @@ const ResumeDocumentPreviewDialog = lazy(async () => {
 });
 
 export interface ResumePoolSearch {
+  id?: string;
+  importStatus?: string;
+  parseStatus?: string;
+  search?: string;
   scope?: ResumePoolScope;
+  sortBy?: string;
+  sortOrder?: string;
+  sourceType?: string;
   uploaderId?: string;
 }
 
 const RESUME_POOL_INITIAL_PAGE_SIZE = 20;
-const RESUME_POOL_LOAD_STEP = 20;
 
 export function ResumePoolPage() {
   const slug = useWorkspaceSlug();
@@ -143,48 +149,78 @@ export function ResumePoolPage() {
   const [retriedRecordIds, setRetriedRecordIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const queryKeyPrefix = useMemo(() => ["resume-pool", slug] as const, [slug]);
-  const fetcher = useMemo(
-    () =>
-      async (params: {
-        filters: ResumePoolFilters;
-        page: number;
-        pageSize: number;
-        search: string;
-        sortBy: string | undefined;
-        sortOrder: "asc" | "desc" | undefined;
-      }) => {
-        const result = await fetchResumePoolItems(
-          slug,
-          scope,
-          scope === "private" ? params.filters.uploaderId || currentUserId || undefined : undefined,
-          params.filters.id || undefined,
-        );
-        const filtered = filterPoolRecords(result.records, params);
-        const start = (params.page - 1) * params.pageSize;
-        const records = filtered.slice(start, start + params.pageSize);
-        return {
-          records,
-          total: filtered.length,
-          totalPages: Math.max(1, Math.ceil(filtered.length / params.pageSize)),
-        };
-      },
-    [currentUserId, scope, slug],
-  );
   const grid = useDataGridState<ResumePoolListRecord, ResumePoolFilters>({
     allowedSortIds: ["createdAt", "candidateName", "updatedAt"],
     defaultPageSize: RESUME_POOL_INITIAL_PAGE_SIZE,
     defaultSorting: [{ desc: true, id: "createdAt" }],
+    enabled: false,
     initialFilters: initialPoolFilters,
-    maxPageSize: Number.MAX_SAFE_INTEGER,
-    queryFn: fetcher,
+    maxPageSize: RESUME_POOL_INITIAL_PAGE_SIZE,
+    queryFn: () => Promise.resolve({ records: [], total: 0, totalPages: 1 }),
     queryKeyBase: ["resume-pool", slug, scope],
   });
-  const visibleRecordCount = grid.bind.data.length;
-  const totalRecordCount = grid.bind.total;
-  const isPoolBusy = grid.bind.loading || grid.bind.refetching;
+  const [activeSort] = grid.sorting;
+  const activeSortOrder = activeSort?.desc ? "desc" : "asc";
+  const poolListQuery = useInfiniteQuery<
+    PaginatedResumePoolResult,
+    Error,
+    { pageParams: number[]; pages: PaginatedResumePoolResult[] },
+    readonly unknown[],
+    number
+  >({
+    getNextPageParam: (lastPage) =>
+      lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) =>
+      fetchResumePoolItems(
+        slug,
+        scope,
+        {
+          id: grid.filters.id || undefined,
+          importStatus:
+            grid.filters.importStatus === "imported" || grid.filters.importStatus === "not_imported"
+              ? grid.filters.importStatus
+              : undefined,
+          page: pageParam,
+          pageSize: RESUME_POOL_INITIAL_PAGE_SIZE,
+          parseStatus: grid.filters.parseStatus
+            ? (grid.filters.parseStatus as
+                | "failed"
+                | "processing"
+                | "queued"
+                | "ready"
+                | "unparsed")
+            : undefined,
+          search: grid.deferredSearch || undefined,
+          sortBy: activeSort?.id as "candidateName" | "createdAt" | "updatedAt" | undefined,
+          sortOrder: activeSortOrder,
+          sourceType:
+            grid.filters.sourceType === "referral" || grid.filters.sourceType === "non_referral"
+              ? grid.filters.sourceType
+              : undefined,
+          uploaderId:
+            scope === "private" ? grid.filters.uploaderId || currentUserId || undefined : undefined,
+        },
+        { signal },
+      ),
+    queryKey: buildInfiniteDataGridQueryKey(["resume-pool", slug, scope], {
+      filters: grid.filters,
+      search: grid.deferredSearch,
+      sortBy: activeSort?.id,
+      sortOrder: activeSortOrder,
+    }),
+    staleTime: 30_000,
+  });
+  const records = useMemo(
+    () => poolListQuery.data?.pages.flatMap((page) => page.records) ?? [],
+    [poolListQuery.data?.pages],
+  );
+  const visibleRecordCount = records.length;
+  const totalRecordCount = poolListQuery.data?.pages[0]?.total ?? 0;
+  const isPoolBusy = poolListQuery.isFetching;
   const hasMoreRecords = visibleRecordCount < totalRecordCount;
   const isInitialPoolLoading = isPoolBusy && visibleRecordCount === 0;
-  const showEmptyState = !isInitialPoolLoading && grid.bind.data.length === 0;
+  const showEmptyState = !isInitialPoolLoading && records.length === 0;
   const showPoolFooter = visibleRecordCount > 0;
   const uploaderQuery = useQuery({
     enabled: scope === "private",
@@ -206,10 +242,7 @@ export function ResumePoolPage() {
     () => [...selectedPrivateResumeIds],
     [selectedPrivateResumeIds],
   );
-  const visibleRecordIds = useMemo(
-    () => grid.bind.data.map((record) => record.id),
-    [grid.bind.data],
-  );
+  const visibleRecordIds = useMemo(() => records.map((record) => record.id), [records]);
   const hasSelectedPrivateResumes = scope === "private" && selectedPrivateResumeIdsArray.length > 0;
   const canUploadResumePool = canUploadToResumePool(
     canCreateResumePool,
@@ -222,12 +255,8 @@ export function ResumePoolPage() {
     if (!hasMoreRecords || isPoolBusy) {
       return;
     }
-    const nextPageSize = Math.min(
-      totalRecordCount,
-      grid.bind.pagination.pageSize + RESUME_POOL_LOAD_STEP,
-    );
-    grid.bind.pagination.onPageSizeChange(nextPageSize);
-  }, [grid.bind.pagination, hasMoreRecords, isPoolBusy, totalRecordCount]);
+    void poolListQuery.fetchNextPage();
+  }, [hasMoreRecords, isPoolBusy, poolListQuery]);
 
   const invalidatePool = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeyPrefix });
@@ -491,10 +520,10 @@ export function ResumePoolPage() {
             filterValues={grid.bind.filterValues}
             filters={filtersConfig}
             onFilterChange={grid.bind.onFilterChange}
-            onRefresh={grid.bind.onRefresh}
+            onRefresh={() => void poolListQuery.refetch()}
             onResetFilters={grid.bind.onResetFilters}
-            refreshing={grid.bind.refetching}
-            searchLoading={grid.bind.loading}
+            refreshing={poolListQuery.isRefetching}
+            searchLoading={poolListQuery.isFetching}
             toolbarRight={
               <ResumePoolToolbarActions
                 canOpenBatchList={canReadResumeUploadBatch}
@@ -536,7 +565,7 @@ export function ResumePoolPage() {
               retryParseMutation.isPending ? (retryParseMutation.variables?.id ?? null) : null
             }
             retriedRecordIds={retriedRecordIds}
-            records={grid.bind.data}
+            records={records}
             selectedPrivateResumeIds={selectedPrivateResumeIds}
             selectionDisabled={isDeletingPoolRecords}
             scope={scope}
@@ -557,7 +586,7 @@ export function ResumePoolPage() {
               <Button
                 className="w-full sm:w-auto"
                 disabled={isPoolBusy}
-                onClick={grid.bind.onRefresh}
+                onClick={() => void poolListQuery.refetch()}
                 type="button"
                 variant="outline"
               >

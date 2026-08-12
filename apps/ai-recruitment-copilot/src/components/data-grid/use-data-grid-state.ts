@@ -33,6 +33,7 @@ export interface UseDataGridStateOptions<TData, F extends Record<string, string>
   allowedSortIds?: readonly string[];
   defaultPageSize?: number;
   defaultSorting?: SortingState;
+  enabled?: boolean;
   initialFilters: F;
   maxPageSize?: number;
   refetchInterval?: number | false;
@@ -240,6 +241,7 @@ export function useDataGridState<TData, F extends Record<string, string>>(
   );
 
   const listQuery = useQuery({
+    enabled: opts.enabled ?? true,
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) => opts.queryFn({ ...queryParams, signal }),
     queryKey,

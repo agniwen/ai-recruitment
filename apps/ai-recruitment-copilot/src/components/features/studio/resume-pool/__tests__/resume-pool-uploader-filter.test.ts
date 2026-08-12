@@ -37,7 +37,7 @@ describe("private resume pool uploader filter", () => {
     expect(filtersSource.indexOf('key: "id"')).toBeLessThan(
       filtersSource.indexOf('key: "uploaderId"'),
     );
-    expect(pageSource).toContain("params.filters.id || undefined");
+    expect(pageSource).toContain("grid.filters.id || undefined");
   });
 
   it("defaults the private pool uploader to the current user", () => {

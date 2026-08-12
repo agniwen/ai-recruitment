@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
-import { resumePoolImportInputSchema } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/schema";
+import {
+  resumePoolImportInputSchema,
+  resumePoolListQuerySchema,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/schema";
 
 const mocks = vi.hoisted(() => ({
   completeResumePoolReadinessWithDefaultAdapters: vi.fn(),
@@ -132,7 +135,13 @@ function makeApp() {
 describe("resume pool private uploader visibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.queryResumePoolItems.mockResolvedValue({ records: [], total: 0 });
+    mocks.queryResumePoolItems.mockResolvedValue({
+      page: 1,
+      pageSize: 100,
+      records: [],
+      total: 0,
+      totalPages: 1,
+    });
     mocks.resolveRecruitingVisibilityScope.mockResolvedValue({
       kind: "restricted",
       userIds: [USER_ID, "subordinate-user"],
@@ -153,7 +162,11 @@ describe("resume pool private uploader visibility", () => {
       creatorIds: [USER_ID],
       id: "pool-abc",
       organizationId: ORGANIZATION_ID,
+      page: 1,
+      pageSize: 100,
       scope: "private",
+      sortBy: "createdAt",
+      sortOrder: "desc",
       userId: USER_ID,
     });
   });
@@ -171,13 +184,21 @@ describe("resume pool private uploader visibility", () => {
     expect(mocks.queryResumePoolItems).toHaveBeenNthCalledWith(1, {
       creatorIds: ["subordinate-user"],
       organizationId: ORGANIZATION_ID,
+      page: 1,
+      pageSize: 100,
       scope: "private",
+      sortBy: "createdAt",
+      sortOrder: "desc",
       userId: USER_ID,
     });
     expect(mocks.queryResumePoolItems).toHaveBeenNthCalledWith(2, {
       creatorIds: [],
       organizationId: ORGANIZATION_ID,
+      page: 1,
+      pageSize: 100,
       scope: "private",
+      sortBy: "createdAt",
+      sortOrder: "desc",
       userId: USER_ID,
     });
   });
@@ -189,7 +210,11 @@ describe("resume pool private uploader visibility", () => {
     expect(mocks.queryResumePoolItems).toHaveBeenCalledWith({
       creatorIds: [USER_ID, "subordinate-user"],
       organizationId: ORGANIZATION_ID,
+      page: 1,
+      pageSize: 100,
       scope: "private",
+      sortBy: "createdAt",
+      sortOrder: "desc",
       userId: USER_ID,
     });
   });
@@ -203,7 +228,11 @@ describe("resume pool private uploader visibility", () => {
     expect(mocks.queryResumePoolItems).toHaveBeenCalledWith({
       creatorIds: undefined,
       organizationId: ORGANIZATION_ID,
+      page: 1,
+      pageSize: 100,
       scope: "public",
+      sortBy: "createdAt",
+      sortOrder: "desc",
       userId: USER_ID,
     });
   });
@@ -375,6 +404,26 @@ describe("resume pool private uploader visibility", () => {
         kind: "restricted",
         userIds: [USER_ID, "subordinate-user"],
       },
+    });
+  });
+});
+
+describe("resume pool list query", () => {
+  it("parses server-side pagination and filters", () => {
+    expect(
+      resumePoolListQuerySchema.parse({
+        page: "3",
+        pageSize: "20",
+        parseStatus: "ready",
+        scope: "public",
+        search: "星火",
+      }),
+    ).toMatchObject({
+      page: 3,
+      pageSize: 20,
+      parseStatus: "ready",
+      scope: "public",
+      search: "星火",
     });
   });
 });

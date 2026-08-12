@@ -25,11 +25,9 @@ import type { ToolbarFilterConfig } from "@/components/data-grid";
 import { PageHeader } from "@/components/features/studio/page-header";
 import {
   buildResumePoolUploaderFilterOptions,
-  filterPoolRecords,
   getResumePoolUploaderFilterAvailability,
   sourceLabel,
 } from "@/components/features/studio/resume-pool/resume-pool-page-model";
-import type { ResumePoolFilters } from "@/components/features/studio/resume-pool/resume-pool-page-model";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -509,20 +507,30 @@ function PoolExportTable() {
         search: string,
         sortBy?: string,
         sortOrder?: "asc" | "desc",
+        pageSize = DATA_EXPORT_LIMIT,
       ) => {
         const scope: ResumePoolScope = filters.scope === "private" ? "private" : "public";
-        const result = await fetchResumePoolItems(
-          slug,
-          scope,
-          scope === "private" ? filters.uploaderId || currentUserId || undefined : undefined,
-          filters.id || undefined,
-        );
-        return filterPoolRecords(result.records, {
-          filters: filters as ResumePoolFilters,
-          search,
-          sortBy,
+        const result = await fetchResumePoolItems(slug, scope, {
+          id: filters.id || undefined,
+          importStatus:
+            filters.importStatus === "imported" || filters.importStatus === "not_imported"
+              ? filters.importStatus
+              : undefined,
+          pageSize,
+          parseStatus: filters.parseStatus
+            ? (filters.parseStatus as "failed" | "processing" | "queued" | "ready" | "unparsed")
+            : undefined,
+          search: search || undefined,
+          sortBy: sortBy as "candidateName" | "createdAt" | "updatedAt" | undefined,
           sortOrder,
+          sourceType:
+            filters.sourceType === "referral" || filters.sourceType === "non_referral"
+              ? filters.sourceType
+              : undefined,
+          uploaderId:
+            scope === "private" ? filters.uploaderId || currentUserId || undefined : undefined,
         });
+        return result;
       },
     [currentUserId, slug],
   );
@@ -533,17 +541,17 @@ function PoolExportTable() {
     initialFilters: POOL_FILTERS,
     maxPageSize: DATA_EXPORT_PAGE_SIZE,
     queryFn: async (params) => {
-      const rows = await fetchFilteredRows(
+      const result = await fetchFilteredRows(
         params.filters,
         params.search,
         params.sortBy,
         params.sortOrder,
+        params.pageSize,
       );
-      const start = (params.page - 1) * params.pageSize;
       return {
-        records: rows.slice(start, start + params.pageSize),
-        total: rows.length,
-        totalPages: Math.max(1, Math.ceil(rows.length / params.pageSize)),
+        records: result.records,
+        total: result.total,
+        totalPages: Math.max(1, Math.ceil(result.total / params.pageSize)),
       };
     },
     queryKeyBase: ["studio-data-export", "resume-pool", slug],
@@ -619,8 +627,15 @@ function PoolExportTable() {
     ],
   );
   const [sort] = grid.sorting;
-  const getAllRows = () =>
-    fetchFilteredRows(grid.filters, grid.search, sort?.id, sort?.desc ? "desc" : "asc");
+  const getAllRows = async () => {
+    const result = await fetchFilteredRows(
+      grid.filters,
+      grid.search,
+      sort?.id,
+      sort?.desc ? "desc" : "asc",
+    );
+    return result.records;
+  };
   const columns = useMemo(
     () => [
       textColumn<ResumePoolListRecord>({

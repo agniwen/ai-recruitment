@@ -139,8 +139,16 @@ export const resumePoolRouter = factory
       const result = await queryResumePoolItems({
         creatorIds,
         ...(q.id ? { id: q.id } : {}),
+        ...(q.importStatus ? { importStatus: q.importStatus } : {}),
         organizationId: activeOrg.id,
+        page: q.page,
+        pageSize: q.pageSize,
+        ...(q.parseStatus ? { parseStatus: q.parseStatus } : {}),
+        ...(q.search ? { search: q.search } : {}),
         scope: q.scope,
+        sortBy: q.sortBy,
+        sortOrder: q.sortOrder,
+        ...(q.sourceType ? { sourceType: q.sourceType } : {}),
         userId: user.id,
       });
       return c.json(result, 200);

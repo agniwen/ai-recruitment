@@ -1,4 +1,4 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -164,6 +164,51 @@ function basePoolInput(overrides: Partial<Parameters<typeof createResumePoolItem
 }
 
 describe("queryResumePoolItems", () => {
+  it("paginates and searches across the full public pool", async () => {
+    const ids: string[] = [];
+    try {
+      for (const index of [1, 2, 3]) {
+        ids.push(
+          await createResumePoolItem(
+            basePoolInput({
+              candidateName: `分页检索探针-${index}`,
+              contentHash: `hash-resume-pool-pagination-${index}`,
+              resumeFileName: `pagination-probe-${index}.pdf`,
+              scope: "public",
+            }),
+          ),
+        );
+      }
+
+      const firstPage = await queryResumePoolItems({
+        organizationId: ORG_A,
+        page: 1,
+        pageSize: 2,
+        scope: "public",
+        search: "分页检索探针",
+        userId: USER_A,
+      });
+      const secondPage = await queryResumePoolItems({
+        organizationId: ORG_A,
+        page: 2,
+        pageSize: 2,
+        scope: "public",
+        search: "分页检索探针",
+        userId: USER_A,
+      });
+
+      expect(firstPage.records).toHaveLength(2);
+      expect(firstPage.total).toBe(3);
+      expect(firstPage.totalPages).toBe(2);
+      expect(secondPage.records).toHaveLength(1);
+      expect(secondPage.page).toBe(2);
+    } finally {
+      if (ids.length > 0) {
+        await db.delete(resumePoolItem).where(inArray(resumePoolItem.id, ids));
+      }
+    }
+  });
+
   it("filters private items by selected creators in the current organization", async () => {
     const ownId = await createResumePoolItem(basePoolInput());
     await createResumePoolItem(basePoolInput({ createdBy: USER_B, organizationId: ORG_A }));
@@ -204,7 +249,7 @@ describe("queryResumePoolItems", () => {
       scope: "private",
       userId: USER_A,
     });
-    expect(emptyResult).toEqual({ records: [], total: 0 });
+    expect(emptyResult).toEqual({ page: 1, pageSize: 100, records: [], total: 0, totalPages: 1 });
   });
 
   it("lists uploader options inside both workspace and recruiting visibility scopes", async () => {

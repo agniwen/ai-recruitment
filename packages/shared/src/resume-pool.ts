@@ -107,8 +107,11 @@ export interface ResumePoolDetail extends ResumePoolListRecord {
 }
 
 export interface PaginatedResumePoolResult {
+  page: number;
+  pageSize: number;
   records: ResumePoolListRecord[];
   total: number;
+  totalPages: number;
 }
 
 export interface ResumePoolUploaderOption {
