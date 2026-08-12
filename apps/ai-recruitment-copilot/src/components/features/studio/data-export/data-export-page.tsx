@@ -243,6 +243,7 @@ function ExportEmpty({ label }: { label: string }) {
 
 function CandidateExportTable() {
   const slug = useWorkspaceSlug();
+  const canExportData = useHasPermission("dataExport", "export");
   const [dialogOpen, setDialogOpen] = useState(false);
   const membersQuery = useQuery({
     queryFn: () =>
@@ -457,10 +458,12 @@ function CandidateExportTable() {
         getRowId={(row) => row.id}
         pageSizeOptions={[DATA_EXPORT_PAGE_SIZE]}
         toolbarRight={
-          <ExportButton
-            disabled={grid.bind.total === 0 || grid.bind.loading || grid.bind.refetching}
-            onClick={() => setDialogOpen(true)}
-          />
+          canExportData ? (
+            <ExportButton
+              disabled={grid.bind.total === 0 || grid.bind.loading || grid.bind.refetching}
+              onClick={() => setDialogOpen(true)}
+            />
+          ) : undefined
         }
       />
       <DataExportDialog
@@ -481,6 +484,7 @@ function CandidateExportTable() {
 
 function PoolExportTable() {
   const slug = useWorkspaceSlug();
+  const canExportData = useHasPermission("dataExport", "export");
   const { data: session } = authClient.useSession();
   const currentUserId = session?.user?.id ?? null;
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -663,10 +667,12 @@ function PoolExportTable() {
         getRowId={(row) => row.id}
         pageSizeOptions={[DATA_EXPORT_PAGE_SIZE]}
         toolbarRight={
-          <ExportButton
-            disabled={grid.bind.total === 0 || grid.bind.loading || grid.bind.refetching}
-            onClick={() => setDialogOpen(true)}
-          />
+          canExportData ? (
+            <ExportButton
+              disabled={grid.bind.total === 0 || grid.bind.loading || grid.bind.refetching}
+              onClick={() => setDialogOpen(true)}
+            />
+          ) : undefined
         }
       />
       <DataExportDialog

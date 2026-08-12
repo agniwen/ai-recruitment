@@ -22,6 +22,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "interviews",
   "calendar",
   "dashboard",
+  "dataExport",
   "hiringUnits",
   "departments",
   "interviewers",
@@ -41,6 +42,7 @@ export const STUDIO_PAGE_PERMISSION_LABELS = {
   calendar: "面试日程",
   chat: "Agent",
   dashboard: "招聘看板",
+  dataExport: "导出数据",
   departments: "部门设置",
   forms: "AI面试-面前通用题",
   globalConfig: "公司信息与话术",
@@ -62,6 +64,7 @@ const memberStudioPagePermissions = [
   "resumePool",
   "interviews",
   "calendar",
+  "dataExport",
   "hiringUnits",
   "departments",
   "interviewers",
@@ -79,6 +82,7 @@ export const statement = {
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
+  dataExport: ["export"],
   department: ["create", "read", "update", "delete"],
   // Deny flag (勾选 = 不能评估). Default for all roles is allow evaluation.
   // owner/admin hold create so Better Auth lets them assign the flag to others;
@@ -113,6 +117,7 @@ export const owner = ac.newRole({
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
+  dataExport: ["export"],
   department: ["create", "read", "update", "delete"],
   // Hold for assignment only — evaluation is never disabled for owner (see helper).
   disableResumeEvaluation: ["create"],
@@ -152,6 +157,7 @@ export const admin = ac.newRole({
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
+  dataExport: ["export"],
   department: ["create", "read", "update", "delete"],
   // Hold for assignment only — evaluation is never disabled for admin (see helper).
   disableResumeEvaluation: ["create"],
@@ -177,6 +183,7 @@ const recruitingMemberStatements = {
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
   chat: ["create", "read", "update", "delete"],
+  dataExport: ["export"],
   department: ["read"],
   globalConfig: ["read", "update"],
   hiringUnit: ["read"],

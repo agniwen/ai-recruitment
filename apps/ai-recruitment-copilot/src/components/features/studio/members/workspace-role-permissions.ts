@@ -110,6 +110,11 @@ export const WORKSPACE_PERMISSION_GROUPS = [
         key: "chat",
         label: "Agent",
       },
+      {
+        actions: ["export"] as const,
+        key: "dataExport",
+        label: "数据导出",
+      },
     ],
     title: "招聘流程",
   },
@@ -175,6 +180,7 @@ export const PERMISSION_ACTION_LABELS: Record<string, string> = {
   cancel: "取消",
   create: "新增",
   delete: "删除",
+  export: "导出",
   import: "导入",
   manage: "代管",
   process: "处理",
@@ -195,6 +201,8 @@ const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
   chat: "控制是否能使用侧边栏 Agent tab 并访问 Agent 页面；未勾选时 Agent tab 会禁用，直接访问或点击会跳回 Studio 候选人管理。页面内接口暂不按该页面权限限制。",
   dashboard:
     "控制是否能在侧边栏看到并访问「招聘看板」页面；未勾选时直接访问会进入 404。用于查看招聘漏斗、阶段转化、待办事项和岗位招聘进展。",
+  dataExport:
+    "控制是否能在侧边栏看到并访问「导出数据」页面；未勾选时侧边栏不展示入口，直接访问会进入 404。页面中的候选人和简历池数据仍受各自查看权限控制。",
   departments:
     "控制是否能在侧边栏看到并访问「部门设置」页面；用于设置岗位和面试官所属的部门。页面内部门列表、详情和增删改仍受「部门」相关权限控制。",
   forms:
@@ -241,6 +249,9 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
     delete: "允许删除 Agent 会话相关数据；当前权限矩阵预留给会话删除能力。",
     read: "允许查看 Agent 会话相关数据；当前权限矩阵预留给会话读取能力。",
     update: "允许更新 Agent 会话相关数据；当前权限矩阵预留给会话编辑能力。",
+  },
+  dataExport: {
+    export: "允许在「导出数据」页面将当前页或全部筛选结果生成为 XLSX 文件。",
   },
   department: {
     create: "允许在「部门设置」页面新增部门。",

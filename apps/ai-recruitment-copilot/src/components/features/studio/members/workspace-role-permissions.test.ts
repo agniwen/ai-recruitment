@@ -85,6 +85,8 @@ describe("workspace role permission helpers", () => {
     });
     expect(items.map((item) => item.key)).toContain("page:chat");
     expect(items.map((item) => item.key)).toContain("page:permissions");
+    expect(items.map((item) => item.key)).toContain("page:dataExport");
+    expect(items.map((item) => item.key)).toContain("dataExport:export");
     expect(items.map((item) => item.key)).toContain("resumeLibrary:read");
     expect(items.map((item) => item.key)).toContain("resumePool:import");
     expect(items.map((item) => item.key)).toContain("resumeUploadBatch:process");
@@ -140,6 +142,8 @@ describe("workspace role permission helpers", () => {
     const chatPage = items.find((item) => item.key === "page:chat");
     const jobDescriptionPage = items.find((item) => item.key === "page:jobDescriptions");
     const jdRead = items.find((item) => item.key === "jd:read");
+    const dataExportPage = items.find((item) => item.key === "page:dataExport");
+    const dataExportAction = items.find((item) => item.key === "dataExport:export");
 
     expect(chatPage?.description).toContain("Agent");
     expect(chatPage?.description).toContain("禁用");
@@ -161,5 +165,8 @@ describe("workspace role permission helpers", () => {
     expect(jdRead?.description).toContain(
       "推荐候选人接口还同时需要「候选人管理」和「简历池」查看权限",
     );
+    expect(dataExportPage?.description).toContain("侧边栏不展示入口");
+    expect(dataExportPage?.description).toContain("404");
+    expect(dataExportAction?.description).toContain("XLSX");
   });
 });

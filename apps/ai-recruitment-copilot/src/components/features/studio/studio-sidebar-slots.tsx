@@ -90,7 +90,7 @@ const navGroups: NavGroup[] = [
         title: "招聘看板",
       },
       {
-        action: "resumes",
+        action: "dataExport",
         icon: TableExportIcon,
         path: "/studio/data-export",
         resource: "page",

@@ -181,6 +181,7 @@ describe("permissions matrix", () => {
         "auditLog",
         "candidateForm",
         "chat",
+        "dataExport",
         "department",
         "globalConfig",
         "humanInterview",
@@ -281,6 +282,11 @@ describe("permission matrix cross-cut", () => {
     ["member", "auditLog", "read", true],
     // chat — 全员可全 CRUD
     ["member", "chat", "delete", true],
+    // data export
+    ["owner", "dataExport", "export", true],
+    ["admin", "dataExport", "export", true],
+    ["member", "dataExport", "export", true],
+    ["noAccess", "dataExport", "export", false],
     // member — 改角色 (update) owner / admin 均可（admin 的目标范围由服务端
     // hook 进一步限制为非管理角色，矩阵这里只给动词）；邀请/移除 admin 也可。
     ["owner", "member", "update", true],
@@ -303,6 +309,7 @@ describe("permission matrix cross-cut", () => {
     ["member", "page", "permissions", false],
     ["member", "page", "globalConfig", false],
     ["member", "page", "resumes", true],
+    ["member", "page", "dataExport", true],
     ["member", "page", "calendar", true],
     ["member", "page", "chat", true],
     ["member", "page", "hiringUnits", true],
