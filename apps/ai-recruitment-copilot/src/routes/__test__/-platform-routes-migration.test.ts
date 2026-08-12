@@ -12,6 +12,7 @@ describe("TanStack Start platform route migration", () => {
   const routes = [
     "/platform",
     "/platform/mail-ingest-accounts",
+    "/platform/historical-resume-imports",
     "/platform/organizations",
     "/platform/queues",
     "/platform/users",
@@ -29,6 +30,7 @@ describe("TanStack Start platform route migration", () => {
     const sources = [
       readSource("routes/platform.tsx"),
       readSource("routes/platform.mail-ingest-accounts.tsx"),
+      readSource("routes/platform.historical-resume-imports.tsx"),
       readSource("routes/platform.organizations.tsx"),
       readSource("routes/platform.queues.tsx"),
       readSource("routes/platform.users.tsx"),

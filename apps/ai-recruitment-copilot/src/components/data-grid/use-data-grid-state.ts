@@ -35,6 +35,7 @@ export interface UseDataGridStateOptions<TData, F extends Record<string, string>
   defaultSorting?: SortingState;
   initialFilters: F;
   maxPageSize?: number;
+  refetchInterval?: number | false;
   refetchOnWindowFocus?: boolean;
   staleTime?: number;
 }
@@ -242,6 +243,7 @@ export function useDataGridState<TData, F extends Record<string, string>>(
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) => opts.queryFn({ ...queryParams, signal }),
     queryKey,
+    refetchInterval: opts.refetchInterval,
     refetchOnWindowFocus: opts.refetchOnWindowFocus ?? true,
     staleTime: opts.staleTime ?? 30 * 1000,
   });

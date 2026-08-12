@@ -157,6 +157,7 @@ describe("PlatformSidebarSlots", () => {
     expect(document.body.textContent).toContain("所有工作区");
     expect(document.body.textContent).toContain("队列任务");
     expect(document.body.textContent).toContain("解析缓存");
+    expect(document.body.textContent).toContain("历史简历解析");
     expect(document.body.textContent).toContain("LiveKit");
     expect(document.body.textContent).toContain("服务概览");
     expect(document.body.textContent).toContain("实时房间");
