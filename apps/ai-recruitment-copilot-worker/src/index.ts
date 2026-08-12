@@ -22,7 +22,7 @@ import {
   createJobDescriptionGoogleSheetSyncWorker,
 } from "@arc/resume-parse-queue/job-description-google-sheet-sync";
 import { createWorkerApp } from "./app";
-import { resolveWorkerServerConfig } from "./config";
+import { isLegacyParseEnabled, resolveWorkerServerConfig } from "./config";
 import { getWorkerConnectionSummary, loadWorkerEnv } from "./env";
 import { getResumeParseConfigSummary } from "./parse-config";
 import { startMailIngestScheduler } from "./mail-ingest/scheduler";
@@ -158,40 +158,44 @@ async function main() {
         await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow");
       await runBulkResumeUploadWorkflow({ bypassCache, itemId });
     });
-    await configureHistoricalResumeParseGlobalConcurrency(12);
-    await recoverIncompleteHistoricalResumeParseJobs();
-    historicalWorker = createResumeParseWorker(
-      async ({ itemId }) => {
-        const { loadHistoricalImportStorageKey } =
-          await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/historical-attempts");
-        const storageKey = await loadHistoricalImportStorageKey(itemId);
-        if (!storageKey) {
+    if (isLegacyParseEnabled()) {
+      await configureHistoricalResumeParseGlobalConcurrency(12);
+      await recoverIncompleteHistoricalResumeParseJobs();
+      historicalWorker = createResumeParseWorker(
+        async ({ itemId }) => {
+          const { loadHistoricalImportStorageKey } =
+            await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/historical-attempts");
+          const storageKey = await loadHistoricalImportStorageKey(itemId);
+          if (!storageKey) {
+            return;
+          }
+          await withHistoricalResumeObjectLock(storageKey, async () => {
+            const { processHistoricalBatchItem } =
+              await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor");
+            await processHistoricalBatchItem(itemId, process.env.HOSTNAME?.trim() || null);
+          });
+        },
+        { concurrency: 12, queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME },
+      );
+      let historicalRecoveryRunning = false;
+      const runHistoricalRecovery = async (): Promise<void> => {
+        if (historicalRecoveryRunning) {
           return;
         }
-        await withHistoricalResumeObjectLock(storageKey, async () => {
-          const { processHistoricalBatchItem } =
-            await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor");
-          await processHistoricalBatchItem(itemId, process.env.HOSTNAME?.trim() || null);
-        });
-      },
-      { concurrency: 12, queueName: RESUME_PARSE_HISTORICAL_QUEUE_NAME },
-    );
-    let historicalRecoveryRunning = false;
-    const runHistoricalRecovery = async (): Promise<void> => {
-      if (historicalRecoveryRunning) {
-        return;
-      }
-      historicalRecoveryRunning = true;
-      try {
-        await recoverIncompleteHistoricalResumeParseJobs();
-      } catch (error) {
-        console.error("[historical-resume-worker] periodic recovery failed", { error });
-      } finally {
-        historicalRecoveryRunning = false;
-      }
-    };
-    historicalRecoveryTimer = setInterval(() => void runHistoricalRecovery(), 60_000);
-    historicalRecoveryTimer.unref();
+        historicalRecoveryRunning = true;
+        try {
+          await recoverIncompleteHistoricalResumeParseJobs();
+        } catch (error) {
+          console.error("[historical-resume-worker] periodic recovery failed", { error });
+        } finally {
+          historicalRecoveryRunning = false;
+        }
+      };
+      historicalRecoveryTimer = setInterval(() => void runHistoricalRecovery(), 60_000);
+      historicalRecoveryTimer.unref();
+    } else {
+      console.info("[historical-resume-worker] disabled by ENABLE_LEGACY_PARSE");
+    }
     if (isResumeSemanticIndexEnabled()) {
       await recoverIncompleteResumeSemanticIndexJobs();
       semanticIndexWorker = createResumeSemanticIndexWorker(async (payload) => {

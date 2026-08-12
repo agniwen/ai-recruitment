@@ -3,6 +3,12 @@ export interface WorkerServerConfig {
   port: number;
 }
 
+export function isLegacyParseEnabled(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.ENABLE_LEGACY_PARSE?.trim().toLowerCase() === "true";
+}
+
 function parsePort(raw: string | undefined, fallback: number): number {
   if (!raw) {
     return fallback;

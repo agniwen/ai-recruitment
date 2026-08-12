@@ -77,6 +77,9 @@ async function main() {
     strict: true,
   });
   loadStandaloneEnv();
+  if (values.commit && process.env.ENABLE_LEGACY_PARSE?.trim().toLowerCase() !== "true") {
+    throw new Error("ENABLE_LEGACY_PARSE 必须设置为 true 才能创建历史简历任务。");
+  }
   if (!(values.workspace && values["user-email"])) {
     throw new Error("必须提供 --workspace 和 --user-email。");
   }
