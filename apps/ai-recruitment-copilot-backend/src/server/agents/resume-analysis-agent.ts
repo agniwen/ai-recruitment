@@ -31,6 +31,7 @@ import {
   runResumeParseWorkflow,
   streamResumeParseWorkflow,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/resume-parse-workflow";
+import { describeError } from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
 import type { ResumeParseWorkflowProgressEvent } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/resume-parse-workflow";
 import { sha256HexOfBytes } from "@arc/shared/file-hash";
 import {
@@ -188,8 +189,9 @@ export class ResumeAnalysisError extends Error {
     message: string,
     stage: "resume-parsing" | "question-generation",
     resumeProfile?: ResumeProfile,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = "ResumeAnalysisError";
     this.stage = stage;
     this.resumeProfile = resumeProfile;
@@ -275,6 +277,7 @@ export function isSupportedResumeDocumentFile(file: File) {
 
 function validateResumeDocumentInput(input: {
   fileName: string;
+  maxFileSizeBytes?: number | null;
   mediaType?: string;
   size: number;
 }) {
@@ -282,7 +285,9 @@ function validateResumeDocumentInput(input: {
     throw new Error(`仅支持上传 ${supportedResumeDocumentLabel} 简历。`);
   }
 
-  if (input.size > MAX_RESUME_FILE_SIZE) {
+  const maxFileSizeBytes =
+    input.maxFileSizeBytes === undefined ? MAX_RESUME_FILE_SIZE : input.maxFileSizeBytes;
+  if (maxFileSizeBytes !== null && input.size > maxFileSizeBytes) {
     throw new Error("简历文件不能超过 20 MB。");
   }
 }
@@ -580,10 +585,12 @@ export interface ParsedResumeProfileResult {
 export async function parseResumeBytesToProfile(input: {
   bytes: Uint8Array;
   fileName: string;
+  maxFileSizeBytes?: number | null;
   mediaType?: string;
 }): Promise<ParsedResumeProfileResult> {
   validateResumeDocumentInput({
     fileName: input.fileName,
+    maxFileSizeBytes: input.maxFileSizeBytes,
     mediaType: input.mediaType,
     size: input.bytes.byteLength,
   });
@@ -605,8 +612,10 @@ export async function parseResumeBytesToProfile(input: {
       throw error;
     }
     throw new ResumeAnalysisError(
-      error instanceof Error ? error.message : "Failed to extract resume information.",
+      describeError(error, "Failed to extract resume information."),
       "resume-parsing",
+      undefined,
+      { cause: error },
     );
   }
 }
@@ -640,6 +649,7 @@ export async function generateInterviewQuestionsForProfile(
       error instanceof Error ? error.message : "Failed to generate interview questions.",
       "question-generation",
       resumeProfile,
+      { cause: error },
     );
   }
 }

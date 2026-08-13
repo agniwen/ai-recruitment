@@ -1,6 +1,10 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  describeError,
+  serializeErrorDetails,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
+import {
   resumeUploadBatch,
   resumeUploadBatchItem,
   resumeUploadBatchItemAttempt,
@@ -71,16 +75,9 @@ export function finishHistoricalImportAttempt(input: {
   itemId: string;
   status: "failed" | "succeeded";
 }): Promise<number> {
-  let errorMessage: string | null = null;
-  if (input.error instanceof Error) {
-    errorMessage = input.error.message;
-  } else if (input.error !== undefined) {
-    errorMessage = String(input.error);
-  }
-  const errorDetails =
-    input.error instanceof Error
-      ? { name: input.error.name, stack: input.error.stack?.slice(0, 8000) ?? null }
-      : null;
+  const errorMessage =
+    input.error === undefined ? null : describeError(input.error, "历史简历解析失败。");
+  const errorDetails = input.error === undefined ? null : serializeErrorDetails(input.error);
   return db.transaction(async (tx) => {
     await tx
       .update(resumeUploadBatchItemAttempt)

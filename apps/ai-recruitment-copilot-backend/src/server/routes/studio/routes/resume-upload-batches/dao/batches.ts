@@ -30,6 +30,8 @@ type BatchRow = typeof resumeUploadBatch.$inferSelect;
 type ItemRow = typeof resumeUploadBatchItem.$inferSelect;
 
 const RETRIABLE_FAILURE_MESSAGES = ["简历文件不可用（S3 对象缺失）。"] as const;
+const LEGACY_SIZE_LIMIT_ERROR = "简历文件不能超过 20 MB。";
+const LEGACY_GENERIC_PARSE_ERROR = "Failed to extract resume information.";
 
 export function toBatchDto(row: BatchRow): BulkResumeBatchDto {
   return {
@@ -680,11 +682,73 @@ export async function recoverIncompleteBatchItems(
     );
 }
 
+async function recoverHistoricalLegacyFailures(): Promise<void> {
+  const affectedBatchIds = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select({
+        batchId: resumeUploadBatchItem.batchId,
+        id: resumeUploadBatchItem.id,
+        poolItemId: resumeUploadBatchItem.poolItemId,
+      })
+      .from(resumeUploadBatchItem)
+      .innerJoin(resumeUploadBatch, eq(resumeUploadBatch.id, resumeUploadBatchItem.batchId))
+      .where(
+        and(
+          eq(resumeUploadBatch.sourceChannel, "historical_import"),
+          eq(resumeUploadBatchItem.status, "failed"),
+          or(
+            eq(resumeUploadBatchItem.errorMessage, LEGACY_SIZE_LIMIT_ERROR),
+            and(
+              eq(resumeUploadBatchItem.errorMessage, LEGACY_GENERIC_PARSE_ERROR),
+              sql`not exists (
+                select 1
+                from ${resumeUploadBatchItemAttempt}
+                where ${resumeUploadBatchItemAttempt.itemId} = ${resumeUploadBatchItem.id}
+                  and ${resumeUploadBatchItemAttempt.errorDetails} ? 'chain'
+              )`,
+            ),
+          ),
+        ),
+      );
+    if (rows.length === 0) {
+      return [];
+    }
+    const itemIds = rows.map((row) => row.id);
+    const poolItemIds = rows.flatMap((row) => (row.poolItemId ? [row.poolItemId] : []));
+    const batchIds = [...new Set(rows.map((row) => row.batchId))];
+    const now = new Date();
+    await tx
+      .update(resumeUploadBatchItem)
+      .set({
+        currentStep: null,
+        errorMessage: null,
+        failureCount: 0,
+        finishedAt: null,
+        startedAt: null,
+        status: "pending",
+      })
+      .where(inArray(resumeUploadBatchItem.id, itemIds));
+    if (poolItemIds.length > 0) {
+      await tx
+        .update(resumePoolItem)
+        .set({ resumeParseError: null, resumeParseStatus: "queued", updatedAt: now })
+        .where(inArray(resumePoolItem.id, poolItemIds));
+    }
+    await tx
+      .update(resumeUploadBatch)
+      .set({ completedAt: null, status: "pending", updatedAt: now })
+      .where(inArray(resumeUploadBatch.id, batchIds));
+    return batchIds;
+  });
+  await Promise.all(affectedBatchIds.map((batchId) => reconcileBatchProgress(batchId)));
+}
+
 export async function recoverIncompleteHistoricalBatchItems(options: {
   excludeItemIds?: string[];
   limit: number;
   thresholdSeconds?: number;
 }): Promise<ResumeParseJobData[]> {
+  await recoverHistoricalLegacyFailures();
   const thresholdSeconds = options.thresholdSeconds ?? resumeParseStaleThresholdSeconds();
   await db.transaction(async (tx) => {
     const staleItems = await tx

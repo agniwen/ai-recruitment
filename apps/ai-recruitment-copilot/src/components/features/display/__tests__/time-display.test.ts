@@ -12,11 +12,11 @@ afterEach(() => {
 });
 
 describe("formatTimeDisplayText", () => {
-  it("uses the current runtime timezone instead of a fixed China timezone", () => {
+  it("always uses the China timezone regardless of the runtime timezone", () => {
     process.env.TZ = "America/Los_Angeles";
 
     expect(formatTimeDisplayText("2026-06-02T09:30:00.000Z", "YY/MM/DD HH:mm")).toBe(
-      "26/06/02 02:30",
+      "26/06/02 17:30",
     );
   });
 

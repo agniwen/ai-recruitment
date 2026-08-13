@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { describeError } from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
 import {
   resumePoolItem,
   resumeUploadBatch,
@@ -113,7 +114,9 @@ type BatchRow = typeof resumeUploadBatch.$inferSelect;
 type ParsedResume = Awaited<ReturnType<typeof parseResumeBytesToProfile>>;
 interface ProcessItemOptions {
   bypassCache?: boolean;
+  maxFileSizeBytes?: number | null;
   onStep?: (step: string) => Promise<void>;
+  throwOnError?: boolean;
 }
 
 async function reportProcessingStep(options: ProcessItemOptions, step: string): Promise<void> {
@@ -202,6 +205,7 @@ async function resolveResumeProfile(
   const parsed = await parseResumeBytesToProfile({
     bytes,
     fileName: item.originalFileName,
+    maxFileSizeBytes: options.maxFileSizeBytes,
     mediaType: object.contentType ?? "application/octet-stream",
   });
   logStep("parse.done", {
@@ -369,7 +373,11 @@ async function fetchAndParse(
     throw new Error("简历文件存储路径为空，无法读取。请重试上传。");
   }
 
-  const { contentHash, resumeProfile, resumeText } = await resolveResumeProfile(item, options);
+  const parseOptions =
+    batchRow.sourceChannel === "historical_import"
+      ? { ...options, maxFileSizeBytes: null }
+      : options;
+  const { contentHash, resumeProfile, resumeText } = await resolveResumeProfile(item, parseOptions);
   const resolvedItem = item.contentHash ? item : { ...item, contentHash };
   await assertBatchItemNotCancelled(batchRow.id, item.id);
 
@@ -651,7 +659,10 @@ async function processClaimedItem(
     if (isBatchItemCancelledError(error)) {
       return loadCancelledProcessResult(item, batchRow, startedAt);
     }
-    outcome.errorMessage = truncate(error instanceof Error ? error.message : String(error));
+    if (options.throwOnError) {
+      throw error;
+    }
+    outcome.errorMessage = truncate(describeError(error, "简历解析失败。"));
     logStep("item.process.error", {
       batchId: batchRow.id,
       errorMessage: outcome.errorMessage,
@@ -746,6 +757,7 @@ export async function processHistoricalBatchItem(
         currentStep = step;
         await setHistoricalImportAttemptStep(attemptId, itemId, step);
       },
+      throwOnError: true,
     });
     const failed = result?.item?.status === "failed";
     if (!failed) {
@@ -780,7 +792,7 @@ export async function processHistoricalBatchItem(
         await releaseBatchItemForRetry(claimed.batchRow.id, itemId);
       } else {
         await writeOutcome(claimed.item, claimed.batchRow.id, {
-          errorMessage: truncate(error instanceof Error ? error.message : String(error)),
+          errorMessage: truncate(describeError(error, "历史简历解析失败。")),
           succeededPoolItemId: null,
           succeededRecordId: null,
         });

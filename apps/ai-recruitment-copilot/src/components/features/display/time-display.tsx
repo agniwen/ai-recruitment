@@ -1,6 +1,8 @@
 "use client";
 
 import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
 import { IconCalendar as CalendarIcon } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { cn } from "@arc/shared/utils";
@@ -9,12 +11,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 // 表格内创建/更新时间统一展示为 `YY/MM/DD HH:mm`。
 // 改用 dayjs format 字符串而不是 Intl.DateTimeFormatOptions——格式更直观、
-// 避免不同 locale 下日期分隔符 / 排序漂移；hydration 后按浏览器当前时区展示。
+// 避免不同 locale 下日期分隔符 / 排序漂移；所有运行环境强制按东八区展示。
 // Tables render created/updated timestamps as `YY/MM/DD HH:mm`. Uses dayjs
 // format strings instead of Intl.DateTimeFormatOptions for one stable format
-// across locales (no separator / order drift), in the browser's current
-// timezone after hydration.
+// across locales (no separator / order drift), always in Asia/Shanghai.
 export const DATE_TIME_DISPLAY_OPTIONS = "YY/MM/DD HH:mm";
+const DISPLAY_TIME_ZONE = "Asia/Shanghai";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 type TimeValue = string | number | Date | null | undefined;
 
@@ -63,7 +68,7 @@ export function formatTimeDisplayText(
   options: string = DATE_TIME_DISPLAY_OPTIONS,
 ) {
   const date = normalizeDate(value);
-  return date ? dayjs(date).format(options) : null;
+  return date ? dayjs(date).tz(DISPLAY_TIME_ZONE).format(options) : null;
 }
 
 function formatTimeInTimeZone(

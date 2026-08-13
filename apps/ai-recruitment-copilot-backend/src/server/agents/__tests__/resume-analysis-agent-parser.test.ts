@@ -130,6 +130,53 @@ describe("resume parsing agent", () => {
     expect(result.parsedTextSource).toBe("qwen-ocr");
   });
 
+  it("keeps the 20 MB limit for regular resume parsing", async () => {
+    await expect(
+      parseResumeBytesToProfile({
+        bytes: new Uint8Array(20 * 1024 * 1024 + 1),
+        fileName: "resume.pdf",
+        mediaType: "application/pdf",
+      }),
+    ).rejects.toThrow("简历文件不能超过 20 MB");
+
+    expect(mocks.runResumeParseWorkflow).not.toHaveBeenCalled();
+  });
+
+  it("allows historical parsing to opt out of the 20 MB limit", async () => {
+    const bytes = new Uint8Array(20 * 1024 * 1024 + 1);
+
+    await parseResumeBytesToProfile({
+      bytes,
+      fileName: "historical-resume.pdf",
+      maxFileSizeBytes: null,
+      mediaType: "application/pdf",
+    });
+
+    expect(mocks.runResumeParseWorkflow).toHaveBeenCalledTimes(1);
+    const [workflowInput] = mocks.runResumeParseWorkflow.mock.calls[0] ?? [];
+    expect(workflowInput?.bytes).toBe(bytes);
+    expect(workflowInput?.fileName).toBe("historical-resume.pdf");
+    expect(workflowInput?.mediaType).toBe("application/pdf");
+  });
+
+  it("preserves a structured workflow error message from a non-Error object", async () => {
+    const workflowError = {
+      error: { message: "DashScope quota exhausted" },
+    };
+    mocks.runResumeParseWorkflow.mockRejectedValue(workflowError);
+
+    const thrown = await parseResumeBytesToProfile({
+      bytes: new Uint8Array([1, 2, 3]),
+      fileName: "resume.pdf",
+      mediaType: "application/pdf",
+    }).catch((error: unknown) => error);
+
+    expect(thrown).toMatchObject({
+      cause: workflowError,
+      message: "DashScope quota exhausted",
+    });
+  });
+
   it("promotes project tech stacks into the top-level skill set", async () => {
     mocks.runResumeParseWorkflow.mockResolvedValue({
       fileHash: "hash-1",

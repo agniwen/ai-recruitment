@@ -39,6 +39,7 @@ import {
 import {
   getClaimMissRetryError,
   processBatchItem,
+  processHistoricalBatchItem,
   processNextItem,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor";
 import { deleteFixtureResumePoolItems } from "../../../../../../test-utils/db-fixture-cleanup";
@@ -357,6 +358,33 @@ describe("getClaimMissRetryError", () => {
 // ─── Test 1: happy path ───────────────────────────────────────────────────────
 
 describe("processNextItem — happy path", () => {
+  it("historical items disable the regular 20 MB parser limit", async () => {
+    const batchId = await insertBatchWithItems({
+      dedupPolicy: "create",
+      files: makeFiles(1),
+      jdMode: "none",
+      jobDescriptionId: null,
+      organizationId: ORG_A,
+      resumePoolScope: "public",
+      sourceChannel: "historical_import",
+      target: "resume_pool",
+      userId: USER_A,
+    });
+    const [item] = await db
+      .select()
+      .from(resumeUploadBatchItem)
+      .where(eq(resumeUploadBatchItem.batchId, batchId));
+    expect(item).toBeDefined();
+    mockS3OK();
+    mockParseOK({ email: null, name: "Historical User", phone: null, targetRoles: [] });
+
+    await processHistoricalBatchItem(item?.id ?? "", "worker-1");
+
+    expect(parseResumeBytesToProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ maxFileSizeBytes: null }),
+    );
+  });
+
   it("pending item → succeeded，并更新批次创建时的未解析占位记录", async () => {
     // Happy path: single-item batch processes to succeeded and updates the queued placeholder record.
     const {
