@@ -1,7 +1,8 @@
 "use client";
 
 import { IconFileAlert, IconFileCheck } from "@tabler/icons-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   customColumn,
   DataGrid,
@@ -10,6 +11,7 @@ import {
   useDataGridState,
 } from "@/components/data-grid";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -17,6 +19,14 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { rpcFetch } from "@/lib/client/api";
 import { rpc } from "@/lib/client/rpc";
@@ -55,7 +65,54 @@ interface HistoricalResumeImportResult {
 
 const INITIAL_FILTERS: HistoricalResumeImportFilters = { view: "records" };
 
+function RetryFailedImportsPopover({
+  onRetry,
+  retrying,
+  search,
+}: {
+  onRetry: (search: string) => Promise<boolean>;
+  retrying: boolean;
+  search: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  async function handleRetry() {
+    if (await onRetry(search)) {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      <PopoverTrigger
+        render={
+          <Button size="sm" type="button">
+            一键重试
+          </Button>
+        }
+      />
+      <PopoverContent align="end" className="w-80" sideOffset={8}>
+        <PopoverHeader>
+          <PopoverTitle>重新解析当前失败记录？</PopoverTitle>
+          <PopoverDescription>
+            将把当前筛选下的最终失败历史简历重置为未解析。系统会按现有限流逐步重新加入解析队列；失败原因和尝试记录会保留。
+          </PopoverDescription>
+        </PopoverHeader>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button onClick={() => setOpen(false)} size="sm" type="button" variant="outline">
+            取消
+          </Button>
+          <Button disabled={retrying} onClick={() => void handleRetry()} size="sm" type="button">
+            重新解析
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function HistoricalResumeImportsGrid() {
+  const [retryingFailedImports, setRetryingFailedImports] = useState(false);
   const fetchRecords = useCallback(
     (params: {
       filters: HistoricalResumeImportFilters;
@@ -84,6 +141,33 @@ export function HistoricalResumeImportsGrid() {
     queryKeyBase: ["platform-historical-resume-imports"],
     refetchInterval: 5000,
   });
+
+  const retryFailedImports = useCallback(
+    async (search: string) => {
+      setRetryingFailedImports(true);
+      try {
+        const result = await rpcFetch<{ retriedCount: number }>(
+          rpc.api.platform["historical-resume-imports"]["retry-failed"].$post({
+            json: search ? { search } : {},
+          }),
+          "重新解析历史简历失败",
+        );
+        if (result.retriedCount === 0) {
+          toast.message("当前筛选下没有可重试的失败简历");
+        } else {
+          toast.success(`已重置 ${result.retriedCount} 份简历，后台将按限流重新解析`);
+        }
+        grid.invalidate();
+        return true;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "重新解析历史简历失败");
+        return false;
+      } finally {
+        setRetryingFailedImports(false);
+      }
+    },
+    [grid],
+  );
 
   const recordColumns = useMemo(
     () => [
@@ -203,15 +287,24 @@ export function HistoricalResumeImportsGrid() {
           查看 MinIO 历史简历的解析进度、成功入池记录和最终失败原因。
         </p>
       </div>
-      <Tabs
-        onValueChange={(value) => grid.setFilter("view", value as HistoricalResumeImportView)}
-        value={grid.filters.view}
-      >
-        <TabsList>
-          <TabsTrigger value="records">解析中 / 已成功</TabsTrigger>
-          <TabsTrigger value="failed">最终失败</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Tabs
+          onValueChange={(value) => grid.setFilter("view", value as HistoricalResumeImportView)}
+          value={grid.filters.view}
+        >
+          <TabsList>
+            <TabsTrigger value="records">解析中 / 已成功</TabsTrigger>
+            <TabsTrigger value="failed">最终失败</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {isFailedView ? (
+          <RetryFailedImportsPopover
+            onRetry={retryFailedImports}
+            retrying={retryingFailedImports}
+            search={grid.search}
+          />
+        ) : null}
+      </div>
       <DataGrid<HistoricalResumeImportRecord>
         {...grid.bind}
         columns={isFailedView ? failedColumns : recordColumns}

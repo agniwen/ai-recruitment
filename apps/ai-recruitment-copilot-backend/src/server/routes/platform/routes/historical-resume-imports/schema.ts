@@ -10,6 +10,11 @@ export const historicalResumeImportQuerySchema = historicalResumeImportFilterSch
   search: z.string().optional(),
 });
 
+export const retryHistoricalResumeImportsSchema = z.object({
+  search: z.string().optional(),
+});
+
 export type HistoricalResumeImportFilters = z.infer<typeof historicalResumeImportFilterSchema> &
   Record<string, string>;
 export type HistoricalResumeImportQuery = z.infer<typeof historicalResumeImportQuerySchema>;
+export type RetryHistoricalResumeImportsInput = z.infer<typeof retryHistoricalResumeImportsSchema>;
