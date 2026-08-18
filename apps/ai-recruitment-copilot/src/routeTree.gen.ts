@@ -57,6 +57,7 @@ import { Route as PlatformMastraStudioMainIndexRouteImport } from './routes/plat
 import { Route as WSlugStudioResumesRouteImport } from './routes/w.$slug.studio.resumes'
 import { Route as WSlugStudioResumePoolRouteImport } from './routes/w.$slug.studio.resume-pool'
 import { Route as WSlugStudioPermissionsRouteImport } from './routes/w.$slug.studio.permissions'
+import { Route as WSlugStudioOdcAnalysisRouteImport } from './routes/w.$slug.studio.odc-analysis'
 import { Route as WSlugStudioMembersRouteImport } from './routes/w.$slug.studio.members'
 import { Route as WSlugStudioMeRouteImport } from './routes/w.$slug.studio.me'
 import { Route as WSlugStudioMailIngestAccountsRouteImport } from './routes/w.$slug.studio.mail-ingest-accounts'
@@ -427,6 +428,11 @@ const WSlugStudioResumePoolRoute = WSlugStudioResumePoolRouteImport.update({
 const WSlugStudioPermissionsRoute = WSlugStudioPermissionsRouteImport.update({
   id: '/permissions',
   path: '/permissions',
+  getParentRoute: () => WSlugStudioRoute,
+} as any)
+const WSlugStudioOdcAnalysisRoute = WSlugStudioOdcAnalysisRouteImport.update({
+  id: '/odc-analysis',
+  path: '/odc-analysis',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
 const WSlugStudioMembersRoute = WSlugStudioMembersRouteImport.update({
@@ -1235,6 +1241,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRouteWithChildren
   '/w/$slug/studio/me': typeof WSlugStudioMeRoute
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
+  '/w/$slug/studio/odc-analysis': typeof WSlugStudioOdcAnalysisRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
@@ -1394,6 +1401,7 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRouteWithChildren
   '/w/$slug/studio/me': typeof WSlugStudioMeRoute
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
+  '/w/$slug/studio/odc-analysis': typeof WSlugStudioOdcAnalysisRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
@@ -1556,6 +1564,7 @@ export interface FileRoutesById {
   '/w/$slug/studio/mail-ingest-accounts': typeof WSlugStudioMailIngestAccountsRouteWithChildren
   '/w/$slug/studio/me': typeof WSlugStudioMeRoute
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
+  '/w/$slug/studio/odc-analysis': typeof WSlugStudioOdcAnalysisRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
@@ -1728,6 +1737,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/mail-ingest-accounts'
     | '/w/$slug/studio/me'
     | '/w/$slug/studio/members'
+    | '/w/$slug/studio/odc-analysis'
     | '/w/$slug/studio/permissions'
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resumes'
@@ -1887,6 +1897,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/mail-ingest-accounts'
     | '/w/$slug/studio/me'
     | '/w/$slug/studio/members'
+    | '/w/$slug/studio/odc-analysis'
     | '/w/$slug/studio/permissions'
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resumes'
@@ -2048,6 +2059,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/mail-ingest-accounts'
     | '/w/$slug/studio/me'
     | '/w/$slug/studio/members'
+    | '/w/$slug/studio/odc-analysis'
     | '/w/$slug/studio/permissions'
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resumes'
@@ -2493,6 +2505,13 @@ declare module '@tanstack/react-router' {
       path: '/permissions'
       fullPath: '/w/$slug/studio/permissions'
       preLoaderRoute: typeof WSlugStudioPermissionsRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
+    '/w/$slug/studio/odc-analysis': {
+      id: '/w/$slug/studio/odc-analysis'
+      path: '/odc-analysis'
+      fullPath: '/w/$slug/studio/odc-analysis'
+      preLoaderRoute: typeof WSlugStudioOdcAnalysisRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
     '/w/$slug/studio/members': {
@@ -4034,6 +4053,7 @@ interface WSlugStudioRouteChildren {
   WSlugStudioMailIngestAccountsRoute: typeof WSlugStudioMailIngestAccountsRouteWithChildren
   WSlugStudioMeRoute: typeof WSlugStudioMeRoute
   WSlugStudioMembersRoute: typeof WSlugStudioMembersRoute
+  WSlugStudioOdcAnalysisRoute: typeof WSlugStudioOdcAnalysisRoute
   WSlugStudioPermissionsRoute: typeof WSlugStudioPermissionsRoute
   WSlugStudioResumePoolRoute: typeof WSlugStudioResumePoolRoute
   WSlugStudioResumesRoute: typeof WSlugStudioResumesRouteWithChildren
@@ -4055,6 +4075,7 @@ const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
     WSlugStudioMailIngestAccountsRouteWithChildren,
   WSlugStudioMeRoute: WSlugStudioMeRoute,
   WSlugStudioMembersRoute: WSlugStudioMembersRoute,
+  WSlugStudioOdcAnalysisRoute: WSlugStudioOdcAnalysisRoute,
   WSlugStudioPermissionsRoute: WSlugStudioPermissionsRoute,
   WSlugStudioResumePoolRoute: WSlugStudioResumePoolRoute,
   WSlugStudioResumesRoute: WSlugStudioResumesRouteWithChildren,

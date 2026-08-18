@@ -90,6 +90,13 @@ const navGroups: NavGroup[] = [
         title: "招聘看板",
       },
       {
+        action: "odcAnalysis",
+        icon: ChartNoAxesCombinedIcon,
+        path: "/studio/odc-analysis",
+        resource: "page",
+        title: "ODC分析",
+      },
+      {
         action: "dataExport",
         icon: TableExportIcon,
         path: "/studio/data-export",

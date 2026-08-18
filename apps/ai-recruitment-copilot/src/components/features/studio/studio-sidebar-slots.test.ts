@@ -23,6 +23,9 @@ describe("Studio sidebar menu items", () => {
     expect(source).toContain('title: "简历池"');
     expect(source).toContain('title: "导出数据"');
     expect(source).toContain('action: "dataExport"');
+    expect(source).toContain('title: "ODC分析"');
+    expect(source).toContain('action: "odcAnalysis"');
+    expect(source).toContain('path: "/studio/odc-analysis"');
     expect(source).not.toContain('title: "招聘"');
     expect(source).not.toContain('title: "人才库"');
   });

@@ -86,6 +86,7 @@ describe("workspace role permission helpers", () => {
     expect(items.map((item) => item.key)).toContain("page:chat");
     expect(items.map((item) => item.key)).toContain("page:permissions");
     expect(items.map((item) => item.key)).toContain("page:dataExport");
+    expect(items.map((item) => item.key)).toContain("page:odcAnalysis");
     expect(items.map((item) => item.key)).toContain("dataExport:export");
     expect(items.map((item) => item.key)).toContain("resumeLibrary:read");
     expect(items.map((item) => item.key)).toContain("resumePool:import");
@@ -101,6 +102,14 @@ describe("workspace role permission helpers", () => {
     expect(items.map((item) => item.key)).toContain("mailIngestAccount:manage");
     expect(items.map((item) => item.key)).not.toContain("resume:read");
     expect(items.map((item) => item.key)).toContain("globalConfig:update");
+  });
+
+  it("describes the ODC analysis page permission", () => {
+    const items = buildPermissionItems();
+    const odcAnalysisPage = items.find((item) => item.key === "page:odcAnalysis");
+
+    expect(odcAnalysisPage?.description).toContain("ODC分析");
+    expect(odcAnalysisPage?.description).toContain("404");
   });
 
   it("groups permission columns by page for two-level table headers", () => {

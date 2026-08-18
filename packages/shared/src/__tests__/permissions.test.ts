@@ -55,6 +55,7 @@ describe("permissions matrix", () => {
           "dashboard",
           "globalConfig",
           "mailIngestAccounts",
+          "odcAnalysis",
           "permissions",
         ]),
       );
@@ -100,6 +101,7 @@ describe("permissions matrix", () => {
           "dashboard",
           "globalConfig",
           "mailIngestAccounts",
+          "odcAnalysis",
           "permissions",
         ]),
       );
@@ -149,7 +151,13 @@ describe("permissions matrix", () => {
 
     it("cannot browse admin-only studio pages", () => {
       expect(roles.member.statements.page).not.toEqual(
-        expect.arrayContaining(["dashboard", "globalConfig", "mailIngestAccounts", "permissions"]),
+        expect.arrayContaining([
+          "dashboard",
+          "globalConfig",
+          "mailIngestAccounts",
+          "odcAnalysis",
+          "permissions",
+        ]),
       );
       expect(roles.member.statements.page).toEqual(
         expect.arrayContaining([
@@ -302,9 +310,11 @@ describe("permission matrix cross-cut", () => {
     ["member", "member", "delete", false],
     // page browsing
     ["admin", "page", "dashboard", true],
+    ["admin", "page", "odcAnalysis", true],
     ["admin", "page", "mailIngestAccounts", true],
     ["admin", "page", "chat", true],
     ["member", "page", "dashboard", false],
+    ["member", "page", "odcAnalysis", false],
     ["member", "page", "mailIngestAccounts", false],
     ["member", "page", "permissions", false],
     ["member", "page", "globalConfig", false],
