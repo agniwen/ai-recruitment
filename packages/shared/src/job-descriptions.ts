@@ -328,6 +328,9 @@ export interface JobDescriptionMetrics {
 /** Where a talent recommendation came from for mixed resume-library + public-pool results. */
 export type JobDescriptionTalentRecommendationSource = "public_resume_pool" | "resume_library";
 
+/** Ranked recommendation window for the modal and export. */
+export const JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT = 50;
+
 export interface JobDescriptionTalentRecommendation {
   candidateEmail: string | null;
   candidateName: string;

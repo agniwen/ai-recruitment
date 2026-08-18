@@ -31,9 +31,11 @@ export function DataExportDialog<T>({
   defaultColumnIds,
   fileName,
   getAllRows,
+  limit = DATA_EXPORT_LIMIT,
   onOpenChange,
   open,
   sheetName,
+  showRange = true,
   source,
   total,
 }: {
@@ -42,15 +44,17 @@ export function DataExportDialog<T>({
   defaultColumnIds: readonly string[];
   fileName: string;
   getAllRows: () => Promise<readonly T[]>;
+  limit?: number;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   sheetName: string;
+  showRange?: boolean;
   source: DataExportSource;
   total: number;
 }) {
   const supportedIds = useMemo(() => columns.map((column) => column.id), [columns]);
   const [range, setRange] = useState<DataExportRange>("current");
-  const [step, setStep] = useState<"columns" | "range">("range");
+  const [step, setStep] = useState<"columns" | "range">(showRange ? "range" : "columns");
   const [selectedIds, setSelectedIds] = useState<string[]>([...defaultColumnIds]);
   const [exporting, setExporting] = useState(false);
 
@@ -59,11 +63,11 @@ export function DataExportDialog<T>({
       return;
     }
     setRange("current");
-    setStep("range");
+    setStep(showRange ? "range" : "columns");
     setSelectedIds(
       normalizeExportColumnIds(readStoredExportColumnIds(source), supportedIds, defaultColumnIds),
     );
-  }, [defaultColumnIds, open, source, supportedIds]);
+  }, [defaultColumnIds, open, showRange, source, supportedIds]);
 
   const selectedColumns = columns.filter((column) => selectedIds.includes(column.id));
 
@@ -80,8 +84,8 @@ export function DataExportDialog<T>({
     }
     setExporting(true);
     try {
-      const requestedRows = range === "current" ? currentRows : await getAllRows();
-      const { rows, truncated } = takeExportRows(requestedRows);
+      const requestedRows = !showRange || range === "all" ? await getAllRows() : currentRows;
+      const { rows, truncated } = takeExportRows(requestedRows, limit);
       if (rows.length === 0) {
         toast.error("当前筛选结果没有可导出的数据");
         return;
@@ -91,9 +95,7 @@ export function DataExportDialog<T>({
       onOpenChange(false);
       toast.success(`已导出 ${rows.length} 行数据`);
       if (truncated) {
-        toast.warning(
-          `符合条件的数据超过 ${DATA_EXPORT_LIMIT} 行，本次仅导出前 ${DATA_EXPORT_LIMIT} 行`,
-        );
+        toast.warning(`符合条件的数据超过 ${limit} 行，本次仅导出前 ${limit} 行`);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "导出失败，请稍后重试");
@@ -102,18 +104,21 @@ export function DataExportDialog<T>({
     }
   }
 
-  const allCount = Math.min(total, DATA_EXPORT_LIMIT);
+  const allCount = Math.min(total, limit);
+  const rememberedColumnsHint = "已记住本次列选择，下次打开导出时会自动恢复。";
+  let description = rememberedColumnsHint;
+  if (step === "range") {
+    description = `每次最多导出 ${limit} 行，导出内容将生成 XLSX 文件。`;
+  } else if (!showRange) {
+    description = `每次最多导出 ${limit} 行。${rememberedColumnsHint}`;
+  }
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{step === "range" ? "选择导出范围" : "选择导出列"}</DialogTitle>
-          <DialogDescription>
-            {step === "range"
-              ? `每次最多导出 ${DATA_EXPORT_LIMIT} 行，导出内容将生成 XLSX 文件。`
-              : "已记住本次列选择，下次打开导出时会自动恢复。"}
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         {step === "range" ? (
@@ -139,7 +144,7 @@ export function DataExportDialog<T>({
                     <span>导出全部筛选结果</span>
                     <FieldDescription>
                       导出符合当前筛选的 {allCount} 行
-                      {total > DATA_EXPORT_LIMIT ? `（共 ${total} 行，已按上限截取）` : ""}。
+                      {total > limit ? `（共 ${total} 行，已按上限截取）` : ""}。
                     </FieldDescription>
                   </div>
                 </Field>
@@ -169,10 +174,12 @@ export function DataExportDialog<T>({
         <DialogFooter>
           <Button
             disabled={exporting}
-            onClick={() => (step === "columns" ? setStep("range") : onOpenChange(false))}
+            onClick={() =>
+              step === "columns" && showRange ? setStep("range") : onOpenChange(false)
+            }
             variant="outline"
           >
-            {step === "columns" ? "上一步" : "取消"}
+            {step === "columns" && showRange ? "上一步" : "取消"}
           </Button>
           {step === "range" ? (
             <Button

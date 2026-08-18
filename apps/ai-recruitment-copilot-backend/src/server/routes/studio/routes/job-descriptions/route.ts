@@ -10,7 +10,11 @@ import {
   member,
   studioInterview,
 } from "@arc/db-schema/schema";
-import { jobDescriptionFormSchema, jobDescriptionUpdateSchema } from "@arc/shared/job-descriptions";
+import {
+  JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT,
+  jobDescriptionFormSchema,
+  jobDescriptionUpdateSchema,
+} from "@arc/shared/job-descriptions";
 import { computeResumeScreeningPolicyHash } from "@arc/shared/resume-screening";
 import { validateJobDescriptionInterviewerDepartments } from "@arc/shared/job-description-interviewers";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -212,7 +216,13 @@ const jobDescriptionListQuerySchema = z.object({
 
 const recommendationBodySchema = z.object({
   excludeAlreadyLinked: z.boolean().optional().default(true),
-  limit: z.number().int().min(1).max(50).optional().default(20),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT)
+    .optional()
+    .default(20),
 });
 
 export const jobDescriptionsRouter = factory

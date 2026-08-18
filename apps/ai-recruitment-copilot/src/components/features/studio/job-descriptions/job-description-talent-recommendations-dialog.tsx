@@ -6,9 +6,11 @@ import type {
   JobDescriptionTalentRecommendationResult,
   JobDescriptionTalentRecommendationSource,
 } from "@arc/shared/job-descriptions";
+import { JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT } from "@arc/shared/job-descriptions";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
+import { DataExportDialog } from "@/components/features/studio/data-export/data-export-dialog";
 import { StudioPersonDetailDialog } from "@/components/features/studio/studio-person-detail-dialog";
 import {
   ResumeDocumentFileIcon,
@@ -18,6 +20,7 @@ import { CopyableResumeRecordId } from "@/components/features/resume/copyable-re
 import {
   IconBriefcase2 as BriefcaseBusinessIcon,
   IconBuilding as Building2Icon,
+  IconDownload,
   IconFileSearch as FileSearchIcon,
   IconGitBranch as FolderGit2Icon,
   IconSchool as GraduationCapIcon,
@@ -41,6 +44,10 @@ import { rpcFetch } from "@/lib/client/api";
 import { authClient } from "@/lib/client/auth-client";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import {
+  talentRecommendationDefaultColumnIds,
+  talentRecommendationExportColumns,
+} from "./job-description-talent-recommendation-export";
 
 const ResumePoolDetailDialog = lazy(async () => {
   const mod = await import("@/components/features/studio/resume-pool/resume-pool-details");
@@ -391,24 +398,30 @@ export function JobDescriptionTalentRecommendationsDialog({
     id: string;
     source: JobDescriptionTalentRecommendationSource;
   } | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFileName, setExportFileName] = useState("推荐人才");
+
+  async function fetchRecommendations(
+    limit: number,
+  ): Promise<JobDescriptionTalentRecommendationResult> {
+    if (!jobDescription) {
+      return EMPTY_RESULT;
+    }
+    return await rpcFetch<JobDescriptionTalentRecommendationResult>(
+      rpc.api.w[":slug"].studio["job-descriptions"][":id"].recommendations.$post({
+        json: {
+          excludeAlreadyLinked: true,
+          limit,
+        },
+        param: { id: jobDescription.id, slug },
+      }),
+      "加载人才推荐失败",
+    );
+  }
 
   const recommendationsQuery = useQuery({
     enabled: open && jobDescription !== null,
-    queryFn: async (): Promise<JobDescriptionTalentRecommendationResult> => {
-      if (!jobDescription) {
-        return EMPTY_RESULT;
-      }
-      return await rpcFetch<JobDescriptionTalentRecommendationResult>(
-        rpc.api.w[":slug"].studio["job-descriptions"][":id"].recommendations.$post({
-          json: {
-            excludeAlreadyLinked: true,
-            limit: 20,
-          },
-          param: { id: jobDescription.id, slug },
-        }),
-        "加载人才推荐失败",
-      );
-    },
+    queryFn: () => fetchRecommendations(20),
     queryKey: ["job-description-recommendations", slug, jobDescription?.id ?? null] as const,
     staleTime: 60 * 1000,
   });
@@ -417,13 +430,36 @@ export function JobDescriptionTalentRecommendationsDialog({
   const isInitialLoading = recommendationsQuery.isFetching && !recommendationsQuery.data;
   const libraryDetailId = detailTarget?.source === "resume_library" ? detailTarget.id : null;
   const poolDetailId = detailTarget?.source === "public_resume_pool" ? detailTarget.id : null;
+  const hasRecommendations = data.candidates.length > 0;
 
   return (
     <>
       <Modal
         bodyClassName="px-6 py-5"
         description="基于岗位 JD 与候选人管理、简历池已索引简历的语义相似度生成。"
-        onOpenChange={onOpenChange}
+        footer={
+          hasRecommendations ? (
+            <Button
+              onClick={() => {
+                const today = new Date().toISOString().slice(0, 10);
+                const jobName = jobDescription?.name ?? "岗位";
+                setExportFileName(`推荐人才-${jobName}-${today}`);
+                setExportOpen(true);
+              }}
+              type="button"
+              variant="outline"
+            >
+              <IconDownload data-icon="inline-start" />
+              导出推荐人才
+            </Button>
+          ) : undefined
+        }
+        onOpenChange={(next) => {
+          if (!next) {
+            setExportOpen(false);
+          }
+          onOpenChange(next);
+        }}
         open={open}
         size="2xl"
         title={jobDescription ? `岗位「${jobDescription.name}」的人才推荐` : "人才推荐"}
@@ -437,6 +473,26 @@ export function JobDescriptionTalentRecommendationsDialog({
           }}
         />
       </Modal>
+
+      <DataExportDialog
+        columns={talentRecommendationExportColumns}
+        currentRows={data.candidates}
+        defaultColumnIds={talentRecommendationDefaultColumnIds}
+        fileName={exportFileName}
+        getAllRows={async () => {
+          const result = await fetchRecommendations(
+            JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT,
+          );
+          return result.candidates;
+        }}
+        limit={JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT}
+        onOpenChange={setExportOpen}
+        open={exportOpen}
+        sheetName="推荐人才"
+        showRange={false}
+        source="talentRecommendations"
+        total={data.candidates.length}
+      />
 
       <StudioPersonDetailDialog
         mode="resume"

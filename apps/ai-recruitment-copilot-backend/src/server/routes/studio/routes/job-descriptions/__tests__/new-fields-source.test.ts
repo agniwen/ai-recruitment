@@ -17,4 +17,8 @@ describe("job description new field persistence", () => {
     expect(routeSource).toContain("jobDescriptionHumanInterviewer");
     expect(daoSource).toContain("loadHumanInterviewerIdsForJobDescriptions");
   });
+
+  it("accepts recommendation requests up to the shared 50-row cap", () => {
+    expect(routeSource).toContain("JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT");
+  });
 });

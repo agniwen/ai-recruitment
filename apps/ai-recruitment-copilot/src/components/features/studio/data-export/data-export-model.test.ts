@@ -29,4 +29,12 @@ describe("data export model", () => {
     expect(result.rows).toHaveLength(DATA_EXPORT_LIMIT);
     expect(result.truncated).toBe(true);
   });
+
+  it("caps an export at a caller-provided row limit", () => {
+    const rows = Array.from({ length: 12 }, (_, index) => index);
+    const result = takeExportRows(rows, 10);
+
+    expect(result.rows).toHaveLength(10);
+    expect(result.truncated).toBe(true);
+  });
 });
