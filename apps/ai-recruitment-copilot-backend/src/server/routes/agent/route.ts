@@ -413,6 +413,7 @@ export const agentRouter = factory
       await tx
         .update(studioInterviewSchedule)
         .set({
+          completedAt: now,
           conversationId: data.conversationId,
           status: "completed" as const,
           updatedAt: now,
@@ -439,6 +440,7 @@ export const agentRouter = factory
         operatorId: null,
         organizationId: orgId,
         scheduleEntryId: data.scheduleEntryId,
+        source: "agent",
       });
     });
 

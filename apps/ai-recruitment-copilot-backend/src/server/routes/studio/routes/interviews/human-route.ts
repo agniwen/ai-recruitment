@@ -97,6 +97,8 @@ export const studioInterviewHumanRouter = factory
 
       const input = c.req.valid("json");
       const created = await createHumanInterviewRound({
+        actorId: c.var.user?.id ?? null,
+        actorRole: c.var.member?.role ?? null,
         input: {
           ...input,
           format: "online",
@@ -118,6 +120,7 @@ export const studioInterviewHumanRouter = factory
         },
         interviewRecordId: recordId,
         operatorId: c.var.user?.id ?? null,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
       });
       invalidateStudioInterviewCaches(activeOrg.id);
@@ -156,6 +159,7 @@ export const studioInterviewHumanRouter = factory
           },
           interviewRecordId: updated.interviewRecordId,
           operatorId: c.var.user?.id ?? null,
+          operatorRole: c.var.member?.role ?? null,
           organizationId: activeOrg.id,
         });
         invalidateStudioInterviewCaches(activeOrg.id);
@@ -181,6 +185,8 @@ export const studioInterviewHumanRouter = factory
       const { outcome, score, feedback } = c.req.valid("json");
       try {
         const updated = await completeHumanInterviewRound({
+          actorId: c.var.user?.id ?? null,
+          actorRole: c.var.member?.role ?? null,
           feedback,
           organizationId: activeOrg.id,
           outcome,
@@ -197,6 +203,7 @@ export const studioInterviewHumanRouter = factory
           },
           interviewRecordId: updated.interviewRecordId,
           operatorId: c.var.user?.id ?? null,
+          operatorRole: c.var.member?.role ?? null,
           organizationId: activeOrg.id,
         });
         const roomNames = await endHumanInterviewMeetingsByRound({
@@ -251,6 +258,7 @@ export const studioInterviewHumanRouter = factory
           },
           interviewRecordId: updated.interviewRecordId,
           operatorId: c.var.user?.id ?? null,
+          operatorRole: c.var.member?.role ?? null,
           organizationId: activeOrg.id,
         });
         for (const roomName of deletedLiveKitRoomNames) {

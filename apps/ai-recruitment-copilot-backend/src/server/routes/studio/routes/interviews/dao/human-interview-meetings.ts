@@ -34,6 +34,7 @@ export {
   isHumanInterviewMeetingAfterValidUntil,
   isHumanInterviewMeetingBeforeScheduledStart,
 } from "./human-interview-meeting-access";
+export { markHumanInterviewMeetingInProgressByRoomName } from "./human-interview-meeting-start";
 
 type MeetingRow = typeof studioHumanInterviewMeeting.$inferSelect;
 function serializeDate(value: Date | null): string | null {
@@ -556,34 +557,6 @@ export async function resolveHumanInterviewMeetingInterviewerInviteToken(
     userId: row.userId,
     validUntil: serializeDate(row.validUntil),
   };
-}
-
-export async function markHumanInterviewMeetingInProgress(meetingId: string): Promise<void> {
-  const now = new Date();
-  await db
-    .update(studioHumanInterviewMeeting)
-    .set({ startedAt: now, status: "in_progress", updatedAt: now })
-    .where(
-      and(
-        eq(studioHumanInterviewMeeting.id, meetingId),
-        eq(studioHumanInterviewMeeting.status, "scheduled"),
-      ),
-    );
-}
-
-export async function markHumanInterviewMeetingInProgressByRoomName(
-  roomName: string,
-): Promise<void> {
-  const now = new Date();
-  await db
-    .update(studioHumanInterviewMeeting)
-    .set({ startedAt: now, status: "in_progress", updatedAt: now })
-    .where(
-      and(
-        eq(studioHumanInterviewMeeting.liveKitRoomName, roomName),
-        eq(studioHumanInterviewMeeting.status, "scheduled"),
-      ),
-    );
 }
 
 export async function endHumanInterviewMeeting({

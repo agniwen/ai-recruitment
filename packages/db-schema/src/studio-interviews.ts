@@ -436,6 +436,7 @@ export const scheduleEntryStatusValues = [
   "in_progress",
   "interrupted",
   "completed",
+  "cancelled",
 ] as const;
 
 export const scheduleEntryStatusSchema = z.enum(scheduleEntryStatusValues);
@@ -446,6 +447,7 @@ export const scheduleEntryStatusMeta: Record<
   ScheduleEntryStatus,
   { label: string; tone: "success" | "warning" | "info" | "outline" }
 > = {
+  cancelled: { label: "已取消", tone: "outline" },
   completed: { label: "已结束", tone: "success" },
   in_progress: { label: "进行中", tone: "warning" },
   interrupted: { label: "进行中", tone: "warning" },

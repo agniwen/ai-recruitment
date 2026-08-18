@@ -59,6 +59,9 @@ export async function resetCandidateWorkflowForJobDescriptionChange(
     await tx
       .update(studioInterviewSchedule)
       .set({
+        cancelReason: null,
+        cancelledAt: null,
+        completedAt: null,
         conversationId: null,
         disconnectedAt: null,
         liveKitParticipantIdentity: null,

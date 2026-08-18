@@ -48,11 +48,49 @@ function resolveTransitionPermission(target: CandidateTransitionInput["pipelineS
   return { action: "update", resource: "interview" } as const;
 }
 
+function resolveOnboardingFactPatch(input: {
+  isHired: boolean;
+  isReactivating: boolean;
+  joiningDate: string | null | undefined;
+  now: Date;
+  operatorId: string | null;
+  operatorRole?: string | null;
+}) {
+  if (input.isHired) {
+    const parsedJoiningDate = input.joiningDate
+      ? new Date(
+          /^\d{4}-\d{2}-\d{2}$/u.test(input.joiningDate)
+            ? `${input.joiningDate}T00:00:00+08:00`
+            : input.joiningDate,
+        )
+      : null;
+    return {
+      actualOnboardedAt:
+        parsedJoiningDate && !Number.isNaN(parsedJoiningDate.getTime())
+          ? parsedJoiningDate
+          : input.now,
+      onboardedConfirmedAt: input.now,
+      onboardedConfirmedBy: input.operatorId,
+      onboardedConfirmedByRole: input.operatorRole ?? null,
+    };
+  }
+  if (input.isReactivating) {
+    return {
+      actualOnboardedAt: null,
+      onboardedConfirmedAt: null,
+      onboardedConfirmedBy: null,
+      onboardedConfirmedByRole: null,
+    };
+  }
+  return {};
+}
+
 export async function transitionCandidateStage(command: {
   authorize: WorkspaceAuthorizer;
   candidateId: string;
   input: CandidateTransitionInput;
   operatorId: string | null;
+  operatorRole?: string | null;
   organizationId: string;
   provenance: CandidateStageTransitionProvenance;
 }): Promise<CandidateStageTransitionResult> {
@@ -62,6 +100,7 @@ export async function transitionCandidateStage(command: {
   }
 
   const now = new Date();
+  // oxlint-disable-next-line complexity -- Transaction enforces the full candidate-stage state machine atomically.
   const result = await db.transaction(async (tx) => {
     const [existing] = await tx
       .select({
@@ -142,9 +181,23 @@ export async function transitionCandidateStage(command: {
       input: command.input,
       now,
     });
+    const isHired = command.input.pipelineStage === "closed" && command.input.outcome === "hired";
+    const isReactivating =
+      existing.pipelineStage === "closed" && command.input.pipelineStage !== "closed";
+    const onboardingFactPatch = resolveOnboardingFactPatch({
+      isHired,
+      isReactivating,
+      joiningDate: command.input.closedMeta?.hiredDetails?.joiningDate,
+      now,
+      operatorId: command.operatorId,
+      operatorRole: command.operatorRole,
+    });
     await tx
       .update(studioInterview)
-      .set(transition.patch)
+      .set({
+        ...transition.patch,
+        ...onboardingFactPatch,
+      })
       .where(eq(studioInterview.id, command.candidateId));
     const provenanceDetail =
       command.provenance.kind === "workspace_recruiting_copilot"
@@ -164,8 +217,10 @@ export async function transitionCandidateStage(command: {
       id: crypto.randomUUID(),
       interviewRecordId: command.candidateId,
       operatorId: command.operatorId,
+      operatorRole: command.operatorRole ?? null,
       organizationId: command.organizationId,
       scheduleEntryId: null,
+      source: command.provenance.kind === "workspace_recruiting_copilot" ? "agent" : "manual",
     });
     return { kind: "ok" } as const;
   });

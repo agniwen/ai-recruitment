@@ -402,6 +402,7 @@ export const invitation = pgTable(
 export const studioInterview = pgTable(
   "studio_interview",
   {
+    actualOnboardedAt: timestamp("actual_onboarded_at", { withTimezone: true }),
     candidateEmail: text("candidate_email"),
     // 候选人期望（薪资 / 现 base / 最早入职日 / 备注），单行 JSONB；
     // 在 offer 阶段录入，便于 dialog prefill。结构见 candidateExpectationsMetaSchema。
@@ -421,6 +422,7 @@ export const studioInterview = pgTable(
     closedReason: text("closed_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdByRole: text("created_by_role"),
     // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
     hiringUnitId: text("hiring_unit_id").references(() => hiringUnit.id, { onDelete: "set null" }),
     hrResumeAssessment: text("hr_resume_assessment"),
@@ -451,6 +453,11 @@ export const studioInterview = pgTable(
     // Superseded by studioOfferDraft subtable; not written anymore.
     offerAcceptedAt: timestamp("offer_accepted_at", { withTimezone: true }),
     offerSentAt: timestamp("offer_sent_at", { withTimezone: true }),
+    onboardedConfirmedAt: timestamp("onboarded_confirmed_at", { withTimezone: true }),
+    onboardedConfirmedBy: text("onboarded_confirmed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    onboardedConfirmedByRole: text("onboarded_confirmed_by_role"),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -546,6 +553,11 @@ export const studioInterview = pgTable(
       table.organizationId,
       table.pipelineStage,
       table.createdAt,
+    ),
+    index("studio_interview_org_outcome_onboarded_at_idx").on(
+      table.organizationId,
+      table.outcome,
+      table.actualOnboardedAt,
     ),
     index("studio_interview_resume_content_hash_idx").on(table.resumeContentHash),
     check(
@@ -927,6 +939,7 @@ export const jobDescriptionHumanInterviewer = pgTable(
 
 export const studioInterviewSchedule = pgTable(
   "studio_interview_schedule",
+  // oxlint-disable-next-line sort-keys -- Candidate feedback and cancellation facts stay grouped by domain.
   {
     allowTextInput: boolean("allow_text_input").notNull().default(false),
     candidateFeedbackCategories: jsonb("candidate_feedback_categories").$type<
@@ -936,9 +949,13 @@ export const studioInterviewSchedule = pgTable(
     candidateFeedbackSubmittedAt: timestamp("candidate_feedback_submitted_at", {
       withTimezone: true,
     }),
+    cancelReason: text("cancel_reason"),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     conversationId: text("conversation_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdByRole: text("created_by_role"),
     // 热重连锚点：轮次首次开始时持久化 LiveKit 房间名、参与者 identity、
     // 会话起始时间。断连超过 LiveKit 自动重连窗口时记录 disconnectedAt，
     // 给候选人 3 分钟内回到同一房间继续对话。
@@ -985,6 +1002,12 @@ export const studioInterviewSchedule = pgTable(
       table.status,
       table.createdAt,
     ),
+    index("studio_interview_schedule_org_scheduled_status_record_idx").on(
+      table.organizationId,
+      table.scheduledAt,
+      table.status,
+      table.interviewRecordId,
+    ),
   ],
 );
 
@@ -1001,7 +1024,11 @@ export const studioHumanInterviewRound = pgTable(
     cancelReason: text("cancel_reason"),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    completedBy: text("completed_by").references(() => user.id, { onDelete: "set null" }),
+    completedByRole: text("completed_by_role"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdByRole: text("created_by_role"),
     feedback: text("feedback"),
     format: text("format").$type<HumanInterviewFormat>().notNull(),
     id: text("id").primaryKey(),
@@ -1019,6 +1046,7 @@ export const studioHumanInterviewRound = pgTable(
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
     score: integer("score"),
     sortOrder: integer("sort_order").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true }),
     status: text("status").$type<HumanInterviewRoundStatus>().notNull().default("pending"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -1030,6 +1058,11 @@ export const studioHumanInterviewRound = pgTable(
     index("studio_human_interview_round_sort_idx").on(table.interviewRecordId, table.sortOrder),
     index("studio_human_interview_round_org_idx").on(table.organizationId),
     index("studio_human_interview_round_status_idx").on(table.status),
+    index("studio_human_interview_round_org_scheduled_status_idx").on(
+      table.organizationId,
+      table.scheduledAt,
+      table.status,
+    ),
   ],
 );
 
@@ -1161,6 +1194,8 @@ export const studioOfferDraft = pgTable(
     bonus: integer("bonus"),
     candidateCounter: text("candidate_counter"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdByRole: text("created_by_role"),
     currency: text("currency").notNull().default("CNY"),
     equity: text("equity"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
@@ -1176,6 +1211,8 @@ export const studioOfferDraft = pgTable(
     position: text("position").notNull(),
     responseAt: timestamp("response_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
+    sentByRole: text("sent_by_role"),
     status: text("status").$type<OfferDraftStatus>().notNull().default("draft"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -1191,6 +1228,16 @@ export const studioOfferDraft = pgTable(
     index("studio_offer_draft_record_idx").on(table.interviewRecordId),
     index("studio_offer_draft_org_idx").on(table.organizationId),
     index("studio_offer_draft_status_idx").on(table.status),
+    index("studio_offer_draft_org_record_sent_idx").on(
+      table.organizationId,
+      table.interviewRecordId,
+      table.sentAt,
+    ),
+    index("studio_offer_draft_org_joining_status_idx").on(
+      table.organizationId,
+      table.joiningDate,
+      table.status,
+    ),
   ],
 );
 
@@ -1869,6 +1916,7 @@ export const interviewAuditLog = pgTable(
       .notNull()
       .references(() => studioInterview.id, { onDelete: "cascade" }),
     operatorId: text("operator_id").references(() => user.id, { onDelete: "set null" }),
+    operatorRole: text("operator_role"),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -1877,11 +1925,17 @@ export const interviewAuditLog = pgTable(
     scheduleEntryId: text("schedule_entry_id").references(() => studioInterviewSchedule.id, {
       onDelete: "set null",
     }),
+    source: text("source").notNull().default("manual"),
   },
   (table) => [
     index("interview_audit_log_record_idx").on(table.interviewRecordId),
     index("interview_audit_log_created_at_idx").on(table.createdAt),
     index("interview_audit_log_organization_idx").on(table.organizationId),
+    index("interview_audit_log_org_action_created_at_idx").on(
+      table.organizationId,
+      table.action,
+      table.createdAt,
+    ),
   ],
 );
 

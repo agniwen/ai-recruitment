@@ -113,6 +113,8 @@ export async function loadDraftById(
 }
 
 export interface CreateDraftOptions {
+  actorId?: string | null;
+  actorRole?: string | null;
   interviewRecordId: string;
   organizationId: string;
   input: OfferDraftInput;
@@ -127,6 +129,8 @@ export interface CreateDraftOptions {
 // Create new version: max(version)+1; supersede any non-terminal predecessors.
 // FOR UPDATE lock + unique index protect against concurrent inserts.
 export async function createOfferDraft({
+  actorId = null,
+  actorRole = null,
   interviewRecordId,
   organizationId,
   input,
@@ -168,6 +172,8 @@ export async function createOfferDraft({
       baseSalary: input.baseSalary,
       bonus: input.bonus ?? null,
       createdAt: now,
+      createdBy: actorId,
+      createdByRole: actorRole,
       currency: input.currency ?? "CNY",
       equity: input.equity ?? null,
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
@@ -178,6 +184,8 @@ export async function createOfferDraft({
       organizationId,
       position: input.position,
       sentAt: sendImmediately ? now : null,
+      sentBy: sendImmediately ? actorId : null,
+      sentByRole: sendImmediately ? actorRole : null,
       status: sendImmediately ? "sent" : "draft",
       updatedAt: now,
       version: nextVersion,
@@ -260,6 +268,7 @@ export async function editOfferDraft({
 export async function sendOfferDraft(
   draftId: string,
   organizationId: string,
+  actor?: { id: string | null; role: string | null },
 ): Promise<OfferDraftRecord> {
   const existing = await loadDraftById(draftId, organizationId);
   if (!existing) {
@@ -271,7 +280,13 @@ export async function sendOfferDraft(
   const now = new Date();
   await db
     .update(studioOfferDraft)
-    .set({ sentAt: now, status: "sent", updatedAt: now })
+    .set({
+      sentAt: now,
+      sentBy: actor?.id ?? null,
+      sentByRole: actor?.role ?? null,
+      status: "sent",
+      updatedAt: now,
+    })
     .where(eq(studioOfferDraft.id, draftId));
   const updated = await loadDraftById(draftId, organizationId);
   if (!updated) {

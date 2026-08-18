@@ -33,7 +33,6 @@ import {
   issueHumanInterviewMeetingLinks,
   listHumanInterviewMeetings,
   loadHumanInterviewMeetingById,
-  markHumanInterviewMeetingInProgress,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-meetings";
 import {
   deleteHumanInterviewLiveKitRoom,
@@ -201,6 +200,7 @@ export const studioInterviewCollectionRouter = factory
         candidatePhone: input.data.candidatePhone || analysis?.resumeProfile.phone || null,
         createdAt: now,
         createdBy: c.var.user?.id ?? null,
+        createdByRole: c.var.member?.role ?? null,
         id: interviewRecordId,
         interviewQuestions: analysis?.interviewQuestions ?? manualInterviewQuestions ?? [],
         jobDescriptionId: input.data.jobDescriptionId || null,
@@ -224,6 +224,7 @@ export const studioInterviewCollectionRouter = factory
         now,
         undefined,
         c.var.user?.id ?? null,
+        c.var.member?.role ?? null,
       );
 
       await db.transaction(async (tx) => {
@@ -432,7 +433,6 @@ export const studioInterviewCollectionRouter = factory
           participantRole: meetingInterviewer.role,
           roomName: meeting.liveKitRoomName,
         });
-        await markHumanInterviewMeetingInProgress(meeting.id);
         return c.json(token, 200);
       } catch (error) {
         if (error instanceof HumanInterviewLiveKitConfigError) {

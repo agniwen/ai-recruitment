@@ -83,6 +83,8 @@ export const offerDraftsRouter = factory
 
       const { sendImmediately, ...input } = c.req.valid("json");
       const created = await createOfferDraft({
+        actorId: c.var.user?.id ?? null,
+        actorRole: c.var.member?.role ?? null,
         input,
         interviewRecordId: recordId,
         organizationId: activeOrg.id,
@@ -99,6 +101,7 @@ export const offerDraftsRouter = factory
         },
         interviewRecordId: recordId,
         operatorId: c.var.user?.id ?? null,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
       });
       invalidateStudioInterviewCaches(activeOrg.id);
@@ -127,6 +130,7 @@ export const offerDraftsRouter = factory
           },
           interviewRecordId: updated.interviewRecordId,
           operatorId: c.var.user?.id ?? null,
+          operatorRole: c.var.member?.role ?? null,
           organizationId: activeOrg.id,
         });
         invalidateStudioInterviewCaches(activeOrg.id);
@@ -146,7 +150,10 @@ export const offerDraftsRouter = factory
     }
     const draftId = c.req.param("draftId");
     try {
-      const updated = await sendOfferDraft(draftId, activeOrg.id);
+      const updated = await sendOfferDraft(draftId, activeOrg.id, {
+        id: c.var.user?.id ?? null,
+        role: c.var.member?.role ?? null,
+      });
       await recordCandidateActivity({
         action: "offer_draft_sent",
         detail: {
@@ -156,6 +163,7 @@ export const offerDraftsRouter = factory
         },
         interviewRecordId: updated.interviewRecordId,
         operatorId: c.var.user?.id ?? null,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
       });
       invalidateStudioInterviewCaches(activeOrg.id);
@@ -190,6 +198,7 @@ export const offerDraftsRouter = factory
           detail: { draftId: updated.id, response, version: updated.version },
           interviewRecordId: updated.interviewRecordId,
           operatorId: c.var.user?.id ?? null,
+          operatorRole: c.var.member?.role ?? null,
           organizationId: activeOrg.id,
         });
         invalidateStudioInterviewCaches(activeOrg.id);
@@ -219,6 +228,7 @@ export const offerDraftsRouter = factory
         },
         interviewRecordId: updated.interviewRecordId,
         operatorId: c.var.user?.id ?? null,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
       });
       invalidateStudioInterviewCaches(activeOrg.id);

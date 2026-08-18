@@ -290,6 +290,9 @@ export const studioInterviewsRouter = factory
       await tx
         .update(studioInterviewSchedule)
         .set({
+          cancelReason: null,
+          cancelledAt: null,
+          completedAt: null,
           conversationId: null,
           // 重置时一并清空热重连锚点，避免下一轮复用旧房间名/identity。
           // Clear hot-reconnect anchors so the next attempt mints a fresh room.
@@ -362,6 +365,7 @@ export const studioInterviewsRouter = factory
         candidateId,
         input,
         operatorId,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
         provenance: { kind: "manual" },
       });

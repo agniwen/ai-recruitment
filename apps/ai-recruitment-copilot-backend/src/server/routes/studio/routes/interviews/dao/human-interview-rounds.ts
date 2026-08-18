@@ -211,6 +211,8 @@ async function nextSortOrder(tx: Tx, interviewRecordId: string): Promise<number>
 }
 
 export interface CreateRoundOptions {
+  actorId?: string | null;
+  actorRole?: string | null;
   interviewRecordId: string;
   organizationId: string;
   input: HumanInterviewRoundInput;
@@ -252,6 +254,8 @@ export async function loadRoundById(
 // Create a round + its interviewer junction rows. sortOrder is server-side
 // derived so the client can't collide with existing rows.
 export async function createHumanInterviewRound({
+  actorId = null,
+  actorRole = null,
   interviewRecordId,
   organizationId,
   input,
@@ -271,6 +275,8 @@ export async function createHumanInterviewRound({
     const sortOrder = input.sortOrder ?? (await nextSortOrder(tx, interviewRecordId));
     await tx.insert(studioHumanInterviewRound).values({
       createdAt: now,
+      createdBy: actorId,
+      createdByRole: actorRole,
       feedback: input.feedback ?? null,
       format: input.format,
       id,
@@ -580,6 +586,8 @@ export async function editHumanInterviewRound({
 // 面试评价：仅 pending → completed；带 outcome / 可选 score / feedback。
 // Mark a pending round as completed; outcome required, score/feedback optional.
 export interface CompleteRoundOptions {
+  actorId?: string | null;
+  actorRole?: string | null;
   roundId: string;
   organizationId: string;
   outcome: HumanInterviewRoundOutcome;
@@ -588,6 +596,8 @@ export interface CompleteRoundOptions {
 }
 
 export async function completeHumanInterviewRound({
+  actorId = null,
+  actorRole = null,
   roundId,
   organizationId,
   outcome,
@@ -607,6 +617,8 @@ export async function completeHumanInterviewRound({
     .update(studioHumanInterviewRound)
     .set({
       completedAt: now,
+      completedBy: actorId,
+      completedByRole: actorRole,
       feedback: normalizedFeedback,
       outcome,
       score: score ?? null,

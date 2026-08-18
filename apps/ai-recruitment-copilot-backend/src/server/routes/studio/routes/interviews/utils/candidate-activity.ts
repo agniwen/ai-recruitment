@@ -8,8 +8,10 @@ export interface CandidateActivityInput {
   detail?: Record<string, unknown>;
   interviewRecordId: string;
   operatorId: string | null;
+  operatorRole?: string | null;
   organizationId: string;
   scheduleEntryId?: string | null;
+  source?: "agent" | "api" | "import" | "manual" | "system";
 }
 
 function buildCandidateActivityValues({
@@ -17,8 +19,10 @@ function buildCandidateActivityValues({
   detail = {},
   interviewRecordId,
   operatorId,
+  operatorRole = null,
   organizationId,
   scheduleEntryId = null,
+  source = "manual",
 }: CandidateActivityInput) {
   return {
     action,
@@ -27,8 +31,10 @@ function buildCandidateActivityValues({
     id: crypto.randomUUID(),
     interviewRecordId,
     operatorId,
+    operatorRole,
     organizationId,
     scheduleEntryId,
+    source,
   };
 }
 

@@ -371,6 +371,7 @@ export const interviewRouter = factory
           await tx
             .update(studioInterviewSchedule)
             .set({
+              completedAt: now,
               disconnectedAt: null,
               liveKitParticipantIdentity: null,
               liveKitRoomName: null,
@@ -705,7 +706,7 @@ export const interviewRouter = factory
       await db.transaction(async (tx) => {
         await tx
           .update(studioInterviewSchedule)
-          .set({ status: "completed" as const, updatedAt: now })
+          .set({ completedAt: now, status: "completed" as const, updatedAt: now })
           .where(eq(studioInterviewSchedule.id, roundId));
       });
 

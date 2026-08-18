@@ -28,7 +28,6 @@ import {
   endHumanInterviewMeeting,
   isHumanInterviewMeetingBeforeScheduledStart,
   isHumanInterviewMeetingAfterValidUntil,
-  markHumanInterviewMeetingInProgress,
   resolveHumanInterviewMeetingInterviewerInviteToken,
   resolveHumanInterviewMeetingInviteToken,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-meetings";
@@ -137,7 +136,6 @@ export const publicRouter = factory
         participantRole: scope.role,
         roomName: scope.liveKitRoomName,
       });
-      await markHumanInterviewMeetingInProgress(scope.meetingId);
       return c.json(token, 200);
     } catch (error) {
       if (error instanceof HumanInterviewLiveKitConfigError) {
@@ -225,7 +223,6 @@ export const publicRouter = factory
         participantRole: "candidate",
         roomName: scope.liveKitRoomName,
       });
-      await markHumanInterviewMeetingInProgress(scope.meetingId);
       return c.json(token, 200);
     } catch (error) {
       if (error instanceof HumanInterviewLiveKitConfigError) {
