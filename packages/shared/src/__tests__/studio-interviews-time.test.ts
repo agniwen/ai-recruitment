@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getScheduleEntryDateValue,
   humanInterviewRoundInputSchema,
   studioInterviewClientFormSchema,
   studioInterviewFormSchema,
@@ -112,5 +113,11 @@ describe("studio interview timestamp input schemas", () => {
         scheduledAt: "2026-06-02T09:30:00.000Z",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("getScheduleEntryDateValue", () => {
+  it("formats schedule editor values in China time", () => {
+    expect(getScheduleEntryDateValue("2026-06-02T09:30:00.000Z")).toBe("2026-06-02T17:30");
   });
 });

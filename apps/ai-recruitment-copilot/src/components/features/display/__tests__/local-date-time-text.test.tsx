@@ -28,7 +28,7 @@ describe("LocalDateTimeText", () => {
       root.render(<LocalDateTimeText format="compact-zh" value="2026-06-02T09:30:00.000Z" />);
     });
 
-    expect(container.textContent).toMatch(/\d{2}\/\d{2}.*\d{2}:\d{2}/u);
+    expect(container.textContent).toContain("17:30");
     await act(() => root.unmount());
   });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { DISPLAY_TIME_ZONE } from "@arc/shared/utils/time";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 type DateTimeValue = Date | string | null | undefined;
@@ -11,18 +12,21 @@ const FORMATTERS: Record<LocalDateTimeFormat, Intl.DateTimeFormat> = {
     hour: "2-digit",
     minute: "2-digit",
     month: "2-digit",
+    timeZone: DISPLAY_TIME_ZONE,
   }),
-  default: new Intl.DateTimeFormat(undefined, {
+  default: new Intl.DateTimeFormat("zh-CN", {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     month: "2-digit",
     second: "2-digit",
+    timeZone: DISPLAY_TIME_ZONE,
     year: "numeric",
   }),
   "long-zh": new Intl.DateTimeFormat("zh-CN", {
     dateStyle: "long",
     timeStyle: "short",
+    timeZone: DISPLAY_TIME_ZONE,
   }),
 };
 

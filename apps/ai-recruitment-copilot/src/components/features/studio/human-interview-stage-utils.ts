@@ -4,6 +4,11 @@ import type {
   HumanInterviewMeetingRecord,
   HumanInterviewRoundRecord,
 } from "@arc/shared/studio-pipeline-stages";
+import { formatDate } from "@arc/shared/utils/time";
+import {
+  dateTimeLocalInputToISOString,
+  isoStringToDateTimeLocalInput,
+} from "@/lib/client/datetime-local";
 
 export function describeRoundSummaryStatus(
   round: HumanInterviewRoundRecord,
@@ -90,10 +95,6 @@ export function canRescheduleHumanInterviewRound(
   return meeting === null || meeting.status === "scheduled";
 }
 
-export function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
 // 卡片底部「评分 / 反馈 / 取消原因」区块是否需要渲染。
 // 抽成 helper 避免在 JSX 里堆负条件被 no-negated-condition 标记。
 // Helper for the "extra details" footer visibility; keeps JSX free of negated
@@ -103,21 +104,11 @@ export function hasRoundDetails(round: HumanInterviewRoundRecord): boolean {
 }
 
 export function formatDateTime(iso: string): string {
-  // 用本地时区按 YYYY-MM-DD HH:mm 展示，避免国际化包负担。
-  // Local time-zone, no i18n lib.
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return formatDate(iso, "YYYY-MM-DD HH:mm");
 }
 
 export function toDateTimeLocalInputValue(iso: string | null): string {
-  if (!iso) {
-    return "";
-  }
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) {
-    return "";
-  }
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return isoStringToDateTimeLocalInput(iso);
 }
 
 export function addOneHourToIsoString(iso: string | null): string | null {
@@ -132,11 +123,11 @@ export function addOneHourToIsoString(iso: string | null): string | null {
 }
 
 export function addOneHourToDateTimeLocalInputValue(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const iso = dateTimeLocalInputToISOString(value);
+  if (!iso) {
     return "";
   }
-  return toDateTimeLocalInputValue(new Date(date.getTime() + 60 * 60 * 1000).toISOString());
+  return toDateTimeLocalInputValue(addOneHourToIsoString(iso));
 }
 
 // ── 新建轮次 dialog ──

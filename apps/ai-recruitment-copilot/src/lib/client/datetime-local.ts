@@ -1,7 +1,16 @@
+import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
+import { DISPLAY_TIME_ZONE } from "@arc/shared/utils/time";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const DATE_TIME_LOCAL_FORMAT = "YYYY-MM-DDTHH:mm";
+
 /**
- * Convert a browser `<input type="datetime-local">` value into an ISO instant.
- * The input string is timezone-less by design, so this must run on the client
- * where `new Date(value)` uses the user's local timezone.
+ * Convert a `<input type="datetime-local">` value into an ISO instant.
+ * The input is timezone-less wall-clock time; interpret it as China time.
  */
 export function dateTimeLocalInputToISOString(value: string): string | null {
   const trimmed = value.trim();
@@ -9,35 +18,21 @@ export function dateTimeLocalInputToISOString(value: string): string | null {
     return null;
   }
 
-  const date = new Date(trimmed);
-  if (Number.isNaN(date.getTime())) {
+  const date = dayjs.tz(trimmed, DATE_TIME_LOCAL_FORMAT, DISPLAY_TIME_ZONE);
+  if (!date.isValid()) {
     return null;
   }
 
   return date.toISOString();
 }
 
-function padDatePart(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
 export function isoStringToDateTimeLocalInput(value: string | null | undefined): string {
   if (!value) {
     return "";
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const date = dayjs(value);
+  if (!date.isValid()) {
     return "";
   }
-  return [
-    date.getFullYear(),
-    "-",
-    padDatePart(date.getMonth() + 1),
-    "-",
-    padDatePart(date.getDate()),
-    "T",
-    padDatePart(date.getHours()),
-    ":",
-    padDatePart(date.getMinutes()),
-  ].join("");
+  return date.tz(DISPLAY_TIME_ZONE).format(DATE_TIME_LOCAL_FORMAT);
 }

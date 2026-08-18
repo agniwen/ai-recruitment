@@ -14,6 +14,7 @@ import type { ResumeLibraryListRecord } from "@arc/shared/studio-resumes";
 import type { ResumePoolListRecord } from "@arc/shared/resume-pool";
 import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import { parseCsvParam } from "@arc/shared/csv";
+import { formatDate } from "@arc/shared/utils/time";
 import {
   DataGrid,
   badgeColumn,
@@ -106,10 +107,8 @@ function displayDate(value: string | null | undefined): string {
   if (!value) {
     return "";
   }
-  return new Intl.DateTimeFormat("zh-CN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  const formatted = formatDate(value);
+  return formatted === "—" ? "" : formatted;
 }
 
 const candidateExportColumns: readonly DataExportColumn<ResumeLibraryListRecord>[] = [

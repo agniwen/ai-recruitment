@@ -1,8 +1,10 @@
 "use client";
 
 import { IconSparkles, IconUser } from "@tabler/icons-react";
-import { addDays, format, startOfWeek } from "date-fns";
+import { TZDate } from "@date-fns/tz";
+import { addDays, startOfWeek } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { DISPLAY_TIME_ZONE, formatDate } from "@arc/shared/utils/time";
 import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { humanInterviewFormatMeta } from "@arc/db-schema/studio-interviews";
@@ -64,7 +66,7 @@ const CALENDAR_I18N = {
 } satisfies Partial<EventCalendarI18nConfig>;
 
 function initialRange(): EventCalendarDateRange {
-  const now = new Date();
+  const now = new TZDate(Date.now(), DISPLAY_TIME_ZONE);
   const start = startOfWeek(now, { weekStartsOn: 1 });
   return {
     end: addDays(start, 7),
@@ -106,7 +108,7 @@ function calendarEventTypeLabel(event: StudioCalendarEvent): string {
 function toCalendarEvent(event: StudioCalendarEvent): CalendarEvent<StudioCalendarEvent> {
   const title = calendarTitle(event);
   return {
-    ariaLabel: `${calendarEventTypeLabel(event)}，${title}，${format(new Date(event.startAt), "yyyy年M月d日 HH:mm")} 至 ${format(new Date(event.endAt), "yyyy年M月d日 HH:mm")}`,
+    ariaLabel: `${calendarEventTypeLabel(event)}，${title}，${formatDate(event.startAt, "YYYY年M月D日 HH:mm")} 至 ${formatDate(event.endAt, "YYYY年M月D日 HH:mm")}`,
     className: calendarEventSurfaceClassName(event),
     color: calendarEventColor(event),
     data: event,
@@ -151,8 +153,8 @@ function CalendarEventTooltip({ event }: { event: StudioCalendarEvent | undefine
         <div>形式：{humanInterviewFormatMeta[event.format].label}</div>
       ) : null}
       {event.kind === "human" && event.location ? <div>地点：{event.location}</div> : null}
-      <div>开始：{format(new Date(event.startAt), "yyyy年M月d日 HH:mm")}</div>
-      <div>结束：{format(new Date(event.endAt), "yyyy年M月d日 HH:mm")}</div>
+      <div>开始：{formatDate(event.startAt, "YYYY年M月D日 HH:mm")}</div>
+      <div>结束：{formatDate(event.endAt, "YYYY年M月D日 HH:mm")}</div>
     </div>
   );
 }
@@ -290,6 +292,7 @@ export function StudioCalendarPage({ slug }: { slug: string }) {
             events={events}
             eventTooltip
             i18n={CALENDAR_I18N}
+            timeZone={DISPLAY_TIME_ZONE}
             interactions={{ drag: false, resize: false, selectSlot: false }}
             loading={calendarQuery.isFetching}
             locale={zhCN}

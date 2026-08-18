@@ -38,6 +38,7 @@ import type {
   PublicHumanInterviewMeetingPreview,
 } from "@arc/shared/studio-pipeline-stages";
 import { cn } from "@arc/shared/utils";
+import { DISPLAY_TIME_ZONE } from "@arc/shared/utils/time";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,6 +120,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   hour: "2-digit",
   minute: "2-digit",
   month: "2-digit",
+  timeZone: DISPLAY_TIME_ZONE,
   year: "numeric",
 });
 

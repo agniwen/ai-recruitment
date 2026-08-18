@@ -2,14 +2,22 @@
  * 日期与时间工具。
  * Date / time helpers.
  *
- * 日期格式化基于 dayjs（全应用统一 `YY/MM/DD HH:mm`）；相对时间仍走原生 Intl
+ * 日期格式化基于 dayjs（全应用统一 `YY/MM/DD HH:mm`，固定中国时区）；相对时间仍走原生 Intl
  * 以保持 zh-CN 下"3 分钟前 / 昨天"等本地化文案。
- * Date formatting goes through dayjs (unified `YY/MM/DD HH:mm` across the
- * app); relative time still uses Intl.RelativeTimeFormat for the localized
+ * Date formatting goes through dayjs (unified `YY/MM/DD HH:mm` in Asia/Shanghai);
+ * relative time still uses Intl.RelativeTimeFormat for the localized
  * "3 minutes ago" phrasing.
  */
 
 import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+/** Product-facing display timezone. All rendered timestamps use this zone. */
+export const DISPLAY_TIME_ZONE = "Asia/Shanghai";
 
 /**
  * 默认 `formatDate` 格式：`YY/MM/DD HH:mm`。
@@ -60,7 +68,7 @@ export function formatDate(
   if (!date) {
     return "—";
   }
-  return dayjs(date).format(format);
+  return dayjs(date).tz(DISPLAY_TIME_ZONE).format(format);
 }
 
 /**

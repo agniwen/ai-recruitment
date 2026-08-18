@@ -6,6 +6,7 @@ import utc from "dayjs/plugin/utc";
 import { IconCalendar as CalendarIcon } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { cn } from "@arc/shared/utils";
+import { DISPLAY_TIME_ZONE } from "@arc/shared/utils/time";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -16,7 +17,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 // format strings instead of Intl.DateTimeFormatOptions for one stable format
 // across locales (no separator / order drift), always in Asia/Shanghai.
 export const DATE_TIME_DISPLAY_OPTIONS = "YY/MM/DD HH:mm";
-const DISPLAY_TIME_ZONE = "Asia/Shanghai";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);

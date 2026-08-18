@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useSyncExternalStoreWithSelector } from "use-sync-external-store/with-selector";
 import type { ComponentType, ReactElement, ReactNode, RefObject } from "react";
+import { DISPLAY_TIME_ZONE } from "@arc/shared/utils/time";
 import { mergeEventCalendarI18n } from "@/components/reui/event-calendar/event-calendar-i18n";
 import type { EventCalendarI18nConfig } from "@/components/reui/event-calendar/event-calendar-i18n";
 import {
@@ -271,7 +272,7 @@ function resolveSettings<TData>(
   } = options;
   return {
     ...rest,
-    timeZone: options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timeZone: options.timeZone ?? DISPLAY_TIME_ZONE,
     locale: options.locale,
     weekStartsOn: options.weekStartsOn ?? 0,
     // the resource view only makes sense with resources configured

@@ -12,8 +12,8 @@ afterEach(() => {
 });
 
 describe("dateTimeLocalInputToISOString", () => {
-  it("serializes a datetime-local value as the user's local instant", () => {
-    process.env.TZ = "Asia/Shanghai";
+  it("serializes a datetime-local value as a China-time instant", () => {
+    process.env.TZ = "America/Los_Angeles";
 
     expect(dateTimeLocalInputToISOString("2026-06-02T17:30")).toBe("2026-06-02T09:30:00.000Z");
   });
@@ -22,7 +22,9 @@ describe("dateTimeLocalInputToISOString", () => {
     expect(dateTimeLocalInputToISOString("")).toBeNull();
   });
 
-  it("formats an ISO instant for a datetime-local input in the browser timezone", () => {
+  it("formats an ISO instant for a datetime-local input in China time", () => {
+    process.env.TZ = "America/Los_Angeles";
+
     expect(isoStringToDateTimeLocalInput("2026-06-02T09:30:00.000Z")).toBe("2026-06-02T17:30");
   });
 

@@ -7,8 +7,8 @@ import type {
 import { scheduleEntryStatusMeta } from "@arc/db-schema/studio-interviews";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { format } from "date-fns";
 import { useState } from "react";
+import { formatDate } from "@arc/shared/utils/time";
 import type { ReactElement } from "react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import { fetchStudioAiCalendarEventPreview } from "@/lib/client/api/endpoints/st
 import { studioCalendarKeys } from "@/lib/client/api/query-keys";
 
 function formatDateTime(value: string | null): string {
-  return value ? format(new Date(value), "M月d日 HH:mm") : "未记录";
+  return value ? formatDate(value, "M月D日 HH:mm") : "未记录";
 }
 
 function formatDuration(durationSecs: number | null): string {

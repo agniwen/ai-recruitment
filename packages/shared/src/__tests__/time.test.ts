@@ -53,17 +53,23 @@ describe("formatDate", () => {
     expect(formatDate("nope")).toBe("—");
   });
 
-  it("formats a date as `YY/MM/DD HH:mm` by default", () => {
-    // 用本地时间断言：dayjs 用本地时区，避免硬编码 UTC offset。
-    // Assert against local-time output: dayjs uses local tz; compute the
-    // expected string with dayjs itself to stay tz-agnostic.
-    const out = formatDate("2026-04-27T15:30:00Z");
-    expect(out).toMatch(/^\d{2}\/\d{2}\/\d{2} \d{2}:\d{2}$/);
+  it("formats a date as China-time `YY/MM/DD HH:mm` by default", () => {
+    expect(formatDate("2026-04-27T15:30:00Z")).toBe("26/04/27 23:30");
   });
 
-  it("respects a custom dayjs format string", () => {
-    const out = formatDate("2026-04-27T10:00:00Z", "YYYY-MM-DD");
-    expect(out).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  it("keeps China time even when the runtime timezone is not Shanghai", () => {
+    const previous = process.env.TZ;
+    process.env.TZ = "America/Los_Angeles";
+    expect(formatDate("2026-06-02T09:30:00.000Z")).toBe("26/06/02 17:30");
+    if (previous === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = previous;
+    }
+  });
+
+  it("respects a custom dayjs format string in China time", () => {
+    expect(formatDate("2026-04-27T16:00:00Z", "YYYY-MM-DD")).toBe("2026-04-28");
   });
 });
 
@@ -72,9 +78,8 @@ describe("formatDateOnly", () => {
     expect(formatDateOnly(null)).toBe("—");
   });
 
-  it("formats date without time component", () => {
-    const out = formatDateOnly("2026-04-27T15:30:00Z");
-    expect(out).toMatch(/^\d{2}\/\d{2}\/\d{2}$/);
+  it("formats the China calendar date without the time component", () => {
+    expect(formatDateOnly("2026-04-27T16:00:00Z")).toBe("26/04/28");
   });
 });
 

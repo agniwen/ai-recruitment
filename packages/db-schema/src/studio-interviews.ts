@@ -647,6 +647,7 @@ export function getScheduleEntryDateValue(value: string | Date | null | undefine
     hour12: false,
     minute: "2-digit",
     month: "2-digit",
+    timeZone: "Asia/Shanghai",
     year: "numeric",
   });
 

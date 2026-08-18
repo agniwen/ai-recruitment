@@ -14,14 +14,11 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { OfferDraftInput } from "@arc/db-schema/studio-interviews";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import { formatDate as formatChinaDate } from "@arc/shared/utils/time";
 import { DatePicker } from "@/components/date-time-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-
-export function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
 
 // Toast 文案 helper：避免内联三元嵌套（mode + sendImmediately 两维组合）。
 // Save-success toast helper; flattens the nested ternary of mode × sendImmediately.
@@ -42,8 +39,7 @@ export function offerResponseLabel(value: "accepted" | "declined" | "counter"): 
 }
 
 export function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return formatChinaDate(iso, "YYYY-MM-DD");
 }
 
 export function formatIsoDateOnly(iso: string): string {
