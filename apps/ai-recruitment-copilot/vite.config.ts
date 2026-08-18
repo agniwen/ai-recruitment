@@ -18,7 +18,7 @@ const requireFromBullmq = createRequire(requireFromQueuePackage.resolve("bullmq/
 const tslibEsmEntry = requireFromBullmq.resolve("tslib/tslib.es6.mjs");
 const bullmqDependencyPathPattern =
   /[/\\]node_modules[/\\](?:\.pnpm[/\\])?bullmq@|[/\\]node_modules[/\\]bullmq[/\\]/;
-const buildTime = new Date().toISOString();
+const DEV_BUILD_TIME = "1970-01-01T00:00:00.000Z";
 const mastraStudioCssIsolation = (): Plugin => ({
   enforce: "pre",
   name: "arc-mastra-studio-css-isolation",
@@ -31,131 +31,135 @@ const mastraStudioCssIsolation = (): Plugin => ({
   },
 });
 
-export default defineConfig({
-  define: {
-    __ARC_BUILD_TIME__: JSON.stringify(buildTime),
-  },
-  envPrefix: ["NEXT_PUBLIC_"],
-  optimizeDeps: {
-    include: [
-      "@assistant-ui/react",
-      "@assistant-ui/react-lexical",
-      "@base-ui/react",
-      "@base-ui/react/**",
-      "@date-fns/tz",
-      // No package-root export; prebundle the deep paths assistant-ui uses.
-      "@lexical/react/LexicalComposer",
-      "@lexical/react/LexicalComposerContext",
-      "@lexical/react/LexicalContentEditable",
-      "@lexical/react/LexicalErrorBoundary",
-      "@lexical/react/LexicalHistoryPlugin",
-      "@lexical/react/LexicalPlainTextPlugin",
-      "@tanstack/react-form",
-      "@tanstack/react-query",
-      "@tanstack/react-router",
-      "@tanstack/react-router-ssr-query",
-      "@tanstack/react-store",
-      "@radix-ui/react-visually-hidden",
-      "better-auth/client/plugins",
-      "better-auth/react",
-      "clsx",
-      "cmdk",
-      "dayjs",
-      "lexical",
-      "react",
-      "react/compiler-runtime",
-      "react/jsx-runtime",
-      "react-day-picker",
-      "react-dom",
-      "react-dom/client",
-      "semver",
-      "sonner",
-      "tailwind-merge",
-      "zod",
-      "zustand",
-      "zustand/middleware",
-    ],
-  },
-  plugins: [
-    mastraStudioCssIsolation(),
-    {
-      enforce: "pre",
-      name: "arc-bullmq-tslib-esm",
-      resolveId(source, importer) {
-        if (source === "tslib" && importer && bullmqDependencyPathPattern.test(importer)) {
-          return tslibEsmEntry;
-        }
+export default defineConfig(({ command }) => {
+  const buildTime = command === "serve" ? DEV_BUILD_TIME : new Date().toISOString();
 
-        return null;
-      },
+  return {
+    define: {
+      __ARC_BUILD_TIME__: JSON.stringify(buildTime),
     },
-    tailwindcss(),
-    tanstackStart({
-      pages: [
-        {
-          path: "/",
-          prerender: { enabled: true, outputPath: "/index.html" },
-        },
+    envPrefix: ["NEXT_PUBLIC_"],
+    optimizeDeps: {
+      include: [
+        "@assistant-ui/react",
+        "@assistant-ui/react-lexical",
+        "@base-ui/react",
+        "@base-ui/react/**",
+        "@date-fns/tz",
+        // No package-root export; prebundle the deep paths assistant-ui uses.
+        "@lexical/react/LexicalComposer",
+        "@lexical/react/LexicalComposerContext",
+        "@lexical/react/LexicalContentEditable",
+        "@lexical/react/LexicalErrorBoundary",
+        "@lexical/react/LexicalHistoryPlugin",
+        "@lexical/react/LexicalPlainTextPlugin",
+        "@tanstack/react-form",
+        "@tanstack/react-query",
+        "@tanstack/react-router",
+        "@tanstack/react-router-ssr-query",
+        "@tanstack/react-store",
+        "@radix-ui/react-visually-hidden",
+        "better-auth/client/plugins",
+        "better-auth/react",
+        "clsx",
+        "cmdk",
+        "dayjs",
+        "lexical",
+        "react",
+        "react/compiler-runtime",
+        "react/jsx-runtime",
+        "react-day-picker",
+        "react-dom",
+        "react-dom/client",
+        "semver",
+        "sonner",
+        "tailwind-merge",
+        "zod",
+        "zustand",
+        "zustand/middleware",
       ],
-      prerender: {
-        autoStaticPathsDiscovery: false,
-        crawlLinks: false,
-        enabled: true,
-      },
-      router: {
-        // Ignore non-route artifacts under `src/routes` so colocated tests
-        // (or future helpers) never become pages. Defaults already skip names
-        // prefixed with `-`; this also drops `__tests__` / `__test__` dirs and
-        // `*.test.*` / `*.spec.*` files even without that prefix.
-        // See: https://tanstack.com/router/latest/docs/api/file-based-routing
-        routeFileIgnorePattern: "(__tests__|__test__|\\.test\\.|\\.spec\\.)",
-        routesDirectory: "routes",
-      },
-      server: {
-        build: {
-          inlineCss: true,
+    },
+    plugins: [
+      mastraStudioCssIsolation(),
+      {
+        enforce: "pre",
+        name: "arc-bullmq-tslib-esm",
+        resolveId(source, importer) {
+          if (source === "tslib" && importer && bullmqDependencyPathPattern.test(importer)) {
+            return tslibEsmEntry;
+          }
+
+          return null;
         },
       },
-      srcDirectory: "src",
-    }),
-    viteReact(),
-    babel({
-      presets: [reactCompilerPreset()],
-    }),
-    nitro({
-      routeRules: {
-        "/**": {
-          headers: {
-            "cache-control": "no-cache",
+      tailwindcss(),
+      tanstackStart({
+        pages: [
+          {
+            path: "/",
+            prerender: { enabled: true, outputPath: "/index.html" },
+          },
+        ],
+        prerender: {
+          autoStaticPathsDiscovery: false,
+          crawlLinks: false,
+          enabled: true,
+        },
+        router: {
+          // Ignore non-route artifacts under `src/routes` so colocated tests
+          // (or future helpers) never become pages. Defaults already skip names
+          // prefixed with `-`; this also drops `__tests__` / `__test__` dirs and
+          // `*.test.*` / `*.spec.*` files even without that prefix.
+          // See: https://tanstack.com/router/latest/docs/api/file-based-routing
+          routeFileIgnorePattern: "(__tests__|__test__|\\.test\\.|\\.spec\\.)",
+          routesDirectory: "routes",
+        },
+        server: {
+          build: {
+            inlineCss: true,
           },
         },
-        "/api/app-version": {
-          headers: {
-            "cache-control": "no-store",
+        srcDirectory: "src",
+      }),
+      viteReact(),
+      babel({
+        presets: [reactCompilerPreset()],
+      }),
+      nitro({
+        routeRules: {
+          "/**": {
+            headers: {
+              "cache-control": "no-cache",
+            },
+          },
+          "/api/app-version": {
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
+          "/assets/**": {
+            headers: {
+              "cache-control": "public, max-age=31536000, immutable",
+            },
           },
         },
-        "/assets/**": {
-          headers: {
-            "cache-control": "public, max-age=31536000, immutable",
-          },
-        },
-      },
-    }),
-  ],
-  preview: {
-    strictPort: process.env.TSS_PRERENDERING !== "true",
-  },
-  resolve: {
-    tsconfigPaths: true,
-  },
-  server: {
-    port: 3000,
-    strictPort: true,
-  },
-  ssr: {
-    // Playground UI subpath exports import package-owned CSS. Keep the package
-    // in Vite's SSR graph so dev SSR transforms those imports instead of
-    // handing them to Node's native ESM loader.
-    noExternal: [/^@mastra\/playground-ui(?:\/|$)/],
-  },
+      }),
+    ],
+    preview: {
+      strictPort: process.env.TSS_PRERENDERING !== "true",
+    },
+    resolve: {
+      tsconfigPaths: true,
+    },
+    server: {
+      port: 3000,
+      strictPort: true,
+    },
+    ssr: {
+      // Playground UI subpath exports import package-owned CSS. Keep the package
+      // in Vite's SSR graph so dev SSR transforms those imports instead of
+      // handing them to Node's native ESM loader.
+      noExternal: [/^@mastra\/playground-ui(?:\/|$)/],
+    },
+  };
 });

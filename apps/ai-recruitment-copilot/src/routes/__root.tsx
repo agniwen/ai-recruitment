@@ -23,6 +23,16 @@ import { ROOT_DOCUMENT_TITLE, documentTitleMeta } from "@/lib/start/document-tit
 const ROOT_DESCRIPTION =
   "面向招聘场景的 AI 协同工作台，覆盖简历筛选、模拟面试与候选人评估全流程。AI Recruitment Copilot — your end-to-end hiring workflow.";
 const ROOT_OG_IMAGE_URL = new URL("/og.png", env.NEXT_PUBLIC_BASE_URL).toString();
+const VITE_PRELOAD_RECOVERY_SCRIPT = `
+window.addEventListener("vite:preloadError", function(event) {
+  event.preventDefault();
+  var key = "arc:vite-preload-reload-at";
+  var now = Date.now();
+  var lastReloadAt = Number(window.sessionStorage.getItem(key) || "0");
+  if (now - lastReloadAt < 10000) return;
+  window.sessionStorage.setItem(key, String(now));
+  window.location.reload();
+});`;
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
@@ -33,6 +43,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       <body className="min-h-dvh antialiased">
         <OverlayScrollbarsBody />
         {children}
+        <script dangerouslySetInnerHTML={{ __html: VITE_PRELOAD_RECOVERY_SCRIPT }} />
         <Scripts />
       </body>
     </html>

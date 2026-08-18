@@ -8,7 +8,7 @@ AGENT_SCRIPT := src/agent.py
 .DEFAULT_GOAL := help
 
 .PHONY: help install web-install agent-install agent-download \
-        dev web-dev worker-dev worker-start worker-typecheck \
+        dev web-dev web-dev-fresh worker-dev worker-start worker-typecheck \
         agent-dev agent-console agent-start agent-shell \
         agent-deploy agent-update-secrets agent-clean clean
 
@@ -34,7 +34,10 @@ agent-download: ## 下载 Silero VAD + turn-detector 模型
 dev: ## 并行启动 TanStack Start + LiveKit agent worker + 简历解析 worker
 	@$(MAKE) -j3 web-dev agent-dev worker-dev
 
-web-dev: ## 清理缓存后启动 TanStack Start dev server
+web-dev: ## 复用缓存启动 TanStack Start dev server
+	pnpm --filter @arc/ai-recruitment-copilot dev
+
+web-dev-fresh: ## 仅在依赖预构建异常时清理缓存并强制启动
 	pnpm --filter @arc/ai-recruitment-copilot dev:fresh
 
 worker-dev: ## 仅启动简历异步解析 worker (dev 模式，热重载)
