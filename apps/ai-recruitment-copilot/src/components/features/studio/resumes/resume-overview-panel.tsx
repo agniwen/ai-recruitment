@@ -522,6 +522,7 @@ export function ResumeReviewStructuredView({
 
 interface OverviewIdentityDraft {
   age: string;
+  alias: string;
   candidateEmail: string;
   candidateName: string;
   candidatePhone: string;
@@ -530,6 +531,7 @@ interface OverviewIdentityDraft {
   jobDescriptionId: string;
   recommendationText: string;
   resumeEvaluationStatus: "fail" | "pass" | "unreviewed";
+  telegram: string;
   targetRole: string;
   workYears: string;
 }
@@ -539,6 +541,7 @@ function toOverviewIdentityDraft(detail: ResumeLibraryDetail): OverviewIdentityD
   const profile = detail.resumeProfile;
   return {
     age: profile?.age === null || profile?.age === undefined ? "" : String(profile.age),
+    alias: detail.closedMeta?.hiredDetails?.alias ?? "",
     // Prefer table columns; fall back to structured profile JSON.
     candidateEmail: detail.candidateEmail ?? profile?.email ?? "",
     candidateName: detail.candidateName || profile?.name || "",
@@ -549,6 +552,7 @@ function toOverviewIdentityDraft(detail: ResumeLibraryDetail): OverviewIdentityD
     recommendationText: detail.recommendationText ?? "",
     resumeEvaluationStatus: detail.resumeEvaluationStatus ?? "unreviewed",
     targetRole: detail.targetRole ?? "",
+    telegram: detail.closedMeta?.hiredDetails?.telegram ?? "",
     workYears:
       profile?.workYears === null || profile?.workYears === undefined
         ? ""
@@ -600,6 +604,7 @@ function ResumeOverviewCandidateInfoSection({
 
   // Match 简历库列表 card 编辑按钮：resumeLibrary:update（via canEdit）+ 解析 ready。
   const showEdit = Boolean(canEdit && slug && canEditResumeRecord(detail.resumeParseStatus));
+  const showHiredCandidateFields = detail.pipelineStage === "closed" && detail.outcome === "hired";
   const resumeEvaluation = describeResumeEvaluationStatus(detail.resumeEvaluationStatus);
   const displayName = detail.candidateName || detail.resumeProfile?.name || null;
   const displayEmail = detail.candidateEmail ?? detail.resumeProfile?.email ?? null;
@@ -699,6 +704,8 @@ function ResumeOverviewCandidateInfoSection({
           resumeEvaluationStatus: draft.resumeEvaluationStatus,
           targetRole: draft.targetRole.trim(),
           workYears,
+          ...(showHiredCandidateFields ? { alias: draft.alias.trim() } : {}),
+          ...(showHiredCandidateFields ? { telegram: draft.telegram.trim() } : {}),
         };
         await updateStudioResumeIdentity(slug, detail.id, payload);
         toast.success("候选人信息已保存");
@@ -915,6 +922,38 @@ function ResumeOverviewCandidateInfoSection({
               value={draft.candidatePhone}
             />
           </Field>
+          {showHiredCandidateFields ? (
+            <>
+              <Field>
+                <FieldLabel htmlFor="overview-telegram">TG 号</FieldLabel>
+                <Input
+                  className="h-8"
+                  disabled={saving}
+                  id="overview-telegram"
+                  maxLength={120}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, telegram: event.target.value }))
+                  }
+                  placeholder="例如 @username"
+                  value={draft.telegram}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="overview-alias">花名</FieldLabel>
+                <Input
+                  className="h-8"
+                  disabled={saving}
+                  id="overview-alias"
+                  maxLength={120}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, alias: event.target.value }))
+                  }
+                  placeholder="例如 花名"
+                  value={draft.alias}
+                />
+              </Field>
+            </>
+          ) : null}
           <Field className="col-span-full">
             <FieldLabel htmlFor="overview-recommendation-text">推荐语</FieldLabel>
             <Textarea
@@ -945,6 +984,12 @@ function ResumeOverviewCandidateInfoSection({
             valueClassName="font-medium"
           />
           <DataField label="用人组织" value={detail.hiringUnitName} />
+          {showHiredCandidateFields ? (
+            <>
+              <DataField label="TG 号" value={detail.closedMeta?.hiredDetails?.telegram ?? null} />
+              <DataField label="花名" value={detail.closedMeta?.hiredDetails?.alias ?? null} />
+            </>
+          ) : null}
           <DataField
             label="简历来源"
             value={describeResumeRecruitmentSource(

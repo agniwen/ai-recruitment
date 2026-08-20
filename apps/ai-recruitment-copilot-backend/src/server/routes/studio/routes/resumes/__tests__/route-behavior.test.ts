@@ -998,6 +998,88 @@ describe("resumeLibraryRouter behavior", () => {
     });
   });
 
+  it("updates onboarded candidate fields without dropping existing closed metadata", async () => {
+    const hiredRecord = {
+      ...EXISTING_RECORD,
+      closedMeta: {
+        feedbackToCandidate: "感谢参与",
+        hiredDetails: { joiningDepartment: "技术部", joiningPosition: "工程师" },
+        previousStage: "offer",
+      },
+      outcome: "hired",
+      pipelineStage: "closed",
+    };
+    mocks.loadResumeDetail
+      .mockResolvedValueOnce(hiredRecord)
+      .mockResolvedValueOnce({ ...hiredRecord });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: null,
+        alias: "小王",
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: "unit-1",
+        jobDescriptionId: "jd-old",
+        recommendationText: "",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        telegram: "@candidate",
+        workYears: null,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updatePatches).toContainEqual(
+      expect.objectContaining({
+        closedMeta: {
+          feedbackToCandidate: "感谢参与",
+          hiredDetails: {
+            alias: "小王",
+            joiningDepartment: "技术部",
+            joiningPosition: "工程师",
+            telegram: "@candidate",
+          },
+          previousStage: "offer",
+        },
+      }),
+    );
+  });
+
+  it("rejects onboarded candidate fields before the hired closed stage", async () => {
+    mocks.loadResumeDetail.mockResolvedValue(EXISTING_RECORD);
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/identity`, {
+      body: JSON.stringify({
+        age: null,
+        alias: "小王",
+        candidateEmail: "",
+        candidateName: "候选人",
+        candidatePhone: "",
+        gender: "",
+        hiringUnitId: "unit-1",
+        jobDescriptionId: "jd-old",
+        recommendationText: "",
+        resumeEvaluationStatus: "pass",
+        targetRole: "",
+        telegram: "@candidate",
+        workYears: null,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "候选人已到岗后才能编辑 TG 号和花名。",
+    });
+    expect(mocks.updatePatches).toHaveLength(0);
+  });
+
   it("rolls back a stale quick-edit submission when another reviewer passes first", async () => {
     mocks.loadResumeDetail.mockResolvedValue({
       ...EXISTING_RECORD,

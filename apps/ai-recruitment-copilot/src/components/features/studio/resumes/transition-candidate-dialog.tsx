@@ -100,6 +100,8 @@ function CloseDialog({
   const [joiningDate, setJoiningDate] = useState("");
   const [joiningDepartment, setJoiningDepartment] = useState("");
   const [joiningPosition, setJoiningPosition] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [alias, setAlias] = useState("");
   // 淘汰细节
   const [category, setCategory] = useState<CloseCategory | "">("");
   const [revisitAfter, setRevisitAfter] = useState("");
@@ -117,6 +119,8 @@ function CloseDialog({
     setJoiningDate("");
     setJoiningDepartment("");
     setJoiningPosition("");
+    setTelegram("");
+    setAlias("");
     setCategory("");
     setRevisitAfter("");
   }, [open, initialOutcome]);
@@ -142,9 +146,11 @@ function CloseDialog({
         };
         if (outcome === "hired") {
           closedMeta.hiredDetails = {
+            alias: alias.trim() || null,
             joiningDate: joiningDate || null,
             joiningDepartment: joiningDepartment.trim() || null,
             joiningPosition: joiningPosition.trim() || null,
+            telegram: telegram.trim() || null,
           };
         }
         if (outcome === "rejected") {
@@ -235,6 +241,30 @@ function CloseDialog({
                     onChange={(e) => setJoiningPosition(e.target.value)}
                     placeholder="例如 高级前端工程师"
                     value={joiningPosition}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs" htmlFor="hired-telegram">
+                    TG 号（可选）
+                  </Label>
+                  <Input
+                    id="hired-telegram"
+                    maxLength={120}
+                    onChange={(e) => setTelegram(e.target.value)}
+                    placeholder="例如 @username"
+                    value={telegram}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs" htmlFor="hired-alias">
+                    花名（可选）
+                  </Label>
+                  <Input
+                    id="hired-alias"
+                    maxLength={120}
+                    onChange={(e) => setAlias(e.target.value)}
+                    placeholder="例如 花名"
+                    value={alias}
                   />
                 </div>
               </CardContent>

@@ -165,6 +165,7 @@ export function parseResumeLibraryEditFormInput(formData: FormData) {
 
 interface CandidateInformationActivityDetail {
   age: number | null;
+  alias?: string | null;
   candidateEmail: string | null;
   candidateName: string | null;
   candidatePhone: string | null;
@@ -175,6 +176,7 @@ interface CandidateInformationActivityDetail {
   jobDescriptionName: string | null;
   recommendationText: string | null;
   resumeEvaluationStatus: "fail" | "pass" | null;
+  telegram?: string | null;
   targetRole: string | null;
   workYears: number | null;
 }
@@ -529,6 +531,11 @@ export const resumeLibraryRouter = factory
       }
 
       const input = c.req.valid("json");
+      const hasHiredCandidateFields = input.alias !== undefined || input.telegram !== undefined;
+      const isHiredCandidate = existing.pipelineStage === "closed" && existing.outcome === "hired";
+      if (hasHiredCandidateFields && !isHiredCandidate) {
+        return c.json({ error: "候选人已到岗后才能编辑 TG 号和花名。" }, 400);
+      }
       if (existing.jobDescriptionId && !input.jobDescriptionId) {
         return c.json({ error: "请选择关联在招岗位。" }, 400);
       }
@@ -596,7 +603,18 @@ export const resumeLibraryRouter = factory
         jobDescriptionChanged || input.resumeEvaluationStatus === "unreviewed"
           ? null
           : input.resumeEvaluationStatus;
+      const nextClosedMeta = hasHiredCandidateFields
+        ? {
+            ...existing.closedMeta,
+            hiredDetails: {
+              ...existing.closedMeta?.hiredDetails,
+              ...(input.alias === undefined ? {} : { alias: input.alias?.trim() || null }),
+              ...(input.telegram === undefined ? {} : { telegram: input.telegram?.trim() || null }),
+            },
+          }
+        : existing.closedMeta;
       const update = {
+        ...(hasHiredCandidateFields ? { closedMeta: nextClosedMeta } : {}),
         candidateEmail: input.candidateEmail || null,
         candidateName: input.candidateName,
         candidatePhone: input.candidatePhone || null,
@@ -649,6 +667,7 @@ export const resumeLibraryRouter = factory
           action: "candidate_information_updated",
           detail: buildCandidateInformationActivityDetail({
             age: input.age,
+            ...(input.alias === undefined ? {} : { alias: input.alias || null }),
             candidateEmail: input.candidateEmail || null,
             candidateName: input.candidateName,
             candidatePhone: input.candidatePhone || null,
@@ -661,6 +680,7 @@ export const resumeLibraryRouter = factory
               : existing.jobDescriptionName,
             recommendationText: input.recommendationText || null,
             resumeEvaluationStatus: nextEvaluationStatus,
+            ...(input.telegram === undefined ? {} : { telegram: input.telegram || null }),
             targetRole: nextTargetRole,
             workYears: input.workYears,
           }),

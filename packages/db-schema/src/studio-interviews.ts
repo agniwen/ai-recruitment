@@ -399,9 +399,11 @@ export const closeCategoryMeta: Record<CloseCategory, { label: string }> = {
 // 到岗专属细节（outcome=hired 时填）。
 // Onboarded-only details; recorded when outcome=hired.
 export const closedHiredDetailsSchema = z.object({
+  alias: z.string().trim().max(120, "花名不能超过 120 个字符").nullable().optional(),
   joiningDate: z.string().trim().nullable().optional(),
   joiningDepartment: z.string().trim().max(200).nullable().optional(),
   joiningPosition: z.string().trim().max(200).nullable().optional(),
+  telegram: z.string().trim().max(120, "TG 号不能超过 120 个字符").nullable().optional(),
 });
 export type ClosedHiredDetails = z.infer<typeof closedHiredDetailsSchema>;
 

@@ -93,6 +93,25 @@ describe("resumeIdentityUpdateSchema", () => {
     }
   });
 
+  it("accepts optional onboarded candidate fields", () => {
+    const result = resumeIdentityUpdateSchema.safeParse({
+      ...validIdentity,
+      alias: "小王",
+      telegram: "@candidate",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("limits onboarded candidate fields", () => {
+    expect(
+      resumeIdentityUpdateSchema.safeParse({ ...validIdentity, alias: "a".repeat(121) }).success,
+    ).toBe(false);
+    expect(
+      resumeIdentityUpdateSchema.safeParse({ ...validIdentity, telegram: "a".repeat(121) }).success,
+    ).toBe(false);
+  });
+
   it("requires an integer age when age is provided", () => {
     expect(resumeIdentityUpdateSchema.safeParse({ ...validIdentity, age: 31.5 }).success).toBe(
       false,

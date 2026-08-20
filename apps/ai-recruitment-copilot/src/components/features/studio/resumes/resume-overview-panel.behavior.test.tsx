@@ -96,6 +96,20 @@ function makeDetail(): ResumeLibraryDetail {
   } as unknown as ResumeLibraryDetail;
 }
 
+function makeHiredDetail(): ResumeLibraryDetail {
+  return {
+    ...makeDetail(),
+    closedMeta: {
+      hiredDetails: {
+        alias: "小王",
+        telegram: "@candidate",
+      },
+    },
+    outcome: "hired",
+    pipelineStage: "closed",
+  } as unknown as ResumeLibraryDetail;
+}
+
 function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
   const prototype =
     input instanceof HTMLTextAreaElement
@@ -200,6 +214,76 @@ it("submits editable hiring unit and target role from quick edit with a number a
       );
     });
   });
+
+  act(() => root.unmount());
+  queryClient.clear();
+});
+
+it("shows and edits TG and alias fields only after hired", async () => {
+  const detail = makeHiredDetail();
+  apiMocks.fetchSelectableHiringUnits.mockResolvedValue([{ id: "unit-1", name: "原用人组织" }]);
+  apiMocks.updateStudioResumeIdentity.mockResolvedValue(detail);
+
+  const { container, queryClient, root } = renderOverview(detail);
+
+  expect(container.textContent).toContain("@candidate");
+  expect(container.textContent).toContain("小王");
+
+  act(() => {
+    container.querySelector<HTMLButtonElement>('[aria-label="编辑候选人信息"]')?.click();
+  });
+
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(
+        container.querySelector('#overview-hiring-unit option[value="unit-1"]'),
+      ).not.toBeNull();
+    });
+  });
+
+  const telegram = container.querySelector<HTMLInputElement>("#overview-telegram");
+  const alias = container.querySelector<HTMLInputElement>("#overview-alias");
+  expect(telegram?.value).toBe("@candidate");
+  expect(alias?.value).toBe("小王");
+
+  act(() => {
+    if (telegram) {
+      setInputValue(telegram, "@new-candidate");
+    }
+    if (alias) {
+      setInputValue(alias, "新花名");
+    }
+  });
+  act(() => {
+    container.querySelector<HTMLButtonElement>('[aria-label="保存"]')?.click();
+  });
+
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(apiMocks.updateStudioResumeIdentity).toHaveBeenCalledWith(
+        "workspace",
+        "resume-1",
+        expect.objectContaining({ alias: "新花名", telegram: "@new-candidate" }),
+      );
+    });
+  });
+
+  act(() => root.unmount());
+  queryClient.clear();
+});
+
+it("does not show hired fields before the hired closed stage", () => {
+  const detail = {
+    ...makeHiredDetail(),
+    outcome: "in_pipeline",
+    pipelineStage: "offer",
+  } as unknown as ResumeLibraryDetail;
+  const { container, queryClient, root } = renderOverview(detail);
+
+  expect(container.textContent).not.toContain("@candidate");
+  expect(container.textContent).not.toContain("小王");
+  expect(container.querySelector("#overview-telegram")).toBeNull();
+  expect(container.querySelector("#overview-alias")).toBeNull();
 
   act(() => root.unmount());
   queryClient.clear();

@@ -683,6 +683,7 @@ export type ResumeLibraryFormValues = z.infer<typeof resumeLibraryFormSchema>;
  */
 export const resumeIdentityUpdateSchema = z.object({
   age: z.number().int().min(0).max(120).nullable(),
+  alias: z.string().trim().max(120, "花名不能超过 120 个字符").nullable().optional(),
   candidateEmail: z
     .string()
     .trim()
@@ -702,6 +703,7 @@ export const resumeIdentityUpdateSchema = z.object({
   recommendationText: z.string().trim().max(2000, "推荐语不能超过 2000 字"),
   resumeEvaluationStatus: resumeEvaluationStatusFormValueSchema,
   targetRole: z.string().trim().max(120, "目标岗位不能超过 120 个字符"),
+  telegram: z.string().trim().max(120, "TG 号不能超过 120 个字符").nullable().optional(),
   workYears: z.number().min(0).max(80).nullable(),
 });
 
