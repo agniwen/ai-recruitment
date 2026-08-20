@@ -20,6 +20,7 @@ import {
   ensureDefaultRecruitingGroupForWorkspace,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/workspace/dao";
 import { ac, roles } from "@arc/shared/permissions";
+import { optionalUserTelegramSchema } from "@arc/shared/user-profile";
 import { db } from "./db";
 import * as schema from "@arc/db-schema/schema";
 
@@ -249,6 +250,23 @@ export const auth = betterAuth({
           } catch (error) {
             console.warn("[auth] failed to stamp user.lastActiveAt", error);
           }
+        },
+      },
+    },
+    user: {
+      update: {
+        // oxlint-disable-next-line require-await -- hook contract requires async
+        async before(updatedUser) {
+          if (!("telegram" in updatedUser)) {
+            return;
+          }
+          const result = optionalUserTelegramSchema.safeParse(updatedUser.telegram);
+          if (!result.success) {
+            throw new APIError("BAD_REQUEST", {
+              message: result.error.issues[0]?.message ?? "TG 号格式无效。",
+            });
+          }
+          return { data: { ...updatedUser, telegram: result.data } };
         },
       },
     },
@@ -492,6 +510,10 @@ export const auth = betterAuth({
       },
       feishuTenantName: {
         input: false,
+        required: false,
+        type: "string",
+      },
+      telegram: {
         required: false,
         type: "string",
       },

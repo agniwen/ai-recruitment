@@ -173,6 +173,7 @@ export const user = pgTable("user", {
   name: text("name").notNull(),
   remark: text("remark"),
   role: text("role").default("user").notNull(),
+  telegram: text("telegram"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())

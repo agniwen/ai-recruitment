@@ -53,6 +53,11 @@ export interface WorkspaceMemberRow {
   image: string | null;
 }
 
+export interface WorkspaceMemberProfileRow {
+  telegram: string | null;
+  userId: string;
+}
+
 export async function listWorkspaceMembers(organizationId: string): Promise<WorkspaceMemberRow[]> {
   const rows = await db
     .select({
@@ -75,6 +80,16 @@ export async function listWorkspaceMembers(organizationId: string): Promise<Work
   }));
 }
 
+export function listWorkspaceMemberProfiles(
+  organizationId: string,
+): Promise<WorkspaceMemberProfileRow[]> {
+  return db
+    .select({ telegram: user.telegram, userId: user.id })
+    .from(member)
+    .innerJoin(user, eq(member.userId, user.id))
+    .where(eq(member.organizationId, organizationId));
+}
+
 export async function updateWorkspaceMemberInterviewer({
   isInterviewer,
   organizationId,
@@ -92,18 +107,20 @@ export async function updateWorkspaceMemberInterviewer({
   return rows.length > 0 ? "updated" : "missing";
 }
 
-export async function updateWorkspaceMemberName({
+export async function updateWorkspaceMemberProfile({
   name,
   organizationId,
+  telegram,
   userId,
 }: {
   name: string;
   organizationId: string;
+  telegram: string | null;
   userId: string;
-}): Promise<{ name: string } | null> {
+}): Promise<{ name: string; telegram: string | null } | null> {
   const [updated] = await db
     .update(user)
-    .set({ name, updatedAt: new Date() })
+    .set({ name, telegram, updatedAt: new Date() })
     .where(
       and(
         eq(user.id, userId),
@@ -115,7 +132,7 @@ export async function updateWorkspaceMemberName({
         ),
       ),
     )
-    .returning({ name: user.name });
+    .returning({ name: user.name, telegram: user.telegram });
   return updated ?? null;
 }
 

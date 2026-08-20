@@ -2,16 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import { buildMemberActionMenu } from "./member-actions";
 
 describe("buildMemberActionMenu", () => {
-  it("shows rename only with member update permission", () => {
-    const [rename, remove] = buildMemberActionMenu({
+  it("shows profile editing only with member update permission", () => {
+    const [editProfile, remove] = buildMemberActionMenu({
       canDelete: false,
       canUpdate: true,
-      onEditName: vi.fn(),
+      onEditProfile: vi.fn(),
       onRemove: vi.fn(),
     });
 
-    expect(rename?.label).toBe("修改用户名称");
-    expect(rename?.show?.({} as never)).toBe(true);
+    expect(editProfile?.label).toBe("编辑成员资料");
+    expect(editProfile?.show?.({} as never)).toBe(true);
     expect(remove?.show?.({} as never)).toBe(false);
   });
 });

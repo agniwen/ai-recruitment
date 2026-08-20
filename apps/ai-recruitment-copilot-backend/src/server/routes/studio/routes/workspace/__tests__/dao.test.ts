@@ -16,7 +16,7 @@ import {
   listRecruitingGroupBoard,
   UNGROUPED_RECRUITING_GROUP_ID,
   updateRecruitingGroupHiringUnits,
-  updateWorkspaceMemberName,
+  updateWorkspaceMemberProfile,
 } from "../dao";
 
 const ORG = "test_workspace_groups_org";
@@ -189,23 +189,29 @@ describe("workspace recruiting group dao", () => {
     expect(groups[1]?.members).toEqual([expect.objectContaining({ role: null, userId: MEMBER })]);
   }, 30_000);
 
-  it("updates names only for users who belong to the workspace", async () => {
-    const updated = await updateWorkspaceMemberName({
+  it("updates profiles only for users who belong to the workspace", async () => {
+    const updated = await updateWorkspaceMemberProfile({
       name: "新的成员名称",
       organizationId: ORG,
+      telegram: "@member",
       userId: MEMBER,
     });
-    const missing = await updateWorkspaceMemberName({
+    const missing = await updateWorkspaceMemberProfile({
       name: "不能保存的名称",
       organizationId: ORG,
+      telegram: "@missing",
       userId: "not_a_workspace_member",
     });
 
-    const [stored] = await db.select({ name: user.name }).from(user).where(eq(user.id, MEMBER));
+    const [stored] = await db
+      .select({ name: user.name, telegram: user.telegram })
+      .from(user)
+      .where(eq(user.id, MEMBER));
 
-    expect(updated).toEqual({ name: "新的成员名称" });
+    expect(updated).toEqual({ name: "新的成员名称", telegram: "@member" });
     expect(missing).toBeNull();
     expect(stored?.name).toBe("新的成员名称");
+    expect(stored?.telegram).toBe("@member");
   }, 30_000);
 
   it("stores and returns hiring units managed by a recruiting group", async () => {

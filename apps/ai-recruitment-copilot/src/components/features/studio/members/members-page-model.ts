@@ -45,8 +45,21 @@ export interface MemberRow {
   image: string | null;
   isInterviewer: boolean;
   role: string;
+  telegram: string | null;
   createdAt: string | Date;
   lastActiveAt: string | null;
+}
+
+export function filterWorkspaceMembers(rows: readonly MemberRow[], search: string): MemberRow[] {
+  const normalizedSearch = search.trim().toLowerCase();
+  if (!normalizedSearch) {
+    return [...rows];
+  }
+  return rows.filter((row) =>
+    [row.email, row.name, row.telegram ?? ""].some((value) =>
+      value.toLowerCase().includes(normalizedSearch),
+    ),
+  );
 }
 
 export interface DynamicWorkspaceRole {

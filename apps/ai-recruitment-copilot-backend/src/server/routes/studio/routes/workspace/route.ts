@@ -10,13 +10,14 @@ import {
   findRecruitingGroupByName,
   listRecruitingGroupBoard,
   listWorkspaceMemberLastActives,
+  listWorkspaceMemberProfiles,
   listWorkspaceMembers,
   loadMyResumeActivity,
   removeRecruitingGroupMember,
   updateRecruitingGroupMemberRole,
   updateRecruitingGroupHiringUnits,
   updateWorkspaceMemberInterviewer,
-  updateWorkspaceMemberName,
+  updateWorkspaceMemberProfile,
 } from "./dao";
 import { inviteLinksRouter } from "./routes/invite-links/route";
 import {
@@ -25,7 +26,7 @@ import {
   recruitingGroupHiringUnitsInputSchema,
   recruitingGroupInputSchema,
   memberInterviewerInputSchema,
-  memberNameInputSchema,
+  memberProfileInputSchema,
   workspaceUpdateSchema,
 } from "./schema";
 
@@ -73,6 +74,14 @@ export const workspaceRouter = factory
     const records = await listWorkspaceMembers(activeOrg.id);
     return c.json({ records }, 200);
   })
+  .get("/members/profiles", requirePermission("member", "update"), async (c) => {
+    const { activeOrg } = c.var;
+    if (!activeOrg) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const records = await listWorkspaceMemberProfiles(activeOrg.id);
+    return c.json({ records }, 200);
+  })
   .patch(
     "/members/:userId/interviewer",
     requirePermission("member", "update"),
@@ -94,17 +103,19 @@ export const workspaceRouter = factory
     },
   )
   .patch(
-    "/members/:userId/name",
+    "/members/:userId/profile",
     requirePermission("member", "update"),
-    zValidator("json", memberNameInputSchema, jsonValidatorError("用户名称无效。")),
+    zValidator("json", memberProfileInputSchema, jsonValidatorError("成员资料无效。")),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
         return c.json({ message: "Unauthorized" }, 401);
       }
-      const updated = await updateWorkspaceMemberName({
-        name: c.req.valid("json").name,
+      const input = c.req.valid("json");
+      const updated = await updateWorkspaceMemberProfile({
+        name: input.name,
         organizationId: activeOrg.id,
+        telegram: input.telegram,
         userId: c.req.param("userId"),
       });
       if (!updated) {

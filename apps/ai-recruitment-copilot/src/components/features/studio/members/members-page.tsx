@@ -57,14 +57,16 @@ import {
 } from "@/components/features/studio/members/role-display";
 import type { WorkspaceRole } from "@/components/features/studio/members/role-display";
 import { WorkspaceSettingsDialog } from "@/components/features/studio/members/workspace-settings-dialog";
-import { EditMemberNameDialog } from "@/components/features/studio/members/edit-member-name-dialog";
+import { EditMemberProfileDialog } from "@/components/features/studio/members/edit-member-profile-dialog";
 import { buildMemberActionMenu } from "@/components/features/studio/members/member-actions";
+import { useWorkspaceMemberProfileControl } from "@/components/features/studio/members/member-profile-control";
 
 import {
   DEFAULT_PAGE_SIZE,
   buildAssignableWorkspaceRoles,
   buildWorkspaceManagementSearch,
   canEditMemberWorkspaceRole,
+  filterWorkspaceMembers,
   getWorkspaceRoleBadgeVariant,
   parseWorkspaceManagementTab,
   useDynamicWorkspaceRoles,
@@ -114,7 +116,7 @@ export function MembersManagementPage() {
   const [groupNameDrafts, setGroupNameDrafts] = useState<Record<string, string>>({});
   const [newGroupName, setNewGroupName] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
-  const [editNameMember, setEditNameMember] = useState<MemberRow | null>(null);
+  const [editProfileMember, setEditProfileMember] = useState<MemberRow | null>(null);
 
   // 「最近活跃」按 userId 索引：服务端取 COALESCE(MAX(session.updatedAt),
   // user.lastActiveAt)——前者给当前活跃 session 5 分钟级的滚动更新，后者
@@ -190,6 +192,9 @@ export function MembersManagementPage() {
   const { data: dynamicWorkspaceRoles = [] } = useDynamicWorkspaceRoles(workspaceId, canUpdate);
   const { interviewerColumn, isInterviewerByUserId } =
     useWorkspaceMemberInterviewerControl(canUpdate);
+  const { memberProfilesReady, profileByUserId, refetchMemberProfiles, telegramColumn } =
+    useWorkspaceMemberProfileControl(canUpdate);
+  const searchSubject = canUpdate && memberProfilesReady ? "邮箱、姓名或 TG 号" : "邮箱或姓名";
 
   function handleTabChange(value: string) {
     const tab = parseWorkspaceManagementTab(value);
@@ -203,9 +208,6 @@ export function MembersManagementPage() {
   // 当前用户在这个 org 的角色——决定 Select 给出哪些可选项 + 哪些行只读。
   // 服务端硬约束已经在 beforeUpdateMemberRole hook 里执行；这里 UI 同步
   // 同一套规则给出即时反馈，并隐藏不可达的选项。
-  // Current user's role inside this org — drives which options the Select
-  // shows and which rows render as read-only. The server-side hook is the
-  // real boundary; this is the matching UX.
   const currentMemberRole = workspaceMemberRole;
   const assignableRoles = useMemo<readonly string[]>(
     () => buildAssignableWorkspaceRoles(currentMemberRole, dynamicWorkspaceRoles),
@@ -222,6 +224,7 @@ export function MembersManagementPage() {
       const { user } = m as {
         user?: { email?: string; name?: string; image?: string | null };
       };
+      const memberProfile = profileByUserId.get(m.userId);
       return {
         createdAt: m.createdAt as string | Date,
         email: user?.email ?? "—",
@@ -231,22 +234,16 @@ export function MembersManagementPage() {
         lastActiveAt: lastActiveMap[m.userId] ?? null,
         name: user?.name ?? user?.email ?? "—",
         role: m.role,
+        telegram: memberProfile?.telegram ?? null,
         userId: m.userId,
       };
     });
-  }, [org?.members, isInterviewerByUserId, lastActiveMap]);
-  const normalizedMemberSearch = memberSearch.trim().toLowerCase();
-  const hasMemberSearch = normalizedMemberSearch.length > 0;
-  const filteredRows = useMemo(() => {
-    if (!hasMemberSearch) {
-      return allRows;
-    }
-    return allRows.filter((row) => {
-      const email = row.email.toLowerCase();
-      const name = row.name.toLowerCase();
-      return email.includes(normalizedMemberSearch) || name.includes(normalizedMemberSearch);
-    });
-  }, [allRows, hasMemberSearch, normalizedMemberSearch]);
+  }, [org?.members, isInterviewerByUserId, lastActiveMap, profileByUserId]);
+  const hasMemberSearch = memberSearch.trim().length > 0;
+  const filteredRows = useMemo(
+    () => filterWorkspaceMembers(allRows, memberSearch),
+    [allRows, memberSearch],
+  );
 
   useEffect(() => {
     setGroupNameDrafts((current) => {
@@ -565,6 +562,7 @@ export function MembersManagementPage() {
         size: 150,
         title: "工作区角色",
       }),
+      ...(telegramColumn ? [telegramColumn] : []),
       interviewerColumn,
       customColumn<MemberRow>({
         cell: (r) => (
@@ -590,8 +588,8 @@ export function MembersManagementPage() {
       actionsColumn<MemberRow>({
         menu: buildMemberActionMenu({
           canDelete,
-          canUpdate,
-          onEditName: setEditNameMember,
+          canUpdate: canUpdate && memberProfilesReady,
+          onEditProfile: setEditProfileMember,
           onRemove: removeMember,
         }),
       }),
@@ -603,8 +601,10 @@ export function MembersManagementPage() {
       canUpdate,
       currentMemberRole,
       interviewerColumn,
+      memberProfilesReady,
       pending,
       session?.user?.id,
+      telegramColumn,
     ],
   );
 
@@ -628,10 +628,10 @@ export function MembersManagementPage() {
           </span>
         }
       />
-      <EditMemberNameDialog
-        member={editNameMember}
-        onOpenChange={(open) => !open && setEditNameMember(null)}
-        onUpdated={refetch}
+      <EditMemberProfileDialog
+        member={editProfileMember}
+        onOpenChange={(open) => !open && setEditProfileMember(null)}
+        onUpdated={() => Promise.all([refetch(), refetchMemberProfiles()])}
       />
 
       <Tabs className="space-y-4" onValueChange={handleTabChange} value={activeTab}>
@@ -653,7 +653,7 @@ export function MembersManagementPage() {
                   <EmptyTitle>{hasMemberSearch ? "没有匹配的成员" : "暂无成员"}</EmptyTitle>
                   <EmptyDescription>
                     {hasMemberSearch
-                      ? "调整邮箱或姓名关键词后重试。"
+                      ? `调整${searchSubject}关键词后重试。`
                       : "邀请同事加入这个工作区，再到招聘组看板里分配组内身份。"}
                   </EmptyDescription>
                 </EmptyHeader>
@@ -680,7 +680,7 @@ export function MembersManagementPage() {
               {
                 key: "search",
                 minWidth: "20rem",
-                placeholder: "搜索邮箱或姓名",
+                placeholder: `搜索${searchSubject}`,
                 type: "search",
               },
             ]}

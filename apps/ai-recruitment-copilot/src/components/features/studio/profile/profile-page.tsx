@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateOnly } from "@arc/shared/utils/time";
+import { USER_TELEGRAM_MAX_LENGTH } from "@arc/shared/user-profile";
 import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { authClient } from "@/lib/client/auth-client";
 import { rpcFetch } from "@/lib/client/api";
@@ -31,6 +32,22 @@ import { cn } from "@arc/shared/utils";
 const WHITESPACE_REGEX = /\s+/u;
 const PROFILE_NAME_MAX_LENGTH = 120;
 const AUTOSAVE_DEBOUNCE_MS = 1000;
+
+interface ProfileDraft {
+  name: string;
+  telegram: string;
+}
+
+function normalizeProfileDraft(profile: ProfileDraft): ProfileDraft {
+  return {
+    name: profile.name.trim(),
+    telegram: profile.telegram.trim(),
+  };
+}
+
+function profilesMatch(left: ProfileDraft, right: ProfileDraft): boolean {
+  return left.name === right.name && left.telegram === right.telegram;
+}
 
 const ROLE_BADGE_VARIANT: Record<WorkspaceRole, "default" | "secondary" | "outline"> = {
   admin: "default",
@@ -237,34 +254,34 @@ export function ProfilePage() {
   const user = session?.user;
   const organizations = listOrganizations ?? [];
 
-  const [name, setName] = useState("");
+  const [profile, setProfile] = useState<ProfileDraft>({ name: "", telegram: "" });
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const lastSavedNameRef = useRef("");
-  const latestNameRef = useRef("");
+  const lastSavedProfileRef = useRef<ProfileDraft>({ name: "", telegram: "" });
+  const latestProfileRef = useRef<ProfileDraft>({ name: "", telegram: "" });
   const requestSeqRef = useRef(0);
   const mountedRef = useRef(true);
   const savedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const next = user?.name ?? "";
-    setName(next);
-    lastSavedNameRef.current = next;
-    latestNameRef.current = next;
+    const next = { name: user?.name ?? "", telegram: user?.telegram ?? "" };
+    setProfile(next);
+    lastSavedProfileRef.current = next;
+    latestProfileRef.current = next;
     setSaveStatus("idle");
-  }, [user?.name]);
+  }, [user?.name, user?.telegram]);
 
   useEffect(() => {
-    latestNameRef.current = name;
-  }, [name]);
+    latestProfileRef.current = profile;
+  }, [profile]);
 
   const performSave = useCallback(async () => {
-    const trimmed = latestNameRef.current.trim();
-    if (!trimmed) {
+    const normalized = normalizeProfileDraft(latestProfileRef.current);
+    if (!normalized.name) {
       setSaveStatus("error");
       toast.error("姓名不能为空");
       return;
     }
-    if (trimmed === lastSavedNameRef.current) {
+    if (profilesMatch(normalized, lastSavedProfileRef.current)) {
       setSaveStatus("idle");
       return;
     }
@@ -272,7 +289,10 @@ export function ProfilePage() {
     const seq = (requestSeqRef.current += 1);
     setSaveStatus("saving");
 
-    const { error } = await authClient.updateUser({ name: trimmed });
+    const { error } = await authClient.updateUser({
+      name: normalized.name,
+      telegram: normalized.telegram || null,
+    });
 
     if (seq !== requestSeqRef.current || !mountedRef.current) {
       return;
@@ -284,7 +304,8 @@ export function ProfilePage() {
       return;
     }
 
-    lastSavedNameRef.current = trimmed;
+    lastSavedProfileRef.current = normalized;
+    setProfile(normalized);
     setSaveStatus("saved");
     await refetch();
 
@@ -292,7 +313,7 @@ export function ProfilePage() {
       clearTimeout(savedResetTimerRef.current);
     }
     savedResetTimerRef.current = setTimeout(() => {
-      if (mountedRef.current && lastSavedNameRef.current === trimmed) {
+      if (mountedRef.current && profilesMatch(lastSavedProfileRef.current, normalized)) {
         setSaveStatus("idle");
       }
     }, 2000);
@@ -302,11 +323,12 @@ export function ProfilePage() {
     void performSave();
   }, AUTOSAVE_DEBOUNCE_MS);
 
-  const handleNameChange = useCallback(
-    (value: string) => {
-      setName(value);
-      latestNameRef.current = value;
-      if (value.trim() === lastSavedNameRef.current) {
+  const handleProfileChange = useCallback(
+    (field: keyof ProfileDraft, value: string) => {
+      const next = { ...latestProfileRef.current, [field]: value };
+      setProfile(next);
+      latestProfileRef.current = next;
+      if (profilesMatch(normalizeProfileDraft(next), lastSavedProfileRef.current)) {
         setSaveStatus("idle");
         debouncedSave.cancel();
         return;
@@ -333,8 +355,8 @@ export function ProfilePage() {
     };
   }, [debouncedSave]);
 
-  const heroName = name.trim() || user?.name || "";
-  const nameSaveLabel = saveStatusLabel(saveStatus);
+  const heroName = profile.name.trim() || user?.name || "";
+  const profileSaveLabel = saveStatusLabel(saveStatus);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
@@ -358,21 +380,37 @@ export function ProfilePage() {
                 disabled={isPending || saveStatus === "saving"}
                 maxLength={PROFILE_NAME_MAX_LENGTH}
                 onBlur={handleSaveNow}
-                onChange={(event) => handleNameChange(event.target.value)}
+                onChange={(event) => handleProfileChange("name", event.target.value)}
                 placeholder="请输入姓名"
-                value={name}
+                value={profile.name}
               />
-              {nameSaveLabel ? (
+              {profileSaveLabel ? (
                 <p
                   className={cn(
                     "text-[11px]",
                     saveStatus === "error" ? "text-destructive" : "text-muted-foreground",
                   )}
                 >
-                  {nameSaveLabel}
+                  {profileSaveLabel}
                 </p>
               ) : null}
             </div>
+          </SettingsRow>
+          <SettingsRow
+            description="用于工作联系，可不填写。失焦或停顿约 1 秒后自动保存。"
+            htmlFor="profile-telegram"
+            label="TG 号"
+          >
+            <Input
+              id="profile-telegram"
+              autoComplete="off"
+              disabled={isPending || saveStatus === "saving"}
+              maxLength={USER_TELEGRAM_MAX_LENGTH}
+              onBlur={handleSaveNow}
+              onChange={(event) => handleProfileChange("telegram", event.target.value)}
+              placeholder="例如 @username"
+              value={profile.telegram}
+            />
           </SettingsRow>
           <SettingsRow description="由登录方式提供，不可在此修改。" label="登录邮箱">
             <Input disabled readOnly value={user?.email ?? ""} />

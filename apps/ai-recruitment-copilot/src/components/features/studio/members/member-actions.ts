@@ -4,18 +4,18 @@ import type { MemberRow } from "./members-page-model";
 export function buildMemberActionMenu({
   canDelete,
   canUpdate,
-  onEditName,
+  onEditProfile,
   onRemove,
 }: {
   canDelete: boolean;
   canUpdate: boolean;
-  onEditName: (member: MemberRow) => void;
+  onEditProfile: (member: MemberRow) => void;
   onRemove: (member: MemberRow) => void;
 }): ActionMenuItem<MemberRow>[] {
   return [
     {
-      label: "修改用户名称",
-      onClick: onEditName,
+      label: "编辑成员资料",
+      onClick: onEditProfile,
       show: () => canUpdate,
     },
     {

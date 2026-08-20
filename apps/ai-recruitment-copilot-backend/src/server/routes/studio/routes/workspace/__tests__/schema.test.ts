@@ -1,15 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { memberNameInputSchema } from "../schema";
+import { memberProfileInputSchema } from "../schema";
 
-describe("memberNameInputSchema", () => {
-  it("trims and accepts names from 1 to 100 characters", () => {
-    expect(memberNameInputSchema.parse({ name: "  张三  " })).toEqual({ name: "张三" });
-    expect(memberNameInputSchema.safeParse({ name: "名" }).success).toBe(true);
-    expect(memberNameInputSchema.safeParse({ name: "名".repeat(100) }).success).toBe(true);
+describe("memberProfileInputSchema", () => {
+  it("trims valid profile fields and converts a blank TG number to null", () => {
+    expect(memberProfileInputSchema.parse({ name: "  张三  ", telegram: "  @zhangsan  " })).toEqual(
+      {
+        name: "张三",
+        telegram: "@zhangsan",
+      },
+    );
+    expect(memberProfileInputSchema.parse({ name: "张三", telegram: "   " })).toEqual({
+      name: "张三",
+      telegram: null,
+    });
   });
 
-  it("rejects blank names and names longer than 100 characters", () => {
-    expect(memberNameInputSchema.safeParse({ name: "   " }).success).toBe(false);
-    expect(memberNameInputSchema.safeParse({ name: "名".repeat(101) }).success).toBe(false);
+  it("rejects invalid names and TG numbers longer than 120 characters", () => {
+    expect(memberProfileInputSchema.safeParse({ name: "   ", telegram: null }).success).toBe(false);
+    expect(
+      memberProfileInputSchema.safeParse({ name: "名".repeat(101), telegram: null }).success,
+    ).toBe(false);
+    expect(
+      memberProfileInputSchema.safeParse({ name: "张三", telegram: "t".repeat(121) }).success,
+    ).toBe(false);
   });
 });

@@ -20,33 +20,40 @@ import { rpcFetch } from "@/lib/client/api";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { USER_TELEGRAM_MAX_LENGTH } from "@arc/shared/user-profile";
 import type { MemberRow } from "./members-page-model";
 
-interface EditMemberNameDialogProps {
+interface EditMemberProfileDialogProps {
   member: MemberRow | null;
   onOpenChange: (open: boolean) => void;
   onUpdated: () => Promise<unknown>;
 }
 
-export function EditMemberNameDialog({
+export function EditMemberProfileDialog({
   member,
   onOpenChange,
   onUpdated,
-}: EditMemberNameDialogProps) {
+}: EditMemberProfileDialogProps) {
   const slug = useWorkspaceSlug();
   const [name, setName] = useState("");
-  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [telegram, setTelegram] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; telegram?: string }>({});
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (member) {
       setName(member.name);
-      setFieldError(null);
+      setTelegram(member.telegram ?? "");
+      setFieldErrors({});
     }
   }, [member]);
 
   const trimmedName = name.trim();
-  const canSubmit = Boolean(member) && trimmedName !== member?.name.trim() && !submitting;
+  const trimmedTelegram = telegram.trim();
+  const canSubmit =
+    Boolean(member) &&
+    (trimmedName !== member?.name.trim() || trimmedTelegram !== (member?.telegram ?? "")) &&
+    !submitting;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,33 +61,37 @@ export function EditMemberNameDialog({
       return;
     }
     if (!trimmedName) {
-      setFieldError("请输入用户名称。");
+      setFieldErrors({ name: "请输入用户名称。" });
       return;
     }
     if (trimmedName.length > 100) {
-      setFieldError("用户名称不能超过 100 个字符。");
+      setFieldErrors({ name: "用户名称不能超过 100 个字符。" });
+      return;
+    }
+    if (trimmedTelegram.length > USER_TELEGRAM_MAX_LENGTH) {
+      setFieldErrors({ telegram: `TG 号不能超过 ${USER_TELEGRAM_MAX_LENGTH} 个字符。` });
       return;
     }
 
     setSubmitting(true);
-    setFieldError(null);
+    setFieldErrors({});
     await runAsyncAction({
       cleanup: () => setSubmitting(false),
       onError: (error) => {
-        const message = error instanceof Error ? error.message : "更新用户名称失败";
-        setFieldError(message);
+        const message = error instanceof Error ? error.message : "更新成员资料失败";
+        setFieldErrors({ name: message });
         toast.error(message);
       },
       operation: async () => {
         await rpcFetch(
-          rpc.api.w[":slug"].studio.workspace.members[":userId"].name.$patch({
-            json: { name: trimmedName },
+          rpc.api.w[":slug"].studio.workspace.members[":userId"].profile.$patch({
+            json: { name: trimmedName, telegram: trimmedTelegram || null },
             param: { slug, userId: member.userId },
           }),
-          "更新用户名称失败",
+          "更新成员资料失败",
         );
         await onUpdated();
-        toast.success("用户名称已更新");
+        toast.success("成员资料已更新");
         onOpenChange(false);
       },
     });
@@ -90,20 +101,20 @@ export function EditMemberNameDialog({
     <Dialog onOpenChange={onOpenChange} open={Boolean(member)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>修改用户名称</DialogTitle>
-          <DialogDescription>修改该成员在系统中显示的名称。</DialogDescription>
+          <DialogTitle>编辑成员资料</DialogTitle>
+          <DialogDescription>修改该成员在系统中显示的名称和 TG 号。</DialogDescription>
         </DialogHeader>
-        <form className="flex flex-col gap-4" id="edit-member-name-form" onSubmit={onSubmit}>
+        <form className="flex flex-col gap-4" id="edit-member-profile-form" onSubmit={onSubmit}>
           <FieldGroup>
-            <Field data-invalid={Boolean(fieldError)}>
+            <Field data-invalid={Boolean(fieldErrors.name)}>
               <FieldLabel htmlFor="member-name">用户名称</FieldLabel>
               <Input
                 aria-describedby={
-                  fieldError
+                  fieldErrors.name
                     ? "member-name-description member-name-error"
                     : "member-name-description"
                 }
-                aria-invalid={Boolean(fieldError)}
+                aria-invalid={Boolean(fieldErrors.name)}
                 autoComplete="off"
                 autoFocus
                 disabled={submitting}
@@ -112,14 +123,40 @@ export function EditMemberNameDialog({
                 name="name"
                 onChange={(event) => {
                   setName(event.target.value);
-                  setFieldError(null);
+                  setFieldErrors((current) => ({ ...current, name: undefined }));
                 }}
                 value={name}
               />
               <FieldDescription id="member-name-description">
                 请输入 1–100 个字符。
               </FieldDescription>
-              <FieldError id="member-name-error">{fieldError}</FieldError>
+              <FieldError id="member-name-error">{fieldErrors.name}</FieldError>
+            </Field>
+            <Field data-invalid={Boolean(fieldErrors.telegram)}>
+              <FieldLabel htmlFor="member-telegram">TG 号（可选）</FieldLabel>
+              <Input
+                aria-describedby={
+                  fieldErrors.telegram
+                    ? "member-telegram-description member-telegram-error"
+                    : "member-telegram-description"
+                }
+                aria-invalid={Boolean(fieldErrors.telegram)}
+                autoComplete="off"
+                disabled={submitting}
+                id="member-telegram"
+                maxLength={USER_TELEGRAM_MAX_LENGTH}
+                name="telegram"
+                onChange={(event) => {
+                  setTelegram(event.target.value);
+                  setFieldErrors((current) => ({ ...current, telegram: undefined }));
+                }}
+                placeholder="例如 @username"
+                value={telegram}
+              />
+              <FieldDescription id="member-telegram-description">
+                可填写 Telegram 用户名，最多 120 个字符。
+              </FieldDescription>
+              <FieldError id="member-telegram-error">{fieldErrors.telegram}</FieldError>
             </Field>
           </FieldGroup>
         </form>
@@ -131,7 +168,7 @@ export function EditMemberNameDialog({
               </Button>
             }
           />
-          <Button disabled={!canSubmit} form="edit-member-name-form" type="submit">
+          <Button disabled={!canSubmit} form="edit-member-profile-form" type="submit">
             {submitting ? <Spinner data-icon="inline-start" /> : null}
             {submitting ? "保存中..." : "保存"}
           </Button>
