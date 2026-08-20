@@ -15,6 +15,7 @@ function cacheKey(organizationId: string, filters: OdcAnalysisFilters): string {
     filters.from ?? null,
     filters.to ?? null,
     filters.jobDescriptionIds,
+    filters.role ?? null,
   ]);
 }
 

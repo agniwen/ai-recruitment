@@ -6,6 +6,7 @@ import type {
   OdcAnalysisData,
   OdcAnalysisJobOption,
   OdcAnalysisMetric,
+  OdcAnalysisRoleOption,
   OdcAnalysisSearch,
 } from "@arc/shared/odc-analysis";
 import { PageHeader } from "@/components/features/studio/page-header";
@@ -13,7 +14,16 @@ import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const ALL_ROLES_VALUE = "__all_odc_roles__";
 
 const UNIT_LABEL: Record<OdcAnalysisMetric["unit"], string> = {
   candidate: "人",
@@ -261,11 +271,13 @@ export function OdcAnalysisPage({
   canViewResumes,
   data,
   jobs,
+  roles,
   search,
 }: {
   canViewResumes: boolean;
   data: OdcAnalysisData;
   jobs: OdcAnalysisJobOption[];
+  roles: OdcAnalysisRoleOption[];
   search: OdcAnalysisSearch;
 }) {
   const navigate = useNavigate({ from: "/w/$slug/studio/odc-analysis" });
@@ -293,9 +305,11 @@ export function OdcAnalysisPage({
       <Card>
         <CardHeader>
           <CardTitle>筛选条件</CardTitle>
-          <CardDescription>时间范围作用于每个指标对应的业务发生时间，默认不限制。</CardDescription>
+          <CardDescription>
+            时间范围与角色作用于各指标对应的业务动作；提需日期、HC 等需求事实不按角色切分。
+          </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-[12rem_12rem_minmax(16rem,1fr)_auto] md:items-end">
+        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-end xl:grid-cols-[12rem_12rem_14rem_minmax(16rem,1fr)_auto]">
           <label className="flex flex-col gap-2 text-sm" htmlFor="odc-analysis-from">
             <span>开始日期</span>
             <Input
@@ -317,6 +331,30 @@ export function OdcAnalysisPage({
               type="date"
               value={search.to ?? ""}
             />
+          </label>
+          <label className="flex flex-col gap-2 text-sm" htmlFor="odc-analysis-role">
+            <span>角色</span>
+            <Select
+              onValueChange={(value) =>
+                updateSearch({
+                  ...search,
+                  role: value && value !== ALL_ROLES_VALUE ? value : undefined,
+                })
+              }
+              value={search.role ?? ALL_ROLES_VALUE}
+            >
+              <SelectTrigger className="w-full" id="odc-analysis-role">
+                <SelectValue placeholder="全部角色" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ROLES_VALUE}>全部角色</SelectItem>
+                {roles.map((role) => (
+                  <SelectItem key={role.value} value={role.value}>
+                    {role.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="flex flex-col gap-2 text-sm" htmlFor="odc-analysis-jobs">
             <span>岗位</span>
@@ -354,14 +392,16 @@ export function OdcAnalysisPage({
         definitions={OVERALL_METRICS}
         description="默认展示当前存量；选择时间后，各指标按对应业务时间统计。"
         drilldown={
-          canViewResumes && !(search.from || search.to) ? { jdIds: search.jdIds, slug } : undefined
+          canViewResumes && !(search.from || search.role || search.to)
+            ? { jdIds: search.jdIds, slug }
+            : undefined
         }
         metrics={data.overall}
         title="招聘整体进度"
       />
       <MetricsPanel
         definitions={TODAY_METRICS}
-        description="按北京时间自然日统计，不受上方时间范围影响，岗位筛选继续生效。"
+        description="按北京时间自然日统计，不受上方时间范围影响，岗位与角色筛选继续生效。"
         metrics={data.today}
         title="今日工作台"
       />

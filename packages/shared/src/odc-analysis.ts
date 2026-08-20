@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
+export const ODC_ANALYSIS_UNKNOWN_ROLE = "__odc_unknown_role__";
+
 function isValidDateOnly(value: string): boolean {
   if (!DATE_ONLY_PATTERN.test(value)) {
     return false;
@@ -16,10 +18,13 @@ const optionalDateOnlySchema = z
   .refine(isValidDateOnly, "日期格式必须为 YYYY-MM-DD")
   .optional();
 
+const optionalRoleSchema = z.string().trim().min(1).max(128).optional();
+
 export const odcAnalysisFiltersSchema = z
   .object({
     from: optionalDateOnlySchema,
     jobDescriptionIds: z.array(z.string().trim().min(1)).max(100).default([]),
+    role: optionalRoleSchema,
     to: optionalDateOnlySchema,
   })
   .refine((value) => !(value.from && value.to) || value.from <= value.to, {
@@ -105,12 +110,18 @@ export interface OdcAnalysisJobOption {
   recruitmentStatus: string | null;
 }
 
+export interface OdcAnalysisRoleOption {
+  label: string;
+  value: string;
+}
+
 export interface OdcAnalysisStateReady {
   access: {
     canViewResumes: boolean;
   };
   data: OdcAnalysisData;
   jobs: OdcAnalysisJobOption[];
+  roles: OdcAnalysisRoleOption[];
   status: "ready";
 }
 
@@ -122,6 +133,7 @@ export type OdcAnalysisState =
 export interface OdcAnalysisSearch {
   from?: string;
   jdIds?: string;
+  role?: string;
   to?: string;
 }
 
@@ -133,11 +145,13 @@ export function coerceOdcAnalysisSearch(search: Record<string, unknown>): OdcAna
   const candidate = {
     from: optionalSearchString(search.from),
     jdIds: optionalSearchString(search.jdIds),
+    role: optionalSearchString(search.role),
     to: optionalSearchString(search.to),
   };
   const filters = odcAnalysisFiltersSchema.safeParse({
     from: candidate.from,
     jobDescriptionIds: candidate.jdIds?.split(",").filter(Boolean) ?? [],
+    role: candidate.role,
     to: candidate.to,
   });
   if (!filters.success) {
@@ -149,6 +163,7 @@ export function coerceOdcAnalysisSearch(search: Record<string, unknown>): OdcAna
       filters.data.jobDescriptionIds.length > 0
         ? filters.data.jobDescriptionIds.join(",")
         : undefined,
+    role: filters.data.role,
     to: filters.data.to,
   };
 }
@@ -157,6 +172,7 @@ export function filtersFromOdcAnalysisSearch(search: OdcAnalysisSearch): OdcAnal
   return odcAnalysisFiltersSchema.parse({
     from: search.from,
     jobDescriptionIds: search.jdIds?.split(",").filter(Boolean) ?? [],
+    role: search.role,
     to: search.to,
   });
 }

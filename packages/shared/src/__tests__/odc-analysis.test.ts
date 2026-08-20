@@ -11,11 +11,13 @@ describe("ODC analysis filters", () => {
       odcAnalysisFiltersSchema.parse({
         from: "2026-08-01",
         jobDescriptionIds: ["jd-b", "jd-a", "jd-b"],
+        role: "odc",
         to: "2026-08-31",
       }),
     ).toEqual({
       from: "2026-08-01",
       jobDescriptionIds: ["jd-a", "jd-b"],
+      role: "odc",
       to: "2026-08-31",
     });
   });
@@ -51,17 +53,27 @@ describe("ODC analysis filters", () => {
     const search = coerceOdcAnalysisSearch({
       from: "2026-08-01",
       jdIds: "jd-b,jd-a,jd-b",
+      role: "odc",
       to: "2026-08-31",
     });
     expect(search).toEqual({
       from: "2026-08-01",
       jdIds: "jd-a,jd-b",
+      role: "odc",
       to: "2026-08-31",
     });
     expect(filtersFromOdcAnalysisSearch(search)).toEqual({
       from: "2026-08-01",
       jobDescriptionIds: ["jd-a", "jd-b"],
+      role: "odc",
       to: "2026-08-31",
+    });
+  });
+
+  it("trims the selected role and preserves the historical unknown sentinel", () => {
+    expect(coerceOdcAnalysisSearch({ role: "  odc  " })).toEqual({ role: "odc" });
+    expect(coerceOdcAnalysisSearch({ role: "__odc_unknown_role__" })).toEqual({
+      role: "__odc_unknown_role__",
     });
   });
 });

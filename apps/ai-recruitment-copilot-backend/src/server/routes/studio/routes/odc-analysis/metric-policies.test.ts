@@ -3,6 +3,7 @@ import {
   countFirstSentOffers,
   countUniqueAiCandidates,
   isCurrentPendingEvaluation,
+  latestOfferByInterview,
 } from "./metric-policies";
 
 describe("ODC analysis confirmed metric policies", () => {
@@ -66,5 +67,41 @@ describe("ODC analysis confirmed metric policies", () => {
         range,
       ),
     ).toBe(1);
+  });
+
+  it("attributes an Offer to the role that made its first successful send", () => {
+    const range = {
+      end: new Date("2026-08-19T00:00:00.000Z"),
+      start: new Date("2026-08-18T00:00:00.000Z"),
+    };
+    const rows = [
+      {
+        interviewRecordId: "candidate-1",
+        role: "hr",
+        sentAt: new Date("2026-08-18T08:00:00.000Z"),
+      },
+      {
+        interviewRecordId: "candidate-1",
+        role: "odc",
+        sentAt: new Date("2026-08-18T12:00:00.000Z"),
+      },
+      {
+        interviewRecordId: "candidate-2",
+        role: "odc",
+        sentAt: new Date("2026-08-18T09:00:00.000Z"),
+      },
+    ];
+
+    expect(countFirstSentOffers(rows, range, "odc")).toBe(1);
+    expect(countFirstSentOffers(rows, range, "hr")).toBe(1);
+  });
+
+  it("attributes the effective Offer to the role on its latest active version", () => {
+    const latest = latestOfferByInterview([
+      { interviewRecordId: "candidate-1", role: "hr", version: 1 },
+      { interviewRecordId: "candidate-1", role: "odc", version: 2 },
+    ]);
+
+    expect(latest.get("candidate-1")?.role).toBe("odc");
   });
 });

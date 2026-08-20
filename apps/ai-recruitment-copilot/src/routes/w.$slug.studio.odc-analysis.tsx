@@ -25,6 +25,7 @@ function OdcAnalysisRoute() {
       canViewResumes={state.access.canViewResumes}
       data={state.data}
       jobs={state.jobs}
+      roles={state.roles}
       search={search}
     />
   );
@@ -32,7 +33,12 @@ function OdcAnalysisRoute() {
 
 export const Route = createFileRoute("/w/$slug/studio/odc-analysis")({
   validateSearch: coerceOdcAnalysisSearch,
-  loaderDeps: ({ search }) => ({ from: search.from, jdIds: search.jdIds, to: search.to }),
+  loaderDeps: ({ search }) => ({
+    from: search.from,
+    jdIds: search.jdIds,
+    role: search.role,
+    to: search.to,
+  }),
   loader: async ({ deps, params }) => {
     const filters = filtersFromOdcAnalysisSearch(deps);
     const state = await loadOdcAnalysisState({ data: { filters, slug: params.slug } });
