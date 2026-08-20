@@ -116,6 +116,7 @@ export interface ImportPoolItemInput {
   dedupPolicy: "check" | "force";
   hiringUnitId: string | null;
   importedBy: string;
+  importedByRole?: string | null;
   jobDescriptionId: string | null;
   organizationId: string;
   poolItemId: string;
@@ -852,6 +853,7 @@ export function importPoolItemToResumeLibrary(
             storageKey: source.resumeStorageKey,
             targetRole: source.targetRole,
             userId: admission.importedBy,
+            userRole: admission.importedByRole ?? null,
           },
           tx,
         );

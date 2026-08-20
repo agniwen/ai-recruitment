@@ -233,6 +233,7 @@ async function ignoreRecruitingAction(input: {
 async function confirmAdvanceCandidateStage(input: {
   authorize: WorkspaceAuthorizer;
   operatorId: string | null;
+  operatorRole: string | null;
   organizationId: string;
   payload: Extract<
     ConfirmRecruitingActionInput["proposal"],
@@ -246,6 +247,7 @@ async function confirmAdvanceCandidateStage(input: {
     candidateId: input.payload.resumeRecordId,
     input: input.payload,
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole,
     organizationId: input.organizationId,
     provenance: {
       kind: "workspace_recruiting_copilot",
@@ -279,6 +281,7 @@ async function confirmAdvanceCandidateStage(input: {
 
 async function confirmGenerateInterviewQuestions(input: {
   operatorId: string | null;
+  operatorRole: string | null;
   organizationId: string;
   payload: Extract<
     ConfirmRecruitingActionInput["proposal"],
@@ -333,6 +336,7 @@ async function confirmGenerateInterviewQuestions(input: {
         id: crypto.randomUUID(),
         interviewRecordId: input.payload.resumeRecordId,
         operatorId: input.operatorId,
+        operatorRole: input.operatorRole,
         organizationId: input.organizationId,
       });
     });
@@ -356,6 +360,7 @@ export function confirmRecruitingAction(input: {
   decision?: ConfirmRecruitingActionInput["decision"];
   hiringUnitScope: HiringUnitAccessScope | null;
   operatorId: string | null;
+  operatorRole: string | null;
   organizationId: string;
   proposal: ConfirmRecruitingActionInput["proposal"];
   visibilityScope: RecruitingVisibilityScope;
@@ -408,6 +413,7 @@ export function confirmRecruitingAction(input: {
     return confirmAdvanceCandidateStage({
       authorize: input.authorize,
       operatorId: input.operatorId,
+      operatorRole: input.operatorRole,
       organizationId: input.organizationId,
       payload: input.proposal.payload,
       proposalId: input.proposal.id,
@@ -416,6 +422,7 @@ export function confirmRecruitingAction(input: {
   }
   return confirmGenerateInterviewQuestions({
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole,
     organizationId: input.organizationId,
     payload: input.proposal.payload,
     proposalId: input.proposal.id,

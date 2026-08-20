@@ -7,6 +7,7 @@ interface ResumePoolAdmissionSource {
 interface ResumePoolAdmissionInput {
   dedupPolicy: "check" | "force";
   importedBy: string;
+  importedByRole?: string | null;
   jobDescriptionId: string | null;
   organizationId: string;
   poolItemId: string;

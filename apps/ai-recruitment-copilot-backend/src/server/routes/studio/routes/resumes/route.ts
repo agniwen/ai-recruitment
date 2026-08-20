@@ -425,6 +425,7 @@ export const resumeLibraryRouter = factory
         storageKey: resumeStorageKey,
         targetRole: input.data.targetRole || null,
         userId: c.var.user?.id ?? null,
+        userRole: c.var.member?.role ?? null,
       });
 
       await replaceDuplicateMatchesForSource({
@@ -492,6 +493,7 @@ export const resumeLibraryRouter = factory
       const result = await updateResumeEvaluationStatus({
         id,
         operatorId: c.var.user?.id ?? null,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
         status: input.status,
       });
@@ -640,6 +642,7 @@ export const resumeLibraryRouter = factory
           const result = await updateResumeEvaluationStatusInTransaction(tx, {
             id,
             operatorId: c.var.user?.id ?? null,
+            operatorRole: c.var.member?.role ?? null,
             organizationId: activeOrg.id,
             status: nextEvaluationStatus,
           });
@@ -657,6 +660,7 @@ export const resumeLibraryRouter = factory
             nextJobDescriptionId,
             nextJobDescriptionName: nextJobDescription?.name ?? null,
             operatorId: c.var.user?.id ?? null,
+            operatorRole: c.var.member?.role ?? null,
             organizationId: activeOrg.id,
             previousEvaluationStatus: existing.resumeEvaluationStatus,
             previousJobDescriptionId: existing.jobDescriptionId,
@@ -840,6 +844,7 @@ export const resumeLibraryRouter = factory
           const result = await updateResumeEvaluationStatusInTransaction(tx, {
             id,
             operatorId: c.var.user?.id ?? null,
+            operatorRole: c.var.member?.role ?? null,
             organizationId: activeOrg.id,
             status: nextResumeEvaluationStatus,
           });
@@ -857,6 +862,7 @@ export const resumeLibraryRouter = factory
             nextJobDescriptionId,
             nextJobDescriptionName: nextJobDescription?.name ?? null,
             operatorId: c.var.user?.id ?? null,
+            operatorRole: c.var.member?.role ?? null,
             organizationId: activeOrg.id,
             previousEvaluationStatus: existing.resumeEvaluationStatus,
             previousJobDescriptionId: existing.jobDescriptionId,

@@ -24,6 +24,7 @@ export async function resetCandidateWorkflowForJobDescriptionChange(
   input: {
     interviewRecordId: string;
     operatorId: string | null;
+    operatorRole?: string | null;
     organizationId: string;
   },
 ): Promise<{ resetAiRoundCount: number; resetFormSubmissionCount: number }> {
@@ -104,6 +105,7 @@ export async function resetCandidateWorkflowForJobDescriptionChange(
       id: crypto.randomUUID(),
       interviewRecordId: input.interviewRecordId,
       operatorId: input.operatorId,
+      operatorRole: input.operatorRole ?? null,
       organizationId: input.organizationId,
       scheduleEntryId: scheduleRow.id,
     });
@@ -122,6 +124,7 @@ export async function applyJobDescriptionChangeEffects(
     nextJobDescriptionId: string | null;
     nextJobDescriptionName: string | null;
     operatorId: string | null;
+    operatorRole?: string | null;
     organizationId: string;
     previousEvaluationStatus: ResumeEvaluationStatus | null;
     previousJobDescriptionId: string | null;
@@ -131,6 +134,7 @@ export async function applyJobDescriptionChangeEffects(
   await resetCandidateWorkflowForJobDescriptionChange(tx, {
     interviewRecordId: input.interviewRecordId,
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole,
     organizationId: input.organizationId,
   });
 
@@ -139,6 +143,7 @@ export async function applyJobDescriptionChangeEffects(
       id: input.interviewRecordId,
       nextJobDescriptionId: input.nextJobDescriptionId,
       operatorId: input.operatorId,
+      operatorRole: input.operatorRole,
       organizationId: input.organizationId,
       previousJobDescriptionId: input.previousJobDescriptionId,
       previousStatus: input.previousEvaluationStatus,
@@ -157,6 +162,7 @@ export async function applyJobDescriptionChangeEffects(
     id: crypto.randomUUID(),
     interviewRecordId: input.interviewRecordId,
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole ?? null,
     organizationId: input.organizationId,
   });
 }

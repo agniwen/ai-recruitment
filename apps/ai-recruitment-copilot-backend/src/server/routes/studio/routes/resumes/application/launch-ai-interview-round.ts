@@ -19,6 +19,7 @@ interface LaunchSchedule {
 
 export interface LaunchAiInterviewRoundCommand {
   actorId: string;
+  actorRole: string | null;
   interviewQuestions: ResumeAnalysisResult["interviewQuestions"];
   interviewRecordId: string;
   organizationId: string;
@@ -37,6 +38,7 @@ interface CommitLaunchInput<
 interface LaunchAiInterviewRoundDependencies<TSchedule extends LaunchSchedule> {
   buildSchedule: (input: {
     actorId: string;
+    actorRole: string | null;
     interviewRecordId: string;
     now: Date;
     organizationId: string;
@@ -120,6 +122,7 @@ export function createLaunchAiInterviewRound<TSchedule extends LaunchSchedule>(
     const now = deps.clock.now();
     const schedule = deps.buildSchedule({
       actorId: command.actorId,
+      actorRole: command.actorRole,
       interviewRecordId: command.interviewRecordId,
       now,
       organizationId: command.organizationId,

@@ -13,7 +13,7 @@ import { createDefaultScheduleEntry } from "@arc/db-schema/studio-interviews";
 import { createLaunchAiInterviewRound } from "./launch-ai-interview-round";
 
 export const launchAiInterviewRound = createLaunchAiInterviewRound({
-  buildSchedule: ({ actorId, interviewRecordId, now, organizationId, roundId }) => {
+  buildSchedule: ({ actorId, actorRole, interviewRecordId, now, organizationId, roundId }) => {
     const [schedule] = buildScheduleRows(
       organizationId,
       interviewRecordId,
@@ -21,12 +21,14 @@ export const launchAiInterviewRound = createLaunchAiInterviewRound({
       now,
       undefined,
       actorId,
+      actorRole,
     );
     return schedule ?? null;
   },
   clock: { now: () => new Date() },
   commit: async ({
     actorId,
+    actorRole,
     auditLogId,
     interviewQuestions,
     interviewRecordId,
@@ -60,6 +62,7 @@ export const launchAiInterviewRound = createLaunchAiInterviewRound({
         id: auditLogId,
         interviewRecordId,
         operatorId: actorId,
+        operatorRole: actorRole,
         organizationId,
         scheduleEntryId: schedule.id,
       });

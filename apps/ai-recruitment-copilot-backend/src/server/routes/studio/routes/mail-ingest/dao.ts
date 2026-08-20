@@ -707,12 +707,19 @@ export async function listEnabledMailIngestAccounts(
   limit = 20,
 ): Promise<WorkerMailIngestAccount[]> {
   const rows = await db
-    .select()
+    .select({ account: mailIngestAccount, userRole: member.role })
     .from(mailIngestAccount)
+    .leftJoin(
+      member,
+      and(
+        eq(member.organizationId, mailIngestAccount.organizationId),
+        eq(member.userId, mailIngestAccount.userId),
+      ),
+    )
     .where(eq(mailIngestAccount.enabled, true))
     .orderBy(mailIngestAccount.lastCheckedAt)
     .limit(limit);
-  return rows.map(toWorkerMailIngestAccount);
+  return rows.map((row) => toWorkerMailIngestAccount(row.account, row.userRole));
 }
 
 export async function claimMailIngestAccount(accountId: string): Promise<boolean> {

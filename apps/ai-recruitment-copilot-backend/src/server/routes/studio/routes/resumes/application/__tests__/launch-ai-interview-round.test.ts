@@ -26,6 +26,7 @@ const deps = {
 
 const command = {
   actorId: "user_1",
+  actorRole: "odc",
   interviewQuestions: [],
   interviewRecordId: "record_1",
   organizationId: "org_1",
@@ -102,6 +103,7 @@ describe("launchAiInterviewRound", () => {
     expect(deps.commit).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: "user_1",
+        actorRole: "odc",
         auditLogId: "audit_1",
         interviewRecordId: "record_1",
         jobDescriptionId: "jd_1",

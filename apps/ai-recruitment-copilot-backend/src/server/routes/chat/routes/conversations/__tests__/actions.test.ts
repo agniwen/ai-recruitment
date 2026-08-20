@@ -64,6 +64,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
         hiringUnitIds: ["hiring-unit-1"],
       },
       operatorId: "user-1",
+      operatorRole: "odc",
       organizationId: "org-1",
       proposal: {
         explanation: "先按前端岗位分析。",
@@ -123,6 +124,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
         hiringUnitIds: ["hiring-unit-1"],
       },
       operatorId: "user-1",
+      operatorRole: "odc",
       organizationId: "org-1",
       proposal: {
         explanation: "先按前端岗位分析。",
@@ -170,6 +172,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
       decision: "ignore",
       hiringUnitScope: null,
       operatorId: "user-1",
+      operatorRole: "odc",
       organizationId: "org-1",
       proposal: {
         explanation: "先选岗位。",
@@ -209,6 +212,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
         hiringUnitIds: ["hiring-unit-1"],
       },
       operatorId: "user-1",
+      operatorRole: "odc",
       organizationId: "org-1",
       proposal: {
         explanation: "先按其他招聘组的岗位分析。",

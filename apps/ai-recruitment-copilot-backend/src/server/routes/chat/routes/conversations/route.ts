@@ -251,6 +251,7 @@ export const conversationsRouter = factory
         decision,
         hiringUnitScope,
         operatorId: user.id,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
         proposal,
         visibilityScope,

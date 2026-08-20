@@ -457,7 +457,7 @@ export const resumePoolRouter = factory
     requirePermission("resumePool", "import"),
     zValidator("json", resumePoolImportInputSchema, jsonValidatorError("请求参数无效。")),
     async (c) => {
-      const { activeOrg, user } = c.var;
+      const { activeOrg, member, user } = c.var;
       if (!activeOrg || !user) {
         return c.json({ message: "Unauthorized" }, 401);
       }
@@ -490,6 +490,7 @@ export const resumePoolRouter = factory
           dedupPolicy: input.dedupPolicy,
           hiringUnitId: input.hiringUnitId ?? null,
           importedBy: user.id,
+          importedByRole: member?.role ?? null,
           jobDescriptionId: input.jobDescriptionId,
           organizationId: activeOrg.id,
           poolItemId: c.req.param("id"),

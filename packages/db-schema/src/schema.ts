@@ -1391,6 +1391,7 @@ export const resumeUploadBatch = pgTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    createdByRole: text("created_by_role"),
     dedupPolicy: text("dedup_policy").$type<ResumeUploadBatchDedupPolicy>().notNull(),
     failedCount: integer("failed_count").notNull().default(0),
     id: text("id").primaryKey(),

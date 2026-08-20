@@ -24,6 +24,7 @@ function account(input: Partial<WorkerMailIngestAccount>): WorkerMailIngestAccou
     subjectKeyword: input.subjectKeyword ?? "boss直聘",
     target: "resume_pool",
     userId: input.userId ?? "user_a",
+    userRole: input.userRole ?? "odc",
     username: input.username ?? "hr@example.com",
   };
 }

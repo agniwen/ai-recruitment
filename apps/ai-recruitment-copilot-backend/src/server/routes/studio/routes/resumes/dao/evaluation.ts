@@ -76,6 +76,7 @@ export async function recordResumeJobDescriptionChange(input: {
   id: string;
   nextJobDescriptionId: string | null;
   operatorId: string | null;
+  operatorRole?: string | null;
   organizationId: string;
   previousJobDescriptionId: string | null;
 }): Promise<void> {
@@ -99,6 +100,7 @@ export async function recordResumeJobDescriptionChange(input: {
     id: crypto.randomUUID(),
     interviewRecordId: input.id,
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole ?? null,
     organizationId: input.organizationId,
   });
 }
@@ -116,6 +118,7 @@ async function insertEvaluationAudit(
     interviewRecordId: string;
     nextJobDescriptionId?: string | null;
     operatorId: string | null;
+    operatorRole?: string | null;
     organizationId: string;
     previousJobDescriptionId?: string | null;
     reason?: string | null;
@@ -137,6 +140,7 @@ async function insertEvaluationAudit(
     id: crypto.randomUUID(),
     interviewRecordId: input.interviewRecordId,
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole ?? null,
     organizationId: input.organizationId,
   });
 }
@@ -146,6 +150,7 @@ export async function submitResumeEvaluation(input: {
   departmentName: string;
   id: string;
   operatorId: string | null;
+  operatorRole?: string | null;
   organizationId: string;
   reason: string;
   status: ResumeEvaluationStatus;
@@ -194,6 +199,7 @@ export async function submitResumeEvaluation(input: {
       fromStatus: existing.resumeEvaluationStatus,
       interviewRecordId: input.id,
       operatorId: input.operatorId,
+      operatorRole: input.operatorRole,
       organizationId: input.organizationId,
       reason: input.reason,
       toStatus: input.status,
@@ -209,6 +215,7 @@ export async function resetResumeEvaluationForJobChangeInTransaction(
     id: string;
     nextJobDescriptionId: string | null;
     operatorId: string | null;
+    operatorRole?: string | null;
     organizationId: string;
     previousJobDescriptionId: string | null;
     previousStatus: ResumeEvaluationStatus;
@@ -252,6 +259,7 @@ export async function resetResumeEvaluationForJobChangeInTransaction(
     interviewRecordId: input.id,
     nextJobDescriptionId: input.nextJobDescriptionId,
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole,
     organizationId: input.organizationId,
     previousJobDescriptionId: input.previousJobDescriptionId,
     reason: "岗位变更后需重新评估",
@@ -265,6 +273,7 @@ export async function resetResumeEvaluationForJobChange(input: {
   id: string;
   nextJobDescriptionId: string | null;
   operatorId: string | null;
+  operatorRole?: string | null;
   organizationId: string;
   previousJobDescriptionId: string | null;
   previousStatus: ResumeEvaluationStatus;
@@ -275,6 +284,7 @@ export async function resetResumeEvaluationForJobChange(input: {
 interface UpdateResumeEvaluationStatusInput {
   id: string;
   operatorId: string | null;
+  operatorRole?: string | null;
   organizationId: string;
   status: ResumeEvaluationStatus | null;
 }
@@ -324,6 +334,7 @@ export async function updateResumeEvaluationStatusInTransaction(
     fromStatus: existing.resumeEvaluationStatus,
     interviewRecordId: input.id,
     operatorId: input.operatorId,
+    operatorRole: input.operatorRole,
     organizationId: input.organizationId,
     toStatus: input.status,
   });

@@ -169,6 +169,7 @@ export const resumeUploadBatchesRouter = factory
         resumePoolScope: input.resumePoolScope ?? null,
         target: input.target,
         userId: user.id,
+        userRole: c.var.member?.role ?? null,
       });
       const detail = await loadBatchDetail(batchId, activeOrg.id, user.id);
       if (!detail) {

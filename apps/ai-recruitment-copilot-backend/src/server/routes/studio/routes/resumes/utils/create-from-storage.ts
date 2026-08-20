@@ -41,6 +41,7 @@ export interface CreateResumeRecordFromStorageInput {
   storageKey: string | null;
   targetRole: string | null;
   userId: string | null;
+  userRole?: string | null;
   source?: {
     importedAt: Date;
     importedBy: string | null;
@@ -72,6 +73,7 @@ export async function createResumeRecordFromStorage(
       candidatePhone,
       createdAt: now,
       createdBy: input.userId,
+      createdByRole: input.userRole ?? null,
       hiringUnitId: input.hiringUnitId ?? null,
       hrResumeAssessment: input.hrResumeAssessment?.trim() || null,
       hrResumeAssessmentUpdatedAt: input.hrResumeAssessment?.trim() ? now : null,

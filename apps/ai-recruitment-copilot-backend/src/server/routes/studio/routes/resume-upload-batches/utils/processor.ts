@@ -247,6 +247,7 @@ async function upsertParsedResumeRecord({
   resumeProfile,
   resumeText,
   userId,
+  userRole,
 }: {
   item: NonNullable<ItemRow>;
   jobDescriptionId: string | null;
@@ -256,6 +257,7 @@ async function upsertParsedResumeRecord({
   resumeProfile: ParsedResume["resumeProfile"];
   resumeText: string | null;
   userId: string;
+  userRole?: string | null;
 }): Promise<string> {
   const startedAt = Date.now();
   logStep("record.upsert.start", {
@@ -285,6 +287,7 @@ async function upsertParsedResumeRecord({
       storageKey: item.storageKey,
       targetRole: null,
       userId,
+      userRole,
     });
     logStep("record.upsert.done", {
       durationMs: elapsed(startedAt),
@@ -445,6 +448,7 @@ async function fetchAndParse(
     resumeProfile,
     resumeText,
     userId,
+    userRole: batchRow.createdByRole,
   });
   return {
     autoMatchJobDescription,

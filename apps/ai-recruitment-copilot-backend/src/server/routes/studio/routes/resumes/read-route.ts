@@ -488,6 +488,7 @@ export const resumeLibraryReadRouter = factory
         departmentName: input.departmentName,
         id,
         operatorId: c.var.user?.id ?? null,
+        operatorRole: c.var.member?.role ?? null,
         organizationId: activeOrg.id,
         reason: input.reason,
         status: input.status,
@@ -537,6 +538,7 @@ export const resumeLibraryReadRouter = factory
       try {
         result = await launchAiInterviewRound({
           actorId: user.id,
+          actorRole: member.role,
           interviewQuestions,
           interviewRecordId: id,
           organizationId: organization.id,

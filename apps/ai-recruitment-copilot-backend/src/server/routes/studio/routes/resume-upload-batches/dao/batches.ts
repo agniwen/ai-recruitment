@@ -77,6 +77,7 @@ export interface CreateBatchInput {
   batchId?: string;
   organizationId: string;
   userId: string;
+  userRole?: string | null;
   jdMode: "bind" | "auto" | "none";
   jobDescriptionId: string | null;
   dedupPolicy: "skip" | "create";
@@ -113,6 +114,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
     await tx.insert(resumeUploadBatch).values({
       createdAt: now,
       createdBy: input.userId,
+      createdByRole: input.userRole ?? null,
       dedupPolicy: input.dedupPolicy,
       id: batchId,
       jdMode: input.jdMode,
@@ -145,6 +147,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
           candidatePhone: null,
           createdAt: now,
           createdBy: input.userId,
+          createdByRole: input.userRole ?? null,
           id: recordId,
           interviewQuestions: [],
           jobDescriptionId: input.jdMode === "bind" ? input.jobDescriptionId : null,

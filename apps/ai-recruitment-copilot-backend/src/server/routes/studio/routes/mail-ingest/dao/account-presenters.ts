@@ -59,6 +59,7 @@ export interface WorkerMailIngestAccount {
   subjectKeyword: string;
   target: AccountRow["target"];
   userId: string;
+  userRole: string | null;
   username: string;
 }
 
@@ -127,7 +128,10 @@ export function toNullableMailIngestAccountDto(row: {
   };
 }
 
-export function toWorkerMailIngestAccount(row: AccountRow): WorkerMailIngestAccount {
+export function toWorkerMailIngestAccount(
+  row: AccountRow,
+  userRole: string | null,
+): WorkerMailIngestAccount {
   return {
     dedupPolicy: row.dedupPolicy,
     emailAddress: row.emailAddress,
@@ -147,6 +151,7 @@ export function toWorkerMailIngestAccount(row: AccountRow): WorkerMailIngestAcco
     subjectKeyword: row.subjectKeyword,
     target: row.target,
     userId: row.userId,
+    userRole,
     username: row.username,
   };
 }

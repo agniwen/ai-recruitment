@@ -113,6 +113,7 @@ async function createBatchForMail(
     resumePoolScope: account.resumePoolScope,
     target: account.target,
     userId: account.userId,
+    userRole: account.userRole,
   });
   const detail = await loadBatchDetail(batchId, account.organizationId, account.userId);
   if (!detail) {

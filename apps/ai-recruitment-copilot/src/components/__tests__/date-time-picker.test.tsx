@@ -42,6 +42,29 @@ describe("date and time pickers", () => {
     expect(container.querySelector('input[type="date"]')).toBeNull();
   });
 
+  it("disables dates outside the configured date-only bounds", async () => {
+    act(() => {
+      root.render(
+        <DatePicker max="2026-07-25" min="2026-07-23" onValueChange={vi.fn()} value="2026-07-24" />,
+      );
+    });
+
+    await act(async () => {
+      container.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(
+      document.querySelector<HTMLButtonElement>('button[data-day="7/22/2026"]')?.disabled,
+    ).toBe(true);
+    expect(
+      document.querySelector<HTMLButtonElement>('button[data-day="7/24/2026"]')?.disabled,
+    ).toBe(false);
+    expect(
+      document.querySelector<HTMLButtonElement>('button[data-day="7/26/2026"]')?.disabled,
+    ).toBe(true);
+  });
+
   it("renders local hours and minutes without a native datetime input", () => {
     act(() => {
       root.render(<DateTimePicker onValueChange={vi.fn()} value="2026-07-24T09:05" />);

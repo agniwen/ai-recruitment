@@ -196,6 +196,7 @@ async function loadCandidateMetrics(
   const [row] = await db
     .select({
       associated: sql<number>`COUNT(*) FILTER (WHERE ${and(
+        eq(studioInterview.resumeParseStatus, "ready"),
         timestampCondition(studioInterview.createdAt, range),
         roleCondition(studioInterview.createdByRole, selectedRole),
       )})`.mapWith(Number),
@@ -208,6 +209,7 @@ async function loadCandidateMetrics(
       pendingEvaluation: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.pipelineStage, CURRENT_PENDING_EVALUATION_FACT.pipelineStage),
         eq(studioInterview.outcome, CURRENT_PENDING_EVALUATION_FACT.outcome),
+        eq(studioInterview.resumeParseStatus, "ready"),
         isNull(studioInterview.resumeEvaluationStatus),
         roleCondition(studioInterview.createdByRole, selectedRole),
         ...instantRangeConditions(studioInterview.createdAt, range),
@@ -218,6 +220,7 @@ async function loadCandidateMetrics(
         ...instantRangeConditions(studioInterview.closedAt, range),
       )})`.mapWith(Number),
       todayAssociated: sql<number>`COUNT(*) FILTER (WHERE ${and(
+        eq(studioInterview.resumeParseStatus, "ready"),
         timestampCondition(studioInterview.createdAt, todayRange),
         roleCondition(studioInterview.createdByRole, selectedRole),
       )})`.mapWith(Number),
@@ -230,6 +233,7 @@ async function loadCandidateMetrics(
       todayPendingEvaluation: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.pipelineStage, CURRENT_PENDING_EVALUATION_FACT.pipelineStage),
         eq(studioInterview.outcome, CURRENT_PENDING_EVALUATION_FACT.outcome),
+        eq(studioInterview.resumeParseStatus, "ready"),
         isNull(studioInterview.resumeEvaluationStatus),
         roleCondition(studioInterview.createdByRole, selectedRole),
         ...instantRangeConditions(studioInterview.createdAt, todayRange),
@@ -279,6 +283,7 @@ async function loadDemandOnboarded(organizationId: string, jobIds: string[]): Pr
         eq(studioInterview.organizationId, organizationId),
         inArray(studioInterview.jobDescriptionId, jobIds),
         eq(studioInterview.outcome, "hired"),
+        isNotNull(studioInterview.actualOnboardedAt),
       ),
     );
   return row?.value ?? 0;
@@ -360,7 +365,7 @@ async function loadHumanMetrics(
     .select({
       completed: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioHumanInterviewRound.status, "completed"),
-        roleCondition(studioHumanInterviewRound.createdByRole, selectedRole),
+        roleCondition(studioHumanInterviewRound.completedByRole, selectedRole),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, todayRange),
       )})`.mapWith(Number),
       inProgress: sql<number>`COUNT(*) FILTER (WHERE ${and(
