@@ -700,10 +700,16 @@ export const resumeIdentityUpdateSchema = z.object({
   gender: z.string().trim().max(40),
   hiringUnitId: resumeLibraryOptionalHiringUnitIdSchema,
   jobDescriptionId: resumeLibraryOptionalJobDescriptionIdSchema,
+  preOnboardingTelegram: z
+    .string()
+    .trim()
+    .max(120, "入职前 TG 不能超过 120 个字符")
+    .nullable()
+    .optional(),
   recommendationText: z.string().trim().max(2000, "推荐语不能超过 2000 字"),
   resumeEvaluationStatus: resumeEvaluationStatusFormValueSchema,
   targetRole: z.string().trim().max(120, "目标岗位不能超过 120 个字符"),
-  telegram: z.string().trim().max(120, "TG 号不能超过 120 个字符").nullable().optional(),
+  telegram: z.string().trim().max(120, "入职后 TG 不能超过 120 个字符").nullable().optional(),
   workYears: z.number().min(0).max(80).nullable(),
 });
 

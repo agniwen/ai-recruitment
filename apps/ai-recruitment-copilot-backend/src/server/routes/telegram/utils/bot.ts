@@ -2,6 +2,7 @@ import { createPostgresState } from "@chat-adapter/state-pg";
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import type { TelegramAdapter, TelegramMessage } from "@chat-adapter/telegram";
 import { Chat } from "chat";
+import type { AdapterPostableMessage } from "chat";
 import { bindTelegramUser } from "../dao";
 
 type TelegramBot = Chat<{ telegram: TelegramAdapter }>;
@@ -80,7 +81,10 @@ export function getTelegramBot(): TelegramBot {
   return bot;
 }
 
-export async function postTelegramDirectMessage(chatId: string, message: string): Promise<void> {
+export async function postTelegramDirectMessage(
+  chatId: string,
+  message: AdapterPostableMessage,
+): Promise<void> {
   const bot = getTelegramBot();
   const threadId = await bot.getAdapter("telegram").openDM(chatId);
   await bot.thread(threadId).post(message);

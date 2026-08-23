@@ -403,7 +403,13 @@ export const closedHiredDetailsSchema = z.object({
   joiningDate: z.string().trim().nullable().optional(),
   joiningDepartment: z.string().trim().max(200).nullable().optional(),
   joiningPosition: z.string().trim().max(200).nullable().optional(),
-  telegram: z.string().trim().max(120, "TG 号不能超过 120 个字符").nullable().optional(),
+  preOnboardingTelegram: z
+    .string()
+    .trim()
+    .max(120, "入职前 TG 不能超过 120 个字符")
+    .nullable()
+    .optional(),
+  telegram: z.string().trim().max(120, "入职后 TG 不能超过 120 个字符").nullable().optional(),
 });
 export type ClosedHiredDetails = z.infer<typeof closedHiredDetailsSchema>;
 

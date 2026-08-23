@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { normalizeTelegramUsername, resolveTelegramRecipientId } from "./identity";
+import {
+  extractTelegramUsername,
+  normalizeTelegramUsername,
+  resolveTelegramRecipientId,
+} from "./identity";
+
+describe("extractTelegramUsername", () => {
+  it.each([
+    ["吕芮龙@qiusen0323", "qiusen0323"],
+    ["@Qiusen0323", "qiusen0323"],
+    ["qiusen0323", "qiusen0323"],
+  ])("extracts the Telegram username from %s", (value, expected) => {
+    expect(extractTelegramUsername(value)).toBe(expected);
+  });
+
+  it("rejects names and malformed Telegram usernames", () => {
+    expect(extractTelegramUsername("吕芮龙")).toBeNull();
+    expect(extractTelegramUsername("@abc")).toBeNull();
+    expect(extractTelegramUsername("qiusen0323 extra")).toBeNull();
+  });
+});
 
 describe("normalizeTelegramUsername", () => {
   it("normalizes profile handles and Telegram usernames to the same key", () => {

@@ -97,6 +97,7 @@ describe("resumeIdentityUpdateSchema", () => {
     const result = resumeIdentityUpdateSchema.safeParse({
       ...validIdentity,
       alias: "小王",
+      preOnboardingTelegram: "@candidate-before",
       telegram: "@candidate",
     });
 
@@ -106,6 +107,12 @@ describe("resumeIdentityUpdateSchema", () => {
   it("limits onboarded candidate fields", () => {
     expect(
       resumeIdentityUpdateSchema.safeParse({ ...validIdentity, alias: "a".repeat(121) }).success,
+    ).toBe(false);
+    expect(
+      resumeIdentityUpdateSchema.safeParse({
+        ...validIdentity,
+        preOnboardingTelegram: "a".repeat(121),
+      }).success,
     ).toBe(false);
     expect(
       resumeIdentityUpdateSchema.safeParse({ ...validIdentity, telegram: "a".repeat(121) }).success,

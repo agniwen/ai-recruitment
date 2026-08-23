@@ -175,6 +175,7 @@ interface CandidateInformationActivityDetail {
   hiringUnitName: string | null;
   jobDescriptionId: string | null;
   jobDescriptionName: string | null;
+  preOnboardingTelegram?: string | null;
   recommendationText: string | null;
   resumeEvaluationStatus: "fail" | "pass" | null;
   telegram?: string | null;
@@ -534,10 +535,13 @@ export const resumeLibraryRouter = factory
       }
 
       const input = c.req.valid("json");
-      const hasHiredCandidateFields = input.alias !== undefined || input.telegram !== undefined;
+      const hasHiredCandidateFields =
+        input.alias !== undefined ||
+        input.preOnboardingTelegram !== undefined ||
+        input.telegram !== undefined;
       const isHiredCandidate = existing.pipelineStage === "closed" && existing.outcome === "hired";
       if (hasHiredCandidateFields && !isHiredCandidate) {
-        return c.json({ error: "候选人已到岗后才能编辑 TG 号和花名。" }, 400);
+        return c.json({ error: "候选人已到岗后才能编辑入职前 TG、入职后 TG 和花名。" }, 400);
       }
       if (existing.jobDescriptionId && !input.jobDescriptionId) {
         return c.json({ error: "请选择关联在招岗位。" }, 400);
@@ -612,6 +616,9 @@ export const resumeLibraryRouter = factory
             hiredDetails: {
               ...existing.closedMeta?.hiredDetails,
               ...(input.alias === undefined ? {} : { alias: input.alias?.trim() || null }),
+              ...(input.preOnboardingTelegram === undefined
+                ? {}
+                : { preOnboardingTelegram: input.preOnboardingTelegram?.trim() || null }),
               ...(input.telegram === undefined ? {} : { telegram: input.telegram?.trim() || null }),
             },
           }
@@ -683,6 +690,9 @@ export const resumeLibraryRouter = factory
             jobDescriptionName: jobDescriptionChanged
               ? (nextJobDescription?.name ?? null)
               : existing.jobDescriptionName,
+            ...(input.preOnboardingTelegram === undefined
+              ? {}
+              : { preOnboardingTelegram: input.preOnboardingTelegram || null }),
             recommendationText: input.recommendationText || null,
             resumeEvaluationStatus: nextEvaluationStatus,
             ...(input.telegram === undefined ? {} : { telegram: input.telegram || null }),

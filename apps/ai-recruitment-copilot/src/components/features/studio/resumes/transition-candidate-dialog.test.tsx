@@ -71,7 +71,13 @@ describe("TransitionCandidateDialog close", () => {
     });
     act(() => {
       const telegram = document.querySelector<HTMLInputElement>("#hired-telegram");
+      const preOnboardingTelegram = document.querySelector<HTMLInputElement>(
+        "#hired-pre-onboarding-telegram",
+      );
       const alias = document.querySelector<HTMLInputElement>("#hired-alias");
+      if (preOnboardingTelegram) {
+        setInputValue(preOnboardingTelegram, "@candidate-before");
+      }
       if (telegram) {
         setInputValue(telegram, "@candidate");
       }
@@ -96,6 +102,7 @@ describe("TransitionCandidateDialog close", () => {
           joiningDate: null,
           joiningDepartment: null,
           joiningPosition: null,
+          preOnboardingTelegram: "@candidate-before",
           telegram: "@candidate",
         },
         internalNotes: null,

@@ -1043,6 +1043,7 @@ describe("resumeLibraryRouter behavior", () => {
         gender: "",
         hiringUnitId: "unit-1",
         jobDescriptionId: "jd-old",
+        preOnboardingTelegram: "@candidate-before",
         recommendationText: "",
         resumeEvaluationStatus: "pass",
         targetRole: "",
@@ -1062,6 +1063,7 @@ describe("resumeLibraryRouter behavior", () => {
             alias: "小王",
             joiningDepartment: "技术部",
             joiningPosition: "工程师",
+            preOnboardingTelegram: "@candidate-before",
             telegram: "@candidate",
           },
           previousStage: "offer",
@@ -1083,6 +1085,7 @@ describe("resumeLibraryRouter behavior", () => {
         gender: "",
         hiringUnitId: "unit-1",
         jobDescriptionId: "jd-old",
+        preOnboardingTelegram: "@candidate-before",
         recommendationText: "",
         resumeEvaluationStatus: "pass",
         targetRole: "",
@@ -1095,7 +1098,7 @@ describe("resumeLibraryRouter behavior", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: "候选人已到岗后才能编辑 TG 号和花名。",
+      error: "候选人已到岗后才能编辑入职前 TG、入职后 TG 和花名。",
     });
     expect(mocks.updatePatches).toHaveLength(0);
   });

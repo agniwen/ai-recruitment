@@ -529,6 +529,7 @@ interface OverviewIdentityDraft {
   gender: string;
   hiringUnitId: string;
   jobDescriptionId: string;
+  preOnboardingTelegram: string;
   recommendationText: string;
   resumeEvaluationStatus: "fail" | "pass" | "unreviewed";
   telegram: string;
@@ -549,6 +550,7 @@ function toOverviewIdentityDraft(detail: ResumeLibraryDetail): OverviewIdentityD
     gender: profile?.gender ?? "",
     hiringUnitId: detail.hiringUnitId ?? "",
     jobDescriptionId: detail.jobDescriptionId ?? "",
+    preOnboardingTelegram: detail.closedMeta?.hiredDetails?.preOnboardingTelegram ?? "",
     recommendationText: detail.recommendationText ?? "",
     resumeEvaluationStatus: detail.resumeEvaluationStatus ?? "unreviewed",
     targetRole: detail.targetRole ?? "",
@@ -705,6 +707,9 @@ function ResumeOverviewCandidateInfoSection({
           targetRole: draft.targetRole.trim(),
           workYears,
           ...(showHiredCandidateFields ? { alias: draft.alias.trim() } : {}),
+          ...(showHiredCandidateFields
+            ? { preOnboardingTelegram: draft.preOnboardingTelegram.trim() }
+            : {}),
           ...(showHiredCandidateFields ? { telegram: draft.telegram.trim() } : {}),
         };
         await updateStudioResumeIdentity(slug, detail.id, payload);
@@ -925,7 +930,24 @@ function ResumeOverviewCandidateInfoSection({
           {showHiredCandidateFields ? (
             <>
               <Field>
-                <FieldLabel htmlFor="overview-telegram">TG 号</FieldLabel>
+                <FieldLabel htmlFor="overview-pre-onboarding-telegram">入职前 TG</FieldLabel>
+                <Input
+                  className="h-8"
+                  disabled={saving}
+                  id="overview-pre-onboarding-telegram"
+                  maxLength={120}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      preOnboardingTelegram: event.target.value,
+                    }))
+                  }
+                  placeholder="例如 @username"
+                  value={draft.preOnboardingTelegram}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="overview-telegram">入职后 TG</FieldLabel>
                 <Input
                   className="h-8"
                   disabled={saving}
@@ -986,7 +1008,14 @@ function ResumeOverviewCandidateInfoSection({
           <DataField label="用人组织" value={detail.hiringUnitName} />
           {showHiredCandidateFields ? (
             <>
-              <DataField label="TG 号" value={detail.closedMeta?.hiredDetails?.telegram ?? null} />
+              <DataField
+                label="入职前 TG"
+                value={detail.closedMeta?.hiredDetails?.preOnboardingTelegram ?? null}
+              />
+              <DataField
+                label="入职后 TG"
+                value={detail.closedMeta?.hiredDetails?.telegram ?? null}
+              />
               <DataField label="花名" value={detail.closedMeta?.hiredDetails?.alias ?? null} />
             </>
           ) : null}

@@ -100,6 +100,7 @@ function CloseDialog({
   const [joiningDate, setJoiningDate] = useState("");
   const [joiningDepartment, setJoiningDepartment] = useState("");
   const [joiningPosition, setJoiningPosition] = useState("");
+  const [preOnboardingTelegram, setPreOnboardingTelegram] = useState("");
   const [telegram, setTelegram] = useState("");
   const [alias, setAlias] = useState("");
   // 淘汰细节
@@ -119,6 +120,7 @@ function CloseDialog({
     setJoiningDate("");
     setJoiningDepartment("");
     setJoiningPosition("");
+    setPreOnboardingTelegram("");
     setTelegram("");
     setAlias("");
     setCategory("");
@@ -150,6 +152,7 @@ function CloseDialog({
             joiningDate: joiningDate || null,
             joiningDepartment: joiningDepartment.trim() || null,
             joiningPosition: joiningPosition.trim() || null,
+            preOnboardingTelegram: preOnboardingTelegram.trim() || null,
             telegram: telegram.trim() || null,
           };
         }
@@ -244,8 +247,20 @@ function CloseDialog({
                   />
                 </div>
                 <div className="grid gap-1.5">
+                  <Label className="text-xs" htmlFor="hired-pre-onboarding-telegram">
+                    入职前 TG（可选）
+                  </Label>
+                  <Input
+                    id="hired-pre-onboarding-telegram"
+                    maxLength={120}
+                    onChange={(e) => setPreOnboardingTelegram(e.target.value)}
+                    placeholder="例如 @username"
+                    value={preOnboardingTelegram}
+                  />
+                </div>
+                <div className="grid gap-1.5">
                   <Label className="text-xs" htmlFor="hired-telegram">
-                    TG 号（可选）
+                    入职后 TG（可选）
                   </Label>
                   <Input
                     id="hired-telegram"

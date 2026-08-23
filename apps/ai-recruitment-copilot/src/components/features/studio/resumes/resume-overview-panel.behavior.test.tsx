@@ -102,6 +102,7 @@ function makeHiredDetail(): ResumeLibraryDetail {
     closedMeta: {
       hiredDetails: {
         alias: "小王",
+        preOnboardingTelegram: "@candidate-before",
         telegram: "@candidate",
       },
     },
@@ -227,6 +228,7 @@ it("shows and edits TG and alias fields only after hired", async () => {
   const { container, queryClient, root } = renderOverview(detail);
 
   expect(container.textContent).toContain("@candidate");
+  expect(container.textContent).toContain("@candidate-before");
   expect(container.textContent).toContain("小王");
 
   act(() => {
@@ -242,11 +244,18 @@ it("shows and edits TG and alias fields only after hired", async () => {
   });
 
   const telegram = container.querySelector<HTMLInputElement>("#overview-telegram");
+  const preOnboardingTelegram = container.querySelector<HTMLInputElement>(
+    "#overview-pre-onboarding-telegram",
+  );
   const alias = container.querySelector<HTMLInputElement>("#overview-alias");
+  expect(preOnboardingTelegram?.value).toBe("@candidate-before");
   expect(telegram?.value).toBe("@candidate");
   expect(alias?.value).toBe("小王");
 
   act(() => {
+    if (preOnboardingTelegram) {
+      setInputValue(preOnboardingTelegram, "@new-candidate-before");
+    }
     if (telegram) {
       setInputValue(telegram, "@new-candidate");
     }
@@ -263,7 +272,11 @@ it("shows and edits TG and alias fields only after hired", async () => {
       expect(apiMocks.updateStudioResumeIdentity).toHaveBeenCalledWith(
         "workspace",
         "resume-1",
-        expect.objectContaining({ alias: "新花名", telegram: "@new-candidate" }),
+        expect.objectContaining({
+          alias: "新花名",
+          preOnboardingTelegram: "@new-candidate-before",
+          telegram: "@new-candidate",
+        }),
       );
     });
   });
@@ -281,8 +294,10 @@ it("does not show hired fields before the hired closed stage", () => {
   const { container, queryClient, root } = renderOverview(detail);
 
   expect(container.textContent).not.toContain("@candidate");
+  expect(container.textContent).not.toContain("@candidate-before");
   expect(container.textContent).not.toContain("小王");
   expect(container.querySelector("#overview-telegram")).toBeNull();
+  expect(container.querySelector("#overview-pre-onboarding-telegram")).toBeNull();
   expect(container.querySelector("#overview-alias")).toBeNull();
 
   act(() => root.unmount());
