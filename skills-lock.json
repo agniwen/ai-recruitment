@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "add-adapter": {
+      "source": "vercel/chat",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/add-adapter/SKILL.md",
+      "computedHash": "e1656598317fec29de630bb560ed8508eb6cba81e7a1bce838071567f7ad6085"
+    },
     "agents": {
       "source": "elevenlabs/skills",
       "sourceType": "github",
