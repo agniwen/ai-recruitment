@@ -21,6 +21,7 @@ import {
   sendOfferDraft,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { recordCandidateActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
+import { notifyCandidateStageChange } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-notification";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 
 export const offerDraftsRouter = factory
@@ -58,7 +59,11 @@ export const offerDraftsRouter = factory
       }
 
       const [candidate] = await db
-        .select({ id: studioInterview.id, pipelineStage: studioInterview.pipelineStage })
+        .select({
+          id: studioInterview.id,
+          outcome: studioInterview.outcome,
+          pipelineStage: studioInterview.pipelineStage,
+        })
         .from(studioInterview)
         .where(
           and(eq(studioInterview.id, recordId), eq(studioInterview.organizationId, activeOrg.id)),
@@ -90,7 +95,17 @@ export const offerDraftsRouter = factory
         organizationId: activeOrg.id,
         sendImmediately,
       });
-      await maybeAdvanceToOffer(recordId, activeOrg.id);
+      const stageChanged = await maybeAdvanceToOffer(recordId, activeOrg.id);
+      if (stageChanged) {
+        await notifyCandidateStageChange({
+          candidateId: recordId,
+          fromOutcome: candidate.outcome,
+          fromStage: candidate.pipelineStage,
+          organizationId: activeOrg.id,
+          toOutcome: "in_pipeline",
+          toStage: "offer",
+        });
+      }
       await recordCandidateActivity({
         action: "offer_draft_created",
         detail: {

@@ -15,6 +15,7 @@ import { livekitRouter } from "./routes/livekit/route";
 import { platformRouter } from "./routes/platform/route";
 import { publicRouter } from "./routes/public/route";
 import { resumeRouter } from "./routes/resume/route";
+import { telegramRouter } from "./routes/telegram/route";
 import { workspaceRouter } from "./routes/workspace/route";
 
 // 中文：所有业务路由都聚合到 apiRoutes，再以 .route("/api", apiRoutes) 挂上去。
@@ -27,6 +28,7 @@ import { workspaceRouter } from "./routes/workspace/route";
 const apiRoutes = factory
   .createApp()
   .route("/", feishuRouter)
+  .route("/", telegramRouter)
   .route("/agent", agentRouter)
   .route("/livekit", livekitRouter)
   .route("/resume", resumeRouter)

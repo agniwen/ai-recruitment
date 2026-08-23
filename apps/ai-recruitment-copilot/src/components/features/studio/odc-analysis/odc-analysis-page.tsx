@@ -6,24 +6,25 @@ import type {
   OdcAnalysisData,
   OdcAnalysisJobOption,
   OdcAnalysisMetric,
-  OdcAnalysisRoleOption,
+  OdcAnalysisResumeActivity,
   OdcAnalysisSearch,
 } from "@arc/shared/odc-analysis";
+import { toBeijingDayKey } from "@arc/shared/beijing-calendar";
 import { DatePicker } from "@/components/date-time-picker";
 import { PageHeader } from "@/components/features/studio/page-header";
-import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const ALL_ROLES_VALUE = "__all_odc_roles__";
 
 const UNIT_LABEL: Record<OdcAnalysisMetric["unit"], string> = {
   candidate: "人",
@@ -34,65 +35,124 @@ const UNIT_LABEL: Record<OdcAnalysisMetric["unit"], string> = {
 };
 
 interface MetricDefinition {
+  activity: OdcAnalysisResumeActivity;
   description: string;
-  key: keyof OdcAnalysisData["overall"] | keyof OdcAnalysisData["today"];
+  key: keyof OdcAnalysisData["overall"] | keyof OdcAnalysisData["activity"];
   label: string;
-  resumeStage?: string;
+}
+
+interface ActivitySectionData {
+  activity: OdcAnalysisData["activity"];
+  activityInterviewStates: OdcAnalysisData["activityInterviewStates"];
+  upcoming: OdcAnalysisData["upcoming"];
+}
+
+interface SectionQuery<T> {
+  data: T | undefined;
+  error: boolean;
+  loading: boolean;
+  retry: () => void;
 }
 
 const OVERALL_METRICS: MetricDefinition[] = [
   {
-    description: "筛选范围内已关联岗位的候选人数",
+    activity: "associated_resume",
+    description: "筛选范围内已关联岗位且解析完成的候选人数",
     key: "associatedResumes",
     label: "已关联简历",
-    resumeStage: "",
   },
   {
-    description: "仍在简历筛选阶段且尚无评估结果的候选人数",
+    activity: "pending_evaluation",
+    description: "筛选范围内关联且当前仍在简历筛选阶段、尚无评估结果的候选人数",
     key: "currentPendingEvaluation",
     label: "当前待评估",
-    resumeStage: "screening",
   },
-  { description: "按候选人去重，多轮 AI 面试只计一人", key: "aiInterviews", label: "AI 面试" },
-  { description: "未取消的真人面试轮次数", key: "humanInterviewRounds", label: "面试环节数" },
-  { description: "按同一候选人同一岗位首次成功发送统计", key: "offers", label: "Offer" },
   {
+    activity: "ai_interview",
+    description: "按候选人去重，多轮 AI 面试只计一人",
+    key: "aiInterviews",
+    label: "AI 面试",
+  },
+  {
+    activity: "human_interview",
+    description: "未取消的真人面试轮次数",
+    key: "humanInterviewRounds",
+    label: "面试环节数",
+  },
+  {
+    activity: "offer",
+    description: "按同一候选人同一岗位首次成功发送统计",
+    key: "offers",
+    label: "Offer",
+  },
+  {
+    activity: "expected_arrival",
     description: "已接受 Offer 中预计到岗日期落入范围的候选人数",
     key: "expectedArrivals",
     label: "即将到岗",
   },
-  { description: "已明确确认实际到岗的候选人数", key: "onboarded", label: "实际到岗" },
   {
+    activity: "onboarded",
+    description: "实际到岗日期落入范围且已确认到岗的候选人数",
+    key: "onboarded",
+    label: "实际到岗",
+  },
+  {
+    activity: "closed",
     description: "按结案时间统计，保留淘汰和撤回拆分",
     key: "rejectedOrWithdrawn",
     label: "淘汰 / 撤回",
   },
 ];
 
-const TODAY_METRICS: MetricDefinition[] = [
-  { description: "今天新关联岗位的候选人数", key: "associatedResumes", label: "今日关联简历" },
+const ACTIVITY_METRICS: MetricDefinition[] = [
   {
-    description: "今天关联且当前仍未完成简历评估的候选人数",
+    activity: "associated_resume",
+    description: "当日新关联岗位且解析完成的候选人数",
+    key: "associatedResumes",
+    label: "关联简历",
+  },
+  {
+    activity: "pending_evaluation",
+    description: "当日关联且当前仍未完成简历评估的候选人数",
     key: "currentPendingEvaluation",
-    label: "今日待评估",
+    label: "待评估",
   },
-  { description: "今天计划开展 AI 面试的去重候选人数", key: "aiInterviews", label: "今日 AI 面试" },
   {
-    description: "今天计划开展且未取消的真人面试轮次",
+    activity: "ai_interview",
+    description: "当日计划开展 AI 面试的去重候选人数",
+    key: "aiInterviews",
+    label: "AI 面试",
+  },
+  {
+    activity: "human_interview",
+    description: "当日计划开展且未取消的真人面试轮次",
     key: "humanInterviewRounds",
-    label: "今日面试环节",
+    label: "面试环节",
   },
-  { description: "今天首次成功发送的逻辑 Offer 数", key: "newOffers", label: "今日新增 Offer" },
   {
-    description: "预计到岗日期为今天且 Offer 已接受的候选人数",
+    activity: "offer",
+    description: "当日首次成功发送的逻辑 Offer 数",
+    key: "newOffers",
+    label: "新增 Offer",
+  },
+  {
+    activity: "expected_arrival",
+    description: "预计到岗日期为当日且 Offer 已接受的候选人数",
     key: "expectedArrivals",
-    label: "今日将到岗",
+    label: "将到岗",
   },
-  { description: "实际到岗日期为今天的候选人数", key: "onboarded", label: "今日实际到岗" },
   {
-    description: "今天结案为淘汰或撤回的候选人数",
+    activity: "onboarded",
+    description: "实际到岗日期为当日的候选人数",
+    key: "onboarded",
+    label: "实际到岗",
+  },
+  {
+    activity: "closed",
+    description: "当日结案为淘汰或撤回的候选人数",
     key: "rejectedOrWithdrawn",
-    label: "今日淘汰 / 撤回",
+    label: "淘汰 / 撤回",
   },
 ];
 
@@ -114,38 +174,62 @@ function breakdownText(metric: OdcAnalysisMetric): string | null {
     .join(" · ");
 }
 
-function MetricCard({
-  definition,
-  drilldown,
+function MetricCardContent({
+  description,
+  label,
   metric,
 }: {
-  definition: MetricDefinition;
-  drilldown?: { jdIds?: string; slug: string; stage: string };
+  description: string;
+  label: string;
   metric: OdcAnalysisMetric;
 }) {
   const detail = breakdownText(metric);
-  const content = (
-    <Card title={`${definition.description}${detail ? `；${detail}` : ""}`}>
+  return (
+    <Card className="h-full" title={`${description}${detail ? `；${detail}` : ""}`}>
       <CardHeader className="pb-3">
-        <CardDescription>{definition.label}</CardDescription>
+        <CardDescription>{label}</CardDescription>
         <CardTitle className="text-3xl tabular-nums">
           {metric.value.toLocaleString("zh-CN")}
-          <span className="ml-1 text-muted-foreground text-sm font-normal">
+          <span className="ms-1 text-muted-foreground text-sm font-normal">
             {UNIT_LABEL[metric.unit]}
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex min-h-12 flex-col gap-1 pt-0 text-muted-foreground text-xs">
-        <span>{definition.description}</span>
+        <span>{description}</span>
         {detail ? <span className="text-foreground">{detail}</span> : null}
       </CardContent>
     </Card>
   );
-  return drilldown ? (
+}
+
+function ResumeMetricCard({
+  activityFrom,
+  activityTo,
+  definition,
+  jdIds,
+  metric,
+  slug,
+}: {
+  activityFrom?: string;
+  activityTo?: string;
+  definition: MetricDefinition;
+  jdIds?: string;
+  metric: OdcAnalysisMetric;
+  slug?: string;
+}) {
+  const content = (
+    <MetricCardContent
+      description={definition.description}
+      label={definition.label}
+      metric={metric}
+    />
+  );
+  return slug ? (
     <Link
       className="rounded-xl outline-none ring-offset-background transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      params={{ slug: drilldown.slug }}
-      search={{ jdIds: drilldown.jdIds, stage: drilldown.stage }}
+      params={{ slug }}
+      search={{ activity: definition.activity, activityFrom, activityTo, jdIds }}
       to="/w/$slug/studio/resumes"
     >
       {content}
@@ -155,70 +239,147 @@ function MetricCard({
   );
 }
 
-function MetricsPanel({
-  description,
+function DemandSummary({
+  canDrillDown,
+  data,
+  search,
+  slug,
+}: {
+  canDrillDown: boolean;
+  data: OdcAnalysisData["demand"];
+  search: OdcAnalysisSearch;
+  slug: string;
+}) {
+  const items = [
+    ["对接岗位", data.connectedJobs],
+    ["总 HC", data.totalHeadcount],
+    ["已到岗", data.onboarded],
+    ["空缺", data.vacancies],
+  ] as const;
+  return (
+    <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      {items.map(([label, metric]) => {
+        const content = (
+          <MetricCardContent
+            description="查看符合当前需求日期筛选的在招岗位"
+            label={label}
+            metric={metric}
+          />
+        );
+        return canDrillDown ? (
+          <Link
+            className="rounded-xl outline-none ring-offset-background transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            key={label}
+            params={{ slug }}
+            search={{
+              dateField: search.demandDateField ?? "requestedDate",
+              dateFrom: search.demandFrom,
+              dateTo: search.demandTo,
+            }}
+            to="/w/$slug/studio/job-descriptions"
+          >
+            {content}
+          </Link>
+        ) : (
+          <div key={label}>{content}</div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MetricsGrid({
+  activityFrom,
+  activityTo,
   definitions,
-  drilldown,
+  jdIds,
   metrics,
+  slug,
+}: {
+  activityFrom?: string;
+  activityTo?: string;
+  definitions: MetricDefinition[];
+  jdIds?: string;
+  metrics: OdcAnalysisData["overall"] | OdcAnalysisData["activity"];
+  slug?: string;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {definitions.map((definition) => (
+        <ResumeMetricCard
+          activityFrom={activityFrom}
+          activityTo={activityTo}
+          definition={definition}
+          jdIds={jdIds}
+          key={definition.key}
+          metric={metrics[definition.key as keyof typeof metrics]}
+          slug={slug}
+        />
+      ))}
+    </div>
+  );
+}
+
+function JobFilter({
+  id,
+  jobs,
+  onChange,
+  value,
+}: {
+  id: string;
+  jobs: OdcAnalysisJobOption[];
+  onChange: (value: string[]) => void;
+  value: string[];
+}) {
+  const options = useMemo(
+    () =>
+      jobs.map((job) => ({
+        description: [job.code, job.recruitmentStatus].filter(Boolean).join(" · ") || undefined,
+        label: job.name,
+        value: job.id,
+      })),
+    [jobs],
+  );
+  return (
+    <SearchableMultiSelect
+      id={id}
+      onChange={onChange}
+      options={options}
+      placeholder="全部岗位"
+      searchPlaceholder="搜索岗位"
+      selectedDisplay="count"
+      selectedFormat={(count) => `已选 ${count} 个岗位`}
+      value={value}
+    />
+  );
+}
+
+function DashboardSection({
+  children,
+  description,
   title,
 }: {
+  children: React.ReactNode;
   description: string;
-  definitions: MetricDefinition[];
-  drilldown?: { jdIds?: string; slug: string };
-  metrics: OdcAnalysisData["overall"] | OdcAnalysisData["today"];
   title: string;
 }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
         <p className="text-muted-foreground text-sm">{description}</p>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {definitions.map((definition) => (
-          <MetricCard
-            definition={definition}
-            drilldown={
-              drilldown && definition.resumeStage !== undefined
-                ? { ...drilldown, stage: definition.resumeStage }
-                : undefined
-            }
-            key={definition.key}
-            metric={metrics[definition.key as keyof typeof metrics]}
-          />
-        ))}
-      </div>
+      {children}
     </section>
   );
 }
 
-function DemandSummary({ data }: { data: OdcAnalysisData["demand"] }) {
-  const items = [
-    ["对接岗位", data.connectedJobs.value.toLocaleString("zh-CN")],
-    ["总 HC", data.totalHeadcount.value.toLocaleString("zh-CN")],
-    ["已到岗", data.onboarded.value.toLocaleString("zh-CN")],
-    ["空缺", data.vacancies.value.toLocaleString("zh-CN")],
-  ] as const;
-  return (
-    <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-      {items.map(([label, value]) => (
-        <Card key={label}>
-          <CardHeader className="pb-4">
-            <CardDescription>{label}</CardDescription>
-            <CardTitle className="text-xl tabular-nums">{value}</CardTitle>
-          </CardHeader>
-        </Card>
-      ))}
-    </section>
-  );
-}
-
-function UpcomingSummary({ data }: { data: OdcAnalysisData }) {
+function UpcomingSummary({ data }: { data: ActivitySectionData }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>未来 3 天 AI 面试</CardTitle>
+          <CardTitle>所选日期后 3 天 AI 面试</CardTitle>
           <CardDescription>按候选人去重，不包含已取消安排</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-3 gap-3">
@@ -232,15 +393,15 @@ function UpcomingSummary({ data }: { data: OdcAnalysisData }) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>今日面试状态与到岗计划</CardTitle>
+          <CardTitle>当日面试状态与后续到岗计划</CardTitle>
           <CardDescription>面试状态按真人面试轮次，预计到岗只统计已接受 Offer</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="grid grid-cols-3 gap-3">
             {[
-              ["已完成", data.todayInterviewStates.completed],
-              ["进行中", data.todayInterviewStates.inProgress],
-              ["即将开始", data.todayInterviewStates.upcoming],
+              ["已完成", data.activityInterviewStates.completed],
+              ["进行中", data.activityInterviewStates.inProgress],
+              ["即将开始", data.activityInterviewStates.upcoming],
             ].map(([label, value]) => (
               <div className="flex flex-col gap-1 rounded-xl bg-muted p-3" key={label}>
                 <span className="text-muted-foreground text-xs">{label}</span>
@@ -265,36 +426,54 @@ function UpcomingSummary({ data }: { data: OdcAnalysisData }) {
   );
 }
 
-export function OdcAnalysisResultsSkeleton() {
+function MetricCardsSkeleton({ count }: { count: number }) {
   return (
-    <>
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton className="h-24 rounded-2xl" key={index} />
-        ))}
-      </div>
-      {["整体进度", "今日工作台"].map((label) => (
-        <section className="flex flex-col gap-4" key={label}>
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-6 w-28" />
-            <Skeleton className="h-4 w-80 max-w-full" />
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {Array.from({ length: 8 }, (_, index) => (
-              <Skeleton className="h-40 rounded-2xl" key={index} />
-            ))}
-          </div>
-        </section>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: count }, (_, index) => (
+        <Skeleton className="h-40 rounded-2xl" key={index} />
       ))}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Skeleton className="h-56 rounded-2xl" />
-        <Skeleton className="h-56 rounded-2xl" />
-      </div>
-    </>
+    </div>
   );
 }
 
-function OdcAnalysisResultsError({ onRetry }: { onRetry: () => void }) {
+export function DemandResultsSkeleton() {
+  return <MetricCardsSkeleton count={4} />;
+}
+
+export function MetricsResultsSkeleton() {
+  return <MetricCardsSkeleton count={8} />;
+}
+
+export function ActivityResultsSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <MetricCardsSkeleton count={8} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Skeleton className="h-52 rounded-2xl" />
+        <Skeleton className="h-52 rounded-2xl" />
+      </div>
+    </div>
+  );
+}
+
+function OdcAnalysisInitialResultsSkeleton() {
+  return (
+    <div className="flex flex-col gap-10">
+      {[4, 8, 8].map((count, sectionIndex) => (
+        <section className="flex flex-col gap-4" key={sectionIndex}>
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-96 max-w-full" />
+          </div>
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <MetricCardsSkeleton count={count} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function OdcAnalysisSectionError({ onRetry }: { onRetry: () => void }) {
   return (
     <Card>
       <CardHeader>
@@ -310,151 +489,250 @@ function OdcAnalysisResultsError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function SectionResults<T>({
+  children,
+  query,
+  skeleton,
+}: {
+  children: (data: T) => React.ReactNode;
+  query: SectionQuery<T>;
+  skeleton: React.ReactNode;
+}) {
+  return (
+    <div aria-busy={query.loading} aria-live="polite">
+      {query.loading ? skeleton : null}
+      {!query.loading && query.error ? <OdcAnalysisSectionError onRetry={query.retry} /> : null}
+      {!query.loading && !query.error && query.data ? children(query.data) : null}
+    </div>
+  );
+}
+
 export function OdcAnalysisPage({
+  activityQuery,
+  canViewJobDescriptions,
   canViewResumes,
-  data,
-  dataError,
-  dataLoading,
+  demandQuery,
   jobs,
-  onRetry,
-  roles,
+  overallQuery,
   search,
 }: {
+  activityQuery: SectionQuery<ActivitySectionData>;
+  canViewJobDescriptions: boolean;
   canViewResumes: boolean;
-  data: OdcAnalysisData | undefined;
-  dataError: boolean;
-  dataLoading: boolean;
+  demandQuery: SectionQuery<OdcAnalysisData["demand"]>;
   jobs: OdcAnalysisJobOption[];
-  onRetry: () => void;
-  roles: OdcAnalysisRoleOption[];
+  overallQuery: SectionQuery<OdcAnalysisData["overall"]>;
   search: OdcAnalysisSearch;
 }) {
   const navigate = useNavigate({ from: "/w/$slug/studio/odc-analysis" });
   const { slug } = useParams({ from: "/w/$slug/studio/odc-analysis" });
-  const selectedJobs = search.jdIds?.split(",").filter(Boolean) ?? [];
-  const jobOptions = useMemo(
-    () =>
-      jobs.map((job) => ({
-        description: [job.code, job.recruitmentStatus].filter(Boolean).join(" · ") || undefined,
-        label: job.name,
-        value: job.id,
-      })),
-    [jobs],
-  );
-  const updateSearch = (next: OdcAnalysisSearch) => {
-    void navigate({ replace: true, search: next });
+  const progressJobs = search.progressJdIds?.split(",").filter(Boolean) ?? [];
+  const activityJobs = search.activityJdIds?.split(",").filter(Boolean) ?? [];
+  const activityDate = search.activityDate ?? toBeijingDayKey(new Date());
+  const updateSearch = (updates: Partial<OdcAnalysisSearch>) => {
+    void navigate({
+      replace: true,
+      resetScroll: false,
+      search: (previous) => ({ ...previous, ...updates }),
+    });
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-8">
       <PageHeader
         title="ODC 分析"
-        description="查看工作区招聘需求、候选人流转与当日安排。统计覆盖所有参与招聘的角色。"
+        description="分别查看岗位需求、候选人招聘进度与指定日期动态。每部分使用独立筛选条件。"
       />
-      <section
-        aria-label="筛选条件"
-        className="grid grid-cols-1 gap-4 md:grid-cols-2 md:items-end xl:grid-cols-[12rem_12rem_14rem_minmax(16rem,1fr)_auto]"
-      >
-        <label className="flex flex-col gap-2 text-sm" htmlFor="odc-analysis-from">
-          <span>开始日期</span>
-          <DatePicker
-            id="odc-analysis-from"
-            max={search.to}
-            onValueChange={(value) => updateSearch({ ...search, from: value || undefined })}
-            placeholder="选择开始日期"
-            value={search.from ?? ""}
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm" htmlFor="odc-analysis-to">
-          <span>结束日期</span>
-          <DatePicker
-            id="odc-analysis-to"
-            min={search.from}
-            onValueChange={(value) => updateSearch({ ...search, to: value || undefined })}
-            placeholder="选择结束日期"
-            value={search.to ?? ""}
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm" htmlFor="odc-analysis-role">
-          <span>角色</span>
-          <Select
-            onValueChange={(value) =>
-              updateSearch({
-                ...search,
-                role: value && value !== ALL_ROLES_VALUE ? value : undefined,
-              })
-            }
-            value={search.role ?? ALL_ROLES_VALUE}
-          >
-            <SelectTrigger className="w-full" id="odc-analysis-role">
-              <SelectValue placeholder="全部角色" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL_ROLES_VALUE}>全部角色</SelectItem>
-              {roles.map((role) => (
-                <SelectItem key={role.value} value={role.value}>
-                  {role.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-        <label className="flex flex-col gap-2 text-sm" htmlFor="odc-analysis-jobs">
-          <span>岗位</span>
-          <SearchableMultiSelect
-            id="odc-analysis-jobs"
-            onChange={(value) =>
-              updateSearch({
-                ...search,
-                jdIds: value.length > 0 ? value.toSorted().join(",") : undefined,
-              })
-            }
-            options={jobOptions}
-            placeholder="全部岗位"
-            searchPlaceholder="搜索岗位"
-            selectedDisplay="count"
-            selectedFormat={(count) => `已选 ${count} 个岗位`}
-            value={selectedJobs}
-          />
-        </label>
-        <Button onClick={() => updateSearch({})} type="button" variant="outline">
-          重置
-        </Button>
-      </section>
-      <div aria-busy={dataLoading} aria-live="polite" className="flex flex-col gap-6">
-        {dataLoading ? <OdcAnalysisResultsSkeleton /> : null}
-        {!dataLoading && dataError ? <OdcAnalysisResultsError onRetry={onRetry} /> : null}
-        {!dataLoading && !dataError && data ? (
-          <>
-            {jobs.length === 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>暂无岗位数据</CardTitle>
-                  <CardDescription>创建或同步在招岗位后，这里会自动汇总招聘进度。</CardDescription>
-                </CardHeader>
-              </Card>
-            ) : null}
-            <DemandSummary data={data.demand} />
-            <MetricsPanel
-              definitions={OVERALL_METRICS}
-              description="默认展示当前存量；选择时间后，各指标按对应业务时间统计。"
-              drilldown={
-                canViewResumes && !(search.from || search.role || search.to)
-                  ? { jdIds: search.jdIds, slug }
-                  : undefined
+      <div className="flex flex-col gap-10">
+        <DashboardSection
+          description="按在招岗位的提需求日期或期望到岗日期筛选；开始和结束日期均可留空。"
+          title="岗位需求概览"
+        >
+          <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-[14rem_12rem_12rem_auto] xl:items-end">
+            <Field>
+              <FieldLabel htmlFor="odc-demand-date-field">日期字段</FieldLabel>
+              <Select
+                onValueChange={(value) =>
+                  updateSearch({
+                    demandDateField:
+                      value === "expectedOnboardDate" ? "expectedOnboardDate" : undefined,
+                  })
+                }
+                value={search.demandDateField ?? "requestedDate"}
+              >
+                <SelectTrigger className="w-full" id="odc-demand-date-field">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="requestedDate">提需求日期</SelectItem>
+                    <SelectItem value="expectedOnboardDate">期望到岗日期</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="odc-demand-from">开始日期</FieldLabel>
+              <DatePicker
+                id="odc-demand-from"
+                max={search.demandTo}
+                onValueChange={(value) => updateSearch({ demandFrom: value || undefined })}
+                placeholder="不限开始日期"
+                value={search.demandFrom ?? ""}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="odc-demand-to">结束日期</FieldLabel>
+              <DatePicker
+                id="odc-demand-to"
+                min={search.demandFrom}
+                onValueChange={(value) => updateSearch({ demandTo: value || undefined })}
+                placeholder="不限结束日期"
+                value={search.demandTo ?? ""}
+              />
+            </Field>
+            <Button
+              onClick={() =>
+                updateSearch({
+                  demandDateField: undefined,
+                  demandFrom: undefined,
+                  demandTo: undefined,
+                })
               }
-              metrics={data.overall}
-              title="招聘整体进度"
-            />
-            <MetricsPanel
-              definitions={TODAY_METRICS}
-              description="按北京时间自然日统计，不受上方时间范围影响，岗位与角色筛选继续生效。"
-              metrics={data.today}
-              title="今日工作台"
-            />
-            <UpcomingSummary data={data} />
-          </>
-        ) : null}
+              type="button"
+              variant="outline"
+            >
+              重置
+            </Button>
+          </FieldGroup>
+          <SectionResults query={demandQuery} skeleton={<DemandResultsSkeleton />}>
+            {(data) => (
+              <DemandSummary
+                canDrillDown={canViewJobDescriptions}
+                data={data}
+                search={search}
+                slug={slug}
+              />
+            )}
+          </SectionResults>
+        </DashboardSection>
+
+        <DashboardSection
+          description="统计候选人管理中的记录；日期范围和岗位均不选择时不限制。不同指标按各自业务时间统计。"
+          title="招聘整体进度"
+        >
+          <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[12rem_12rem_minmax(18rem,1fr)_auto] xl:items-end">
+            <Field>
+              <FieldLabel htmlFor="odc-progress-from">开始日期</FieldLabel>
+              <DatePicker
+                id="odc-progress-from"
+                max={search.progressTo}
+                onValueChange={(value) => updateSearch({ progressFrom: value || undefined })}
+                placeholder="不限开始日期"
+                value={search.progressFrom ?? ""}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="odc-progress-to">结束日期</FieldLabel>
+              <DatePicker
+                id="odc-progress-to"
+                min={search.progressFrom}
+                onValueChange={(value) => updateSearch({ progressTo: value || undefined })}
+                placeholder="不限结束日期"
+                value={search.progressTo ?? ""}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="odc-progress-jobs">岗位</FieldLabel>
+              <JobFilter
+                id="odc-progress-jobs"
+                jobs={jobs}
+                onChange={(value) =>
+                  updateSearch({
+                    progressJdIds: value.length > 0 ? value.toSorted().join(",") : undefined,
+                  })
+                }
+                value={progressJobs}
+              />
+            </Field>
+            <Button
+              onClick={() =>
+                updateSearch({
+                  progressFrom: undefined,
+                  progressJdIds: undefined,
+                  progressTo: undefined,
+                })
+              }
+              type="button"
+              variant="outline"
+            >
+              重置
+            </Button>
+          </FieldGroup>
+          <SectionResults query={overallQuery} skeleton={<MetricsResultsSkeleton />}>
+            {(data) => (
+              <MetricsGrid
+                activityFrom={search.progressFrom}
+                activityTo={search.progressTo}
+                definitions={OVERALL_METRICS}
+                jdIds={search.progressJdIds}
+                metrics={data}
+                slug={canViewResumes ? slug : undefined}
+              />
+            )}
+          </SectionResults>
+        </DashboardSection>
+
+        <DashboardSection
+          description="按北京时间自然日统计；默认今天，岗位默认全部。下方未来安排以所选日期为起点。"
+          title="当日动态"
+        >
+          <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[12rem_minmax(18rem,1fr)_auto] xl:items-end">
+            <Field>
+              <FieldLabel htmlFor="odc-activity-date">日期</FieldLabel>
+              <DatePicker
+                id="odc-activity-date"
+                onValueChange={(value) => updateSearch({ activityDate: value || undefined })}
+                value={activityDate}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="odc-activity-jobs">岗位</FieldLabel>
+              <JobFilter
+                id="odc-activity-jobs"
+                jobs={jobs}
+                onChange={(value) =>
+                  updateSearch({
+                    activityJdIds: value.length > 0 ? value.toSorted().join(",") : undefined,
+                  })
+                }
+                value={activityJobs}
+              />
+            </Field>
+            <Button
+              onClick={() => updateSearch({ activityDate: undefined, activityJdIds: undefined })}
+              type="button"
+              variant="outline"
+            >
+              回到今天
+            </Button>
+          </FieldGroup>
+          <SectionResults query={activityQuery} skeleton={<ActivityResultsSkeleton />}>
+            {(data) => (
+              <div className="flex flex-col gap-4">
+                <MetricsGrid
+                  activityFrom={activityDate}
+                  activityTo={activityDate}
+                  definitions={ACTIVITY_METRICS}
+                  jdIds={search.activityJdIds}
+                  metrics={data.activity}
+                  slug={canViewResumes ? slug : undefined}
+                />
+                <UpcomingSummary data={data} />
+              </div>
+            )}
+          </SectionResults>
+        </DashboardSection>
       </div>
     </div>
   );
@@ -467,8 +745,7 @@ export function OdcAnalysisPageSkeleton() {
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-5 w-96 max-w-full" />
       </div>
-      <Skeleton className="h-20 w-full rounded-xl" />
-      <OdcAnalysisResultsSkeleton />
+      <OdcAnalysisInitialResultsSkeleton />
     </div>
   );
 }

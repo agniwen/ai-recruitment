@@ -25,6 +25,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/human-interview-livekit";
 import { offerDraftsRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/routes/offer-drafts/route";
 import { recordCandidateActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
+import { notifyCandidateStageChange } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-notification";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { humanInterviewFeedbackSchema } from "./utils/human-interview-readiness";
@@ -79,7 +80,11 @@ export const studioInterviewHumanRouter = factory
       // 候选人必须存在、归属当前组织、且未结案（已结案需先重新激活）。
       // Candidate must exist, belong to active org, and not be closed.
       const [candidate] = await db
-        .select({ id: studioInterview.id, pipelineStage: studioInterview.pipelineStage })
+        .select({
+          id: studioInterview.id,
+          outcome: studioInterview.outcome,
+          pipelineStage: studioInterview.pipelineStage,
+        })
         .from(studioInterview)
         .where(
           and(eq(studioInterview.id, recordId), eq(studioInterview.organizationId, activeOrg.id)),
@@ -110,7 +115,17 @@ export const studioInterviewHumanRouter = factory
       });
       // 创建第一轮时自动把 pipelineStage 推进到 human_interview（screening/ai_interview 等才推）。
       // Auto-advance pipelineStage when the first round goes in.
-      await maybeAdvanceToHumanInterview(recordId, activeOrg.id);
+      const stageChanged = await maybeAdvanceToHumanInterview(recordId, activeOrg.id);
+      if (stageChanged) {
+        await notifyCandidateStageChange({
+          candidateId: recordId,
+          fromOutcome: candidate.outcome,
+          fromStage: candidate.pipelineStage,
+          organizationId: activeOrg.id,
+          toOutcome: "in_pipeline",
+          toStage: "human_interview",
+        });
+      }
       await recordCandidateActivity({
         action: "human_interview_round_created",
         detail: {

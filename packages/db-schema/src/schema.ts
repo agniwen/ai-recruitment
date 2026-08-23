@@ -174,6 +174,11 @@ export const user = pgTable("user", {
   remark: text("remark"),
   role: text("role").default("user").notNull(),
   telegram: text("telegram"),
+  // Telegram bots cannot DM a private @username directly. After the user sends
+  // /start, store the numeric Bot API recipient ID together with the username
+  // that was bound so profile-handle changes cannot route to a stale account.
+  telegramBoundUsername: text("telegram_bound_username"),
+  telegramChatId: text("telegram_chat_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())

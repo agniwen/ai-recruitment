@@ -6,74 +6,92 @@ import {
 } from "../odc-analysis";
 
 describe("ODC analysis filters", () => {
-  it("normalizes and deduplicates selected jobs", () => {
+  it("normalizes the three independent dashboard filter groups", () => {
     expect(
       odcAnalysisFiltersSchema.parse({
-        from: "2026-08-01",
-        jobDescriptionIds: ["jd-b", "jd-a", "jd-b"],
-        role: "odc",
-        to: "2026-08-31",
+        activityDate: "2026-08-23",
+        activityJobDescriptionIds: ["jd-c", "jd-c"],
+        demandDateField: "expectedOnboardDate",
+        demandFrom: "2026-09-01",
+        demandTo: "2026-09-30",
+        progressFrom: "2026-08-01",
+        progressJobDescriptionIds: ["jd-b", "jd-a", "jd-b"],
+        progressTo: "2026-08-31",
       }),
     ).toEqual({
-      from: "2026-08-01",
-      jobDescriptionIds: ["jd-a", "jd-b"],
-      role: "odc",
-      to: "2026-08-31",
+      activityDate: "2026-08-23",
+      activityJobDescriptionIds: ["jd-c"],
+      demandDateField: "expectedOnboardDate",
+      demandFrom: "2026-09-01",
+      demandTo: "2026-09-30",
+      progressFrom: "2026-08-01",
+      progressJobDescriptionIds: ["jd-a", "jd-b"],
+      progressTo: "2026-08-31",
     });
   });
 
   it("rejects invalid and reversed date ranges", () => {
     expect(
       odcAnalysisFiltersSchema.safeParse({
-        from: "2026-08-31",
-        jobDescriptionIds: [],
-        to: "2026-08-01",
+        progressFrom: "2026-08-31",
+        progressTo: "2026-08-01",
       }).success,
     ).toBe(false);
     expect(
       odcAnalysisFiltersSchema.safeParse({
-        from: "2026-02-30",
-        jobDescriptionIds: [],
+        activityDate: "2026-02-30",
       }).success,
     ).toBe(false);
     expect(
       odcAnalysisFiltersSchema.safeParse({
-        from: "2025-01-01",
-        jobDescriptionIds: [],
-        to: "2026-02-01",
+        demandFrom: "2025-01-01",
+        demandTo: "2026-02-01",
       }).success,
     ).toBe(false);
   });
 
   it("coerces invalid URL state to the default filters", () => {
-    expect(coerceOdcAnalysisSearch({ from: "not-a-date", jdIds: "jd-1" })).toEqual({});
+    expect(coerceOdcAnalysisSearch({ progressFrom: "not-a-date", progressJdIds: "jd-1" })).toEqual(
+      {},
+    );
   });
 
   it("round-trips URL search params into server filters", () => {
     const search = coerceOdcAnalysisSearch({
-      from: "2026-08-01",
-      jdIds: "jd-b,jd-a,jd-b",
-      role: "odc",
-      to: "2026-08-31",
+      activityDate: "2026-08-23",
+      activityJdIds: "jd-c,jd-c",
+      demandDateField: "expectedOnboardDate",
+      demandFrom: "2026-09-01",
+      demandTo: "2026-09-30",
+      progressFrom: "2026-08-01",
+      progressJdIds: "jd-b,jd-a,jd-b",
+      progressTo: "2026-08-31",
     });
     expect(search).toEqual({
-      from: "2026-08-01",
-      jdIds: "jd-a,jd-b",
-      role: "odc",
-      to: "2026-08-31",
+      activityDate: "2026-08-23",
+      activityJdIds: "jd-c",
+      demandDateField: "expectedOnboardDate",
+      demandFrom: "2026-09-01",
+      demandTo: "2026-09-30",
+      progressFrom: "2026-08-01",
+      progressJdIds: "jd-a,jd-b",
+      progressTo: "2026-08-31",
     });
     expect(filtersFromOdcAnalysisSearch(search)).toEqual({
-      from: "2026-08-01",
-      jobDescriptionIds: ["jd-a", "jd-b"],
-      role: "odc",
-      to: "2026-08-31",
+      activityDate: "2026-08-23",
+      activityJobDescriptionIds: ["jd-c"],
+      demandDateField: "expectedOnboardDate",
+      demandFrom: "2026-09-01",
+      demandTo: "2026-09-30",
+      progressFrom: "2026-08-01",
+      progressJobDescriptionIds: ["jd-a", "jd-b"],
+      progressTo: "2026-08-31",
     });
   });
 
-  it("trims the selected role and preserves the historical unknown sentinel", () => {
-    expect(coerceOdcAnalysisSearch({ role: "  odc  " })).toEqual({ role: "odc" });
-    expect(coerceOdcAnalysisSearch({ role: "__odc_unknown_role__" })).toEqual({
-      role: "__odc_unknown_role__",
+  it("defaults the demand field to requested date", () => {
+    expect(filtersFromOdcAnalysisSearch({})).toMatchObject({
+      demandDateField: "requestedDate",
     });
   });
 });

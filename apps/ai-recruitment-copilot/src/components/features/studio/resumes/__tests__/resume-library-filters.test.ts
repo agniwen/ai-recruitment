@@ -15,9 +15,11 @@ describe("resume library filters", () => {
     );
   });
 
-  it("always renders all filters without a collapse control", () => {
+  it("renders all filters and the ODC activity date range without a collapse control", () => {
     expect(pageSource).toContain("filters={filtersConfig}");
     expect(pageSource).not.toContain("useResumeLibraryCollapsibleFiltersWithState");
-    expect(pageSource).not.toContain("filtersExtra={filtersExtra}");
+    expect(pageSource).toContain("activityFrom");
+    expect(pageSource).toContain("activityTo");
+    expect(pageSource).toContain("filtersExtra={");
   });
 });

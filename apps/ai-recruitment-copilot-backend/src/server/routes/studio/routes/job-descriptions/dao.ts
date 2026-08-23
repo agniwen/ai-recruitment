@@ -10,7 +10,21 @@ import {
 } from "@arc/shared/resume-screening";
 import type { MinimaxVoiceId } from "@arc/db-schema/minimax-voices";
 import type { SQL } from "drizzle-orm";
-import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "lodash-es";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -100,8 +114,33 @@ function buildGoogleSheetStatusCondition(
   );
 }
 
+function buildJobDateConditions({
+  dateField,
+  dateFrom,
+  dateTo,
+}: {
+  dateField?: "requestedDate" | "expectedOnboardDate";
+  dateFrom?: string;
+  dateTo?: string;
+}): SQL[] {
+  if (!(dateFrom || dateTo)) {
+    return [];
+  }
+  const dateColumn =
+    dateField === "expectedOnboardDate"
+      ? jobDescription.expectedOnboardDate
+      : jobDescription.requestedDate;
+  return [
+    dateFrom ? gte(dateColumn, dateFrom) : undefined,
+    dateTo ? lte(dateColumn, dateTo) : undefined,
+  ].filter((condition): condition is SQL => condition !== undefined);
+}
+
 function buildWhereConditions({
   code,
+  dateField,
+  dateFrom,
+  dateTo,
   googleSheetStatuses,
   organizationId,
   recruitmentStatuses,
@@ -114,6 +153,9 @@ function buildWhereConditions({
   scopeCondition,
 }: {
   code?: string;
+  dateField?: "requestedDate" | "expectedOnboardDate";
+  dateFrom?: string;
+  dateTo?: string;
   googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
   recruitmentStatuses?: string[];
@@ -129,6 +171,7 @@ function buildWhereConditions({
   if (code) {
     conditions.push(ilike(jobDescription.code, `%${code}%`));
   }
+  conditions.push(...buildJobDateConditions({ dateField, dateFrom, dateTo }));
   if (sourceSheet) {
     conditions.push(eq(jobDescription.sourceSheet, sourceSheet));
   }
@@ -198,6 +241,9 @@ async function resolveJdIdsForInterviewers(
 
 function listJobDescriptionRows({
   code,
+  dateField,
+  dateFrom,
+  dateTo,
   googleSheetStatuses,
   organizationId,
   recruitmentStatuses,
@@ -214,6 +260,9 @@ function listJobDescriptionRows({
   offset,
 }: {
   code?: string;
+  dateField?: "requestedDate" | "expectedOnboardDate";
+  dateFrom?: string;
+  dateTo?: string;
   googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
   recruitmentStatuses?: string[];
@@ -231,6 +280,9 @@ function listJobDescriptionRows({
 }) {
   const where = buildWhereConditions({
     code,
+    dateField,
+    dateFrom,
+    dateTo,
     departmentIds,
     googleSheetStatuses,
     hiringUnitIds,
@@ -312,6 +364,9 @@ function listJobDescriptionRows({
 
 async function countJobDescriptionRows({
   code,
+  dateField,
+  dateFrom,
+  dateTo,
   googleSheetStatuses,
   organizationId,
   recruitmentStatuses,
@@ -324,6 +379,9 @@ async function countJobDescriptionRows({
   scopeCondition,
 }: {
   code?: string;
+  dateField?: "requestedDate" | "expectedOnboardDate";
+  dateFrom?: string;
+  dateTo?: string;
   googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
   recruitmentStatuses?: string[];
@@ -337,6 +395,9 @@ async function countJobDescriptionRows({
 }) {
   const where = buildWhereConditions({
     code,
+    dateField,
+    dateFrom,
+    dateTo,
     departmentIds,
     googleSheetStatuses,
     hiringUnitIds,
@@ -525,6 +586,9 @@ export async function queryPaginatedJobDescriptions(
 ): Promise<PaginatedJobDescriptionResult> {
   const {
     code,
+    dateField,
+    dateFrom,
+    dateTo,
     departmentIds,
     googleSheetStatuses,
     hiringUnitIds,
@@ -544,6 +608,9 @@ export async function queryPaginatedJobDescriptions(
   const [records, total] = await Promise.all([
     listJobDescriptionRows({
       code,
+      dateField,
+      dateFrom,
+      dateTo,
       departmentIds,
       googleSheetStatuses,
       hiringUnitIds,
@@ -561,6 +628,9 @@ export async function queryPaginatedJobDescriptions(
     }),
     countJobDescriptionRows({
       code,
+      dateField,
+      dateFrom,
+      dateTo,
       departmentIds,
       googleSheetStatuses,
       hiringUnitIds,

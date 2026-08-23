@@ -29,6 +29,15 @@ export function createJobDescriptionListFilters({
       type: "search",
     },
     {
+      key: "dateField",
+      options: [
+        { label: "提需求日期", value: "requestedDate" },
+        { label: "期望到岗日期", value: "expectedOnboardDate" },
+      ],
+      placeholder: "岗位日期字段",
+      type: "select",
+    },
+    {
       emptyMessage: "没有匹配的来源表格",
       key: "sourceSheet",
       options: sourceSheets.map((sourceSheet) => ({

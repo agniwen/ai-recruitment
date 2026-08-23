@@ -6,6 +6,9 @@ describe("parseJobDescriptionListFilters", () => {
     expect(
       parseJobDescriptionListFilters({
         code: " REQ-001 ",
+        dateField: "expectedOnboardDate",
+        dateFrom: "2026-09-01",
+        dateTo: "2026-09-30",
         departmentId: "department-1, department-2",
         googleSheetStatus: "active,deleted",
         hiringUnitId: "unit-1, unit-2",
@@ -16,6 +19,9 @@ describe("parseJobDescriptionListFilters", () => {
       }),
     ).toEqual({
       code: "REQ-001",
+      dateField: "expectedOnboardDate",
+      dateFrom: "2026-09-01",
+      dateTo: "2026-09-30",
       departmentIds: ["department-1", "department-2"],
       googleSheetStatuses: ["active", "deleted"],
       hiringUnitIds: ["unit-1", "unit-2"],
@@ -33,6 +39,9 @@ describe("parseJobDescriptionListFilters", () => {
       }),
     ).toEqual({
       code: undefined,
+      dateField: undefined,
+      dateFrom: undefined,
+      dateTo: undefined,
       departmentIds: undefined,
       googleSheetStatuses: ["active"],
       hiringUnitIds: undefined,

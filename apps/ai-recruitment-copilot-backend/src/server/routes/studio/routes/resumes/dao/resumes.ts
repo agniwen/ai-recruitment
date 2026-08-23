@@ -1,4 +1,23 @@
-import { and, arrayContains, asc, count, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "lodash-es";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -37,6 +56,8 @@ import type {
   ResumeLibraryListRecord,
   ResumeStageProgress,
 } from "@arc/shared/studio-resumes";
+import { odcAnalysisResumeActivityValues } from "@arc/shared/odc-analysis";
+import type { OdcAnalysisResumeActivity } from "@arc/shared/odc-analysis";
 import type { ResumeDuplicateMatchSummary } from "@arc/shared/resume-duplicates";
 import { resumeReviewActionSchema } from "@arc/shared/resume-review";
 import type { ResumeReviewAction } from "@arc/shared/resume-review";
@@ -83,6 +104,9 @@ const paginationSchema = makePaginationSchema(SORT_COLUMNS);
 // Text filters are per-field (AND). Linked JDs / hiring units use id lists.
 // `search` remains free-text OR across fields for copilot-style callers.
 const filtersSchema = z.object({
+  activity: z.enum(odcAnalysisResumeActivityValues).optional().nullable(),
+  activityFrom: z.string().date().optional().nullable(),
+  activityTo: z.string().date().optional().nullable(),
   candidateEmail: z.string().trim().max(120).optional().nullable(),
   candidateName: z.string().trim().max(120).optional().nullable(),
   candidatePhone: z.string().trim().max(120).optional().nullable(),
@@ -181,12 +205,121 @@ function buildOutcomesCondition(outcomes: string[] | null | undefined) {
   return filtered.length > 0 ? inArray(studioInterview.outcome, filtered) : null;
 }
 
+const activitySchedule = alias(studioInterviewSchedule, "resume_activity_schedule");
+const activityHumanRound = alias(studioHumanInterviewRound, "resume_activity_human_round");
+
+function addCalendarDay(day: string): string {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function activityTimestampCondition(column: AnyPgColumn, from?: string | null, to?: string | null) {
+  const start = from ? new Date(`${from}T00:00:00+08:00`) : null;
+  const end = to ? new Date(`${addCalendarDay(to)}T00:00:00+08:00`) : null;
+  return and(start ? gte(column, start) : undefined, end ? lt(column, end) : undefined);
+}
+
+export function buildOdcActivityCondition(
+  activity: OdcAnalysisResumeActivity | null | undefined,
+  from?: string | null,
+  to?: string | null,
+) {
+  if (!activity) {
+    return null;
+  }
+  const start = from ? new Date(`${from}T00:00:00+08:00`) : null;
+  const end = to ? new Date(`${addCalendarDay(to)}T00:00:00+08:00`) : null;
+  const rangeSql = (column: AnyPgColumn) => activityTimestampCondition(column, from, to);
+  if (activity === "associated_resume") {
+    return and(eq(studioInterview.resumeParseStatus, "ready"), rangeSql(studioInterview.createdAt));
+  }
+  if (activity === "pending_evaluation") {
+    return and(
+      eq(studioInterview.pipelineStage, "screening"),
+      eq(studioInterview.outcome, "in_pipeline"),
+      eq(studioInterview.resumeParseStatus, "ready"),
+      isNull(studioInterview.resumeEvaluationStatus),
+      rangeSql(studioInterview.createdAt),
+    );
+  }
+  if (activity === "ai_interview") {
+    return exists(
+      db
+        .select({ value: sql`1` })
+        .from(activitySchedule)
+        .where(
+          and(
+            eq(activitySchedule.interviewRecordId, studioInterview.id),
+            ne(activitySchedule.status, "cancelled"),
+            activityTimestampCondition(activitySchedule.scheduledAt, from, to),
+          ),
+        ),
+    );
+  }
+  if (activity === "human_interview") {
+    return exists(
+      db
+        .select({ value: sql`1` })
+        .from(activityHumanRound)
+        .where(
+          and(
+            eq(activityHumanRound.interviewRecordId, studioInterview.id),
+            ne(activityHumanRound.status, "cancelled"),
+            activityTimestampCondition(activityHumanRound.scheduledAt, from, to),
+          ),
+        ),
+    );
+  }
+  if (activity === "offer") {
+    const firstSentAt = sql`(
+      SELECT min(activity_offer.sent_at)
+      FROM studio_offer_draft AS activity_offer
+      WHERE activity_offer.interview_record_id = ${studioInterview.id}
+        AND activity_offer.sent_at IS NOT NULL
+    )`;
+    return and(
+      sql`${firstSentAt} IS NOT NULL`,
+      start ? sql`${firstSentAt} >= ${start}` : undefined,
+      end ? sql`${firstSentAt} < ${end}` : undefined,
+    );
+  }
+  if (activity === "expected_arrival") {
+    return sql`EXISTS (
+      SELECT 1
+      FROM studio_offer_draft AS activity_offer
+      WHERE activity_offer.interview_record_id = ${studioInterview.id}
+        AND activity_offer.status = 'accepted'
+        AND activity_offer.version = (
+          SELECT max(activity_latest.version)
+          FROM studio_offer_draft AS activity_latest
+          WHERE activity_latest.interview_record_id = ${studioInterview.id}
+            AND activity_latest.status <> 'superseded'
+        )
+        ${start ? sql`AND activity_offer.joining_date >= ${start}` : sql``}
+        ${end ? sql`AND activity_offer.joining_date < ${end}` : sql``}
+    )`;
+  }
+  if (activity === "onboarded") {
+    return and(
+      eq(studioInterview.outcome, "hired"),
+      isNotNull(studioInterview.actualOnboardedAt),
+      activityTimestampCondition(studioInterview.actualOnboardedAt, from, to),
+    );
+  }
+  return and(
+    inArray(studioInterview.outcome, ["rejected", "withdrawn"]),
+    activityTimestampCondition(studioInterview.closedAt, from, to),
+  );
+}
+
 function buildWhere(organizationId: string, filters?: ResumeQueryFilters) {
   if (filters?.forceEmpty) {
     return sql`false`;
   }
   const conditions = [
     eq(studioInterview.organizationId, organizationId),
+    buildOdcActivityCondition(filters?.activity, filters?.activityFrom, filters?.activityTo),
     buildSearchCondition(filters?.search),
     buildIlikeCondition(studioInterview.id, filters?.id),
     buildIlikeCondition(studioInterview.candidateName, filters?.candidateName),
@@ -901,6 +1034,9 @@ function toRecord(
 }
 
 export interface ResumeListFilters {
+  activity?: OdcAnalysisResumeActivity | null;
+  activityFrom?: string | null;
+  activityTo?: string | null;
   candidateEmail?: string | null;
   candidateName?: string | null;
   candidatePhone?: string | null;

@@ -12,10 +12,14 @@ const cache = new LRUCache<string, Promise<OdcAnalysisCacheValue>>({
 function cacheKey(organizationId: string, filters: OdcAnalysisFilters): string {
   return JSON.stringify([
     organizationId,
-    filters.from ?? null,
-    filters.to ?? null,
-    filters.jobDescriptionIds,
-    filters.role ?? null,
+    filters.demandDateField,
+    filters.demandFrom ?? null,
+    filters.demandTo ?? null,
+    filters.progressFrom ?? null,
+    filters.progressTo ?? null,
+    filters.progressJobDescriptionIds,
+    filters.activityDate ?? null,
+    filters.activityJobDescriptionIds,
   ]);
 }
 

@@ -735,7 +735,7 @@ export async function cancelHumanInterviewRound(
 export async function maybeAdvanceToHumanInterview(
   interviewRecordId: string,
   organizationId: string,
-): Promise<void> {
+): Promise<boolean> {
   // 统计非 cancelled 行数 —— 这次插入完后，count=1 说明刚刚是第一轮。
   // First non-cancelled row count; 1 means we just inserted the first round.
   const rounds = await db
@@ -749,14 +749,14 @@ export async function maybeAdvanceToHumanInterview(
     )
     .limit(2);
   if (rounds.length !== 1) {
-    return;
+    return false;
   }
   // 单条 UPDATE 自带 WHERE 守卫：只在可推进的阶段 + 仍 in_pipeline 时才命中。
   // 这样 race（另一个 HR 同时把候选人结案）不会触发 CHECK 约束，而是 no-op。
   // Single UPDATE guarded by WHERE: only fires when the candidate is still in
   // an advanceable stage and active. A concurrent close becomes a no-op instead
   // of violating the (pipeline_stage='closed' ⇔ outcome ≠ 'in_pipeline') CHECK.
-  await db
+  const updated = await db
     .update(studioInterview)
     .set({ pipelineStage: "human_interview", updatedAt: new Date() })
     .where(
@@ -766,5 +766,7 @@ export async function maybeAdvanceToHumanInterview(
         inArray(studioInterview.pipelineStage, ["screening", "written_test", "ai_interview"]),
         eq(studioInterview.outcome, "in_pipeline"),
       ),
-    );
+    )
+    .returning({ id: studioInterview.id });
+  return updated.length > 0;
 }

@@ -3,6 +3,7 @@ import { ClientOnly, useRouter } from "@tanstack/react-router";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { DatePicker } from "@/components/date-time-picker";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type {
@@ -60,6 +61,9 @@ const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDi
 
 interface JobDescriptionFilters extends Record<string, string> {
   code: string;
+  dateField: string;
+  dateFrom: string;
+  dateTo: string;
   departmentId: string;
   googleSheetStatus: string;
   hiringUnitId: string;
@@ -134,6 +138,12 @@ export function JobDescriptionManagementPage({
               pageSize: String(params.pageSize),
               ...(params.search ? { search: params.search } : {}),
               ...(params.filters.code ? { code: params.filters.code } : {}),
+              dateField:
+                params.filters.dateField === "expectedOnboardDate"
+                  ? "expectedOnboardDate"
+                  : "requestedDate",
+              ...(params.filters.dateFrom ? { dateFrom: params.filters.dateFrom } : {}),
+              ...(params.filters.dateTo ? { dateTo: params.filters.dateTo } : {}),
               ...(params.filters.sourceSheet ? { sourceSheet: params.filters.sourceSheet } : {}),
               // 多选过滤：CSV 形式，例如 "a,b,c"。空串表示不筛选。
               // / Multi-select filters serialize to CSV; empty string means "no filter".
@@ -177,6 +187,9 @@ export function JobDescriptionManagementPage({
     defaultSorting: [{ desc: true, id: "createdAt" }],
     initialFilters: {
       code: "",
+      dateField: "requestedDate",
+      dateFrom: "",
+      dateTo: "",
       departmentId: "",
       googleSheetStatus: "",
       hiringUnitId: "",
@@ -672,6 +685,24 @@ export function JobDescriptionManagementPage({
             )
           }
           filters={filtersConfig}
+          filtersExtra={
+            <div className="grid grid-cols-2 gap-3">
+              <DatePicker
+                aria-label="岗位日期开始"
+                max={grid.bind.filterValues.dateTo}
+                onValueChange={(value) => grid.bind.onFilterChange("dateFrom", value)}
+                placeholder="开始日期"
+                value={grid.bind.filterValues.dateFrom}
+              />
+              <DatePicker
+                aria-label="岗位日期结束"
+                min={grid.bind.filterValues.dateFrom}
+                onValueChange={(value) => grid.bind.onFilterChange("dateTo", value)}
+                placeholder="结束日期"
+                value={grid.bind.filterValues.dateTo}
+              />
+            </div>
+          }
           getRowId={(r) => r.id}
           toolbarRight={
             <JobDescriptionToolbarActions

@@ -7,6 +7,7 @@ import {
   loadOrCreateActiveInterviewContextSnapshot,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/context-snapshots";
 import { autoBindApplicableTemplates } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interview-questions/dao/bindings";
+import { notifyCandidateStageChange } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-notification";
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import { interviewAuditLog, studioInterview, studioInterviewSchedule } from "@arc/db-schema/schema";
 import { createDefaultScheduleEntry } from "@arc/db-schema/studio-interviews";
@@ -114,4 +115,13 @@ export const launchAiInterviewRound = createLaunchAiInterviewRound({
   invalidateCache: invalidateStudioInterviewCaches,
   loadCandidate: ({ interviewRecordId, organizationId, visibilityScope }) =>
     loadResumeDetail(interviewRecordId, organizationId, visibilityScope),
+  notifyStageChange: ({ fromStage, interviewRecordId, organizationId }) =>
+    notifyCandidateStageChange({
+      candidateId: interviewRecordId,
+      fromOutcome: "in_pipeline",
+      fromStage,
+      organizationId,
+      toOutcome: "in_pipeline",
+      toStage: "ai_interview",
+    }),
 });

@@ -201,6 +201,9 @@ function buildManualJobDescriptionRecord(args: {
 
 const jobDescriptionListQuerySchema = z.object({
   code: z.string().optional(),
+  dateField: z.enum(["requestedDate", "expectedOnboardDate"]).optional(),
+  dateFrom: z.string().date().optional(),
+  dateTo: z.string().date().optional(),
   departmentId: z.string().optional(),
   googleSheetStatus: z.string().optional(),
   hiringUnitId: z.string().optional(),
@@ -273,6 +276,9 @@ export const jobDescriptionsRouter = factory
         {
           actorUserId: c.var.user?.id,
           code: q.code,
+          dateField: q.dateField,
+          dateFrom: q.dateFrom,
+          dateTo: q.dateTo,
           departmentId: q.departmentId,
           googleSheetStatus: q.googleSheetStatus,
           hiringUnitId: q.hiringUnitId,

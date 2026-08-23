@@ -18,33 +18,65 @@ const optionalDateOnlySchema = z
   .refine(isValidDateOnly, "日期格式必须为 YYYY-MM-DD")
   .optional();
 
-const optionalRoleSchema = z.string().trim().min(1).max(128).optional();
+export const odcAnalysisDemandDateFieldValues = ["requestedDate", "expectedOnboardDate"] as const;
+export type OdcAnalysisDemandDateField = (typeof odcAnalysisDemandDateFieldValues)[number];
+
+export const odcAnalysisResumeActivityValues = [
+  "associated_resume",
+  "pending_evaluation",
+  "ai_interview",
+  "human_interview",
+  "offer",
+  "expected_arrival",
+  "onboarded",
+  "closed",
+] as const;
+export type OdcAnalysisResumeActivity = (typeof odcAnalysisResumeActivityValues)[number];
+
+function isValidRange(from?: string, to?: string): boolean {
+  return !(from && to) || from <= to;
+}
+
+function isRangeWithinLimit(from?: string, to?: string): boolean {
+  if (!(from && to)) {
+    return true;
+  }
+  const start = new Date(`${from}T00:00:00.000Z`);
+  const end = new Date(`${to}T00:00:00.000Z`);
+  return (end.getTime() - start.getTime()) / 86_400_000 <= 366;
+}
 
 export const odcAnalysisFiltersSchema = z
   .object({
-    from: optionalDateOnlySchema,
-    jobDescriptionIds: z.array(z.string().trim().min(1)).max(100).default([]),
-    role: optionalRoleSchema,
-    to: optionalDateOnlySchema,
+    activityDate: optionalDateOnlySchema,
+    activityJobDescriptionIds: z.array(z.string().trim().min(1)).max(100).default([]),
+    demandDateField: z.enum(odcAnalysisDemandDateFieldValues).default("requestedDate"),
+    demandFrom: optionalDateOnlySchema,
+    demandTo: optionalDateOnlySchema,
+    progressFrom: optionalDateOnlySchema,
+    progressJobDescriptionIds: z.array(z.string().trim().min(1)).max(100).default([]),
+    progressTo: optionalDateOnlySchema,
   })
-  .refine((value) => !(value.from && value.to) || value.from <= value.to, {
+  .refine((value) => isValidRange(value.demandFrom, value.demandTo), {
     message: "开始日期不能晚于结束日期",
-    path: ["to"],
+    path: ["demandTo"],
   })
-  .refine(
-    (value) => {
-      if (!(value.from && value.to)) {
-        return true;
-      }
-      const from = new Date(`${value.from}T00:00:00.000Z`);
-      const to = new Date(`${value.to}T00:00:00.000Z`);
-      return (to.getTime() - from.getTime()) / 86_400_000 <= 366;
-    },
-    { message: "单次时间范围不能超过 366 天", path: ["to"] },
-  )
+  .refine((value) => isRangeWithinLimit(value.demandFrom, value.demandTo), {
+    message: "单次时间范围不能超过 366 天",
+    path: ["demandTo"],
+  })
+  .refine((value) => isValidRange(value.progressFrom, value.progressTo), {
+    message: "开始日期不能晚于结束日期",
+    path: ["progressTo"],
+  })
+  .refine((value) => isRangeWithinLimit(value.progressFrom, value.progressTo), {
+    message: "单次时间范围不能超过 366 天",
+    path: ["progressTo"],
+  })
   .transform((value) => ({
     ...value,
-    jobDescriptionIds: [...new Set(value.jobDescriptionIds)].toSorted(),
+    activityJobDescriptionIds: [...new Set(value.activityJobDescriptionIds)].toSorted(),
+    progressJobDescriptionIds: [...new Set(value.progressJobDescriptionIds)].toSorted(),
   }));
 
 export type OdcAnalysisFilters = z.infer<typeof odcAnalysisFiltersSchema>;
@@ -82,7 +114,7 @@ export interface OdcAnalysisData {
     rejectedOrWithdrawn: OdcAnalysisMetric;
   };
   timeZone: "Asia/Shanghai";
-  today: {
+  activity: {
     aiInterviews: OdcAnalysisMetric;
     associatedResumes: OdcAnalysisMetric;
     currentPendingEvaluation: OdcAnalysisMetric;
@@ -92,7 +124,7 @@ export interface OdcAnalysisData {
     onboarded: OdcAnalysisMetric;
     rejectedOrWithdrawn: OdcAnalysisMetric;
   };
-  todayInterviewStates: {
+  activityInterviewStates: {
     completed: number;
     inProgress: number;
     upcoming: number;
@@ -117,11 +149,11 @@ export interface OdcAnalysisRoleOption {
 
 export interface OdcAnalysisStateReady {
   access: {
+    canViewJobDescriptions: boolean;
     canViewResumes: boolean;
   };
   data: OdcAnalysisData;
   jobs: OdcAnalysisJobOption[];
-  roles: OdcAnalysisRoleOption[];
   status: "ready";
 }
 
@@ -131,10 +163,14 @@ export type OdcAnalysisState =
   | OdcAnalysisStateReady;
 
 export interface OdcAnalysisSearch {
-  from?: string;
-  jdIds?: string;
-  role?: string;
-  to?: string;
+  activityDate?: string;
+  activityJdIds?: string;
+  demandDateField?: OdcAnalysisDemandDateField;
+  demandFrom?: string;
+  demandTo?: string;
+  progressFrom?: string;
+  progressJdIds?: string;
+  progressTo?: string;
 }
 
 function optionalSearchString(value: unknown): string | undefined {
@@ -143,36 +179,56 @@ function optionalSearchString(value: unknown): string | undefined {
 
 export function coerceOdcAnalysisSearch(search: Record<string, unknown>): OdcAnalysisSearch {
   const candidate = {
-    from: optionalSearchString(search.from),
-    jdIds: optionalSearchString(search.jdIds),
-    role: optionalSearchString(search.role),
-    to: optionalSearchString(search.to),
+    activityDate: optionalSearchString(search.activityDate),
+    activityJdIds: optionalSearchString(search.activityJdIds),
+    demandDateField: optionalSearchString(search.demandDateField),
+    demandFrom: optionalSearchString(search.demandFrom),
+    demandTo: optionalSearchString(search.demandTo),
+    progressFrom: optionalSearchString(search.progressFrom),
+    progressJdIds: optionalSearchString(search.progressJdIds),
+    progressTo: optionalSearchString(search.progressTo),
   };
   const filters = odcAnalysisFiltersSchema.safeParse({
-    from: candidate.from,
-    jobDescriptionIds: candidate.jdIds?.split(",").filter(Boolean) ?? [],
-    role: candidate.role,
-    to: candidate.to,
+    activityDate: candidate.activityDate,
+    activityJobDescriptionIds: candidate.activityJdIds?.split(",").filter(Boolean) ?? [],
+    demandDateField: candidate.demandDateField,
+    demandFrom: candidate.demandFrom,
+    demandTo: candidate.demandTo,
+    progressFrom: candidate.progressFrom,
+    progressJobDescriptionIds: candidate.progressJdIds?.split(",").filter(Boolean) ?? [],
+    progressTo: candidate.progressTo,
   });
   if (!filters.success) {
     return {};
   }
   return {
-    from: filters.data.from,
-    jdIds:
-      filters.data.jobDescriptionIds.length > 0
-        ? filters.data.jobDescriptionIds.join(",")
+    activityDate: filters.data.activityDate,
+    activityJdIds:
+      filters.data.activityJobDescriptionIds.length > 0
+        ? filters.data.activityJobDescriptionIds.join(",")
         : undefined,
-    role: filters.data.role,
-    to: filters.data.to,
+    demandDateField:
+      filters.data.demandDateField === "requestedDate" ? undefined : filters.data.demandDateField,
+    demandFrom: filters.data.demandFrom,
+    demandTo: filters.data.demandTo,
+    progressFrom: filters.data.progressFrom,
+    progressJdIds:
+      filters.data.progressJobDescriptionIds.length > 0
+        ? filters.data.progressJobDescriptionIds.join(",")
+        : undefined,
+    progressTo: filters.data.progressTo,
   };
 }
 
 export function filtersFromOdcAnalysisSearch(search: OdcAnalysisSearch): OdcAnalysisFilters {
   return odcAnalysisFiltersSchema.parse({
-    from: search.from,
-    jobDescriptionIds: search.jdIds?.split(",").filter(Boolean) ?? [],
-    role: search.role,
-    to: search.to,
+    activityDate: search.activityDate,
+    activityJobDescriptionIds: search.activityJdIds?.split(",").filter(Boolean) ?? [],
+    demandDateField: search.demandDateField,
+    demandFrom: search.demandFrom,
+    demandTo: search.demandTo,
+    progressFrom: search.progressFrom,
+    progressJobDescriptionIds: search.progressJdIds?.split(",").filter(Boolean) ?? [],
+    progressTo: search.progressTo,
   });
 }

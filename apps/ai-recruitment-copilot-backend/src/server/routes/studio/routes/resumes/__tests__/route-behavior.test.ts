@@ -366,6 +366,26 @@ describe("resumeLibraryRouter behavior", () => {
     );
   });
 
+  it("passes ODC activity drilldown filters to the list query", async () => {
+    const response = await makeApp().request(
+      "/resumes?activity=ai_interview&activityFrom=2026-08-23&activityTo=2026-08-23&jdIds=jd-1",
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.queryPaginatedResumeRecords).toHaveBeenCalledWith(
+      ORGANIZATION_ID,
+      expect.objectContaining({
+        activity: "ai_interview",
+        activityFrom: "2026-08-23",
+        activityTo: "2026-08-23",
+        jobDescriptionIds: ["jd-1"],
+      }),
+      expect.any(Object),
+      { kind: "all" },
+      undefined,
+    );
+  });
+
   it("returns resume-library metrics behind page and resource permissions", async () => {
     const response = await makeApp().request("/resumes/metrics");
 

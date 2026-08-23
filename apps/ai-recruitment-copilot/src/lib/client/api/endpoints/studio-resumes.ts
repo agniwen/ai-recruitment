@@ -21,11 +21,16 @@ import type {
   ResumeLibraryDetail,
   ResumeLibraryMetrics,
 } from "@arc/shared/studio-resumes";
+import type { OdcAnalysisResumeActivity } from "@arc/shared/odc-analysis";
 import { rpc } from "@/lib/client/rpc";
 import { rpcFetch } from "../rpc-fetch";
 import type { DedupMatchRecord } from "./studio-interviews";
 
 export interface ResumeListParams {
+  /** ODC 指标下钻口径。 */
+  activity?: OdcAnalysisResumeActivity;
+  activityFrom?: string;
+  activityTo?: string;
   /** 已知的列表总数；后续分页用于跳过重复 COUNT。 */
   knownTotal?: number;
   page?: number;
@@ -60,6 +65,15 @@ function optionalCsvParam(values: string[] | undefined): string | undefined {
 
 function buildResumeListQuery(params: ResumeListParams): Record<string, string> {
   const query: Record<string, string> = {};
+  if (params.activity) {
+    query.activity = params.activity;
+  }
+  if (params.activityFrom) {
+    query.activityFrom = params.activityFrom;
+  }
+  if (params.activityTo) {
+    query.activityTo = params.activityTo;
+  }
   if (params.page !== undefined) {
     query.page = String(params.page);
   }

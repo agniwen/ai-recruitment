@@ -6,7 +6,6 @@ describe("ODC analysis date ranges", () => {
     expect(
       resolveOdcAnalysisRange({
         from: "2026-08-01",
-        jobDescriptionIds: [],
         to: "2026-08-31",
       }),
     ).toEqual({
@@ -16,7 +15,7 @@ describe("ODC analysis date ranges", () => {
   });
 
   it("keeps an unbounded side null", () => {
-    expect(resolveOdcAnalysisRange({ jobDescriptionIds: [], to: "2026-08-18" })).toEqual({
+    expect(resolveOdcAnalysisRange({ to: "2026-08-18" })).toEqual({
       end: new Date("2026-08-18T16:00:00.000Z"),
       start: null,
     });

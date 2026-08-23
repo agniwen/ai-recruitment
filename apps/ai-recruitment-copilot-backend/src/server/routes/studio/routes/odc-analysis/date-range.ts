@@ -1,5 +1,3 @@
-import type { OdcAnalysisFilters } from "@arc/shared/odc-analysis";
-
 export interface InstantRange {
   end: Date | null;
   start: Date | null;
@@ -15,7 +13,7 @@ export function beijingDayStart(day: string): Date {
   return new Date(`${day}T00:00:00+08:00`);
 }
 
-export function resolveOdcAnalysisRange(filters: OdcAnalysisFilters): InstantRange {
+export function resolveOdcAnalysisRange(filters: { from?: string; to?: string }): InstantRange {
   return {
     end: filters.to ? beijingDayStart(addCalendarDays(filters.to, 1)) : null,
     start: filters.from ? beijingDayStart(filters.from) : null,

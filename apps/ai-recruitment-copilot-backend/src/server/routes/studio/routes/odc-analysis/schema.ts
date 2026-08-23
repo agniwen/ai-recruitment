@@ -3,16 +3,24 @@ import { odcAnalysisFiltersSchema } from "@arc/shared/odc-analysis";
 
 export const odcAnalysisQuerySchema = z
   .object({
-    from: z.string().optional(),
-    jobDescriptionIds: z.string().optional(),
-    role: z.string().optional(),
-    to: z.string().optional(),
+    activityDate: z.string().optional(),
+    activityJobDescriptionIds: z.string().optional(),
+    demandDateField: z.string().optional(),
+    demandFrom: z.string().optional(),
+    demandTo: z.string().optional(),
+    progressFrom: z.string().optional(),
+    progressJobDescriptionIds: z.string().optional(),
+    progressTo: z.string().optional(),
   })
   .transform((value) =>
     odcAnalysisFiltersSchema.parse({
-      from: value.from,
-      jobDescriptionIds: value.jobDescriptionIds?.split(",").filter(Boolean) ?? [],
-      role: value.role,
-      to: value.to,
+      activityDate: value.activityDate,
+      activityJobDescriptionIds: value.activityJobDescriptionIds?.split(",").filter(Boolean) ?? [],
+      demandDateField: value.demandDateField,
+      demandFrom: value.demandFrom,
+      demandTo: value.demandTo,
+      progressFrom: value.progressFrom,
+      progressJobDescriptionIds: value.progressJobDescriptionIds?.split(",").filter(Boolean) ?? [],
+      progressTo: value.progressTo,
     }),
   );

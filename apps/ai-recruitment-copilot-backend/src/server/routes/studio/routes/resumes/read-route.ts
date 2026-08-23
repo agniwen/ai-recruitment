@@ -10,6 +10,7 @@ import { parseCsvParam } from "@arc/shared/csv";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import { resumeEvaluationStatusSubmitSchema } from "@arc/shared/studio-resumes";
+import { odcAnalysisResumeActivityValues } from "@arc/shared/odc-analysis";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
@@ -91,6 +92,9 @@ export const resumeLibraryReadRouter = factory
     zValidator(
       "query",
       z.object({
+        activity: z.enum(odcAnalysisResumeActivityValues).optional(),
+        activityFrom: z.string().date().optional(),
+        activityTo: z.string().date().optional(),
         candidateEmail: z.string().optional(),
         candidateName: z.string().optional(),
         candidatePhone: z.string().optional(),
@@ -123,6 +127,9 @@ export const resumeLibraryReadRouter = factory
       const result = await queryPaginatedResumeRecords(
         activeOrg.id,
         {
+          activity: q.activity,
+          activityFrom: q.activityFrom,
+          activityTo: q.activityTo,
           candidateEmail: q.candidateEmail,
           candidateName: q.candidateName,
           candidatePhone: q.candidatePhone,

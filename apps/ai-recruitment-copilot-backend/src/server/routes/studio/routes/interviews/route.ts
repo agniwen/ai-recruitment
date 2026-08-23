@@ -34,6 +34,7 @@ import {
   safeUpdateTag,
 } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { transitionCandidateStage } from "./utils/candidate-stage-transition";
+import { notifyCandidateStageChange } from "./utils/candidate-stage-notification";
 
 const dedupCheckInputSchema = z.object({
   email: z.string().trim().max(200).nullable().optional(),
@@ -113,14 +114,14 @@ async function resetOrphanedAiInterviewParents(
   tx: Tx,
   organizationId: string,
   candidateIds: readonly string[],
-): Promise<void> {
+): Promise<string[]> {
   const unique = uniq(candidateIds.filter(Boolean));
   if (unique.length === 0) {
-    return;
+    return [];
   }
   // 唯一一个 SQL，安全且无 N+1：用 NOT EXISTS 子查询过滤掉还有 schedule 的候选人。
   // Single SQL guarded by NOT EXISTS — no N+1 and won't touch candidates with surviving rounds.
-  await tx
+  const reset = await tx
     .update(studioInterview)
     .set({ pipelineStage: "screening", updatedAt: new Date() })
     .where(
@@ -136,7 +137,9 @@ async function resetOrphanedAiInterviewParents(
             .where(eq(studioInterviewSchedule.interviewRecordId, studioInterview.id)),
         ),
       ),
-    );
+    )
+    .returning({ id: studioInterview.id });
+  return reset.map((row) => row.id);
 }
 
 export const studioInterviewsRouter = factory
@@ -493,12 +496,12 @@ export const studioInterviewsRouter = factory
         // Edge race: round vanished between the SELECT and DELETE; treat as not-found.
         return { kind: "not_found" as const };
       }
-      await resetOrphanedAiInterviewParents(
+      const stageResetIds = await resetOrphanedAiInterviewParents(
         tx,
         orgId,
         removed.map((r) => r.interviewRecordId),
       );
-      return { kind: "ok" as const };
+      return { kind: "ok" as const, stageResetIds };
     });
     if (result.kind === "not_found") {
       return c.json({ error: "记录不存在。" }, 404);
@@ -512,6 +515,18 @@ export const studioInterviewsRouter = factory
       );
     }
     invalidateStudioInterviewCaches(orgId);
+    await Promise.all(
+      result.stageResetIds.map((candidateId) =>
+        notifyCandidateStageChange({
+          candidateId,
+          fromOutcome: "in_pipeline",
+          fromStage: "ai_interview",
+          organizationId: orgId,
+          toOutcome: "in_pipeline",
+          toStage: "screening",
+        }),
+      ),
+    );
     return c.json({ success: true }, 200);
   })
   .post(
@@ -569,14 +584,15 @@ export const studioInterviewsRouter = factory
           .returning({
             interviewRecordId: studioInterviewSchedule.interviewRecordId,
           });
-        if (rows.length > 0) {
-          await resetOrphanedAiInterviewParents(
-            tx,
-            orgId,
-            rows.map((r) => r.interviewRecordId),
-          );
-        }
-        return { kind: "ok" as const, removed: rows };
+        const stageResetIds =
+          rows.length > 0
+            ? await resetOrphanedAiInterviewParents(
+                tx,
+                orgId,
+                rows.map((r) => r.interviewRecordId),
+              )
+            : [];
+        return { kind: "ok" as const, removed: rows, stageResetIds };
       });
       if (result.kind === "locked") {
         return c.json(
@@ -587,6 +603,18 @@ export const studioInterviewsRouter = factory
         );
       }
       invalidateStudioInterviewCaches(orgId);
+      await Promise.all(
+        result.stageResetIds.map((candidateId) =>
+          notifyCandidateStageChange({
+            candidateId,
+            fromOutcome: "in_pipeline",
+            fromStage: "ai_interview",
+            organizationId: orgId,
+            toOutcome: "in_pipeline",
+            toStage: "screening",
+          }),
+        ),
+      );
       return c.json({ deletedCount: result.removed.length, success: true }, 200);
     },
   )

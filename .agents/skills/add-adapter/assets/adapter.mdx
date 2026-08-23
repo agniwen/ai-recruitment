@@ -50,8 +50,9 @@ features:
 
 ## Install
 
-{/* Only the adapter package + chat (+ optional state adapter). Extra imports
-    used below go in code blocks, NOT here — see the peerDeps invariant. */}
+{/_ Only the adapter package + chat (+ optional state adapter). Extra imports
+used below go in code blocks, NOT here — see the peerDeps invariant. _/}
+
 <PackageInstall package="@foo/chat-sdk-adapter chat @chat-adapter/state-memory" />
 
 ## Quick start
@@ -82,7 +83,11 @@ bot.onDirectMessage(async (thread, message) => {
 <TypeTable
   type={{
     apiKey: { type: "string", description: "Foo API key. Falls back to `FOO_API_KEY`." },
-    webhookSecret: { type: "string", description: "Signing secret for inbound webhook verification. Falls back to `FOO_WEBHOOK_SECRET`." },
+    webhookSecret: {
+      type: "string",
+      description:
+        "Signing secret for inbound webhook verification. Falls back to `FOO_WEBHOOK_SECRET`.",
+    },
   }}
 />
 
@@ -96,8 +101,8 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
-{/* Add the sections that apply: sending, reactions, attachments, thread IDs,
-    limitations, links. Keep it faithful to the adapter's real behavior. */}
+{/_ Add the sections that apply: sending, reactions, attachments, thread IDs,
+limitations, links. Keep it faithful to the adapter's real behavior. _/}
 
 ## Feature support
 

@@ -13,6 +13,7 @@ import {
   resolveCandidateTransitionPatch,
 } from "./candidate-transition";
 import type { CandidateTransitionInput } from "./candidate-transition";
+import { notifyCandidateStageChange } from "./candidate-stage-notification";
 
 export type CandidateStageTransitionProvenance =
   | { kind: "manual" }
@@ -222,11 +223,25 @@ export async function transitionCandidateStage(command: {
       scheduleEntryId: null,
       source: command.provenance.kind === "workspace_recruiting_copilot" ? "agent" : "manual",
     });
-    return { kind: "ok" } as const;
+    return {
+      kind: "ok",
+      notification: {
+        fromOutcome: existing.outcome,
+        fromStage: existing.pipelineStage,
+        toOutcome: transition.patch.outcome,
+        toStage: transition.patch.pipelineStage,
+      },
+    } as const;
   });
 
   if (result.kind === "ok") {
     invalidateStudioInterviewCaches(command.organizationId);
+    await notifyCandidateStageChange({
+      candidateId: command.candidateId,
+      organizationId: command.organizationId,
+      ...result.notification,
+    });
+    return { kind: "ok" };
   }
   return result;
 }

@@ -28,6 +28,9 @@ export const SERVER_ENV_NAMES = [
   "S3_FORCE_PATH_STYLE",
   "S3_KEY_PREFIX",
   "S3_REGION",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_BOT_USERNAME",
+  "TELEGRAM_WEBHOOK_SECRET_TOKEN",
 ] as const;
 
 export type ServerEnvName = (typeof SERVER_ENV_NAMES)[number];
@@ -63,6 +66,9 @@ export function createServerEnv(runtimeEnv: Record<string, string | undefined>) 
       S3_FORCE_PATH_STYLE: runtimeEnv.S3_FORCE_PATH_STYLE,
       S3_KEY_PREFIX: runtimeEnv.S3_KEY_PREFIX,
       S3_REGION: runtimeEnv.S3_REGION,
+      TELEGRAM_BOT_TOKEN: runtimeEnv.TELEGRAM_BOT_TOKEN,
+      TELEGRAM_BOT_USERNAME: runtimeEnv.TELEGRAM_BOT_USERNAME,
+      TELEGRAM_WEBHOOK_SECRET_TOKEN: runtimeEnv.TELEGRAM_WEBHOOK_SECRET_TOKEN,
     },
     server: {
       ALIBABA_BASE_URL: z.url(),
@@ -91,6 +97,9 @@ export function createServerEnv(runtimeEnv: Record<string, string | undefined>) 
       S3_FORCE_PATH_STYLE: z.string().min(1),
       S3_KEY_PREFIX: z.string().min(1),
       S3_REGION: z.string().min(1),
+      TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+      TELEGRAM_BOT_USERNAME: z.string().min(1).optional(),
+      TELEGRAM_WEBHOOK_SECRET_TOKEN: z.string().min(1).optional(),
     },
   });
 }

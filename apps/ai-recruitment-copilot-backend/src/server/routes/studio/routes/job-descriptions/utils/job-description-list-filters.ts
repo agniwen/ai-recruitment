@@ -1,11 +1,16 @@
 import { z } from "zod";
+import { odcAnalysisDemandDateFieldValues } from "@arc/shared/odc-analysis";
 
 const googleSheetStatusSchema = z.enum(["active", "deleted", "unlinked"]);
 const MAX_ID_FILTER_VALUES = 500;
 const MAX_ID_LENGTH = 120;
+const dateOnlySchema = z.string().date().optional().nullable();
 
 const jobDescriptionListFiltersSchema = z.object({
   code: z.string().trim().max(120).optional().nullable(),
+  dateField: z.enum(odcAnalysisDemandDateFieldValues).optional().nullable(),
+  dateFrom: dateOnlySchema,
+  dateTo: dateOnlySchema,
   departmentId: z.string().trim().max(120).optional().nullable(),
   googleSheetStatus: z.string().trim().max(120).optional().nullable(),
   hiringUnitId: z.string().trim().optional().nullable(),
@@ -19,6 +24,9 @@ export type JobDescriptionGoogleSheetStatusFilter = z.infer<typeof googleSheetSt
 
 export interface JobDescriptionListFilterInput {
   code?: string | null;
+  dateField?: (typeof odcAnalysisDemandDateFieldValues)[number] | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
   departmentId?: string | null;
   googleSheetStatus?: string | null;
   hiringUnitId?: string | null;
@@ -63,6 +71,9 @@ export function parseJobDescriptionListFilters(filters?: JobDescriptionListFilte
   }
   return {
     code: parsed.data.code?.trim() || undefined,
+    dateField: parsed.data.dateField ?? undefined,
+    dateFrom: parsed.data.dateFrom ?? undefined,
+    dateTo: parsed.data.dateTo ?? undefined,
     departmentIds: csvToValues(parsed.data.departmentId),
     googleSheetStatuses: parseEnumCsv(parsed.data.googleSheetStatus, googleSheetStatusSchema),
     hiringUnitIds: boundedIdCsvToValues(parsed.data.hiringUnitId),

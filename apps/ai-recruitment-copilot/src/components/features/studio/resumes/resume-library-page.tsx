@@ -36,6 +36,7 @@ import { BulkUploadProgressDialog } from "@/components/features/studio/resumes/b
 import { useBulkUpload } from "@/components/features/studio/resumes/use-bulk-upload";
 import { UploadBatchListDialog } from "@/components/features/studio/resumes/upload-batch-list-dialog";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { DatePicker } from "@/components/date-time-picker";
 import {
   Empty,
   EmptyContent,
@@ -217,6 +218,19 @@ export function ResumeLibraryPage() {
         fetchStudioResumes(
           slug,
           {
+            activity:
+              params.filters.activity === "associated_resume" ||
+              params.filters.activity === "pending_evaluation" ||
+              params.filters.activity === "ai_interview" ||
+              params.filters.activity === "human_interview" ||
+              params.filters.activity === "offer" ||
+              params.filters.activity === "expected_arrival" ||
+              params.filters.activity === "onboarded" ||
+              params.filters.activity === "closed"
+                ? params.filters.activity
+                : undefined,
+            activityFrom: params.filters.activityFrom || undefined,
+            activityTo: params.filters.activityTo || undefined,
             candidateEmail: params.filters.candidateEmail || undefined,
             candidateName: params.filters.candidateName || undefined,
             candidatePhone: params.filters.candidatePhone || undefined,
@@ -422,6 +436,21 @@ export function ResumeLibraryPage() {
 
   const filtersConfig = useMemo(
     () => [
+      {
+        key: "activity" as const,
+        options: [
+          { label: "关联简历", value: "associated_resume" },
+          { label: "待评估", value: "pending_evaluation" },
+          { label: "AI 面试", value: "ai_interview" },
+          { label: "真人面试", value: "human_interview" },
+          { label: "Offer", value: "offer" },
+          { label: "预计到岗", value: "expected_arrival" },
+          { label: "实际到岗", value: "onboarded" },
+          { label: "淘汰 / 撤回", value: "closed" },
+        ],
+        placeholder: "ODC 指标口径",
+        type: "select" as const,
+      },
       {
         key: "id" as const,
         minWidth: "12rem",
@@ -678,6 +707,26 @@ export function ResumeLibraryPage() {
           error={resumeLibraryListQuery.error}
           fetchNextPage={resumeLibraryListQuery.fetchNextPage}
           filters={filtersConfig}
+          filtersExtra={
+            grid.filters.activity ? (
+              <div className="grid grid-cols-2 gap-3">
+                <DatePicker
+                  aria-label="指标日期开始"
+                  max={grid.bind.filterValues.activityTo}
+                  onValueChange={(value) => grid.bind.onFilterChange("activityFrom", value)}
+                  placeholder="指标开始日期"
+                  value={grid.bind.filterValues.activityFrom}
+                />
+                <DatePicker
+                  aria-label="指标日期结束"
+                  min={grid.bind.filterValues.activityFrom}
+                  onValueChange={(value) => grid.bind.onFilterChange("activityTo", value)}
+                  placeholder="指标结束日期"
+                  value={grid.bind.filterValues.activityTo}
+                />
+              </div>
+            ) : undefined
+          }
           grid={grid}
           hasActiveUploadBatches={hasActiveUploadBatches}
           hasNextPage={Boolean(resumeLibraryListQuery.hasNextPage)}

@@ -21,6 +21,7 @@ import {
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { removeImportedInterviewFromConversations } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat";
 import { recordCandidateActivityInTransaction } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
+import { notifyCandidateStageChange } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-notification";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import {
   parseResumeFastToProfile,
@@ -698,6 +699,20 @@ export const resumeLibraryRouter = factory
         return c.json({ error: "该简历已评估通过，不能继续评估。" }, 409);
       }
 
+      if (
+        jobDescriptionChanged &&
+        (existing.pipelineStage !== "screening" || existing.outcome !== "in_pipeline")
+      ) {
+        await notifyCandidateStageChange({
+          candidateId: id,
+          fromOutcome: existing.outcome,
+          fromStage: existing.pipelineStage,
+          organizationId: activeOrg.id,
+          toOutcome: "in_pipeline",
+          toStage: "screening",
+        });
+      }
+
       if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {
         await reassessAfterJobDescriptionChange({
           organizationId: activeOrg.id,
@@ -896,6 +911,20 @@ export const resumeLibraryRouter = factory
       });
       if (evaluationResult?.status === "already_passed") {
         return c.json({ error: "该简历已评估通过，不能继续评估。" }, 409);
+      }
+
+      if (
+        jobDescriptionChanged &&
+        (existing.pipelineStage !== "screening" || existing.outcome !== "in_pipeline")
+      ) {
+        await notifyCandidateStageChange({
+          candidateId: id,
+          fromOutcome: existing.outcome,
+          fromStage: existing.pipelineStage,
+          organizationId: activeOrg.id,
+          toOutcome: "in_pipeline",
+          toStage: "screening",
+        });
       }
 
       if (jobDescriptionChanged && resumeProfile && existing.resumeParseStatus === "ready") {

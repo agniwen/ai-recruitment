@@ -42,6 +42,7 @@ interface ResumeLibraryCardListProps {
   error: unknown;
   fetchNextPage: () => Promise<unknown>;
   filters: ToolbarFilterConfig[];
+  filtersExtra?: ReactNode;
   grid: ResumeLibraryGridState;
   hasNextPage: boolean;
   onBulkDelete: () => void;
@@ -84,6 +85,7 @@ export function ResumeLibraryCardList({
   error,
   fetchNextPage,
   filters,
+  filtersExtra,
   grid,
   hasNextPage,
   hasActiveUploadBatches,
@@ -296,6 +298,7 @@ export function ResumeLibraryCardList({
         canResetFilters={grid.bind.canResetFilters}
         filterValues={grid.bind.filterValues}
         filters={filters}
+        filtersExtra={filtersExtra}
         onFilterChange={grid.bind.onFilterChange}
         onRefresh={grid.bind.onRefresh}
         onResetFilters={grid.bind.onResetFilters}

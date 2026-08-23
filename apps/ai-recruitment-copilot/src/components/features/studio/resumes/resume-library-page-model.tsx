@@ -28,6 +28,9 @@ export const ResumeDocumentPreviewDialog = lazy(async () => {
 });
 
 export interface ResumeFilters extends Record<string, string> {
+  activity: string;
+  activityFrom: string;
+  activityTo: string;
   candidateEmail: string;
   candidateName: string;
   candidatePhone: string;
@@ -49,6 +52,9 @@ export interface ResumeFilters extends Record<string, string> {
 // hiringUnitId / jdIds = searchable single-selects.
 // skills = candidate must have ALL selected skills (intersection / AND).
 export const EMPTY_FILTERS: ResumeFilters = {
+  activity: "",
+  activityFrom: "",
+  activityTo: "",
   candidateEmail: "",
   candidateName: "",
   candidatePhone: "",

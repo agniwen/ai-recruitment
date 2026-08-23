@@ -58,6 +58,11 @@ interface LaunchAiInterviewRoundDependencies<TSchedule extends LaunchSchedule> {
     organizationId: string;
     visibilityScope: RecruitingVisibilityScope;
   }) => Promise<LaunchCandidate | null>;
+  notifyStageChange?: (input: {
+    fromStage: PipelineStage;
+    interviewRecordId: string;
+    organizationId: string;
+  }) => Promise<void>;
 }
 
 export type LaunchAiInterviewRoundResult =
@@ -149,6 +154,11 @@ export function createLaunchAiInterviewRound<TSchedule extends LaunchSchedule>(
       throw new LaunchAiInterviewMutationError(error);
     }
     deps.invalidateCache(command.organizationId);
+    await deps.notifyStageChange?.({
+      fromStage: candidate.pipelineStage,
+      interviewRecordId: command.interviewRecordId,
+      organizationId: command.organizationId,
+    });
 
     return { ok: true, roundId: schedule.id };
   };

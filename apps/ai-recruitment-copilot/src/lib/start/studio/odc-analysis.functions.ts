@@ -22,6 +22,11 @@ export const loadOdcAnalysisState = createServerFn({ method: "GET" })
     return {
       ...result,
       access: {
+        canViewJobDescriptions: hasPermissionInStatements(
+          access.permissions,
+          "page",
+          "jobDescriptions",
+        ),
         canViewResumes: hasPermissionInStatements(access.permissions, "page", "resumes"),
       },
       status: "ready",

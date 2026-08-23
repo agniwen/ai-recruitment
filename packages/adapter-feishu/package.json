@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@chat-adapter/shared": "^4.28.1",
+    "@chat-adapter/shared": "^4.38.1",
     "@larksuiteoapi/node-sdk": "^1.59.0",
     "chat": "catalog:"
   },

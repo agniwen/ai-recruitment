@@ -25,6 +25,7 @@ import {
   getHumanInterviewOfferReadinessError,
   loadHumanInterviewRoundReadiness,
 } from "./human-interview-rounds";
+import { notifyCandidateStageChange } from "../utils/candidate-stage-notification";
 
 export type { OfferDraftRecord };
 
@@ -355,7 +356,7 @@ export async function cancelOfferDraft(
 ): Promise<OfferDraftRecord> {
   const now = new Date();
 
-  await db.transaction(async (tx) => {
+  const stageChange = await db.transaction(async (tx) => {
     // 1. 锁住草稿行 + 校验。
     // 1. Lock the draft row + validate.
     const [existing] = await tx
@@ -394,7 +395,7 @@ export async function cancelOfferDraft(
       )
       .limit(1);
     if (remaining.length > 0) {
-      return;
+      return null;
     }
 
     // 4. 派生回退目标阶段：有非取消的真人复面 → human_interview；否则有 AI schedule → ai_interview；
@@ -432,7 +433,7 @@ export async function cancelOfferDraft(
     //    其它阶段（closed / 已被人挪走）一律不动；WHERE 守卫让并发竞争变成 no-op。
     // 5. Roll back only when still in offer/in_pipeline. WHERE guard makes
     //    concurrent close (already past offer) a no-op rather than CHECK violation.
-    await tx
+    const changed = await tx
       .update(studioInterview)
       .set({ pipelineStage: targetStage, updatedAt: now })
       .where(
@@ -442,8 +443,23 @@ export async function cancelOfferDraft(
           eq(studioInterview.pipelineStage, "offer"),
           eq(studioInterview.outcome, "in_pipeline"),
         ),
-      );
+      )
+      .returning({ id: studioInterview.id });
+    return changed.length > 0
+      ? { candidateId: existing.interviewRecordId, toStage: targetStage }
+      : null;
   });
+
+  if (stageChange) {
+    await notifyCandidateStageChange({
+      candidateId: stageChange.candidateId,
+      fromOutcome: "in_pipeline",
+      fromStage: "offer",
+      organizationId,
+      toOutcome: "in_pipeline",
+      toStage: stageChange.toStage,
+    });
+  }
 
   const updated = await loadDraftById(draftId, organizationId);
   if (!updated) {
@@ -461,7 +477,7 @@ export async function cancelOfferDraft(
 export async function maybeAdvanceToOffer(
   interviewRecordId: string,
   organizationId: string,
-): Promise<void> {
+): Promise<boolean> {
   const drafts = await db
     .select({ id: studioOfferDraft.id })
     .from(studioOfferDraft)
@@ -473,7 +489,7 @@ export async function maybeAdvanceToOffer(
     )
     .limit(2);
   if (drafts.length !== 1) {
-    return;
+    return false;
   }
   const [candidate] = await db
     .select({ pipelineStage: studioInterview.pipelineStage })
@@ -488,14 +504,14 @@ export async function maybeAdvanceToOffer(
   if (candidate?.pipelineStage === "human_interview") {
     const readiness = await loadHumanInterviewRoundReadiness(interviewRecordId, organizationId);
     if (getHumanInterviewOfferReadinessError(readiness)) {
-      return;
+      return false;
     }
   }
   // 同 maybeAdvanceToHumanInterview：把守卫推到 UPDATE 的 WHERE 上，避免与
   // 并发 close 之间的 TOCTOU 触发 DB CHECK 约束。
   // Mirrors maybeAdvanceToHumanInterview — guard via UPDATE's WHERE clause so
   // a concurrent close becomes a no-op instead of violating the CHECK.
-  await db
+  const updated = await db
     .update(studioInterview)
     .set({ pipelineStage: "offer", updatedAt: new Date() })
     .where(
@@ -505,5 +521,7 @@ export async function maybeAdvanceToOffer(
         eq(studioInterview.pipelineStage, "human_interview"),
         eq(studioInterview.outcome, "in_pipeline"),
       ),
-    );
+    )
+    .returning({ id: studioInterview.id });
+  return updated.length > 0;
 }
