@@ -320,13 +320,6 @@ function RecruiterResumeDetailPage() {
           onRequestClose={
             canUpdateResumeLibrary
               ? ({ id, candidateName, initialOutcome }) => {
-                  const reason = detail
-                    ? getResumeActionLockedReason(detail.resumeParseStatus)
-                    : null;
-                  if (reason) {
-                    toast.error(reason);
-                    return;
-                  }
                   setTransitionTarget({
                     candidate: { candidateName, id },
                     initialOutcome,
