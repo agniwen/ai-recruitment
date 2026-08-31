@@ -36,6 +36,7 @@ interface QdrantClientLike {
     input: {
       filter: { must: QdrantFilterCondition[] };
       limit: number;
+      offset?: number;
       query: number[];
       with_payload: true;
     },
@@ -224,6 +225,9 @@ export class QdrantResumeVectorStore implements ResumeVectorStore, ResumeVectorR
       mustMatch("chunkType", input.chunkType),
       mustMatch("status", "active"),
     ];
+    if (input.embeddingVersion) {
+      must.push(mustMatch("embeddingVersion", input.embeddingVersion));
+    }
     if (input.sourceTypes && input.sourceTypes.length > 0) {
       must.push(mustMatchAny("sourceType", input.sourceTypes));
     }
@@ -233,6 +237,7 @@ export class QdrantResumeVectorStore implements ResumeVectorStore, ResumeVectorR
         must,
       },
       limit: input.limit,
+      offset: input.offset,
       query: input.embedding,
       with_payload: true,
     });

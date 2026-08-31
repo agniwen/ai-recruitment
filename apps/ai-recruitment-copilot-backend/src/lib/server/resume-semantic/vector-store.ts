@@ -44,7 +44,9 @@ export interface ResumeStoredEmbeddingChunk {
 export interface ResumeVectorSearchInput {
   chunkType: ResumeSemanticChunkType;
   embedding: number[];
+  embeddingVersion?: string;
   limit: number;
+  offset?: number;
   organizationId: string;
   sourceTypes?: ResumeSemanticSourceType[];
 }

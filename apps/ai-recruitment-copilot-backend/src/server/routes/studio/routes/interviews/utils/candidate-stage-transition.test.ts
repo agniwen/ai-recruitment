@@ -4,9 +4,12 @@ import { transitionCandidateStage } from "./candidate-stage-transition";
 // oxlint-disable promise/prefer-await-to-callbacks -- the fake transaction must execute Drizzle's callback.
 
 const mocks = vi.hoisted(() => ({
+  autoCloseRelatedCandidatesAfterHire: vi.fn(),
   getReadinessError: vi.fn(),
   invalidateCaches: vi.fn(),
   loadReadiness: vi.fn(),
+  notifyCandidateStageChange: vi.fn(),
+  refreshDirectUploadDuplicateMatchesBeforeHire: vi.fn(),
   transaction: vi.fn(),
 }));
 
@@ -18,6 +21,19 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
   invalidateStudioInterviewCaches: mocks.invalidateCaches,
 }));
 
+vi.mock("./candidate-stage-notification", () => ({
+  notifyCandidateStageChange: mocks.notifyCandidateStageChange,
+}));
+
+vi.mock("./related-candidate-auto-closure", () => ({
+  autoCloseRelatedCandidatesAfterHire: mocks.autoCloseRelatedCandidatesAfterHire,
+}));
+
+vi.mock("./direct-upload-dedup-refresh", () => ({
+  refreshDirectUploadDuplicateMatchesBeforeHire:
+    mocks.refreshDirectUploadDuplicateMatchesBeforeHire,
+}));
+
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds",
   () => ({
@@ -27,21 +43,34 @@ vi.mock(
 );
 
 function createTransaction(existing: {
+  candidateName?: string;
   closedMeta: null;
   jobDescriptionAiInterviewDisabled?: boolean;
   jobDescriptionId: string | null;
-  outcome: "in_pipeline";
-  pipelineStage: "human_interview" | "screening";
+  outcome: "archived" | "in_pipeline";
+  pipelineStage: "closed" | "human_interview" | "screening";
+  resumeSourcePoolItemId?: string | null;
+  resumeSourceType?: "direct_upload" | "private_pool" | "public_pool" | null;
 }) {
   const insertedValues = vi.fn(async (_value: unknown) => {});
   const updatedWhere = vi.fn(async (_value: unknown) => {});
   const tx = {
+    execute: vi.fn(() => Promise.resolve()),
     insert: vi.fn(() => ({ values: insertedValues })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         leftJoin: vi.fn(() => ({
           where: vi.fn(() => ({
-            for: vi.fn(() => ({ limit: vi.fn().mockResolvedValue([existing]) })),
+            for: vi.fn(() => ({
+              limit: vi.fn().mockResolvedValue([
+                {
+                  candidateName: "候选人甲",
+                  resumeSourcePoolItemId: null,
+                  resumeSourceType: "direct_upload",
+                  ...existing,
+                },
+              ]),
+            })),
           })),
         })),
       })),
@@ -56,6 +85,9 @@ function createTransaction(existing: {
 describe("transitionCandidateStage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.autoCloseRelatedCandidatesAfterHire.mockResolvedValue([]);
+    mocks.notifyCandidateStageChange.mockImplementation(() => Promise.resolve());
+    mocks.refreshDirectUploadDuplicateMatchesBeforeHire.mockImplementation(() => Promise.resolve());
   });
 
   it("authorizes protected target stages before opening the transaction", async () => {
@@ -184,6 +216,109 @@ describe("transitionCandidateStage", () => {
     expect(authorize).not.toHaveBeenCalledWith({ action: "update", resource: "interview" });
     expect(updatedWhere).toHaveBeenCalledOnce();
     expect(insertedValues).toHaveBeenCalledOnce();
+  });
+
+  it("automatically closes related in-pipeline candidates when this candidate is hired", async () => {
+    const { insertedValues, tx } = createTransaction({
+      candidateName: "候选人甲",
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "human_interview",
+      resumeSourcePoolItemId: "pool-a",
+      resumeSourceType: "public_pool",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    mocks.autoCloseRelatedCandidatesAfterHire.mockResolvedValue([
+      {
+        candidateId: "candidate-b",
+        candidateName: "候选人乙",
+        fromOutcome: "in_pipeline",
+        fromStage: "screening",
+        match: { kind: "resume_pool_source" },
+      },
+    ]);
+    mocks.refreshDirectUploadDuplicateMatchesBeforeHire.mockResolvedValue([
+      { candidateId: "candidate-b", similarityScore: 94 },
+    ]);
+
+    await expect(
+      transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: { outcome: "hired", pipelineStage: "closed" },
+        operatorId: "user-a",
+        operatorRole: "odc",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({ kind: "ok" });
+
+    expect(mocks.autoCloseRelatedCandidatesAfterHire).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hiredCandidate: {
+          id: "candidate-a",
+          name: "候选人甲",
+          poolItemId: "pool-a",
+          sourceType: "public_pool",
+        },
+        operatorId: "user-a",
+        operatorRole: "odc",
+        organizationId: "org-a",
+        refreshedSemanticMatches: [{ candidateId: "candidate-b", similarityScore: 94 }],
+        tx,
+      }),
+    );
+    expect(tx.execute).toHaveBeenCalledOnce();
+    expect(mocks.refreshDirectUploadDuplicateMatchesBeforeHire).toHaveBeenCalledWith({
+      candidateId: "candidate-a",
+      organizationId: "org-a",
+    });
+    expect(insertedValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          automaticallyClosedCandidateCount: 1,
+          automaticallyClosedCandidateIds: ["candidate-b"],
+        }),
+        interviewRecordId: "candidate-a",
+      }),
+    );
+    expect(mocks.notifyCandidateStageChange).toHaveBeenCalledOnce();
+    expect(mocks.notifyCandidateStageChange).toHaveBeenCalledWith(
+      expect.objectContaining({ candidateId: "candidate-a", organizationId: "org-a" }),
+    );
+  });
+
+  it("rejects hiring a related candidate that was already automatically closed", async () => {
+    const { insertedValues, tx, updatedWhere } = createTransaction({
+      candidateName: "候选人乙",
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "archived",
+      pipelineStage: "closed",
+      resumeSourcePoolItemId: "pool-a",
+      resumeSourceType: "public_pool",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+
+    await expect(
+      transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-b",
+        input: { outcome: "hired", pipelineStage: "closed" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({
+      kind: "invalid",
+      message: "该候选人已结束流程，不能再次标记录用。",
+    });
+
+    expect(tx.execute).toHaveBeenCalledOnce();
+    expect(updatedWhere).not.toHaveBeenCalled();
+    expect(insertedValues).not.toHaveBeenCalled();
+    expect(mocks.autoCloseRelatedCandidatesAfterHire).not.toHaveBeenCalled();
   });
 
   it("forbids close without candidateClose:create", async () => {

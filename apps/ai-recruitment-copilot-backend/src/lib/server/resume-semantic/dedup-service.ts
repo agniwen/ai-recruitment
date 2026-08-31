@@ -16,7 +16,11 @@ import { getResumeSemanticIndexConfig } from "./indexer";
 import { rerankResumeDuplicate } from "./rerank";
 import type { VectorSimilarityScores } from "./rerank";
 import { buildResumeSemanticTexts } from "./text-builders";
-import type { ResumeVectorSearchResult, ResumeVectorStore } from "./vector-store";
+import type {
+  ResumeEmbeddingChunk,
+  ResumeVectorSearchResult,
+  ResumeVectorStore,
+} from "./vector-store";
 
 interface SemanticCandidateRecord {
   candidateEmail: string | null;
@@ -42,6 +46,7 @@ interface FindSemanticResumeDuplicatesInput {
   poolOwnerUserId?: string | null;
   poolScope?: ResumePoolScope | null;
   resumeProfile?: ResumeProfile | null;
+  resultLimit?: number;
   sourceTypes?: ResumeSemanticSourceType[];
   throwOnError?: boolean;
 }
@@ -98,6 +103,44 @@ function mergeVectorScores(
   return map;
 }
 
+async function searchVectorCandidates(input: {
+  chunk: ResumeEmbeddingChunk;
+  embeddingVersion: string;
+  organizationId: string;
+  resultLimit: number | null;
+  sourceTypes: ResumeSemanticSourceType[];
+  vectorStore: ResumeVectorStore;
+}): Promise<ResumeVectorSearchResult[]> {
+  const pageSize = input.resultLimit ?? (input.chunk.chunkType === "skill_role" ? 30 : 50);
+  const results: ResumeVectorSearchResult[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+  while (true) {
+    const page = await input.vectorStore.searchSimilarResumes({
+      chunkType: input.chunk.chunkType,
+      embedding: input.chunk.embedding,
+      embeddingVersion: input.embeddingVersion,
+      limit: pageSize,
+      offset: input.resultLimit ? offset : undefined,
+      organizationId: input.organizationId,
+      sourceTypes: input.sourceTypes,
+    });
+    const unseen = page.filter((result) => {
+      const key = sourceKey(result.sourceType, result.sourceId);
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+    results.push(...unseen);
+    if (!input.resultLimit || page.length < pageSize || unseen.length === 0) {
+      return results;
+    }
+    offset += page.length;
+  }
+}
+
 export async function findSemanticResumeDuplicates(
   input: FindSemanticResumeDuplicatesInput,
   // oxlint-disable-next-line no-use-before-define -- default dependency factory stays below the public function.
@@ -113,6 +156,8 @@ export async function findSemanticResumeDuplicates(
   }
   const queryProfile = input.resumeProfile;
   const sourceTypes = input.sourceTypes?.length ? input.sourceTypes : ["studio_interview" as const];
+  const resultLimit = input.resultLimit ? Math.max(1, Math.floor(input.resultLimit)) : null;
+  const { embeddingVersion } = getResumeSemanticIndexConfig();
 
   try {
     const chunks = buildResumeSemanticTexts(queryProfile);
@@ -123,12 +168,13 @@ export async function findSemanticResumeDuplicates(
     await deps.vectorStore.ensureCollection();
     const searchResultGroups = await Promise.all(
       embedded.map((chunk) =>
-        deps.vectorStore.searchSimilarResumes({
-          chunkType: chunk.chunkType,
-          embedding: chunk.embedding,
-          limit: chunk.chunkType === "skill_role" ? 30 : 50,
+        searchVectorCandidates({
+          chunk,
+          embeddingVersion,
           organizationId: input.organizationId,
+          resultLimit,
           sourceTypes,
+          vectorStore: deps.vectorStore,
         }),
       ),
     );
@@ -183,9 +229,8 @@ export async function findSemanticResumeDuplicates(
         },
       ];
     });
-    const matches = semanticMatches
-      .toSorted((a, b) => (b.score ?? 0) - (a.score ?? 0))
-      .slice(0, 10);
+    const sortedMatches = semanticMatches.toSorted((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    const matches = sortedMatches.slice(0, resultLimit ?? 10);
     console.info("[resume-semantic-dedup] completed", {
       candidateCount: candidates.length,
       matchCount: matches.length,

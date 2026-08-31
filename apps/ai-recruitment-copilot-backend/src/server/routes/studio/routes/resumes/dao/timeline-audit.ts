@@ -5,6 +5,10 @@ import type {
   CandidateTimelineEventTone,
   ResumeEvaluationStatus,
 } from "@arc/shared/studio-resumes";
+import {
+  automaticClosureMatchLabel,
+  readAutomaticCandidateClosureAuditDetail,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/related-candidate-auto-closure-policy";
 import { describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 
 function isPipelineStage(value: unknown): value is PipelineStage {
@@ -46,6 +50,19 @@ export function auditMetadata(
   detail: Record<string, unknown>,
   action: string,
 ): CandidateTimelineEventMeta[] {
+  const automaticClosure =
+    action === "candidate_transition" ? readAutomaticCandidateClosureAuditDetail(detail) : null;
+  if (automaticClosure) {
+    const similarityScore = automaticClosure.similarityScore
+      ? `${automaticClosure.similarityScore}%`
+      : null;
+    return [
+      { label: "触发候选人", value: automaticClosure.triggerCandidateName },
+      { label: "触发记录 ID", value: automaticClosure.triggerCandidateId },
+      { label: "匹配方式", value: automaticClosureMatchLabel(automaticClosure.matchKind) },
+      ...(similarityScore ? [{ label: "相似度", value: similarityScore }] : []),
+    ];
+  }
   if (action !== "candidate_information_updated") {
     return [];
   }
@@ -86,6 +103,10 @@ function jobDescriptionChangeLabel(
 // oxlint-disable-next-line complexity -- Audit copy stays centralized by action.
 export function auditDescription(detail: Record<string, unknown>, action: string): string | null {
   if (action === "candidate_transition") {
+    const automaticClosure = readAutomaticCandidateClosureAuditDetail(detail);
+    if (automaticClosure) {
+      return automaticClosure.reason;
+    }
     const from = stageLabel(detail.fromStage);
     const to = stageLabel(detail.toStage);
     const outcome = outcomeLabel(detail.toOutcome);
@@ -215,6 +236,9 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
     round_reset: "AI 面试轮次重置",
   };
   if (action === "candidate_transition") {
+    if (readAutomaticCandidateClosureAuditDetail(detail)) {
+      return "关联候选人录用，流程自动结束";
+    }
     if (detail.toStage === "closed") {
       return "候选人结案";
     }

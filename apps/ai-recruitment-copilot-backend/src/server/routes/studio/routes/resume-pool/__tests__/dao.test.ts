@@ -973,7 +973,7 @@ describe("deleteOwnPoolItem", () => {
       .where(eq(studioInterview.id, imported.resumeRecordId));
     expect(record?.candidateName).toBe(PROFILE.name);
     expect(record?.resumeSourceType).toBe("private_pool");
-    expect(record?.resumeSourcePoolItemId).toBeNull();
+    expect(record?.resumeSourcePoolItemId).toBe(privateId);
   });
 
   it("deletes public items created by the current user", async () => {

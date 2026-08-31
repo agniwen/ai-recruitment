@@ -67,12 +67,23 @@ describe("findSemanticResumeDuplicates", () => {
 
   it("adds semantic matches and reasons when vector search finds similar resumes", async () => {
     const ensureCollection = vi.fn();
+    const searchSimilarResumes = vi.fn(({ chunkType }) =>
+      Promise.resolve([
+        {
+          chunkType,
+          score: chunkType === "work_project" ? 0.96 : 0.9,
+          sourceId: "candidate-semantic",
+          sourceType: "studio_interview" as const,
+        },
+      ]),
+    );
     const matches = await findSemanticResumeDuplicates(
       {
         email: queryProfile.email,
         name: queryProfile.name,
         organizationId: "org-1",
         phone: queryProfile.phone,
+        resultLimit: 25,
         resumeProfile: queryProfile,
       },
       {
@@ -110,16 +121,7 @@ describe("findSemanticResumeDuplicates", () => {
         vectorStore: {
           deleteResumeEmbeddings: vi.fn(),
           ensureCollection,
-          searchSimilarResumes: vi.fn(({ chunkType }) =>
-            Promise.resolve([
-              {
-                chunkType,
-                score: chunkType === "work_project" ? 0.96 : 0.9,
-                sourceId: "candidate-semantic",
-                sourceType: "studio_interview" as const,
-              },
-            ]),
-          ),
+          searchSimilarResumes,
           upsertResumeEmbeddings: vi.fn(),
         },
       },
@@ -132,6 +134,7 @@ describe("findSemanticResumeDuplicates", () => {
       uploaderName: "上传人昵称",
     });
     expect(ensureCollection).toHaveBeenCalledTimes(1);
+    expect(searchSimilarResumes).toHaveBeenCalledWith(expect.objectContaining({ limit: 25 }));
     expect(matches[0]?.score).toBeGreaterThanOrEqual(92);
     expect(matches[0]?.status).toBe("archived");
     expect(matches[0]?.semanticReasons).toContain("工作/项目经历语义高度相似");
@@ -203,6 +206,79 @@ describe("findSemanticResumeDuplicates", () => {
       id: "pool-candidate",
       sourceType: "resume_pool_item",
     });
+  });
+
+  it("continues vector pagination past orphaned sources for untruncated results", async () => {
+    const searchSimilarResumes = vi.fn(({ chunkType, offset = 0 }) => {
+      if (offset >= 2) {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve([
+        {
+          chunkType,
+          score: 0.96,
+          sourceId: offset === 0 ? "deleted-candidate" : "candidate-semantic",
+          sourceType: "studio_interview" as const,
+        },
+      ]);
+    });
+    const matches = await findSemanticResumeDuplicates(
+      {
+        organizationId: "org-1",
+        resultLimit: 1,
+        resumeProfile: queryProfile,
+      },
+      {
+        embed: vi.fn(({ chunks }) =>
+          Promise.resolve(
+            chunks.map((chunk: { chunkType: string; text: string }, index: number) => ({
+              ...chunk,
+              embedding: [index, index + 1],
+            })),
+          ),
+        ),
+        embeddingConfig: {
+          apiKey: "key",
+          baseUrl: "https://dashscope.example/v1",
+          dimensions: 2,
+          model: "text-embedding-v4",
+        },
+        enabled: true,
+        loadCandidates: (_organizationId, sources) => {
+          expect(sources).toContainEqual({
+            sourceId: "deleted-candidate",
+            sourceType: "studio_interview",
+          });
+          expect(sources).toContainEqual({
+            sourceId: "candidate-semantic",
+            sourceType: "studio_interview",
+          });
+          return Promise.resolve([
+            {
+              candidateEmail: "other@example.com",
+              candidateName: "李四",
+              candidatePhone: "13900000000",
+              createdAt: "2026-01-02T00:00:00.000Z",
+              id: "candidate-semantic",
+              jobDescriptionName: null,
+              resumeProfile: queryProfile,
+              status: "active",
+              targetRole: "全栈工程师",
+            },
+          ]);
+        },
+        vectorStore: {
+          deleteResumeEmbeddings: vi.fn(),
+          ensureCollection: vi.fn(),
+          searchSimilarResumes,
+          upsertResumeEmbeddings: vi.fn(),
+        },
+      },
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.id).toBe("candidate-semantic");
+    expect(searchSimilarResumes).toHaveBeenCalledWith(expect.objectContaining({ offset: 2 }));
   });
 
   it("returns no matches when vector search fails", async () => {

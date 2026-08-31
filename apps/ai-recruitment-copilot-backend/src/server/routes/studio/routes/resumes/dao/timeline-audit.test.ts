@@ -88,3 +88,29 @@ describe("candidate information audit timeline", () => {
     ]);
   });
 });
+
+describe("automatic related-candidate closure timeline", () => {
+  const detail = {
+    automaticClosure: true,
+    fromOutcome: "in_pipeline",
+    fromStage: "human_interview",
+    matchKind: "semantic_similarity",
+    reason: "高相似简历候选人「候选人甲」已录用（相似度 94%），系统自动结束流程。",
+    similarityScore: 94,
+    toOutcome: "archived",
+    toStage: "closed",
+    triggerCandidateId: "candidate-winner",
+    triggerCandidateName: "候选人甲",
+  };
+
+  it("shows which candidate completed first and why this record was closed", () => {
+    expect(auditTitle("candidate_transition", detail)).toBe("关联候选人录用，流程自动结束");
+    expect(auditDescription(detail, "candidate_transition")).toBe(detail.reason);
+    expect(auditMetadata(detail, "candidate_transition")).toEqual([
+      { label: "触发候选人", value: "候选人甲" },
+      { label: "触发记录 ID", value: "candidate-winner" },
+      { label: "匹配方式", value: "简历相似度" },
+      { label: "相似度", value: "94%" },
+    ]);
+  });
+});

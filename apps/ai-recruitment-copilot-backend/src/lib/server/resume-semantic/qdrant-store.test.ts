@@ -169,7 +169,9 @@ describe("QdrantResumeVectorStore", () => {
     const results = await store.searchSimilarResumes({
       chunkType: "work_project",
       embedding: [0.1, 0.2, 0.3],
+      embeddingVersion: "embedding-v2",
       limit: 20,
+      offset: 40,
       organizationId: "org-1",
     });
 
@@ -190,6 +192,11 @@ describe("QdrantResumeVectorStore", () => {
       key: "chunkType",
       match: { value: "work_project" },
     });
+    expect(queryOptions.filter.must).toContainEqual({
+      key: "embeddingVersion",
+      match: { value: "embedding-v2" },
+    });
+    expect(queryOptions.offset).toBe(40);
   });
 
   it("adds source type filters when searching similar resumes", async () => {

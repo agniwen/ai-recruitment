@@ -514,10 +514,9 @@ export const studioInterview = pgTable(
     resumeSourceImportedBy: text("resume_source_imported_by").references(() => user.id, {
       onDelete: "set null",
     }),
-    // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
-    resumeSourcePoolItemId: text("resume_source_pool_item_id").references(() => resumePoolItem.id, {
-      onDelete: "set null",
-    }),
+    // 持久来源快照，不设外键：即使原简历池记录被删除，候选人仍保留最初的池 ID，
+    // 用于同源候选人的录用联动与审计追溯。
+    resumeSourcePoolItemId: text("resume_source_pool_item_id"),
     resumeSourceType: text("resume_source_type").$type<StudioInterviewResumeSourceType>(),
     resumeStorageKey: text("resume_storage_key"),
     resumeText: text("resume_text"),

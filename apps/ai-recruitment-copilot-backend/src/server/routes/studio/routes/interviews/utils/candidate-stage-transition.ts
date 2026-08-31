@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
@@ -14,6 +14,8 @@ import {
 } from "./candidate-transition";
 import type { CandidateTransitionInput } from "./candidate-transition";
 import { notifyCandidateStageChange } from "./candidate-stage-notification";
+import { refreshDirectUploadDuplicateMatchesBeforeHire } from "./direct-upload-dedup-refresh";
+import { autoCloseRelatedCandidatesAfterHire } from "./related-candidate-auto-closure";
 
 export type CandidateStageTransitionProvenance =
   | { kind: "manual" }
@@ -100,16 +102,32 @@ export async function transitionCandidateStage(command: {
     return { kind: "forbidden" };
   }
 
+  const isHiringCandidate =
+    command.input.pipelineStage === "closed" && command.input.outcome === "hired";
+  const refreshedSemanticMatches = isHiringCandidate
+    ? await refreshDirectUploadDuplicateMatchesBeforeHire({
+        candidateId: command.candidateId,
+        organizationId: command.organizationId,
+      })
+    : undefined;
   const now = new Date();
   // oxlint-disable-next-line complexity -- Transaction enforces the full candidate-stage state machine atomically.
   const result = await db.transaction(async (tx) => {
+    if (isHiringCandidate) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`candidate-hire:${command.organizationId}`}, 0))`,
+      );
+    }
     const [existing] = await tx
       .select({
+        candidateName: studioInterview.candidateName,
         closedMeta: studioInterview.closedMeta,
         jobDescriptionAiInterviewDisabled: jobDescription.aiInterviewDisabled,
         jobDescriptionId: studioInterview.jobDescriptionId,
         outcome: studioInterview.outcome,
         pipelineStage: studioInterview.pipelineStage,
+        resumeSourcePoolItemId: studioInterview.resumeSourcePoolItemId,
+        resumeSourceType: studioInterview.resumeSourceType,
       })
       .from(studioInterview)
       .leftJoin(
@@ -176,6 +194,12 @@ export async function transitionCandidateStage(command: {
     ) {
       return { kind: "noop" } as const;
     }
+    if (isHiringCandidate && existing.outcome !== "in_pipeline") {
+      return {
+        kind: "invalid",
+        message: "该候选人已结束流程，不能再次标记录用。",
+      } as const;
+    }
 
     const transition = resolveCandidateTransitionPatch({
       existing,
@@ -200,6 +224,22 @@ export async function transitionCandidateStage(command: {
         ...onboardingFactPatch,
       })
       .where(eq(studioInterview.id, command.candidateId));
+    const automaticallyClosedCandidates = isHired
+      ? await autoCloseRelatedCandidatesAfterHire({
+          hiredCandidate: {
+            id: command.candidateId,
+            name: existing.candidateName,
+            poolItemId: existing.resumeSourcePoolItemId,
+            sourceType: existing.resumeSourceType,
+          },
+          now,
+          operatorId: command.operatorId,
+          operatorRole: command.operatorRole,
+          organizationId: command.organizationId,
+          refreshedSemanticMatches,
+          tx,
+        })
+      : [];
     const provenanceDetail =
       command.provenance.kind === "workspace_recruiting_copilot"
         ? {
@@ -208,12 +248,21 @@ export async function transitionCandidateStage(command: {
             source: "workspace_recruiting_copilot" as const,
           }
         : {};
+    const automaticClosureDetail = isHired
+      ? {
+          automaticallyClosedCandidateCount: automaticallyClosedCandidates.length,
+          automaticallyClosedCandidateIds: automaticallyClosedCandidates.map(
+            (candidate) => candidate.candidateId,
+          ),
+        }
+      : {};
     await tx.insert(interviewAuditLog).values({
       action: "candidate_transition",
       createdAt: now,
       detail: {
         ...transition.auditDetail,
         ...provenanceDetail,
+        ...automaticClosureDetail,
       },
       id: crypto.randomUUID(),
       interviewRecordId: command.candidateId,
