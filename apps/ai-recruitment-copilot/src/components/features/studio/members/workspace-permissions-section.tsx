@@ -265,7 +265,9 @@ function RoleFormDialog({
               />
               <div className="grid gap-1">
                 <FieldLabel htmlFor="workspace-role-is-odc">是否为 ODC</FieldLabel>
-                <FieldDescription>勾选后，该角色产生的招聘数据会计入 ODC 分析。</FieldDescription>
+                <FieldDescription>
+                  勾选后，该角色成员按招聘组与编制组织范围可见的数据会计入 ODC 分析。
+                </FieldDescription>
               </div>
             </Field>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}

@@ -1,9 +1,10 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import { buildJobDescriptionHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import {
-  interviewAuditLog,
+  department,
   jobDescription,
-  organizationRole,
   studioHumanInterviewRound,
   studioInterview,
   studioInterviewSchedule,
@@ -26,7 +27,8 @@ import {
   latestOfferByInterview,
 } from "./metric-policies";
 import { instantRangeConditions } from "./utils/instant-range-conditions";
-import { matchesOdcRole, odcRoleCondition } from "./utils/role-filter";
+import { resolveOdcAnalysisVisibilityScope } from "./visibility-scope";
+import type { OdcAnalysisVisibilityScope } from "./visibility-scope";
 
 export { resolveOdcAnalysisRange } from "./date-range";
 
@@ -63,14 +65,24 @@ function timestampCondition(
   return and(...instantRangeConditions(column, range)) ?? sql`true`;
 }
 
-function odcJobCondition(organizationId: string, odcRoles: readonly string[]) {
+function candidateVisibilityCondition(scope: RecruitingVisibilityScope) {
+  if (scope.kind === "all") {
+    return;
+  }
+  if (scope.kind === "none" || scope.userIds.length === 0) {
+    return sql`false`;
+  }
+  return inArray(studioInterview.createdBy, scope.userIds);
+}
+
+function visibleJobCondition(organizationId: string, visibility: OdcAnalysisVisibilityScope) {
   return and(
     eq(jobDescription.organizationId, organizationId),
-    odcRoleCondition(jobDescription.createdByRole, odcRoles),
+    buildJobDescriptionHiringUnitScopeCondition(visibility.hiringUnits),
   );
 }
 
-function loadSelectedJobs(organizationId: string, odcRoles: readonly string[]) {
+function loadSelectedJobs(organizationId: string, visibility: OdcAnalysisVisibilityScope) {
   return db
     .select({
       code: jobDescription.code,
@@ -82,24 +94,15 @@ function loadSelectedJobs(organizationId: string, odcRoles: readonly string[]) {
       requestedDate: jobDescription.requestedDate,
     })
     .from(jobDescription)
-    .where(odcJobCondition(organizationId, odcRoles))
+    .leftJoin(department, eq(department.id, jobDescription.departmentId))
+    .where(visibleJobCondition(organizationId, visibility))
     .orderBy(asc(jobDescription.name));
 }
 
-async function loadOdcRoleNames(organizationId: string): Promise<string[]> {
-  const roles = await db
-    .select({ role: organizationRole.role })
-    .from(organizationRole)
-    .where(
-      and(eq(organizationRole.organizationId, organizationId), eq(organizationRole.isOdc, true)),
-    );
-  return roles.map(({ role }) => role);
-}
-
-export async function loadOdcAnalysisJobOptions(
+function loadOdcAnalysisJobOptionsForVisibility(
   organizationId: string,
+  visibility: OdcAnalysisVisibilityScope,
 ): Promise<OdcAnalysisJobOption[]> {
-  const odcRoles = await loadOdcRoleNames(organizationId);
   return db
     .select({
       code: jobDescription.code,
@@ -108,22 +111,16 @@ export async function loadOdcAnalysisJobOptions(
       recruitmentStatus: jobDescription.recruitmentStatus,
     })
     .from(jobDescription)
-    .where(odcJobCondition(organizationId, odcRoles))
+    .leftJoin(department, eq(department.id, jobDescription.departmentId))
+    .where(visibleJobCondition(organizationId, visibility))
     .orderBy(asc(jobDescription.name));
 }
 
-function latestTransitionRoleCondition(odcRoles: readonly string[]) {
-  const latestRole = sql`(
-    SELECT ${interviewAuditLog.operatorRole}
-    FROM ${interviewAuditLog}
-    WHERE ${interviewAuditLog.organizationId} = ${studioInterview.organizationId}
-      AND ${interviewAuditLog.interviewRecordId} = ${studioInterview.id}
-      AND ${interviewAuditLog.action} = 'candidate_transition'
-      AND (${interviewAuditLog.detail} ->> 'toOutcome') = ${studioInterview.outcome}
-    ORDER BY ${interviewAuditLog.createdAt} DESC
-    LIMIT 1
-  )`;
-  return odcRoleCondition(latestRole, odcRoles);
+export async function loadOdcAnalysisJobOptions(
+  organizationId: string,
+): Promise<OdcAnalysisJobOption[]> {
+  const visibility = await resolveOdcAnalysisVisibilityScope(organizationId);
+  return loadOdcAnalysisJobOptionsForVisibility(organizationId, visibility);
 }
 
 // oxlint-disable-next-line complexity -- A single aggregate query intentionally keeps all dashboard counters on one snapshot.
@@ -133,7 +130,7 @@ async function loadCandidateMetrics(
   progressRange: InstantRange,
   activityJobIds: string[],
   activityRange: InstantRange,
-  odcRoles: readonly string[],
+  visibilityScope: RecruitingVisibilityScope,
 ) {
   const [row] = await db
     .select({
@@ -141,13 +138,11 @@ async function loadCandidateMetrics(
         eq(studioInterview.resumeParseStatus, "ready"),
         selectedJobCondition(progressJobIds),
         timestampCondition(studioInterview.createdAt, progressRange),
-        odcRoleCondition(studioInterview.createdByRole, odcRoles),
       )})`.mapWith(Number),
       onboarded: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "hired"),
         isNotNull(studioInterview.actualOnboardedAt),
         selectedJobCondition(progressJobIds),
-        odcRoleCondition(studioInterview.onboardedConfirmedByRole, odcRoles),
         ...instantRangeConditions(studioInterview.actualOnboardedAt, progressRange),
       )})`.mapWith(Number),
       pendingEvaluation: sql<number>`COUNT(*) FILTER (WHERE ${and(
@@ -156,26 +151,22 @@ async function loadCandidateMetrics(
         eq(studioInterview.resumeParseStatus, "ready"),
         isNull(studioInterview.resumeEvaluationStatus),
         selectedJobCondition(progressJobIds),
-        odcRoleCondition(studioInterview.createdByRole, odcRoles),
         ...instantRangeConditions(studioInterview.createdAt, progressRange),
       )})`.mapWith(Number),
       rejected: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "rejected"),
         selectedJobCondition(progressJobIds),
-        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, progressRange),
       )})`.mapWith(Number),
       todayAssociated: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.resumeParseStatus, "ready"),
         selectedJobCondition(activityJobIds),
         timestampCondition(studioInterview.createdAt, activityRange),
-        odcRoleCondition(studioInterview.createdByRole, odcRoles),
       )})`.mapWith(Number),
       todayOnboarded: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "hired"),
         isNotNull(studioInterview.actualOnboardedAt),
         selectedJobCondition(activityJobIds),
-        odcRoleCondition(studioInterview.onboardedConfirmedByRole, odcRoles),
         ...instantRangeConditions(studioInterview.actualOnboardedAt, activityRange),
       )})`.mapWith(Number),
       todayPendingEvaluation: sql<number>`COUNT(*) FILTER (WHERE ${and(
@@ -184,30 +175,31 @@ async function loadCandidateMetrics(
         eq(studioInterview.resumeParseStatus, "ready"),
         isNull(studioInterview.resumeEvaluationStatus),
         selectedJobCondition(activityJobIds),
-        odcRoleCondition(studioInterview.createdByRole, odcRoles),
         ...instantRangeConditions(studioInterview.createdAt, activityRange),
       )})`.mapWith(Number),
       todayRejected: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "rejected"),
         selectedJobCondition(activityJobIds),
-        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, activityRange),
       )})`.mapWith(Number),
       todayWithdrawn: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "withdrawn"),
         selectedJobCondition(activityJobIds),
-        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, activityRange),
       )})`.mapWith(Number),
       withdrawn: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "withdrawn"),
         selectedJobCondition(progressJobIds),
-        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, progressRange),
       )})`.mapWith(Number),
     })
     .from(studioInterview)
-    .where(eq(studioInterview.organizationId, organizationId));
+    .where(
+      and(
+        eq(studioInterview.organizationId, organizationId),
+        candidateVisibilityCondition(visibilityScope),
+      ),
+    );
 
   return {
     associated: row?.associated ?? 0,
@@ -226,7 +218,7 @@ async function loadCandidateMetrics(
 async function loadDemandOnboarded(
   organizationId: string,
   jobIds: string[],
-  odcRoles: readonly string[],
+  visibilityScope: RecruitingVisibilityScope,
 ): Promise<number> {
   if (jobIds.length === 0) {
     return 0;
@@ -240,7 +232,7 @@ async function loadDemandOnboarded(
         inArray(studioInterview.jobDescriptionId, jobIds),
         eq(studioInterview.outcome, "hired"),
         isNotNull(studioInterview.actualOnboardedAt),
-        odcRoleCondition(studioInterview.onboardedConfirmedByRole, odcRoles),
+        candidateVisibilityCondition(visibilityScope),
       ),
     );
   return row?.value ?? 0;
@@ -254,7 +246,7 @@ async function loadAiMetrics(
   activityRange: InstantRange,
   futureRange: InstantRange,
   futureDays: string[],
-  odcRoles: readonly string[],
+  visibilityScope: RecruitingVisibilityScope,
 ) {
   const [[row], futureRows] = await Promise.all([
     db
@@ -277,7 +269,7 @@ async function loadAiMetrics(
       .where(
         and(
           eq(studioInterviewSchedule.organizationId, organizationId),
-          odcRoleCondition(studioInterviewSchedule.createdByRole, odcRoles),
+          candidateVisibilityCondition(visibilityScope),
         ),
       ),
     db
@@ -292,7 +284,7 @@ async function loadAiMetrics(
         and(
           eq(studioInterviewSchedule.organizationId, organizationId),
           selectedJobCondition(activityJobIds),
-          odcRoleCondition(studioInterviewSchedule.createdByRole, odcRoles),
+          candidateVisibilityCondition(visibilityScope),
           ne(studioInterviewSchedule.status, "cancelled"),
           ...instantRangeConditions(studioInterviewSchedule.scheduledAt, futureRange),
         ),
@@ -319,46 +311,46 @@ async function loadHumanMetrics(
   progressRange: InstantRange,
   activityJobIds: string[],
   activityRange: InstantRange,
-  odcRoles: readonly string[],
+  visibilityScope: RecruitingVisibilityScope,
 ) {
   const [row] = await db
     .select({
       completed: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioHumanInterviewRound.status, "completed"),
         selectedJobCondition(activityJobIds),
-        odcRoleCondition(studioHumanInterviewRound.completedByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
       inProgress: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioHumanInterviewRound.status, "pending"),
         isNotNull(studioHumanInterviewRound.startedAt),
         selectedJobCondition(activityJobIds),
-        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
       overall: sql<number>`COUNT(*) FILTER (WHERE ${and(
         ne(studioHumanInterviewRound.status, "cancelled"),
         selectedJobCondition(progressJobIds),
-        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, progressRange),
       )})`.mapWith(Number),
       today: sql<number>`COUNT(*) FILTER (WHERE ${and(
         ne(studioHumanInterviewRound.status, "cancelled"),
         selectedJobCondition(activityJobIds),
-        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
       upcoming: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioHumanInterviewRound.status, "pending"),
         isNull(studioHumanInterviewRound.startedAt),
         selectedJobCondition(activityJobIds),
-        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
     })
     .from(studioHumanInterviewRound)
     .innerJoin(studioInterview, eq(studioInterview.id, studioHumanInterviewRound.interviewRecordId))
-    .where(eq(studioHumanInterviewRound.organizationId, organizationId));
+    .where(
+      and(
+        eq(studioHumanInterviewRound.organizationId, organizationId),
+        candidateVisibilityCondition(visibilityScope),
+      ),
+    );
   return {
     completed: row?.completed ?? 0,
     inProgress: row?.inProgress ?? 0,
@@ -375,14 +367,13 @@ async function loadOfferMetrics(
   activityJobIds: string[],
   activityRange: InstantRange,
   futureDays: string[],
-  odcRoles: readonly string[],
+  visibilityScope: RecruitingVisibilityScope,
 ) {
   const [firstSentRows, offerRows] = await Promise.all([
     db
       .select({
         interviewRecordId: studioOfferDraft.interviewRecordId,
         jobDescriptionId: studioInterview.jobDescriptionId,
-        role: studioOfferDraft.sentByRole,
         sentAt: studioOfferDraft.sentAt,
       })
       .from(studioOfferDraft)
@@ -390,6 +381,7 @@ async function loadOfferMetrics(
       .where(
         and(
           eq(studioOfferDraft.organizationId, organizationId),
+          candidateVisibilityCondition(visibilityScope),
           sql`${studioInterview.jobDescriptionId} in (${sql.join(
             [...new Set([...progressJobIds, ...activityJobIds])].map((id) => sql`${id}`),
             sql`, `,
@@ -402,7 +394,6 @@ async function loadOfferMetrics(
         interviewRecordId: studioOfferDraft.interviewRecordId,
         jobDescriptionId: studioInterview.jobDescriptionId,
         joiningDate: studioOfferDraft.joiningDate,
-        sentByRole: studioOfferDraft.sentByRole,
         status: studioOfferDraft.status,
         version: studioOfferDraft.version,
       })
@@ -411,6 +402,7 @@ async function loadOfferMetrics(
       .where(
         and(
           eq(studioOfferDraft.organizationId, organizationId),
+          candidateVisibilityCondition(visibilityScope),
           sql`${studioInterview.jobDescriptionId} in (${sql.join(
             [...new Set([...progressJobIds, ...activityJobIds])].map((id) => sql`${id}`),
             sql`, `,
@@ -433,12 +425,7 @@ async function loadOfferMetrics(
   let expectedOverall = 0;
   let expectedToday = 0;
   for (const offer of latestOffers.values()) {
-    if (
-      offer.status !== "accepted" ||
-      !offer.joiningDate ||
-      !offer.jobDescriptionId ||
-      !matchesOdcRole(offer.sentByRole, odcRoles)
-    ) {
+    if (offer.status !== "accepted" || !offer.joiningDate || !offer.jobDescriptionId) {
       continue;
     }
     if (progressJobIdSet.has(offer.jobDescriptionId) && inRange(offer.joiningDate, progressRange)) {
@@ -462,14 +449,12 @@ async function loadOfferMetrics(
         (offer) => offer.jobDescriptionId && progressJobIdSet.has(offer.jobDescriptionId),
       ),
       progressRange,
-      odcRoles,
     ),
     today: countFirstSentOffers(
       sentOffers.filter(
         (offer) => offer.jobDescriptionId && activityJobIdSet.has(offer.jobDescriptionId),
       ),
       activityRange,
-      odcRoles,
     ),
   };
 }
@@ -486,13 +471,13 @@ function summarizeDateRange(values: (string | null)[]): string | null {
   return dates[0] === dates.at(-1) ? dates[0] : `${dates[0]} 至 ${dates.at(-1)}`;
 }
 
-export async function loadOdcAnalysisData(
+async function loadOdcAnalysisDataForVisibility(
   organizationId: string,
   filters: OdcAnalysisFilters,
+  visibility: OdcAnalysisVisibilityScope,
   now = new Date(),
 ): Promise<OdcAnalysisData> {
-  const odcRoles = await loadOdcRoleNames(organizationId);
-  const selectedJobs = await loadSelectedJobs(organizationId, odcRoles);
+  const selectedJobs = await loadSelectedJobs(organizationId, visibility);
   const availableJobIds = new Set(selectedJobs.map((job) => job.id));
   const requestedJobIds = [
     ...filters.progressJobDescriptionIds,
@@ -576,7 +561,7 @@ export async function loadOdcAnalysisData(
       progressRange,
       activityJobIds,
       activityRange,
-      odcRoles,
+      visibility.recruiting,
     ),
     loadAiMetrics(
       organizationId,
@@ -586,7 +571,7 @@ export async function loadOdcAnalysisData(
       activityRange,
       futureRange,
       futureDays,
-      odcRoles,
+      visibility.recruiting,
     ),
     loadHumanMetrics(
       organizationId,
@@ -594,7 +579,7 @@ export async function loadOdcAnalysisData(
       progressRange,
       activityJobIds,
       activityRange,
-      odcRoles,
+      visibility.recruiting,
     ),
     loadOfferMetrics(
       organizationId,
@@ -603,9 +588,9 @@ export async function loadOdcAnalysisData(
       activityJobIds,
       activityRange,
       futureDays,
-      odcRoles,
+      visibility.recruiting,
     ),
-    loadDemandOnboarded(organizationId, demandJobIds, odcRoles),
+    loadDemandOnboarded(organizationId, demandJobIds, visibility.recruiting),
   ]);
 
   const vacancies = Math.max(totalHeadcount - demandOnboarded, 0);
@@ -657,6 +642,15 @@ export async function loadOdcAnalysisData(
   };
 }
 
+export async function loadOdcAnalysisData(
+  organizationId: string,
+  filters: OdcAnalysisFilters,
+  now = new Date(),
+): Promise<OdcAnalysisData> {
+  const visibility = await resolveOdcAnalysisVisibilityScope(organizationId);
+  return loadOdcAnalysisDataForVisibility(organizationId, filters, visibility, now);
+}
+
 export async function loadOdcAnalysis(
   organizationId: string,
   filters: OdcAnalysisFilters,
@@ -664,9 +658,10 @@ export async function loadOdcAnalysis(
   data: OdcAnalysisData;
   jobs: OdcAnalysisJobOption[];
 }> {
+  const visibility = await resolveOdcAnalysisVisibilityScope(organizationId);
   const [data, jobs] = await Promise.all([
-    loadOdcAnalysisData(organizationId, filters),
-    loadOdcAnalysisJobOptions(organizationId),
+    loadOdcAnalysisDataForVisibility(organizationId, filters, visibility),
+    loadOdcAnalysisJobOptionsForVisibility(organizationId, visibility),
   ]);
   return { data, jobs };
 }

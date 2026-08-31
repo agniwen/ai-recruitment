@@ -1,6 +1,5 @@
 import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";
 import type { InstantRange } from "./date-range";
-import { matchesOdcRole } from "./utils/role-filter";
 
 export const CURRENT_PENDING_EVALUATION_FACT = {
   outcome: "in_pipeline",
@@ -42,24 +41,20 @@ export function latestOfferByInterview<T extends { interviewRecordId: string; ve
 }
 
 export function countFirstSentOffers(
-  rows: { interviewRecordId: string; role?: string | null; sentAt: Date | null }[],
+  rows: { interviewRecordId: string; sentAt: Date | null }[],
   range: InstantRange,
-  odcRoles: readonly string[],
 ): number {
-  const firstSentByInterview = new Map<string, { role: string | null | undefined; sentAt: Date }>();
+  const firstSentByInterview = new Map<string, Date>();
   for (const row of rows) {
     if (!row.sentAt) {
       continue;
     }
     const existing = firstSentByInterview.get(row.interviewRecordId);
-    if (!existing || row.sentAt < existing.sentAt) {
-      firstSentByInterview.set(row.interviewRecordId, { role: row.role, sentAt: row.sentAt });
+    if (!existing || row.sentAt < existing) {
+      firstSentByInterview.set(row.interviewRecordId, row.sentAt);
     }
   }
   return [...firstSentByInterview.values()].filter(
-    ({ role, sentAt }) =>
-      matchesOdcRole(role, odcRoles) &&
-      (!range.start || sentAt >= range.start) &&
-      (!range.end || sentAt < range.end),
+    (sentAt) => (!range.start || sentAt >= range.start) && (!range.end || sentAt < range.end),
   ).length;
 }
