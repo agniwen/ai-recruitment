@@ -58,6 +58,7 @@ export const googleSheetSyncRouter = factory
     const { run } = await createOrGetActiveGoogleSheetSyncRun({
       organizationId: activeOrg.id,
       requestedBy: c.var.user?.id ?? null,
+      requestedByRole: c.var.member?.role ?? null,
     });
     // Always ensure the queue has a job — even when reusing an active DB run
     // (Redis may have lost the original job after a restart / Redis switch).

@@ -47,24 +47,3 @@ export function PermissionCell({
     />
   );
 }
-
-export function OdcRoleCell({
-  checked,
-  disabled,
-  name,
-  onToggle,
-}: {
-  checked: boolean;
-  disabled: boolean;
-  name: string;
-  onToggle?: () => void;
-}) {
-  return (
-    <BooleanRoleCell
-      checked={checked}
-      disabled={disabled}
-      label={`${name}: ${checked ? "计入 ODC 分析" : "不计入 ODC 分析"}`}
-      onToggle={onToggle}
-    />
-  );
-}

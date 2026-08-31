@@ -71,6 +71,27 @@ describe("ODC role snapshot collection chains", () => {
     expect(dao).toContain("matchesOdcRole(offer.sentByRole, odcRoles)");
   });
 
+  it("scopes demand jobs and job filters to the role that created each job", () => {
+    const dao = source("./dao.ts");
+    const schema = source("../../../../../../../../packages/db-schema/src/schema.ts");
+    const jobRoute = source("../job-descriptions/route.ts");
+    const googleSheetSync = source(
+      "../job-descriptions/routes/google-sheet-sync/utils/google-sheets-sync.ts",
+    );
+    const migration = source(
+      "../../../../../../../ai-recruitment-copilot/drizzle/20260831170000_add_job_description_created_by_role/migration.sql",
+    );
+
+    expect(schema).toContain('createdByRole: text("created_by_role")');
+    expect(migration).toContain('ADD COLUMN "created_by_role" text');
+    expect(migration).toContain('SET "created_by_role" = "member"."role"');
+    expect(jobRoute).toContain("createdByRole: c.var.member?.role ?? null");
+    expect(googleSheetSync).toContain("createdByRole: actorRole ?? null");
+    expect(migration).toContain('ADD COLUMN "requested_by_role" text');
+    expect(dao).toContain("loadSelectedJobs(organizationId, odcRoles)");
+    expect(dao).toContain("odcRoleCondition(jobDescription.createdByRole, odcRoles)");
+  });
+
   it("captures mail-ingest roles and excludes unfinished parsing from admission counts", () => {
     const mailDao = source("../mail-ingest/dao.ts");
     const mailProcessor = source(

@@ -774,6 +774,7 @@ export const jobDescription = pgTable(
     controlCategory: text("control_category"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdByRole: text("created_by_role"),
     creationSource: text("creation_source")
       .$type<"manual" | "google_sheets">()
       .default("manual")
@@ -874,6 +875,7 @@ export const jobDescriptionGoogleSheetSyncRun = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
+    requestedByRole: text("requested_by_role"),
     result: jsonb("result").$type<{
       departmentsCreated: number;
       hiringUnitsCreated: number;

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,7 @@ import {
 } from "@/lib/client/workspace-context";
 import { roles } from "@arc/shared/permissions";
 import { WORKSPACE_ROLES, getWorkspaceRoleLabel } from "./role-display";
-import { OdcRoleCell, PermissionCell } from "./workspace-permission-checkbox-cell";
+import { PermissionCell } from "./workspace-permission-checkbox-cell";
 import {
   BUILT_IN_WORKSPACE_ROLE_NAMES,
   buildPermissionHeaderGroups,
@@ -52,7 +53,6 @@ import {
   hasPermissionAction,
   normalizeDynamicRoleName,
   readRoleDeleteError,
-  revertOdcRoleDraft,
   sortDynamicWorkspaceRolesByCreatedAt,
   togglePermissionAction,
 } from "./workspace-role-permissions";
@@ -89,6 +89,7 @@ interface RoleFormState {
 }
 
 interface RoleFormSubmit {
+  isOdc: boolean;
   name: string;
   permission: PermissionRecord;
   role: string;
@@ -172,6 +173,7 @@ function RoleFormDialog({
   submitting: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [isOdc, setIsOdc] = useState(false);
   const [roleIdentifier, setRoleIdentifier] = useState("");
   const [roleName, setRoleName] = useState("");
 
@@ -185,6 +187,7 @@ function RoleFormDialog({
     const defaultName = state.mode === "copy" ? `${sourceName} 副本`.trim() : sourceName;
     const defaultRole = state.mode === "copy" ? `${sourceRole}-copy` : sourceRole;
     setError(null);
+    setIsOdc(state.role?.isOdc ?? false);
     setRoleName(defaultName);
     setRoleIdentifier(defaultRole);
   }, [state]);
@@ -214,6 +217,7 @@ function RoleFormDialog({
 
     setError(null);
     onSubmit({
+      isOdc,
       name,
       permission: copyPermission(state.permission),
       role,
@@ -252,6 +256,18 @@ function RoleFormDialog({
               />
               <FieldDescription>名称用于展示，标识用于权限判断和成员角色值。</FieldDescription>
             </Field>
+            <Field className="flex-row items-start gap-3 rounded-lg border p-3">
+              <Checkbox
+                checked={isOdc}
+                disabled={submitting}
+                id="workspace-role-is-odc"
+                onCheckedChange={setIsOdc}
+              />
+              <div className="grid gap-1">
+                <FieldLabel htmlFor="workspace-role-is-odc">是否为 ODC</FieldLabel>
+                <FieldDescription>勾选后，该角色产生的招聘数据会计入 ODC 分析。</FieldDescription>
+              </div>
+            </Field>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
           </div>
 
@@ -289,7 +305,6 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
   );
   const [deleteTarget, setDeleteTarget] = useState<DynamicWorkspaceRole | null>(null);
   const [draftByRoleId, setDraftByRoleId] = useState<Record<string, PermissionRecord>>({});
-  const [odcDraftByRoleId, setOdcDraftByRoleId] = useState<Record<string, boolean>>({});
   const [roleFormState, setRoleFormState] = useState<RoleFormState | null>(null);
 
   const { data: dynamicRoles = [], isPending } = useQuery({
@@ -312,7 +327,6 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
     setDraftByRoleId(
       Object.fromEntries(dynamicRoles.map((role) => [role.id, copyPermission(role.permission)])),
     );
-    setOdcDraftByRoleId(Object.fromEntries(dynamicRoles.map((role) => [role.id, role.isOdc])));
   }, [dynamicRoles]);
 
   const createRole = useMutation({
@@ -325,7 +339,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
         throw new Error("不能使用系统内置角色名。");
       }
       const { error } = await authClient.organization.createRole({
-        additionalFields: { isOdc: false, name: input.name },
+        additionalFields: { isOdc: input.isOdc, name: input.name },
         organizationId: workspaceId,
         permission: input.permission,
         role,
@@ -341,6 +355,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       setRoleFormState(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ["odc-analysis", workspaceSlug] }),
         queryClient.invalidateQueries({ queryKey: workspaceAccessKeys.bySlug(workspaceSlug) }),
       ]);
       toast.success("角色已创建");
@@ -372,11 +387,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
         throw new Error(error.message ?? "保存角色设置失败");
       }
     },
-    onError(error, input) {
-      if (input.isOdc !== undefined) {
-        const attemptedValue = input.isOdc;
-        setOdcDraftByRoleId((current) => revertOdcRoleDraft(current, input.id, attemptedValue));
-      }
+    onError(error) {
       toast.error(readError(error, "保存角色设置失败"));
     },
     async onSuccess() {
@@ -407,6 +418,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       setDeleteTarget(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey }),
+        queryClient.invalidateQueries({ queryKey: ["odc-analysis", workspaceSlug] }),
         queryClient.invalidateQueries({ queryKey: workspaceAccessKeys.bySlug(workspaceSlug) }),
       ]);
       toast.success("角色已删除");
@@ -451,7 +463,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
     ...dynamicRoles.map((role) => ({
       builtIn: false,
       id: role.id,
-      isOdc: odcDraftByRoleId[role.id] ?? role.isOdc,
+      isOdc: role.isOdc,
       name: role.name,
       permission: draftByRoleId[role.id] ?? copyPermissionRecord(role.permission),
       role: role.role,
@@ -476,14 +488,6 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
                     scope="col"
                   >
                     角色
-                  </th>
-                  <th
-                    className="min-w-24 border-r bg-muted px-2 py-2 text-center align-middle font-medium"
-                    rowSpan={2}
-                    scope="col"
-                    title="勾选后，该自定义角色产生的招聘数据会计入 ODC 分析。"
-                  >
-                    是否为 ODC
                   </th>
                   {permissionHeaderGroups.map((group) => (
                     <th
@@ -529,6 +533,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
                                 <Badge variant={row.builtIn ? "secondary" : "outline"}>
                                   {row.builtIn ? "内置" : "自定义"}
                                 </Badge>
+                                {row.isOdc ? <Badge variant="secondary">ODC</Badge> : null}
                               </div>
                               <span className="block truncate text-muted-foreground text-xs">
                                 {row.role}
@@ -588,26 +593,6 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
                           </div>
                         </div>
                       </th>
-                      <td className="border-r align-middle">
-                        <OdcRoleCell
-                          checked={row.isOdc}
-                          disabled={row.builtIn || rowBusy}
-                          name={row.name}
-                          onToggle={() => {
-                            if (!dynamicRole) {
-                              return;
-                            }
-                            setOdcDraftByRoleId((current) => ({
-                              ...current,
-                              [dynamicRole.id]: !row.isOdc,
-                            }));
-                            updateRole.mutate({
-                              id: dynamicRole.id,
-                              isOdc: !row.isOdc,
-                            });
-                          }}
-                        />
-                      </td>
                       {permissionItems.map((item) => {
                         const checked = hasPermissionAction(
                           row.permission,
@@ -685,6 +670,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
           ) {
             updateRole.mutate({
               id: roleFormState.role.id,
+              isOdc: input.isOdc,
               name: input.name,
               permission: input.permission,
             });

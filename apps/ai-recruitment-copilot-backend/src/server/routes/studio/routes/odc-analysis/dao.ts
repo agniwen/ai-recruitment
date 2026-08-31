@@ -63,7 +63,14 @@ function timestampCondition(
   return and(...instantRangeConditions(column, range)) ?? sql`true`;
 }
 
-function loadSelectedJobs(organizationId: string) {
+function odcJobCondition(organizationId: string, odcRoles: readonly string[]) {
+  return and(
+    eq(jobDescription.organizationId, organizationId),
+    odcRoleCondition(jobDescription.createdByRole, odcRoles),
+  );
+}
+
+function loadSelectedJobs(organizationId: string, odcRoles: readonly string[]) {
   return db
     .select({
       code: jobDescription.code,
@@ -75,20 +82,7 @@ function loadSelectedJobs(organizationId: string) {
       requestedDate: jobDescription.requestedDate,
     })
     .from(jobDescription)
-    .where(eq(jobDescription.organizationId, organizationId))
-    .orderBy(asc(jobDescription.name));
-}
-
-export function loadOdcAnalysisJobOptions(organizationId: string): Promise<OdcAnalysisJobOption[]> {
-  return db
-    .select({
-      code: jobDescription.code,
-      id: jobDescription.id,
-      name: jobDescription.name,
-      recruitmentStatus: jobDescription.recruitmentStatus,
-    })
-    .from(jobDescription)
-    .where(eq(jobDescription.organizationId, organizationId))
+    .where(odcJobCondition(organizationId, odcRoles))
     .orderBy(asc(jobDescription.name));
 }
 
@@ -100,6 +94,22 @@ async function loadOdcRoleNames(organizationId: string): Promise<string[]> {
       and(eq(organizationRole.organizationId, organizationId), eq(organizationRole.isOdc, true)),
     );
   return roles.map(({ role }) => role);
+}
+
+export async function loadOdcAnalysisJobOptions(
+  organizationId: string,
+): Promise<OdcAnalysisJobOption[]> {
+  const odcRoles = await loadOdcRoleNames(organizationId);
+  return db
+    .select({
+      code: jobDescription.code,
+      id: jobDescription.id,
+      name: jobDescription.name,
+      recruitmentStatus: jobDescription.recruitmentStatus,
+    })
+    .from(jobDescription)
+    .where(odcJobCondition(organizationId, odcRoles))
+    .orderBy(asc(jobDescription.name));
 }
 
 function latestTransitionRoleCondition(odcRoles: readonly string[]) {
@@ -481,10 +491,8 @@ export async function loadOdcAnalysisData(
   filters: OdcAnalysisFilters,
   now = new Date(),
 ): Promise<OdcAnalysisData> {
-  const [selectedJobs, odcRoles] = await Promise.all([
-    loadSelectedJobs(organizationId),
-    loadOdcRoleNames(organizationId),
-  ]);
+  const odcRoles = await loadOdcRoleNames(organizationId);
+  const selectedJobs = await loadSelectedJobs(organizationId, odcRoles);
   const availableJobIds = new Set(selectedJobs.map((job) => job.id));
   const requestedJobIds = [
     ...filters.progressJobDescriptionIds,

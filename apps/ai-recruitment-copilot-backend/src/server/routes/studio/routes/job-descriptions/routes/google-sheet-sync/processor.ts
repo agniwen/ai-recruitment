@@ -20,6 +20,7 @@ export async function processGoogleSheetSyncRun({ runId }: { runId: string }): P
   try {
     const values = await readConfiguredGoogleSheetValues();
     const { changedJobIds, ...result } = await syncGoogleSheetJobDescriptions({
+      actorRole: claimed.requestedByRole,
       actorUserId: claimed.requestedBy,
       organizationId: claimed.organizationId,
       values,

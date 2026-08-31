@@ -481,10 +481,12 @@ function definedJobValues(values: GoogleSheetJobValues) {
 }
 
 export async function syncGoogleSheetJobDescriptions({
+  actorRole,
   actorUserId,
   organizationId,
   values,
 }: {
+  actorRole: string | null | undefined;
   actorUserId: string | null | undefined;
   organizationId: string;
   values: unknown[][];
@@ -671,6 +673,7 @@ export async function syncGoogleSheetJobDescriptions({
           code: record.code,
           createdAt: now,
           createdBy: actorUserId ?? null,
+          createdByRole: actorRole ?? null,
           creationSource: "google_sheets",
           departmentId: departmentIdForWrite,
           description: null,

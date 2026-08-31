@@ -1051,7 +1051,7 @@ export function loadJobDescriptionMetrics(
 }
 
 export function serializeJobDescription(
-  row: typeof jobDescription.$inferSelect & {
+  row: Omit<typeof jobDescription.$inferSelect, "createdByRole"> & {
     departmentHiringUnitId?: string | null;
     departmentHiringUnitName?: string | null;
     hiringUnitId?: string | null;

@@ -43,6 +43,7 @@ async function loadActiveGoogleSheetSyncRun(
 export async function createOrGetActiveGoogleSheetSyncRun(input: {
   organizationId: string;
   requestedBy: string | null;
+  requestedByRole: string | null;
 }): Promise<{ created: boolean; run: JobDescriptionGoogleSheetsSyncRun }> {
   const [created] = await db
     .insert(jobDescriptionGoogleSheetSyncRun)
@@ -50,6 +51,7 @@ export async function createOrGetActiveGoogleSheetSyncRun(input: {
       id: crypto.randomUUID(),
       organizationId: input.organizationId,
       requestedBy: input.requestedBy,
+      requestedByRole: input.requestedByRole,
     })
     .onConflictDoNothing()
     .returning();
@@ -133,9 +135,11 @@ export async function failStaleGoogleSheetSyncRuns(input?: {
   return rows.map((row) => row.id);
 }
 
-export async function claimGoogleSheetSyncRun(
-  runId: string,
-): Promise<{ organizationId: string; requestedBy: string | null } | null> {
+export async function claimGoogleSheetSyncRun(runId: string): Promise<{
+  organizationId: string;
+  requestedBy: string | null;
+  requestedByRole: string | null;
+} | null> {
   const now = new Date();
   const [claimed] = await db
     .update(jobDescriptionGoogleSheetSyncRun)
@@ -154,6 +158,7 @@ export async function claimGoogleSheetSyncRun(
     .returning({
       organizationId: jobDescriptionGoogleSheetSyncRun.organizationId,
       requestedBy: jobDescriptionGoogleSheetSyncRun.requestedBy,
+      requestedByRole: jobDescriptionGoogleSheetSyncRun.requestedByRole,
     });
   return claimed ?? null;
 }

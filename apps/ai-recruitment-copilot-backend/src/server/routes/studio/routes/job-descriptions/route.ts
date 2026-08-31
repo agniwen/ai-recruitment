@@ -136,6 +136,7 @@ function buildManualJobDescriptionRecord(args: {
   organizationId: string;
   departmentHiringUnitId: string | null;
   createdBy: string | null;
+  createdByRole: string | null;
   resumeScreeningPolicyHash: string;
 }): typeof jobDescription.$inferSelect {
   const {
@@ -145,6 +146,7 @@ function buildManualJobDescriptionRecord(args: {
     organizationId,
     departmentHiringUnitId,
     createdBy,
+    createdByRole,
     resumeScreeningPolicyHash,
   } = args;
   return {
@@ -154,6 +156,7 @@ function buildManualJobDescriptionRecord(args: {
     controlCategory: nullableText(input.controlCategory),
     createdAt: now,
     createdBy,
+    createdByRole,
     creationSource: "manual",
     departmentId: input.departmentId,
     description: input.description?.trim() || null,
@@ -412,6 +415,7 @@ export const jobDescriptionsRouter = factory
         const record = buildManualJobDescriptionRecord({
           code,
           createdBy: c.var.user?.id ?? null,
+          createdByRole: c.var.member?.role ?? null,
           departmentHiringUnitId,
           input,
           now,

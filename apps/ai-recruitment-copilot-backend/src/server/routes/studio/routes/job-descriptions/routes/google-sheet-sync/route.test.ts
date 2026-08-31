@@ -75,6 +75,7 @@ describe("Google Sheet sync route", () => {
     expect(mocks.createOrGetActiveRun).toHaveBeenCalledWith({
       organizationId: "org-1",
       requestedBy: "user-1",
+      requestedByRole: "admin",
     });
     expect(mocks.ensureEnqueue).toHaveBeenCalledWith({ runId: run.id });
   });

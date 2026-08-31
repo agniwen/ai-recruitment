@@ -488,14 +488,6 @@ export function canEditDynamicRoleIdentifier(mode: "copy" | "create" | "edit"): 
   return mode !== "edit";
 }
 
-export function revertOdcRoleDraft(
-  current: Record<string, boolean>,
-  roleId: string,
-  attemptedValue: boolean,
-): Record<string, boolean> {
-  return { ...current, [roleId]: !attemptedValue };
-}
-
 function readUnknownErrorMessage(error: unknown): string | undefined {
   if (error && typeof error === "object" && "message" in error) {
     const { message } = error as { message?: string };
