@@ -31,6 +31,16 @@ describe("workspace role permission helpers", () => {
     expect(permissionsSectionSource).toContain('queryKey: ["odc-analysis", workspaceSlug]');
   });
 
+  it("keeps the ODC role checkbox compact in a horizontal field layout", () => {
+    expect(permissionsSectionSource).toContain(
+      '<Field className="items-start rounded-lg border p-3" orientation="horizontal">',
+    );
+    expect(permissionsSectionSource).toContain('<FieldContent className="min-w-0">');
+    expect(permissionsSectionSource).not.toContain(
+      '<Field className="flex-row items-start gap-3 rounded-lg border p-3">',
+    );
+  });
+
   it("keeps role identifiers immutable after creation", () => {
     expect(canEditDynamicRoleIdentifier("create")).toBe(true);
     expect(canEditDynamicRoleIdentifier("copy")).toBe(true);

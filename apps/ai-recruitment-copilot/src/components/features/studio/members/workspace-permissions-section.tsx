@@ -29,7 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Empty, EmptyContent, EmptyDescription, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -256,19 +256,19 @@ function RoleFormDialog({
               />
               <FieldDescription>名称用于展示，标识用于权限判断和成员角色值。</FieldDescription>
             </Field>
-            <Field className="flex-row items-start gap-3 rounded-lg border p-3">
+            <Field className="items-start rounded-lg border p-3" orientation="horizontal">
               <Checkbox
                 checked={isOdc}
                 disabled={submitting}
                 id="workspace-role-is-odc"
                 onCheckedChange={setIsOdc}
               />
-              <div className="grid gap-1">
+              <FieldContent className="min-w-0">
                 <FieldLabel htmlFor="workspace-role-is-odc">是否为 ODC</FieldLabel>
                 <FieldDescription>
                   勾选后，该角色成员按招聘组与编制组织范围可见的数据会计入 ODC 分析。
                 </FieldDescription>
-              </div>
+              </FieldContent>
             </Field>
             {error ? <p className="text-destructive text-sm">{error}</p> : null}
           </div>
