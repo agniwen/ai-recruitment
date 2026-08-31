@@ -32,7 +32,7 @@ export const LOCAL_CHAT_MODELS: readonly ChatModelOption[] = [
   { id: "qwen3.6-plus", label: "Qwen3.6 Plus", provider: "alibaba" },
   { id: "qwen3.6-max-preview", label: "Qwen3.6 Max", provider: "alibaba" },
   { id: "qwen3.6-flash", label: "Qwen3.6 Flash", provider: "alibaba" },
-  // DeepSeek — V4 自带 thinking 模式（enable_thinking），无需单独的推理变体
+  // DeepSeek — V4 自带 thinking 模式，但系统调用时统一关闭
   { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", provider: "deepseek" },
   { id: "deepseek-v4-flash-0731", label: "DeepSeek V4 Flash 0731", provider: "deepseek" },
   // Kimi — 月之暗面，百炼托管版（K2.6 默认开启 thinking）

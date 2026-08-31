@@ -45,7 +45,7 @@
 - 每个 provider 1-3 条，覆盖**旗舰 + 备选**两档即可，不要堆所有快照
 - 同一家如果新版本（`v4-pro`）覆盖了老版本的能力（`v3.2` + `r1`），用新版替代而不是叠加
 - 带日期快照的 id（`qwen3.6-plus-2026-04-02` 这种）不进清单，用别名（`qwen3.6-plus`）保稳健
-- 如果某模型自带 hybrid thinking（V4 / K2.6 / GLM-5.x），**不**再单独列对应的推理变体——chat route 已经透传 `enableThinking`
+- 如果某模型自带 hybrid thinking（V4 / K2.6 / GLM-5.x），也统一以关闭思考模式调用，不再提供推理变体。
 
 ### 3. 改 `LOCAL_CHAT_MODELS`
 

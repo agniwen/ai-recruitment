@@ -2,8 +2,10 @@ import { Agent } from "@mastra/core/agent";
 import type { z } from "zod";
 import {
   configureAlibabaCodingPlanApiKey,
+  DISABLED_THINKING_PROVIDER_OPTIONS,
   mastraModels,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
+import type { DisabledThinkingProviderOptions } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import { parseJsonOutput } from "@arc/ai-recruitment-copilot-backend/server/agents/json-output";
 
 configureAlibabaCodingPlanApiKey();
@@ -13,6 +15,7 @@ export interface MastraGenerateOptions {
     maxOutputTokens?: number;
     temperature?: number;
   };
+  providerOptions?: DisabledThinkingProviderOptions;
   structuredOutput?: {
     schema: unknown;
   };
@@ -194,6 +197,7 @@ export async function generateTextWithMastraAgent({
 }): Promise<string> {
   const result = await agent.generate(prompt, {
     modelSettings: buildModelSettings({ maxOutputTokens, temperature }),
+    providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
   });
   if (result.error) {
     throw result.error;
@@ -233,6 +237,7 @@ export async function* streamTextWithMastraAgent({
 }): AsyncIterable<string> {
   const result = await agent.stream(prompt, {
     modelSettings: buildModelSettings({ maxOutputTokens, temperature }),
+    providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
   });
   const stream = result.textStream;
   const iterable = isReadableStream(stream) ? readableStreamToAsyncIterable(stream) : stream;
@@ -262,6 +267,7 @@ export async function generateStructuredWithMastraAgent<TSchema extends z.ZodTyp
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const result = await agent.generate(attemptPrompt, {
       modelSettings: buildModelSettings({ maxOutputTokens, temperature }),
+      providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
       structuredOutput: { schema },
     });
     if (result.error) {

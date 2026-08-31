@@ -37,6 +37,7 @@ import {
 import type { OmTerminalExtractionCache } from "@/components/features/mastra-studio/upstream/services/om-parts-converter";
 import { ToolCallProvider } from "@/components/features/mastra-studio/upstream/services/tool-call-provider";
 import type { ChatProps } from "@/components/features/mastra-studio/upstream/types";
+import { withModelThinkingDisabled } from "@arc/shared/model-thinking";
 
 /**
  * Runtime + dispatch context for the main agent chat.
@@ -293,7 +294,7 @@ export function ChatProvider({
     maxSteps,
     maxTokens,
     presencePenalty,
-    providerOptions,
+    providerOptions: withModelThinkingDisabled(providerOptions),
     requireToolApproval,
     seed,
     temperature,

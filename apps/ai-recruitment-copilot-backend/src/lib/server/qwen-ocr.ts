@@ -76,7 +76,10 @@ export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Pr
   try {
     const client = getClient(endpoint.baseURL, apiKey);
     const base64 = imageBytes.toString("base64");
-    const response = await client.chat.completions.create({
+    const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming & {
+      enable_thinking: false;
+    } = {
+      enable_thinking: false,
       max_tokens: 4096,
       messages: [
         {
@@ -89,7 +92,8 @@ export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Pr
       ],
       model,
       temperature: 0,
-    });
+    };
+    const response = await client.chat.completions.create(request);
     return response.choices[0]?.message?.content ?? "";
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

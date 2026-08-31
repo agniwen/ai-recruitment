@@ -4,6 +4,12 @@ import {
   sanitizeModelId,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/sanitize-api-url";
 
+export {
+  DISABLED_THINKING_PROVIDER_OPTIONS,
+  withModelThinkingDisabled,
+} from "@arc/shared/model-thinking";
+export type { DisabledThinkingProviderOptions } from "@arc/shared/model-thinking";
+
 const ALIBABA_CODING_PLAN_PREFIX = "alibaba-coding-plan/";
 const ALIBABA_PROVIDER_ID = "alibaba";
 const DEFAULT_ALIBABA_COMPATIBLE_MODEL = "deepseek-v4-flash-0731";

@@ -7,6 +7,7 @@ import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-ba
 import { legacyUiMessageToArcMessage } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/adapters/arc-message-adapter";
 import { createRecruitingCopilotAgent } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/recruiting-copilot-agent";
 import { mastra } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/index";
+import { DISABLED_THINKING_PROVIDER_OPTIONS } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { resumeChatRequestSchema } from "@arc/ai-recruitment-copilot-backend/server/routes/resume/schema";
@@ -182,8 +183,13 @@ export const resumeChatRouter = factory
 
     const nativeApproval = extractV6NativeApproval(messages);
     const agentStream = nativeApproval
-      ? await agent.resumeStream(nativeApproval.resumeData, { runId: nativeApproval.runId })
-      : await agent.stream(toModelMessages(messages));
+      ? await agent.resumeStream(nativeApproval.resumeData, {
+          providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
+          runId: nativeApproval.runId,
+        })
+      : await agent.stream(toModelMessages(messages), {
+          providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
+        });
     const stream = createUIMessageStream<UIMessage>({
       execute: ({ writer }) => {
         writer.merge(

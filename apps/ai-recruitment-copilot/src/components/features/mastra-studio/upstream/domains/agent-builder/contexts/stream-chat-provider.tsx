@@ -18,6 +18,7 @@ import type {
   SendContextValue,
 } from "./stream-chat-context";
 import { useCurrentUser } from "@/components/features/mastra-studio/upstream/domains/auth/hooks/use-current-user";
+import { withModelThinkingDisabled } from "@arc/shared/model-thinking";
 
 export interface StreamChatProviderProps {
   agentId: string;
@@ -86,15 +87,11 @@ export const StreamChatProvider = ({
           maxSteps: 100,
           // Sized to fit one `set-agent-instructions` tool call carrying up to
           // ~3,000 chars of generated instructions plus the JSON envelope and
-          // any hidden reasoning tokens emitted by the builder model. Below
-          // ~2,000 we see mid-stream JSON truncation surface as an OpenAI
+          // the model response. Below ~2,000 we see mid-stream JSON truncation
+          // surface as an OpenAI
           // server_error on the next request.
           maxTokens: 5000,
-          providerOptions: {
-            openai: {
-              reasoningEffort: "low",
-            },
-          },
+          providerOptions: withModelThinkingDisabled(),
           temperature: 1,
         },
         requestContext,
