@@ -17,7 +17,7 @@ export const odcAnalysisRouter = factory
       }
       try {
         const filters = c.req.valid("query");
-        return c.json(await loadOdcAnalysis(activeOrg.id, filters), 200);
+        return c.json(await loadOdcAnalysis(activeOrg.id, user.id, filters), 200);
       } catch (error) {
         if (error instanceof OdcAnalysisFilterError) {
           return c.json({ error: error.message }, 400);

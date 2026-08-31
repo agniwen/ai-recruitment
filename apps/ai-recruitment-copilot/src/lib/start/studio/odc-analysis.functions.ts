@@ -18,7 +18,7 @@ export const loadOdcAnalysisState = createServerFn({ method: "GET" })
     if (access.status !== "ready") {
       return access;
     }
-    const result = await loadOdcAnalysis(access.workspace.id, data.filters);
+    const result = await loadOdcAnalysis(access.workspace.id, access.user.id, data.filters);
     return {
       ...result,
       access: {

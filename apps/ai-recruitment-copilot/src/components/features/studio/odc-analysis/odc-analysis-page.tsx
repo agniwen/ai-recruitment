@@ -563,7 +563,7 @@ export function OdcAnalysisPage({
     <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-8">
       <PageHeader
         title="ODC 分析"
-        description="分别查看岗位需求、候选人招聘进度与指定日期动态。仅统计标记为 ODC 的角色成员按招聘组与编制组织范围可见的数据。"
+        description="分别查看岗位需求、候选人招聘进度与指定日期动态。仅统计当前用户创建的岗位，以及由当前用户创建且关联这些岗位的候选人数据。"
       />
       <div className="flex flex-col gap-10">
         <DashboardSection

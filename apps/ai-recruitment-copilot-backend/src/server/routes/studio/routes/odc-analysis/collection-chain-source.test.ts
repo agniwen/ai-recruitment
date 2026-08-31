@@ -5,7 +5,7 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf-8");
 }
 
-describe("ODC role configuration and visibility", () => {
+describe("ODC role configuration and personal data scope", () => {
   it("persists the ODC role marker with a safe false default", () => {
     const schema = source("../../../../../../../../packages/db-schema/src/schema.ts");
     const migration = source(
@@ -54,25 +54,29 @@ describe("ODC role configuration and visibility", () => {
     expect(actions).toContain("operatorRole: input.operatorRole");
   });
 
-  it("applies the merged ODC-member visibility scope to every metric family", () => {
+  it("scopes every metric family to candidates created by the current user", () => {
     const dao = source("./dao.ts");
-    const visibility = source("./visibility-scope.ts");
+    const metricSections = [
+      ["async function loadCandidateMetrics", "async function loadDemandOnboarded"],
+      ["async function loadDemandOnboarded", "async function loadAiMetrics"],
+      ["async function loadAiMetrics", "async function loadHumanMetrics"],
+      ["async function loadHumanMetrics", "async function loadOfferMetrics"],
+      ["async function loadOfferMetrics", "function zeroDayCounts"],
+    ] as const;
 
-    expect(visibility).toContain("resolveRecruitingVisibilityScope");
-    expect(visibility).toContain("resolveHiringUnitAccessScope");
-    expect(visibility).toContain("odcRoleCondition(member.role, roleNames)");
-    expect(dao).toContain("candidateVisibilityCondition(visibilityScope)");
-    expect(dao).toContain("visibility.recruiting");
-    expect(dao).not.toContain("latestTransitionRoleCondition");
-    expect(dao).not.toContain("matchesOdcRole");
+    for (const [startMarker, endMarker] of metricSections) {
+      const section = dao.slice(dao.indexOf(startMarker), dao.indexOf(endMarker));
+      expect(section).toContain("eq(studioInterview.createdBy, actorUserId)");
+    }
+    expect(dao).not.toContain("candidateVisibilityCondition");
+    expect(dao).not.toContain("resolveOdcAnalysisVisibilityScope");
   });
 
-  it("scopes demand jobs and job filters to ODC members' hiring-unit visibility", () => {
+  it("scopes demand jobs and job filters to jobs created by the current user", () => {
     const dao = source("./dao.ts");
 
-    expect(dao).toContain("buildJobDescriptionHiringUnitScopeCondition(visibility.hiringUnits)");
-    expect(dao).toContain("loadSelectedJobs(organizationId, visibility)");
-    expect(dao).not.toContain("odcRoleCondition(jobDescription.createdByRole");
+    expect(dao).toContain("eq(jobDescription.createdBy, actorUserId)");
+    expect(dao).toContain("loadSelectedJobs(organizationId, actorUserId)");
   });
 
   it("captures mail-ingest roles and excludes unfinished parsing from admission counts", () => {

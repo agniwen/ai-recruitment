@@ -48,7 +48,9 @@ describe("ODC analysis filter loading", () => {
   });
 
   it("loads fresh role-scoped analysis after ODC configuration changes", () => {
-    expect(functionsSource).toContain("loadOdcAnalysis(access.workspace.id, data.filters)");
+    expect(functionsSource).toContain(
+      "loadOdcAnalysis(access.workspace.id, access.user.id, data.filters)",
+    );
     expect(functionsSource).not.toContain("loadCachedOdcAnalysis");
   });
 
