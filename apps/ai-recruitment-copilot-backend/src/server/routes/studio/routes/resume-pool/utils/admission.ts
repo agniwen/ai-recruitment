@@ -25,7 +25,8 @@ export interface ResumePoolAdmissionDeps<TSource extends ResumePoolAdmissionSour
       poolItemId: string;
       sourceOrganizationId: string;
     },
-  ) => Promise<void>;
+  ) => Promise<"cloned" | "needs_indexing">;
+  enqueueSemanticIndex: (input: ResumePoolAdmissionKey) => Promise<void>;
   ensureAdmissionRecord: (input: {
     admission: ResumePoolAdmissionInput;
     source: TSource;
@@ -76,13 +77,16 @@ export async function admitResumePoolItem<TSource extends ResumePoolAdmissionSou
     existingResumeRecordId ?? (await deps.ensureAdmissionRecord({ admission: input, source }));
   const key = { organizationId: input.organizationId, resumeRecordId };
   try {
-    await deps.cloneSemanticIndex({
+    const semanticCloneResult = await deps.cloneSemanticIndex({
       ...key,
       poolItemId: source.id,
       sourceOrganizationId: source.organizationId ?? input.organizationId,
     });
     await deps.replaceDuplicateSnapshot({ ...key, matches });
     await deps.markAdmissionReady(key);
+    if (semanticCloneResult === "needs_indexing") {
+      await deps.enqueueSemanticIndex(key);
+    }
     return { resumeRecordId, status: "imported" };
   } catch (error) {
     await deps.markAdmissionFailed({

@@ -167,7 +167,7 @@ describe("cloneResumeSemanticIndexFromPoolToInterview", () => {
     );
   });
 
-  it("rejects incomplete pool vector sets", async () => {
+  it("falls back to target reindexing when pool vectors are incomplete", async () => {
     const upsertResumeEmbeddings = vi.fn();
 
     await expect(
@@ -193,7 +193,7 @@ describe("cloneResumeSemanticIndexFromPoolToInterview", () => {
           },
         },
       ),
-    ).rejects.toThrow("semantic vectors are incomplete");
+    ).resolves.toBe("needs_indexing");
 
     expect(upsertResumeEmbeddings).not.toHaveBeenCalled();
   });

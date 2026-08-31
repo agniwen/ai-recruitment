@@ -137,10 +137,10 @@ beforeAll(async () => {
 afterAll(cleanup);
 
 beforeEach(() => {
-  vi.mocked(enqueueResumeSemanticIndexJobBestEffort).mockClear();
+  vi.mocked(enqueueResumeSemanticIndexJobBestEffort).mockReset().mockResolvedValue(true);
   vi.mocked(findSemanticResumeDuplicates).mockResolvedValue([]);
   vi.mocked(deleteResumeSemanticIndexBestEffort).mockClear();
-  vi.mocked(cloneResumeSemanticIndexFromPoolToInterview).mockResolvedValue();
+  vi.mocked(cloneResumeSemanticIndexFromPoolToInterview).mockReset().mockResolvedValue("cloned");
 });
 
 function basePoolInput(overrides: Partial<Parameters<typeof createResumePoolItem>[0]> = {}) {
@@ -732,6 +732,41 @@ describe("importPoolItemToResumeLibrary", () => {
       targetOrganizationId: ORG_A,
     });
     expect(enqueueResumeSemanticIndexJobBestEffort).not.toHaveBeenCalled();
+  });
+
+  it("imports and queues target indexing when public pool vectors are incomplete", async () => {
+    const publicId = await createResumePoolItem(
+      basePoolInput({
+        contentHash: "hash-resume-pool-incomplete-vectors",
+        resumeFileName: "candidate-incomplete-vectors.pdf",
+        scope: "public",
+      }),
+    );
+    vi.mocked(cloneResumeSemanticIndexFromPoolToInterview).mockResolvedValueOnce("needs_indexing");
+
+    const result = await importPoolItemToResumeLibrary({
+      dedupPolicy: "force",
+      hiringUnitId: null,
+      importedBy: USER_B,
+      jobDescriptionId: null,
+      organizationId: ORG_A,
+      poolItemId: publicId,
+    });
+
+    expect(result.status).toBe("imported");
+    if (result.status !== "imported") {
+      throw new Error("expected import success");
+    }
+    const [record] = await db
+      .select({ resumeParseStatus: studioInterview.resumeParseStatus })
+      .from(studioInterview)
+      .where(eq(studioInterview.id, result.resumeRecordId));
+    expect(record?.resumeParseStatus).toBe("ready");
+    expect(enqueueResumeSemanticIndexJobBestEffort).toHaveBeenCalledWith({
+      organizationId: ORG_A,
+      sourceId: result.resumeRecordId,
+      sourceType: "studio_interview",
+    });
   });
 
   it("creates another Resume Record for an explicit reimport", async () => {

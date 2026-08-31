@@ -18,6 +18,8 @@ interface CloneResumeSemanticIndexInput {
   targetOrganizationId?: string;
 }
 
+export type ResumeSemanticCloneResult = "cloned" | "needs_indexing";
+
 interface SourceIndexState {
   contentHash: string | null;
   embeddingModel: string;
@@ -121,10 +123,10 @@ function validateLoadedChunks({
   organizationId: string;
   sourceId: string;
   sourceType: ResumeSemanticSourceType;
-}): Map<ResumeSemanticChunkType, ResumeStoredEmbeddingChunk> {
+}): Map<ResumeSemanticChunkType, ResumeStoredEmbeddingChunk> | null {
   const byChunkType = chunkMap(chunks);
   if (REQUIRED_CHUNK_TYPES.some((chunkType) => !byChunkType.has(chunkType))) {
-    throw new Error("resume pool semantic vectors are incomplete.");
+    return null;
   }
   for (const chunk of byChunkType.values()) {
     if (
@@ -154,7 +156,7 @@ function requireChunk(
 export async function cloneResumeSemanticIndexFromPoolToInterview(
   input: CloneResumeSemanticIndexInput,
   deps: CloneResumeSemanticIndexDeps = createDefaultCloneDeps(),
-): Promise<void> {
+): Promise<ResumeSemanticCloneResult> {
   const embeddingVersion = deps.getEmbeddingVersion();
   const sourceOrganizationId = input.sourceOrganizationId ?? input.organizationId;
   const targetOrganizationId = input.targetOrganizationId ?? input.organizationId;
@@ -183,6 +185,9 @@ export async function cloneResumeSemanticIndexFromPoolToInterview(
     sourceId: input.poolItemId,
     sourceType: "resume_pool_item",
   });
+  if (!byChunkType) {
+    return "needs_indexing";
+  }
   await deps.vectorStore.upsertResumeEmbeddings({
     chunks: REQUIRED_CHUNK_TYPES.map((chunkType) => {
       const chunk = requireChunk(byChunkType, chunkType);
@@ -210,4 +215,5 @@ export async function cloneResumeSemanticIndexFromPoolToInterview(
     sourceId: input.resumeRecordId,
     sourceType: "studio_interview",
   });
+  return "cloned";
 }

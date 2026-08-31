@@ -774,6 +774,16 @@ export function importPoolItemToResumeLibrary(
         sourceOrganizationId: admission.sourceOrganizationId,
         targetOrganizationId: admission.organizationId,
       }),
+    enqueueSemanticIndex: async ({ organizationId, resumeRecordId }) => {
+      const enqueued = await enqueueResumeSemanticIndexJobBestEffort({
+        organizationId,
+        sourceId: resumeRecordId,
+        sourceType: "studio_interview",
+      });
+      if (!enqueued) {
+        throw new Error("候选人语义索引任务入队失败。");
+      }
+    },
     ensureAdmissionRecord: async ({ admission, source }) => {
       let resumeRecordId = "";
       await db.transaction(async (tx) => {

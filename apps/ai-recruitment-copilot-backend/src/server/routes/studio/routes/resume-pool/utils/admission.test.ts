@@ -11,7 +11,8 @@ interface Source {
 function createStore() {
   const records = new Map<string, { error: string | null; status: string }>();
   const deps: ResumePoolAdmissionDeps<Source, { id: string }> = {
-    cloneSemanticIndex: () => Promise.resolve(),
+    cloneSemanticIndex: () => Promise.resolve("cloned"),
+    enqueueSemanticIndex: () => Promise.resolve(),
     ensureAdmissionRecord: ({ source }) => {
       const id = `record-for-${source.id}`;
       if (!records.has(id)) {
@@ -62,6 +63,36 @@ describe("admitResumePoolItem", () => {
     expect(records.get(result.resumeRecordId)).toEqual({ error: null, status: "ready" });
   });
 
+  it("imports and reindexes the Resume Record when pool vectors are incomplete", async () => {
+    const { deps, records } = createStore();
+    const steps: string[] = [];
+    deps.cloneSemanticIndex = () => Promise.resolve("needs_indexing");
+    deps.markAdmissionReady = ({ resumeRecordId }) => {
+      steps.push("ready");
+      records.set(resumeRecordId, { error: null, status: "ready" });
+      return Promise.resolve();
+    };
+    deps.enqueueSemanticIndex = ({ resumeRecordId }) => {
+      expect(records.get(resumeRecordId)?.status).toBe("ready");
+      steps.push("enqueue");
+      return Promise.resolve();
+    };
+
+    await expect(
+      admitResumePoolItem(
+        {
+          dedupPolicy: "force",
+          importedBy: "user-1",
+          jobDescriptionId: null,
+          organizationId: "target-org",
+          poolItemId: "pool-1",
+        },
+        deps,
+      ),
+    ).resolves.toEqual({ resumeRecordId: "record-for-pool-1", status: "imported" });
+    expect(steps).toEqual(["ready", "enqueue"]);
+  });
+
   it("keeps a failed admission retryable and reuses the same Resume Record", async () => {
     const { deps, records } = createStore();
     let firstAttempt = true;
@@ -70,7 +101,7 @@ describe("admitResumePoolItem", () => {
         firstAttempt = false;
         return Promise.reject(new Error("qdrant unavailable"));
       }
-      return Promise.resolve();
+      return Promise.resolve("cloned");
     };
 
     await expect(
