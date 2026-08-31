@@ -3,21 +3,18 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   interviewAuditLog,
   jobDescription,
-  member,
   organizationRole,
   studioHumanInterviewRound,
   studioInterview,
   studioInterviewSchedule,
   studioOfferDraft,
 } from "@arc/db-schema/schema";
-import { ODC_ANALYSIS_UNKNOWN_ROLE } from "@arc/shared/odc-analysis";
 import type {
   OdcAnalysisData,
   OdcAnalysisDayCount,
   OdcAnalysisFilters,
   OdcAnalysisJobOption,
   OdcAnalysisMetric,
-  OdcAnalysisRoleOption,
 } from "@arc/shared/odc-analysis";
 import { toBeijingDayKey } from "@arc/shared/beijing-calendar";
 import { addCalendarDays, beijingDayStart, resolveOdcAnalysisRange } from "./date-range";
@@ -29,7 +26,7 @@ import {
   latestOfferByInterview,
 } from "./metric-policies";
 import { instantRangeConditions } from "./utils/instant-range-conditions";
-import { matchesSelectedRole, roleCondition } from "./utils/role-filter";
+import { matchesOdcRole, odcRoleCondition } from "./utils/role-filter";
 
 export { resolveOdcAnalysisRange } from "./date-range";
 
@@ -95,76 +92,17 @@ export function loadOdcAnalysisJobOptions(organizationId: string): Promise<OdcAn
     .orderBy(asc(jobDescription.name));
 }
 
-const BUILT_IN_ROLE_LABELS: Record<string, string> = {
-  admin: "管理员",
-  member: "普通成员",
-  noAccess: "空权限用户",
-  owner: "拥有者",
-};
-
-export async function loadOdcAnalysisRoleOptions(
-  organizationId: string,
-  selectedRole?: string,
-): Promise<OdcAnalysisRoleOption[]> {
-  const [dynamicRoles, ...roleRows] = await Promise.all([
-    db
-      .select({ label: organizationRole.name, value: organizationRole.role })
-      .from(organizationRole)
-      .where(eq(organizationRole.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: member.role })
-      .from(member)
-      .where(eq(member.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: studioInterview.createdByRole })
-      .from(studioInterview)
-      .where(eq(studioInterview.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: studioInterview.onboardedConfirmedByRole })
-      .from(studioInterview)
-      .where(eq(studioInterview.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: studioInterviewSchedule.createdByRole })
-      .from(studioInterviewSchedule)
-      .where(eq(studioInterviewSchedule.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: studioHumanInterviewRound.createdByRole })
-      .from(studioHumanInterviewRound)
-      .where(eq(studioHumanInterviewRound.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: studioHumanInterviewRound.completedByRole })
-      .from(studioHumanInterviewRound)
-      .where(eq(studioHumanInterviewRound.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: studioOfferDraft.sentByRole })
-      .from(studioOfferDraft)
-      .where(eq(studioOfferDraft.organizationId, organizationId)),
-    db
-      .selectDistinct({ value: interviewAuditLog.operatorRole })
-      .from(interviewAuditLog)
-      .where(eq(interviewAuditLog.organizationId, organizationId)),
-  ]);
-  const labels = new Map(dynamicRoles.map((role) => [role.value, role.label]));
-  for (const row of roleRows.flat()) {
-    if (row.value) {
-      labels.set(row.value, labels.get(row.value) ?? BUILT_IN_ROLE_LABELS[row.value] ?? row.value);
-    }
-  }
-  if (selectedRole && selectedRole !== ODC_ANALYSIS_UNKNOWN_ROLE && !labels.has(selectedRole)) {
-    labels.set(selectedRole, BUILT_IN_ROLE_LABELS[selectedRole] ?? selectedRole);
-  }
-  return [
-    ...[...labels]
-      .map(([value, label]) => ({ label, value }))
-      .toSorted((a, b) => a.label.localeCompare(b.label, "zh-CN")),
-    { label: "历史角色未知", value: ODC_ANALYSIS_UNKNOWN_ROLE },
-  ];
+async function loadOdcRoleNames(organizationId: string): Promise<string[]> {
+  const roles = await db
+    .select({ role: organizationRole.role })
+    .from(organizationRole)
+    .where(
+      and(eq(organizationRole.organizationId, organizationId), eq(organizationRole.isOdc, true)),
+    );
+  return roles.map(({ role }) => role);
 }
 
-function latestTransitionRoleCondition(selectedRole?: string) {
-  if (!selectedRole) {
-    return;
-  }
+function latestTransitionRoleCondition(odcRoles: readonly string[]) {
   const latestRole = sql`(
     SELECT ${interviewAuditLog.operatorRole}
     FROM ${interviewAuditLog}
@@ -175,7 +113,7 @@ function latestTransitionRoleCondition(selectedRole?: string) {
     ORDER BY ${interviewAuditLog.createdAt} DESC
     LIMIT 1
   )`;
-  return roleCondition(latestRole, selectedRole);
+  return odcRoleCondition(latestRole, odcRoles);
 }
 
 // oxlint-disable-next-line complexity -- A single aggregate query intentionally keeps all dashboard counters on one snapshot.
@@ -185,7 +123,7 @@ async function loadCandidateMetrics(
   progressRange: InstantRange,
   activityJobIds: string[],
   activityRange: InstantRange,
-  selectedRole?: string,
+  odcRoles: readonly string[],
 ) {
   const [row] = await db
     .select({
@@ -193,13 +131,13 @@ async function loadCandidateMetrics(
         eq(studioInterview.resumeParseStatus, "ready"),
         selectedJobCondition(progressJobIds),
         timestampCondition(studioInterview.createdAt, progressRange),
-        roleCondition(studioInterview.createdByRole, selectedRole),
+        odcRoleCondition(studioInterview.createdByRole, odcRoles),
       )})`.mapWith(Number),
       onboarded: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "hired"),
         isNotNull(studioInterview.actualOnboardedAt),
         selectedJobCondition(progressJobIds),
-        roleCondition(studioInterview.onboardedConfirmedByRole, selectedRole),
+        odcRoleCondition(studioInterview.onboardedConfirmedByRole, odcRoles),
         ...instantRangeConditions(studioInterview.actualOnboardedAt, progressRange),
       )})`.mapWith(Number),
       pendingEvaluation: sql<number>`COUNT(*) FILTER (WHERE ${and(
@@ -208,26 +146,26 @@ async function loadCandidateMetrics(
         eq(studioInterview.resumeParseStatus, "ready"),
         isNull(studioInterview.resumeEvaluationStatus),
         selectedJobCondition(progressJobIds),
-        roleCondition(studioInterview.createdByRole, selectedRole),
+        odcRoleCondition(studioInterview.createdByRole, odcRoles),
         ...instantRangeConditions(studioInterview.createdAt, progressRange),
       )})`.mapWith(Number),
       rejected: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "rejected"),
         selectedJobCondition(progressJobIds),
-        latestTransitionRoleCondition(selectedRole),
+        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, progressRange),
       )})`.mapWith(Number),
       todayAssociated: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.resumeParseStatus, "ready"),
         selectedJobCondition(activityJobIds),
         timestampCondition(studioInterview.createdAt, activityRange),
-        roleCondition(studioInterview.createdByRole, selectedRole),
+        odcRoleCondition(studioInterview.createdByRole, odcRoles),
       )})`.mapWith(Number),
       todayOnboarded: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "hired"),
         isNotNull(studioInterview.actualOnboardedAt),
         selectedJobCondition(activityJobIds),
-        roleCondition(studioInterview.onboardedConfirmedByRole, selectedRole),
+        odcRoleCondition(studioInterview.onboardedConfirmedByRole, odcRoles),
         ...instantRangeConditions(studioInterview.actualOnboardedAt, activityRange),
       )})`.mapWith(Number),
       todayPendingEvaluation: sql<number>`COUNT(*) FILTER (WHERE ${and(
@@ -236,25 +174,25 @@ async function loadCandidateMetrics(
         eq(studioInterview.resumeParseStatus, "ready"),
         isNull(studioInterview.resumeEvaluationStatus),
         selectedJobCondition(activityJobIds),
-        roleCondition(studioInterview.createdByRole, selectedRole),
+        odcRoleCondition(studioInterview.createdByRole, odcRoles),
         ...instantRangeConditions(studioInterview.createdAt, activityRange),
       )})`.mapWith(Number),
       todayRejected: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "rejected"),
         selectedJobCondition(activityJobIds),
-        latestTransitionRoleCondition(selectedRole),
+        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, activityRange),
       )})`.mapWith(Number),
       todayWithdrawn: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "withdrawn"),
         selectedJobCondition(activityJobIds),
-        latestTransitionRoleCondition(selectedRole),
+        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, activityRange),
       )})`.mapWith(Number),
       withdrawn: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioInterview.outcome, "withdrawn"),
         selectedJobCondition(progressJobIds),
-        latestTransitionRoleCondition(selectedRole),
+        latestTransitionRoleCondition(odcRoles),
         ...instantRangeConditions(studioInterview.closedAt, progressRange),
       )})`.mapWith(Number),
     })
@@ -275,7 +213,11 @@ async function loadCandidateMetrics(
   };
 }
 
-async function loadDemandOnboarded(organizationId: string, jobIds: string[]): Promise<number> {
+async function loadDemandOnboarded(
+  organizationId: string,
+  jobIds: string[],
+  odcRoles: readonly string[],
+): Promise<number> {
   if (jobIds.length === 0) {
     return 0;
   }
@@ -288,6 +230,7 @@ async function loadDemandOnboarded(organizationId: string, jobIds: string[]): Pr
         inArray(studioInterview.jobDescriptionId, jobIds),
         eq(studioInterview.outcome, "hired"),
         isNotNull(studioInterview.actualOnboardedAt),
+        odcRoleCondition(studioInterview.onboardedConfirmedByRole, odcRoles),
       ),
     );
   return row?.value ?? 0;
@@ -301,7 +244,7 @@ async function loadAiMetrics(
   activityRange: InstantRange,
   futureRange: InstantRange,
   futureDays: string[],
-  selectedRole?: string,
+  odcRoles: readonly string[],
 ) {
   const [[row], futureRows] = await Promise.all([
     db
@@ -324,7 +267,7 @@ async function loadAiMetrics(
       .where(
         and(
           eq(studioInterviewSchedule.organizationId, organizationId),
-          roleCondition(studioInterviewSchedule.createdByRole, selectedRole),
+          odcRoleCondition(studioInterviewSchedule.createdByRole, odcRoles),
         ),
       ),
     db
@@ -339,7 +282,7 @@ async function loadAiMetrics(
         and(
           eq(studioInterviewSchedule.organizationId, organizationId),
           selectedJobCondition(activityJobIds),
-          roleCondition(studioInterviewSchedule.createdByRole, selectedRole),
+          odcRoleCondition(studioInterviewSchedule.createdByRole, odcRoles),
           ne(studioInterviewSchedule.status, "cancelled"),
           ...instantRangeConditions(studioInterviewSchedule.scheduledAt, futureRange),
         ),
@@ -366,40 +309,40 @@ async function loadHumanMetrics(
   progressRange: InstantRange,
   activityJobIds: string[],
   activityRange: InstantRange,
-  selectedRole?: string,
+  odcRoles: readonly string[],
 ) {
   const [row] = await db
     .select({
       completed: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioHumanInterviewRound.status, "completed"),
         selectedJobCondition(activityJobIds),
-        roleCondition(studioHumanInterviewRound.completedByRole, selectedRole),
+        odcRoleCondition(studioHumanInterviewRound.completedByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
       inProgress: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioHumanInterviewRound.status, "pending"),
         isNotNull(studioHumanInterviewRound.startedAt),
         selectedJobCondition(activityJobIds),
-        roleCondition(studioHumanInterviewRound.createdByRole, selectedRole),
+        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
       overall: sql<number>`COUNT(*) FILTER (WHERE ${and(
         ne(studioHumanInterviewRound.status, "cancelled"),
         selectedJobCondition(progressJobIds),
-        roleCondition(studioHumanInterviewRound.createdByRole, selectedRole),
+        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, progressRange),
       )})`.mapWith(Number),
       today: sql<number>`COUNT(*) FILTER (WHERE ${and(
         ne(studioHumanInterviewRound.status, "cancelled"),
         selectedJobCondition(activityJobIds),
-        roleCondition(studioHumanInterviewRound.createdByRole, selectedRole),
+        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
       upcoming: sql<number>`COUNT(*) FILTER (WHERE ${and(
         eq(studioHumanInterviewRound.status, "pending"),
         isNull(studioHumanInterviewRound.startedAt),
         selectedJobCondition(activityJobIds),
-        roleCondition(studioHumanInterviewRound.createdByRole, selectedRole),
+        odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles),
         ...instantRangeConditions(studioHumanInterviewRound.scheduledAt, activityRange),
       )})`.mapWith(Number),
     })
@@ -422,7 +365,7 @@ async function loadOfferMetrics(
   activityJobIds: string[],
   activityRange: InstantRange,
   futureDays: string[],
-  selectedRole?: string,
+  odcRoles: readonly string[],
 ) {
   const [firstSentRows, offerRows] = await Promise.all([
     db
@@ -484,7 +427,7 @@ async function loadOfferMetrics(
       offer.status !== "accepted" ||
       !offer.joiningDate ||
       !offer.jobDescriptionId ||
-      !matchesSelectedRole(offer.sentByRole, selectedRole)
+      !matchesOdcRole(offer.sentByRole, odcRoles)
     ) {
       continue;
     }
@@ -509,14 +452,14 @@ async function loadOfferMetrics(
         (offer) => offer.jobDescriptionId && progressJobIdSet.has(offer.jobDescriptionId),
       ),
       progressRange,
-      selectedRole,
+      odcRoles,
     ),
     today: countFirstSentOffers(
       sentOffers.filter(
         (offer) => offer.jobDescriptionId && activityJobIdSet.has(offer.jobDescriptionId),
       ),
       activityRange,
-      selectedRole,
+      odcRoles,
     ),
   };
 }
@@ -538,7 +481,10 @@ export async function loadOdcAnalysisData(
   filters: OdcAnalysisFilters,
   now = new Date(),
 ): Promise<OdcAnalysisData> {
-  const selectedJobs = await loadSelectedJobs(organizationId);
+  const [selectedJobs, odcRoles] = await Promise.all([
+    loadSelectedJobs(organizationId),
+    loadOdcRoleNames(organizationId),
+  ]);
   const availableJobIds = new Set(selectedJobs.map((job) => job.id));
   const requestedJobIds = [
     ...filters.progressJobDescriptionIds,
@@ -622,6 +568,7 @@ export async function loadOdcAnalysisData(
       progressRange,
       activityJobIds,
       activityRange,
+      odcRoles,
     ),
     loadAiMetrics(
       organizationId,
@@ -631,8 +578,16 @@ export async function loadOdcAnalysisData(
       activityRange,
       futureRange,
       futureDays,
+      odcRoles,
     ),
-    loadHumanMetrics(organizationId, progressJobIds, progressRange, activityJobIds, activityRange),
+    loadHumanMetrics(
+      organizationId,
+      progressJobIds,
+      progressRange,
+      activityJobIds,
+      activityRange,
+      odcRoles,
+    ),
     loadOfferMetrics(
       organizationId,
       progressJobIds,
@@ -640,8 +595,9 @@ export async function loadOdcAnalysisData(
       activityJobIds,
       activityRange,
       futureDays,
+      odcRoles,
     ),
-    loadDemandOnboarded(organizationId, demandJobIds),
+    loadDemandOnboarded(organizationId, demandJobIds, odcRoles),
   ]);
 
   const vacancies = Math.max(totalHeadcount - demandOnboarded, 0);

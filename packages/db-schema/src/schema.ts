@@ -287,6 +287,7 @@ export const organizationRole = pgTable(
   {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     id: text("id").primaryKey(),
+    isOdc: boolean("is_odc").default(false).notNull(),
     name: text("name").notNull(),
     organizationId: text("organization_id")
       .notNull()

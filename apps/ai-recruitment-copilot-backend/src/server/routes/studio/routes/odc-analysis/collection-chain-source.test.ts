@@ -6,6 +6,16 @@ function source(relativePath: string): string {
 }
 
 describe("ODC role snapshot collection chains", () => {
+  it("persists the ODC role marker with a safe false default", () => {
+    const schema = source("../../../../../../../../packages/db-schema/src/schema.ts");
+    const migration = source(
+      "../../../../../../../ai-recruitment-copilot/drizzle/20260831120000_add_organization_role_is_odc/migration.sql",
+    );
+
+    expect(schema).toContain('isOdc: boolean("is_odc").default(false).notNull()');
+    expect(migration).toContain('ADD COLUMN "is_odc" boolean DEFAULT false NOT NULL');
+  });
+
   it("persists the actor role for every resume-library creation path", () => {
     const createFromStorage = source("../resumes/utils/create-from-storage.ts");
     const resumesRoute = source("../resumes/route.ts");
@@ -47,7 +57,18 @@ describe("ODC role snapshot collection chains", () => {
   it("attributes completed human interviews to the completing role", () => {
     const dao = source("./dao.ts");
 
-    expect(dao).toContain("roleCondition(studioHumanInterviewRound.completedByRole, selectedRole)");
+    expect(dao).toContain("odcRoleCondition(studioHumanInterviewRound.completedByRole, odcRoles)");
+  });
+
+  it("loads the configured ODC roles and applies them to every metric family", () => {
+    const dao = source("./dao.ts");
+
+    expect(dao).toContain("loadOdcRoleNames");
+    expect(dao).toContain("eq(organizationRole.isOdc, true)");
+    expect(dao).toContain("odcRoleCondition(studioInterview.createdByRole, odcRoles)");
+    expect(dao).toContain("odcRoleCondition(studioInterviewSchedule.createdByRole, odcRoles)");
+    expect(dao).toContain("odcRoleCondition(studioHumanInterviewRound.createdByRole, odcRoles)");
+    expect(dao).toContain("matchesOdcRole(offer.sentByRole, odcRoles)");
   });
 
   it("captures mail-ingest roles and excludes unfinished parsing from admission counts", () => {

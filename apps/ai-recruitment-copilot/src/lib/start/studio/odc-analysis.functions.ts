@@ -3,7 +3,7 @@ import { z } from "zod";
 import { odcAnalysisFiltersSchema } from "@arc/shared/odc-analysis";
 import type { OdcAnalysisState } from "@arc/shared/odc-analysis";
 import { hasPermissionInStatements } from "@arc/shared/permission-statements";
-import { loadCachedOdcAnalysis } from "./odc-analysis.server";
+import { loadOdcAnalysis } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/odc-analysis/dao";
 import { resolveAuthorizedStudioPageAccessFromRequest } from "./page-access.server";
 
 const odcAnalysisInputSchema = z.object({
@@ -18,7 +18,7 @@ export const loadOdcAnalysisState = createServerFn({ method: "GET" })
     if (access.status !== "ready") {
       return access;
     }
-    const result = await loadCachedOdcAnalysis(access.workspace.id, data.filters);
+    const result = await loadOdcAnalysis(access.workspace.id, data.filters);
     return {
       ...result,
       access: {

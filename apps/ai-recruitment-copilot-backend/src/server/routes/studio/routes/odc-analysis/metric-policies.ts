@@ -1,6 +1,6 @@
 import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";
 import type { InstantRange } from "./date-range";
-import { matchesSelectedRole } from "./utils/role-filter";
+import { matchesOdcRole } from "./utils/role-filter";
 
 export const CURRENT_PENDING_EVALUATION_FACT = {
   outcome: "in_pipeline",
@@ -44,7 +44,7 @@ export function latestOfferByInterview<T extends { interviewRecordId: string; ve
 export function countFirstSentOffers(
   rows: { interviewRecordId: string; role?: string | null; sentAt: Date | null }[],
   range: InstantRange,
-  selectedRole?: string,
+  odcRoles: readonly string[],
 ): number {
   const firstSentByInterview = new Map<string, { role: string | null | undefined; sentAt: Date }>();
   for (const row of rows) {
@@ -58,7 +58,7 @@ export function countFirstSentOffers(
   }
   return [...firstSentByInterview.values()].filter(
     ({ role, sentAt }) =>
-      matchesSelectedRole(role, selectedRole) &&
+      matchesOdcRole(role, odcRoles) &&
       (!range.start || sentAt >= range.start) &&
       (!range.end || sentAt < range.end),
   ).length;

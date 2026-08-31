@@ -2,8 +2,6 @@ import { z } from "zod";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
-export const ODC_ANALYSIS_UNKNOWN_ROLE = "__odc_unknown_role__";
-
 function isValidDateOnly(value: string): boolean {
   if (!DATE_ONLY_PATTERN.test(value)) {
     return false;
@@ -140,11 +138,6 @@ export interface OdcAnalysisJobOption {
   id: string;
   name: string;
   recruitmentStatus: string | null;
-}
-
-export interface OdcAnalysisRoleOption {
-  label: string;
-  value: string;
 }
 
 export interface OdcAnalysisStateReady {

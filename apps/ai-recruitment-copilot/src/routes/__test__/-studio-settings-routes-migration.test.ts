@@ -209,11 +209,16 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(routeSource).toContain("actionRender={actionRender}");
     expect(pageHeaderSource).toContain("actionRender?: ReactNode;");
     expect(pageHeaderSource).toContain("{actionRender ? <div");
-    expect(source).toContain("additionalFields: { name: input.name }");
+    expect(source).toContain("additionalFields: { isOdc: false, name: input.name }");
+    expect(source).toContain("是否为 ODC");
+    expect(source).toContain("计入 ODC 分析");
+    expect(source).toContain("isOdc: !row.isOdc");
+    expect(source).toContain("revertOdcRoleDraft");
+    expect(source).toContain('queryKey: ["odc-analysis", workspaceSlug]');
     expect(source).toContain("name: input.name");
-    expect(source).toContain(
-      "role: input.role === roleFormState.role.role ? undefined : input.role",
-    );
+    expect(source).toContain("角色标识创建后不可更改");
+    expect(source).toContain('canEditDynamicRoleIdentifier(state?.mode ?? "create")');
+    expect(source).not.toContain("data.roleName");
     expect(source).not.toContain("@/components/ui/card");
     expect(source).not.toContain("<Card");
     expect(source).not.toContain("<CardHeader");

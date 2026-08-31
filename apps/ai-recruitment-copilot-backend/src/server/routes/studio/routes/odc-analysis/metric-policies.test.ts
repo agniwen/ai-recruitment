@@ -52,19 +52,23 @@ describe("ODC analysis confirmed metric policies", () => {
         [
           {
             interviewRecordId: "candidate-1",
+            role: "odc",
             sentAt: new Date("2026-08-17T12:00:00.000Z"),
           },
           {
             interviewRecordId: "candidate-1",
+            role: "odc",
             sentAt: new Date("2026-08-18T12:00:00.000Z"),
           },
           {
             interviewRecordId: "candidate-2",
+            role: "odc",
             sentAt: new Date("2026-08-18T08:00:00.000Z"),
           },
-          { interviewRecordId: "candidate-3", sentAt: null },
+          { interviewRecordId: "candidate-3", role: "odc", sentAt: null },
         ],
         range,
+        ["odc"],
       ),
     ).toBe(1);
   });
@@ -92,8 +96,10 @@ describe("ODC analysis confirmed metric policies", () => {
       },
     ];
 
-    expect(countFirstSentOffers(rows, range, "odc")).toBe(1);
-    expect(countFirstSentOffers(rows, range, "hr")).toBe(1);
+    expect(countFirstSentOffers(rows, range, ["odc"])).toBe(1);
+    expect(countFirstSentOffers(rows, range, ["hr"])).toBe(1);
+    expect(countFirstSentOffers(rows, range, ["odc", "hr"])).toBe(2);
+    expect(countFirstSentOffers(rows, range, [])).toBe(0);
   });
 
   it("attributes the effective Offer to the role on its latest active version", () => {

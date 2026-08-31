@@ -1,30 +1,38 @@
-import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { studioInterview } from "@arc/db-schema/schema";
-import { ODC_ANALYSIS_UNKNOWN_ROLE } from "@arc/shared/odc-analysis";
-import { matchesSelectedRole, roleCondition } from "./role-filter";
+import { matchesOdcRole, odcRoleCondition } from "./role-filter";
 
 describe("ODC analysis role filtering", () => {
-  it("binds a selected role and maps the unknown sentinel to NULL", () => {
+  it("binds every configured ODC role", () => {
     const dialect = new PgDialect();
     const selected = dialect.sqlToQuery(
-      roleCondition(studioInterview.createdByRole, "odc") ?? sql`false`,
-    );
-    const unknown = dialect.sqlToQuery(
-      roleCondition(studioInterview.createdByRole, ODC_ANALYSIS_UNKNOWN_ROLE) ?? sql`false`,
+      odcRoleCondition(studioInterview.createdByRole, ["odc", "odc-lead"]),
     );
 
-    expect(selected.params).toEqual(["odc"]);
-    expect(unknown.params).toEqual([]);
-    expect(unknown.sql).toContain("is null");
+    expect(selected.params).toEqual(["odc", "odc-lead"]);
+    expect(selected.sql).toContain("regexp_split_to_array");
+    expect(selected.sql).toContain("&& ARRAY[");
   });
 
-  it("matches known, unknown, and unfiltered role values", () => {
-    expect(matchesSelectedRole("odc", "odc")).toBe(true);
-    expect(matchesSelectedRole("hr", "odc")).toBe(false);
-    expect(matchesSelectedRole(null, ODC_ANALYSIS_UNKNOWN_ROLE)).toBe(true);
-    expect(matchesSelectedRole("odc", ODC_ANALYSIS_UNKNOWN_ROLE)).toBe(false);
-    expect(matchesSelectedRole("hr")).toBe(true);
+  it("matches only configured ODC roles and rejects unknown history", () => {
+    const odcRoles = ["odc", "odc-lead"];
+
+    expect(matchesOdcRole("odc", odcRoles)).toBe(true);
+    expect(matchesOdcRole("odc-lead", odcRoles)).toBe(true);
+    expect(matchesOdcRole("member, odc", odcRoles)).toBe(true);
+    expect(matchesOdcRole("odc-lead,member", odcRoles)).toBe(true);
+    expect(matchesOdcRole("hr", odcRoles)).toBe(false);
+    expect(matchesOdcRole("odc-assistant,member", odcRoles)).toBe(false);
+    expect(matchesOdcRole(null, odcRoles)).toBe(false);
+    expect(matchesOdcRole("odc", [])).toBe(false);
+  });
+
+  it("emits a false condition when no role is marked as ODC", () => {
+    const dialect = new PgDialect();
+    const condition = dialect.sqlToQuery(odcRoleCondition(studioInterview.createdByRole, []));
+
+    expect(condition.params).toEqual([]);
+    expect(condition.sql).toBe("false");
   });
 });

@@ -1,22 +1,28 @@
-import { eq, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
-import { ODC_ANALYSIS_UNKNOWN_ROLE } from "@arc/shared/odc-analysis";
 
-export function roleCondition(column: SQLWrapper, selectedRole?: string): SQL | undefined {
-  if (!selectedRole) {
-    return undefined;
+export function odcRoleCondition(column: SQLWrapper, odcRoles: readonly string[]): SQL {
+  if (odcRoles.length === 0) {
+    return sql`false`;
   }
-  return selectedRole === ODC_ANALYSIS_UNKNOWN_ROLE ? isNull(column) : eq(column, selectedRole);
+
+  const roleValues = sql.join(
+    odcRoles.map((role) => sql`${role}`),
+    sql`, `,
+  );
+  return sql`regexp_split_to_array(coalesce(${column}, ''), E'\\s*,\\s*') && ARRAY[${roleValues}]::text[]`;
 }
 
-export function matchesSelectedRole(
+export function matchesOdcRole(
   value: string | null | undefined,
-  selectedRole?: string,
+  odcRoles: readonly string[],
 ): boolean {
-  if (!selectedRole) {
-    return true;
+  if (!value || odcRoles.length === 0) {
+    return false;
   }
-  return selectedRole === ODC_ANALYSIS_UNKNOWN_ROLE
-    ? value === null || value === undefined
-    : value === selectedRole;
+
+  return value
+    .split(",")
+    .map((role) => role.trim())
+    .some((role) => odcRoles.includes(role));
 }

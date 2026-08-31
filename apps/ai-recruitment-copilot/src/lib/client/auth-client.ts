@@ -29,6 +29,11 @@ export const authClient = createAuthClient({
       schema: {
         organizationRole: {
           additionalFields: {
+            isOdc: {
+              defaultValue: false,
+              required: false,
+              type: "boolean",
+            },
             name: {
               required: true,
               type: "string",

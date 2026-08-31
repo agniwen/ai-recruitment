@@ -25,14 +25,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const UNIT_LABEL: Record<OdcAnalysisMetric["unit"], string> = {
-  candidate: "人",
-  headcount: "HC",
-  job: "个岗位",
-  offer: "个 Offer",
-  round: "个环节",
-};
+import { cn } from "@/lib/utils";
+import { ODC_ANALYSIS_TONE_STYLES, ODC_ANALYSIS_UNIT_LABEL } from "./odc-analysis-visuals";
+import type { OdcAnalysisSectionTone } from "./odc-analysis-visuals";
 
 interface MetricDefinition {
   activity: OdcAnalysisResumeActivity;
@@ -178,20 +173,25 @@ function MetricCardContent({
   description,
   label,
   metric,
+  tone,
 }: {
   description: string;
   label: string;
   metric: OdcAnalysisMetric;
+  tone: OdcAnalysisSectionTone;
 }) {
   const detail = breakdownText(metric);
   return (
-    <Card className="h-full" title={`${description}${detail ? `；${detail}` : ""}`}>
+    <Card
+      className={cn("h-full", ODC_ANALYSIS_TONE_STYLES[tone].card)}
+      title={`${description}${detail ? `；${detail}` : ""}`}
+    >
       <CardHeader className="pb-3">
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-3xl tabular-nums">
           {metric.value.toLocaleString("zh-CN")}
           <span className="ms-1 text-muted-foreground text-sm font-normal">
-            {UNIT_LABEL[metric.unit]}
+            {ODC_ANALYSIS_UNIT_LABEL[metric.unit]}
           </span>
         </CardTitle>
       </CardHeader>
@@ -210,6 +210,7 @@ function ResumeMetricCard({
   jdIds,
   metric,
   slug,
+  tone,
 }: {
   activityFrom?: string;
   activityTo?: string;
@@ -217,12 +218,14 @@ function ResumeMetricCard({
   jdIds?: string;
   metric: OdcAnalysisMetric;
   slug?: string;
+  tone: OdcAnalysisSectionTone;
 }) {
   const content = (
     <MetricCardContent
       description={definition.description}
       label={definition.label}
       metric={metric}
+      tone={tone}
     />
   );
   return slug ? (
@@ -264,6 +267,7 @@ function DemandSummary({
             description="查看符合当前需求日期筛选的在招岗位"
             label={label}
             metric={metric}
+            tone="blue"
           />
         );
         return canDrillDown ? (
@@ -295,6 +299,7 @@ function MetricsGrid({
   jdIds,
   metrics,
   slug,
+  tone,
 }: {
   activityFrom?: string;
   activityTo?: string;
@@ -302,6 +307,7 @@ function MetricsGrid({
   jdIds?: string;
   metrics: OdcAnalysisData["overall"] | OdcAnalysisData["activity"];
   slug?: string;
+  tone: OdcAnalysisSectionTone;
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -314,6 +320,7 @@ function MetricsGrid({
           key={definition.key}
           metric={metrics[definition.key as keyof typeof metrics]}
           slug={slug}
+          tone={tone}
         />
       ))}
     </div>
@@ -358,13 +365,21 @@ function DashboardSection({
   children,
   description,
   title,
+  tone,
 }: {
   children: React.ReactNode;
   description: string;
   title: string;
+  tone: OdcAnalysisSectionTone;
 }) {
+  const styles = ODC_ANALYSIS_TONE_STYLES[tone];
   return (
-    <section className="flex flex-col gap-5">
+    <section
+      className={cn(
+        "relative flex flex-col gap-5 overflow-hidden rounded-2xl border p-5 md:p-6",
+        styles.panel,
+      )}
+    >
       <div className="flex flex-col gap-1">
         <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
         <p className="text-muted-foreground text-sm">{description}</p>
@@ -375,23 +390,27 @@ function DashboardSection({
 }
 
 function UpcomingSummary({ data }: { data: ActivitySectionData }) {
+  const styles = ODC_ANALYSIS_TONE_STYLES.green;
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card>
+      <Card className={styles.card}>
         <CardHeader>
           <CardTitle>所选日期后 3 天 AI 面试</CardTitle>
           <CardDescription>按候选人去重，不包含已取消安排</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-3 gap-3">
           {data.upcoming.aiInterviews.map((item) => (
-            <div className="flex flex-col gap-1 rounded-xl bg-muted p-3" key={item.day}>
+            <div
+              className={cn("flex flex-col gap-1 rounded-xl border p-3", styles.subtle)}
+              key={item.day}
+            >
               <span className="text-muted-foreground text-xs">{formatDay(item.day)}</span>
               <span className="text-xl tabular-nums">{item.value} 人</span>
             </div>
           ))}
         </CardContent>
       </Card>
-      <Card>
+      <Card className={styles.card}>
         <CardHeader>
           <CardTitle>当日面试状态与后续到岗计划</CardTitle>
           <CardDescription>面试状态按真人面试轮次，预计到岗只统计已接受 Offer</CardDescription>
@@ -403,7 +422,10 @@ function UpcomingSummary({ data }: { data: ActivitySectionData }) {
               ["进行中", data.activityInterviewStates.inProgress],
               ["即将开始", data.activityInterviewStates.upcoming],
             ].map(([label, value]) => (
-              <div className="flex flex-col gap-1 rounded-xl bg-muted p-3" key={label}>
+              <div
+                className={cn("flex flex-col gap-1 rounded-xl border p-3", styles.subtle)}
+                key={label}
+              >
                 <span className="text-muted-foreground text-xs">{label}</span>
                 <span className="text-xl tabular-nums">{value}</span>
               </div>
@@ -412,7 +434,7 @@ function UpcomingSummary({ data }: { data: ActivitySectionData }) {
           <div className="grid grid-cols-3 gap-3">
             {data.upcoming.arrivals.map((item) => (
               <div
-                className="flex flex-col gap-1 rounded-xl border border-input p-3"
+                className={cn("flex flex-col gap-1 rounded-xl border p-3", styles.subtle)}
                 key={item.day}
               >
                 <span className="text-muted-foreground text-xs">{formatDay(item.day)} 到岗</span>
@@ -541,12 +563,13 @@ export function OdcAnalysisPage({
     <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-8">
       <PageHeader
         title="ODC 分析"
-        description="分别查看岗位需求、候选人招聘进度与指定日期动态。每部分使用独立筛选条件。"
+        description="分别查看岗位需求、候选人招聘进度与指定日期动态。招聘指标仅统计在「角色与权限」中标记为 ODC 的自定义角色。"
       />
       <div className="flex flex-col gap-10">
         <DashboardSection
           description="按在招岗位的提需求日期或期望到岗日期筛选；开始和结束日期均可留空。"
           title="岗位需求概览"
+          tone="blue"
         >
           <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-[14rem_12rem_12rem_auto] xl:items-end">
             <Field>
@@ -620,6 +643,7 @@ export function OdcAnalysisPage({
         <DashboardSection
           description="统计候选人管理中的记录；日期范围和岗位均不选择时不限制。不同指标按各自业务时间统计。"
           title="招聘整体进度"
+          tone="amber"
         >
           <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[12rem_12rem_minmax(18rem,1fr)_auto] xl:items-end">
             <Field>
@@ -678,6 +702,7 @@ export function OdcAnalysisPage({
                 jdIds={search.progressJdIds}
                 metrics={data}
                 slug={canViewResumes ? slug : undefined}
+                tone="amber"
               />
             )}
           </SectionResults>
@@ -686,6 +711,7 @@ export function OdcAnalysisPage({
         <DashboardSection
           description="按北京时间自然日统计；默认今天，岗位默认全部。下方未来安排以所选日期为起点。"
           title="当日动态"
+          tone="green"
         >
           <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[12rem_minmax(18rem,1fr)_auto] xl:items-end">
             <Field>
@@ -727,6 +753,7 @@ export function OdcAnalysisPage({
                   jdIds={search.activityJdIds}
                   metrics={data.activity}
                   slug={canViewResumes ? slug : undefined}
+                  tone="green"
                 />
                 <UpcomingSummary data={data} />
               </div>

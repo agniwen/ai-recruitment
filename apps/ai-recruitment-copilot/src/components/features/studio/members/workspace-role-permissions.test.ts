@@ -4,14 +4,30 @@ import {
   ROLE_ASSIGNED_TO_MEMBERS_MESSAGE,
   buildPermissionHeaderGroups,
   buildPermissionItems,
+  canEditDynamicRoleIdentifier,
   canManageWorkspacePermissions,
   copyPermissionRecord,
   normalizeDynamicRoleName,
   readRoleDeleteError,
+  revertOdcRoleDraft,
   sortDynamicWorkspaceRolesByCreatedAt,
 } from "./workspace-role-permissions";
 
 describe("workspace role permission helpers", () => {
+  it("keeps role identifiers immutable after creation", () => {
+    expect(canEditDynamicRoleIdentifier("create")).toBe(true);
+    expect(canEditDynamicRoleIdentifier("copy")).toBe(true);
+    expect(canEditDynamicRoleIdentifier("edit")).toBe(false);
+  });
+
+  it("rolls an optimistic ODC marker back to its persisted value", () => {
+    expect(revertOdcRoleDraft({ "role-1": true, "role-2": true }, "role-1", true)).toEqual({
+      "role-1": false,
+      "role-2": true,
+    });
+    expect(revertOdcRoleDraft({}, "role-1", false)).toEqual({ "role-1": true });
+  });
+
   it("allows only workspace administrators to manage permissions", () => {
     expect(canManageWorkspacePermissions("owner")).toBe(true);
     expect(canManageWorkspacePermissions("admin")).toBe(true);

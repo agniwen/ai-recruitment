@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, genericOAuth } from "better-auth/plugins";
 import type { GenericOAuthConfig } from "better-auth/plugins";
@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { getAuthRequestHeaders } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-request-context";
 import { AUTH_RATE_LIMIT } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-rate-limit";
+import { attemptsDynamicRoleIdentifierUpdate } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-role-policy";
 import { getRequiredEnv } from "@arc/ai-recruitment-copilot-backend/lib/server/env";
 import { getFeishuTenantAccessToken } from "@arc/ai-recruitment-copilot-backend/lib/server/feishu-access-token";
 import {
@@ -281,6 +282,16 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
   },
+  hooks: {
+    // oxlint-disable-next-line require-await -- middleware contract requires async
+    before: createAuthMiddleware(async (ctx) => {
+      if (attemptsDynamicRoleIdentifierUpdate(ctx.path, ctx.body)) {
+        throw new APIError("BAD_REQUEST", {
+          message: "角色标识创建后不可更改。",
+        });
+      }
+    }),
+  },
   // 被封禁用户走 OAuth 回调时 better-auth 会重定向到 `${errorURL}?error=banned&...`。
   // 指向 /login —— 那边的 LoginErrorToast 会把 error_description 弹成 toast，
   // 顺手清掉 URL 参数防止刷新重复弹。
@@ -460,6 +471,11 @@ export const auth = betterAuth({
       schema: {
         organizationRole: {
           additionalFields: {
+            isOdc: {
+              defaultValue: false,
+              required: false,
+              type: "boolean",
+            },
             name: {
               required: true,
               type: "string",
