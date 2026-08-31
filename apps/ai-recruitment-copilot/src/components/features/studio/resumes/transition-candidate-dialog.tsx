@@ -2,7 +2,7 @@
 
 /* oxlint-disable no-use-before-define -- helper components defined below export */
 // 「标记结案」/「重新激活」二合一对话框。
-//   - mode='close'：HR 选 outcome（到岗/淘汰/撤回/归档）+ 可选的到岗 / 淘汰细节
+//   - mode='close'：HR 选 outcome（到岗/撤回/归档）+ 可选的到岗细节
 //   - mode='reactivate'：HR 填写原因并恢复到简历初筛
 // 调用方只传 id 与 candidateName 即可。
 //
@@ -13,12 +13,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import {
-  candidateOutcomeMeta,
-  closeCategoryMeta,
-  closeCategoryValues,
-} from "@arc/db-schema/studio-interviews";
-import type { CandidateOutcome, ClosedMeta, CloseCategory } from "@arc/db-schema/studio-interviews";
+import { candidateOutcomeMeta } from "@arc/db-schema/studio-interviews";
+import type { CandidateOutcome, ClosedMeta } from "@arc/db-schema/studio-interviews";
 import type { ApiError } from "@/lib/client/api/errors";
 import { transitionInterviewRecord } from "@/lib/client/api";
 import { runAsyncAction } from "@/lib/client/async-control";
@@ -36,7 +32,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
@@ -47,14 +42,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-// 结案可选的 4 个终态——in_pipeline 在 close 流程里不合法。
-// The four terminal outcomes available when closing.
-const CLOSE_OUTCOMES: Exclude<CandidateOutcome, "in_pipeline">[] = [
-  "hired",
-  "rejected",
-  "withdrawn",
-  "archived",
-];
+type ManualCloseOutcome = Exclude<CandidateOutcome, "in_pipeline" | "rejected">;
+
+// 人工结案不提供「已淘汰」；rejected 仍保留给自动结束流程与历史数据。
+const CLOSE_OUTCOMES: ManualCloseOutcome[] = ["hired", "withdrawn", "archived"];
 
 const REACTIVATE_TARGET_STAGE = "screening" as const;
 const REACTIVATE_TARGET_STAGE_LABEL = "简历初筛";
@@ -91,9 +82,9 @@ function CloseDialog({
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
 
-  const [outcome, setOutcome] = useState<Exclude<CandidateOutcome, "in_pipeline">>(
-    initialOutcome ?? "rejected",
-  );
+  const defaultOutcome: ManualCloseOutcome =
+    initialOutcome && initialOutcome !== "rejected" ? initialOutcome : "archived";
+  const [outcome, setOutcome] = useState<ManualCloseOutcome>(defaultOutcome);
   const [internalNotes, setInternalNotes] = useState("");
   const [feedbackToCandidate, setFeedbackToCandidate] = useState("");
   // 到岗细节
@@ -103,9 +94,6 @@ function CloseDialog({
   const [preOnboardingTelegram, setPreOnboardingTelegram] = useState("");
   const [telegram, setTelegram] = useState("");
   const [alias, setAlias] = useState("");
-  // 淘汰细节
-  const [category, setCategory] = useState<CloseCategory | "">("");
-  const [revisitAfter, setRevisitAfter] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // 打开对话框时根据 initialOutcome 重置表单。
@@ -114,7 +102,7 @@ function CloseDialog({
     if (!open) {
       return;
     }
-    setOutcome(initialOutcome ?? "rejected");
+    setOutcome(defaultOutcome);
     setInternalNotes("");
     setFeedbackToCandidate("");
     setJoiningDate("");
@@ -123,9 +111,7 @@ function CloseDialog({
     setPreOnboardingTelegram("");
     setTelegram("");
     setAlias("");
-    setCategory("");
-    setRevisitAfter("");
-  }, [open, initialOutcome]);
+  }, [defaultOutcome, open]);
 
   async function handleConfirm() {
     if (!candidate) {
@@ -160,13 +146,6 @@ function CloseDialog({
             telegram: telegram.trim() || null,
           };
         }
-        if (outcome === "rejected") {
-          closedMeta.category = category || null;
-          closedMeta.rejectionDetails = {
-            revisitAfter: revisitAfter || null,
-          };
-        }
-
         await transitionInterviewRecord(slug, candidate.id, {
           closedMeta,
           outcome,
@@ -199,7 +178,7 @@ function CloseDialog({
         <div className="space-y-4 py-2">
           <RadioGroup
             className="grid grid-cols-2 gap-2"
-            onValueChange={(v) => setOutcome(v as Exclude<CandidateOutcome, "in_pipeline">)}
+            onValueChange={(v) => setOutcome(v as ManualCloseOutcome)}
             value={outcome}
           >
             {CLOSE_OUTCOMES.map((value) => (
@@ -285,40 +264,6 @@ function CloseDialog({
                     onChange={(e) => setAlias(e.target.value)}
                     placeholder="例如 花名"
                     value={alias}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {outcome === "rejected" ? (
-            <Card className="gap-0 rounded-lg py-0">
-              <CardContent className="grid gap-3 bg-muted/30 p-3">
-                <div className="grid gap-1.5">
-                  <Label className="text-xs" htmlFor="reject-category">
-                    淘汰原因分类（可选，用于统计）
-                  </Label>
-                  <NativeSelect
-                    id="reject-category"
-                    onChange={(e) => setCategory(e.target.value as CloseCategory)}
-                    value={category}
-                  >
-                    <NativeSelectOption value="">请选择</NativeSelectOption>
-                    {closeCategoryValues.map((v) => (
-                      <NativeSelectOption key={v} value={v}>
-                        {closeCategoryMeta[v].label}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs" htmlFor="revisit-after">
-                    建议多久后再联系（可选）
-                  </Label>
-                  <DatePicker
-                    id="revisit-after"
-                    onValueChange={setRevisitAfter}
-                    value={revisitAfter}
                   />
                 </div>
               </CardContent>
