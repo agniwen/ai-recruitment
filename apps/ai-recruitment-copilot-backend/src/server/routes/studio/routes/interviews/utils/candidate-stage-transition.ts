@@ -8,6 +8,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds";
 import { interviewAuditLog, jobDescription, studioInterview } from "@arc/db-schema/schema";
 import {
+  getCandidateHiredDetailsError,
   getCandidateReactivationError,
   getCandidateStageTransitionError,
   resolveCandidateTransitionPatch,
@@ -100,6 +101,11 @@ export async function transitionCandidateStage(command: {
   const transitionPermission = resolveTransitionPermission(command.input.pipelineStage);
   if (!(await command.authorize(transitionPermission))) {
     return { kind: "forbidden" };
+  }
+
+  const hiredDetailsError = getCandidateHiredDetailsError(command.input);
+  if (hiredDetailsError) {
+    return { kind: "invalid", message: hiredDetailsError };
   }
 
   const isHiringCandidate =

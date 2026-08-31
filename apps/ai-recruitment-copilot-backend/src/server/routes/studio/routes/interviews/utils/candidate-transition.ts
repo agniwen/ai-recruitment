@@ -49,6 +49,14 @@ export interface CandidateTransitionAuditDetail {
   toStage: PipelineStage;
 }
 
+export function getCandidateHiredDetailsError(input: CandidateTransitionInput): string | null {
+  const isHiredClose = input.pipelineStage === "closed" && input.outcome === "hired";
+  if (isHiredClose && !input.closedMeta?.hiredDetails?.preOnboardingTelegram?.trim()) {
+    return "标记为已到岗时，请填写入职前 TG。";
+  }
+  return null;
+}
+
 export function getCandidateReactivationError({
   from,
   reactivationReason,

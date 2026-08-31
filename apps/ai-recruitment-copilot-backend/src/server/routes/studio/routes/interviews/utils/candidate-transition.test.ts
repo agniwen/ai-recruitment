@@ -1,11 +1,47 @@
 import { describe, expect, it } from "vitest";
 import {
+  getCandidateHiredDetailsError,
   getCandidateReactivationError,
   getCandidateStageTransitionError,
   resolveCandidateTransitionPatch,
 } from "./candidate-transition";
 
 const now = new Date("2026-06-21T12:00:00.000Z");
+
+describe("getCandidateHiredDetailsError", () => {
+  it.each([undefined, null, "   "])(
+    "requires a non-blank pre-onboarding TG when closing as hired (%s)",
+    (preOnboardingTelegram) => {
+      expect(
+        getCandidateHiredDetailsError({
+          closedMeta: {
+            hiredDetails: { preOnboardingTelegram },
+          },
+          outcome: "hired",
+          pipelineStage: "closed",
+        }),
+      ).toBe("标记为已到岗时，请填写入职前 TG。");
+    },
+  );
+
+  it("allows a hired close with pre-onboarding TG and other transitions without it", () => {
+    expect(
+      getCandidateHiredDetailsError({
+        closedMeta: {
+          hiredDetails: { preOnboardingTelegram: " @candidate-before " },
+        },
+        outcome: "hired",
+        pipelineStage: "closed",
+      }),
+    ).toBeNull();
+    expect(
+      getCandidateHiredDetailsError({
+        outcome: "rejected",
+        pipelineStage: "closed",
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("getCandidateReactivationError", () => {
   it("requires a non-blank reason when restoring a closed candidate", () => {

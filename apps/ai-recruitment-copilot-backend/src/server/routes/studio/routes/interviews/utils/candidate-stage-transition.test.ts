@@ -218,6 +218,28 @@ describe("transitionCandidateStage", () => {
     expect(insertedValues).toHaveBeenCalledOnce();
   });
 
+  it("rejects a hired close without pre-onboarding TG before opening the transaction", async () => {
+    const authorize = vi.fn().mockResolvedValue(true);
+
+    await expect(
+      transitionCandidateStage({
+        authorize,
+        candidateId: "candidate-a",
+        input: { outcome: "hired", pipelineStage: "closed" },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({
+      kind: "invalid",
+      message: "标记为已到岗时，请填写入职前 TG。",
+    });
+
+    expect(authorize).toHaveBeenCalledWith({ action: "create", resource: "candidateClose" });
+    expect(mocks.refreshDirectUploadDuplicateMatchesBeforeHire).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it("automatically closes related in-pipeline candidates when this candidate is hired", async () => {
     const { insertedValues, tx } = createTransaction({
       candidateName: "候选人甲",
@@ -246,7 +268,11 @@ describe("transitionCandidateStage", () => {
       transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
-        input: { outcome: "hired", pipelineStage: "closed" },
+        input: {
+          closedMeta: { hiredDetails: { preOnboardingTelegram: "@candidate-before" } },
+          outcome: "hired",
+          pipelineStage: "closed",
+        },
         operatorId: "user-a",
         operatorRole: "odc",
         organizationId: "org-a",
@@ -305,7 +331,11 @@ describe("transitionCandidateStage", () => {
       transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-b",
-        input: { outcome: "hired", pipelineStage: "closed" },
+        input: {
+          closedMeta: { hiredDetails: { preOnboardingTelegram: "@candidate-before" } },
+          outcome: "hired",
+          pipelineStage: "closed",
+        },
         operatorId: "user-a",
         organizationId: "org-a",
         provenance: { kind: "manual" },

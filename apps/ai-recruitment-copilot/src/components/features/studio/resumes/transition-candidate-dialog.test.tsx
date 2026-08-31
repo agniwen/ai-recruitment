@@ -44,7 +44,56 @@ function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 describe("TransitionCandidateDialog close", () => {
-  it("submits optional TG and alias fields when marking a candidate as hired", async () => {
+  it("requires pre-onboarding TG before a candidate can be marked as hired", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <TransitionCandidateDialog
+            candidate={{ candidateName: "候选人", id: "resume-1" }}
+            mode="close"
+            onCompleted={vi.fn()}
+            onOpenChange={vi.fn()}
+            open={true}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    act(() => {
+      document.querySelector<HTMLInputElement>("#outcome-hired")?.click();
+    });
+
+    const confirmButton = [...document.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("确认结案"),
+    );
+    const preOnboardingTelegram = document.querySelector<HTMLInputElement>(
+      "#hired-pre-onboarding-telegram",
+    );
+
+    expect(document.body.textContent).toContain("入职前 TG（必填）");
+    expect(preOnboardingTelegram?.required).toBe(true);
+    expect(confirmButton?.disabled).toBe(true);
+
+    act(() => {
+      if (preOnboardingTelegram) {
+        setInputValue(preOnboardingTelegram, "@candidate-before");
+      }
+    });
+
+    expect(confirmButton?.disabled).toBe(false);
+    expect(apiMocks.transitionInterviewRecord).not.toHaveBeenCalled();
+
+    act(() => root.unmount());
+  });
+
+  it("submits required pre-onboarding TG and optional profile fields when marking as hired", async () => {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);

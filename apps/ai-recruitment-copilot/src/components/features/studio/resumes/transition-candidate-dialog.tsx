@@ -131,6 +131,10 @@ function CloseDialog({
     if (!candidate) {
       return;
     }
+    if (outcome === "hired" && !preOnboardingTelegram.trim()) {
+      toast.error("标记为已到岗时，请填写入职前 TG。");
+      return;
+    }
     setSubmitting(true);
     await runAsyncAction({
       cleanup: () => setSubmitting(false),
@@ -248,13 +252,14 @@ function CloseDialog({
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs" htmlFor="hired-pre-onboarding-telegram">
-                    入职前 TG（可选）
+                    入职前 TG（必填）
                   </Label>
                   <Input
                     id="hired-pre-onboarding-telegram"
                     maxLength={120}
                     onChange={(e) => setPreOnboardingTelegram(e.target.value)}
                     placeholder="例如 @username"
+                    required
                     value={preOnboardingTelegram}
                   />
                 </div>
@@ -353,7 +358,12 @@ function CloseDialog({
           <Button disabled={submitting} onClick={() => onOpenChange(false)} variant="outline">
             取消
           </Button>
-          <Button disabled={submitting || !candidate} onClick={handleConfirm}>
+          <Button
+            disabled={
+              submitting || !candidate || (outcome === "hired" && !preOnboardingTelegram.trim())
+            }
+            onClick={handleConfirm}
+          >
             {submitting ? "处理中…" : "确认结案"}
           </Button>
         </DialogFooter>
