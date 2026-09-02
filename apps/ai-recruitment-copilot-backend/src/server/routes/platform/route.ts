@@ -35,6 +35,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/mail-ingest/validation";
 import { listResumeParseQueueJobsWithDetailFilters } from "./queue-details";
 import type { PlatformQueueJobsResult } from "./queue-details";
+import { platformAgentTestsRouter } from "./routes/agent-tests/route";
 import { platformHistoricalResumeImportsRouter } from "./routes/historical-resume-imports/route";
 import { platformLiveKitRouter } from "./routes/livekit/route";
 import { platformMastraRouter } from "./routes/mastra/route";
@@ -578,6 +579,7 @@ const platformQueues = factory
 export const platformRouter = factory
   .createApp()
   .use(adminMiddleware)
+  .route("/agent-tests", platformAgentTestsRouter)
   .route("/livekit", platformLiveKitRouter)
   .route("/historical-resume-imports", platformHistoricalResumeImportsRouter)
   .route("/mastra", platformMastraRouter)

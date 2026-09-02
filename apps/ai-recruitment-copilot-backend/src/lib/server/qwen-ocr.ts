@@ -3,7 +3,12 @@
 
 import OpenAI from "openai";
 import { getRequiredEnv } from "./env";
-import { sanitizeApiUrl, sanitizeModelId } from "./sanitize-api-url";
+import {
+  redactApiUrl,
+  redactUrlsInText,
+  sanitizeApiUrl,
+  sanitizeModelId,
+} from "./sanitize-api-url";
 
 const OCR_PROMPT =
   "请完整提取这张简历图片中的所有文字，包括所有图片、图表、表格中的文字。保持原始排版顺序，表格用文字形式还原。只输出提取的文字，不要解释。";
@@ -17,6 +22,11 @@ export interface QwenOcrEndpointConfig {
   apiKeySource: "QWEN_OCR_API_KEY" | "ALIBABA_API_KEY" | "unset";
   baseURL: string;
   model: string;
+}
+
+export interface QwenOcrCallOptions {
+  maxOutputTokens?: number;
+  signal?: AbortSignal;
 }
 
 /** Prefer dedicated OCR key so Token Plan keys can stay on ALIBABA_API_KEY. */
@@ -60,10 +70,23 @@ export function isQwenOcrConfigured(env: NodeJS.ProcessEnv = process.env): boole
 }
 
 function formatOcrErrorMessage(config: QwenOcrEndpointConfig, message: string): string {
-  return `Qwen OCR failed (model=${config.model}, baseURL=${config.baseURL}, key=${config.apiKeySource}): ${message}`;
+  return `Qwen OCR failed (model=${config.model}, baseURL=${redactApiUrl(config.baseURL)}, key=${config.apiKeySource}): ${message}`;
 }
 
-export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Promise<string> {
+function redactOcrErrorDetail(
+  config: QwenOcrEndpointConfig,
+  apiKey: string,
+  message: string,
+): string {
+  const withoutKey = message.replaceAll(apiKey, "[REDACTED]");
+  return redactUrlsInText(withoutKey.replaceAll(config.baseURL, redactApiUrl(config.baseURL)));
+}
+
+export async function qwenVlOcr(
+  imageBytes: Buffer,
+  mediaType = "image/png",
+  options: QwenOcrCallOptions = {},
+): Promise<string> {
   // Ensure required env is present, then sanitize (strips zero-width paste junk).
   getRequiredEnv("QWEN_OCR_MODEL");
   const config = getQwenOcrEndpointConfig();
@@ -80,7 +103,7 @@ export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Pr
       enable_thinking: false;
     } = {
       enable_thinking: false,
-      max_tokens: 4096,
+      max_tokens: options.maxOutputTokens ?? 4096,
       messages: [
         {
           content: [
@@ -93,18 +116,21 @@ export async function qwenVlOcr(imageBytes: Buffer, mediaType = "image/png"): Pr
       model,
       temperature: 0,
     };
-    const response = await client.chat.completions.create(request);
+    const response = options.signal
+      ? await client.chat.completions.create(request, { signal: options.signal })
+      : await client.chat.completions.create(request);
     return response.choices[0]?.message?.content ?? "";
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const safeMessage = redactOcrErrorDetail(endpoint, apiKey, message);
     // Always emit endpoint identity so production failures are diagnosable (never log the key).
     console.error(OCR_LOG_PREFIX, "model call failed", {
       apiKeySource: endpoint.apiKeySource,
-      baseURL: endpoint.baseURL,
-      errorMessage: message,
+      baseURL: redactApiUrl(endpoint.baseURL),
+      errorMessage: safeMessage,
       mediaType,
       model: endpoint.model,
     });
-    throw new Error(formatOcrErrorMessage(endpoint, message), { cause: error });
+    throw new Error(formatOcrErrorMessage(endpoint, safeMessage), { cause: error });
   }
 }

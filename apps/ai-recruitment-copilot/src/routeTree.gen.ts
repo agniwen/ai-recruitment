@@ -32,6 +32,7 @@ import { Route as PlatformMastraStudioRouteImport } from './routes/platform.mast
 import { Route as PlatformMailIngestAccountsRouteImport } from './routes/platform.mail-ingest-accounts'
 import { Route as PlatformLivekitRouteImport } from './routes/platform.livekit'
 import { Route as PlatformHistoricalResumeImportsRouteImport } from './routes/platform.historical-resume-imports'
+import { Route as PlatformAgentTestsRouteImport } from './routes/platform.agent-tests'
 import { Route as JoinCodeRouteImport } from './routes/join.$code'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as InterviewIdRouteImport } from './routes/interview.$id'
@@ -299,6 +300,11 @@ const PlatformHistoricalResumeImportsRoute =
     path: '/historical-resume-imports',
     getParentRoute: () => PlatformRoute,
   } as any)
+const PlatformAgentTestsRoute = PlatformAgentTestsRouteImport.update({
+  id: '/agent-tests',
+  path: '/agent-tests',
+  getParentRoute: () => PlatformRoute,
+} as any)
 const JoinCodeRoute = JoinCodeRouteImport.update({
   id: '/join/$code',
   path: '/join/$code',
@@ -1174,6 +1180,7 @@ export interface FileRoutesByFullPath {
   '/interview/$id': typeof InterviewIdRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
+  '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
   '/platform/livekit': typeof PlatformLivekitRouteWithChildren
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
@@ -1341,6 +1348,7 @@ export interface FileRoutesByTo {
   '/interview/$id': typeof InterviewIdRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
+  '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/mastra-studio': typeof PlatformMastraStudioMainIndexRoute
@@ -1495,6 +1503,7 @@ export interface FileRoutesById {
   '/interview/$id': typeof InterviewIdRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
+  '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
   '/platform/livekit': typeof PlatformLivekitRouteWithChildren
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
@@ -1670,6 +1679,7 @@ export interface FileRouteTypes {
     | '/interview/$id'
     | '/invite/$token'
     | '/join/$code'
+    | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
     | '/platform/livekit'
     | '/platform/mail-ingest-accounts'
@@ -1837,6 +1847,7 @@ export interface FileRouteTypes {
     | '/interview/$id'
     | '/invite/$token'
     | '/join/$code'
+    | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
     | '/platform/mail-ingest-accounts'
     | '/platform/mastra-studio'
@@ -1990,6 +2001,7 @@ export interface FileRouteTypes {
     | '/interview/$id'
     | '/invite/$token'
     | '/join/$code'
+    | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
     | '/platform/livekit'
     | '/platform/mail-ingest-accounts'
@@ -2330,6 +2342,13 @@ declare module '@tanstack/react-router' {
       path: '/historical-resume-imports'
       fullPath: '/platform/historical-resume-imports'
       preLoaderRoute: typeof PlatformHistoricalResumeImportsRouteImport
+      parentRoute: typeof PlatformRoute
+    }
+    '/platform/agent-tests': {
+      id: '/platform/agent-tests'
+      path: '/agent-tests'
+      fullPath: '/platform/agent-tests'
+      preLoaderRoute: typeof PlatformAgentTestsRouteImport
       parentRoute: typeof PlatformRoute
     }
     '/join/$code': {
@@ -3930,6 +3949,7 @@ const PlatformMastraStudioRouteWithChildren =
   PlatformMastraStudioRoute._addFileChildren(PlatformMastraStudioRouteChildren)
 
 interface PlatformRouteChildren {
+  PlatformAgentTestsRoute: typeof PlatformAgentTestsRoute
   PlatformHistoricalResumeImportsRoute: typeof PlatformHistoricalResumeImportsRoute
   PlatformLivekitRoute: typeof PlatformLivekitRouteWithChildren
   PlatformMailIngestAccountsRoute: typeof PlatformMailIngestAccountsRoute
@@ -3941,6 +3961,7 @@ interface PlatformRouteChildren {
 }
 
 const PlatformRouteChildren: PlatformRouteChildren = {
+  PlatformAgentTestsRoute: PlatformAgentTestsRoute,
   PlatformHistoricalResumeImportsRoute: PlatformHistoricalResumeImportsRoute,
   PlatformLivekitRoute: PlatformLivekitRouteWithChildren,
   PlatformMailIngestAccountsRoute: PlatformMailIngestAccountsRoute,
