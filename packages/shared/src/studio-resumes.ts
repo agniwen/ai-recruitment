@@ -25,6 +25,19 @@ import type {
 } from "@arc/db-schema/studio-interviews";
 import type { ResumeScreeningResult } from "./resume-screening";
 
+export const AUTOMATIC_ARCHIVE_REASON_HIRED_ELSEWHERE = "已入职其他岗位";
+
+function isHiredElsewhereArchiveReason(value: string | null | undefined): boolean {
+  if (value === AUTOMATIC_ARCHIVE_REASON_HIRED_ELSEWHERE) {
+    return true;
+  }
+  return Boolean(
+    value?.includes("已录用") &&
+    value.includes("系统自动结束流程") &&
+    (value.startsWith("同一简历池记录派生") || value.startsWith("高相似简历候选人")),
+  );
+}
+
 /**
  * AI 面试阶段的派生进度：从 studio_interview_schedule 聚合。
  * - activeRound 为 null 表示要么全部完成、要么还没排期（结合 totalRounds 区分）
@@ -184,6 +197,8 @@ export interface ResumeLibraryListRecord {
   // 最终结论（in_pipeline / hired / rejected / withdrawn / archived）。
   // 不变量：outcome !== 'in_pipeline' ⇔ pipelineStage === 'closed'。
   outcome: CandidateOutcome;
+  // 结案/归档原因。列表卡片用它区分普通归档和“已入职其他岗位”的自动归档。
+  closedReason: string | null;
   // 派生的当前阶段进度信息；目前仅 ai_interview 阶段会有 schedule 数据。
   // Derived progress for the current stage; only ai_interview produces
   // schedule data today, others are placeholders.
@@ -219,7 +234,6 @@ export interface ResumeLibraryDetail extends ResumeLibraryListRecord {
   candidateExpectationsMeta: CandidateExpectationsMeta | null;
   closedAt: string | null;
   closedMeta: ClosedMeta | null;
-  closedReason: string | null;
   creatorOrganizationName: string | null;
   hrResumeAssessment: string | null;
   hrResumeAssessmentUpdatedAt: string | null;
@@ -340,6 +354,7 @@ function describeOffer(p: OfferProgress | null): Description {
  * tone for the resume library "面试进度" cell, detail panel, and elsewhere.
  */
 export function describeResumeProgress(record: {
+  closedReason?: string | null;
   pipelineStage: PipelineStage;
   outcome: CandidateOutcome;
   resumeEvaluationStatus?: ResumeEvaluationStatus | null;
@@ -348,6 +363,7 @@ export function describeResumeProgress(record: {
   stageProgress: ResumeStageProgress;
 }): { label: string; tone: "success" | "warning" | "info" | "outline" | "danger" } {
   const {
+    closedReason,
     pipelineStage,
     outcome,
     resumeEvaluationStatus,
@@ -355,6 +371,32 @@ export function describeResumeProgress(record: {
     resumeReviewStatus,
     stageProgress,
   } = record;
+
+  // 结案是候选人流程的最终状态，展示优先级高于简历解析/评估状态。
+  if (pipelineStage === "closed") {
+    switch (outcome) {
+      case "hired": {
+        return { label: "已结案 · 已到岗", tone: "success" };
+      }
+      case "rejected": {
+        return { label: "已结案 · 已淘汰", tone: "outline" };
+      }
+      case "withdrawn": {
+        return { label: "已结案 · 已撤回", tone: "outline" };
+      }
+      case "archived": {
+        return {
+          label: isHiredElsewhereArchiveReason(closedReason)
+            ? `已归档 · ${AUTOMATIC_ARCHIVE_REASON_HIRED_ELSEWHERE}`
+            : "已归档",
+          tone: "outline",
+        };
+      }
+      default: {
+        return { label: "已结案", tone: "outline" };
+      }
+    }
+  }
 
   if (resumeParseStatus && resumeParseStatus !== "ready") {
     const meta = resumeParseStatusMeta[resumeParseStatus];
@@ -369,27 +411,6 @@ export function describeResumeProgress(record: {
   if (pipelineStage === "screening" && resumeEvaluationStatus) {
     const meta = resumeEvaluationStatusMeta[resumeEvaluationStatus];
     return { label: `简历筛选 · ${meta.label}`, tone: meta.tone };
-  }
-
-  // closed 阶段：用 outcome 决定标签和色调。
-  if (pipelineStage === "closed") {
-    switch (outcome) {
-      case "hired": {
-        return { label: "已结案 · 已到岗", tone: "success" };
-      }
-      case "rejected": {
-        return { label: "已结案 · 已淘汰", tone: "outline" };
-      }
-      case "withdrawn": {
-        return { label: "已结案 · 已撤回", tone: "outline" };
-      }
-      case "archived": {
-        return { label: "已归档", tone: "outline" };
-      }
-      default: {
-        return { label: "已结案", tone: "outline" };
-      }
-    }
   }
 
   switch (pipelineStage) {

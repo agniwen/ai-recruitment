@@ -1,6 +1,7 @@
 import type { StudioInterviewResumeSourceType } from "@arc/db-schema/schema";
 import { candidateOutcomeMeta, pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { CandidateOutcome, ClosedMeta, PipelineStage } from "@arc/db-schema/studio-interviews";
+import { AUTOMATIC_ARCHIVE_REASON_HIRED_ELSEWHERE } from "@arc/shared/studio-resumes";
 import { resolveCandidateTransitionPatch } from "./candidate-transition";
 
 export const AUTO_CLOSE_RESUME_SIMILARITY_THRESHOLD = 90;
@@ -142,7 +143,7 @@ export function buildAutomaticCandidateClosure(input: {
     existing: input.candidate,
     input: {
       closedMeta: { category: "other", internalNotes: reason },
-      closedReason: reason,
+      closedReason: AUTOMATIC_ARCHIVE_REASON_HIRED_ELSEWHERE,
       outcome: "archived",
       pipelineStage: "closed",
     },

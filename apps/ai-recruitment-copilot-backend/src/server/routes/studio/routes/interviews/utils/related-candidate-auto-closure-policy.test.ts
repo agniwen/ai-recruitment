@@ -65,7 +65,7 @@ describe("related candidate automatic closure policy", () => {
         internalNotes: "同一简历池记录派生的候选人「候选人甲」已录用，系统自动结束流程。",
         previousStage: "human_interview",
       },
-      closedReason: "同一简历池记录派生的候选人「候选人甲」已录用，系统自动结束流程。",
+      closedReason: "已入职其他岗位",
       outcome: "archived",
       pipelineStage: "closed",
       updatedAt: now,
@@ -92,8 +92,6 @@ describe("related candidate automatic closure policy", () => {
       similarityScore: 94,
       triggerCandidateId: "candidate-winner",
     });
-    expect(result.patch.closedReason).toBe(
-      "高相似简历候选人「候选人甲」已录用（相似度 94%），系统自动结束流程。",
-    );
+    expect(result.patch.closedReason).toBe("已入职其他岗位");
   });
 });

@@ -210,6 +210,26 @@ describe("resume evaluation status", () => {
 });
 
 describe("describeResumeProgress", () => {
+  it("shows the hired-elsewhere reason for automatically archived candidates", () => {
+    expect(
+      describeResumeProgress({
+        closedReason: "已入职其他岗位",
+        outcome: "archived",
+        pipelineStage: "closed",
+        resumeParseStatus: "failed",
+        stageProgress: EMPTY,
+      }),
+    ).toEqual({ label: "已归档 · 已入职其他岗位", tone: "outline" });
+    expect(
+      describeResumeProgress({
+        closedReason: "同一简历池记录派生的候选人「候选人甲」已录用，系统自动结束流程。",
+        outcome: "archived",
+        pipelineStage: "closed",
+        stageProgress: EMPTY,
+      }),
+    ).toEqual({ label: "已归档 · 已入职其他岗位", tone: "outline" });
+  });
+
   it("screening → 简历筛选 · 待处理", () => {
     expect(
       describeResumeProgress({
