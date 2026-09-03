@@ -363,6 +363,42 @@ describe("resolveRecruitingVisibilityScope", () => {
     ).resolves.toEqual({ kind: "restricted", userIds: [USERS.ungroupedSupervisor] });
   });
 
+  it("inherits a direct report's existing visibility transitively", async () => {
+    await db
+      .update(member)
+      .set({ directManagerId: "m_vis_group_a_external" })
+      .where(eq(member.userId, USERS.groupBLead));
+    await db
+      .update(member)
+      .set({ directManagerId: "m_vis_ungrouped_supervisor" })
+      .where(eq(member.userId, USERS.groupAExternal));
+
+    try {
+      const scope = await resolveRecruitingVisibilityScope({
+        organizationId: ORG,
+        userId: USERS.ungroupedSupervisor,
+      });
+
+      expect(scope).toEqual({
+        kind: "restricted",
+        userIds: expect.arrayContaining([
+          USERS.ungroupedSupervisor,
+          USERS.groupAExternal,
+          USERS.groupALead,
+          USERS.groupAHr,
+          USERS.groupAViewer,
+          USERS.groupBLead,
+          USERS.groupBHr,
+        ]),
+      });
+      expect(scope.kind === "restricted" ? scope.userIds : []).not.toContain(
+        USERS.groupASupervisor,
+      );
+    } finally {
+      await db.update(member).set({ directManagerId: null }).where(eq(member.organizationId, ORG));
+    }
+  });
+
   it("limits ungrouped hr and viewer members to their own data", async () => {
     await expect(
       resolveRecruitingVisibilityScope({ organizationId: ORG, userId: USERS.ungroupedHr }),

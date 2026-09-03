@@ -16,6 +16,52 @@ const GROUP_ROLE_RANK: Record<string, number> = {
   viewer: 0,
 };
 
+interface OrganizationMemberVisibilityRow {
+  directManagerId: string | null;
+  id: string;
+  role: string;
+  userId: string;
+}
+
+function collectInheritedMembers(
+  currentMember: OrganizationMemberVisibilityRow,
+  organizationMembers: OrganizationMemberVisibilityRow[],
+): OrganizationMemberVisibilityRow[] {
+  const membersByManagerId = new Map<string, OrganizationMemberVisibilityRow[]>();
+  for (const workspaceMember of organizationMembers) {
+    if (!workspaceMember.directManagerId) {
+      continue;
+    }
+    const reports = membersByManagerId.get(workspaceMember.directManagerId) ?? [];
+    reports.push(workspaceMember);
+    membersByManagerId.set(workspaceMember.directManagerId, reports);
+  }
+
+  const inheritedMembers = [currentMember];
+  const inheritedMemberIds = new Set([currentMember.id]);
+  for (const manager of inheritedMembers) {
+    for (const report of membersByManagerId.get(manager.id) ?? []) {
+      if (!inheritedMemberIds.has(report.id)) {
+        inheritedMemberIds.add(report.id);
+        inheritedMembers.push(report);
+      }
+    }
+  }
+  return inheritedMembers;
+}
+
+function buildRanksByGroup(
+  memberships: { groupId: string; role: string }[],
+): Map<string, number[]> {
+  const ranksByGroup = new Map<string, number[]>();
+  for (const membership of memberships) {
+    const ranks = ranksByGroup.get(membership.groupId) ?? [];
+    ranks.push(GROUP_ROLE_RANK[membership.role] ?? 0);
+    ranksByGroup.set(membership.groupId, ranks);
+  }
+  return ranksByGroup;
+}
+
 export async function resolveRecruitingVisibilityScope({
   currentRole,
   organizationId,
@@ -29,11 +75,16 @@ export async function resolveRecruitingVisibilityScope({
     return { kind: "all" };
   }
 
-  const [currentMember] = await db
-    .select({ role: member.role, userId: member.userId })
+  const organizationMembers = await db
+    .select({
+      directManagerId: member.directManagerId,
+      id: member.id,
+      role: member.role,
+      userId: member.userId,
+    })
     .from(member)
-    .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)))
-    .limit(1);
+    .where(eq(member.organizationId, organizationId));
+  const currentMember = organizationMembers.find((row) => row.userId === userId);
 
   if (!currentMember) {
     return { kind: "none" };
@@ -43,23 +94,31 @@ export async function resolveRecruitingVisibilityScope({
     return { kind: "all" };
   }
 
-  const currentMemberships = await db
-    .select({ groupId: recruitingGroupMember.groupId, role: recruitingGroupMember.role })
+  const inheritedMembers = collectInheritedMembers(currentMember, organizationMembers);
+  if (inheritedMembers.some((workspaceMember) => ALL_DATA_ROLES.has(workspaceMember.role))) {
+    return { kind: "all" };
+  }
+
+  const inheritedUserIds = inheritedMembers.map((workspaceMember) => workspaceMember.userId);
+  const inheritedMemberships = await db
+    .select({
+      groupId: recruitingGroupMember.groupId,
+      role: recruitingGroupMember.role,
+      userId: recruitingGroupMember.userId,
+    })
     .from(recruitingGroupMember)
     .where(
       and(
         eq(recruitingGroupMember.organizationId, organizationId),
-        eq(recruitingGroupMember.userId, userId),
+        inArray(recruitingGroupMember.userId, inheritedUserIds),
       ),
     );
 
-  if (currentMemberships.length === 0) {
-    return { kind: "restricted", userIds: [userId] };
+  if (inheritedMemberships.length === 0) {
+    return { kind: "restricted", userIds: inheritedUserIds };
   }
 
-  const ownRankByGroup = new Map(
-    currentMemberships.map((row) => [row.groupId, GROUP_ROLE_RANK[row.role] ?? 0]),
-  );
+  const ownRanksByGroup = buildRanksByGroup(inheritedMemberships);
   const groupRows = await db
     .select({
       groupId: recruitingGroupMember.groupId,
@@ -70,15 +129,17 @@ export async function resolveRecruitingVisibilityScope({
     .where(
       and(
         eq(recruitingGroupMember.organizationId, organizationId),
-        inArray(recruitingGroupMember.groupId, [...ownRankByGroup.keys()]),
+        inArray(recruitingGroupMember.groupId, [...ownRanksByGroup.keys()]),
       ),
     );
 
-  const visible = new Set<string>([userId]);
+  const visible = new Set<string>(inheritedUserIds);
   for (const row of groupRows) {
-    const ownRank = ownRankByGroup.get(row.groupId) ?? 0;
     const targetRank = GROUP_ROLE_RANK[row.role] ?? 0;
-    if (ownRank >= GROUP_ROLE_RANK.recruitingLead && targetRank < ownRank) {
+    const canSeeTarget = (ownRanksByGroup.get(row.groupId) ?? []).some(
+      (ownRank) => ownRank >= GROUP_ROLE_RANK.recruitingLead && targetRank < ownRank,
+    );
+    if (canSeeTarget) {
       visible.add(row.userId);
     }
   }

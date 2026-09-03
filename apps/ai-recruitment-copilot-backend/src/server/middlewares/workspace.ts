@@ -13,6 +13,7 @@ const ACTIVE_ORG_COLUMNS = {
 
 const ACTIVE_MEMBER_COLUMNS = {
   createdAt: true,
+  directManagerId: true,
   id: true,
   inviteLinkId: true,
   isInterviewer: true,

@@ -59,6 +59,7 @@ import {
   bigserial,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -262,6 +263,7 @@ export const member = pgTable(
   "member",
   {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    directManagerId: text("direct_manager_id"),
     id: text("id").primaryKey(),
     // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
     inviteLinkId: text("invite_link_id").references(() => workspaceInviteLink.id, {
@@ -277,8 +279,18 @@ export const member = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
   },
   (table) => [
+    foreignKey({
+      columns: [table.directManagerId],
+      foreignColumns: [table.id],
+      name: "member_direct_manager_id_member_id_fk",
+    }).onDelete("set null"),
+    check(
+      "member_direct_manager_not_self",
+      sql`${table.directManagerId} is null or ${table.directManagerId} <> ${table.id}`,
+    ),
     uniqueIndex("member_user_org_uq").on(table.userId, table.organizationId),
     index("member_organization_idx").on(table.organizationId),
+    index("member_organization_direct_manager_idx").on(table.organizationId, table.directManagerId),
   ],
 );
 
