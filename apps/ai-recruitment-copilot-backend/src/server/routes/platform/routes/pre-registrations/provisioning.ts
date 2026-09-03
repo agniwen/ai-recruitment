@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { acquireReportingLineWriteLock } from "@arc/ai-recruitment-copilot-backend/lib/server/db/reporting-line-write-lock";
 import {
   member,
   memberReportingLine,
@@ -9,10 +10,11 @@ import {
   recruitingGroupMember,
   user,
 } from "@arc/db-schema/schema";
+import { PRE_REGISTRATION_WORKSPACE_SLUG } from "./schema";
 import type { PreRegistrationRecruitingRole } from "./schema";
 
 export interface PreRegistrationProvisioningRecord {
-  directManagerId: string | null;
+  directManagerEmail: string | null;
   displayName: string;
   email: string;
   id: string;
@@ -43,21 +45,25 @@ export function buildPreRegistrationProfileUpdate(
 }
 
 export function buildRegisteredReportingLines(
-  registeredRows: readonly {
-    directManagerId: string | null;
-    memberId: string;
-    preRegistrationId: string;
+  registrations: readonly {
+    directManagerEmail: string | null;
+    email: string;
   }[],
+  workspaceMembers: readonly { email: string; memberId: string }[],
   organizationId: string,
 ) {
-  const memberIdByPreRegistrationId = new Map(
-    registeredRows.map((row) => [row.preRegistrationId, row.memberId]),
+  const memberIdByEmail = new Map(
+    workspaceMembers.map((row) => [row.email.trim().toLowerCase(), row.memberId]),
   );
+  const registeredPreEntries = registrations.flatMap((registration) => {
+    const memberId = memberIdByEmail.get(registration.email.trim().toLowerCase());
+    return memberId ? [{ ...registration, memberId }] : [];
+  });
   return {
-    managedMemberIds: registeredRows.map((row) => row.memberId),
-    reportingLines: registeredRows.flatMap((row) => {
-      const directManagerMemberId = row.directManagerId
-        ? memberIdByPreRegistrationId.get(row.directManagerId)
+    managedMemberIds: registeredPreEntries.map((row) => row.memberId),
+    reportingLines: registeredPreEntries.flatMap((row) => {
+      const directManagerMemberId = row.directManagerEmail
+        ? memberIdByEmail.get(row.directManagerEmail.trim().toLowerCase())
         : null;
       return directManagerMemberId
         ? [
@@ -73,21 +79,88 @@ export function buildRegisteredReportingLines(
 }
 
 export function hasPreRegistrationManagerCycle(
-  rows: readonly { directManagerId: string | null; id: string }[],
+  rows: readonly { directManagerEmail: string | null; email: string }[],
 ): boolean {
-  const managerById = new Map(rows.map((row) => [row.id, row.directManagerId]));
+  const managerByEmail = new Map(
+    rows.map((row) => [
+      row.email.trim().toLowerCase(),
+      row.directManagerEmail?.trim().toLowerCase(),
+    ]),
+  );
   for (const row of rows) {
     const visited = new Set<string>();
-    let currentId: string | null | undefined = row.id;
-    while (currentId) {
-      if (visited.has(currentId)) {
+    let currentEmail: string | null | undefined = row.email.trim().toLowerCase();
+    while (currentEmail) {
+      if (visited.has(currentEmail)) {
         return true;
       }
-      visited.add(currentId);
-      currentId = managerById.get(currentId);
+      visited.add(currentEmail);
+      currentEmail = managerByEmail.get(currentEmail);
     }
   }
   return false;
+}
+
+export function buildReconciledReportingLines(
+  current: readonly { directManagerId: string; memberId: string }[],
+  managedMemberIds: readonly string[],
+  replacements: readonly { directManagerId: string; memberId: string }[],
+) {
+  const managedIds = new Set(managedMemberIds);
+  return [...current.filter((row) => !managedIds.has(row.memberId)), ...replacements];
+}
+
+export function hasMemberReportingLineCycle(
+  rows: readonly { directManagerId: string; memberId: string }[],
+): boolean {
+  const managerByMemberId = new Map(rows.map((row) => [row.memberId, row.directManagerId]));
+  for (const row of rows) {
+    const visited = new Set<string>();
+    let currentMemberId: string | undefined = row.memberId;
+    while (currentMemberId) {
+      if (visited.has(currentMemberId)) {
+        return true;
+      }
+      visited.add(currentMemberId);
+      currentMemberId = managerByMemberId.get(currentMemberId);
+    }
+  }
+  return false;
+}
+
+export function buildProspectiveManagerRelationships({
+  current,
+  memberRelationships,
+  preRegistrations,
+  previousEmail,
+}: {
+  current: { directManagerEmail: string | null; email: string; id: string };
+  memberRelationships: readonly { directManagerEmail: string; email: string }[];
+  preRegistrations: readonly {
+    directManagerEmail: string | null;
+    email: string;
+    id: string;
+  }[];
+  previousEmail: string | null;
+}) {
+  const nextPreRegistrations = preRegistrations
+    .filter((row) => row.id !== current.id)
+    .map((row) => ({
+      directManagerEmail:
+        previousEmail && row.directManagerEmail?.toLowerCase() === previousEmail.toLowerCase()
+          ? current.email
+          : row.directManagerEmail,
+      email: row.email,
+    }));
+  nextPreRegistrations.push({
+    directManagerEmail: current.directManagerEmail,
+    email: current.email,
+  });
+  const preRegistrationEmails = new Set(nextPreRegistrations.map((row) => row.email.toLowerCase()));
+  return [
+    ...nextPreRegistrations,
+    ...memberRelationships.filter((row) => !preRegistrationEmails.has(row.email.toLowerCase())),
+  ];
 }
 
 async function findRegistrationByEmail(
@@ -95,7 +168,7 @@ async function findRegistrationByEmail(
 ): Promise<PreRegistrationProvisioningRecord | null> {
   const [registration] = await db
     .select({
-      directManagerId: platformPreRegistration.directManagerId,
+      directManagerEmail: platformPreRegistration.directManagerEmail,
       displayName: platformPreRegistration.displayName,
       email: platformPreRegistration.email,
       id: platformPreRegistration.id,
@@ -107,7 +180,7 @@ async function findRegistrationByEmail(
     .from(platformPreRegistration)
     .where(
       and(
-        eq(platformPreRegistration.workspaceSlug, "work"),
+        eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
         sql`lower(${platformPreRegistration.email}) = ${normalizedEmail}`,
       ),
     )
@@ -204,23 +277,42 @@ async function reconcileWorkspaceReportingLines(workspaceSlug: string): Promise<
     return;
   }
 
-  const registeredRows = await db
-    .select({
-      directManagerId: platformPreRegistration.directManagerId,
-      memberId: member.id,
-      preRegistrationId: platformPreRegistration.id,
-    })
-    .from(platformPreRegistration)
-    .innerJoin(user, sql`lower(${user.email}) = lower(${platformPreRegistration.email})`)
-    .innerJoin(member, and(eq(member.userId, user.id), eq(member.organizationId, workspace.id)))
-    .where(eq(platformPreRegistration.workspaceSlug, workspaceSlug));
-
-  const { managedMemberIds, reportingLines } = buildRegisteredReportingLines(
-    registeredRows,
-    workspace.id,
-  );
-
   await db.transaction(async (tx) => {
+    await acquireReportingLineWriteLock(tx, workspace.id);
+    const [registrations, workspaceMembers, currentReportingLines] = await Promise.all([
+      tx
+        .select({
+          directManagerEmail: platformPreRegistration.directManagerEmail,
+          email: platformPreRegistration.email,
+        })
+        .from(platformPreRegistration)
+        .where(eq(platformPreRegistration.workspaceSlug, workspaceSlug)),
+      tx
+        .select({ email: user.email, memberId: member.id })
+        .from(member)
+        .innerJoin(user, eq(user.id, member.userId))
+        .where(eq(member.organizationId, workspace.id)),
+      tx
+        .select({
+          directManagerId: memberReportingLine.directManagerId,
+          memberId: memberReportingLine.memberId,
+        })
+        .from(memberReportingLine)
+        .where(eq(memberReportingLine.organizationId, workspace.id)),
+    ]);
+    const { managedMemberIds, reportingLines } = buildRegisteredReportingLines(
+      registrations,
+      workspaceMembers,
+      workspace.id,
+    );
+    const reconciledReportingLines = buildReconciledReportingLines(
+      currentReportingLines,
+      managedMemberIds,
+      reportingLines,
+    );
+    if (hasMemberReportingLineCycle(reconciledReportingLines)) {
+      throw new Error("Pre-registration reporting lines would create a cycle.");
+    }
     if (managedMemberIds.length > 0) {
       await tx
         .delete(memberReportingLine)

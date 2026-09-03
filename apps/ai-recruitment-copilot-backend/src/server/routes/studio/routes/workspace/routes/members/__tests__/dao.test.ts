@@ -146,4 +146,25 @@ describe("workspace member reporting-line dao", () => {
       ]),
     );
   });
+
+  it("serializes concurrent inverse updates so they cannot create a cycle", async () => {
+    await db
+      .delete(memberReportingLine)
+      .where(eq(memberReportingLine.organizationId, ORGANIZATION_ID));
+
+    const results = await Promise.all([
+      updateWorkspaceMemberDirectManager({
+        directManagerUserId: USERS.report,
+        organizationId: ORGANIZATION_ID,
+        userId: USERS.manager,
+      }),
+      updateWorkspaceMemberDirectManager({
+        directManagerUserId: USERS.manager,
+        organizationId: ORGANIZATION_ID,
+        userId: USERS.report,
+      }),
+    ]);
+
+    expect(results.toSorted()).toEqual(["cycle", "updated"]);
+  });
 });

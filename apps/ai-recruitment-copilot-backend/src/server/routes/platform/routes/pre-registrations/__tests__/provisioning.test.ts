@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildPreRegistrationProfileUpdate,
+  buildProspectiveManagerRelationships,
+  buildReconciledReportingLines,
   buildRegisteredReportingLines,
+  hasMemberReportingLineCycle,
   hasPreRegistrationManagerCycle,
   provisionPreRegisteredUser,
 } from "../provisioning";
@@ -15,7 +18,8 @@ describe("pre-registration profile and hierarchy", () => {
 
   it("links a registered child when its manager registers later", () => {
     const childOnly = buildRegisteredReportingLines(
-      [{ directManagerId: "manager-entry", memberId: "child-member", preRegistrationId: "child" }],
+      [{ directManagerEmail: "manager@example.com", email: "child@example.com" }],
+      [{ email: "child@example.com", memberId: "child-member" }],
       "work-org",
     );
     expect(childOnly.reportingLines).toEqual([]);
@@ -23,15 +27,13 @@ describe("pre-registration profile and hierarchy", () => {
     const afterManagerRegisters = buildRegisteredReportingLines(
       [
         {
-          directManagerId: "manager-entry",
-          memberId: "child-member",
-          preRegistrationId: "child",
+          directManagerEmail: "MANAGER@example.com",
+          email: "child@example.com",
         },
-        {
-          directManagerId: null,
-          memberId: "manager-member",
-          preRegistrationId: "manager-entry",
-        },
+      ],
+      [
+        { email: "child@example.com", memberId: "child-member" },
+        { email: "manager@example.com", memberId: "manager-member" },
       ],
       "work-org",
     );
@@ -48,15 +50,13 @@ describe("pre-registration profile and hierarchy", () => {
     const result = buildRegisteredReportingLines(
       [
         {
-          directManagerId: null,
-          memberId: "manager-member",
-          preRegistrationId: "manager-entry",
+          directManagerEmail: "manager@example.com",
+          email: "child@example.com",
         },
-        {
-          directManagerId: "manager-entry",
-          memberId: "child-member",
-          preRegistrationId: "child",
-        },
+      ],
+      [
+        { email: "manager@example.com", memberId: "manager-member" },
+        { email: "child@example.com", memberId: "child-member" },
       ],
       "work-org",
     );
@@ -64,6 +64,16 @@ describe("pre-registration profile and hierarchy", () => {
       directManagerId: "manager-member",
       memberId: "child-member",
     });
+  });
+
+  it("rejects a deferred relationship that conflicts with an existing inverse edge", () => {
+    const reconciled = buildReconciledReportingLines(
+      [{ directManagerId: "a-member", memberId: "b-member" }],
+      ["a-member"],
+      [{ directManagerId: "b-member", memberId: "a-member" }],
+    );
+
+    expect(hasMemberReportingLineCycle(reconciled)).toBe(true);
   });
 });
 
@@ -83,7 +93,7 @@ describe("provisionPreRegisteredUser", () => {
 
   it("applies the pre-entry and reconciles deferred manager relationships", async () => {
     const registration = {
-      directManagerId: "manager-entry",
+      directManagerEmail: "manager@example.com",
       displayName: "张三",
       email: "member@example.com",
       id: "entry-1",
@@ -111,16 +121,57 @@ describe("hasPreRegistrationManagerCycle", () => {
   it("detects direct and indirect manager cycles", () => {
     expect(
       hasPreRegistrationManagerCycle([
-        { directManagerId: "b", id: "a" },
-        { directManagerId: "a", id: "b" },
+        { directManagerEmail: "b@example.com", email: "a@example.com" },
+        { directManagerEmail: "a@example.com", email: "b@example.com" },
       ]),
     ).toBe(true);
     expect(
       hasPreRegistrationManagerCycle([
-        { directManagerId: null, id: "a" },
-        { directManagerId: "a", id: "b" },
-        { directManagerId: "b", id: "c" },
+        { directManagerEmail: null, email: "a@example.com" },
+        { directManagerEmail: "a@example.com", email: "b@example.com" },
+        { directManagerEmail: "b@example.com", email: "c@example.com" },
       ]),
     ).toBe(false);
+  });
+
+  it("detects cycles that include an existing registered-member relationship", () => {
+    const relationships = buildProspectiveManagerRelationships({
+      current: {
+        directManagerEmail: "registered@example.com",
+        email: "pre-entry@example.com",
+        id: "pre-entry",
+      },
+      memberRelationships: [
+        {
+          directManagerEmail: "pre-entry@example.com",
+          email: "registered@example.com",
+        },
+      ],
+      preRegistrations: [],
+      previousEmail: null,
+    });
+
+    expect(hasPreRegistrationManagerCycle(relationships)).toBe(true);
+  });
+
+  it("preserves subordinates on the old email when that identity is already registered", () => {
+    const relationships = buildProspectiveManagerRelationships({
+      current: {
+        directManagerEmail: null,
+        email: "new@example.com",
+        id: "manager",
+      },
+      memberRelationships: [],
+      preRegistrations: [
+        { directManagerEmail: null, email: "old@example.com", id: "manager" },
+        { directManagerEmail: "old@example.com", email: "child@example.com", id: "child" },
+      ],
+      previousEmail: null,
+    });
+
+    expect(relationships).toContainEqual({
+      directManagerEmail: "old@example.com",
+      email: "child@example.com",
+    });
   });
 });

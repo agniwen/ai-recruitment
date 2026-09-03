@@ -26,7 +26,7 @@ vi.mock("../provisioning", () => ({
 const app = factory.createApp().route("/pre-registrations", platformPreRegistrationsRouter);
 
 const input = {
-  directManagerId: null,
+  directManagerEmail: null,
   displayName: "张三",
   email: "member@example.com",
   recruitingGroupNames: ["燎原社"],
@@ -58,7 +58,7 @@ describe("platform pre-registration routes", () => {
     mocks.update.mockResolvedValue("cycle");
 
     const response = await app.request("/pre-registrations/entry-1", {
-      body: JSON.stringify({ ...input, directManagerId: "entry-2" }),
+      body: JSON.stringify({ ...input, directManagerEmail: "manager@example.com" }),
       headers: { "Content-Type": "application/json" },
       method: "PATCH",
     });
@@ -66,5 +66,16 @@ describe("platform pre-registration routes", () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: "直属上级关系不能形成循环。" });
     expect(mocks.provision).not.toHaveBeenCalled();
+  });
+
+  it("rejects using the same email as the direct manager", async () => {
+    const response = await app.request("/pre-registrations", {
+      body: JSON.stringify({ ...input, directManagerEmail: "MEMBER@example.com" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 });

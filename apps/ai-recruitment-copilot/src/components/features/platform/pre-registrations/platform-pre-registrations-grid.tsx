@@ -57,7 +57,7 @@ type RecruitingRole = "recruitingSupervisor" | "recruitingLead" | "hr";
 
 interface PlatformPreRegistrationRecord {
   createdAt: string;
-  directManagerId: string | null;
+  directManagerEmail: string | null;
   directManagerName: string | null;
   displayName: string;
   email: string;
@@ -81,11 +81,11 @@ interface PlatformPreRegistrationsResult {
 interface ManagerOption {
   displayName: string;
   email: string;
-  id: string;
+  source: "both" | "pre_registration" | "registered";
 }
 
 interface EditorForm {
-  directManagerId: string | null;
+  directManagerEmail: string | null;
   displayName: string;
   email: string;
   recruitingGroupNames: string;
@@ -94,7 +94,7 @@ interface EditorForm {
 }
 
 const EMPTY_FORM: EditorForm = {
-  directManagerId: null,
+  directManagerEmail: null,
   displayName: "",
   email: "",
   recruitingGroupNames: "",
@@ -108,12 +108,19 @@ const ROLE_LABELS: Record<RecruitingRole, string> = {
   recruitingSupervisor: "招聘主管",
 };
 
+function managerSourceLabel(source: ManagerOption["source"]) {
+  if (source === "both") {
+    return "已预录入 / 已注册";
+  }
+  return source === "registered" ? "已注册" : "已预录入";
+}
+
 function toEditorForm(record: PlatformPreRegistrationRecord | null): EditorForm {
   if (!record) {
     return EMPTY_FORM;
   }
   return {
-    directManagerId: record.directManagerId,
+    directManagerEmail: record.directManagerEmail,
     displayName: record.displayName,
     email: record.email,
     recruitingGroupNames: record.recruitingGroupNames.join("，"),
@@ -150,14 +157,14 @@ function PreRegistrationEditorDialog({
   const selectableManagers = useMemo(
     () =>
       managerOptions
-        .filter((option) => option.id !== record?.id)
+        .filter((option) => option.email.toLowerCase() !== form.email.trim().toLowerCase())
         .map((option) => ({
-          description: option.email,
+          description: `${option.email} · ${managerSourceLabel(option.source)}`,
           label: option.displayName,
           searchValue: `${option.displayName} ${option.email}`,
-          value: option.id,
+          value: option.email,
         })),
-    [managerOptions, record?.id],
+    [form.email, managerOptions],
   );
   const groupNames = parseGroupNames(form.recruitingGroupNames);
   const canSubmit =
@@ -168,7 +175,7 @@ function PreRegistrationEditorDialog({
   const mutation = useMutation({
     mutationFn: () => {
       const json = {
-        directManagerId: form.directManagerId,
+        directManagerEmail: form.directManagerEmail,
         displayName: form.displayName,
         email: form.email,
         recruitingGroupNames: groupNames,
@@ -224,9 +231,17 @@ function PreRegistrationEditorDialog({
                 autoComplete="email"
                 disabled={mutation.isPending}
                 id="pre-registration-email"
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, email: event.target.value }))
-                }
+                onChange={(event) => {
+                  const email = event.target.value;
+                  setForm((current) => ({
+                    ...current,
+                    directManagerEmail:
+                      current.directManagerEmail?.toLowerCase() === email.trim().toLowerCase()
+                        ? null
+                        : current.directManagerEmail,
+                    email,
+                  }));
+                }}
                 placeholder="name@gmail.com"
                 type="email"
                 value={form.email}
@@ -302,15 +317,15 @@ function PreRegistrationEditorDialog({
               <SearchableSelect
                 clearable
                 disabled={mutation.isPending}
-                emptyMessage="没有匹配的预录入人员"
+                emptyMessage="没有匹配的人员"
                 id="pre-registration-manager"
-                onChange={(directManagerId) =>
-                  setForm((current) => ({ ...current, directManagerId }))
+                onChange={(directManagerEmail) =>
+                  setForm((current) => ({ ...current, directManagerEmail }))
                 }
                 options={selectableManagers}
                 placeholder="无直属上级"
                 searchPlaceholder="搜索花名或邮箱…"
-                value={form.directManagerId}
+                value={form.directManagerEmail}
               />
             </Field>
           </FieldGroup>

@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { acquireReportingLineWriteLock } from "@arc/ai-recruitment-copilot-backend/lib/server/db/reporting-line-write-lock";
 import { member, memberReportingLine } from "@arc/db-schema/schema";
 
 export interface WorkspaceMemberHierarchyRow {
@@ -45,6 +46,7 @@ export function updateWorkspaceMemberDirectManager({
   userId: string;
 }): Promise<"cycle" | "missing" | "self" | "updated"> {
   return db.transaction(async (tx) => {
+    await acquireReportingLineWriteLock(tx, organizationId);
     const members = await tx
       .select({ id: member.id, userId: member.userId })
       .from(member)
@@ -124,6 +126,7 @@ export function updateWorkspaceMembersDirectManager({
   userIds: string[];
 }): Promise<"cycle" | "missing" | "self" | "updated"> {
   return db.transaction(async (tx) => {
+    await acquireReportingLineWriteLock(tx, organizationId);
     const members = await tx
       .select({ id: member.id, userId: member.userId })
       .from(member)

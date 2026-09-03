@@ -335,7 +335,7 @@ export const platformPreRegistration = pgTable(
   "platform_pre_registration",
   {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    directManagerId: text("direct_manager_id"),
+    directManagerEmail: text("direct_manager_email"),
     displayName: text("display_name").notNull(),
     email: text("email").notNull(),
     id: text("id").primaryKey(),
@@ -349,20 +349,18 @@ export const platformPreRegistration = pgTable(
     workspaceSlug: text("workspace_slug").default("work").notNull(),
   },
   (table) => [
-    foreignKey({
-      columns: [table.directManagerId],
-      foreignColumns: [table.id],
-      name: "platform_pre_registration_direct_manager_fk",
-    }).onDelete("set null"),
     check(
       "platform_pre_registration_not_self_managed",
-      sql`${table.directManagerId} IS NULL OR ${table.directManagerId} <> ${table.id}`,
+      sql`${table.directManagerEmail} IS NULL OR lower(${table.directManagerEmail}) <> lower(${table.email})`,
     ),
     uniqueIndex("platform_pre_registration_workspace_email_uq").on(
       table.workspaceSlug,
       sql`lower(${table.email})`,
     ),
-    index("platform_pre_registration_manager_idx").on(table.directManagerId),
+    index("platform_pre_registration_manager_email_idx").on(
+      table.workspaceSlug,
+      sql`lower(${table.directManagerEmail})`,
+    ),
     index("platform_pre_registration_workspace_name_idx").on(
       table.workspaceSlug,
       table.displayName,
