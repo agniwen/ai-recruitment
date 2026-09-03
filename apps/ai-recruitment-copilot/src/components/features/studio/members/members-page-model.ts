@@ -273,7 +273,7 @@ export function useDynamicWorkspaceRoles(workspaceId: string, enabled: boolean) 
 }
 
 export const GROUP_ROLE_LABELS: Record<RecruitingGroupRole, string> = {
-  hr: "招聘成员",
+  hr: "招聘专员",
   recruitingLead: "招聘组长",
   recruitingSupervisor: "招聘主管",
   viewer: "只读成员",
