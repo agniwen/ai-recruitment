@@ -5,7 +5,6 @@ import { isBuiltInWorkspaceRole } from "@/components/features/studio/members/rol
 import type { WorkspaceRole } from "@/components/features/studio/members/role-display";
 import { sortDynamicWorkspaceRolesByCreatedAt } from "@/components/features/studio/members/workspace-role-permissions";
 
-export const DEFAULT_PAGE_SIZE = 10;
 export const DEFAULT_TAB = "members";
 const WORKSPACE_MANAGEMENT_TABS = ["members", "groups"] as const;
 
@@ -48,6 +47,8 @@ export interface MemberRow {
   telegram: string | null;
   createdAt: string | Date;
   lastActiveAt: string | null;
+  treeDepth?: number;
+  hasDirectReports?: boolean;
 }
 
 export function filterWorkspaceMembers(rows: readonly MemberRow[], search: string): MemberRow[] {
@@ -60,6 +61,58 @@ export function filterWorkspaceMembers(rows: readonly MemberRow[], search: strin
       value.toLowerCase().includes(normalizedSearch),
     ),
   );
+}
+
+export function buildWorkspaceMemberTreeRows(
+  rows: readonly MemberRow[],
+  directManagerByUserId: ReadonlyMap<string, string | null>,
+  collapsedUserIds: ReadonlySet<string>,
+): MemberRow[] {
+  const memberByUserId = new Map(rows.map((row) => [row.userId, row]));
+  const childrenByManagerUserId = new Map<string, MemberRow[]>();
+  const roots: MemberRow[] = [];
+
+  for (const row of rows) {
+    const directManagerUserId = directManagerByUserId.get(row.userId);
+    if (
+      !directManagerUserId ||
+      directManagerUserId === row.userId ||
+      !memberByUserId.has(directManagerUserId)
+    ) {
+      roots.push(row);
+      continue;
+    }
+    const children = childrenByManagerUserId.get(directManagerUserId) ?? [];
+    children.push(row);
+    childrenByManagerUserId.set(directManagerUserId, children);
+  }
+
+  const result: MemberRow[] = [];
+  const visited = new Set<string>();
+  function appendMember(row: MemberRow, treeDepth: number) {
+    if (visited.has(row.userId)) {
+      return;
+    }
+    visited.add(row.userId);
+    const children = childrenByManagerUserId.get(row.userId) ?? [];
+    result.push({ ...row, hasDirectReports: children.length > 0, treeDepth });
+    if (collapsedUserIds.has(row.userId)) {
+      return;
+    }
+    for (const child of children) {
+      appendMember(child, treeDepth + 1);
+    }
+  }
+
+  for (const root of roots) {
+    appendMember(root, 0);
+  }
+  // A persisted cycle should be impossible, but keeping remaining rows visible makes the UI
+  // resilient to legacy or manually edited data.
+  for (const row of rows) {
+    appendMember(row, 0);
+  }
+  return result;
 }
 
 export interface DynamicWorkspaceRole {

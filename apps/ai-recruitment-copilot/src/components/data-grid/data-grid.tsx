@@ -145,6 +145,7 @@ export interface DataGridProps<TData extends RowData> {
    * Max height for the table scroll viewport.
    */
   maxHeight?: string | null;
+  showPagination?: boolean;
 }
 
 export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
@@ -400,6 +401,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
       )}
 
       <PaginationBar
+        hidden={props.showPagination === false}
         loading={loading || refetching}
         onPageChange={pagination.onPageChange}
         onPageSizeChange={pagination.onPageSizeChange}

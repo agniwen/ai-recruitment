@@ -116,7 +116,7 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(pageSource).toContain("filterWorkspaceMembers(allRows, memberSearch)");
     expect(pageSource).toMatch(/placeholder: `搜索\$\{searchSubject\}`/u);
     expect(pageSource).toContain("filterValues={{ search: memberSearch }}");
-    expect(pageSource).toContain("setPage(1)");
+    expect(pageSource).toContain("showPagination={false}");
   });
 
   it("lets workspace admins mark members as human interviewers", () => {

@@ -1,5 +1,11 @@
 /* oxlint-disable max-lines -- workspace member management composes several tightly coupled tables and dialogs. */
-import { IconSettings, IconUserPlus, IconUsers } from "@tabler/icons-react";
+import {
+  IconChevronDown,
+  IconChevronRight,
+  IconSettings,
+  IconUserPlus,
+  IconUsers,
+} from "@tabler/icons-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
@@ -63,7 +69,7 @@ import { buildMemberActionMenu } from "@/components/features/studio/members/memb
 import { useWorkspaceMemberProfileControl } from "@/components/features/studio/members/member-profile-control";
 
 import {
-  DEFAULT_PAGE_SIZE,
+  buildWorkspaceMemberTreeRows,
   buildAssignableWorkspaceRoles,
   buildWorkspaceManagementSearch,
   canEditMemberWorkspaceRole,
@@ -89,6 +95,8 @@ import {
 } from "@/components/features/studio/members/members-groups";
 import { useWorkspaceMemberInterviewerControl } from "@/components/features/studio/members/member-interviewer-control";
 import { useWorkspaceMemberDirectManagerControl } from "@/components/features/studio/members/member-direct-manager-control";
+
+const ignorePaginationChange = (value: number) => value;
 
 export function MembersManagementPage() {
   const slug = useWorkspaceSlug();
@@ -181,8 +189,9 @@ export function MembersManagementPage() {
     () => hiringUnits.map((unit) => ({ label: unit.name, value: unit.id })),
     [hiringUnits],
   );
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [collapsedMemberUserIds, setCollapsedMemberUserIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<RecruitingGroupRow | null>(null);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const isDeleteGroupDialogOpen = Boolean(deleteGroupTarget);
@@ -241,7 +250,10 @@ export function MembersManagementPage() {
       };
     });
   }, [org?.members, isInterviewerByUserId, lastActiveMap, profileByUserId]);
-  const { directManagerColumn } = useWorkspaceMemberDirectManagerControl(canUpdate, allRows);
+  const { directManagerByUserId, directManagerColumn } = useWorkspaceMemberDirectManagerControl(
+    canUpdate,
+    allRows,
+  );
   const hasMemberSearch = memberSearch.trim().length > 0;
   const filteredRows = useMemo(
     () => filterWorkspaceMembers(allRows, memberSearch),
@@ -265,16 +277,28 @@ export function MembersManagementPage() {
     });
   }, [groups]);
 
-  // 成员列表按显式 workspaceId 拉取，这里做客户端切片
-  // 让分页 UI 跟其他 studio 页面 (服务端分页) 视觉一致。
-  // total <= pageSize 时 totalPages 仍是 1, DataGrid 会隐藏页码控件。
-  const total = filteredRows.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
   const rows = useMemo(
-    () => filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [filteredRows, safePage, pageSize],
+    () =>
+      buildWorkspaceMemberTreeRows(
+        filteredRows,
+        directManagerByUserId,
+        hasMemberSearch ? new Set() : collapsedMemberUserIds,
+      ),
+    [collapsedMemberUserIds, directManagerByUserId, filteredRows, hasMemberSearch],
   );
+  const total = rows.length;
+
+  function toggleMemberTreeRow(userId: string) {
+    setCollapsedMemberUserIds((current) => {
+      const next = new Set(current);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  }
 
   async function createGroup() {
     const name = normalizeGroupName(newGroupName);
@@ -510,15 +534,40 @@ export function MembersManagementPage() {
   const columns = useMemo(
     () => [
       customColumn<MemberRow>({
-        cell: (r) => (
-          <MemberCell
-            avatarSize="sm"
-            className="gap-3"
-            email={r.email}
-            image={r.image}
-            name={r.name}
-          />
-        ),
+        cell: (r) => {
+          const isCollapsed = collapsedMemberUserIds.has(r.userId) && !hasMemberSearch;
+          return (
+            <div
+              className="flex min-w-0 items-center gap-1"
+              style={{ paddingInlineStart: `${(r.treeDepth ?? 0) * 24}px` }}
+            >
+              {r.hasDirectReports ? (
+                <button
+                  aria-expanded={!isCollapsed}
+                  aria-label={isCollapsed ? `展开 ${r.name} 的下属` : `收起 ${r.name} 的下属`}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => toggleMemberTreeRow(r.userId)}
+                  type="button"
+                >
+                  {isCollapsed ? (
+                    <IconChevronRight className="size-4" />
+                  ) : (
+                    <IconChevronDown className="size-4" />
+                  )}
+                </button>
+              ) : (
+                <span aria-hidden className="size-7 shrink-0" />
+              )}
+              <MemberCell
+                avatarSize="sm"
+                className="min-w-0 flex-1 gap-3"
+                email={r.email}
+                image={r.image}
+                name={r.name}
+              />
+            </div>
+          );
+        },
         key: "name",
         title: "成员",
       }),
@@ -604,9 +653,11 @@ export function MembersManagementPage() {
       canDelete,
       canUpdate,
       currentMemberRole,
+      collapsedMemberUserIds,
       directManagerColumn,
       interviewerColumn,
       memberProfilesReady,
+      hasMemberSearch,
       pending,
       session?.user?.id,
       telegramColumn,
@@ -696,17 +747,14 @@ export function MembersManagementPage() {
                 return;
               }
               setMemberSearch(value);
-              setPage(1);
             }}
             pagination={{
-              onPageChange: setPage,
-              onPageSizeChange: (size) => {
-                setPageSize(size);
-                setPage(1);
-              },
-              page: safePage,
-              pageSize,
+              onPageChange: ignorePaginationChange,
+              onPageSizeChange: ignorePaginationChange,
+              page: 1,
+              pageSize: Math.max(total, 1),
             }}
+            showPagination={false}
             toolbarRight={
               <div className="flex flex-wrap gap-2">
                 <PermissionGate action="create" resource="invitation">
@@ -731,7 +779,7 @@ export function MembersManagementPage() {
               </div>
             }
             total={total}
-            totalPages={totalPages}
+            totalPages={1}
           />
         </TabsContent>
 

@@ -82,37 +82,44 @@ export function useWorkspaceMemberDirectManagerControl(
 
   const directManagerColumn = useMemo(
     () =>
-      query.isSuccess
-        ? customColumn<MemberRow>({
-            cell: (row) => (
-              <SearchableSelect
-                clearable
-                disabled={!canUpdate || pendingUserId === row.userId}
-                emptyMessage="没有可选成员"
-                onChange={(directManagerUserId) =>
-                  void changeDirectManager(row.userId, directManagerUserId)
-                }
-                options={memberOptions.filter((option) => option.value !== row.userId)}
-                placeholder="未设置"
-                searchPlaceholder="搜索姓名或邮箱…"
-                triggerClassName="min-w-48"
-                value={directManagerByUserId.get(row.userId) ?? null}
-              />
-            ),
-            key: "directManagerUserId",
-            size: 220,
-            title: "直属上级",
-          })
-        : null,
+      customColumn<MemberRow>({
+        cell: (row) => {
+          if (query.isPending) {
+            return <span className="text-muted-foreground text-sm">加载中…</span>;
+          }
+          if (query.isError) {
+            return <span className="text-destructive text-sm">加载失败</span>;
+          }
+          return (
+            <SearchableSelect
+              clearable
+              disabled={!canUpdate || pendingUserId === row.userId}
+              emptyMessage="没有可选成员"
+              onChange={(directManagerUserId) =>
+                void changeDirectManager(row.userId, directManagerUserId)
+              }
+              options={memberOptions.filter((option) => option.value !== row.userId)}
+              placeholder="未设置"
+              searchPlaceholder="搜索姓名或邮箱…"
+              triggerClassName="min-w-48"
+              value={directManagerByUserId.get(row.userId) ?? null}
+            />
+          );
+        },
+        key: "directManagerUserId",
+        size: 220,
+        title: "直属上级",
+      }),
     [
       canUpdate,
       changeDirectManager,
       directManagerByUserId,
       memberOptions,
       pendingUserId,
-      query.isSuccess,
+      query.isError,
+      query.isPending,
     ],
   );
 
-  return { directManagerColumn };
+  return { directManagerByUserId, directManagerColumn };
 }
