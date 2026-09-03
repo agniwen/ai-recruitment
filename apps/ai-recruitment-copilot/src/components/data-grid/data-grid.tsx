@@ -96,6 +96,47 @@ export interface BulkActionContext<TData> {
 
 export type DataGridColumnDef<TData extends RowData> = ColumnDef<DataGridFeatures, TData>;
 
+interface DataGridPaginationState {
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}
+
+function getSkeletonRowCount(pagination: DataGridPaginationState | undefined): number {
+  return Math.min(pagination?.pageSize ?? 6, 6);
+}
+
+function DataGridPagination({
+  loading,
+  pageSizeOptions,
+  pagination,
+  total,
+  totalPages,
+}: {
+  loading: boolean;
+  pageSizeOptions: readonly number[];
+  pagination: DataGridPaginationState | undefined;
+  total: number;
+  totalPages: number;
+}) {
+  if (!pagination) {
+    return null;
+  }
+  return (
+    <PaginationBar
+      loading={loading}
+      onPageChange={pagination.onPageChange}
+      onPageSizeChange={pagination.onPageSizeChange}
+      page={pagination.page}
+      pageSize={pagination.pageSize}
+      pageSizeOptions={pageSizeOptions}
+      total={total}
+      totalPages={totalPages}
+    />
+  );
+}
+
 export interface DataGridProps<TData extends RowData> {
   data: TData[];
   total: number;
@@ -108,12 +149,7 @@ export interface DataGridProps<TData extends RowData> {
   /** Logical pin sides (TanStack Table V9). `start` ≈ left in LTR, `end` ≈ right. */
   columnPinning?: { end?: string[]; start?: string[] };
 
-  pagination: {
-    page: number;
-    pageSize: number;
-    onPageChange: (p: number) => void;
-    onPageSizeChange: (s: number) => void;
-  };
+  pagination?: DataGridPaginationState;
   pageSizeOptions?: readonly number[];
 
   sorting?: SortingState;
@@ -145,7 +181,6 @@ export interface DataGridProps<TData extends RowData> {
    * Max height for the table scroll viewport.
    */
   maxHeight?: string | null;
-  showPagination?: boolean;
 }
 
 export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
@@ -228,7 +263,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     emptyContent = (
       <DataGridSkeleton
         columnCount={table.getAllLeafColumns().length}
-        rowCount={Math.min(pagination.pageSize, 6)}
+        rowCount={getSkeletonRowCount(pagination)}
       />
     );
   }
@@ -400,14 +435,10 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
         emptyContent
       )}
 
-      <PaginationBar
-        hidden={props.showPagination === false}
-        loading={loading || refetching}
-        onPageChange={pagination.onPageChange}
-        onPageSizeChange={pagination.onPageSizeChange}
-        page={pagination.page}
-        pageSize={pagination.pageSize}
+      <DataGridPagination
+        loading={Boolean(loading || refetching)}
         pageSizeOptions={pageSizeOptions}
+        pagination={pagination}
         total={total}
         totalPages={totalPages}
       />

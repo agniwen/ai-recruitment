@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/select";
 
 export interface PaginationBarProps {
-  hidden?: boolean;
   page: number;
   pageSize: number;
   total: number;
@@ -57,7 +56,6 @@ function getVisiblePages(page: number, totalPages: number): VisiblePage[] {
 export function PaginationBar(props: PaginationBarProps) {
   const {
     loading,
-    hidden,
     onPageChange,
     onPageSizeChange,
     page,
@@ -67,7 +65,7 @@ export function PaginationBar(props: PaginationBarProps) {
     totalPages,
   } = props;
 
-  if (hidden || total === 0) {
+  if (total === 0) {
     return null;
   }
 

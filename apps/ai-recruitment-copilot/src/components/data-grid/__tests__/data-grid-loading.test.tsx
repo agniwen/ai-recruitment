@@ -15,7 +15,15 @@ interface Row {
 
 const columns: DataGridColumnDef<Row>[] = [{ accessorKey: "name", header: "姓名" }];
 
-function renderGrid({ data = [], loading = false }: { data?: Row[]; loading?: boolean }) {
+function renderGrid({
+  data = [],
+  loading = false,
+  paginated = true,
+}: {
+  data?: Row[];
+  loading?: boolean;
+  paginated?: boolean;
+}) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -28,12 +36,16 @@ function renderGrid({ data = [], loading = false }: { data?: Row[]; loading?: bo
         empty={<p>暂无记录</p>}
         getRowId={(row) => row.id}
         loading={loading}
-        pagination={{
-          onPageChange: vi.fn(),
-          onPageSizeChange: vi.fn(),
-          page: 1,
-          pageSize: 20,
-        }}
+        pagination={
+          paginated
+            ? {
+                onPageChange: vi.fn(),
+                onPageSizeChange: vi.fn(),
+                page: 1,
+                pageSize: 20,
+              }
+            : undefined
+        }
         total={data.length}
         totalPages={data.length > 0 ? 1 : 0}
       />,
@@ -67,5 +79,19 @@ describe("DataGrid initial loading", () => {
 
     expect(container.querySelector('[data-slot="data-grid-skeleton"]')).toBeNull();
     expect(container.textContent).toContain("暂无记录");
+  });
+
+  it("renders all supplied rows without pagination controls when pagination is omitted", () => {
+    const container = renderGrid({
+      data: [
+        { id: "1", name: "张三" },
+        { id: "2", name: "李四" },
+      ],
+      paginated: false,
+    });
+
+    expect(container.textContent).toContain("张三");
+    expect(container.textContent).toContain("李四");
+    expect(container.querySelector('[data-slot="pagination"]')).toBeNull();
   });
 });

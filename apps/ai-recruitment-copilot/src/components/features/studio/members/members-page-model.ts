@@ -63,6 +63,33 @@ export function filterWorkspaceMembers(rows: readonly MemberRow[], search: strin
   );
 }
 
+export function filterWorkspaceMembersWithAncestors(
+  rows: readonly MemberRow[],
+  search: string,
+  directManagerByUserId: ReadonlyMap<string, string | null>,
+): MemberRow[] {
+  const matches = filterWorkspaceMembers(rows, search);
+  if (matches.length === rows.length) {
+    return matches;
+  }
+  const memberByUserId = new Map(rows.map((row) => [row.userId, row]));
+  const includedUserIds = new Set(matches.map((row) => row.userId));
+  for (const match of matches) {
+    const visited = new Set<string>();
+    let ancestorUserId = directManagerByUserId.get(match.userId);
+    while (ancestorUserId && !visited.has(ancestorUserId)) {
+      visited.add(ancestorUserId);
+      const ancestor = memberByUserId.get(ancestorUserId);
+      if (!ancestor) {
+        break;
+      }
+      includedUserIds.add(ancestorUserId);
+      ancestorUserId = directManagerByUserId.get(ancestorUserId);
+    }
+  }
+  return rows.filter((row) => includedUserIds.has(row.userId));
+}
+
 export function buildWorkspaceMemberTreeRows(
   rows: readonly MemberRow[],
   directManagerByUserId: ReadonlyMap<string, string | null>,
@@ -88,15 +115,27 @@ export function buildWorkspaceMemberTreeRows(
   }
 
   const result: MemberRow[] = [];
-  const visited = new Set<string>();
-  function appendMember(row: MemberRow, treeDepth: number) {
-    if (visited.has(row.userId)) {
+  const accountedFor = new Set<string>();
+  function accountForDescendants(row: MemberRow) {
+    if (accountedFor.has(row.userId)) {
       return;
     }
-    visited.add(row.userId);
+    accountedFor.add(row.userId);
+    for (const child of childrenByManagerUserId.get(row.userId) ?? []) {
+      accountForDescendants(child);
+    }
+  }
+  function appendMember(row: MemberRow, treeDepth: number) {
+    if (accountedFor.has(row.userId)) {
+      return;
+    }
+    accountedFor.add(row.userId);
     const children = childrenByManagerUserId.get(row.userId) ?? [];
     result.push({ ...row, hasDirectReports: children.length > 0, treeDepth });
     if (collapsedUserIds.has(row.userId)) {
+      for (const child of children) {
+        accountForDescendants(child);
+      }
       return;
     }
     for (const child of children) {

@@ -73,7 +73,7 @@ import {
   buildAssignableWorkspaceRoles,
   buildWorkspaceManagementSearch,
   canEditMemberWorkspaceRole,
-  filterWorkspaceMembers,
+  filterWorkspaceMembersWithAncestors,
   getWorkspaceRoleBadgeVariant,
   parseWorkspaceManagementTab,
   useDynamicWorkspaceRoles,
@@ -95,8 +95,6 @@ import {
 } from "@/components/features/studio/members/members-groups";
 import { useWorkspaceMemberInterviewerControl } from "@/components/features/studio/members/member-interviewer-control";
 import { useWorkspaceMemberDirectManagerControl } from "@/components/features/studio/members/member-direct-manager-control";
-
-const ignorePaginationChange = (value: number) => value;
 
 export function MembersManagementPage() {
   const slug = useWorkspaceSlug();
@@ -256,8 +254,8 @@ export function MembersManagementPage() {
   );
   const hasMemberSearch = memberSearch.trim().length > 0;
   const filteredRows = useMemo(
-    () => filterWorkspaceMembers(allRows, memberSearch),
-    [allRows, memberSearch],
+    () => filterWorkspaceMembersWithAncestors(allRows, memberSearch, directManagerByUserId),
+    [allRows, directManagerByUserId, memberSearch],
   );
 
   useEffect(() => {
@@ -748,13 +746,6 @@ export function MembersManagementPage() {
               }
               setMemberSearch(value);
             }}
-            pagination={{
-              onPageChange: ignorePaginationChange,
-              onPageSizeChange: ignorePaginationChange,
-              page: 1,
-              pageSize: Math.max(total, 1),
-            }}
-            showPagination={false}
             toolbarRight={
               <div className="flex flex-wrap gap-2">
                 <PermissionGate action="create" resource="invitation">

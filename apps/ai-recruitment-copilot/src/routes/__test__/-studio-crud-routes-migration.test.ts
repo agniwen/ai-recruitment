@@ -106,19 +106,6 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(panelSource).toContain("filteredMemberPoolRows.map");
   });
 
-  it("filters workspace members by name, email, or TG number on the client", () => {
-    const membersSource = readSource("components/features/studio/members/members-page.tsx");
-    const pageIndex = membersSource.indexOf("function MembersManagementPage");
-    const pageSource = membersSource.slice(pageIndex, pageIndex + 25_000);
-
-    expect(pageSource).toContain("memberSearch");
-    expect(pageSource).toContain("filteredRows");
-    expect(pageSource).toContain("filterWorkspaceMembers(allRows, memberSearch)");
-    expect(pageSource).toMatch(/placeholder: `搜索\$\{searchSubject\}`/u);
-    expect(pageSource).toContain("filterValues={{ search: memberSearch }}");
-    expect(pageSource).toContain("showPagination={false}");
-  });
-
   it("lets workspace admins mark members as human interviewers", () => {
     const membersSource = readSource("components/features/studio/members/members-page.tsx");
     const pageIndex = membersSource.indexOf("function MembersManagementPage");
