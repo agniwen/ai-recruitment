@@ -145,6 +145,7 @@ describe("PlatformSidebarSlots", () => {
 
   it("resolves active menu items from nested paths", () => {
     expect(resolvePlatformSidebarNavItem("/platform/users/member-1")?.title).toBe("所有用户");
+    expect(resolvePlatformSidebarNavItem("/platform/pre-registrations")?.title).toBe("预录入信息");
     expect(
       resolvePlatformSidebarNavItem("/platform/mastra-studio/agents/demo")?.icon,
     ).toBeDefined();
@@ -155,6 +156,7 @@ describe("PlatformSidebarSlots", () => {
     roots.push(root);
 
     expect(document.body.textContent).toContain("所有工作区");
+    expect(document.body.textContent).toContain("预录入信息");
     expect(document.body.textContent).toContain("队列任务");
     expect(document.body.textContent).toContain("解析缓存");
     expect(document.body.textContent).toContain("历史简历解析");

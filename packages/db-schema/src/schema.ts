@@ -331,6 +331,45 @@ export const organizationRole = pgTable(
   ],
 );
 
+export const platformPreRegistration = pgTable(
+  "platform_pre_registration",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    directManagerId: text("direct_manager_id"),
+    displayName: text("display_name").notNull(),
+    email: text("email").notNull(),
+    id: text("id").primaryKey(),
+    recruitingGroupNames: text("recruiting_group_names").array().notNull(),
+    recruitingRole: text("recruiting_role").notNull(),
+    telegram: text("telegram").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    workspaceSlug: text("workspace_slug").default("work").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.directManagerId],
+      foreignColumns: [table.id],
+      name: "platform_pre_registration_direct_manager_fk",
+    }).onDelete("set null"),
+    check(
+      "platform_pre_registration_not_self_managed",
+      sql`${table.directManagerId} IS NULL OR ${table.directManagerId} <> ${table.id}`,
+    ),
+    uniqueIndex("platform_pre_registration_workspace_email_uq").on(
+      table.workspaceSlug,
+      sql`lower(${table.email})`,
+    ),
+    index("platform_pre_registration_manager_idx").on(table.directManagerId),
+    index("platform_pre_registration_workspace_name_idx").on(
+      table.workspaceSlug,
+      table.displayName,
+    ),
+  ],
+);
+
 export const recruitingGroup = pgTable(
   "recruiting_group",
   {

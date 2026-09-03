@@ -2,6 +2,7 @@
 
 import {
   IconBuilding,
+  IconClipboardList,
   IconDatabase,
   IconGauge,
   IconHistory,
@@ -63,6 +64,11 @@ const manageNavSections: NavSection[] = [
         icon: IconUsers,
         path: "/platform/users",
         title: "所有用户",
+      },
+      {
+        icon: IconClipboardList,
+        path: "/platform/pre-registrations",
+        title: "预录入信息",
       },
       {
         icon: IconInbox,

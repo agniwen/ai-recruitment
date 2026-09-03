@@ -20,6 +20,7 @@ import {
   addMemberToDefaultRecruitingGroup,
   ensureDefaultRecruitingGroupForWorkspace,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/workspace/dao";
+import { provisionPreRegisteredUser } from "@arc/ai-recruitment-copilot-backend/server/routes/platform/routes/pre-registrations/provisioning";
 import { ac, roles } from "@arc/shared/permissions";
 import { optionalUserTelegramSchema } from "@arc/shared/user-profile";
 import { db } from "./db";
@@ -250,6 +251,21 @@ export const auth = betterAuth({
               .where(eq(schema.user.id, newSession.userId));
           } catch (error) {
             console.warn("[auth] failed to stamp user.lastActiveAt", error);
+          }
+          try {
+            const [sessionUser] = await db
+              .select({ email: schema.user.email })
+              .from(schema.user)
+              .where(eq(schema.user.id, newSession.userId))
+              .limit(1);
+            if (sessionUser) {
+              await provisionPreRegisteredUser({
+                email: sessionUser.email,
+                userId: newSession.userId,
+              });
+            }
+          } catch (error) {
+            console.warn("[auth] failed to apply platform pre-registration", error);
           }
         },
       },

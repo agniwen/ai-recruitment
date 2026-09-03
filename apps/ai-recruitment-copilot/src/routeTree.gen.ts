@@ -27,6 +27,7 @@ import { Route as RRoundIdRouteImport } from './routes/r.$roundId'
 import { Route as PlatformUsersRouteImport } from './routes/platform.users'
 import { Route as PlatformResumeParseCacheRouteImport } from './routes/platform.resume-parse-cache'
 import { Route as PlatformQueuesRouteImport } from './routes/platform.queues'
+import { Route as PlatformPreRegistrationsRouteImport } from './routes/platform.pre-registrations'
 import { Route as PlatformOrganizationsRouteImport } from './routes/platform.organizations'
 import { Route as PlatformMastraStudioRouteImport } from './routes/platform.mastra-studio'
 import { Route as PlatformMailIngestAccountsRouteImport } from './routes/platform.mail-ingest-accounts'
@@ -273,6 +274,12 @@ const PlatformQueuesRoute = PlatformQueuesRouteImport.update({
   path: '/queues',
   getParentRoute: () => PlatformRoute,
 } as any)
+const PlatformPreRegistrationsRoute =
+  PlatformPreRegistrationsRouteImport.update({
+    id: '/pre-registrations',
+    path: '/pre-registrations',
+    getParentRoute: () => PlatformRoute,
+  } as any)
 const PlatformOrganizationsRoute = PlatformOrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
@@ -1186,6 +1193,7 @@ export interface FileRoutesByFullPath {
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/mastra-studio': typeof PlatformMastraStudioRouteWithChildren
   '/platform/organizations': typeof PlatformOrganizationsRoute
+  '/platform/pre-registrations': typeof PlatformPreRegistrationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -1353,6 +1361,7 @@ export interface FileRoutesByTo {
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/mastra-studio': typeof PlatformMastraStudioMainIndexRoute
   '/platform/organizations': typeof PlatformOrganizationsRoute
+  '/platform/pre-registrations': typeof PlatformPreRegistrationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -1509,6 +1518,7 @@ export interface FileRoutesById {
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/mastra-studio': typeof PlatformMastraStudioRouteWithChildren
   '/platform/organizations': typeof PlatformOrganizationsRoute
+  '/platform/pre-registrations': typeof PlatformPreRegistrationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -1685,6 +1695,7 @@ export interface FileRouteTypes {
     | '/platform/mail-ingest-accounts'
     | '/platform/mastra-studio'
     | '/platform/organizations'
+    | '/platform/pre-registrations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
     | '/platform/users'
@@ -1852,6 +1863,7 @@ export interface FileRouteTypes {
     | '/platform/mail-ingest-accounts'
     | '/platform/mastra-studio'
     | '/platform/organizations'
+    | '/platform/pre-registrations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
     | '/platform/users'
@@ -2007,6 +2019,7 @@ export interface FileRouteTypes {
     | '/platform/mail-ingest-accounts'
     | '/platform/mastra-studio'
     | '/platform/organizations'
+    | '/platform/pre-registrations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
     | '/platform/users'
@@ -2307,6 +2320,13 @@ declare module '@tanstack/react-router' {
       path: '/queues'
       fullPath: '/platform/queues'
       preLoaderRoute: typeof PlatformQueuesRouteImport
+      parentRoute: typeof PlatformRoute
+    }
+    '/platform/pre-registrations': {
+      id: '/platform/pre-registrations'
+      path: '/pre-registrations'
+      fullPath: '/platform/pre-registrations'
+      preLoaderRoute: typeof PlatformPreRegistrationsRouteImport
       parentRoute: typeof PlatformRoute
     }
     '/platform/organizations': {
@@ -3955,6 +3975,7 @@ interface PlatformRouteChildren {
   PlatformMailIngestAccountsRoute: typeof PlatformMailIngestAccountsRoute
   PlatformMastraStudioRoute: typeof PlatformMastraStudioRouteWithChildren
   PlatformOrganizationsRoute: typeof PlatformOrganizationsRoute
+  PlatformPreRegistrationsRoute: typeof PlatformPreRegistrationsRoute
   PlatformQueuesRoute: typeof PlatformQueuesRoute
   PlatformResumeParseCacheRoute: typeof PlatformResumeParseCacheRoute
   PlatformUsersRoute: typeof PlatformUsersRoute
@@ -3967,6 +3988,7 @@ const PlatformRouteChildren: PlatformRouteChildren = {
   PlatformMailIngestAccountsRoute: PlatformMailIngestAccountsRoute,
   PlatformMastraStudioRoute: PlatformMastraStudioRouteWithChildren,
   PlatformOrganizationsRoute: PlatformOrganizationsRoute,
+  PlatformPreRegistrationsRoute: PlatformPreRegistrationsRoute,
   PlatformQueuesRoute: PlatformQueuesRoute,
   PlatformResumeParseCacheRoute: PlatformResumeParseCacheRoute,
   PlatformUsersRoute: PlatformUsersRoute,
