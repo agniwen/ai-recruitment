@@ -8,11 +8,13 @@ import {
 } from "@tabler/icons-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import type { RowSelectionState } from "@tanstack/react-table";
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/features/studio/page-header";
-import { actionsColumn, customColumn, DataGrid } from "@/components/data-grid";
+import { actionsColumn, customColumn, DataGrid, selectColumn } from "@/components/data-grid";
+import type { BulkActionContext } from "@/components/data-grid";
 import { MemberCell } from "@/components/data-grid/cells/member-cell";
 import { PermissionGate } from "@/components/features/permission/permission-gate";
 import { TimeDisplay } from "@/components/features/display/time-display";
@@ -95,6 +97,7 @@ import {
 } from "@/components/features/studio/members/members-groups";
 import { useWorkspaceMemberInterviewerControl } from "@/components/features/studio/members/member-interviewer-control";
 import { useWorkspaceMemberDirectManagerControl } from "@/components/features/studio/members/member-direct-manager-control";
+import { MemberBulkDirectManagerDialog } from "@/components/features/studio/members/member-bulk-direct-manager-dialog";
 
 export function MembersManagementPage() {
   const slug = useWorkspaceSlug();
@@ -190,6 +193,7 @@ export function MembersManagementPage() {
   const [collapsedMemberUserIds, setCollapsedMemberUserIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [memberRowSelection, setMemberRowSelection] = useState<RowSelectionState>({});
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<RecruitingGroupRow | null>(null);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const isDeleteGroupDialogOpen = Boolean(deleteGroupTarget);
@@ -285,6 +289,26 @@ export function MembersManagementPage() {
     [collapsedMemberUserIds, directManagerByUserId, filteredRows, hasMemberSearch],
   );
   const total = rows.length;
+  const memberSelectColumns = useMemo(
+    () => (canUpdate ? [selectColumn<MemberRow>()] : []),
+    [canUpdate],
+  );
+  const memberBulkActions = useMemo(
+    () =>
+      canUpdate
+        ? ({ clearSelection, selectedIds }: BulkActionContext<MemberRow>) => {
+            const selectedMemberIds = new Set(selectedIds);
+            return (
+              <MemberBulkDirectManagerDialog
+                allMembers={allRows}
+                clearSelection={clearSelection}
+                selectedMembers={allRows.filter((member) => selectedMemberIds.has(member.id))}
+              />
+            );
+          }
+        : undefined,
+    [allRows, canUpdate],
+  );
 
   function toggleMemberTreeRow(userId: string) {
     setCollapsedMemberUserIds((current) => {
@@ -531,6 +555,7 @@ export function MembersManagementPage() {
 
   const columns = useMemo(
     () => [
+      ...memberSelectColumns,
       customColumn<MemberRow>({
         cell: (r) => {
           const isCollapsed = collapsedMemberUserIds.has(r.userId) && !hasMemberSearch;
@@ -655,6 +680,7 @@ export function MembersManagementPage() {
       directManagerColumn,
       interviewerColumn,
       memberProfilesReady,
+      memberSelectColumns,
       hasMemberSearch,
       pending,
       session?.user?.id,
@@ -696,6 +722,7 @@ export function MembersManagementPage() {
 
         <TabsContent className="mt-0" value="members">
           <DataGrid<MemberRow>
+            bulkActions={memberBulkActions}
             columns={columns}
             data={rows}
             empty={
@@ -746,6 +773,8 @@ export function MembersManagementPage() {
               }
               setMemberSearch(value);
             }}
+            onRowSelectionChange={setMemberRowSelection}
+            rowSelection={memberRowSelection}
             toolbarRight={
               <div className="flex flex-wrap gap-2">
                 <PermissionGate action="create" resource="invitation">

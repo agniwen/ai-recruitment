@@ -17,6 +17,10 @@ interface WorkspaceMemberHierarchyRow {
 
 const EMPTY_MEMBER_HIERARCHY: WorkspaceMemberHierarchyRow[] = [];
 
+export function workspaceMemberHierarchyQueryKey(slug: string) {
+  return ["workspace-member-hierarchy", slug] as const;
+}
+
 export function useWorkspaceMemberDirectManagerControl(
   canUpdate: boolean,
   members: readonly MemberRow[],
@@ -24,7 +28,7 @@ export function useWorkspaceMemberDirectManagerControl(
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
-  const hierarchyQueryKey = useMemo(() => ["workspace-member-hierarchy", slug] as const, [slug]);
+  const hierarchyQueryKey = workspaceMemberHierarchyQueryKey(slug);
   const query = useQuery({
     queryFn: () =>
       rpcFetch<{ records: WorkspaceMemberHierarchyRow[] }>(

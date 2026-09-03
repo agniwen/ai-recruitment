@@ -2,7 +2,11 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { member, memberReportingLine, organization, user } from "@arc/db-schema/schema";
-import { listWorkspaceMemberHierarchy, updateWorkspaceMemberDirectManager } from "../dao";
+import {
+  listWorkspaceMemberHierarchy,
+  updateWorkspaceMemberDirectManager,
+  updateWorkspaceMembersDirectManager,
+} from "../dao";
 
 const ORGANIZATION_ID = "test_member_reporting_line_org";
 const NOW = new Date("2026-09-03T00:00:00.000Z");
@@ -104,5 +108,35 @@ describe("workspace member reporting-line dao", () => {
       directManagerUserId: null,
       userId: USERS.report,
     });
+  });
+
+  it("updates several reporting lines atomically and rejects cycles", async () => {
+    expect(
+      await updateWorkspaceMembersDirectManager({
+        directManagerUserId: USERS.manager,
+        organizationId: ORGANIZATION_ID,
+        userIds: [USERS.report, USERS.secondReport],
+      }),
+    ).toBe("updated");
+    expect(await listWorkspaceMemberHierarchy(ORGANIZATION_ID)).toEqual(
+      expect.arrayContaining([
+        { directManagerUserId: USERS.manager, userId: USERS.report },
+        { directManagerUserId: USERS.manager, userId: USERS.secondReport },
+      ]),
+    );
+    expect(
+      await updateWorkspaceMembersDirectManager({
+        directManagerUserId: USERS.report,
+        organizationId: ORGANIZATION_ID,
+        userIds: [USERS.manager],
+      }),
+    ).toBe("cycle");
+    expect(
+      await updateWorkspaceMembersDirectManager({
+        directManagerUserId: USERS.manager,
+        organizationId: ORGANIZATION_ID,
+        userIds: [USERS.manager, USERS.report],
+      }),
+    ).toBe("self");
   });
 });
