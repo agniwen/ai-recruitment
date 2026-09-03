@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   member,
+  memberReportingLine,
   organization,
   recruitingGroup,
   recruitingGroupMember,
@@ -38,6 +39,8 @@ const GROUP_A = "test_vis_group_a";
 const GROUP_B = "test_vis_group_b";
 
 async function cleanup() {
+  await db.delete(memberReportingLine).where(eq(memberReportingLine.organizationId, ORG));
+  await db.delete(memberReportingLine).where(eq(memberReportingLine.organizationId, OTHER_ORG));
   await db.delete(recruitingGroupMember).where(eq(recruitingGroupMember.organizationId, ORG));
   await db.delete(recruitingGroupMember).where(eq(recruitingGroupMember.organizationId, OTHER_ORG));
   await db.delete(recruitingGroup).where(eq(recruitingGroup.organizationId, ORG));
@@ -364,14 +367,18 @@ describe("resolveRecruitingVisibilityScope", () => {
   });
 
   it("inherits a direct report's existing visibility transitively", async () => {
-    await db
-      .update(member)
-      .set({ directManagerId: "m_vis_group_a_external" })
-      .where(eq(member.userId, USERS.groupBLead));
-    await db
-      .update(member)
-      .set({ directManagerId: "m_vis_ungrouped_supervisor" })
-      .where(eq(member.userId, USERS.groupAExternal));
+    await db.insert(memberReportingLine).values([
+      {
+        directManagerId: "m_vis_group_a_external",
+        memberId: "m_vis_group_b_lead",
+        organizationId: ORG,
+      },
+      {
+        directManagerId: "m_vis_ungrouped_supervisor",
+        memberId: "m_vis_group_a_external",
+        organizationId: ORG,
+      },
+    ]);
 
     try {
       const scope = await resolveRecruitingVisibilityScope({
@@ -395,7 +402,7 @@ describe("resolveRecruitingVisibilityScope", () => {
         USERS.groupASupervisor,
       );
     } finally {
-      await db.update(member).set({ directManagerId: null }).where(eq(member.organizationId, ORG));
+      await db.delete(memberReportingLine).where(eq(memberReportingLine.organizationId, ORG));
     }
   });
 

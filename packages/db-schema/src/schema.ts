@@ -263,7 +263,6 @@ export const member = pgTable(
   "member",
   {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    directManagerId: text("direct_manager_id"),
     id: text("id").primaryKey(),
     // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
     inviteLinkId: text("invite_link_id").references(() => workspaceInviteLink.id, {
@@ -279,18 +278,33 @@ export const member = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
   },
   (table) => [
-    foreignKey({
-      columns: [table.directManagerId],
-      foreignColumns: [table.id],
-      name: "member_direct_manager_id_member_id_fk",
-    }).onDelete("set null"),
-    check(
-      "member_direct_manager_not_self",
-      sql`${table.directManagerId} is null or ${table.directManagerId} <> ${table.id}`,
-    ),
     uniqueIndex("member_user_org_uq").on(table.userId, table.organizationId),
+    uniqueIndex("member_organization_id_id_uq").on(table.organizationId, table.id),
     index("member_organization_idx").on(table.organizationId),
-    index("member_organization_direct_manager_idx").on(table.organizationId, table.directManagerId),
+  ],
+);
+
+export const memberReportingLine = pgTable(
+  "member_reporting_line",
+  {
+    directManagerId: text("direct_manager_id").notNull(),
+    memberId: text("member_id").notNull(),
+    organizationId: text("organization_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.organizationId, table.memberId] }),
+    foreignKey({
+      columns: [table.organizationId, table.memberId],
+      foreignColumns: [member.organizationId, member.id],
+      name: "member_reporting_line_member_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.directManagerId],
+      foreignColumns: [member.organizationId, member.id],
+      name: "member_reporting_line_direct_manager_fk",
+    }).onDelete("cascade"),
+    check("member_reporting_line_not_self", sql`${table.directManagerId} <> ${table.memberId}`),
+    index("member_reporting_line_manager_idx").on(table.organizationId, table.directManagerId),
   ],
 );
 

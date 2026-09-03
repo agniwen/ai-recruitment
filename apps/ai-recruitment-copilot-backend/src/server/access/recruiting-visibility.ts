@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { member, recruitingGroupMember } from "@arc/db-schema/schema";
+import { member, memberReportingLine, recruitingGroupMember } from "@arc/db-schema/schema";
 
 export type RecruitingVisibilityScope =
   | { kind: "all" }
@@ -75,15 +75,32 @@ export async function resolveRecruitingVisibilityScope({
     return { kind: "all" };
   }
 
-  const organizationMembers = await db
-    .select({
-      directManagerId: member.directManagerId,
-      id: member.id,
-      role: member.role,
-      userId: member.userId,
-    })
-    .from(member)
-    .where(eq(member.organizationId, organizationId));
+  const [memberRows, reportingLines] = await Promise.all([
+    db
+      .select({
+        id: member.id,
+        role: member.role,
+        userId: member.userId,
+      })
+      .from(member)
+      .where(eq(member.organizationId, organizationId)),
+    db
+      .select({
+        directManagerId: memberReportingLine.directManagerId,
+        memberId: memberReportingLine.memberId,
+      })
+      .from(memberReportingLine)
+      .where(eq(memberReportingLine.organizationId, organizationId)),
+  ]);
+  const directManagerIdByMemberId = new Map(
+    reportingLines.map((row) => [row.memberId, row.directManagerId]),
+  );
+  const organizationMembers: OrganizationMemberVisibilityRow[] = memberRows.map(
+    (workspaceMember) => ({
+      ...workspaceMember,
+      directManagerId: directManagerIdByMemberId.get(workspaceMember.id) ?? null,
+    }),
+  );
   const currentMember = organizationMembers.find((row) => row.userId === userId);
 
   if (!currentMember) {

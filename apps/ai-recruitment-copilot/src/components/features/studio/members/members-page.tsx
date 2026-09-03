@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- workspace member management composes several tightly coupled tables and dialogs. */
 import { IconSettings, IconUserPlus, IconUsers } from "@tabler/icons-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -119,7 +120,12 @@ export function MembersManagementPage() {
   const [memberSearch, setMemberSearch] = useState("");
   const [editProfileMember, setEditProfileMember] = useState<MemberRow | null>(null);
 
-  // 最近活跃按 userId 索引；服务端用 session 滚动时间并以 user.lastActiveAt 兜底。
+  // 「最近活跃」按 userId 索引：服务端取 COALESCE(MAX(session.updatedAt),
+  // user.lastActiveAt)——前者给当前活跃 session 5 分钟级的滚动更新，后者
+  // 在登出/过期后兜底。详见 routes/studio/workspace/dao.ts。
+  // Last-active map keyed by userId. The server returns
+  // COALESCE(MAX(session.updatedAt), user.lastActiveAt) so logout/expiry
+  // doesn't regress previously-seen users to "从未登录".
   const { data: lastActiveMap = {} } = useQuery({
     enabled: Boolean(workspaceId),
     queryFn: async () => {

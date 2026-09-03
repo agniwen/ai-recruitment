@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import type { listWorkspaceMemberHierarchy, updateWorkspaceMemberDirectManager } from "../dao";
-import type * as WorkspaceDao from "../dao";
+import type * as MembersDao from "../dao";
 
 const mocks = vi.hoisted(() => ({
   listWorkspaceMemberHierarchy: vi.fn<typeof listWorkspaceMemberHierarchy>(),
@@ -13,13 +13,13 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () 
 }));
 
 vi.mock("../dao", async (importOriginal) => ({
-  ...(await importOriginal<typeof WorkspaceDao>()),
+  ...(await importOriginal<typeof MembersDao>()),
   listWorkspaceMemberHierarchy: mocks.listWorkspaceMemberHierarchy,
   updateWorkspaceMemberDirectManager: mocks.updateWorkspaceMemberDirectManager,
 }));
 
 // oxlint-disable-next-line import/first -- must follow vi.mock() calls for correct hoisting.
-import { workspaceRouter } from "../route";
+import { membersRouter } from "../route";
 
 const ORGANIZATION_ID = "direct_manager_route_org";
 const ACTOR_USER_ID = "direct_manager_route_actor";
@@ -32,7 +32,7 @@ function makeApp() {
       c.set("user", { id: ACTOR_USER_ID } as never);
       await next();
     })
-    .route("/workspace", workspaceRouter);
+    .route("/members", membersRouter);
 }
 
 describe("workspace direct-manager routes", () => {
@@ -43,7 +43,7 @@ describe("workspace direct-manager routes", () => {
       { directManagerUserId: "manager", userId: "report" },
     ]);
 
-    const response = await makeApp().request("/workspace/members/hierarchy");
+    const response = await makeApp().request("/members/hierarchy");
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -55,7 +55,7 @@ describe("workspace direct-manager routes", () => {
   it("updates a member direct manager within the active workspace", async () => {
     mocks.updateWorkspaceMemberDirectManager.mockResolvedValue("updated");
 
-    const response = await makeApp().request("/workspace/members/report/direct-manager", {
+    const response = await makeApp().request("/members/report/direct-manager", {
       body: JSON.stringify({ directManagerUserId: "manager" }),
       headers: { "content-type": "application/json" },
       method: "PATCH",
@@ -70,16 +70,19 @@ describe("workspace direct-manager routes", () => {
     });
   });
 
-  it("rejects a direct-manager cycle", async () => {
-    mocks.updateWorkspaceMemberDirectManager.mockResolvedValue("cycle");
+  it.each([
+    ["self", 400, "成员不能成为自己的直属上级。"],
+    ["cycle", 409, "直属上级关系不能形成循环。"],
+  ] as const)("maps the %s result to an API error", async (result, status, error) => {
+    mocks.updateWorkspaceMemberDirectManager.mockResolvedValue(result);
 
-    const response = await makeApp().request("/workspace/members/report/direct-manager", {
+    const response = await makeApp().request("/members/report/direct-manager", {
       body: JSON.stringify({ directManagerUserId: "manager" }),
       headers: { "content-type": "application/json" },
       method: "PATCH",
     });
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: "直属上级关系不能形成循环。" });
+    expect(response.status).toBe(status);
+    expect(await response.json()).toEqual({ error });
   });
 });

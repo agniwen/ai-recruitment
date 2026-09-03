@@ -17,10 +17,6 @@ export const memberInterviewerInputSchema = z.object({
   isInterviewer: z.boolean(),
 });
 
-export const memberDirectManagerInputSchema = z.object({
-  directManagerUserId: z.string().trim().min(1, "请选择直属上级。").nullable(),
-});
-
 export const memberProfileInputSchema = z.object({
   name: z.string().trim().min(1, "请输入用户名称。").max(100, "用户名称不能超过 100 个字符。"),
   telegram: optionalUserTelegramSchema,

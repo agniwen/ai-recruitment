@@ -26,7 +26,6 @@ export function useWorkspaceMemberDirectManagerControl(
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const hierarchyQueryKey = useMemo(() => ["workspace-member-hierarchy", slug] as const, [slug]);
   const query = useQuery({
-    enabled: canUpdate,
     queryFn: () =>
       rpcFetch<{ records: WorkspaceMemberHierarchyRow[] }>(
         rpc.api.w[":slug"].studio.workspace.members.hierarchy.$get({ param: { slug } }),
@@ -54,6 +53,9 @@ export function useWorkspaceMemberDirectManagerControl(
 
   const changeDirectManager = useCallback(
     async (userId: string, directManagerUserId: string | null) => {
+      if (!canUpdate) {
+        return;
+      }
       if ((directManagerByUserId.get(userId) ?? null) === directManagerUserId) {
         return;
       }
@@ -75,17 +77,17 @@ export function useWorkspaceMemberDirectManagerControl(
         },
       });
     },
-    [directManagerByUserId, hierarchyQueryKey, queryClient, slug],
+    [canUpdate, directManagerByUserId, hierarchyQueryKey, queryClient, slug],
   );
 
   const directManagerColumn = useMemo(
     () =>
-      canUpdate && query.isSuccess
+      query.isSuccess
         ? customColumn<MemberRow>({
             cell: (row) => (
               <SearchableSelect
                 clearable
-                disabled={pendingUserId === row.userId}
+                disabled={!canUpdate || pendingUserId === row.userId}
                 emptyMessage="没有可选成员"
                 onChange={(directManagerUserId) =>
                   void changeDirectManager(row.userId, directManagerUserId)

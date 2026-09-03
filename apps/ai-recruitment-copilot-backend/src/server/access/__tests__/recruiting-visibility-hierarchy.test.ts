@@ -29,22 +29,16 @@ describe("direct-manager recruiting visibility", () => {
   it("recursively inherits each direct report's recruiting-group visibility", async () => {
     queueSelectResults([
       [
-        { directManagerId: null, id: "top-member", role: "member", userId: "top" },
-        {
-          directManagerId: "top-member",
-          id: "middle-member",
-          role: "member",
-          userId: "middle",
-        },
-        {
-          directManagerId: "middle-member",
-          id: "lead-member",
-          role: "member",
-          userId: "lead",
-        },
-        { directManagerId: null, id: "hr-a-member", role: "member", userId: "hr-a" },
-        { directManagerId: null, id: "hr-b-member", role: "member", userId: "hr-b" },
-        { directManagerId: null, id: "peer-member", role: "member", userId: "peer" },
+        { id: "top-member", role: "member", userId: "top" },
+        { id: "middle-member", role: "member", userId: "middle" },
+        { id: "lead-member", role: "member", userId: "lead" },
+        { id: "hr-a-member", role: "member", userId: "hr-a" },
+        { id: "hr-b-member", role: "member", userId: "hr-b" },
+        { id: "peer-member", role: "member", userId: "peer" },
+      ],
+      [
+        { directManagerId: "top-member", memberId: "middle-member" },
+        { directManagerId: "middle-member", memberId: "lead-member" },
       ],
       [
         { groupId: "group-a", role: "recruitingSupervisor", userId: "middle" },
