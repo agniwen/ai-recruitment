@@ -33,6 +33,45 @@ export interface PreRegistrationProvisioningDependencies {
   reconcileWorkspaceReportingLines: (workspaceSlug: string) => Promise<void>;
 }
 
+export function buildPreRegistrationProfileUpdate(
+  registration: Pick<PreRegistrationProvisioningRecord, "displayName" | "telegram">,
+) {
+  return {
+    name: registration.displayName,
+    telegram: registration.telegram,
+  };
+}
+
+export function buildRegisteredReportingLines(
+  registeredRows: readonly {
+    directManagerId: string | null;
+    memberId: string;
+    preRegistrationId: string;
+  }[],
+  organizationId: string,
+) {
+  const memberIdByPreRegistrationId = new Map(
+    registeredRows.map((row) => [row.preRegistrationId, row.memberId]),
+  );
+  return {
+    managedMemberIds: registeredRows.map((row) => row.memberId),
+    reportingLines: registeredRows.flatMap((row) => {
+      const directManagerMemberId = row.directManagerId
+        ? memberIdByPreRegistrationId.get(row.directManagerId)
+        : null;
+      return directManagerMemberId
+        ? [
+            {
+              directManagerId: directManagerMemberId,
+              memberId: row.memberId,
+              organizationId,
+            },
+          ]
+        : [];
+    }),
+  };
+}
+
 export function hasPreRegistrationManagerCycle(
   rows: readonly { directManagerId: string | null; id: string }[],
 ): boolean {
@@ -95,7 +134,10 @@ async function applyRegistration(
   }
 
   await db.transaction(async (tx) => {
-    await tx.update(user).set({ telegram: registration.telegram }).where(eq(user.id, userId));
+    await tx
+      .update(user)
+      .set(buildPreRegistrationProfileUpdate(registration))
+      .where(eq(user.id, userId));
     await tx
       .insert(member)
       .values({
@@ -173,24 +215,10 @@ async function reconcileWorkspaceReportingLines(workspaceSlug: string): Promise<
     .innerJoin(member, and(eq(member.userId, user.id), eq(member.organizationId, workspace.id)))
     .where(eq(platformPreRegistration.workspaceSlug, workspaceSlug));
 
-  const memberIdByPreRegistrationId = new Map(
-    registeredRows.map((row) => [row.preRegistrationId, row.memberId]),
+  const { managedMemberIds, reportingLines } = buildRegisteredReportingLines(
+    registeredRows,
+    workspace.id,
   );
-  const managedMemberIds = registeredRows.map((row) => row.memberId);
-  const reportingLines = registeredRows.flatMap((row) => {
-    const directManagerMemberId = row.directManagerId
-      ? memberIdByPreRegistrationId.get(row.directManagerId)
-      : null;
-    return directManagerMemberId
-      ? [
-          {
-            directManagerId: directManagerMemberId,
-            memberId: row.memberId,
-            organizationId: workspace.id,
-          },
-        ]
-      : [];
-  });
 
   await db.transaction(async (tx) => {
     if (managedMemberIds.length > 0) {
