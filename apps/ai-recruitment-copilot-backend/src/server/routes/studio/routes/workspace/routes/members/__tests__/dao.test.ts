@@ -138,5 +138,12 @@ describe("workspace member reporting-line dao", () => {
         userIds: [USERS.manager, USERS.report],
       }),
     ).toBe("self");
+    expect(await listWorkspaceMemberHierarchy(ORGANIZATION_ID)).toEqual(
+      expect.arrayContaining([
+        { directManagerUserId: null, userId: USERS.manager },
+        { directManagerUserId: USERS.manager, userId: USERS.report },
+        { directManagerUserId: USERS.manager, userId: USERS.secondReport },
+      ]),
+    );
   });
 });

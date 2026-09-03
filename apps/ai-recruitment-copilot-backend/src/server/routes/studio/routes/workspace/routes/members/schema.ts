@@ -6,5 +6,5 @@ export const memberDirectManagerInputSchema = z.object({
 
 export const memberBatchDirectManagerInputSchema = z.object({
   directManagerUserId: z.string().min(1),
-  userIds: z.array(z.string().min(1)).min(1),
+  userIds: z.array(z.string().min(1)).min(1).max(5000),
 });

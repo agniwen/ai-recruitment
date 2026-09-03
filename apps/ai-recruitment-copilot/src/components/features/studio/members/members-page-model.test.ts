@@ -3,6 +3,7 @@ import {
   buildWorkspaceMemberTreeRows,
   filterWorkspaceMembers,
   filterWorkspaceMembersWithAncestors,
+  retainVisibleMemberSelection,
 } from "./members-page-model";
 import type { MemberRow } from "./members-page-model";
 
@@ -37,6 +38,16 @@ describe("filterWorkspaceMembers", () => {
         (row) => row.userId,
       ),
     ).toEqual(["manager", "report"]);
+  });
+});
+
+describe("retainVisibleMemberSelection", () => {
+  it("drops selected members that are no longer visible", () => {
+    expect(
+      retainVisibleMemberSelection({ "hidden-id": true, "visible-id": true }, [
+        { ...MEMBER, id: "visible-id" },
+      ]),
+    ).toEqual({ "visible-id": true });
   });
 });
 

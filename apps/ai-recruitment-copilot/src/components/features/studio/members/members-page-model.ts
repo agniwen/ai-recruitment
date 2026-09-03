@@ -90,6 +90,19 @@ export function filterWorkspaceMembersWithAncestors(
   return rows.filter((row) => includedUserIds.has(row.userId));
 }
 
+export function retainVisibleMemberSelection(
+  selection: Record<string, boolean>,
+  visibleRows: readonly MemberRow[],
+): Record<string, boolean> {
+  const visibleIds = new Set(visibleRows.map((row) => row.id));
+  const retainedEntries = Object.entries(selection).filter(
+    ([id, selected]) => selected && visibleIds.has(id),
+  );
+  return retainedEntries.length === Object.keys(selection).length
+    ? selection
+    : Object.fromEntries(retainedEntries);
+}
+
 export function buildWorkspaceMemberTreeRows(
   rows: readonly MemberRow[],
   directManagerByUserId: ReadonlyMap<string, string | null>,

@@ -78,6 +78,7 @@ import {
   filterWorkspaceMembersWithAncestors,
   getWorkspaceRoleBadgeVariant,
   parseWorkspaceManagementTab,
+  retainVisibleMemberSelection,
   useDynamicWorkspaceRoles,
   EMPTY_RECRUITING_GROUPS,
 } from "@/components/features/studio/members/members-page-model";
@@ -288,6 +289,9 @@ export function MembersManagementPage() {
       ),
     [collapsedMemberUserIds, directManagerByUserId, filteredRows, hasMemberSearch],
   );
+  useEffect(() => {
+    setMemberRowSelection((current) => retainVisibleMemberSelection(current, rows));
+  }, [rows]);
   const total = rows.length;
   const memberSelectColumns = useMemo(
     () => (canUpdate ? [selectColumn<MemberRow>()] : []),
