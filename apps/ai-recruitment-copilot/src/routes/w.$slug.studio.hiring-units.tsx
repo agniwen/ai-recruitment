@@ -31,6 +31,13 @@ import { OdcAssignmentDialog } from "@/components/features/studio/hiring-units/o
 import { PageHeader } from "@/components/features/studio/page-header";
 import { StudioTablePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -170,17 +177,26 @@ function HiringUnitManagementPage() {
       customColumn<HiringUnitTreeRow>({
         cell: (row) =>
           row.odcMembers.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {row.odcMembers.map((member) => (
-                <Badge key={member.memberId} title={member.email} variant="secondary">
-                  {member.name}
-                </Badge>
+            <AvatarGroup>
+              {row.odcMembers.slice(0, 5).map((member) => (
+                <Avatar key={member.memberId} size="sm" title={`${member.name} · ${member.email}`}>
+                  {member.image ? <AvatarImage alt={member.name} src={member.image} /> : null}
+                  <AvatarFallback>{member.name.trim().slice(0, 2) || "ODC"}</AvatarFallback>
+                </Avatar>
               ))}
-            </div>
+              {row.odcMembers.length > 5 ? (
+                <AvatarGroupCount title={`另有 ${row.odcMembers.length - 5} 位 ODC`}>
+                  +{row.odcMembers.length - 5}
+                </AvatarGroupCount>
+              ) : null}
+            </AvatarGroup>
           ) : (
             <span className="text-muted-foreground">未设置</span>
           ),
         key: "odcMembers",
+        maxSize: 160,
+        minSize: 160,
+        size: 160,
         title: "ODC",
       }),
       dateColumn<HiringUnitTreeRow>({ key: "createdAt", title: "创建时间" }),

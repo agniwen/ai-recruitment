@@ -9,6 +9,8 @@ export interface CustomColumnOptions<TData extends RowData> {
   title: string | ((ctx: HeaderContext<DataGridFeatures, TData, unknown>) => ReactNode);
   cell: (row: TData) => ReactNode;
   size?: number;
+  minSize?: number;
+  maxSize?: number;
   enableSorting?: boolean;
   /** When set, this column also reads `row[accessorKey]` (used by sort + filter) */
   accessorKey?: keyof TData & string;
@@ -22,6 +24,8 @@ export function customColumn<TData extends RowData>(
     enableSorting: opts.enableSorting ?? false,
     header: opts.title,
     id: opts.key,
+    maxSize: opts.maxSize,
+    minSize: opts.minSize,
     size: opts.size,
   } satisfies ColumnDef<DataGridFeatures, TData>;
   return opts.accessorKey ? { ...base, accessorKey: opts.accessorKey } : base;

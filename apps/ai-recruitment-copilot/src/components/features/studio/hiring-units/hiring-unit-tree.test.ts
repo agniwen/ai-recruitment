@@ -83,6 +83,11 @@ describe("hiring unit management list", () => {
     expect(source).not.toContain("useDataGridState");
     expect(source).not.toMatch(/pagination=\{/u);
     expect(source).toContain("row.odcMembers");
+    expect(source).toContain("<AvatarGroup>");
+    expect(source).toContain("row.odcMembers.slice(0, 5)");
+    expect(source).toContain("<AvatarGroupCount");
+    expect(source).toContain("minSize: 160");
+    expect(source).toContain("maxSize: 160");
   });
 
   it("submits multiple ODC members for one hiring unit or department", () => {
