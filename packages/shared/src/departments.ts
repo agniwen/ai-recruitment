@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { OdcMemberSummary } from "./hiring-units";
 
 export const departmentBaseSchema = z.object({
   description: z.string().trim().max(500, "描述不能超过 500 字").optional().or(z.literal("")),
@@ -26,4 +27,5 @@ export interface DepartmentRecord {
 export interface DepartmentListRecord extends DepartmentRecord {
   interviewerCount: number;
   jobDescriptionCount: number;
+  odcMembers: OdcMemberSummary[];
 }

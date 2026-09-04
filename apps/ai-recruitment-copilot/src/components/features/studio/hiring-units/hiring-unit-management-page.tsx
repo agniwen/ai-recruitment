@@ -23,16 +23,10 @@ import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-d
 import { HiringUnitFormDialog } from "@/components/features/studio/hiring-units/hiring-unit-form-dialog";
 import { flattenHiringUnitTree } from "@/components/features/studio/hiring-units/hiring-unit-tree";
 import type { HiringUnitTreeRow } from "@/components/features/studio/hiring-units/hiring-unit-tree";
-import { OdcAssignmentDialog } from "@/components/features/studio/hiring-units/odc-assignment-dialog";
+import { OdcAssignmentDialog } from "@/components/features/studio/odc-assignment-dialog";
 import { PageHeader } from "@/components/features/studio/page-header";
+import { OdcAvatarGroup } from "@/components/features/studio/odc-avatar-group";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarGroup,
-  AvatarGroupCount,
-  AvatarImage,
-} from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -186,24 +180,7 @@ export function HiringUnitManagementPage() {
         truncate: true,
       }),
       customColumn<HiringUnitTreeRow>({
-        cell: (row) =>
-          row.odcMembers.length > 0 ? (
-            <AvatarGroup>
-              {row.odcMembers.slice(0, 5).map((member) => (
-                <Avatar key={member.memberId} size="sm" title={`${member.name} · ${member.email}`}>
-                  {member.image ? <AvatarImage alt={member.name} src={member.image} /> : null}
-                  <AvatarFallback>{member.name.trim().slice(0, 2) || "ODC"}</AvatarFallback>
-                </Avatar>
-              ))}
-              {row.odcMembers.length > 5 ? (
-                <AvatarGroupCount title={`另有 ${row.odcMembers.length - 5} 位 ODC`}>
-                  +{row.odcMembers.length - 5}
-                </AvatarGroupCount>
-              ) : null}
-            </AvatarGroup>
-          ) : (
-            <span className="text-muted-foreground">未设置</span>
-          ),
+        cell: (row) => <OdcAvatarGroup members={row.odcMembers} />,
         key: "odcMembers",
         maxSize: 160,
         minSize: 160,

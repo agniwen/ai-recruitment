@@ -86,20 +86,24 @@ describe("hiring unit management list", () => {
       new URL("hiring-unit-management-page.tsx", import.meta.url),
       "utf-8",
     );
+    const avatarGroupSource = readFileSync(
+      new URL("../odc-avatar-group.tsx", import.meta.url),
+      "utf-8",
+    );
 
     expect(source).toContain('["hiring-units"].tree.$get');
     expect(source).not.toContain("useDataGridState");
     expect(source).not.toMatch(/pagination=\{/u);
-    expect(source).toContain("row.odcMembers");
-    expect(source).toContain("<AvatarGroup>");
-    expect(source).toContain("row.odcMembers.slice(0, 5)");
-    expect(source).toContain("<AvatarGroupCount");
+    expect(source).toContain("<OdcAvatarGroup members={row.odcMembers}");
+    expect(avatarGroupSource).toContain("<AvatarGroup>");
+    expect(avatarGroupSource).toContain("members.slice(0, 5)");
+    expect(avatarGroupSource).toContain("<AvatarGroupCount");
     expect(source).toContain("minSize: 160");
     expect(source).toContain("maxSize: 160");
   });
 
   it("submits multiple ODC members for one hiring unit or department", () => {
-    const source = readFileSync(new URL("odc-assignment-dialog.tsx", import.meta.url), "utf-8");
+    const source = readFileSync(new URL("../odc-assignment-dialog.tsx", import.meta.url), "utf-8");
 
     expect(source).toContain("<SearchableMultiSelect");
     expect(source).toContain("json: { memberIds }");

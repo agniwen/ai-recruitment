@@ -19,19 +19,27 @@ import type { SearchableSelectOption } from "@/components/ui/searchable-select";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
-import type { HiringUnitTreeRow } from "./hiring-unit-tree";
+
+export interface OdcAssignmentTarget {
+  id: string;
+  name: string;
+  odcMembers: OdcMemberSummary[];
+  rowType: "department" | "hiringUnit";
+}
+
+interface OdcAssignmentDialogProps {
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+  open: boolean;
+  target: OdcAssignmentTarget | null;
+}
 
 export function OdcAssignmentDialog({
   onOpenChange,
   onSaved,
   open,
   target,
-}: {
-  onOpenChange: (open: boolean) => void;
-  onSaved: () => void;
-  open: boolean;
-  target: HiringUnitTreeRow | null;
-}) {
+}: OdcAssignmentDialogProps) {
   const slug = useWorkspaceSlug();
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);

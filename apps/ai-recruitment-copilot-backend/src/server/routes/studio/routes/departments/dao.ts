@@ -19,8 +19,11 @@ import {
   hiringUnit,
   interviewer,
   jobDescription,
+  member,
+  user,
 } from "@arc/db-schema/schema";
 import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import type { OdcMemberSummary } from "@arc/shared/hiring-units";
 
 const departmentListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
@@ -170,9 +173,56 @@ export async function loadDepartmentReferenceCountsByIds(departmentIds: string[]
   return map;
 }
 
+export async function loadDepartmentOdcMembersByIds({
+  departmentIds,
+  organizationId,
+}: {
+  departmentIds: string[];
+  organizationId: string;
+}): Promise<Map<string, OdcMemberSummary[]>> {
+  if (departmentIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db
+    .select({
+      departmentId: departmentOdcMember.departmentId,
+      email: user.email,
+      image: user.image,
+      memberId: member.id,
+      name: user.name,
+      userId: user.id,
+    })
+    .from(departmentOdcMember)
+    .innerJoin(member, eq(departmentOdcMember.memberId, member.id))
+    .innerJoin(user, eq(member.userId, user.id))
+    .where(
+      and(
+        eq(departmentOdcMember.organizationId, organizationId),
+        inArray(departmentOdcMember.departmentId, departmentIds),
+      ),
+    )
+    .orderBy(user.name, user.email);
+
+  const membersByDepartmentId = new Map<string, OdcMemberSummary[]>();
+  for (const row of rows) {
+    const records = membersByDepartmentId.get(row.departmentId) ?? [];
+    records.push({
+      email: row.email,
+      image: row.image,
+      memberId: row.memberId,
+      name: row.name,
+      userId: row.userId,
+    });
+    membersByDepartmentId.set(row.departmentId, records);
+  }
+  return membersByDepartmentId;
+}
+
 function toDepartmentListRecord(
   row: Awaited<ReturnType<typeof listDepartmentRows>>[number],
   refs: { interviewerCount: number; jobDescriptionCount: number },
+  odcMembers: OdcMemberSummary[],
 ): DepartmentListRecord {
   return {
     createdAt: serializeDate(row.createdAt),
@@ -184,6 +234,7 @@ function toDepartmentListRecord(
     interviewerCount: refs.interviewerCount,
     jobDescriptionCount: refs.jobDescriptionCount,
     name: row.name,
+    odcMembers,
     updatedAt: serializeDate(row.updatedAt),
   };
 }
@@ -228,7 +279,11 @@ export async function queryPaginatedDepartments(
     countDepartmentRows({ organizationId, scopeCondition, search }),
   ]);
 
-  const refsMap = await loadDepartmentReferenceCountsByIds(records.map((record) => record.id));
+  const departmentIds = records.map((record) => record.id);
+  const [refsMap, odcMembersByDepartmentId] = await Promise.all([
+    loadDepartmentReferenceCountsByIds(departmentIds),
+    loadDepartmentOdcMembersByIds({ departmentIds, organizationId }),
+  ]);
 
   return {
     page,
@@ -237,6 +292,7 @@ export async function queryPaginatedDepartments(
       toDepartmentListRecord(
         record,
         refsMap.get(record.id) ?? { interviewerCount: 0, jobDescriptionCount: 0 },
+        odcMembersByDepartmentId.get(record.id) ?? [],
       ),
     ),
     total,
