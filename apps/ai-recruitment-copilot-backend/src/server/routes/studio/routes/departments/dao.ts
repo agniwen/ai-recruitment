@@ -126,7 +126,7 @@ async function countDepartmentRows({
   return result?.count ?? 0;
 }
 
-async function loadReferenceCounts(departmentIds: string[]) {
+export async function loadDepartmentReferenceCountsByIds(departmentIds: string[]) {
   if (departmentIds.length === 0) {
     return new Map<string, { interviewerCount: number; jobDescriptionCount: number }>();
   }
@@ -228,7 +228,7 @@ export async function queryPaginatedDepartments(
     countDepartmentRows({ organizationId, scopeCondition, search }),
   ]);
 
-  const refsMap = await loadReferenceCounts(records.map((record) => record.id));
+  const refsMap = await loadDepartmentReferenceCountsByIds(records.map((record) => record.id));
 
   return {
     page,

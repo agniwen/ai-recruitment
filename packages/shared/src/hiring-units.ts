@@ -35,6 +35,8 @@ export interface HiringUnitTreeDepartment {
   description: string | null;
   hiringUnitId: string | null;
   id: string;
+  interviewerCount: number;
+  jobDescriptionCount: number;
   name: string;
   odcMembers: OdcMemberSummary[];
   updatedAt: string | Date;

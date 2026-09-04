@@ -30,6 +30,7 @@ import {
   resolveDepartmentHiringUnitScopeCondition,
   resolveHiringUnitAccessScope,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import { loadDepartmentReferenceCountsByIds } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 
 const hiringUnitListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
@@ -323,6 +324,9 @@ export async function listHiringUnitTree({
       .orderBy(asc(department.name)),
     loadOdcMembersByTarget(organizationId),
   ]);
+  const departmentReferenceCounts = await loadDepartmentReferenceCountsByIds(
+    departmentRows.map((row) => row.id),
+  );
 
   const departmentsByHiringUnitId = new Map<string, HiringUnitTreeDepartment[]>();
   const unassignedDepartments: HiringUnitTreeDepartment[] = [];
@@ -332,6 +336,8 @@ export async function listHiringUnitTree({
       description: row.description,
       hiringUnitId: row.hiringUnitId,
       id: row.id,
+      interviewerCount: departmentReferenceCounts.get(row.id)?.interviewerCount ?? 0,
+      jobDescriptionCount: departmentReferenceCounts.get(row.id)?.jobDescriptionCount ?? 0,
       name: row.name,
       odcMembers: odcMembersByTarget.departments.get(row.id) ?? [],
       updatedAt: serializeDate(row.updatedAt),

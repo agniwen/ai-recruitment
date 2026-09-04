@@ -13,6 +13,8 @@ const tree: HiringUnitTreeNode[] = [
         description: "负责平台研发",
         hiringUnitId: "unit-1",
         id: "department-1",
+        interviewerCount: 1,
+        jobDescriptionCount: 2,
         name: "平台部",
         odcMembers: [],
         updatedAt: "2026-09-02T00:00:00.000Z",
@@ -54,7 +56,13 @@ describe("flattenHiringUnitTree", () => {
         rowType: "hiringUnit",
         treeDepth: 0,
       }),
-      expect.objectContaining({ id: "department-1", rowType: "department", treeDepth: 1 }),
+      expect.objectContaining({
+        id: "department-1",
+        interviewerCount: 1,
+        jobDescriptionCount: 2,
+        rowType: "department",
+        treeDepth: 1,
+      }),
     ]);
   });
 
@@ -75,7 +83,7 @@ describe("flattenHiringUnitTree", () => {
 describe("hiring unit management list", () => {
   it("loads the complete tree without pagination controls", () => {
     const source = readFileSync(
-      new URL("../../../../routes/w.$slug.studio.hiring-units.tsx", import.meta.url),
+      new URL("hiring-unit-management-page.tsx", import.meta.url),
       "utf-8",
     );
 
@@ -96,5 +104,23 @@ describe("hiring unit management list", () => {
     expect(source).toContain("<SearchableMultiSelect");
     expect(source).toContain("json: { memberIds }");
     expect(source).toContain("target?.odcMembers.map");
+  });
+
+  it("edits and safely deletes department rows from the tree", () => {
+    const source = readFileSync(
+      new URL("hiring-unit-management-page.tsx", import.meta.url),
+      "utf-8",
+    );
+    const deleteDialogSource = readFileSync(
+      new URL("../departments/department-delete-dialog.tsx", import.meta.url),
+      "utf-8",
+    );
+
+    expect(source).toContain("<DepartmentFormDialog");
+    expect(source).toContain('studio.departments[":id"].$delete');
+    expect(source).toContain('row.rowType === "department" && canUpdateDepartment');
+    expect(source).toContain('row.rowType === "department" && canDeleteDepartment');
+    expect(deleteDialogSource).toContain("department.jobDescriptionCount > 0");
+    expect(deleteDialogSource).toContain("confirmDisabled");
   });
 });

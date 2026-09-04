@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { PageHeader } from "@/components/features/studio/page-header";
-import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { ScopedInterviewersModal } from "@/components/features/studio/scoped-interviewers-modal";
 import { ScopedJobDescriptionsModal } from "@/components/features/studio/scoped-job-descriptions-modal";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
@@ -32,6 +31,7 @@ import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { useHasPermission } from "@/hooks/use-has-permission";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DepartmentFormDialog } from "@/components/features/studio/departments/department-form-dialog";
+import { DepartmentDeleteDialog } from "@/components/features/studio/departments/department-delete-dialog";
 
 export function DepartmentManagementPage() {
   const slug = useWorkspaceSlug();
@@ -274,16 +274,10 @@ export function DepartmentManagementPage() {
         />
       ) : null}
 
-      <EntityDeleteDialog
-        description={(record) =>
-          record.interviewerCount > 0 || record.jobDescriptionCount > 0
-            ? "该部门下仍有面试官或在招岗位，将无法删除。"
-            : `即将删除部门：${record.name}，删除后无法恢复。`
-        }
+      <DepartmentDeleteDialog
         onClose={() => crud.setDeleteRecord(null)}
         onConfirm={crud.handleDelete}
         record={canDeleteDepartment ? crud.deleteRecord : null}
-        title="确认删除这个部门？"
       />
 
       <ScopedInterviewersModal
