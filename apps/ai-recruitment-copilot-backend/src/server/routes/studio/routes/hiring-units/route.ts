@@ -3,17 +3,24 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { hiringUnit } from "@arc/db-schema/schema";
-import { hiringUnitFormSchema, hiringUnitUpdateSchema } from "@arc/shared/hiring-units";
+import {
+  hiringUnitFormSchema,
+  hiringUnitUpdateSchema,
+  odcAssignmentSchema,
+} from "@arc/shared/hiring-units";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import {
   listAllHiringUnits,
+  listHiringUnitTree,
   listSelectableHiringUnits,
   loadHiringUnitById,
   queryPaginatedHiringUnits,
   serializeHiringUnit,
+  updateHiringUnitOdcMember,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao";
+import { isEligibleOdcMember } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
 
 const hiringUnitListQuerySchema = z.object({
   page: z.string().optional(),
@@ -55,6 +62,24 @@ export const hiringUnitsRouter = factory
     const records = await listAllHiringUnits(activeOrg.id);
     return c.json({ records }, 200);
   })
+  .get(
+    "/tree",
+    requirePermission("hiringUnit", "read"),
+    requirePermission("department", "read"),
+    async (c) => {
+      const { activeOrg } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      return c.json(
+        await listHiringUnitTree({
+          actorUserId: c.var.user?.id,
+          organizationId: activeOrg.id,
+        }),
+        200,
+      );
+    },
+  )
   .get("/selectable", async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
@@ -83,6 +108,7 @@ export const hiringUnitsRouter = factory
         description: input.description?.trim() || null,
         id: crypto.randomUUID(),
         name: input.name.trim(),
+        odcMemberId: null,
         organizationId: activeOrg.id,
         updatedAt: now,
       } satisfies typeof hiringUnit.$inferInsert;
@@ -134,6 +160,31 @@ export const hiringUnitsRouter = factory
       safeUpdateTag(`hiring-units:${activeOrg.id}`);
       const updated = await loadHiringUnitById(id, activeOrg.id);
       return c.json(updated, 200);
+    },
+  )
+  .put(
+    "/:id/odc",
+    requirePermission("hiringUnit", "update"),
+    zValidator("json", odcAssignmentSchema, jsonValidatorError("ODC 设置参数无效。")),
+    async (c) => {
+      const { activeOrg } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const { memberId } = c.req.valid("json");
+      if (memberId && !(await isEligibleOdcMember({ memberId, organizationId: activeOrg.id }))) {
+        return c.json({ error: "所选成员的角色未标记为 ODC。" }, 400);
+      }
+      const updated = await updateHiringUnitOdcMember({
+        id: c.req.param("id"),
+        memberId,
+        organizationId: activeOrg.id,
+      });
+      if (!updated) {
+        return c.json({ error: "用人组织不存在。" }, 404);
+      }
+      safeUpdateTag(`hiring-units:${activeOrg.id}`);
+      return c.json({ success: true }, 200);
     },
   )
   .delete("/:id", requirePermission("hiringUnit", "delete"), async (c) => {

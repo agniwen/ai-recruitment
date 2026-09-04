@@ -21,3 +21,37 @@ export interface HiringUnitRecord {
 }
 
 export type HiringUnitListRecord = HiringUnitRecord;
+
+export interface OdcMemberSummary {
+  email: string;
+  image: string | null;
+  memberId: string;
+  name: string;
+  userId: string;
+}
+
+export interface HiringUnitTreeDepartment {
+  createdAt: string | Date;
+  description: string | null;
+  hiringUnitId: string | null;
+  id: string;
+  name: string;
+  odcMember: OdcMemberSummary | null;
+  updatedAt: string | Date;
+}
+
+export interface HiringUnitTreeNode extends HiringUnitRecord {
+  departments: HiringUnitTreeDepartment[];
+  odcMember: OdcMemberSummary | null;
+}
+
+export interface HiringUnitTreeResult {
+  records: HiringUnitTreeNode[];
+  unassignedDepartments: HiringUnitTreeDepartment[];
+}
+
+export const odcAssignmentSchema = z.object({
+  memberId: z.string().trim().min(1).nullable(),
+});
+
+export type OdcAssignmentInput = z.infer<typeof odcAssignmentSchema>;

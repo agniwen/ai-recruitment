@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { department, hiringUnit } from "@arc/db-schema/schema";
 import { departmentFormSchema, departmentUpdateSchema } from "@arc/shared/departments";
+import { odcAssignmentSchema } from "@arc/shared/hiring-units";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import {
@@ -12,9 +13,11 @@ import {
   loadDepartmentReferenceCounts,
   queryPaginatedDepartments,
   serializeDepartment,
+  updateDepartmentOdcMember,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import { isEligibleOdcMember } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
 
 const departmentListQuerySchema = z.object({
   page: z.string().optional(),
@@ -111,6 +114,7 @@ export const departmentsRouter = factory
         hiringUnitId,
         id: crypto.randomUUID(),
         name: input.name.trim(),
+        odcMemberId: null,
         organizationId: activeOrg.id,
         updatedAt: now,
       } satisfies typeof department.$inferInsert;
@@ -172,6 +176,39 @@ export const departmentsRouter = factory
       safeUpdateTag(`departments:${activeOrg.id}`);
       const updated = await loadDepartmentById(id, activeOrg.id, { actorUserId: c.var.user?.id });
       return c.json(updated, 200);
+    },
+  )
+  .put(
+    "/:id/odc",
+    requirePermission("department", "update"),
+    zValidator("json", odcAssignmentSchema, jsonValidatorError("ODC 设置参数无效。")),
+    async (c) => {
+      const { activeOrg } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const id = c.req.param("id");
+      const existing = await loadDepartmentById(id, activeOrg.id, {
+        actorUserId: c.var.user?.id,
+      });
+      if (!existing) {
+        return c.json({ error: "部门不存在。" }, 404);
+      }
+      const { memberId } = c.req.valid("json");
+      if (memberId && !(await isEligibleOdcMember({ memberId, organizationId: activeOrg.id }))) {
+        return c.json({ error: "所选成员的角色未标记为 ODC。" }, 400);
+      }
+      const updated = await updateDepartmentOdcMember({
+        id,
+        memberId,
+        organizationId: activeOrg.id,
+      });
+      if (!updated) {
+        return c.json({ error: "部门不存在。" }, 404);
+      }
+      safeUpdateTag(`departments:${activeOrg.id}`);
+      safeUpdateTag(`hiring-units:${activeOrg.id}`);
+      return c.json({ success: true }, 200);
     },
   )
   .delete("/:id", requirePermission("department", "delete"), async (c) => {

@@ -294,6 +294,23 @@ export async function loadDepartmentReferenceCounts(id: string) {
   };
 }
 
+export async function updateDepartmentOdcMember({
+  id,
+  memberId,
+  organizationId,
+}: {
+  id: string;
+  memberId: string | null;
+  organizationId: string;
+}): Promise<boolean> {
+  const rows = await db
+    .update(department)
+    .set({ odcMemberId: memberId, updatedAt: new Date() })
+    .where(and(eq(department.id, id), eq(department.organizationId, organizationId)))
+    .returning({ id: department.id });
+  return rows.length > 0;
+}
+
 export async function loadDepartmentById(
   id: string,
   organizationId: string,

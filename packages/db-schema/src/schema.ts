@@ -692,6 +692,7 @@ export const hiringUnit = pgTable(
     description: text("description"),
     id: text("id").primaryKey(),
     name: text("name").notNull(),
+    odcMemberId: text("odc_member_id").references(() => member.id, { onDelete: "set null" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -706,6 +707,7 @@ export const hiringUnit = pgTable(
     index("hiring_unit_name_idx").on(table.name),
     index("hiring_unit_created_at_idx").on(table.createdAt),
     index("hiring_unit_organization_idx").on(table.organizationId),
+    index("hiring_unit_odc_member_idx").on(table.odcMemberId),
   ],
 );
 
@@ -747,6 +749,7 @@ export const department = pgTable(
     }),
     id: text("id").primaryKey(),
     name: text("name").notNull(),
+    odcMemberId: text("odc_member_id").references(() => member.id, { onDelete: "set null" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -762,6 +765,7 @@ export const department = pgTable(
     index("department_created_at_idx").on(table.createdAt),
     index("department_organization_idx").on(table.organizationId),
     index("department_hiring_unit_idx").on(table.organizationId, table.hiringUnitId),
+    index("department_odc_member_idx").on(table.odcMemberId),
   ],
 );
 

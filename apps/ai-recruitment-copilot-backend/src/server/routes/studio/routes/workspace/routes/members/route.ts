@@ -1,15 +1,37 @@
 import { zValidator } from "@hono/zod-validator";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
+import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import {
   listWorkspaceMemberHierarchy,
   updateWorkspaceMemberDirectManager,
   updateWorkspaceMembersDirectManager,
 } from "./dao";
 import { memberBatchDirectManagerInputSchema, memberDirectManagerInputSchema } from "./schema";
+import { listOdcMemberCandidates } from "../../../hiring-units/odc-assignment";
 
 export const membersRouter = factory
   .createApp()
+  .get("/odc-candidates", async (c) => {
+    const { activeOrg } = c.var;
+    if (!activeOrg) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const authorize = createRequestWorkspaceAuthorizer({
+      headers: c.req.raw.headers,
+      memberRole: c.var.member?.role,
+      organizationId: activeOrg.id,
+      userId: c.var.user?.id,
+    });
+    const [canUpdateHiringUnits, canUpdateDepartments] = await Promise.all([
+      authorize({ action: "update", resource: "hiringUnit" }),
+      authorize({ action: "update", resource: "department" }),
+    ]);
+    if (!(canUpdateHiringUnits || canUpdateDepartments)) {
+      return c.json({ message: "Forbidden" }, 403);
+    }
+    return c.json({ records: await listOdcMemberCandidates(activeOrg.id) }, 200);
+  })
   .get("/hierarchy", async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {

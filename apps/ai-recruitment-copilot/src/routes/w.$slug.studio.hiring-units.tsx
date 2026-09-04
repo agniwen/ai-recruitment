@@ -1,4 +1,4 @@
-import { HydrationBoundary, useQueryClient } from "@tanstack/react-query";
+import { HydrationBoundary, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DehydratedState } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -7,27 +7,33 @@ import {
   useLoaderData,
   useRouter,
 } from "@tanstack/react-router";
-import type { DataGridQueryState } from "@/components/data-grid/query-contract";
-import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
-import { formatDocumentTitle } from "@/lib/start/document-title";
-import { loadStudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
-import type { StudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
-import { PageHeader } from "@/components/features/studio/page-header";
-import { StudioTablePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
-import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
-import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
-import type { HiringUnitListRecord, HiringUnitRecord } from "@arc/shared/hiring-units";
-import type { PaginatedHiringUnitResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao";
-import { IconWorld as GlobeIcon, IconPlus as PlusIcon } from "@tabler/icons-react";
-import { useMemo } from "react";
-import { Button } from "@/components/ui/button";
+import {
+  IconBuilding,
+  IconChevronDown,
+  IconChevronRight,
+  IconPlus,
+  IconWorld,
+} from "@tabler/icons-react";
+import { useMemo, useState } from "react";
+import type { HiringUnitRecord, HiringUnitTreeResult } from "@arc/shared/hiring-units";
 import {
   actionsColumn,
+  customColumn,
   DataGrid,
   dateColumn,
   textColumn,
-  useDataGridState,
 } from "@/components/data-grid";
+import { MemberCell } from "@/components/data-grid/cells/member-cell";
+import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
+import { HiringUnitFormDialog } from "@/components/features/studio/hiring-units/hiring-unit-form-dialog";
+import { flattenHiringUnitTree } from "@/components/features/studio/hiring-units/hiring-unit-tree";
+import type { HiringUnitTreeRow } from "@/components/features/studio/hiring-units/hiring-unit-tree";
+import { OdcAssignmentDialog } from "@/components/features/studio/hiring-units/odc-assignment-dialog";
+import { PageHeader } from "@/components/features/studio/page-header";
+import { StudioTablePageSkeleton } from "@/components/features/studio/studio-page-skeletons";
+import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -36,10 +42,13 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { rpc } from "@/lib/client/rpc";
 import { useHasPermission } from "@/hooks/use-has-permission";
+import { rpcFetch } from "@/lib/client/api/rpc-fetch";
+import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
-import { HiringUnitFormDialog } from "@/components/features/studio/hiring-units/hiring-unit-form-dialog";
+import { formatDocumentTitle } from "@/lib/start/document-title";
+import { loadStudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
+import type { StudioHiringUnitsState } from "@/lib/start/studio/hiring-units.functions";
 
 function HiringUnitManagementPage() {
   const slug = useWorkspaceSlug();
@@ -48,161 +57,231 @@ function HiringUnitManagementPage() {
   const canCreateHiringUnit = useHasPermission("hiringUnit", "create");
   const canUpdateHiringUnit = useHasPermission("hiringUnit", "update");
   const canDeleteHiringUnit = useHasPermission("hiringUnit", "delete");
-
-  const fetchHiringUnits = useMemo(
-    () =>
-      async (params: {
-        search: string;
-        page: number;
-        pageSize: number;
-        filters: Record<string, never>;
-        sortBy: string | undefined;
-        sortOrder: "asc" | "desc" | undefined;
-      }): Promise<PaginatedHiringUnitResult> => {
-        const res = await rpc.api.w[":slug"].studio["hiring-units"].$get({
-          param: { slug },
-          query: {
-            page: String(params.page),
-            pageSize: String(params.pageSize),
-            ...(params.search ? { search: params.search } : {}),
-            sortBy: params.sortBy ?? "createdAt",
-            sortOrder: params.sortOrder ?? "desc",
-          },
-        });
-        if (!res.ok) {
-          throw new Error("加载用人组织列表失败");
-        }
-        return (await res.json()) as PaginatedHiringUnitResult;
-      },
-    [slug],
+  const canUpdateDepartment = useHasPermission("department", "update");
+  const [collapsedHiringUnitIds, setCollapsedHiringUnitIds] = useState<Set<string>>(
+    () => new Set(),
   );
+  const [search, setSearch] = useState("");
+  const [odcTarget, setOdcTarget] = useState<HiringUnitTreeRow | null>(null);
 
-  const grid = useDataGridState<HiringUnitListRecord, Record<string, never>>({
-    allowedSortIds: ["createdAt", "name", "updatedAt"],
-    defaultSorting: [{ desc: true, id: "createdAt" }],
-    initialFilters: {},
-    queryFn: fetchHiringUnits,
-    queryKeyBase: ["hiring-units", slug],
+  const treeQuery = useQuery({
+    queryFn: () =>
+      rpcFetch<HiringUnitTreeResult>(
+        rpc.api.w[":slug"].studio["hiring-units"].tree.$get({ param: { slug } }),
+        "加载用人组织树失败",
+      ),
+    queryKey: ["hiring-units", slug, "tree"],
   });
 
+  const rows = useMemo(
+    () =>
+      flattenHiringUnitTree(
+        treeQuery.data?.records ?? [],
+        collapsedHiringUnitIds,
+        search,
+        treeQuery.data?.unassignedDepartments ?? [],
+      ),
+    [collapsedHiringUnitIds, search, treeQuery.data],
+  );
+
   function invalidateHiringUnitData() {
-    grid.invalidate();
     void queryClient.invalidateQueries({ queryKey: ["hiring-units"] });
+    void queryClient.invalidateQueries({ queryKey: ["departments"] });
     void router.invalidate();
   }
 
-  const crud = useEntityCrud<HiringUnitListRecord, HiringUnitRecord>({
+  const crud = useEntityCrud<HiringUnitTreeRow, HiringUnitRecord>({
     deleteEntity: (record) =>
       rpc.api.w[":slug"].studio["hiring-units"][":id"].$delete({
         param: { id: record.id, slug },
       }),
-    detailFromList: (record) => record,
+    detailFromList: (record) => ({
+      createdAt: record.createdAt,
+      createdBy: record.createdBy,
+      description: record.description,
+      id: record.id,
+      name: record.name,
+      updatedAt: record.updatedAt,
+    }),
     invalidate: invalidateHiringUnitData,
-    messages: {
-      deleteSuccess: "用人组织已删除",
-    },
+    messages: { deleteSuccess: "用人组织已删除" },
   });
 
-  const columns = useMemo(
-    () => {
-      const baseColumns = [
-        textColumn<HiringUnitListRecord>({
-          key: "name",
-          primary: true,
-          title: "用人组织名称",
-        }),
-        textColumn<HiringUnitListRecord>({
-          fallback: "—",
-          key: "description",
-          muted: true,
-          title: "描述",
-          truncate: true,
-        }),
-        dateColumn<HiringUnitListRecord>({
-          key: "createdAt",
-          title: "创建时间",
-        }),
-      ];
-
-      if (canUpdateHiringUnit || canDeleteHiringUnit) {
-        baseColumns.push(
-          actionsColumn<HiringUnitListRecord>({
-            inline: [
-              {
-                label: "编辑",
-                onClick: (r) => void crud.openEdit(r),
-                show: () => canUpdateHiringUnit,
-              },
-            ],
-            menu: [
-              {
-                label: "删除",
-                onClick: (r) => crud.setDeleteRecord(r),
-                show: () => canDeleteHiringUnit,
-                variant: "destructive",
-              },
-            ],
-          }),
-        );
+  function toggleHiringUnit(id: string) {
+    setCollapsedHiringUnitIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
       }
+      return next;
+    });
+  }
 
-      return baseColumns;
-    },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- columns 不应每次 crud 引用变化都重建
-    [canDeleteHiringUnit, canUpdateHiringUnit],
-  );
+  const columns = useMemo(() => {
+    const baseColumns = [
+      customColumn<HiringUnitTreeRow>({
+        cell: (row) => {
+          const collapsed = collapsedHiringUnitIds.has(row.id) && !search;
+          return (
+            <div
+              className="flex min-w-56 items-center gap-1"
+              style={{ paddingInlineStart: `${row.treeDepth * 24}px` }}
+            >
+              {row.hasChildren ? (
+                <button
+                  aria-expanded={!collapsed}
+                  aria-label={collapsed ? `展开 ${row.name} 的部门` : `收起 ${row.name} 的部门`}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => toggleHiringUnit(row.id)}
+                  type="button"
+                >
+                  {collapsed ? (
+                    <IconChevronRight className="size-4" />
+                  ) : (
+                    <IconChevronDown className="size-4" />
+                  )}
+                </button>
+              ) : (
+                <span aria-hidden className="size-7 shrink-0" />
+              )}
+              {row.rowType === "hiringUnit" ? (
+                <IconWorld className="size-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <IconBuilding className="size-4 shrink-0 text-muted-foreground" />
+              )}
+              <span className="min-w-0 truncate font-medium">{row.name}</span>
+              <Badge variant={row.rowType === "hiringUnit" ? "secondary" : "outline"}>
+                {row.rowType === "hiringUnit" ? "用人组织" : "部门"}
+              </Badge>
+            </div>
+          );
+        },
+        key: "name",
+        title: "组织 / 部门",
+      }),
+      textColumn<HiringUnitTreeRow>({
+        fallback: "—",
+        key: "description",
+        muted: true,
+        title: "描述",
+        truncate: true,
+      }),
+      customColumn<HiringUnitTreeRow>({
+        cell: (row) =>
+          row.odcMember ? (
+            <MemberCell
+              avatarSize="sm"
+              email={row.odcMember.email}
+              image={row.odcMember.image}
+              name={row.odcMember.name}
+            />
+          ) : (
+            <span className="text-muted-foreground">未设置</span>
+          ),
+        key: "odcMember",
+        title: "ODC",
+      }),
+      dateColumn<HiringUnitTreeRow>({ key: "createdAt", title: "创建时间" }),
+    ];
 
-  const filtersConfig = useMemo(
-    () => [
-      {
-        key: "search" as const,
-        minWidth: "15rem",
-        placeholder: "搜索用人组织名称或描述",
-        type: "search" as const,
-      },
-    ],
-    [],
-  );
+    if (canUpdateHiringUnit || canDeleteHiringUnit || canUpdateDepartment) {
+      baseColumns.push(
+        actionsColumn<HiringUnitTreeRow>({
+          inline: [
+            {
+              label: "编辑",
+              onClick: (row) => void crud.openEdit(row),
+              show: (row) => row.rowType === "hiringUnit" && canUpdateHiringUnit,
+            },
+          ],
+          menu: [
+            {
+              label: "设置 ODC",
+              onClick: setOdcTarget,
+              show: (row) =>
+                row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment,
+            },
+            {
+              label: "删除",
+              onClick: (row) => crud.setDeleteRecord(row),
+              show: (row) => row.rowType === "hiringUnit" && canDeleteHiringUnit,
+              variant: "destructive",
+            },
+          ],
+        }),
+      );
+    }
+    return baseColumns;
+  }, [
+    canDeleteHiringUnit,
+    canUpdateDepartment,
+    canUpdateHiringUnit,
+    collapsedHiringUnitIds,
+    crud,
+    search,
+  ]);
 
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader description="设置招聘需求所属的业务组织及招聘负责范围。" title="用人组织" />
-
-        <DataGrid<HiringUnitListRecord>
-          {...grid.bind}
+        <PageHeader
+          description="按用人组织展开查看所属部门，并设置组织或部门的 ODC。"
+          title="用人组织"
+        />
+        <DataGrid<HiringUnitTreeRow>
           columns={columns}
+          data={rows}
           empty={
             <Empty className="border-border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <GlobeIcon className="size-5" />
+                  <IconWorld className="size-5" />
                 </EmptyMedia>
-                <EmptyTitle>还没有用人组织</EmptyTitle>
+                <EmptyTitle>{search ? "没有匹配的组织或部门" : "还没有用人组织"}</EmptyTitle>
                 <EmptyDescription>
-                  创建用人组织后，可逐步把部门、面试官和在招岗位按业务范围归属起来。
+                  {search
+                    ? "请尝试其他关键词。"
+                    : "创建用人组织后，可将部门、面试官和在招岗位按业务范围归属起来。"}
                 </EmptyDescription>
               </EmptyHeader>
-              {canCreateHiringUnit ? (
+              {canCreateHiringUnit && !search ? (
                 <EmptyContent>
                   <Button onClick={crud.openCreate}>
-                    <PlusIcon className="size-4" />
+                    <IconPlus className="size-4" />
                     新建用人组织
                   </Button>
                 </EmptyContent>
               ) : null}
             </Empty>
           }
-          filters={filtersConfig}
-          getRowId={(r) => r.id}
+          error={treeQuery.error}
+          filterValues={{ search }}
+          filters={[
+            {
+              key: "search",
+              minWidth: "15rem",
+              placeholder: "搜索用人组织或部门",
+              type: "search",
+            },
+          ]}
+          getRowId={(row) => `${row.rowType}:${row.id}`}
+          loading={treeQuery.isLoading}
+          onFilterChange={(_, value) => setSearch(value)}
+          onRefresh={() => void treeQuery.refetch()}
+          onRetry={() => void treeQuery.refetch()}
+          refetching={treeQuery.isRefetching}
           toolbarRight={
             canCreateHiringUnit ? (
               <Button className="flex-1 sm:flex-none" onClick={crud.openCreate}>
-                <PlusIcon className="size-4" />
+                <IconPlus className="size-4" />
                 新建用人组织
               </Button>
             ) : null
           }
+          total={rows.length}
+          totalPages={1}
         />
       </div>
 
@@ -214,6 +293,17 @@ function HiringUnitManagementPage() {
           record={crud.editingRecord}
         />
       ) : null}
+
+      <OdcAssignmentDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setOdcTarget(null);
+          }
+        }}
+        onSaved={invalidateHiringUnitData}
+        open={odcTarget !== null}
+        target={odcTarget}
+      />
 
       {canDeleteHiringUnit ? (
         <EntityDeleteDialog
@@ -228,50 +318,13 @@ function HiringUnitManagementPage() {
   );
 }
 
-type EmptyFilters = Record<string, never>;
-type SearchParamsPrimitive = boolean | number | string;
-type SearchParamsRecord = Record<
-  string,
-  SearchParamsPrimitive | SearchParamsPrimitive[] | undefined
->;
-function coerceSearchParams(search: Record<string, unknown>): SearchParamsRecord {
-  const out: SearchParamsRecord = {};
-  for (const [key, value] of Object.entries(search)) {
-    if (typeof value === "string") {
-      out[key] = value;
-      continue;
-    }
-    if (typeof value === "number" || typeof value === "boolean") {
-      out[key] = value;
-      continue;
-    }
-    if (Array.isArray(value)) {
-      out[key] = value.filter(
-        (item): item is boolean | number | string =>
-          typeof item === "string" || typeof item === "number" || typeof item === "boolean",
-      );
-    }
-  }
-  return out;
-}
-
-function parseHiringUnitQuery(searchParams: SearchParamsRecord): DataGridQueryState<EmptyFilters> {
-  return parseDataGridSearchParams(searchParams, {
-    allowedSortIds: ["createdAt", "name", "updatedAt"],
-    defaultSorting: [{ desc: true, id: "createdAt" }],
-    initialFilters: {},
-  });
-}
-
 function StudioHiringUnitsRoute() {
   const state = useLoaderData({
     from: "/w/$slug/studio/hiring-units",
   }) as unknown as StudioHiringUnitsState;
-
   if (state.status !== "ready") {
     return null;
   }
-
   return (
     <HydrationBoundary state={state.dehydratedState as unknown as DehydratedState}>
       <HiringUnitManagementPage />
@@ -281,18 +334,9 @@ function StudioHiringUnitsRoute() {
 
 export const Route = createFileRoute("/w/$slug/studio/hiring-units")({
   component: StudioHiringUnitsRoute,
-  head: () => ({
-    meta: [{ title: formatDocumentTitle("用人组织") }],
-  }),
-  loader: async (loaderContext) => {
-    const { location, params } = loaderContext as unknown as {
-      location: { search: SearchParamsRecord };
-      params: { slug: string };
-    };
-    const query = parseHiringUnitQuery(location.search);
-    const state = (await loadStudioHiringUnitsState({
-      data: { query, slug: params.slug },
-    })) as StudioHiringUnitsState;
+  head: () => ({ meta: [{ title: formatDocumentTitle("用人组织") }] }),
+  loader: async ({ params }) => {
+    const state = await loadStudioHiringUnitsState({ data: { slug: params.slug } });
     if (state.status === "unauthenticated") {
       throw redirect({
         href: `/login?callbackURL=${encodeURIComponent(`/w/${params.slug}/studio/hiring-units`)}`,
@@ -305,5 +349,4 @@ export const Route = createFileRoute("/w/$slug/studio/hiring-units")({
   },
   pendingComponent: () => <StudioTablePageSkeleton label="用人组织" />,
   shouldReload: false,
-  validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
 });

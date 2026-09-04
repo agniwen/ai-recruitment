@@ -1,5 +1,12 @@
-import type { HiringUnitListRecord, HiringUnitRecord } from "@arc/shared/hiring-units";
+import type {
+  HiringUnitListRecord,
+  HiringUnitRecord,
+  HiringUnitTreeDepartment,
+  HiringUnitTreeResult,
+  OdcMemberSummary,
+} from "@arc/shared/hiring-units";
 import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -12,8 +19,11 @@ import type {
   PaginationParams,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
-import { hiringUnit } from "@arc/db-schema/schema";
-import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import { department, hiringUnit, member, user } from "@arc/db-schema/schema";
+import {
+  resolveDepartmentHiringUnitScopeCondition,
+  resolveHiringUnitAccessScope,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const hiringUnitListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
@@ -29,6 +39,11 @@ const ORDER_COLUMNS = {
 } as const;
 
 const hiringUnitPaginationSchema = makePaginationSchema(SORT_COLUMNS);
+
+const hiringUnitOdcMember = alias(member, "hiring_unit_odc_member");
+const hiringUnitOdcUser = alias(user, "hiring_unit_odc_user");
+const departmentOdcMember = alias(member, "department_odc_member");
+const departmentOdcUser = alias(user, "department_odc_user");
 
 export type HiringUnitPaginationParams = PaginationParams<SortColumn>;
 
@@ -199,4 +214,140 @@ export async function loadHiringUnitById(
     .where(and(eq(hiringUnit.id, id), eq(hiringUnit.organizationId, organizationId)))
     .limit(1);
   return row ? serializeHiringUnit(row) : null;
+}
+
+function toOdcMemberSummary(row: {
+  email: string | null;
+  image: string | null;
+  memberId: string | null;
+  name: string | null;
+  userId: string | null;
+}): OdcMemberSummary | null {
+  if (!(row.email && row.memberId && row.name && row.userId)) {
+    return null;
+  }
+  return {
+    email: row.email,
+    image: row.image,
+    memberId: row.memberId,
+    name: row.name,
+    userId: row.userId,
+  };
+}
+
+export async function listHiringUnitTree({
+  actorUserId,
+  organizationId,
+}: {
+  actorUserId: string | null | undefined;
+  organizationId: string;
+}): Promise<HiringUnitTreeResult> {
+  const departmentScopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId,
+    organizationId,
+  });
+  const [unitRows, departmentRows] = await Promise.all([
+    db
+      .select({
+        createdAt: hiringUnit.createdAt,
+        createdBy: hiringUnit.createdBy,
+        description: hiringUnit.description,
+        id: hiringUnit.id,
+        name: hiringUnit.name,
+        odcEmail: hiringUnitOdcUser.email,
+        odcImage: hiringUnitOdcUser.image,
+        odcMemberId: hiringUnitOdcMember.id,
+        odcName: hiringUnitOdcUser.name,
+        odcUserId: hiringUnitOdcUser.id,
+        updatedAt: hiringUnit.updatedAt,
+      })
+      .from(hiringUnit)
+      .leftJoin(hiringUnitOdcMember, eq(hiringUnit.odcMemberId, hiringUnitOdcMember.id))
+      .leftJoin(hiringUnitOdcUser, eq(hiringUnitOdcMember.userId, hiringUnitOdcUser.id))
+      .where(eq(hiringUnit.organizationId, organizationId))
+      .orderBy(asc(hiringUnit.name)),
+    db
+      .select({
+        createdAt: department.createdAt,
+        description: department.description,
+        hiringUnitId: department.hiringUnitId,
+        id: department.id,
+        name: department.name,
+        odcEmail: departmentOdcUser.email,
+        odcImage: departmentOdcUser.image,
+        odcMemberId: departmentOdcMember.id,
+        odcName: departmentOdcUser.name,
+        odcUserId: departmentOdcUser.id,
+        updatedAt: department.updatedAt,
+      })
+      .from(department)
+      .leftJoin(departmentOdcMember, eq(department.odcMemberId, departmentOdcMember.id))
+      .leftJoin(departmentOdcUser, eq(departmentOdcMember.userId, departmentOdcUser.id))
+      .where(and(eq(department.organizationId, organizationId), departmentScopeCondition))
+      .orderBy(asc(department.name)),
+  ]);
+
+  const departmentsByHiringUnitId = new Map<string, HiringUnitTreeDepartment[]>();
+  const unassignedDepartments: HiringUnitTreeDepartment[] = [];
+  for (const row of departmentRows) {
+    const record: HiringUnitTreeDepartment = {
+      createdAt: serializeDate(row.createdAt),
+      description: row.description,
+      hiringUnitId: row.hiringUnitId,
+      id: row.id,
+      name: row.name,
+      odcMember: toOdcMemberSummary({
+        email: row.odcEmail,
+        image: row.odcImage,
+        memberId: row.odcMemberId,
+        name: row.odcName,
+        userId: row.odcUserId,
+      }),
+      updatedAt: serializeDate(row.updatedAt),
+    };
+    if (!row.hiringUnitId) {
+      unassignedDepartments.push(record);
+      continue;
+    }
+    const records = departmentsByHiringUnitId.get(row.hiringUnitId) ?? [];
+    records.push(record);
+    departmentsByHiringUnitId.set(row.hiringUnitId, records);
+  }
+
+  return {
+    records: unitRows.map((row) => ({
+      createdAt: serializeDate(row.createdAt),
+      createdBy: row.createdBy,
+      departments: departmentsByHiringUnitId.get(row.id) ?? [],
+      description: row.description,
+      id: row.id,
+      name: row.name,
+      odcMember: toOdcMemberSummary({
+        email: row.odcEmail,
+        image: row.odcImage,
+        memberId: row.odcMemberId,
+        name: row.odcName,
+        userId: row.odcUserId,
+      }),
+      updatedAt: serializeDate(row.updatedAt),
+    })),
+    unassignedDepartments,
+  };
+}
+
+export async function updateHiringUnitOdcMember({
+  id,
+  memberId,
+  organizationId,
+}: {
+  id: string;
+  memberId: string | null;
+  organizationId: string;
+}): Promise<boolean> {
+  const rows = await db
+    .update(hiringUnit)
+    .set({ odcMemberId: memberId, updatedAt: new Date() })
+    .where(and(eq(hiringUnit.id, id), eq(hiringUnit.organizationId, organizationId)))
+    .returning({ id: hiringUnit.id });
+  return rows.length > 0;
 }
