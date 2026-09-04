@@ -692,7 +692,6 @@ export const hiringUnit = pgTable(
     description: text("description"),
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    odcMemberId: text("odc_member_id").references(() => member.id, { onDelete: "set null" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -707,7 +706,38 @@ export const hiringUnit = pgTable(
     index("hiring_unit_name_idx").on(table.name),
     index("hiring_unit_created_at_idx").on(table.createdAt),
     index("hiring_unit_organization_idx").on(table.organizationId),
-    index("hiring_unit_odc_member_idx").on(table.odcMemberId),
+    uniqueIndex("hiring_unit_organization_id_id_uq").on(table.organizationId, table.id),
+  ],
+);
+
+export const hiringUnitOdcMember = pgTable(
+  "hiring_unit_odc_member",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    hiringUnitId: text("hiring_unit_id")
+      .notNull()
+      .references(() => hiringUnit.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.hiringUnitId, table.memberId] }),
+    foreignKey({
+      columns: [table.organizationId, table.hiringUnitId],
+      foreignColumns: [hiringUnit.organizationId, hiringUnit.id],
+      name: "hiring_unit_odc_member_hiring_unit_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.memberId],
+      foreignColumns: [member.organizationId, member.id],
+      name: "hiring_unit_odc_member_member_fk",
+    }).onDelete("cascade"),
+    index("hiring_unit_odc_member_organization_idx").on(table.organizationId),
+    index("hiring_unit_odc_member_member_idx").on(table.organizationId, table.memberId),
   ],
 );
 
@@ -749,7 +779,6 @@ export const department = pgTable(
     }),
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    odcMemberId: text("odc_member_id").references(() => member.id, { onDelete: "set null" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -765,7 +794,38 @@ export const department = pgTable(
     index("department_created_at_idx").on(table.createdAt),
     index("department_organization_idx").on(table.organizationId),
     index("department_hiring_unit_idx").on(table.organizationId, table.hiringUnitId),
-    index("department_odc_member_idx").on(table.odcMemberId),
+    uniqueIndex("department_organization_id_id_uq").on(table.organizationId, table.id),
+  ],
+);
+
+export const departmentOdcMember = pgTable(
+  "department_odc_member",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    departmentId: text("department_id")
+      .notNull()
+      .references(() => department.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.departmentId, table.memberId] }),
+    foreignKey({
+      columns: [table.organizationId, table.departmentId],
+      foreignColumns: [department.organizationId, department.id],
+      name: "department_odc_member_department_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.memberId],
+      foreignColumns: [member.organizationId, member.id],
+      name: "department_odc_member_member_fk",
+    }).onDelete("cascade"),
+    index("department_odc_member_organization_idx").on(table.organizationId),
+    index("department_odc_member_member_idx").on(table.organizationId, table.memberId),
   ],
 );
 

@@ -11,7 +11,7 @@ export interface HiringUnitTreeRow {
   hasChildren: boolean;
   id: string;
   name: string;
-  odcMember: OdcMemberSummary | null;
+  odcMembers: OdcMemberSummary[];
   parentHiringUnitId: string | null;
   rowType: "department" | "hiringUnit";
   treeDepth: number;
@@ -38,7 +38,7 @@ function departmentRow(record: HiringUnitTreeDepartment, treeDepth: number): Hir
     hasChildren: false,
     id: record.id,
     name: record.name,
-    odcMember: record.odcMember,
+    odcMembers: record.odcMembers,
     parentHiringUnitId: record.hiringUnitId,
     rowType: "department",
     treeDepth,
@@ -70,7 +70,7 @@ export function flattenHiringUnitTree(
       hasChildren: unit.departments.length > 0,
       id: unit.id,
       name: unit.name,
-      odcMember: unit.odcMember,
+      odcMembers: unit.odcMembers,
       parentHiringUnitId: null,
       rowType: "hiringUnit",
       treeDepth: 0,

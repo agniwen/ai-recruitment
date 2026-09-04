@@ -12,12 +12,12 @@ import {
   loadDepartmentById,
   loadDepartmentReferenceCounts,
   queryPaginatedDepartments,
+  replaceDepartmentOdcMembers,
   serializeDepartment,
-  updateDepartmentOdcMember,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
-import { isEligibleOdcMember } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
+import { areEligibleOdcMembers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
 
 const departmentListQuerySchema = z.object({
   page: z.string().optional(),
@@ -114,7 +114,6 @@ export const departmentsRouter = factory
         hiringUnitId,
         id: crypto.randomUUID(),
         name: input.name.trim(),
-        odcMemberId: null,
         organizationId: activeOrg.id,
         updatedAt: now,
       } satisfies typeof department.$inferInsert;
@@ -194,13 +193,13 @@ export const departmentsRouter = factory
       if (!existing) {
         return c.json({ error: "部门不存在。" }, 404);
       }
-      const { memberId } = c.req.valid("json");
-      if (memberId && !(await isEligibleOdcMember({ memberId, organizationId: activeOrg.id }))) {
-        return c.json({ error: "所选成员的角色未标记为 ODC。" }, 400);
+      const { memberIds } = c.req.valid("json");
+      if (!(await areEligibleOdcMembers({ memberIds, organizationId: activeOrg.id }))) {
+        return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
       }
-      const updated = await updateDepartmentOdcMember({
+      const updated = await replaceDepartmentOdcMembers({
         id,
-        memberId,
+        memberIds,
         organizationId: activeOrg.id,
       });
       if (!updated) {

@@ -23,7 +23,6 @@ import {
   dateColumn,
   textColumn,
 } from "@/components/data-grid";
-import { MemberCell } from "@/components/data-grid/cells/member-cell";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { HiringUnitFormDialog } from "@/components/features/studio/hiring-units/hiring-unit-form-dialog";
 import { flattenHiringUnitTree } from "@/components/features/studio/hiring-units/hiring-unit-tree";
@@ -170,17 +169,18 @@ function HiringUnitManagementPage() {
       }),
       customColumn<HiringUnitTreeRow>({
         cell: (row) =>
-          row.odcMember ? (
-            <MemberCell
-              avatarSize="sm"
-              email={row.odcMember.email}
-              image={row.odcMember.image}
-              name={row.odcMember.name}
-            />
+          row.odcMembers.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {row.odcMembers.map((member) => (
+                <Badge key={member.memberId} title={member.email} variant="secondary">
+                  {member.name}
+                </Badge>
+              ))}
+            </div>
           ) : (
             <span className="text-muted-foreground">未设置</span>
           ),
-        key: "odcMember",
+        key: "odcMembers",
         title: "ODC",
       }),
       dateColumn<HiringUnitTreeRow>({ key: "createdAt", title: "创建时间" }),

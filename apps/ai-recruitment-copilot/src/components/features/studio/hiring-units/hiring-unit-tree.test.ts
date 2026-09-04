@@ -14,14 +14,29 @@ const tree: HiringUnitTreeNode[] = [
         hiringUnitId: "unit-1",
         id: "department-1",
         name: "平台部",
-        odcMember: null,
+        odcMembers: [],
         updatedAt: "2026-09-02T00:00:00.000Z",
       },
     ],
     description: "核心业务",
     id: "unit-1",
     name: "研发中心",
-    odcMember: null,
+    odcMembers: [
+      {
+        email: "odc-1@example.com",
+        image: null,
+        memberId: "member-1",
+        name: "ODC 一",
+        userId: "user-1",
+      },
+      {
+        email: "odc-2@example.com",
+        image: null,
+        memberId: "member-2",
+        name: "ODC 二",
+        userId: "user-2",
+      },
+    ],
     updatedAt: "2026-09-01T00:00:00.000Z",
   },
 ];
@@ -32,6 +47,10 @@ describe("flattenHiringUnitTree", () => {
       expect.objectContaining({
         hasChildren: true,
         id: "unit-1",
+        odcMembers: [
+          expect.objectContaining({ memberId: "member-1" }),
+          expect.objectContaining({ memberId: "member-2" }),
+        ],
         rowType: "hiringUnit",
         treeDepth: 0,
       }),
@@ -63,5 +82,14 @@ describe("hiring unit management list", () => {
     expect(source).toContain('["hiring-units"].tree.$get');
     expect(source).not.toContain("useDataGridState");
     expect(source).not.toMatch(/pagination=\{/u);
+    expect(source).toContain("row.odcMembers");
+  });
+
+  it("submits multiple ODC members for one hiring unit or department", () => {
+    const source = readFileSync(new URL("odc-assignment-dialog.tsx", import.meta.url), "utf-8");
+
+    expect(source).toContain("<SearchableMultiSelect");
+    expect(source).toContain("json: { memberIds }");
+    expect(source).toContain("target?.odcMembers.map");
   });
 });

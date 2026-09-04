@@ -36,13 +36,13 @@ export interface HiringUnitTreeDepartment {
   hiringUnitId: string | null;
   id: string;
   name: string;
-  odcMember: OdcMemberSummary | null;
+  odcMembers: OdcMemberSummary[];
   updatedAt: string | Date;
 }
 
 export interface HiringUnitTreeNode extends HiringUnitRecord {
   departments: HiringUnitTreeDepartment[];
-  odcMember: OdcMemberSummary | null;
+  odcMembers: OdcMemberSummary[];
 }
 
 export interface HiringUnitTreeResult {
@@ -51,7 +51,9 @@ export interface HiringUnitTreeResult {
 }
 
 export const odcAssignmentSchema = z.object({
-  memberId: z.string().trim().min(1).nullable(),
+  memberIds: z
+    .array(z.string().trim().min(1))
+    .refine((ids) => new Set(ids).size === ids.length, "ODC 人员不能重复"),
 });
 
 export type OdcAssignmentInput = z.infer<typeof odcAssignmentSchema>;

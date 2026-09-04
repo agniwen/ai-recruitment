@@ -1,19 +1,24 @@
 export interface OdcAssignmentIdentity {
+  memberIds: string[];
+  organizationId: string;
+}
+
+export interface OdcCandidateIdentity {
+  isOdc: boolean;
   memberId: string;
   organizationId: string;
 }
 
-export interface OdcCandidateIdentity extends OdcAssignmentIdentity {
-  isOdc: boolean;
-}
-
-export function canAssignOdcMember(
+export function canAssignOdcMembers(
   assignment: OdcAssignmentIdentity,
-  candidate: OdcCandidateIdentity,
+  candidates: OdcCandidateIdentity[],
 ) {
-  return (
-    candidate.isOdc &&
-    candidate.memberId === assignment.memberId &&
-    candidate.organizationId === assignment.organizationId
+  const eligibleMemberIds = new Set(
+    candidates
+      .filter(
+        (candidate) => candidate.isOdc && candidate.organizationId === assignment.organizationId,
+      )
+      .map((candidate) => candidate.memberId),
   );
+  return assignment.memberIds.every((memberId) => eligibleMemberIds.has(memberId));
 }

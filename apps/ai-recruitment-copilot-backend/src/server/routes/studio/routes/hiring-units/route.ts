@@ -17,10 +17,10 @@ import {
   listSelectableHiringUnits,
   loadHiringUnitById,
   queryPaginatedHiringUnits,
+  replaceHiringUnitOdcMembers,
   serializeHiringUnit,
-  updateHiringUnitOdcMember,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao";
-import { isEligibleOdcMember } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
+import { areEligibleOdcMembers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
 
 const hiringUnitListQuerySchema = z.object({
   page: z.string().optional(),
@@ -108,7 +108,6 @@ export const hiringUnitsRouter = factory
         description: input.description?.trim() || null,
         id: crypto.randomUUID(),
         name: input.name.trim(),
-        odcMemberId: null,
         organizationId: activeOrg.id,
         updatedAt: now,
       } satisfies typeof hiringUnit.$inferInsert;
@@ -171,13 +170,13 @@ export const hiringUnitsRouter = factory
       if (!activeOrg) {
         return c.json({ message: "Unauthorized" }, 401);
       }
-      const { memberId } = c.req.valid("json");
-      if (memberId && !(await isEligibleOdcMember({ memberId, organizationId: activeOrg.id }))) {
-        return c.json({ error: "所选成员的角色未标记为 ODC。" }, 400);
+      const { memberIds } = c.req.valid("json");
+      if (!(await areEligibleOdcMembers({ memberIds, organizationId: activeOrg.id }))) {
+        return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
       }
-      const updated = await updateHiringUnitOdcMember({
+      const updated = await replaceHiringUnitOdcMembers({
         id: c.req.param("id"),
-        memberId,
+        memberIds,
         organizationId: activeOrg.id,
       });
       if (!updated) {

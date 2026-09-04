@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { member, organizationRole, user } from "@arc/db-schema/schema";
 import type { OdcMemberSummary } from "@arc/shared/hiring-units";
-import { canAssignOdcMember } from "./odc-assignment-policy";
+import { canAssignOdcMembers } from "./odc-assignment-policy";
 import type { OdcAssignmentIdentity } from "./odc-assignment-policy";
 
 export async function listOdcMemberCandidates(organizationId: string): Promise<OdcMemberSummary[]> {
@@ -30,11 +30,15 @@ export async function listOdcMemberCandidates(organizationId: string): Promise<O
   return rows;
 }
 
-export async function isEligibleOdcMember({
-  memberId,
+export async function areEligibleOdcMembers({
+  memberIds,
   organizationId,
 }: OdcAssignmentIdentity): Promise<boolean> {
-  const [candidate] = await db
+  if (memberIds.length === 0) {
+    return true;
+  }
+
+  const candidates = await db
     .select({
       isOdc: organizationRole.isOdc,
       memberId: member.id,
@@ -48,8 +52,7 @@ export async function isEligibleOdcMember({
         eq(organizationRole.role, member.role),
       ),
     )
-    .where(and(eq(member.id, memberId), eq(member.organizationId, organizationId)))
-    .limit(1);
+    .where(and(inArray(member.id, memberIds), eq(member.organizationId, organizationId)));
 
-  return candidate ? canAssignOdcMember({ memberId, organizationId }, candidate) : false;
+  return canAssignOdcMembers({ memberIds, organizationId }, candidates);
 }

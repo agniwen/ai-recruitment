@@ -6,7 +6,6 @@ import type {
   OdcMemberSummary,
 } from "@arc/shared/hiring-units";
 import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -19,7 +18,14 @@ import type {
   PaginationParams,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
-import { department, hiringUnit, member, user } from "@arc/db-schema/schema";
+import {
+  department,
+  departmentOdcMember,
+  hiringUnit,
+  hiringUnitOdcMember,
+  member,
+  user,
+} from "@arc/db-schema/schema";
 import {
   resolveDepartmentHiringUnitScopeCondition,
   resolveHiringUnitAccessScope,
@@ -39,11 +45,6 @@ const ORDER_COLUMNS = {
 } as const;
 
 const hiringUnitPaginationSchema = makePaginationSchema(SORT_COLUMNS);
-
-const hiringUnitOdcMember = alias(member, "hiring_unit_odc_member");
-const hiringUnitOdcUser = alias(user, "hiring_unit_odc_user");
-const departmentOdcMember = alias(member, "department_odc_member");
-const departmentOdcUser = alias(user, "department_odc_user");
 
 export type HiringUnitPaginationParams = PaginationParams<SortColumn>;
 
@@ -217,21 +218,70 @@ export async function loadHiringUnitById(
 }
 
 function toOdcMemberSummary(row: {
-  email: string | null;
+  email: string;
   image: string | null;
-  memberId: string | null;
-  name: string | null;
-  userId: string | null;
-}): OdcMemberSummary | null {
-  if (!(row.email && row.memberId && row.name && row.userId)) {
-    return null;
-  }
+  memberId: string;
+  name: string;
+  userId: string;
+}): OdcMemberSummary {
   return {
     email: row.email,
     image: row.image,
     memberId: row.memberId,
     name: row.name,
     userId: row.userId,
+  };
+}
+
+async function loadOdcMembersByTarget(organizationId: string) {
+  const [hiringUnitRows, departmentRows] = await Promise.all([
+    db
+      .select({
+        email: user.email,
+        image: user.image,
+        memberId: member.id,
+        name: user.name,
+        targetId: hiringUnitOdcMember.hiringUnitId,
+        userId: user.id,
+      })
+      .from(hiringUnitOdcMember)
+      .innerJoin(member, eq(hiringUnitOdcMember.memberId, member.id))
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(eq(hiringUnitOdcMember.organizationId, organizationId))
+      .orderBy(asc(user.name), asc(user.email)),
+    db
+      .select({
+        email: user.email,
+        image: user.image,
+        memberId: member.id,
+        name: user.name,
+        targetId: departmentOdcMember.departmentId,
+        userId: user.id,
+      })
+      .from(departmentOdcMember)
+      .innerJoin(member, eq(departmentOdcMember.memberId, member.id))
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(eq(departmentOdcMember.organizationId, organizationId))
+      .orderBy(asc(user.name), asc(user.email)),
+  ]);
+
+  const groupRows = (
+    rows: (OdcMemberSummary & {
+      targetId: string;
+    })[],
+  ) => {
+    const grouped = new Map<string, OdcMemberSummary[]>();
+    for (const row of rows) {
+      const records = grouped.get(row.targetId) ?? [];
+      records.push(toOdcMemberSummary(row));
+      grouped.set(row.targetId, records);
+    }
+    return grouped;
+  };
+
+  return {
+    departments: groupRows(departmentRows),
+    hiringUnits: groupRows(hiringUnitRows),
   };
 }
 
@@ -246,7 +296,7 @@ export async function listHiringUnitTree({
     actorUserId,
     organizationId,
   });
-  const [unitRows, departmentRows] = await Promise.all([
+  const [unitRows, departmentRows, odcMembersByTarget] = await Promise.all([
     db
       .select({
         createdAt: hiringUnit.createdAt,
@@ -254,16 +304,9 @@ export async function listHiringUnitTree({
         description: hiringUnit.description,
         id: hiringUnit.id,
         name: hiringUnit.name,
-        odcEmail: hiringUnitOdcUser.email,
-        odcImage: hiringUnitOdcUser.image,
-        odcMemberId: hiringUnitOdcMember.id,
-        odcName: hiringUnitOdcUser.name,
-        odcUserId: hiringUnitOdcUser.id,
         updatedAt: hiringUnit.updatedAt,
       })
       .from(hiringUnit)
-      .leftJoin(hiringUnitOdcMember, eq(hiringUnit.odcMemberId, hiringUnitOdcMember.id))
-      .leftJoin(hiringUnitOdcUser, eq(hiringUnitOdcMember.userId, hiringUnitOdcUser.id))
       .where(eq(hiringUnit.organizationId, organizationId))
       .orderBy(asc(hiringUnit.name)),
     db
@@ -273,18 +316,12 @@ export async function listHiringUnitTree({
         hiringUnitId: department.hiringUnitId,
         id: department.id,
         name: department.name,
-        odcEmail: departmentOdcUser.email,
-        odcImage: departmentOdcUser.image,
-        odcMemberId: departmentOdcMember.id,
-        odcName: departmentOdcUser.name,
-        odcUserId: departmentOdcUser.id,
         updatedAt: department.updatedAt,
       })
       .from(department)
-      .leftJoin(departmentOdcMember, eq(department.odcMemberId, departmentOdcMember.id))
-      .leftJoin(departmentOdcUser, eq(departmentOdcMember.userId, departmentOdcUser.id))
       .where(and(eq(department.organizationId, organizationId), departmentScopeCondition))
       .orderBy(asc(department.name)),
+    loadOdcMembersByTarget(organizationId),
   ]);
 
   const departmentsByHiringUnitId = new Map<string, HiringUnitTreeDepartment[]>();
@@ -296,13 +333,7 @@ export async function listHiringUnitTree({
       hiringUnitId: row.hiringUnitId,
       id: row.id,
       name: row.name,
-      odcMember: toOdcMemberSummary({
-        email: row.odcEmail,
-        image: row.odcImage,
-        memberId: row.odcMemberId,
-        name: row.odcName,
-        userId: row.odcUserId,
-      }),
+      odcMembers: odcMembersByTarget.departments.get(row.id) ?? [],
       updatedAt: serializeDate(row.updatedAt),
     };
     if (!row.hiringUnitId) {
@@ -322,32 +353,49 @@ export async function listHiringUnitTree({
       description: row.description,
       id: row.id,
       name: row.name,
-      odcMember: toOdcMemberSummary({
-        email: row.odcEmail,
-        image: row.odcImage,
-        memberId: row.odcMemberId,
-        name: row.odcName,
-        userId: row.odcUserId,
-      }),
+      odcMembers: odcMembersByTarget.hiringUnits.get(row.id) ?? [],
       updatedAt: serializeDate(row.updatedAt),
     })),
     unassignedDepartments,
   };
 }
 
-export async function updateHiringUnitOdcMember({
+export function replaceHiringUnitOdcMembers({
   id,
-  memberId,
+  memberIds,
   organizationId,
 }: {
   id: string;
-  memberId: string | null;
+  memberIds: string[];
   organizationId: string;
 }): Promise<boolean> {
-  const rows = await db
-    .update(hiringUnit)
-    .set({ odcMemberId: memberId, updatedAt: new Date() })
-    .where(and(eq(hiringUnit.id, id), eq(hiringUnit.organizationId, organizationId)))
-    .returning({ id: hiringUnit.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(hiringUnit)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(hiringUnit.id, id), eq(hiringUnit.organizationId, organizationId)))
+      .returning({ id: hiringUnit.id });
+    if (rows.length === 0) {
+      return false;
+    }
+
+    await tx
+      .delete(hiringUnitOdcMember)
+      .where(
+        and(
+          eq(hiringUnitOdcMember.hiringUnitId, id),
+          eq(hiringUnitOdcMember.organizationId, organizationId),
+        ),
+      );
+    if (memberIds.length > 0) {
+      await tx.insert(hiringUnitOdcMember).values(
+        memberIds.map((memberId) => ({
+          hiringUnitId: id,
+          memberId,
+          organizationId,
+        })),
+      );
+    }
+    return true;
+  });
 }

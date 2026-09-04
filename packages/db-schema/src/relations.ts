@@ -101,10 +101,7 @@ export const relations = defineRelations(schema, (r) => ({
     }),
     interviewers: r.many.interviewer(),
     jobDescriptions: r.many.jobDescription(),
-    odcMember: r.one.member({
-      from: r.department.odcMemberId,
-      to: r.member.id,
-    }),
+    odcMemberLinks: r.many.departmentOdcMember(),
     organization: r.one.organization({
       from: r.department.organizationId,
       to: r.organization.id,
@@ -112,6 +109,20 @@ export const relations = defineRelations(schema, (r) => ({
     user: r.one.user({
       from: r.department.createdBy,
       to: r.user.id,
+    }),
+  },
+  departmentOdcMember: {
+    department: r.one.department({
+      from: r.departmentOdcMember.departmentId,
+      to: r.department.id,
+    }),
+    member: r.one.member({
+      from: r.departmentOdcMember.memberId,
+      to: r.member.id,
+    }),
+    organization: r.one.organization({
+      from: r.departmentOdcMember.organizationId,
+      to: r.organization.id,
     }),
   },
   feishuThreadState: {
@@ -129,10 +140,7 @@ export const relations = defineRelations(schema, (r) => ({
   hiringUnit: {
     departments: r.many.department(),
     jobDescriptions: r.many.jobDescription(),
-    odcMember: r.one.member({
-      from: r.hiringUnit.odcMemberId,
-      to: r.member.id,
-    }),
+    odcMemberLinks: r.many.hiringUnitOdcMember(),
     organization: r.one.organization({
       from: r.hiringUnit.organizationId,
       to: r.organization.id,
@@ -142,6 +150,20 @@ export const relations = defineRelations(schema, (r) => ({
     user: r.one.user({
       from: r.hiringUnit.createdBy,
       to: r.user.id,
+    }),
+  },
+  hiringUnitOdcMember: {
+    hiringUnit: r.one.hiringUnit({
+      from: r.hiringUnitOdcMember.hiringUnitId,
+      to: r.hiringUnit.id,
+    }),
+    member: r.one.member({
+      from: r.hiringUnitOdcMember.memberId,
+      to: r.member.id,
+    }),
+    organization: r.one.organization({
+      from: r.hiringUnitOdcMember.organizationId,
+      to: r.organization.id,
     }),
   },
   interviewAuditLog: {

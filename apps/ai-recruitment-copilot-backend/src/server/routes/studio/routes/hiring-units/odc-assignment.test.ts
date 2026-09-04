@@ -1,29 +1,32 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { canAssignOdcMember } from "./odc-assignment-policy";
+import { canAssignOdcMembers } from "./odc-assignment-policy";
 
-describe("canAssignOdcMember", () => {
-  it("accepts a member whose workspace role is marked as ODC", () => {
+describe("canAssignOdcMembers", () => {
+  it("accepts every selected member when all workspace roles are marked as ODC", () => {
     expect(
-      canAssignOdcMember(
-        { memberId: "member-1", organizationId: "org-1" },
+      canAssignOdcMembers({ memberIds: ["member-1", "member-2"], organizationId: "org-1" }, [
         { isOdc: true, memberId: "member-1", organizationId: "org-1" },
-      ),
+        { isOdc: true, memberId: "member-2", organizationId: "org-1" },
+      ]),
     ).toBe(true);
   });
 
-  it("rejects members from another workspace or a non-ODC role", () => {
+  it("rejects the full selection when any member is missing, belongs elsewhere, or is not ODC", () => {
     expect(
-      canAssignOdcMember(
-        { memberId: "member-1", organizationId: "org-1" },
-        { isOdc: true, memberId: "member-1", organizationId: "org-2" },
-      ),
+      canAssignOdcMembers({ memberIds: ["member-1", "member-2"], organizationId: "org-1" }, [
+        { isOdc: true, memberId: "member-1", organizationId: "org-1" },
+      ]),
     ).toBe(false);
     expect(
-      canAssignOdcMember(
-        { memberId: "member-1", organizationId: "org-1" },
+      canAssignOdcMembers({ memberIds: ["member-1"], organizationId: "org-1" }, [
+        { isOdc: true, memberId: "member-1", organizationId: "org-2" },
+      ]),
+    ).toBe(false);
+    expect(
+      canAssignOdcMembers({ memberIds: ["member-1"], organizationId: "org-1" }, [
         { isOdc: false, memberId: "member-1", organizationId: "org-1" },
-      ),
+      ]),
     ).toBe(false);
   });
 });
@@ -36,7 +39,7 @@ describe("department ODC route", () => {
     expect(route).toContain("loadDepartmentById(id, activeOrg.id");
     expect(route).toContain("actorUserId: c.var.user?.id");
     expect(route.indexOf("loadDepartmentById")).toBeLessThan(
-      route.indexOf("updateDepartmentOdcMember"),
+      route.indexOf("replaceDepartmentOdcMembers"),
     );
   });
 });

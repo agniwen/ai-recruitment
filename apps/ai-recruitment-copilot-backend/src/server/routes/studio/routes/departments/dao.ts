@@ -13,7 +13,13 @@ import type {
   PaginationParams,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/db/pagination";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
-import { department, hiringUnit, interviewer, jobDescription } from "@arc/db-schema/schema";
+import {
+  department,
+  departmentOdcMember,
+  hiringUnit,
+  interviewer,
+  jobDescription,
+} from "@arc/db-schema/schema";
 import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 const departmentListFiltersSchema = z.object({
@@ -294,21 +300,44 @@ export async function loadDepartmentReferenceCounts(id: string) {
   };
 }
 
-export async function updateDepartmentOdcMember({
+export function replaceDepartmentOdcMembers({
   id,
-  memberId,
+  memberIds,
   organizationId,
 }: {
   id: string;
-  memberId: string | null;
+  memberIds: string[];
   organizationId: string;
 }): Promise<boolean> {
-  const rows = await db
-    .update(department)
-    .set({ odcMemberId: memberId, updatedAt: new Date() })
-    .where(and(eq(department.id, id), eq(department.organizationId, organizationId)))
-    .returning({ id: department.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(department)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(department.id, id), eq(department.organizationId, organizationId)))
+      .returning({ id: department.id });
+    if (rows.length === 0) {
+      return false;
+    }
+
+    await tx
+      .delete(departmentOdcMember)
+      .where(
+        and(
+          eq(departmentOdcMember.departmentId, id),
+          eq(departmentOdcMember.organizationId, organizationId),
+        ),
+      );
+    if (memberIds.length > 0) {
+      await tx.insert(departmentOdcMember).values(
+        memberIds.map((memberId) => ({
+          departmentId: id,
+          memberId,
+          organizationId,
+        })),
+      );
+    }
+    return true;
+  });
 }
 
 export async function loadDepartmentById(

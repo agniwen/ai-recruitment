@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import type { SearchableSelectOption } from "@/components/ui/searchable-select";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
@@ -33,7 +33,7 @@ export function OdcAssignmentDialog({
   target: HiringUnitTreeRow | null;
 }) {
   const slug = useWorkspaceSlug();
-  const [memberId, setMemberId] = useState<string | null>(null);
+  const [memberIds, setMemberIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const candidatesQuery = useQuery({
     enabled: open,
@@ -51,7 +51,7 @@ export function OdcAssignmentDialog({
 
   useEffect(() => {
     if (open) {
-      setMemberId(target?.odcMember?.memberId ?? null);
+      setMemberIds(target?.odcMembers.map((member) => member.memberId) ?? []);
     }
   }, [open, target]);
 
@@ -64,19 +64,20 @@ export function OdcAssignmentDialog({
       searchValue: `${candidate.name} ${candidate.email}`,
       value: candidate.memberId,
     }));
-    const current = target?.odcMember;
-    if (current && !candidates.some((candidate) => candidate.memberId === current.memberId)) {
-      next.unshift({
-        avatarUrl: current.image,
-        description: `${current.email} · 当前角色未标记为 ODC，仅可清除`,
-        disabled: true,
-        label: current.name,
-        searchValue: `${current.name} ${current.email}`,
-        value: current.memberId,
-      });
+    for (const current of target?.odcMembers ?? []) {
+      if (!candidates.some((candidate) => candidate.memberId === current.memberId)) {
+        next.unshift({
+          avatarUrl: current.image,
+          description: `${current.email} · 当前角色未标记为 ODC，仅可清除`,
+          disabled: true,
+          label: current.name,
+          searchValue: `${current.name} ${current.email}`,
+          value: current.memberId,
+        });
+      }
     }
     return next;
-  }, [candidatesQuery.data, target?.odcMember]);
+  }, [candidatesQuery.data, target?.odcMembers]);
 
   async function handleSave() {
     if (!target) {
@@ -87,11 +88,11 @@ export function OdcAssignmentDialog({
       const response =
         target.rowType === "hiringUnit"
           ? await rpc.api.w[":slug"].studio["hiring-units"][":id"].odc.$put({
-              json: { memberId },
+              json: { memberIds },
               param: { id: target.id, slug },
             })
           : await rpc.api.w[":slug"].studio.departments[":id"].odc.$put({
-              json: { memberId },
+              json: { memberIds },
               param: { id: target.id, slug },
             });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -99,7 +100,7 @@ export function OdcAssignmentDialog({
         toast.error(payload?.error ?? "设置 ODC 失败");
         return;
       }
-      toast.success(memberId ? "ODC 已设置" : "ODC 设置已清除");
+      toast.success(memberIds.length > 0 ? "ODC 已设置" : "ODC 设置已清除");
       onSaved();
       onOpenChange(false);
     } catch {
@@ -120,18 +121,21 @@ export function OdcAssignmentDialog({
           </DialogDescription>
         </DialogHeader>
         <Field>
-          <FieldLabel htmlFor="odc-member">ODC 人员</FieldLabel>
+          <FieldLabel htmlFor="odc-members">ODC 人员（可多选）</FieldLabel>
           <FieldContent>
-            <SearchableSelect
-              clearable
+            <SearchableMultiSelect
               disabled={candidatesQuery.isLoading || saving}
               emptyMessage="暂无角色标记为 ODC 的成员"
-              id="odc-member"
-              onChange={setMemberId}
+              id="odc-members"
+              onChange={setMemberIds}
               options={options}
-              placeholder={candidatesQuery.isLoading ? "加载 ODC 人员..." : "请选择 ODC 人员"}
+              placeholder={
+                candidatesQuery.isLoading ? "加载 ODC 人员..." : "请选择 ODC 人员（可多选）"
+              }
               searchPlaceholder="搜索姓名或邮箱"
-              value={memberId}
+              selectedPreviewLimit={3}
+              showBadges
+              value={memberIds}
             />
           </FieldContent>
         </Field>
