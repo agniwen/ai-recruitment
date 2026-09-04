@@ -208,6 +208,7 @@ export async function queryPaginatedInterviewers(
   const offset = (page - 1) * pageSize;
   const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
     actorUserId: filters?.actorUserId,
+    includeOdc: false,
     organizationId,
   });
 
@@ -252,6 +253,7 @@ export async function listAllInterviewers(
 ): Promise<InterviewerListRecord[]> {
   const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
     actorUserId: options?.actorUserId,
+    includeOdc: false,
     organizationId,
   });
   const where = buildWhereConditions({ organizationId, scopeCondition });
@@ -306,6 +308,7 @@ export async function loadInterviewerById(
 ): Promise<InterviewerRecord | null> {
   const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
     actorUserId: options?.actorUserId,
+    includeOdc: false,
     organizationId,
   });
   const [row] = await db

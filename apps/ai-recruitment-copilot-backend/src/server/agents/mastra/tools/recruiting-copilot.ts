@@ -3,7 +3,11 @@ import { createTool } from "@mastra/core/tools";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import {
+  buildResumeVisibilityCondition,
+  getRecruitingVisibilityScope,
+} from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import type { CompatibleResumeVisibilityScope as RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { QdrantResumeVectorStore } from "@arc/ai-recruitment-copilot-backend/lib/server/qdrant/resume-vector-store";
 import {
@@ -408,13 +412,10 @@ async function loadSemanticCandidateCards({
   organizationId: string;
   visibilityScope: RecruitingVisibilityScope;
 }) {
-  if (ids.length === 0 || visibilityScope.kind === "none") {
+  if (ids.length === 0) {
     return [];
   }
-  const visibilityCondition =
-    visibilityScope.kind === "restricted"
-      ? inArray(studioInterview.createdBy, visibilityScope.userIds)
-      : undefined;
+  const visibilityCondition = buildResumeVisibilityCondition(visibilityScope);
   const rows = await db
     .select({
       candidateName: studioInterview.candidateName,
@@ -736,7 +737,7 @@ async function executePoolBindProposal(input: {
       organizationId: input.organizationId,
       poolItemId,
       userId: input.actorUserId,
-      visibilityScope: input.visibilityScope,
+      visibilityScope: getRecruitingVisibilityScope(input.visibilityScope),
     });
     if (!existing) {
       return created;
@@ -828,13 +829,7 @@ export async function getResumeRecordDetailForCopilot(input: {
   visibilityScope: RecruitingVisibilityScope;
 }): Promise<z.infer<typeof getResumeRecordDetailOutputSchema>> {
   const parsed = getResumeRecordDetailInputSchema.parse(input);
-  if (input.visibilityScope.kind === "none") {
-    return { resumeRecord: null };
-  }
-  const visibilityCondition =
-    input.visibilityScope.kind === "restricted"
-      ? inArray(studioInterview.createdBy, input.visibilityScope.userIds)
-      : undefined;
+  const visibilityCondition = buildResumeVisibilityCondition(input.visibilityScope);
   const [record] = await db
     .select({
       candidateName: studioInterview.candidateName,
@@ -996,7 +991,7 @@ export function createRecruitingCopilotTools({
           contextBindings,
           organizationId,
           userId,
-          visibilityScope,
+          visibilityScope: getRecruitingVisibilityScope(visibilityScope),
         }),
       id: "get_resume_pool_detail",
       inputSchema: getResumePoolDetailInputSchema,

@@ -3,6 +3,7 @@ import type {
   HiringUnitRecord,
   HiringUnitTreeDepartment,
   HiringUnitTreeResult,
+  OdcBatchAssignmentTarget,
   OdcMemberSummary,
 } from "@arc/shared/hiring-units";
 import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
@@ -50,6 +51,29 @@ const hiringUnitPaginationSchema = makePaginationSchema(SORT_COLUMNS);
 export type HiringUnitPaginationParams = PaginationParams<SortColumn>;
 
 export type PaginatedHiringUnitResult = PaginatedResult<HiringUnitListRecord>;
+
+const ODC_ASSIGNMENT_INSERT_BATCH_SIZE = 5000;
+const ODC_TARGET_QUERY_BATCH_SIZE = 5000;
+
+function* buildOdcAssignmentBatches<T>(
+  targetIds: string[],
+  memberIds: string[],
+  createAssignment: (targetId: string, memberId: string) => T,
+): Generator<T[]> {
+  let batch: T[] = [];
+  for (const targetId of targetIds) {
+    for (const memberId of memberIds) {
+      batch.push(createAssignment(targetId, memberId));
+      if (batch.length === ODC_ASSIGNMENT_INSERT_BATCH_SIZE) {
+        yield batch;
+        batch = [];
+      }
+    }
+  }
+  if (batch.length > 0) {
+    yield batch;
+  }
+}
 
 function buildWhereConditions({
   organizationId,
@@ -402,6 +426,119 @@ export function replaceHiringUnitOdcMembers({
         })),
       );
     }
+    return true;
+  });
+}
+
+export function replaceOdcMembersForTargets({
+  memberIds,
+  organizationId,
+  targets,
+}: {
+  memberIds: string[];
+  organizationId: string;
+  targets: OdcBatchAssignmentTarget[];
+}): Promise<boolean> {
+  const hiringUnitIds = targets
+    .filter((target) => target.rowType === "hiringUnit")
+    .map((target) => target.id);
+  const departmentIds = targets
+    .filter((target) => target.rowType === "department")
+    .map((target) => target.id);
+
+  return db.transaction(async (tx) => {
+    const existingHiringUnits = [];
+    for (let index = 0; index < hiringUnitIds.length; index += ODC_TARGET_QUERY_BATCH_SIZE) {
+      const rows = await tx
+        .select({ id: hiringUnit.id })
+        .from(hiringUnit)
+        .where(
+          and(
+            eq(hiringUnit.organizationId, organizationId),
+            inArray(hiringUnit.id, hiringUnitIds.slice(index, index + ODC_TARGET_QUERY_BATCH_SIZE)),
+          ),
+        );
+      existingHiringUnits.push(...rows);
+    }
+    const existingDepartments = [];
+    for (let index = 0; index < departmentIds.length; index += ODC_TARGET_QUERY_BATCH_SIZE) {
+      const rows = await tx
+        .select({ id: department.id })
+        .from(department)
+        .where(
+          and(
+            eq(department.organizationId, organizationId),
+            inArray(department.id, departmentIds.slice(index, index + ODC_TARGET_QUERY_BATCH_SIZE)),
+          ),
+        );
+      existingDepartments.push(...rows);
+    }
+    if (
+      existingHiringUnits.length !== hiringUnitIds.length ||
+      existingDepartments.length !== departmentIds.length
+    ) {
+      return false;
+    }
+
+    const now = new Date();
+    if (hiringUnitIds.length > 0) {
+      for (let index = 0; index < hiringUnitIds.length; index += ODC_TARGET_QUERY_BATCH_SIZE) {
+        const idBatch = hiringUnitIds.slice(index, index + ODC_TARGET_QUERY_BATCH_SIZE);
+        await tx
+          .update(hiringUnit)
+          .set({ updatedAt: now })
+          .where(
+            and(eq(hiringUnit.organizationId, organizationId), inArray(hiringUnit.id, idBatch)),
+          );
+        await tx
+          .delete(hiringUnitOdcMember)
+          .where(
+            and(
+              eq(hiringUnitOdcMember.organizationId, organizationId),
+              inArray(hiringUnitOdcMember.hiringUnitId, idBatch),
+            ),
+          );
+      }
+      if (memberIds.length > 0) {
+        for (const assignments of buildOdcAssignmentBatches(
+          hiringUnitIds,
+          memberIds,
+          (hiringUnitId, memberId) => ({ hiringUnitId, memberId, organizationId }),
+        )) {
+          await tx.insert(hiringUnitOdcMember).values(assignments);
+        }
+      }
+    }
+
+    if (departmentIds.length > 0) {
+      for (let index = 0; index < departmentIds.length; index += ODC_TARGET_QUERY_BATCH_SIZE) {
+        const idBatch = departmentIds.slice(index, index + ODC_TARGET_QUERY_BATCH_SIZE);
+        await tx
+          .update(department)
+          .set({ updatedAt: now })
+          .where(
+            and(eq(department.organizationId, organizationId), inArray(department.id, idBatch)),
+          );
+        await tx
+          .delete(departmentOdcMember)
+          .where(
+            and(
+              eq(departmentOdcMember.organizationId, organizationId),
+              inArray(departmentOdcMember.departmentId, idBatch),
+            ),
+          );
+      }
+      if (memberIds.length > 0) {
+        for (const assignments of buildOdcAssignmentBatches(
+          departmentIds,
+          memberIds,
+          (departmentId, memberId) => ({ departmentId, memberId, organizationId }),
+        )) {
+          await tx.insert(departmentOdcMember).values(assignments);
+        }
+      }
+    }
+
     return true;
   });
 }

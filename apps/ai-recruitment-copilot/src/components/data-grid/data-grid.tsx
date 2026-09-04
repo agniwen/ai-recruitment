@@ -3,6 +3,7 @@
 import type {
   ColumnDef,
   OnChangeFn,
+  Row,
   RowData,
   RowSelectionState,
   SortingState,
@@ -107,6 +108,19 @@ function getSkeletonRowCount(pagination: DataGridPaginationState | undefined): n
   return Math.min(pagination?.pageSize ?? 6, 6);
 }
 
+function getRowSelectionSetting<TData extends RowData>(
+  rowSelection: RowSelectionState | undefined,
+  canSelectRow: ((row: TData) => boolean) | undefined,
+): boolean | ((row: Row<TData>) => boolean) {
+  if (rowSelection === undefined) {
+    return false;
+  }
+  if (canSelectRow) {
+    return (row) => canSelectRow(row.original);
+  }
+  return true;
+}
+
 function DataGridPagination({
   loading,
   pageSizeOptions,
@@ -157,6 +171,7 @@ export interface DataGridProps<TData extends RowData> {
 
   rowSelection?: RowSelectionState;
   onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+  canSelectRow?: (row: TData) => boolean;
 
   filters?: ToolbarFilterConfig[];
   filterValues?: Record<string, string>;
@@ -186,6 +201,7 @@ export interface DataGridProps<TData extends RowData> {
 export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   const {
     bulkActions,
+    canSelectRow,
     canResetFilters,
     columnPinning,
     columns,
@@ -229,7 +245,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     data,
     // Preserve V8 non-range checkbox behavior (V9 enables Shift range by default).
     enableRowRangeSelection: false,
-    enableRowSelection: rowSelection !== undefined,
+    enableRowSelection: getRowSelectionSetting(rowSelection, canSelectRow),
     features: dataGridFeatures,
     getRowId,
     manualSorting: true,

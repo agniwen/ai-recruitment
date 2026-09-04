@@ -9,15 +9,15 @@ const mocks = vi.hoisted(() => ({
   loadResumeDetail: vi.fn(),
   loadResumePoolItem: vi.fn(),
   resolveHiringUnitAccessScope: vi.fn(),
-  resolveRecruitingVisibilityScope: vi.fn(),
+  resolveResumeVisibilityScope: vi.fn(),
   upsertConversation: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy", () => ({
   createRequestWorkspaceAuthorizer: mocks.createRequestWorkspaceAuthorizer,
 }));
-vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility", () => ({
-  resolveRecruitingVisibilityScope: mocks.resolveRecruitingVisibilityScope,
+vi.mock("@arc/ai-recruitment-copilot-backend/server/access/resume-visibility", () => ({
+  resolveResumeVisibilityScope: mocks.resolveResumeVisibilityScope,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope", () => ({
   resolveHiringUnitAccessScope: mocks.resolveHiringUnitAccessScope,
@@ -79,7 +79,10 @@ describe("conversationsRouter", () => {
       canAccessAll: false,
       hiringUnitIds: ["hiring-unit-1"],
     });
-    mocks.resolveRecruitingVisibilityScope.mockResolvedValue({ kind: "all" });
+    mocks.resolveResumeVisibilityScope.mockResolvedValue({
+      odc: { departmentIds: [], hiringUnitIds: [] },
+      recruiting: { kind: "all" },
+    });
   });
 
   it("returns a normalized string error for invalid conversation create payloads", async () => {
@@ -142,7 +145,10 @@ describe("conversationsRouter", () => {
         decision: "confirm",
         operatorId: USER_ID,
         organizationId: ORG_ID,
-        visibilityScope: { kind: "all" },
+        visibilityScope: {
+          odc: { departmentIds: [], hiringUnitIds: [] },
+          recruiting: { kind: "all" },
+        },
       }),
     );
     expect(mocks.authorize).toHaveBeenCalledWith({
@@ -210,7 +216,10 @@ describe("conversationsRouter", () => {
           canAccessAll: false,
           hiringUnitIds: ["hiring-unit-1"],
         },
-        visibilityScope: { kind: "all" },
+        visibilityScope: {
+          odc: { departmentIds: [], hiringUnitIds: [] },
+          recruiting: { kind: "all" },
+        },
       }),
     );
   });

@@ -5,6 +5,8 @@ import type { OdcMemberSummary } from "@arc/shared/hiring-units";
 import { canAssignOdcMembers } from "./odc-assignment-policy";
 import type { OdcAssignmentIdentity } from "./odc-assignment-policy";
 
+const ODC_MEMBER_QUERY_BATCH_SIZE = 5000;
+
 export async function listOdcMemberCandidates(organizationId: string): Promise<OdcMemberSummary[]> {
   const rows = await db
     .select({
@@ -38,21 +40,30 @@ export async function areEligibleOdcMembers({
     return true;
   }
 
-  const candidates = await db
-    .select({
-      isOdc: organizationRole.isOdc,
-      memberId: member.id,
-      organizationId: member.organizationId,
-    })
-    .from(member)
-    .innerJoin(
-      organizationRole,
-      and(
-        eq(organizationRole.organizationId, member.organizationId),
-        eq(organizationRole.role, member.role),
-      ),
-    )
-    .where(and(inArray(member.id, memberIds), eq(member.organizationId, organizationId)));
+  const candidates = [];
+  for (let index = 0; index < memberIds.length; index += ODC_MEMBER_QUERY_BATCH_SIZE) {
+    const rows = await db
+      .select({
+        isOdc: organizationRole.isOdc,
+        memberId: member.id,
+        organizationId: member.organizationId,
+      })
+      .from(member)
+      .innerJoin(
+        organizationRole,
+        and(
+          eq(organizationRole.organizationId, member.organizationId),
+          eq(organizationRole.role, member.role),
+        ),
+      )
+      .where(
+        and(
+          inArray(member.id, memberIds.slice(index, index + ODC_MEMBER_QUERY_BATCH_SIZE)),
+          eq(member.organizationId, organizationId),
+        ),
+      );
+    candidates.push(...rows);
+  }
 
   return canAssignOdcMembers({ memberIds, organizationId }, candidates);
 }

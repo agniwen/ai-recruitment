@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import { getRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import {
   generateInterviewQuestionsForProfile,
@@ -84,7 +85,7 @@ async function confirmBindCandidateToJob(input: {
   organizationId: string;
   proposalId: string;
   resumeRecordId: string;
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }): Promise<ConfirmRecruitingActionResult> {
   if (!input.operatorId) {
     return { message: "无法确认当前操作人。", status: "failed" };
@@ -150,7 +151,7 @@ async function confirmBindPoolItemToJob(input: {
   organizationId: string;
   poolItemId: string;
   proposalId: string;
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }): Promise<ConfirmRecruitingActionResult> {
   if (!input.operatorId) {
     return { message: "无法确认当前操作人。", status: "failed" };
@@ -172,7 +173,7 @@ async function confirmBindPoolItemToJob(input: {
     organizationId: input.organizationId,
     poolItemId,
     userId: input.operatorId,
-    visibilityScope: input.visibilityScope,
+    visibilityScope: getRecruitingVisibilityScope(input.visibilityScope),
   });
   if (!existing) {
     return { message: "简历池记录不存在或无权访问。", status: "failed" };
@@ -363,7 +364,7 @@ export function confirmRecruitingAction(input: {
   operatorRole: string | null;
   organizationId: string;
   proposal: ConfirmRecruitingActionInput["proposal"];
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }) {
   if (input.decision === "ignore") {
     return ignoreRecruitingAction({

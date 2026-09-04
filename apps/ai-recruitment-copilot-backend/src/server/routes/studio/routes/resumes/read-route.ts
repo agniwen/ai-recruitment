@@ -1,14 +1,17 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { studioInterview } from "@arc/db-schema/schema";
 import { parseCsvParam } from "@arc/shared/csv";
-import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import {
+  buildResumeVisibilityCondition,
+  resolveResumeVisibilityScope,
+} from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import type { ResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import { resumeEvaluationStatusSubmitSchema } from "@arc/shared/studio-resumes";
 import { odcAnalysisResumeActivityValues } from "@arc/shared/odc-analysis";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
@@ -63,11 +66,14 @@ function loadVisibilityScope(
   organizationId: string,
   currentRole: string | null | undefined,
   userId: string | undefined,
-): Promise<RecruitingVisibilityScope> {
+): Promise<ResumeVisibilityScope> {
   if (!userId) {
-    return Promise.resolve({ kind: "none" });
+    return Promise.resolve({
+      odc: { departmentIds: [], hiringUnitIds: [] },
+      recruiting: { kind: "none" },
+    });
   }
-  return resolveRecruitingVisibilityScope({ currentRole, organizationId, userId });
+  return resolveResumeVisibilityScope({ currentRole, organizationId, userId });
 }
 
 async function reassessResumeRecordInBackground(input: {
@@ -189,13 +195,12 @@ export const resumeLibraryReadRouter = factory
       jsonValidatorError("招聘指标参数无效。"),
     ),
     async (c) => {
-      const { organization } = getWorkspaceRequestContext(c);
+      const { member, organization, user } = getWorkspaceRequestContext(c);
       const { scope } = c.req.valid("query");
-      if (scope === "personal" && !c.var.user?.id) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const visibilityScope = await loadVisibilityScope(organization.id, member.role, user.id);
       const metrics = await loadResumeLibraryMetrics(organization.id, {
-        createdByUserId: scope === "personal" ? c.var.user?.id : undefined,
+        createdByUserId: scope === "personal" ? user.id : undefined,
+        visibilityScope,
       });
       return c.json(metrics, 200);
     },
@@ -205,18 +210,45 @@ export const resumeLibraryReadRouter = factory
     requirePermission("resumeLibrary", "read"),
     zValidator("json", dedupCheckInputSchema, jsonValidatorError("请求参数无效。")),
     async (c) => {
-      const { activeOrg } = c.var;
-      if (!activeOrg) {
+      const { activeOrg, member, user } = c.var;
+      if (!activeOrg || !user) {
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
-      const matches = await findSemanticResumeDuplicates({
+      const visibilityScope = await loadVisibilityScope(activeOrg.id, member?.role, user.id);
+      const foundMatches = await findSemanticResumeDuplicates({
         email: input.email ?? null,
         name: input.name ?? null,
         organizationId: activeOrg.id,
         phone: input.phone ?? null,
+        resultLimit: 50,
         resumeProfile: input.resumeProfile ?? null,
       });
+      const studioIds = foundMatches
+        .filter((match) => match.sourceType === "studio_interview")
+        .map((match) => match.id);
+      const visibleStudioIds =
+        studioIds.length === 0
+          ? new Set<string>()
+          : new Set(
+              (
+                await db
+                  .select({ id: studioInterview.id })
+                  .from(studioInterview)
+                  .where(
+                    and(
+                      eq(studioInterview.organizationId, activeOrg.id),
+                      inArray(studioInterview.id, studioIds),
+                      buildResumeVisibilityCondition(visibilityScope),
+                    ),
+                  )
+              ).map((row) => row.id),
+            );
+      const matches = foundMatches
+        .filter(
+          (match) => match.sourceType !== "studio_interview" || visibleStudioIds.has(match.id),
+        )
+        .slice(0, 10);
       console.info("[resume-dedup-check] response", {
         matchCount: matches.length,
         matches: matches.map((match) => ({
@@ -594,11 +626,9 @@ export const resumeLibraryReadRouter = factory
         }
       }
 
-      const detail = await loadInterviewRoundDetail(
-        result.roundId,
-        organization.id,
-        visibilityScope,
-      );
+      const detail = await loadInterviewRoundDetail(result.roundId, organization.id, {
+        kind: "all",
+      });
       return c.json(detail, 201);
     },
   )

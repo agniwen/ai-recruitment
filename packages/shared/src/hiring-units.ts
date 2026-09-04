@@ -59,3 +59,23 @@ export const odcAssignmentSchema = z.object({
 });
 
 export type OdcAssignmentInput = z.infer<typeof odcAssignmentSchema>;
+
+export const odcBatchAssignmentSchema = z.object({
+  memberIds: odcAssignmentSchema.shape.memberIds,
+  targets: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1),
+        rowType: z.enum(["hiringUnit", "department"]),
+      }),
+    )
+    .min(1, "请至少选择一个用人组织或部门")
+    .refine(
+      (targets) =>
+        new Set(targets.map((target) => `${target.rowType}:${target.id}`)).size === targets.length,
+      "用人组织或部门不能重复",
+    ),
+});
+
+export type OdcBatchAssignmentInput = z.infer<typeof odcBatchAssignmentSchema>;
+export type OdcBatchAssignmentTarget = OdcBatchAssignmentInput["targets"][number];

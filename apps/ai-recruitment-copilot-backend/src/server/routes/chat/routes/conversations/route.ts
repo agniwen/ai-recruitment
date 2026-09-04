@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
-import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import { resolveResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import { legacyUiMessageToArcMessage } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/adapters/arc-message-adapter";
 import {
   checkConversationOwner,
@@ -208,7 +208,7 @@ export const conversationsRouter = factory
       if (!allowed) {
         return c.json({ error: "Forbidden" }, 403);
       }
-      const visibilityScope = await resolveRecruitingVisibilityScope({
+      const visibilityScope = await resolveResumeVisibilityScope({
         currentRole: c.var.member?.role,
         organizationId: activeOrg.id,
         userId: user.id,
@@ -220,7 +220,7 @@ export const conversationsRouter = factory
             organizationId: activeOrg.id,
             poolItemId: normalizeResumePoolItemId(proposal.payload.poolItemId),
             userId: user.id,
-            visibilityScope,
+            visibilityScope: visibilityScope.recruiting,
           });
           if (!visiblePoolItem) {
             return c.json({ error: "Not Found" }, 404);

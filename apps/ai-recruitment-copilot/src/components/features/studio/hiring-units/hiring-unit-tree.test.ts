@@ -102,6 +102,23 @@ describe("hiring unit management list", () => {
     expect(source).toContain("maxSize: 160");
   });
 
+  it("supports selecting mixed rows for overwrite-style batch ODC assignment", () => {
+    const pageSource = readFileSync(
+      new URL("hiring-unit-management-page.tsx", import.meta.url),
+      "utf-8",
+    );
+    const dialogSource = readFileSync(
+      new URL("../bulk-odc-assignment-dialog.tsx", import.meta.url),
+      "utf-8",
+    );
+
+    expect(pageSource).toContain("selectColumn<HiringUnitTreeRow>({");
+    expect(pageSource).toContain("rowSelection={rowSelection}");
+    expect(pageSource).toContain("批量设置 ODC");
+    expect(dialogSource).toContain('["hiring-units"].odc.batch.$put');
+    expect(dialogSource).toContain("此操作会覆盖");
+  });
+
   it("submits multiple ODC members for one hiring unit or department", () => {
     const source = readFileSync(new URL("../odc-assignment-dialog.tsx", import.meta.url), "utf-8");
 

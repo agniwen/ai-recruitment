@@ -3,11 +3,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   department,
+  departmentOdcMember,
   hiringUnit,
+  hiringUnitOdcMember,
   interviewer,
   jobDescription,
   member,
   organization,
+  organizationRole,
   recruitingGroup,
   recruitingGroupHiringUnit,
   recruitingGroupMember,
@@ -21,6 +24,7 @@ const ORG = "hiring_scope_org";
 const OWNER = "hiring_scope_owner";
 const MEMBER = "hiring_scope_member";
 const NO_GROUP_MEMBER = "hiring_scope_no_group_member";
+const NO_GROUP_MEMBER_ID = "hiring_scope_no_group_member_member";
 const GROUP_A = "hiring_scope_group_a";
 const HIRING_UNIT_A = "hiring_scope_unit_a";
 const HIRING_UNIT_B = "hiring_scope_unit_b";
@@ -90,6 +94,16 @@ async function seedWorkspace() {
     name: "Hiring Scope Org",
     slug: "hiring-scope-org",
   });
+  await db.insert(organizationRole).values({
+    createdAt: NOW,
+    id: "hiring_scope_odc_role",
+    isOdc: true,
+    name: "ODC",
+    organizationId: ORG,
+    permission: "member",
+    role: "odc",
+    updatedAt: NOW,
+  });
   await db.insert(member).values([
     {
       createdAt: NOW,
@@ -107,9 +121,9 @@ async function seedWorkspace() {
     },
     {
       createdAt: NOW,
-      id: "hiring_scope_no_group_member_member",
+      id: NO_GROUP_MEMBER_ID,
       organizationId: ORG,
-      role: "member",
+      role: "odc",
       userId: NO_GROUP_MEMBER,
     },
   ]);
@@ -323,5 +337,46 @@ describe("hiring unit recruiting-group scope", () => {
     expect(ids(departments)).toEqual([DEPT_PUBLIC]);
     expect(ids(interviewers)).toEqual([INTERVIEWER_PUBLIC]);
     expect(ids(jobDescriptions)).toEqual([JD_PUBLIC]);
+  });
+
+  it("部门 ODC 只看到本部门，改为用人组织 ODC 后看到其全部下属部门", async () => {
+    await db.insert(departmentOdcMember).values({
+      departmentId: DEPT_B,
+      memberId: NO_GROUP_MEMBER_ID,
+      organizationId: ORG,
+    });
+
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual([
+      JD_B,
+    ]);
+    expect(await listAllInterviewers(ORG, { actorUserId: NO_GROUP_MEMBER })).toEqual([]);
+
+    await db.delete(departmentOdcMember).where(eq(departmentOdcMember.organizationId, ORG));
+    await db.insert(hiringUnitOdcMember).values({
+      hiringUnitId: HIRING_UNIT_A,
+      memberId: NO_GROUP_MEMBER_ID,
+      organizationId: ORG,
+    });
+
+    const [departments, jobDescriptions] = await Promise.all([
+      listAllDepartments(ORG, { actorUserId: NO_GROUP_MEMBER }),
+      listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }),
+    ]);
+    expect(ids(departments)).toEqual([DEPT_A]);
+    expect(ids(jobDescriptions)).toEqual([JD_A]);
+  });
+
+  it("角色取消 ODC 标记后立即失去已分配范围", async () => {
+    await db.insert(hiringUnitOdcMember).values({
+      hiringUnitId: HIRING_UNIT_A,
+      memberId: NO_GROUP_MEMBER_ID,
+      organizationId: ORG,
+    });
+    await db
+      .update(organizationRole)
+      .set({ isOdc: false })
+      .where(and(eq(organizationRole.organizationId, ORG), eq(organizationRole.role, "odc")));
+
+    expect(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER })).toEqual([]);
   });
 });

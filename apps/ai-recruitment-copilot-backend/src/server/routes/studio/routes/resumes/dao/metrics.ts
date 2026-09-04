@@ -1,5 +1,8 @@
 import { and, count, desc, eq, exists, gte, isNotNull, ne, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { buildResumeVisibilityCondition } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import { startOfBeijingDay, toBeijingCalendarDate } from "@arc/shared/beijing-calendar";
 import type {
   DashboardActivityRow,
@@ -36,14 +39,23 @@ const hasInterviewRoundsSql = exists(
     .where(eq(studioInterviewSchedule.interviewRecordId, studioInterview.id)),
 );
 
-function resumeMetricsOrgFilters(organizationId: string, createdByUserId?: string) {
+function resumeMetricsOrgFilters(
+  organizationId: string,
+  createdByUserId?: string,
+  visibilityCondition?: SQL,
+) {
   return and(
     eq(studioInterview.organizationId, organizationId),
     createdByUserId ? eq(studioInterview.createdBy, createdByUserId) : undefined,
+    visibilityCondition,
   );
 }
 
-async function loadByPipeline(organizationId: string, createdByUserId?: string) {
+async function loadByPipeline(
+  organizationId: string,
+  createdByUserId?: string,
+  visibilityCondition?: SQL,
+) {
   // 漏斗分布：按 (pipelineStage, outcome) 分桶；outcome='archived' 排除，避免
   // 冷藏长尾压扁主流程展示。其他 closed outcome（hired / rejected / withdrawn）保留。
   // Pipeline funnel: bucket by (pipelineStage, outcome); archived outcomes are
@@ -57,7 +69,7 @@ async function loadByPipeline(organizationId: string, createdByUserId?: string) 
     .from(studioInterview)
     .where(
       and(
-        resumeMetricsOrgFilters(organizationId, createdByUserId),
+        resumeMetricsOrgFilters(organizationId, createdByUserId, visibilityCondition),
         ne(studioInterview.outcome, "archived"),
       ),
     )
@@ -73,6 +85,7 @@ async function loadByPipeline(organizationId: string, createdByUserId?: string) 
 async function loadDailyAdded(
   organizationId: string,
   createdByUserId?: string,
+  visibilityCondition?: SQL,
 ): Promise<ResumeLibraryMetrics["dailyAdded"]> {
   // Truncate created_at to day; window is the last 365 days for the GitHub-style
   // year calendar. Group by day + uploader so tooltips can list per-user counts.
@@ -94,7 +107,7 @@ async function loadDailyAdded(
     .leftJoin(user, eq(user.id, studioInterview.createdBy))
     .where(
       and(
-        resumeMetricsOrgFilters(organizationId, createdByUserId),
+        resumeMetricsOrgFilters(organizationId, createdByUserId, visibilityCondition),
         gte(studioInterview.createdAt, since),
       ),
     )
@@ -126,7 +139,11 @@ async function loadDailyAdded(
     }));
 }
 
-async function loadConversion(organizationId: string, createdByUserId?: string) {
+async function loadConversion(
+  organizationId: string,
+  createdByUserId?: string,
+  visibilityCondition?: SQL,
+) {
   // 把"已发起 AI 面试 vs 未发起"压成两个 count，archived 排除。
   // FILTER 表达式拿 hasInterviewRoundsSql 直接复用为布尔条件。
   // Pack "launched vs not launched" into two parallel counts in a single query;
@@ -141,7 +158,7 @@ async function loadConversion(organizationId: string, createdByUserId?: string) 
     .from(studioInterview)
     .where(
       and(
-        resumeMetricsOrgFilters(organizationId, createdByUserId),
+        resumeMetricsOrgFilters(organizationId, createdByUserId, visibilityCondition),
         ne(studioInterview.outcome, "archived"),
       ),
     );
@@ -155,6 +172,7 @@ async function loadConversion(organizationId: string, createdByUserId?: string) 
 export interface ResumeLibraryMetricsOptions {
   /** When set, only count candidates created by this user (personal scope). */
   createdByUserId?: string;
+  visibilityScope?: CompatibleResumeVisibilityScope;
 }
 
 async function queryResumeLibraryMetrics(
@@ -162,10 +180,11 @@ async function queryResumeLibraryMetrics(
   options?: ResumeLibraryMetricsOptions,
 ): Promise<ResumeLibraryMetrics> {
   const createdByUserId = options?.createdByUserId;
+  const visibilityCondition = buildResumeVisibilityCondition(options?.visibilityScope);
   const [byPipeline, dailyAdded, conversion] = await Promise.all([
-    loadByPipeline(organizationId, createdByUserId),
-    loadDailyAdded(organizationId, createdByUserId),
-    loadConversion(organizationId, createdByUserId),
+    loadByPipeline(organizationId, createdByUserId, visibilityCondition),
+    loadDailyAdded(organizationId, createdByUserId, visibilityCondition),
+    loadConversion(organizationId, createdByUserId, visibilityCondition),
   ]);
   return { byPipeline, conversion, dailyAdded };
 }

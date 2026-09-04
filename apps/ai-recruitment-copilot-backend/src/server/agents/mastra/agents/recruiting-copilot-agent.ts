@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { mastraModels } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import { createRecruitingCopilotTools } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/tools/recruiting-copilot";
@@ -23,7 +23,7 @@ export function createRecruitingCopilotAgent({
   focus?: RecruitingCopilotFocus;
   organizationId: string;
   userId: string;
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }) {
   return new Agent({
     id: "recruiting-copilot-agent",

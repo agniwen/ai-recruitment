@@ -427,6 +427,21 @@ describe("queryPaginatedResumeRecords", () => {
     expect(blocked).toBeNull();
   });
 
+  it("allows a department ODC to list and open every resume linked to that department", async () => {
+    const visibilityScope = {
+      odc: { departmentIds: [DEPT_ID], hiringUnitIds: [] },
+      recruiting: { kind: "none" as const },
+    };
+    const result = await queryPaginatedResumeRecords(ORG_A, undefined, undefined, visibilityScope);
+
+    expect(result.records.map((row) => row.candidateName).toSorted()).toEqual(
+      ["郭靖", "李四"].toSorted(),
+    );
+    await expect(loadResumeDetail("ri_test_a_1", ORG_A, visibilityScope)).resolves.toMatchObject({
+      candidateName: "郭靖",
+    });
+  });
+
   it("combines skills + jobDescriptionIds + search (intersection)", async () => {
     // React 命中郭靖；JD 限定后端 → 没人；search 不限。
     const result = await queryPaginatedResumeRecords(ORG_A, {

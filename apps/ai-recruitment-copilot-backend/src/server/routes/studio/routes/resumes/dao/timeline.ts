@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import type {
   CandidateTimelineEvent,
   CandidateTimelineEventMeta,
@@ -340,7 +340,7 @@ function hasOperatorAuditedAction(
 export async function loadCandidateTimeline(
   interviewRecordId: string,
   organizationId: string,
-  visibilityScope?: RecruitingVisibilityScope,
+  visibilityScope?: CompatibleResumeVisibilityScope,
 ): Promise<CandidateTimelineResponse | null> {
   const candidate = await loadResumeDetail(interviewRecordId, organizationId, visibilityScope);
   if (!candidate) {

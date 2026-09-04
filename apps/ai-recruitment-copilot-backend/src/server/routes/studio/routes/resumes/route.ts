@@ -8,8 +8,11 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { studioInterview } from "@arc/db-schema/schema";
 import { resumeReviewSchema } from "@arc/shared/resume-review";
 import type { ResumeReview } from "@arc/shared/resume-review";
-import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import {
+  buildResumeVisibilityCondition,
+  resolveResumeVisibilityScope,
+} from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import type { ResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import {
   canDeleteResumeRecord,
   canEditResumeRecord,
@@ -81,11 +84,14 @@ function loadVisibilityScope(
   organizationId: string,
   currentRole: string | null | undefined,
   userId: string | undefined,
-): Promise<RecruitingVisibilityScope> {
+): Promise<ResumeVisibilityScope> {
   if (!userId) {
-    return Promise.resolve({ kind: "none" });
+    return Promise.resolve({
+      odc: { departmentIds: [], hiringUnitIds: [] },
+      recruiting: { kind: "none" },
+    });
   }
-  return resolveRecruitingVisibilityScope({ currentRole, organizationId, userId });
+  return resolveResumeVisibilityScope({ currentRole, organizationId, userId });
 }
 
 function toNullableString(value: FormDataEntryValue | null): string | null {
@@ -977,9 +983,16 @@ export const resumeLibraryRouter = factory
     if (!canDeleteResumeRecord(record.resumeParseStatus)) {
       return c.json({ error: "简历解析排队或处理中，暂不能删除。" }, 409);
     }
+    const visibilityCondition = buildResumeVisibilityCondition(visibilityScope);
     const result = await db
       .delete(studioInterview)
-      .where(and(eq(studioInterview.id, id), eq(studioInterview.organizationId, activeOrg.id)))
+      .where(
+        and(
+          eq(studioInterview.id, id),
+          eq(studioInterview.organizationId, activeOrg.id),
+          visibilityCondition,
+        ),
+      )
       .returning({ id: studioInterview.id });
     if (result.length === 0) {
       return c.json({ error: "记录不存在。" }, 404);
@@ -1024,13 +1037,7 @@ export const resumeLibraryRouter = factory
         c.var.member?.role,
         c.var.user?.id,
       );
-      if (visibilityScope.kind === "none") {
-        return c.json({ error: "记录不存在。" }, 404);
-      }
-      const visibilityCondition =
-        visibilityScope.kind === "restricted"
-          ? inArray(studioInterview.createdBy, visibilityScope.userIds)
-          : undefined;
+      const visibilityCondition = buildResumeVisibilityCondition(visibilityScope);
       const rows = await db
         .select({ id: studioInterview.id, resumeParseStatus: studioInterview.resumeParseStatus })
         .from(studioInterview)
@@ -1045,11 +1052,16 @@ export const resumeLibraryRouter = factory
         return c.json({ error: "所选记录包含解析排队或处理中的简历，暂不能删除。" }, 409);
       }
 
+      const visibleIds = rows.map((row) => row.id);
+      if (visibleIds.length === 0) {
+        return c.json({ error: "记录不存在。" }, 404);
+      }
+
       const result = await db
         .delete(studioInterview)
         .where(
           and(
-            inArray(studioInterview.id, ids),
+            inArray(studioInterview.id, visibleIds),
             eq(studioInterview.organizationId, activeOrg.id),
             visibilityCondition,
           ),

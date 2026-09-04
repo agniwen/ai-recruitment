@@ -2,7 +2,7 @@ import type { ModelMessage, UIMessage } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { zValidator } from "@hono/zod-validator";
 import { toAISdkStream } from "@mastra/ai-sdk";
-import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import { resolveResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { legacyUiMessageToArcMessage } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/adapters/arc-message-adapter";
 import { createRecruitingCopilotAgent } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/agents/recruiting-copilot-agent";
@@ -130,7 +130,7 @@ export const resumeChatRouter = factory
     if ("error" in validatedMessages) {
       return c.json({ error: validatedMessages.error }, 400);
     }
-    const visibilityScope = await resolveRecruitingVisibilityScope({
+    const visibilityScope = await resolveResumeVisibilityScope({
       currentRole: c.var.member?.role,
       organizationId: orgId,
       userId,

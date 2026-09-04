@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { canAssignOdcMembers } from "./odc-assignment-policy";
+import { odcBatchAssignmentSchema } from "@arc/shared/hiring-units";
 
 describe("canAssignOdcMembers", () => {
   it("accepts every selected member when all workspace roles are marked as ODC", () => {
@@ -54,5 +55,42 @@ describe("ODC candidate route", () => {
     expect(source).toContain('authorize({ action: "update", resource: "hiringUnit" })');
     expect(source).toContain('authorize({ action: "update", resource: "department" })');
     expect(source).toContain("canUpdateHiringUnits || canUpdateDepartments");
+  });
+});
+
+describe("batch ODC assignment", () => {
+  it("accepts mixed unique targets and rejects duplicate targets", () => {
+    expect(
+      odcBatchAssignmentSchema.safeParse({
+        memberIds: ["member-1"],
+        targets: [
+          { id: "unit-1", rowType: "hiringUnit" },
+          { id: "department-1", rowType: "department" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      odcBatchAssignmentSchema.safeParse({
+        memberIds: [],
+        targets: [
+          { id: "unit-1", rowType: "hiringUnit" },
+          { id: "unit-1", rowType: "hiringUnit" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("uses one atomic overwrite path after mixed permission checks", () => {
+    const routeSource = readFileSync(new URL("route.ts", import.meta.url), "utf-8");
+    const daoSource = readFileSync(new URL("dao.ts", import.meta.url), "utf-8");
+
+    expect(routeSource).toContain('"/odc/batch"');
+    expect(routeSource).toContain('resource: "hiringUnit"');
+    expect(routeSource).toContain('resource: "department"');
+    expect(routeSource).toContain("replaceOdcMembersForTargets");
+    expect(daoSource).toContain("export function replaceOdcMembersForTargets");
+    expect(daoSource).toContain("return db.transaction");
+    expect(daoSource).toContain("delete(hiringUnitOdcMember)");
+    expect(daoSource).toContain("delete(departmentOdcMember)");
   });
 });

@@ -5,6 +5,7 @@ import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 const mocks = vi.hoisted(() => ({
   applyJobDescriptionChangeEffects: vi.fn(),
   autoBindApplicableTemplates: vi.fn(),
+  buildResumeVisibilityCondition: vi.fn(),
   buildScheduleRows: vi.fn(),
   createResumeRecordFromStorage: vi.fn(),
   deleteDuplicateMatchesForSource: vi.fn(),
@@ -33,8 +34,8 @@ const mocks = vi.hoisted(() => ({
   recordCandidateActivityInTransaction: vi.fn(),
   removeImportedInterviewFromConversations: vi.fn(),
   replaceDuplicateMatchesForSource: vi.fn(),
-  resolveRecruitingVisibilityScope: vi.fn(),
   resolveResumeUploadStorage: vi.fn(),
+  resolveResumeVisibilityScope: vi.fn(),
   retryFailedResumeParse: vi.fn(),
   submitResumeEvaluation: vi.fn(),
   transaction: vi.fn(),
@@ -81,8 +82,9 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   getObjectBytes: vi.fn(),
   getObjectStream: vi.fn(),
 }));
-vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility", () => ({
-  resolveRecruitingVisibilityScope: mocks.resolveRecruitingVisibilityScope,
+vi.mock("@arc/ai-recruitment-copilot-backend/server/access/resume-visibility", () => ({
+  buildResumeVisibilityCondition: mocks.buildResumeVisibilityCondition,
+  resolveResumeVisibilityScope: mocks.resolveResumeVisibilityScope,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
   invalidateStudioInterviewCaches: mocks.invalidateStudioInterviewCaches,
@@ -286,7 +288,10 @@ describe("resumeLibraryRouter behavior", () => {
     mocks.insertedValues.length = 0;
     mocks.permissionChecks.length = 0;
     mocks.updatePatches.length = 0;
-    mocks.resolveRecruitingVisibilityScope.mockResolvedValue({ kind: "all" });
+    mocks.resolveResumeVisibilityScope.mockResolvedValue({
+      odc: { departmentIds: [], hiringUnitIds: [] },
+      recruiting: { kind: "all" },
+    });
     mocks.resolveResumeUploadStorage.mockResolvedValue(null);
     mocks.forceResumeReparse.mockResolvedValue({ status: "queued" });
     mocks.retryFailedResumeParse.mockResolvedValue({ status: "queued" });
@@ -348,7 +353,7 @@ describe("resumeLibraryRouter behavior", () => {
       ORGANIZATION_ID,
       expect.any(Object),
       expect.objectContaining({ page: "2", pageSize: "20" }),
-      { kind: "all" },
+      { odc: { departmentIds: [], hiringUnitIds: [] }, recruiting: { kind: "all" } },
       1103,
     );
   });
@@ -361,7 +366,7 @@ describe("resumeLibraryRouter behavior", () => {
       ORGANIZATION_ID,
       expect.objectContaining({ id: "test_a" }),
       expect.any(Object),
-      { kind: "all" },
+      { odc: { departmentIds: [], hiringUnitIds: [] }, recruiting: { kind: "all" } },
       undefined,
     );
   });
@@ -381,7 +386,7 @@ describe("resumeLibraryRouter behavior", () => {
         jobDescriptionIds: ["jd-1"],
       }),
       expect.any(Object),
-      { kind: "all" },
+      { odc: { departmentIds: [], hiringUnitIds: [] }, recruiting: { kind: "all" } },
       undefined,
     );
   });
@@ -397,6 +402,10 @@ describe("resumeLibraryRouter behavior", () => {
     });
     expect(mocks.loadResumeLibraryMetrics).toHaveBeenCalledWith(ORGANIZATION_ID, {
       createdByUserId: undefined,
+      visibilityScope: {
+        odc: { departmentIds: [], hiringUnitIds: [] },
+        recruiting: { kind: "all" },
+      },
     });
     expect(mocks.permissionChecks).toEqual([
       ["page", "resumes"],
@@ -410,6 +419,10 @@ describe("resumeLibraryRouter behavior", () => {
     expect(response.status).toBe(200);
     expect(mocks.loadResumeLibraryMetrics).toHaveBeenCalledWith(ORGANIZATION_ID, {
       createdByUserId: USER_ID,
+      visibilityScope: {
+        odc: { departmentIds: [], hiringUnitIds: [] },
+        recruiting: { kind: "all" },
+      },
     });
   });
 
@@ -521,7 +534,10 @@ describe("resumeLibraryRouter behavior", () => {
       poolOwnerUserId: USER_ID,
       sourceId: RECORD_ID,
       sourceType: "studio_interview",
-      visibilityScope: { kind: "all" },
+      visibilityScope: {
+        odc: { departmentIds: [], hiringUnitIds: [] },
+        recruiting: { kind: "all" },
+      },
     });
   });
 

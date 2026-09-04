@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import { buildResumeVisibilityCondition } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import type { DedupMatchRecord } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/studio-interviews";
 import { buildResumeProfileSnapshotFromProfile } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resume-profile-snapshot";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
@@ -216,7 +217,7 @@ export async function listDuplicateMatchesForSource(input: {
   poolOwnerUserId?: string | null;
   sourceId: string;
   sourceType: ResumeSemanticSourceType;
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }): Promise<DedupMatchRecord[]> {
   const matchRows = await db
     .select()
@@ -231,12 +232,9 @@ export async function listDuplicateMatchesForSource(input: {
     )
     .orderBy(desc(resumeDuplicateMatch.score), desc(resumeDuplicateMatch.createdAt));
 
-  const studioIds =
-    input.visibilityScope.kind === "none"
-      ? []
-      : matchRows
-          .filter((row) => row.matchedSourceType === "studio_interview")
-          .map((row) => row.matchedSourceId);
+  const studioIds = matchRows
+    .filter((row) => row.matchedSourceType === "studio_interview")
+    .map((row) => row.matchedSourceId);
   const poolIds = matchRows
     .filter((row) => row.matchedSourceType === "resume_pool_item")
     .map((row) => row.matchedSourceId);
@@ -276,9 +274,7 @@ export async function listDuplicateMatchesForSource(input: {
             and(
               eq(studioInterview.organizationId, input.organizationId),
               inArray(studioInterview.id, studioIds),
-              input.visibilityScope.kind === "restricted"
-                ? inArray(studioInterview.createdBy, input.visibilityScope.userIds)
-                : undefined,
+              buildResumeVisibilityCondition(input.visibilityScope),
             ),
           ),
     poolIds.length === 0

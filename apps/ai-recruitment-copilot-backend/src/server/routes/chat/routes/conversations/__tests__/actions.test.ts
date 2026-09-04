@@ -61,6 +61,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
       hiringUnitScope: {
         canAccessAll: false,
         canAccessPublic: true,
+        departmentIds: [],
         hiringUnitIds: ["hiring-unit-1"],
       },
       operatorId: "user-1",
@@ -121,6 +122,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
       hiringUnitScope: {
         canAccessAll: false,
         canAccessPublic: true,
+        departmentIds: [],
         hiringUnitIds: ["hiring-unit-1"],
       },
       operatorId: "user-1",
@@ -209,6 +211,7 @@ describe("confirmRecruitingAction bind_* conversation context", () => {
       hiringUnitScope: {
         canAccessAll: false,
         canAccessPublic: true,
+        departmentIds: [],
         hiringUnitIds: ["hiring-unit-1"],
       },
       operatorId: "user-1",

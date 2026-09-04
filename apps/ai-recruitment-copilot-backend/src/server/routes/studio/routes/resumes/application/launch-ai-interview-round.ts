@@ -2,7 +2,7 @@ import type { ResumeAnalysisResult } from "@arc/db-schema/interview/types";
 import type { PipelineStage, ResumeParseStatus } from "@arc/db-schema/studio-interviews";
 import { canApplyCandidatePipelineEvent } from "@arc/shared/candidate-pipeline-machine";
 import { canLaunchInterviewFromResume } from "@arc/shared/studio-resumes";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 
 interface LaunchCandidate {
   jobDescriptionAiInterviewDisabled: boolean;
@@ -23,7 +23,7 @@ export interface LaunchAiInterviewRoundCommand {
   interviewQuestions: ResumeAnalysisResult["interviewQuestions"];
   interviewRecordId: string;
   organizationId: string;
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }
 
 interface CommitLaunchInput<
@@ -56,7 +56,7 @@ interface LaunchAiInterviewRoundDependencies<TSchedule extends LaunchSchedule> {
   loadCandidate: (input: {
     interviewRecordId: string;
     organizationId: string;
-    visibilityScope: RecruitingVisibilityScope;
+    visibilityScope: CompatibleResumeVisibilityScope;
   }) => Promise<LaunchCandidate | null>;
   notifyStageChange?: (input: {
     fromStage: PipelineStage;

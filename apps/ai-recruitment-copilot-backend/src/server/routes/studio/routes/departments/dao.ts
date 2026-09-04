@@ -44,6 +44,41 @@ export type DepartmentPaginationParams = PaginationParams<SortColumn>;
 
 export type PaginatedDepartmentResult = PaginatedResult<DepartmentListRecord>;
 
+const DEPARTMENT_ID_QUERY_BATCH_SIZE = 5000;
+
+export async function areDepartmentsVisible({
+  actorUserId,
+  ids,
+  organizationId,
+}: {
+  actorUserId: string | null | undefined;
+  ids: string[];
+  organizationId: string;
+}): Promise<boolean> {
+  if (ids.length === 0) {
+    return true;
+  }
+  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
+    actorUserId,
+    organizationId,
+  });
+  let visibleCount = 0;
+  for (let index = 0; index < ids.length; index += DEPARTMENT_ID_QUERY_BATCH_SIZE) {
+    const rows = await db
+      .select({ id: department.id })
+      .from(department)
+      .where(
+        and(
+          eq(department.organizationId, organizationId),
+          inArray(department.id, ids.slice(index, index + DEPARTMENT_ID_QUERY_BATCH_SIZE)),
+          scopeCondition,
+        ),
+      );
+    visibleCount += rows.length;
+  }
+  return visibleCount === ids.length;
+}
+
 function buildWhereConditions({
   organizationId,
   search,

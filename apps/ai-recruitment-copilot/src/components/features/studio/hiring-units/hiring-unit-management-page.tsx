@@ -7,7 +7,8 @@ import {
   IconPlus,
   IconWorld,
 } from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import type { RowSelectionState } from "@tanstack/react-table";
+import { useEffect, useMemo, useState } from "react";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { HiringUnitRecord, HiringUnitTreeResult } from "@arc/shared/hiring-units";
 import {
@@ -15,8 +16,10 @@ import {
   customColumn,
   DataGrid,
   dateColumn,
+  selectColumn,
   textColumn,
 } from "@/components/data-grid";
+import { BulkOdcAssignmentDialog } from "@/components/features/studio/bulk-odc-assignment-dialog";
 import { DepartmentDeleteDialog } from "@/components/features/studio/departments/department-delete-dialog";
 import { DepartmentFormDialog } from "@/components/features/studio/departments/department-form-dialog";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
@@ -56,6 +59,8 @@ export function HiringUnitManagementPage() {
   );
   const [search, setSearch] = useState("");
   const [odcTarget, setOdcTarget] = useState<HiringUnitTreeRow | null>(null);
+  const [batchOdcTargets, setBatchOdcTargets] = useState<HiringUnitTreeRow[]>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   const treeQuery = useQuery({
     queryFn: () =>
@@ -76,6 +81,19 @@ export function HiringUnitManagementPage() {
       ),
     [collapsedHiringUnitIds, search, treeQuery.data],
   );
+
+  useEffect(() => {
+    const selectableRowIds = new Set(
+      rows
+        .filter((row) => (row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment))
+        .map((row) => `${row.rowType}:${row.id}`),
+    );
+    setRowSelection((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([id, selected]) => selected && selectableRowIds.has(id)),
+      ),
+    );
+  }, [canUpdateDepartment, canUpdateHiringUnit, rows]);
 
   function invalidateHiringUnitData() {
     void queryClient.invalidateQueries({ queryKey: ["hiring-units"] });
@@ -132,6 +150,14 @@ export function HiringUnitManagementPage() {
 
   const columns = useMemo(() => {
     const baseColumns = [
+      ...(canUpdateHiringUnit || canUpdateDepartment
+        ? [
+            selectColumn<HiringUnitTreeRow>({
+              getRowLabel: (row) => row.name,
+              scopeLabel: "组织与部门",
+            }),
+          ]
+        : []),
       customColumn<HiringUnitTreeRow>({
         cell: (row) => {
           const collapsed = collapsedHiringUnitIds.has(row.id) && !search;
@@ -248,6 +274,14 @@ export function HiringUnitManagementPage() {
           title="用人组织"
         />
         <DataGrid<HiringUnitTreeRow>
+          bulkActions={({ selectedRows }) => (
+            <Button onClick={() => setBatchOdcTargets(selectedRows)} variant="secondary">
+              批量设置 ODC
+            </Button>
+          )}
+          canSelectRow={(row) =>
+            row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment
+          }
           columns={columns}
           data={rows}
           empty={
@@ -288,7 +322,9 @@ export function HiringUnitManagementPage() {
           onFilterChange={(_, value) => setSearch(value)}
           onRefresh={() => void treeQuery.refetch()}
           onRetry={() => void treeQuery.refetch()}
+          onRowSelectionChange={setRowSelection}
           refetching={treeQuery.isRefetching}
+          rowSelection={rowSelection}
           toolbarRight={
             canCreateHiringUnit ? (
               <Button className="flex-1 sm:flex-none" onClick={crud.openCreate}>
@@ -329,6 +365,20 @@ export function HiringUnitManagementPage() {
         onSaved={invalidateHiringUnitData}
         open={odcTarget !== null}
         target={odcTarget}
+      />
+
+      <BulkOdcAssignmentDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setBatchOdcTargets([]);
+          }
+        }}
+        onSaved={() => {
+          setRowSelection({});
+          invalidateHiringUnitData();
+        }}
+        open={batchOdcTargets.length > 0}
+        targets={batchOdcTargets}
       />
 
       {canDeleteHiringUnit ? (

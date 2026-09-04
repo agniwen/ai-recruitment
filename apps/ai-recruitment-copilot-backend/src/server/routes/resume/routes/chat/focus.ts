@@ -1,4 +1,4 @@
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 
 export type RecruitingCopilotFocusInput = { id: string; kind: "resume_record" } | undefined;
 
@@ -11,7 +11,7 @@ interface RecruitingCopilotFocusDeps {
   loadResumeRecord: (input: {
     organizationId: string;
     resumeRecordId: string;
-    visibilityScope: RecruitingVisibilityScope;
+    visibilityScope: CompatibleResumeVisibilityScope;
   }) => Promise<{ id: string } | null>;
 }
 
@@ -19,7 +19,7 @@ export async function resolveRecruitingCopilotFocus(
   input: {
     focus: RecruitingCopilotFocusInput;
     organizationId: string;
-    visibilityScope: RecruitingVisibilityScope;
+    visibilityScope: CompatibleResumeVisibilityScope;
   },
   deps: RecruitingCopilotFocusDeps,
 ): Promise<ResolvedRecruitingCopilotFocus | { kind: "not_found" } | null> {

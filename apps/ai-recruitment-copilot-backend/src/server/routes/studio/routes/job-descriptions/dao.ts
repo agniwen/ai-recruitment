@@ -198,6 +198,7 @@ function buildWhereConditions({
     const hiringUnitCondition = buildJobDescriptionHiringUnitScopeCondition({
       canAccessAll: false,
       canAccessPublic: false,
+      departmentIds: [],
       hiringUnitIds,
     });
     if (hiringUnitCondition) {
@@ -1023,6 +1024,7 @@ async function queryJobDescriptionMetrics(
     }),
     resolveDepartmentHiringUnitScopeCondition({
       actorUserId: options?.actorUserId,
+      includeOdc: false,
       organizationId,
     }),
   ]);
