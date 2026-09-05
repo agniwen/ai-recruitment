@@ -99,7 +99,7 @@ function loadOdcAnalysisJobOptionsForActor(
     .orderBy(asc(jobDescription.name));
 }
 
-export async function loadOdcAnalysisJobOptions(
+export function loadOdcAnalysisJobOptions(
   organizationId: string,
   actorUserId: string,
 ): Promise<OdcAnalysisJobOption[]> {
@@ -625,7 +625,7 @@ async function loadOdcAnalysisDataForActor(
   };
 }
 
-export async function loadOdcAnalysisData(
+export function loadOdcAnalysisData(
   organizationId: string,
   actorUserId: string,
   filters: OdcAnalysisFilters,

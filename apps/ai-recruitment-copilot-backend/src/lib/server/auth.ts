@@ -20,7 +20,7 @@ import {
   addMemberToDefaultRecruitingGroup,
   ensureDefaultRecruitingGroupForWorkspace,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/workspace/dao";
-import { provisionPreRegisteredUser } from "@arc/ai-recruitment-copilot-backend/server/routes/platform/routes/pre-registrations/provisioning";
+import { provisionPreRegisteredUser } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/pre-registrations/provisioning";
 import { ac, roles } from "@arc/shared/permissions";
 import { optionalUserTelegramSchema } from "@arc/shared/user-profile";
 import { db } from "./db";
@@ -265,7 +265,7 @@ export const auth = betterAuth({
               });
             }
           } catch (error) {
-            console.warn("[auth] failed to apply platform pre-registration", error);
+            console.warn("[auth] failed to apply workspace pre-registration", error);
           }
         },
       },

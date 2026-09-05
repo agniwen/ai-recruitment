@@ -1,12 +1,18 @@
 import { HydrationBoundary } from "@tanstack/react-query";
 import type { DehydratedState } from "@tanstack/react-query";
-import { createFileRoute, redirect, useLoaderData } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  notFound,
+  redirect,
+  useLoaderData,
+  useParams,
+} from "@tanstack/react-router";
 import type { DataGridQueryState } from "@/components/data-grid/query-contract";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
-import { PlatformPreRegistrationsGrid } from "@/components/features/platform/pre-registrations/platform-pre-registrations-grid";
+import { StudioPreRegistrationsGrid } from "@/components/features/studio/pre-registrations/studio-pre-registrations-grid";
 import { formatDocumentTitle } from "@/lib/start/document-title";
-import { loadPlatformPreRegistrationsState } from "@/lib/start/platform/pre-registrations.functions";
-import type { PlatformPreRegistrationsState } from "@/lib/start/platform/pre-registrations.functions";
+import { loadStudioPreRegistrationsState } from "@/lib/start/studio/pre-registrations.functions";
+import type { StudioPreRegistrationsState } from "@/lib/start/studio/pre-registrations.functions";
 
 type EmptyFilters = Record<string, never>;
 type SearchPrimitive = boolean | number | string;
@@ -38,36 +44,37 @@ function parseQuery(search: SearchRecord): DataGridQueryState<EmptyFilters> {
   });
 }
 
-function PlatformPreRegistrationsRoute() {
-  const state = useLoaderData({ from: "/platform/pre-registrations" });
+function StudioPreRegistrationsRoute() {
+  const { slug } = useParams({ from: "/w/$slug/studio/pre-registrations" });
+  const state = useLoaderData({ from: "/w/$slug/studio/pre-registrations" });
   if (state.status !== "ready") {
     return null;
   }
   return (
     <HydrationBoundary state={state.dehydratedState as unknown as DehydratedState}>
       <div className="container mx-auto">
-        <PlatformPreRegistrationsGrid />
+        <StudioPreRegistrationsGrid key={slug} />
       </div>
     </HydrationBoundary>
   );
 }
 
-export const Route = createFileRoute("/platform/pre-registrations")({
+export const Route = createFileRoute("/w/$slug/studio/pre-registrations")({
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
   loader: async (loaderContext) => {
     const { location } = loaderContext as unknown as { location: { search: SearchRecord } };
-    const state = (await loadPlatformPreRegistrationsState({
-      data: { query: parseQuery(location.search) },
-    })) as PlatformPreRegistrationsState;
+    const state = (await loadStudioPreRegistrationsState({
+      data: { slug: loaderContext.params.slug, query: parseQuery(location.search) },
+    })) as StudioPreRegistrationsState;
     if (state.status === "unauthenticated") {
       throw redirect({ href: "/login" });
     }
-    if (state.status === "forbidden") {
-      throw redirect({ href: "/" });
+    if (state.status === "not_found") {
+      throw notFound();
     }
     return state;
   },
-  head: () => ({ meta: [{ title: formatDocumentTitle("平台 · 预录入信息") }] }),
-  component: PlatformPreRegistrationsRoute,
+  head: () => ({ meta: [{ title: formatDocumentTitle("预录入信息") }] }),
+  component: StudioPreRegistrationsRoute,
   shouldReload: false,
 });

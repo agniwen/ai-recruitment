@@ -39,7 +39,6 @@ import { platformAgentTestsRouter } from "./routes/agent-tests/route";
 import { platformHistoricalResumeImportsRouter } from "./routes/historical-resume-imports/route";
 import { platformLiveKitRouter } from "./routes/livekit/route";
 import { platformMastraRouter } from "./routes/mastra/route";
-import { platformPreRegistrationsRouter } from "./routes/pre-registrations/route";
 import { platformResumeParseCacheRouter } from "./routes/resume-parse-cache/route";
 
 // --- Organizations list ---
@@ -584,7 +583,6 @@ export const platformRouter = factory
   .route("/livekit", platformLiveKitRouter)
   .route("/historical-resume-imports", platformHistoricalResumeImportsRouter)
   .route("/mastra", platformMastraRouter)
-  .route("/pre-registrations", platformPreRegistrationsRouter)
   .route("/", platformQueues)
   .route("/", platformMailIngestAccounts)
   .route("/resume-parse-cache", platformResumeParseCacheRouter)

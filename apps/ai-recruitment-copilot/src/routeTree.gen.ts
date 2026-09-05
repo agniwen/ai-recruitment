@@ -27,7 +27,6 @@ import { Route as RRoundIdRouteImport } from './routes/r.$roundId'
 import { Route as PlatformUsersRouteImport } from './routes/platform.users'
 import { Route as PlatformResumeParseCacheRouteImport } from './routes/platform.resume-parse-cache'
 import { Route as PlatformQueuesRouteImport } from './routes/platform.queues'
-import { Route as PlatformPreRegistrationsRouteImport } from './routes/platform.pre-registrations'
 import { Route as PlatformOrganizationsRouteImport } from './routes/platform.organizations'
 import { Route as PlatformMastraStudioRouteImport } from './routes/platform.mastra-studio'
 import { Route as PlatformMailIngestAccountsRouteImport } from './routes/platform.mail-ingest-accounts'
@@ -58,6 +57,7 @@ import { Route as PlatformMastraStudioAgentBuilderIndexRouteImport } from './rou
 import { Route as PlatformMastraStudioMainIndexRouteImport } from './routes/platform.mastra-studio._main.index'
 import { Route as WSlugStudioResumesRouteImport } from './routes/w.$slug.studio.resumes'
 import { Route as WSlugStudioResumePoolRouteImport } from './routes/w.$slug.studio.resume-pool'
+import { Route as WSlugStudioPreRegistrationsRouteImport } from './routes/w.$slug.studio.pre-registrations'
 import { Route as WSlugStudioPermissionsRouteImport } from './routes/w.$slug.studio.permissions'
 import { Route as WSlugStudioOdcAnalysisRouteImport } from './routes/w.$slug.studio.odc-analysis'
 import { Route as WSlugStudioMembersRouteImport } from './routes/w.$slug.studio.members'
@@ -274,12 +274,6 @@ const PlatformQueuesRoute = PlatformQueuesRouteImport.update({
   path: '/queues',
   getParentRoute: () => PlatformRoute,
 } as any)
-const PlatformPreRegistrationsRoute =
-  PlatformPreRegistrationsRouteImport.update({
-    id: '/pre-registrations',
-    path: '/pre-registrations',
-    getParentRoute: () => PlatformRoute,
-  } as any)
 const PlatformOrganizationsRoute = PlatformOrganizationsRouteImport.update({
   id: '/organizations',
   path: '/organizations',
@@ -438,6 +432,12 @@ const WSlugStudioResumePoolRoute = WSlugStudioResumePoolRouteImport.update({
   path: '/resume-pool',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
+const WSlugStudioPreRegistrationsRoute =
+  WSlugStudioPreRegistrationsRouteImport.update({
+    id: '/pre-registrations',
+    path: '/pre-registrations',
+    getParentRoute: () => WSlugStudioRoute,
+  } as any)
 const WSlugStudioPermissionsRoute = WSlugStudioPermissionsRouteImport.update({
   id: '/permissions',
   path: '/permissions',
@@ -1193,7 +1193,6 @@ export interface FileRoutesByFullPath {
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/mastra-studio': typeof PlatformMastraStudioRouteWithChildren
   '/platform/organizations': typeof PlatformOrganizationsRoute
-  '/platform/pre-registrations': typeof PlatformPreRegistrationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -1258,6 +1257,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/odc-analysis': typeof WSlugStudioOdcAnalysisRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
+  '/w/$slug/studio/pre-registrations': typeof WSlugStudioPreRegistrationsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/platform/mastra-studio/': typeof PlatformMastraStudioMainIndexRoute
@@ -1361,7 +1361,6 @@ export interface FileRoutesByTo {
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/mastra-studio': typeof PlatformMastraStudioMainIndexRoute
   '/platform/organizations': typeof PlatformOrganizationsRoute
-  '/platform/pre-registrations': typeof PlatformPreRegistrationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -1420,6 +1419,7 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/odc-analysis': typeof WSlugStudioOdcAnalysisRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
+  '/w/$slug/studio/pre-registrations': typeof WSlugStudioPreRegistrationsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/platform/mastra-studio/agent-builder': typeof PlatformMastraStudioAgentBuilderIndexRoute
@@ -1518,7 +1518,6 @@ export interface FileRoutesById {
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/mastra-studio': typeof PlatformMastraStudioRouteWithChildren
   '/platform/organizations': typeof PlatformOrganizationsRoute
-  '/platform/pre-registrations': typeof PlatformPreRegistrationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
   '/platform/users': typeof PlatformUsersRoute
@@ -1585,6 +1584,7 @@ export interface FileRoutesById {
   '/w/$slug/studio/members': typeof WSlugStudioMembersRoute
   '/w/$slug/studio/odc-analysis': typeof WSlugStudioOdcAnalysisRoute
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
+  '/w/$slug/studio/pre-registrations': typeof WSlugStudioPreRegistrationsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/platform/mastra-studio/_main/': typeof PlatformMastraStudioMainIndexRoute
@@ -1695,7 +1695,6 @@ export interface FileRouteTypes {
     | '/platform/mail-ingest-accounts'
     | '/platform/mastra-studio'
     | '/platform/organizations'
-    | '/platform/pre-registrations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
     | '/platform/users'
@@ -1760,6 +1759,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/members'
     | '/w/$slug/studio/odc-analysis'
     | '/w/$slug/studio/permissions'
+    | '/w/$slug/studio/pre-registrations'
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resumes'
     | '/platform/mastra-studio/'
@@ -1863,7 +1863,6 @@ export interface FileRouteTypes {
     | '/platform/mail-ingest-accounts'
     | '/platform/mastra-studio'
     | '/platform/organizations'
-    | '/platform/pre-registrations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
     | '/platform/users'
@@ -1922,6 +1921,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/members'
     | '/w/$slug/studio/odc-analysis'
     | '/w/$slug/studio/permissions'
+    | '/w/$slug/studio/pre-registrations'
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resumes'
     | '/platform/mastra-studio/agent-builder'
@@ -2019,7 +2019,6 @@ export interface FileRouteTypes {
     | '/platform/mail-ingest-accounts'
     | '/platform/mastra-studio'
     | '/platform/organizations'
-    | '/platform/pre-registrations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
     | '/platform/users'
@@ -2086,6 +2085,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/members'
     | '/w/$slug/studio/odc-analysis'
     | '/w/$slug/studio/permissions'
+    | '/w/$slug/studio/pre-registrations'
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resumes'
     | '/platform/mastra-studio/_main/'
@@ -2322,13 +2322,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlatformQueuesRouteImport
       parentRoute: typeof PlatformRoute
     }
-    '/platform/pre-registrations': {
-      id: '/platform/pre-registrations'
-      path: '/pre-registrations'
-      fullPath: '/platform/pre-registrations'
-      preLoaderRoute: typeof PlatformPreRegistrationsRouteImport
-      parentRoute: typeof PlatformRoute
-    }
     '/platform/organizations': {
       id: '/platform/organizations'
       path: '/organizations'
@@ -2537,6 +2530,13 @@ declare module '@tanstack/react-router' {
       path: '/resume-pool'
       fullPath: '/w/$slug/studio/resume-pool'
       preLoaderRoute: typeof WSlugStudioResumePoolRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
+    '/w/$slug/studio/pre-registrations': {
+      id: '/w/$slug/studio/pre-registrations'
+      path: '/pre-registrations'
+      fullPath: '/w/$slug/studio/pre-registrations'
+      preLoaderRoute: typeof WSlugStudioPreRegistrationsRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
     '/w/$slug/studio/permissions': {
@@ -3975,7 +3975,6 @@ interface PlatformRouteChildren {
   PlatformMailIngestAccountsRoute: typeof PlatformMailIngestAccountsRoute
   PlatformMastraStudioRoute: typeof PlatformMastraStudioRouteWithChildren
   PlatformOrganizationsRoute: typeof PlatformOrganizationsRoute
-  PlatformPreRegistrationsRoute: typeof PlatformPreRegistrationsRoute
   PlatformQueuesRoute: typeof PlatformQueuesRoute
   PlatformResumeParseCacheRoute: typeof PlatformResumeParseCacheRoute
   PlatformUsersRoute: typeof PlatformUsersRoute
@@ -3988,7 +3987,6 @@ const PlatformRouteChildren: PlatformRouteChildren = {
   PlatformMailIngestAccountsRoute: PlatformMailIngestAccountsRoute,
   PlatformMastraStudioRoute: PlatformMastraStudioRouteWithChildren,
   PlatformOrganizationsRoute: PlatformOrganizationsRoute,
-  PlatformPreRegistrationsRoute: PlatformPreRegistrationsRoute,
   PlatformQueuesRoute: PlatformQueuesRoute,
   PlatformResumeParseCacheRoute: PlatformResumeParseCacheRoute,
   PlatformUsersRoute: PlatformUsersRoute,
@@ -4098,6 +4096,7 @@ interface WSlugStudioRouteChildren {
   WSlugStudioMembersRoute: typeof WSlugStudioMembersRoute
   WSlugStudioOdcAnalysisRoute: typeof WSlugStudioOdcAnalysisRoute
   WSlugStudioPermissionsRoute: typeof WSlugStudioPermissionsRoute
+  WSlugStudioPreRegistrationsRoute: typeof WSlugStudioPreRegistrationsRoute
   WSlugStudioResumePoolRoute: typeof WSlugStudioResumePoolRoute
   WSlugStudioResumesRoute: typeof WSlugStudioResumesRouteWithChildren
 }
@@ -4120,6 +4119,7 @@ const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
   WSlugStudioMembersRoute: WSlugStudioMembersRoute,
   WSlugStudioOdcAnalysisRoute: WSlugStudioOdcAnalysisRoute,
   WSlugStudioPermissionsRoute: WSlugStudioPermissionsRoute,
+  WSlugStudioPreRegistrationsRoute: WSlugStudioPreRegistrationsRoute,
   WSlugStudioResumePoolRoute: WSlugStudioResumePoolRoute,
   WSlugStudioResumesRoute: WSlugStudioResumesRouteWithChildren,
 }

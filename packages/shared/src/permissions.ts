@@ -35,6 +35,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "chat",
   "mailIngestAccounts",
   "permissions",
+  "preRegistrations",
   "globalConfig",
 ] as const;
 
@@ -57,6 +58,7 @@ export const STUDIO_PAGE_PERMISSION_LABELS = {
   members: "成员与招聘组",
   odcAnalysis: "ODC分析",
   permissions: "角色与权限",
+  preRegistrations: "预录入信息",
   resumePool: "简历池",
   resumes: "候选人管理",
 } as const;

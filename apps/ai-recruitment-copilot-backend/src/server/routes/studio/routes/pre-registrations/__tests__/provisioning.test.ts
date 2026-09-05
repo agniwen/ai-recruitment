@@ -78,10 +78,39 @@ describe("pre-registration profile and hierarchy", () => {
 });
 
 describe("provisionPreRegisteredUser", () => {
+  it("applies every workspace pre-entry with its own role, and scopes edits to one workspace", async () => {
+    const records = ["alpha", "beta"].map((workspaceSlug) => ({
+      directManagerEmail: null,
+      displayName: "张三",
+      email: "person@example.com",
+      id: workspaceSlug,
+      recruitingGroupNames: ["招聘组"],
+      recruitingRole: "hr" as const,
+      telegram: "@person",
+      workspaceRole: `${workspaceSlug}-hr`,
+      workspaceSlug,
+    }));
+    const dependencies = {
+      applyRegistration: vi.fn(),
+      findRegistrationsByEmail: vi.fn().mockResolvedValue(records),
+      reconcileWorkspaceReportingLines: vi.fn(),
+    };
+    await provisionPreRegisteredUser({ email: "person@example.com", userId: "u" }, dependencies);
+    expect(dependencies.applyRegistration).toHaveBeenNthCalledWith(1, records[0], "u");
+    expect(dependencies.applyRegistration).toHaveBeenNthCalledWith(2, records[1], "u");
+    dependencies.applyRegistration.mockClear();
+    dependencies.reconcileWorkspaceReportingLines.mockClear();
+    await provisionPreRegisteredUser(
+      { email: "person@example.com", userId: "u", workspaceSlug: "beta" },
+      dependencies,
+    );
+    expect(dependencies.applyRegistration).toHaveBeenCalledExactlyOnceWith(records[1], "u");
+    expect(dependencies.reconcileWorkspaceReportingLines).toHaveBeenCalledExactlyOnceWith("beta");
+  });
   it("does nothing when the registration email is not pre-entered", async () => {
     const dependencies = {
       applyRegistration: vi.fn(),
-      findRegistrationByEmail: vi.fn().mockResolvedValue(null),
+      findRegistrationsByEmail: vi.fn().mockResolvedValue([]),
       reconcileWorkspaceReportingLines: vi.fn(),
     };
 
@@ -100,18 +129,19 @@ describe("provisionPreRegisteredUser", () => {
       recruitingGroupNames: ["燎原社"],
       recruitingRole: "hr" as const,
       telegram: "@member",
+      workspaceRole: "custom-hr",
       workspaceSlug: "work",
     };
     const dependencies = {
       applyRegistration: vi.fn(() => Promise.resolve()),
-      findRegistrationByEmail: vi.fn().mockResolvedValue(registration),
+      findRegistrationsByEmail: vi.fn().mockResolvedValue([registration]),
       reconcileWorkspaceReportingLines: vi.fn(() => Promise.resolve()),
     };
 
     await expect(
       provisionPreRegisteredUser({ email: " MEMBER@example.com ", userId: "user-1" }, dependencies),
     ).resolves.toBe("applied");
-    expect(dependencies.findRegistrationByEmail).toHaveBeenCalledWith("member@example.com");
+    expect(dependencies.findRegistrationsByEmail).toHaveBeenCalledWith("member@example.com");
     expect(dependencies.applyRegistration).toHaveBeenCalledWith(registration, "user-1");
     expect(dependencies.reconcileWorkspaceReportingLines).toHaveBeenCalledWith("work");
   });

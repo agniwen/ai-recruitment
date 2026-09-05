@@ -4,7 +4,7 @@ import {
   normalizePermissionStatements,
 } from "@arc/shared/permission-statements";
 import type { WorkspacePermissionStatements } from "@arc/shared/permission-statements";
-import { roles, statement } from "@arc/shared/permissions";
+import { isWorkspaceAdministratorRole, roles, statement } from "@arc/shared/permissions";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { organizationRole } from "@arc/db-schema/schema";
 import {
@@ -76,10 +76,17 @@ export async function computeWorkspacePermissionSnapshot({
     return { role: memberRole, statements: {} };
   }
 
-  const roleStatements = await loadRoleStatements({
+  let roleStatements = await loadRoleStatements({
     organizationId,
     role: memberRole,
   });
+
+  if (!isWorkspaceAdministratorRole(memberRole) && roleStatements.page) {
+    roleStatements = {
+      ...roleStatements,
+      page: roleStatements.page.filter((action) => action !== "preRegistrations"),
+    };
+  }
 
   if (memberRole !== "member") {
     return {

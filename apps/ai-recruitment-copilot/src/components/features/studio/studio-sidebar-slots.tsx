@@ -182,6 +182,13 @@ const navGroups: NavGroup[] = [
         title: "简历邮箱采集",
       },
       {
+        action: "preRegistrations",
+        icon: ClipboardListIcon,
+        path: "/studio/pre-registrations",
+        resource: "page",
+        title: "预录入信息",
+      },
+      {
         action: "permissions",
         icon: ShieldCheckIcon,
         path: "/studio/permissions",

@@ -346,6 +346,7 @@ export const platformPreRegistration = pgTable(
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    workspaceRole: text("workspace_role").default("member").notNull(),
     workspaceSlug: text("workspace_slug").default("work").notNull(),
   },
   (table) => [

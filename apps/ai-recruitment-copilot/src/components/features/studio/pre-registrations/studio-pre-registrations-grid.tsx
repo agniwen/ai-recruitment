@@ -51,11 +51,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { rpcFetch } from "@/lib/client/api";
+import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { rpc } from "@/lib/client/rpc";
 
 type RecruitingRole = "recruitingSupervisor" | "recruitingLead" | "hr";
 
-interface PlatformPreRegistrationRecord {
+interface StudioPreRegistrationRecord {
   createdAt: string;
   directManagerEmail: string | null;
   directManagerName: string | null;
@@ -66,14 +67,15 @@ interface PlatformPreRegistrationRecord {
   recruitingRole: RecruitingRole;
   registeredUserId: string | null;
   telegram: string;
+  workspaceRole: string;
   updatedAt: string;
   workspaceSlug: string;
 }
 
-interface PlatformPreRegistrationsResult {
+interface StudioPreRegistrationsResult {
   page: number;
   pageSize: number;
-  records: PlatformPreRegistrationRecord[];
+  records: StudioPreRegistrationRecord[];
   total: number;
   totalPages: number;
 }
@@ -91,6 +93,7 @@ interface EditorForm {
   recruitingGroupNames: string;
   recruitingRole: RecruitingRole;
   telegram: string;
+  workspaceRole: string;
 }
 
 const EMPTY_FORM: EditorForm = {
@@ -100,6 +103,7 @@ const EMPTY_FORM: EditorForm = {
   recruitingGroupNames: "",
   recruitingRole: "hr",
   telegram: "",
+  workspaceRole: "member",
 };
 
 const ROLE_LABELS: Record<RecruitingRole, string> = {
@@ -115,7 +119,7 @@ function managerSourceLabel(source: ManagerOption["source"]) {
   return source === "registered" ? "已注册" : "已预录入";
 }
 
-function toEditorForm(record: PlatformPreRegistrationRecord | null): EditorForm {
+function toEditorForm(record: StudioPreRegistrationRecord | null): EditorForm {
   if (!record) {
     return EMPTY_FORM;
   }
@@ -126,6 +130,7 @@ function toEditorForm(record: PlatformPreRegistrationRecord | null): EditorForm 
     recruitingGroupNames: record.recruitingGroupNames.join("，"),
     recruitingRole: record.recruitingRole,
     telegram: record.telegram,
+    workspaceRole: record.workspaceRole,
   };
 }
 
@@ -141,6 +146,7 @@ function parseGroupNames(value: string) {
 }
 
 function PreRegistrationEditorDialog({
+  roleOptions,
   managerOptions,
   onOpenChange,
   onSaved,
@@ -148,11 +154,13 @@ function PreRegistrationEditorDialog({
   record,
 }: {
   managerOptions: ManagerOption[];
+  roleOptions: { label: string; value: string }[];
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
   open: boolean;
-  record: PlatformPreRegistrationRecord | null;
+  record: StudioPreRegistrationRecord | null;
 }) {
+  const slug = useWorkspaceSlug();
   const [form, setForm] = useState<EditorForm>(() => toEditorForm(record));
   const selectableManagers = useMemo(
     () =>
@@ -171,7 +179,8 @@ function PreRegistrationEditorDialog({
     form.displayName.trim().length > 0 &&
     form.email.trim().length > 0 &&
     form.telegram.trim().length > 0 &&
-    groupNames.length > 0;
+    groupNames.length > 0 &&
+    roleOptions.some((option) => option.value === form.workspaceRole);
   const mutation = useMutation({
     mutationFn: () => {
       const json = {
@@ -181,18 +190,19 @@ function PreRegistrationEditorDialog({
         recruitingGroupNames: groupNames,
         recruitingRole: form.recruitingRole,
         telegram: form.telegram,
+        workspaceRole: form.workspaceRole,
       };
       if (record) {
         return rpcFetch<{ id: string }>(
-          rpc.api.platform["pre-registrations"][":id"].$patch({
+          rpc.api.w[":slug"].studio["pre-registrations"][":id"].$patch({
             json,
-            param: { id: record.id },
+            param: { id: record.id, slug },
           }),
           "预录入信息更新失败",
         );
       }
       return rpcFetch<{ id: string }>(
-        rpc.api.platform["pre-registrations"].$post({ json }),
+        rpc.api.w[":slug"].studio["pre-registrations"].$post({ json, param: { slug } }),
         "预录入信息创建失败",
       );
     },
@@ -212,7 +222,7 @@ function PreRegistrationEditorDialog({
         <DialogHeader>
           <DialogTitle>{record ? "编辑预录入信息" : "新增预录入信息"}</DialogTitle>
           <DialogDescription>
-            用户注册后会自动加入 work 工作区，并应用招聘组、角色、直属上级和 TG。
+            用户注册后会自动加入当前工作区，并应用工作区角色、招聘组、直属上级和 TG。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -284,7 +294,40 @@ function PreRegistrationEditorDialog({
                 placeholder="多个招聘组用逗号分隔"
                 value={form.recruitingGroupNames}
               />
-              <FieldDescription>若 work 中不存在对应招聘组，注册时会自动创建。</FieldDescription>
+              <FieldDescription>
+                若当前工作区中不存在对应招聘组，注册时会自动创建。
+              </FieldDescription>
+            </Field>
+            <Field data-disabled={mutation.isPending}>
+              <FieldLabel htmlFor="pre-registration-workspace-role">工作区角色</FieldLabel>
+              <Select
+                disabled={mutation.isPending}
+                value={form.workspaceRole}
+                onValueChange={(value) => {
+                  if (value) {
+                    setForm((current) => ({ ...current, workspaceRole: value }));
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full" id="pre-registration-workspace-role">
+                  <SelectValue placeholder="选择工作区角色">
+                    {roleOptions.find((option) => option.value === form.workspaceRole)?.label ??
+                      "请选择角色"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {roleOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                首次加入工作区时自动设置；已有成员的工作区角色保持不变。
+              </FieldDescription>
             </Field>
             <Field data-disabled={mutation.isPending}>
               <FieldLabel htmlFor="pre-registration-role">招聘角色</FieldLabel>
@@ -348,28 +391,38 @@ function PreRegistrationEditorDialog({
   );
 }
 
-export function PlatformPreRegistrationsGrid() {
+export function StudioPreRegistrationsGrid() {
+  const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<PlatformPreRegistrationRecord | null>(null);
-  const [deletingRecord, setDeletingRecord] = useState<PlatformPreRegistrationRecord | null>(null);
+  const [editingRecord, setEditingRecord] = useState<StudioPreRegistrationRecord | null>(null);
+  const [deletingRecord, setDeletingRecord] = useState<StudioPreRegistrationRecord | null>(null);
+  const roleOptionsQuery = useQuery({
+    queryFn: () =>
+      rpcFetch<{ records: { label: string; value: string }[] }>(
+        rpc.api.w[":slug"].studio["pre-registrations"]["role-options"].$get({ param: { slug } }),
+        "加载工作区角色失败",
+      ),
+    queryKey: ["studio-pre-registration-role-options", slug],
+  });
   const managerOptionsQuery = useQuery({
     queryFn: () =>
       rpcFetch<{ records: ManagerOption[] }>(
-        rpc.api.platform["pre-registrations"]["manager-options"].$get(),
+        rpc.api.w[":slug"].studio["pre-registrations"]["manager-options"].$get({ param: { slug } }),
         "加载直属上级候选失败",
       ),
-    queryKey: ["platform-pre-registration-manager-options"],
+    queryKey: ["studio-pre-registration-manager-options", slug],
     staleTime: 30_000,
   });
-  const grid = useDataGridState<PlatformPreRegistrationRecord, Record<string, never>>({
+  const grid = useDataGridState<StudioPreRegistrationRecord, Record<string, never>>({
     allowedSortIds: ["displayName", "email", "createdAt"],
     defaultPageSize: 20,
     defaultSorting: [{ desc: false, id: "displayName" }],
     initialFilters: {},
-    queryFn: (params): Promise<PlatformPreRegistrationsResult> =>
-      rpcFetch<PlatformPreRegistrationsResult>(
-        rpc.api.platform["pre-registrations"].$get({
+    queryFn: (params): Promise<StudioPreRegistrationsResult> =>
+      rpcFetch<StudioPreRegistrationsResult>(
+        rpc.api.w[":slug"].studio["pre-registrations"].$get({
+          param: { slug },
           query: {
             page: String(params.page),
             pageSize: String(params.pageSize),
@@ -380,12 +433,12 @@ export function PlatformPreRegistrationsGrid() {
         }),
         "加载预录入信息失败",
       ),
-    queryKeyBase: ["platform-pre-registrations"],
+    queryKeyBase: ["studio-pre-registrations", slug],
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
       rpcFetch<{ success: boolean }>(
-        rpc.api.platform["pre-registrations"][":id"].$delete({ param: { id } }),
+        rpc.api.w[":slug"].studio["pre-registrations"][":id"].$delete({ param: { id, slug } }),
         "删除预录入信息失败",
       ),
     onError: (error) => {
@@ -395,21 +448,21 @@ export function PlatformPreRegistrationsGrid() {
       toast.success("预录入信息已删除");
       setDeletingRecord(null);
       void queryClient.invalidateQueries({
-        queryKey: ["platform-pre-registration-manager-options"],
+        queryKey: ["studio-pre-registration-manager-options", slug],
       });
       grid.invalidate();
     },
   });
   const columns = useMemo(
     () => [
-      textColumn<PlatformPreRegistrationRecord>({
+      textColumn<StudioPreRegistrationRecord>({
         key: "displayName",
         primary: true,
         title: "花名",
       }),
-      textColumn<PlatformPreRegistrationRecord>({ key: "email", title: "Gmail" }),
-      textColumn<PlatformPreRegistrationRecord>({ key: "telegram", title: "TG" }),
-      customColumn<PlatformPreRegistrationRecord>({
+      textColumn<StudioPreRegistrationRecord>({ key: "email", title: "Gmail" }),
+      textColumn<StudioPreRegistrationRecord>({ key: "telegram", title: "TG" }),
+      customColumn<StudioPreRegistrationRecord>({
         cell: (row) => (
           <div className="flex flex-wrap gap-1">
             {row.recruitingGroupNames.map((name) => (
@@ -422,17 +475,24 @@ export function PlatformPreRegistrationsGrid() {
         key: "recruitingGroupNames",
         title: "招聘组",
       }),
-      customColumn<PlatformPreRegistrationRecord>({
+      customColumn<StudioPreRegistrationRecord>({
         cell: (row) => ROLE_LABELS[row.recruitingRole],
         key: "recruitingRole",
-        title: "角色",
+        title: "招聘角色",
       }),
-      textColumn<PlatformPreRegistrationRecord>({
+      customColumn<StudioPreRegistrationRecord>({
+        cell: (row) =>
+          roleOptionsQuery.data?.records.find((option) => option.value === row.workspaceRole)
+            ?.label ?? row.workspaceRole,
+        key: "workspaceRole",
+        title: "工作区角色",
+      }),
+      textColumn<StudioPreRegistrationRecord>({
         fallback: "—",
         key: "directManagerName",
         title: "直属上级",
       }),
-      customColumn<PlatformPreRegistrationRecord>({
+      customColumn<StudioPreRegistrationRecord>({
         cell: (row) => (
           <Badge variant={row.registeredUserId ? "success" : "secondary"}>
             {row.registeredUserId ? "已注册" : "待注册"}
@@ -441,12 +501,12 @@ export function PlatformPreRegistrationsGrid() {
         key: "registeredUserId",
         title: "状态",
       }),
-      dateColumn<PlatformPreRegistrationRecord>({
+      dateColumn<StudioPreRegistrationRecord>({
         key: "createdAt",
         sortable: true,
         title: "创建时间",
       }),
-      actionsColumn<PlatformPreRegistrationRecord>({
+      actionsColumn<StudioPreRegistrationRecord>({
         inline: [
           {
             label: "编辑",
@@ -465,19 +525,19 @@ export function PlatformPreRegistrationsGrid() {
         ],
       }),
     ],
-    [],
+    [roleOptionsQuery.data],
   );
 
   function handleSaved() {
     grid.invalidate();
     void queryClient.invalidateQueries({
-      queryKey: ["platform-pre-registration-manager-options"],
+      queryKey: ["studio-pre-registration-manager-options", slug],
     });
   }
 
   return (
     <>
-      <DataGrid<PlatformPreRegistrationRecord>
+      <DataGrid<StudioPreRegistrationRecord>
         {...grid.bind}
         columnPinning={{ end: ["actions"] }}
         columns={columns}
@@ -519,6 +579,7 @@ export function PlatformPreRegistrationsGrid() {
       {editorOpen ? (
         <PreRegistrationEditorDialog
           key={editingRecord?.id ?? "new"}
+          roleOptions={roleOptionsQuery.data?.records ?? []}
           managerOptions={managerOptionsQuery.data?.records ?? []}
           onOpenChange={setEditorOpen}
           onSaved={handleSaved}

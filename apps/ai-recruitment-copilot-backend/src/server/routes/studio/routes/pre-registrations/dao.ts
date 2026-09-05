@@ -13,8 +13,7 @@ import {
   buildProspectiveManagerRelationships,
   hasPreRegistrationManagerCycle,
 } from "./provisioning";
-import { PRE_REGISTRATION_WORKSPACE_SLUG } from "./schema";
-import type { PlatformPreRegistrationInput } from "./schema";
+import type { StudioPreRegistrationInput } from "./schema";
 
 const directManagerPreRegistration = alias(
   platformPreRegistration,
@@ -25,7 +24,7 @@ const reportingLineManagerMember = alias(member, "pre_registration_reporting_lin
 const reportingLineMemberUser = alias(user, "pre_registration_reporting_line_member_user");
 const reportingLineManagerUser = alias(user, "pre_registration_reporting_line_manager_user");
 
-export interface PlatformPreRegistrationsQuery {
+export interface StudioPreRegistrationsQuery {
   page: number;
   pageSize: number;
   search?: string;
@@ -37,19 +36,22 @@ type MutationResult<T> = T | "cycle" | "duplicate" | "manager_not_found" | "not_
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type DatabaseExecutor = typeof db | DatabaseTransaction;
 
-async function lockWorkReportingLines(tx: DatabaseTransaction): Promise<void> {
+async function lockWorkspaceReportingLines(
+  tx: DatabaseTransaction,
+  workspaceSlug: string,
+): Promise<void> {
   const [workspace] = await tx
     .select({ id: organization.id })
     .from(organization)
-    .where(eq(organization.slug, PRE_REGISTRATION_WORKSPACE_SLUG))
+    .where(eq(organization.slug, workspaceSlug))
     .limit(1);
   if (!workspace) {
-    throw new Error("Pre-registration workspace not found: work");
+    throw new Error("Pre-registration workspace not found");
   }
   await acquireReportingLineWriteLock(tx, workspace.id);
 }
 
-function orderBy(query: PlatformPreRegistrationsQuery) {
+function orderBy(query: StudioPreRegistrationsQuery) {
   if (query.sortBy === "email") {
     return query.sortOrder === "desc"
       ? desc(platformPreRegistration.email)
@@ -65,10 +67,13 @@ function orderBy(query: PlatformPreRegistrationsQuery) {
     : asc(platformPreRegistration.displayName);
 }
 
-export async function queryPaginatedPlatformPreRegistrations(query: PlatformPreRegistrationsQuery) {
+export async function queryPaginatedStudioPreRegistrations(
+  workspaceSlug: string,
+  query: StudioPreRegistrationsQuery,
+) {
   const search = query.search?.trim();
   const searchFilter = and(
-    eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+    eq(platformPreRegistration.workspaceSlug, workspaceSlug),
     search
       ? or(
           ilike(platformPreRegistration.displayName, `%${search}%`),
@@ -99,6 +104,7 @@ export async function queryPaginatedPlatformPreRegistrations(query: PlatformPreR
         registeredUserId: user.id,
         telegram: platformPreRegistration.telegram,
         updatedAt: platformPreRegistration.updatedAt,
+        workspaceRole: platformPreRegistration.workspaceRole,
         workspaceSlug: platformPreRegistration.workspaceSlug,
       })
       .from(platformPreRegistration)
@@ -133,7 +139,7 @@ export async function queryPaginatedPlatformPreRegistrations(query: PlatformPreR
   };
 }
 
-export async function listPlatformPreRegistrationManagerOptions() {
+export async function listStudioPreRegistrationManagerOptions(workspaceSlug: string) {
   const [preRegistrations, registeredMembers] = await Promise.all([
     db
       .select({
@@ -141,13 +147,13 @@ export async function listPlatformPreRegistrationManagerOptions() {
         email: platformPreRegistration.email,
       })
       .from(platformPreRegistration)
-      .where(eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG)),
+      .where(eq(platformPreRegistration.workspaceSlug, workspaceSlug)),
     db
       .select({ displayName: user.name, email: user.email })
       .from(member)
       .innerJoin(user, eq(user.id, member.userId))
       .innerJoin(organization, eq(organization.id, member.organizationId))
-      .where(eq(organization.slug, PRE_REGISTRATION_WORKSPACE_SLUG)),
+      .where(eq(organization.slug, workspaceSlug)),
   ]);
   const options = new Map<
     string,
@@ -172,6 +178,7 @@ export async function listPlatformPreRegistrationManagerOptions() {
 
 async function managerExists(
   executor: DatabaseExecutor,
+  workspaceSlug: string,
   managerEmail: string | null,
 ): Promise<boolean> {
   if (!managerEmail) {
@@ -184,7 +191,7 @@ async function managerExists(
       .from(platformPreRegistration)
       .where(
         and(
-          eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+          eq(platformPreRegistration.workspaceSlug, workspaceSlug),
           sql`lower(${platformPreRegistration.email}) = ${normalizedEmail}`,
         ),
       )
@@ -195,10 +202,7 @@ async function managerExists(
       .innerJoin(user, eq(user.id, member.userId))
       .innerJoin(organization, eq(organization.id, member.organizationId))
       .where(
-        and(
-          eq(organization.slug, PRE_REGISTRATION_WORKSPACE_SLUG),
-          sql`lower(${user.email}) = ${normalizedEmail}`,
-        ),
+        and(eq(organization.slug, workspaceSlug), sql`lower(${user.email}) = ${normalizedEmail}`),
       )
       .limit(1),
   ]);
@@ -207,6 +211,7 @@ async function managerExists(
 
 async function emailExists(
   executor: DatabaseExecutor,
+  workspaceSlug: string,
   email: string,
   excludedId?: string,
 ): Promise<boolean> {
@@ -215,7 +220,7 @@ async function emailExists(
     .from(platformPreRegistration)
     .where(
       and(
-        eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+        eq(platformPreRegistration.workspaceSlug, workspaceSlug),
         sql`lower(${platformPreRegistration.email}) = ${email.trim().toLowerCase()}`,
         excludedId ? sql`${platformPreRegistration.id} <> ${excludedId}` : undefined,
       ),
@@ -224,8 +229,9 @@ async function emailExists(
   return Boolean(existing);
 }
 
-async function registeredWorkMemberExists(
+async function registeredWorkspaceMemberExists(
   executor: DatabaseExecutor,
+  workspaceSlug: string,
   email: string,
 ): Promise<boolean> {
   const [registeredMember] = await executor
@@ -234,10 +240,7 @@ async function registeredWorkMemberExists(
     .innerJoin(user, eq(user.id, member.userId))
     .innerJoin(organization, eq(organization.id, member.organizationId))
     .where(
-      and(
-        eq(organization.slug, PRE_REGISTRATION_WORKSPACE_SLUG),
-        sql`lower(${user.email}) = ${email.toLowerCase()}`,
-      ),
+      and(eq(organization.slug, workspaceSlug), sql`lower(${user.email}) = ${email.toLowerCase()}`),
     )
     .limit(1);
   return Boolean(registeredMember);
@@ -245,6 +248,7 @@ async function registeredWorkMemberExists(
 
 async function createsCycle(
   executor: DatabaseExecutor,
+  workspaceSlug: string,
   id: string,
   previousEmail: string | null,
   email: string,
@@ -258,7 +262,7 @@ async function createsCycle(
         id: platformPreRegistration.id,
       })
       .from(platformPreRegistration)
-      .where(eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG)),
+      .where(eq(platformPreRegistration.workspaceSlug, workspaceSlug)),
     executor
       .select({
         directManagerEmail: reportingLineManagerUser.email,
@@ -285,7 +289,7 @@ async function createsCycle(
         eq(reportingLineManagerUser.id, reportingLineManagerMember.userId),
       )
       .innerJoin(organization, eq(organization.id, memberReportingLine.organizationId))
-      .where(eq(organization.slug, PRE_REGISTRATION_WORKSPACE_SLUG)),
+      .where(eq(organization.slug, workspaceSlug)),
   ]);
   const nextRows = buildProspectiveManagerRelationships({
     current: { directManagerEmail, email, id },
@@ -296,7 +300,7 @@ async function createsCycle(
   return hasPreRegistrationManagerCycle(nextRows);
 }
 
-function normalizedInput(input: PlatformPreRegistrationInput) {
+function normalizedInput(input: StudioPreRegistrationInput) {
   return {
     ...input,
     directManagerEmail: input.directManagerEmail?.toLowerCase() ?? null,
@@ -304,19 +308,20 @@ function normalizedInput(input: PlatformPreRegistrationInput) {
   };
 }
 
-export function createPlatformPreRegistration(
-  input: PlatformPreRegistrationInput,
+export function createStudioPreRegistration(
+  workspaceSlug: string,
+  input: StudioPreRegistrationInput,
 ): Promise<MutationResult<typeof platformPreRegistration.$inferSelect>> {
   return db.transaction(async (tx) => {
-    await lockWorkReportingLines(tx);
-    if (await emailExists(tx, input.email)) {
+    await lockWorkspaceReportingLines(tx, workspaceSlug);
+    if (await emailExists(tx, workspaceSlug, input.email)) {
       return "duplicate";
     }
-    if (!(await managerExists(tx, input.directManagerEmail))) {
+    if (!(await managerExists(tx, workspaceSlug, input.directManagerEmail))) {
       return "manager_not_found";
     }
     const id = crypto.randomUUID();
-    if (await createsCycle(tx, id, null, input.email, input.directManagerEmail)) {
+    if (await createsCycle(tx, workspaceSlug, id, null, input.email, input.directManagerEmail)) {
       return "cycle";
     }
     const [created] = await tx
@@ -324,43 +329,53 @@ export function createPlatformPreRegistration(
       .values({
         ...normalizedInput(input),
         id,
-        workspaceSlug: PRE_REGISTRATION_WORKSPACE_SLUG,
+        workspaceSlug,
       })
       .returning();
     return created;
   });
 }
 
-export function updatePlatformPreRegistration(
+export function updateStudioPreRegistration(
+  workspaceSlug: string,
   id: string,
-  input: PlatformPreRegistrationInput,
+  input: StudioPreRegistrationInput,
 ): Promise<MutationResult<typeof platformPreRegistration.$inferSelect>> {
   return db.transaction(async (tx) => {
-    await lockWorkReportingLines(tx);
+    await lockWorkspaceReportingLines(tx, workspaceSlug);
     const [existing] = await tx
       .select({ email: platformPreRegistration.email, id: platformPreRegistration.id })
       .from(platformPreRegistration)
       .where(
         and(
           eq(platformPreRegistration.id, id),
-          eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+          eq(platformPreRegistration.workspaceSlug, workspaceSlug),
         ),
       )
       .limit(1);
     if (!existing) {
       return "not_found";
     }
-    if (await emailExists(tx, input.email, id)) {
+    if (await emailExists(tx, workspaceSlug, input.email, id)) {
       return "duplicate";
     }
-    if (!(await managerExists(tx, input.directManagerEmail))) {
+    if (!(await managerExists(tx, workspaceSlug, input.directManagerEmail))) {
       return "manager_not_found";
     }
     const emailChanged = existing.email.toLowerCase() !== input.email.toLowerCase();
     const preservePreviousIdentity =
-      emailChanged && (await registeredWorkMemberExists(tx, existing.email));
+      emailChanged && (await registeredWorkspaceMemberExists(tx, workspaceSlug, existing.email));
     const previousEmailToReplace = preservePreviousIdentity ? null : existing.email;
-    if (await createsCycle(tx, id, previousEmailToReplace, input.email, input.directManagerEmail)) {
+    if (
+      await createsCycle(
+        tx,
+        workspaceSlug,
+        id,
+        previousEmailToReplace,
+        input.email,
+        input.directManagerEmail,
+      )
+    ) {
       return "cycle";
     }
     const changed = await tx
@@ -369,7 +384,7 @@ export function updatePlatformPreRegistration(
       .where(
         and(
           eq(platformPreRegistration.id, id),
-          eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+          eq(platformPreRegistration.workspaceSlug, workspaceSlug),
         ),
       )
       .returning();
@@ -379,7 +394,7 @@ export function updatePlatformPreRegistration(
         .set({ directManagerEmail: input.email.toLowerCase(), updatedAt: new Date() })
         .where(
           and(
-            eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+            eq(platformPreRegistration.workspaceSlug, workspaceSlug),
             sql`lower(${platformPreRegistration.directManagerEmail}) = ${existing.email.toLowerCase()}`,
           ),
         );
@@ -388,16 +403,16 @@ export function updatePlatformPreRegistration(
   });
 }
 
-export function deletePlatformPreRegistration(id: string): Promise<boolean> {
+export function deleteStudioPreRegistration(workspaceSlug: string, id: string): Promise<boolean> {
   return db.transaction(async (tx) => {
-    await lockWorkReportingLines(tx);
+    await lockWorkspaceReportingLines(tx, workspaceSlug);
     const [existing] = await tx
       .select({ email: platformPreRegistration.email })
       .from(platformPreRegistration)
       .where(
         and(
           eq(platformPreRegistration.id, id),
-          eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+          eq(platformPreRegistration.workspaceSlug, workspaceSlug),
         ),
       )
       .limit(1);
@@ -411,7 +426,7 @@ export function deletePlatformPreRegistration(id: string): Promise<boolean> {
       .innerJoin(organization, eq(organization.id, member.organizationId))
       .where(
         and(
-          eq(organization.slug, PRE_REGISTRATION_WORKSPACE_SLUG),
+          eq(organization.slug, workspaceSlug),
           sql`lower(${user.email}) = ${existing.email.toLowerCase()}`,
         ),
       )
@@ -421,7 +436,7 @@ export function deletePlatformPreRegistration(id: string): Promise<boolean> {
       .where(
         and(
           eq(platformPreRegistration.id, id),
-          eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+          eq(platformPreRegistration.workspaceSlug, workspaceSlug),
         ),
       );
     if (!registeredMember) {
@@ -430,7 +445,7 @@ export function deletePlatformPreRegistration(id: string): Promise<boolean> {
         .set({ directManagerEmail: null, updatedAt: new Date() })
         .where(
           and(
-            eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
+            eq(platformPreRegistration.workspaceSlug, workspaceSlug),
             sql`lower(${platformPreRegistration.directManagerEmail}) = ${existing.email.toLowerCase()}`,
           ),
         );

@@ -10,7 +10,8 @@ import {
   recruitingGroupMember,
   user,
 } from "@arc/db-schema/schema";
-import { PRE_REGISTRATION_WORKSPACE_SLUG } from "./schema";
+import { dynamicWorkspaceRoleExists } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-roles";
+import { roles } from "@arc/shared/permissions";
 import type { PreRegistrationRecruitingRole } from "./schema";
 
 export interface PreRegistrationProvisioningRecord {
@@ -22,6 +23,7 @@ export interface PreRegistrationProvisioningRecord {
   recruitingRole: PreRegistrationRecruitingRole;
   telegram: string;
   workspaceSlug: string;
+  workspaceRole: string;
 }
 
 export interface PreRegistrationProvisioningDependencies {
@@ -29,9 +31,9 @@ export interface PreRegistrationProvisioningDependencies {
     registration: PreRegistrationProvisioningRecord,
     userId: string,
   ) => Promise<void>;
-  findRegistrationByEmail: (
+  findRegistrationsByEmail: (
     normalizedEmail: string,
-  ) => Promise<PreRegistrationProvisioningRecord | null>;
+  ) => Promise<PreRegistrationProvisioningRecord[]>;
   reconcileWorkspaceReportingLines: (workspaceSlug: string) => Promise<void>;
 }
 
@@ -163,10 +165,10 @@ export function buildProspectiveManagerRelationships({
   ];
 }
 
-async function findRegistrationByEmail(
+async function findRegistrationsByEmail(
   normalizedEmail: string,
-): Promise<PreRegistrationProvisioningRecord | null> {
-  const [registration] = await db
+): Promise<PreRegistrationProvisioningRecord[]> {
+  const registrations = await db
     .select({
       directManagerEmail: platformPreRegistration.directManagerEmail,
       displayName: platformPreRegistration.displayName,
@@ -175,22 +177,15 @@ async function findRegistrationByEmail(
       recruitingGroupNames: platformPreRegistration.recruitingGroupNames,
       recruitingRole: platformPreRegistration.recruitingRole,
       telegram: platformPreRegistration.telegram,
+      workspaceRole: platformPreRegistration.workspaceRole,
       workspaceSlug: platformPreRegistration.workspaceSlug,
     })
     .from(platformPreRegistration)
-    .where(
-      and(
-        eq(platformPreRegistration.workspaceSlug, PRE_REGISTRATION_WORKSPACE_SLUG),
-        sql`lower(${platformPreRegistration.email}) = ${normalizedEmail}`,
-      ),
-    )
-    .limit(1);
-  return registration
-    ? {
-        ...registration,
-        recruitingRole: registration.recruitingRole as PreRegistrationRecruitingRole,
-      }
-    : null;
+    .where(sql`lower(${platformPreRegistration.email}) = ${normalizedEmail}`);
+  return registrations.map((registration) => ({
+    ...registration,
+    recruitingRole: registration.recruitingRole as PreRegistrationRecruitingRole,
+  }));
 }
 
 async function applyRegistration(
@@ -206,6 +201,15 @@ async function applyRegistration(
     throw new Error(`Pre-registration workspace not found: ${registration.workspaceSlug}`);
   }
 
+  if (
+    !Object.hasOwn(roles, registration.workspaceRole) &&
+    !(await dynamicWorkspaceRoleExists(workspace.id, registration.workspaceRole))
+  ) {
+    throw new Error(
+      `Pre-registration workspace role no longer exists: ${registration.workspaceRole}`,
+    );
+  }
+
   await db.transaction(async (tx) => {
     await tx
       .update(user)
@@ -216,7 +220,7 @@ async function applyRegistration(
       .values({
         id: `mem_${crypto.randomUUID()}`,
         organizationId: workspace.id,
-        role: "member",
+        role: registration.workspaceRole,
         userId,
       })
       .onConflictDoNothing({ target: [member.userId, member.organizationId] });
@@ -331,26 +335,32 @@ async function reconcileWorkspaceReportingLines(workspaceSlug: string): Promise<
 
 const defaultDependencies: PreRegistrationProvisioningDependencies = {
   applyRegistration,
-  findRegistrationByEmail,
+  findRegistrationsByEmail,
   reconcileWorkspaceReportingLines,
 };
 
 export async function provisionPreRegisteredUser(
-  input: { email: string; userId: string },
+  input: { email: string; userId: string; workspaceSlug?: string },
   dependencies: PreRegistrationProvisioningDependencies = defaultDependencies,
 ): Promise<"applied" | "unmatched"> {
   const normalizedEmail = input.email.trim().toLowerCase();
-  const registration = await dependencies.findRegistrationByEmail(normalizedEmail);
-  if (!registration) {
+  const matchingRegistrations = await dependencies.findRegistrationsByEmail(normalizedEmail);
+  const registrations = matchingRegistrations.filter(
+    (entry) => !input.workspaceSlug || entry.workspaceSlug === input.workspaceSlug,
+  );
+  if (registrations.length === 0) {
     return "unmatched";
   }
-  await dependencies.applyRegistration(registration, input.userId);
-  await dependencies.reconcileWorkspaceReportingLines(registration.workspaceSlug);
+  for (const registration of registrations) {
+    await dependencies.applyRegistration(registration, input.userId);
+    await dependencies.reconcileWorkspaceReportingLines(registration.workspaceSlug);
+  }
   return "applied";
 }
 
 export async function provisionPreRegisteredUserByEmail(
   email: string,
+  workspaceSlug: string,
 ): Promise<"applied" | "unmatched"> {
   const normalizedEmail = email.trim().toLowerCase();
   const [registeredUser] = await db
@@ -361,5 +371,9 @@ export async function provisionPreRegisteredUserByEmail(
   if (!registeredUser) {
     return "unmatched";
   }
-  return provisionPreRegisteredUser({ email: normalizedEmail, userId: registeredUser.id });
+  return provisionPreRegisteredUser({
+    email: normalizedEmail,
+    userId: registeredUser.id,
+    workspaceSlug,
+  });
 }

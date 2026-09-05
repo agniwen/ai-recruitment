@@ -227,23 +227,20 @@ export const resumeLibraryReadRouter = factory
       const studioIds = foundMatches
         .filter((match) => match.sourceType === "studio_interview")
         .map((match) => match.id);
-      const visibleStudioIds =
+      const visibleStudioRows =
         studioIds.length === 0
-          ? new Set<string>()
-          : new Set(
-              (
-                await db
-                  .select({ id: studioInterview.id })
-                  .from(studioInterview)
-                  .where(
-                    and(
-                      eq(studioInterview.organizationId, activeOrg.id),
-                      inArray(studioInterview.id, studioIds),
-                      buildResumeVisibilityCondition(visibilityScope),
-                    ),
-                  )
-              ).map((row) => row.id),
-            );
+          ? []
+          : await db
+              .select({ id: studioInterview.id })
+              .from(studioInterview)
+              .where(
+                and(
+                  eq(studioInterview.organizationId, activeOrg.id),
+                  inArray(studioInterview.id, studioIds),
+                  buildResumeVisibilityCondition(visibilityScope),
+                ),
+              );
+      const visibleStudioIds = new Set(visibleStudioRows.map((row) => row.id));
       const matches = foundMatches
         .filter(
           (match) => match.sourceType !== "studio_interview" || visibleStudioIds.has(match.id),

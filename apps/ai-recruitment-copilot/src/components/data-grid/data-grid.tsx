@@ -111,7 +111,7 @@ function getSkeletonRowCount(pagination: DataGridPaginationState | undefined): n
 function getRowSelectionSetting<TData extends RowData>(
   rowSelection: RowSelectionState | undefined,
   canSelectRow: ((row: TData) => boolean) | undefined,
-): boolean | ((row: Row<TData>) => boolean) {
+): boolean | ((row: Row<DataGridFeatures, TData>) => boolean) {
   if (rowSelection === undefined) {
     return false;
   }

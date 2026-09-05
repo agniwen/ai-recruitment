@@ -1,3 +1,4 @@
+import type { RowSelectionState } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
 import { authClient } from "@/lib/client/auth-client";
@@ -91,9 +92,9 @@ export function filterWorkspaceMembersWithAncestors(
 }
 
 export function retainVisibleMemberSelection(
-  selection: Record<string, boolean>,
+  selection: RowSelectionState,
   visibleRows: readonly MemberRow[],
-): Record<string, boolean> {
+): RowSelectionState {
   const visibleIds = new Set(visibleRows.map((row) => row.id));
   const retainedEntries = Object.entries(selection).filter(
     ([id, selected]) => selected && visibleIds.has(id),

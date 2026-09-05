@@ -117,7 +117,11 @@ function readError(error: unknown, fallback: string): string {
 }
 
 function copyPermission(permission: PermissionRecord | null | undefined): PermissionRecord {
-  return copyPermissionRecord(permission);
+  const copied = copyPermissionRecord(permission);
+  if (copied.page) {
+    copied.page = copied.page.filter((action) => action !== "preRegistrations");
+  }
+  return copied;
 }
 
 function PermissionHeaderLabel({ item }: { item: PermissionItem }) {
@@ -596,16 +600,17 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
                         </div>
                       </th>
                       {permissionItems.map((item) => {
-                        const checked = hasPermissionAction(
-                          row.permission,
-                          item.resource,
-                          item.action,
-                        );
+                        const checked =
+                          item.key === "page:preRegistrations"
+                            ? canManageWorkspacePermissions(row.role)
+                            : hasPermissionAction(row.permission, item.resource, item.action);
                         return (
                           <td className="border-l align-middle" key={`${row.id}:${item.key}`}>
                             <PermissionCell
                               checked={checked}
-                              disabled={row.builtIn || rowBusy}
+                              disabled={
+                                row.builtIn || rowBusy || item.key === "page:preRegistrations"
+                              }
                               item={item}
                               onToggle={() => {
                                 if (!dynamicRole) {

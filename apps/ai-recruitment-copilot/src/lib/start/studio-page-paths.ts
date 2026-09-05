@@ -21,6 +21,7 @@ export const STUDIO_PAGE_PATHS = [
   { action: "me", path: "/me" },
   { action: "members", path: "/members" },
   { action: "mailIngestAccounts", path: "/mail-ingest-accounts" },
+  { action: "preRegistrations", path: "/pre-registrations" },
   { action: "permissions", path: "/permissions" },
   { action: "globalConfig", path: "/global-config" },
 ] as const satisfies readonly {

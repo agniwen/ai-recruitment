@@ -527,7 +527,7 @@ export function ResumeDuplicateMatchesDialog({
   isLoading?: boolean;
   isError?: boolean;
   source?: DedupSourceCandidate | null;
-  title?: string;
+  title?: ReactNode;
   onOpenChange: (open: boolean) => void;
 }) {
   let content: ReactNode = <p className="text-muted-foreground text-sm">暂无疑似重复简历。</p>;

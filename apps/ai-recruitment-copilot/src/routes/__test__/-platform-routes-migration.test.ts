@@ -14,7 +14,6 @@ describe("TanStack Start platform route migration", () => {
     "/platform/mail-ingest-accounts",
     "/platform/historical-resume-imports",
     "/platform/organizations",
-    "/platform/pre-registrations",
     "/platform/queues",
     "/platform/users",
   ];
@@ -33,16 +32,12 @@ describe("TanStack Start platform route migration", () => {
       readSource("routes/platform.mail-ingest-accounts.tsx"),
       readSource("routes/platform.historical-resume-imports.tsx"),
       readSource("routes/platform.organizations.tsx"),
-      readSource("routes/platform.pre-registrations.tsx"),
       readSource("routes/platform.queues.tsx"),
       readSource("routes/platform.users.tsx"),
       readSource("components/features/platform/mail-ingest-accounts/mail-ingest-accounts-grid.tsx"),
       readSource("components/features/platform/platform-sidebar-slots.tsx"),
       readSource("components/features/platform/platform-header.tsx"),
       readSource("components/features/platform/organizations/organizations-grid.tsx"),
-      readSource(
-        "components/features/platform/pre-registrations/platform-pre-registrations-grid.tsx",
-      ),
       readSource("components/features/platform/queues/queues-grid.tsx"),
       readSource("components/features/platform/users/users-grid.tsx"),
       readSource("components/layout/platform-sidebar/platform-sidebar.tsx"),
@@ -115,7 +110,6 @@ describe("TanStack Start platform route migration", () => {
     const leafRouteFiles = [
       "routes/platform.mail-ingest-accounts.tsx",
       "routes/platform.organizations.tsx",
-      "routes/platform.pre-registrations.tsx",
       "routes/platform.queues.tsx",
       "routes/platform.users.tsx",
     ];
