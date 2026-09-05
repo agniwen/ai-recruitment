@@ -1,3 +1,4 @@
+import { buildListTextFilterWhere } from "@arc/ai-recruitment-copilot-backend/lib/server/db/list-text-filters";
 import type {
   JobDescriptionInterviewerSummary,
   JobDescriptionListRecord,
@@ -144,6 +145,7 @@ function buildWhereConditions({
   googleSheetStatuses,
   organizationId,
   recruitmentStatuses,
+  textFilters,
   search,
   sourceSheet,
   departmentIds,
@@ -159,6 +161,7 @@ function buildWhereConditions({
   googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
   recruitmentStatuses?: string[];
+  textFilters?: string;
   search?: string;
   sourceSheet?: string;
   departmentIds?: string[];
@@ -216,6 +219,13 @@ function buildWhereConditions({
   if (scopeCondition) {
     conditions.push(scopeCondition);
   }
+  const atomic = buildListTextFilterWhere("jobs", textFilters, {
+    name: jobDescription.name,
+    prompt: jobDescription.prompt,
+  });
+  if (atomic) {
+    conditions.push(atomic);
+  }
   return and(...conditions);
 }
 
@@ -248,6 +258,7 @@ function listJobDescriptionRows({
   googleSheetStatuses,
   organizationId,
   recruitmentStatuses,
+  textFilters,
   search,
   sourceSheet,
   departmentIds,
@@ -267,6 +278,7 @@ function listJobDescriptionRows({
   googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
   recruitmentStatuses?: string[];
+  textFilters?: string;
   search?: string;
   sourceSheet?: string;
   departmentIds?: string[];
@@ -294,6 +306,7 @@ function listJobDescriptionRows({
     scopeCondition,
     search,
     sourceSheet,
+    textFilters,
   });
 
   let query = db
@@ -371,6 +384,7 @@ async function countJobDescriptionRows({
   googleSheetStatuses,
   organizationId,
   recruitmentStatuses,
+  textFilters,
   search,
   sourceSheet,
   departmentIds,
@@ -386,6 +400,7 @@ async function countJobDescriptionRows({
   googleSheetStatuses?: JobDescriptionGoogleSheetStatusFilter[];
   organizationId: string;
   recruitmentStatuses?: string[];
+  textFilters?: string;
   search?: string;
   sourceSheet?: string;
   departmentIds?: string[];
@@ -409,6 +424,7 @@ async function countJobDescriptionRows({
     scopeCondition,
     search,
     sourceSheet,
+    textFilters,
   });
   const [result] = await db
     .select({ count: count() })
@@ -595,6 +611,7 @@ export async function queryPaginatedJobDescriptions(
     hiringUnitIds,
     interviewerIds,
     recruitmentStatuses,
+    textFilters,
     search,
     sourceSheet,
   } = parseJobDescriptionListFilters(filters);
@@ -626,6 +643,7 @@ export async function queryPaginatedJobDescriptions(
       sortBy,
       sortOrder,
       sourceSheet,
+      textFilters,
     }),
     countJobDescriptionRows({
       code,
@@ -642,6 +660,7 @@ export async function queryPaginatedJobDescriptions(
       scopeCondition,
       search,
       sourceSheet,
+      textFilters,
     }),
   ]);
 

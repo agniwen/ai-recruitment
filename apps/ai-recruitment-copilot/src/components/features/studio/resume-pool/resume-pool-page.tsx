@@ -1,5 +1,7 @@
-/* oxlint-disable complexity -- page controller composes feature modules. */
 "use client";
+/* oxlint-disable complexity -- page controller composes feature modules. */
+
+/* oxlint-disable complexity -- page controller coordinates filters, incremental loading, uploads, and route navigation. */
 
 import { IconLoader2, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -191,13 +193,13 @@ export function ResumePoolPage() {
                 | "ready"
                 | "unparsed")
             : undefined,
-          search: grid.deferredSearch || undefined,
           sortBy: activeSort?.id as "candidateName" | "createdAt" | "updatedAt" | undefined,
           sortOrder: activeSortOrder,
           sourceType:
             grid.filters.sourceType === "referral" || grid.filters.sourceType === "non_referral"
               ? grid.filters.sourceType
               : undefined,
+          textFilters: grid.filters.textFilters || undefined,
           uploaderId:
             scope === "private" ? grid.filters.uploaderId || currentUserId || undefined : undefined,
         },
@@ -420,6 +422,7 @@ export function ResumePoolPage() {
   const emptyTitle = scope === "private" ? "暂无私有简历池简历" : "公共简历池暂无简历";
   const filtersConfig = useMemo(
     () => [
+      { key: "textFilters" as const, resource: "resumes" as const, type: "text-filters" as const },
       {
         key: "id" as const,
         minWidth: "12rem",
@@ -442,15 +445,11 @@ export function ResumePoolPage() {
             },
           ]
         : []),
-      {
-        key: "search" as const,
-        minWidth: "15rem",
-        placeholder: "搜索候选人、邮箱、电话、简历名或目标岗位",
-        type: "search" as const,
-      },
+
       {
         clearable: false,
         key: "sourceType" as const,
+        label: "来源类型",
         options: [
           { label: "全部", value: "all" },
           { label: "内推", value: "referral" },
@@ -459,6 +458,7 @@ export function ResumePoolPage() {
         placeholder: "按类型筛选",
         searchPlaceholder: "搜索类型…",
         type: "select" as const,
+        unfilteredValue: "all",
       },
       {
         key: "parseStatus" as const,
@@ -474,6 +474,7 @@ export function ResumePoolPage() {
       },
       {
         key: "importStatus" as const,
+        label: "招聘状态",
         options: [
           { label: "已入库", value: "imported" },
           { label: "未入库", value: "not_imported" },
@@ -516,6 +517,7 @@ export function ResumePoolPage() {
         </Tabs>
         <div className="flex flex-col gap-4">
           <Toolbar
+            filterStorageKey="resume-pool"
             canResetFilters={grid.bind.canResetFilters}
             filterValues={grid.bind.filterValues}
             filters={filtersConfig}

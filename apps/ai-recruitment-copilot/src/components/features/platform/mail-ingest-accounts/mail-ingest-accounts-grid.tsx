@@ -1,4 +1,5 @@
 "use client";
+import { listTextQuery } from "@arc/shared/list-text-filters";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { IconBuilding as Building2Icon, IconInbox as InboxIcon } from "@tabler/icons-react";
@@ -447,6 +448,7 @@ export function PlatformMailIngestAccountsGrid() {
     return rpcFetch<PlatformMailIngestAccountsResult>(
       rpc.api.platform["mail-ingest-accounts"].$get({
         query: {
+          ...listTextQuery(params),
           page: String(params.page),
           pageSize: String(params.pageSize),
           ...(params.search ? { search: params.search } : {}),
@@ -608,14 +610,7 @@ export function PlatformMailIngestAccountsGrid() {
             </EmptyHeader>
           </Empty>
         }
-        filters={[
-          {
-            key: "search",
-            minWidth: "20rem",
-            placeholder: "搜索工作区、成员、邮箱、IMAP 或标题关键字",
-            type: "search",
-          },
-        ]}
+        filters={[{ key: "textFilters", resource: "platformMailAccounts", type: "text-filters" }]}
         getRowId={(row) => `${row.organization.id}:${row.user.id}:${row.account?.id ?? "empty"}`}
       />
 

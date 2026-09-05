@@ -144,6 +144,7 @@ export const resumePoolRouter = factory
         page: q.page,
         pageSize: q.pageSize,
         ...(q.parseStatus ? { parseStatus: q.parseStatus } : {}),
+        textFilters: q.textFilters,
         ...(q.search ? { search: q.search } : {}),
         scope: q.scope,
         sortBy: q.sortBy,

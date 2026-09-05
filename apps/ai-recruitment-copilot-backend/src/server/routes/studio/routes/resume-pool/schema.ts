@@ -1,3 +1,4 @@
+import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { z } from "zod";
 import { resumePoolCreateSchema, resumePoolImportSchema } from "@arc/shared/resume-pool";
 
@@ -12,6 +13,7 @@ export const resumePoolListQuerySchema = z.object({
   sortBy: z.enum(["candidateName", "createdAt", "updatedAt"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
   sourceType: z.enum(["non_referral", "referral"]).optional(),
+  textFilters: listTextFiltersSchema("resumes"),
   uploaderId: z.string().trim().min(1).optional(),
 });
 

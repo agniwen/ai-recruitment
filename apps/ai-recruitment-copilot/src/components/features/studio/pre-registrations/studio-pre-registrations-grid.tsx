@@ -419,6 +419,7 @@ export function StudioPreRegistrationsGrid() {
     defaultPageSize: 20,
     defaultSorting: [{ desc: false, id: "displayName" }],
     initialFilters: {},
+    keywordSearch: true,
     queryFn: (params): Promise<StudioPreRegistrationsResult> =>
       rpcFetch<StudioPreRegistrationsResult>(
         rpc.api.w[":slug"].studio["pre-registrations"].$get({

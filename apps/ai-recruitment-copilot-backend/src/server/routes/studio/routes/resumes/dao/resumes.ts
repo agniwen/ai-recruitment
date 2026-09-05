@@ -1,3 +1,5 @@
+import { buildResumeAtomicSearch } from "./atomic-search";
+import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import {
   and,
   arrayContains,
@@ -119,6 +121,7 @@ const filtersSchema = z.object({
   pipelineStages: z.array(z.string()).max(10).optional().nullable(),
   search: z.string().trim().max(120).optional().nullable(),
   skills: z.array(z.string()).max(20).optional().nullable(),
+  textFilters: listTextFiltersSchema("resumes"),
 });
 
 type Pagination = z.infer<typeof paginationSchema>;
@@ -320,6 +323,7 @@ function buildWhere(organizationId: string, filters?: ResumeQueryFilters) {
     buildOdcActivityCondition(filters?.activity, filters?.activityFrom, filters?.activityTo),
     buildSearchCondition(filters?.search),
     buildIlikeCondition(studioInterview.id, filters?.id),
+    buildResumeAtomicSearch(studioInterview, filters?.textFilters),
     buildIlikeCondition(studioInterview.candidateName, filters?.candidateName),
     buildIlikeCondition(studioInterview.candidateEmail, filters?.candidateEmail),
     buildIlikeCondition(studioInterview.candidatePhone, filters?.candidatePhone),
@@ -1047,6 +1051,7 @@ export interface ResumeListFilters {
   outcomes?: string[] | null;
   pipelineStages?: string[] | null;
   /** Free-text OR across name / email / phone / file / target role. */
+  textFilters?: string;
   search?: string | null;
   skills?: string[] | null;
 }

@@ -1,3 +1,4 @@
+import { matchesListTextFilters, parseListTextFilters } from "@arc/shared/list-text-filters";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
@@ -68,8 +69,17 @@ export function filterWorkspaceMembersWithAncestors(
   rows: readonly MemberRow[],
   search: string,
   directManagerByUserId: ReadonlyMap<string, string | null>,
+  atomic = false,
 ): MemberRow[] {
-  const matches = filterWorkspaceMembers(rows, search);
+  const matches = atomic
+    ? rows.filter((row) =>
+        matchesListTextFilters(parseListTextFilters(search), {
+          email: row.email,
+          name: row.name,
+          telegram: row.telegram,
+        }),
+      )
+    : filterWorkspaceMembers(rows, search);
   if (matches.length === rows.length) {
     return matches;
   }

@@ -1,3 +1,5 @@
+import { buildListTextFilterWhere } from "@arc/ai-recruitment-copilot-backend/lib/server/db/list-text-filters";
+import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import type { DepartmentListRecord, DepartmentRecord } from "@arc/shared/departments";
 import type { SQL } from "drizzle-orm";
 import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
@@ -27,6 +29,7 @@ import type { OdcMemberSummary } from "@arc/shared/hiring-units";
 
 const departmentListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
+  textFilters: listTextFiltersSchema("departments"),
 });
 
 const SORT_COLUMNS = ["createdAt", "name", "updatedAt"] as const;
@@ -81,10 +84,12 @@ export async function areDepartmentsVisible({
 
 function buildWhereConditions({
   organizationId,
+  textFilters,
   search,
   scopeCondition,
 }: {
   organizationId: string;
+  textFilters?: string;
   search?: string;
   scopeCondition?: SQL;
 }) {
@@ -98,6 +103,13 @@ function buildWhereConditions({
       conditions.push(searchCondition);
     }
   }
+  const atomic = buildListTextFilterWhere("departments", textFilters, {
+    description: department.description,
+    name: department.name,
+  });
+  if (atomic) {
+    conditions.push(atomic);
+  }
   if (scopeCondition) {
     conditions.push(scopeCondition);
   }
@@ -106,6 +118,7 @@ function buildWhereConditions({
 
 function listDepartmentRows({
   organizationId,
+  textFilters,
   search,
   sortBy = "createdAt",
   sortOrder = "desc",
@@ -114,6 +127,7 @@ function listDepartmentRows({
   scopeCondition,
 }: {
   organizationId: string;
+  textFilters?: string;
   search?: string;
   sortBy?: SortColumn;
   sortOrder?: "asc" | "desc";
@@ -121,7 +135,7 @@ function listDepartmentRows({
   offset?: number;
   scopeCondition?: SQL;
 }) {
-  const where = buildWhereConditions({ organizationId, scopeCondition, search });
+  const where = buildWhereConditions({ organizationId, scopeCondition, search, textFilters });
 
   let query = db
     .select({
@@ -152,14 +166,16 @@ function listDepartmentRows({
 
 async function countDepartmentRows({
   organizationId,
+  textFilters,
   search,
   scopeCondition,
 }: {
   organizationId: string;
+  textFilters?: string;
   search?: string;
   scopeCondition?: SQL;
 }) {
-  const where = buildWhereConditions({ organizationId, scopeCondition, search });
+  const where = buildWhereConditions({ organizationId, scopeCondition, search, textFilters });
   const [result] = await db.select({ count: count() }).from(department).where(where);
   return result?.count ?? 0;
 }
@@ -274,12 +290,12 @@ function toDepartmentListRecord(
   };
 }
 
-function parseFilters(filters?: { search?: string | null }) {
+function parseFilters(filters?: { textFilters?: string; search?: string | null }) {
   const parsed = departmentListFiltersSchema.safeParse(filters ?? {});
   if (!parsed.success) {
-    return { search: undefined };
+    return { search: undefined, textFilters: undefined };
   }
-  return { search: parsed.data.search?.trim() || undefined };
+  return { search: parsed.data.search?.trim() || undefined, textFilters: parsed.data.textFilters };
 }
 
 export function parseDepartmentPagination(
@@ -289,10 +305,15 @@ export function parseDepartmentPagination(
 }
 
 export async function queryPaginatedDepartments(
-  filters: { organizationId: string; search?: string | null; actorUserId?: string | null },
+  filters: {
+    organizationId: string;
+    textFilters?: string;
+    search?: string | null;
+    actorUserId?: string | null;
+  },
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedDepartmentResult> {
-  const { search } = parseFilters(filters);
+  const { textFilters, search } = parseFilters(filters);
   const { organizationId } = filters;
   const { page, pageSize, sortBy, sortOrder } = parseDepartmentPagination(pagination);
   const offset = (page - 1) * pageSize;
@@ -310,8 +331,9 @@ export async function queryPaginatedDepartments(
       search,
       sortBy,
       sortOrder,
+      textFilters,
     }),
-    countDepartmentRows({ organizationId, scopeCondition, search }),
+    countDepartmentRows({ organizationId, scopeCondition, search, textFilters }),
   ]);
 
   const departmentIds = records.map((record) => record.id);
@@ -336,7 +358,12 @@ export async function queryPaginatedDepartments(
 }
 
 export function listDepartments(
-  filters: { organizationId: string; search?: string | null; actorUserId?: string | null },
+  filters: {
+    organizationId: string;
+    textFilters?: string;
+    search?: string | null;
+    actorUserId?: string | null;
+  },
   pagination?: Record<string, unknown>,
 ) {
   return queryPaginatedDepartments(filters, pagination);

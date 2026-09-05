@@ -22,11 +22,13 @@ type Grid = ReturnType<typeof useDataGridState<{ id: string }, { status: string 
 async function renderGridHook({
   queryFn = vi.fn(() => Promise.resolve({ records: [], total: 0, totalPages: 5 })),
   searchParams = "",
+  keywordSearch = false,
 }: {
   queryFn?: ReturnType<
     typeof vi.fn<() => Promise<{ records: { id: string }[]; total: number; totalPages: number }>>
   >;
   searchParams?: string;
+  keywordSearch?: boolean;
 }) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -39,6 +41,7 @@ async function renderGridHook({
   function Harness() {
     current = useDataGridState<{ id: string }, { status: string }>({
       initialFilters: { status: "" },
+      keywordSearch,
       queryFn,
       queryKeyBase: ["test-grid"],
     });
@@ -89,6 +92,82 @@ afterEach(() => {
 });
 
 describe("useDataGridState", () => {
+  it("clears only removable conditions while retaining fixed filters and page context", async () => {
+    const harness = await renderGridHook({
+      searchParams:
+        "?page=3&status=locked&scope=private&textFilters=%7B%22name%22%3A%22Alice%22%7D",
+    });
+    expect(harness.current.bind.filterValues.textFilters).toBe('{"name":"Alice"}');
+    await act(async () => {
+      harness.current.bind.onResetFilters({ textFilters: "" });
+      await Promise.resolve();
+    });
+    expect(harness.current.filters.status).toBe("locked");
+    expect(harness.current.page).toBe(1);
+    expect(harness.router.state.location.search).toMatchObject({
+      scope: "private",
+      status: "locked",
+    });
+    expect(harness.current.filters.textFilters).toBe("");
+    await act(async () => {
+      harness.root.unmount();
+      await Promise.resolve();
+    });
+  });
+
+  it("ignores legacy mixed search unless the page explicitly enables task-ID lookup", async () => {
+    const migrated = await renderGridHook({ searchParams: "?search=hidden" });
+    expect(migrated.current.search).toBe("");
+    expect(migrated.queryFn).toHaveBeenLastCalledWith(expect.objectContaining({ search: "" }));
+    const queue = await renderGridHook({ keywordSearch: true, searchParams: "?search=job-1" });
+    expect(queue.current.search).toBe("job-1");
+  });
+  it("clears condition values in one update without changing page context or sorting", async () => {
+    const harness = await renderGridHook({
+      searchParams: "?page=3&status=done&context=queue-2&sortBy=createdAt&sortOrder=asc",
+    });
+    act(() => harness.current.setRowSelection({ candidate: true }));
+    harness.queryFn.mockClear();
+    await act(async () => {
+      harness.current.bind.onResetFilters({ status: "all", textFilters: "" });
+      await Promise.resolve();
+    });
+    expect(harness.router.state.location.search).toMatchObject({
+      context: "queue-2",
+      page: 1,
+      sortBy: "createdAt",
+      sortOrder: "asc",
+      status: "all",
+    });
+    expect(harness.current.rowSelection).toEqual({});
+    expect(harness.queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps atomic conditions together in the URL, request and page reset", async () => {
+    const harness = await renderGridHook({ searchParams: "?page=3" });
+    harness.queryFn.mockClear();
+    await act(async () => {
+      harness.current.bind.onFilterChange("textFilters", '{"company":"腾讯","school":"清华"}');
+      await Promise.resolve();
+    });
+    expect(harness.router.state.location.search).toMatchObject({
+      page: 1,
+      textFilters: '{"company":"腾讯","school":"清华"}',
+    });
+    expect(harness.queryFn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        filters: { status: "", textFilters: '{"company":"腾讯","school":"清华"}' },
+        page: 1,
+      }),
+    );
+    await act(async () => {
+      harness.current.bind.onResetFilters();
+      await Promise.resolve();
+    });
+    expect(harness.current.filters.textFilters).toBe("");
+    expect(harness.current.bind.canResetFilters).toBe(false);
+  });
+
   it("hydrates a non-default page from the URL", async () => {
     const harness = await renderGridHook({ searchParams: "?page=2" });
 
@@ -112,6 +191,24 @@ describe("useDataGridState", () => {
     expect(harness.router.state.location.search).toMatchObject({ page: 2 });
     expect(harness.router.state.location.href).toContain("?page=2");
     expect(harness.router.state.location.href).not.toContain('"2"');
+  });
+
+  it("commits a filter and page reset together and clears selected records", async () => {
+    const harness = await renderGridHook({ searchParams: "?page=3" });
+    act(() => harness.current.setRowSelection({ candidate: true }));
+    harness.queryFn.mockClear();
+
+    await act(async () => {
+      harness.current.setFilter("status", "done");
+      await Promise.resolve();
+    });
+
+    expect(harness.current.page).toBe(1);
+    expect(harness.current.rowSelection).toEqual({});
+    expect(harness.router.state.location.search).toMatchObject({ page: 1, status: "done" });
+    expect(harness.queryFn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ filters: { status: "done", textFilters: "" }, page: 1 }),
+    );
   });
 
   it("exposes a failed list query and a retry callback", async () => {

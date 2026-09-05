@@ -322,6 +322,7 @@ function CandidateExportTable() {
     defaultPageSize: DATA_EXPORT_PAGE_SIZE,
     defaultSorting: [{ desc: true, id: "createdAt" }],
     initialFilters: CANDIDATE_FILTERS,
+    keywordSearch: true,
     maxPageSize: DATA_EXPORT_PAGE_SIZE,
     queryFn: (params) => fetchRows(params),
     queryKeyBase: ["studio-data-export", "candidates", slug],
@@ -538,6 +539,7 @@ function PoolExportTable() {
     defaultPageSize: DATA_EXPORT_PAGE_SIZE,
     defaultSorting: [{ desc: true, id: "createdAt" }],
     initialFilters: POOL_FILTERS,
+    keywordSearch: true,
     maxPageSize: DATA_EXPORT_PAGE_SIZE,
     queryFn: async (params) => {
       const result = await fetchFilteredRows(

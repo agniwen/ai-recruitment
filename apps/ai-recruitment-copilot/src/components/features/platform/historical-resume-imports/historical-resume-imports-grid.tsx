@@ -137,6 +137,7 @@ export function HistoricalResumeImportsGrid() {
   const grid = useDataGridState<HistoricalResumeImportRecord, HistoricalResumeImportFilters>({
     defaultPageSize: 10,
     initialFilters: INITIAL_FILTERS,
+    keywordSearch: true,
     queryFn: fetchRecords,
     queryKeyBase: ["platform-historical-resume-imports"],
     refetchInterval: 5000,

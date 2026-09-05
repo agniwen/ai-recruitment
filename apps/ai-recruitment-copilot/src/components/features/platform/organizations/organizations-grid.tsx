@@ -1,4 +1,5 @@
 "use client";
+import { listTextQuery } from "@arc/shared/list-text-filters";
 
 import { IconBuilding as Building2Icon, IconUsers as UsersIcon } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
@@ -55,6 +56,7 @@ export function OrganizationsGrid() {
         rpcFetch<OrganizationsResult>(
           rpc.api.platform.organizations.$get({
             query: {
+              ...listTextQuery(params),
               page: String(params.page),
               pageSize: String(params.pageSize),
               ...(params.search ? { search: params.search } : {}),
@@ -138,10 +140,9 @@ export function OrganizationsGrid() {
         }
         filters={[
           {
-            key: "search",
-            minWidth: "20rem",
-            placeholder: "搜索名称或 slug",
-            type: "search",
+            key: "textFilters" as const,
+            resource: "organizations" as const,
+            type: "text-filters" as const,
           },
         ]}
         getRowId={(r) => r.id}

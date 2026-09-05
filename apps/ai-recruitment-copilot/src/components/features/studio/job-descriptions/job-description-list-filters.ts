@@ -3,12 +3,16 @@ import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import type { ToolbarFilterConfig } from "@/components/data-grid";
 
 export function createJobDescriptionListFilters({
+  dateFrom,
+  dateTo,
   departments,
   hiringUnits,
   interviewers,
   recruitmentStatuses,
   sourceSheets,
 }: {
+  dateFrom?: string;
+  dateTo?: string;
   departments: DepartmentRecord[];
   hiringUnits: { id: string; name: string }[];
   interviewers: InterviewerListRecord[];
@@ -16,12 +20,7 @@ export function createJobDescriptionListFilters({
   sourceSheets: string[];
 }): ToolbarFilterConfig[] {
   return [
-    {
-      key: "search",
-      minWidth: "15rem",
-      placeholder: "搜索在招岗位名称或描述",
-      type: "search",
-    },
+    { key: "textFilters", resource: "jobs", type: "text-filters" },
     {
       key: "code",
       minWidth: "12rem",
@@ -37,6 +36,8 @@ export function createJobDescriptionListFilters({
       placeholder: "岗位日期字段",
       type: "select",
     },
+    { boundary: "from", key: "dateFrom", label: "岗位日期开始", max: dateTo, type: "date" },
+    { boundary: "to", key: "dateTo", label: "岗位日期结束", min: dateFrom, type: "date" },
     {
       emptyMessage: "没有匹配的来源表格",
       key: "sourceSheet",

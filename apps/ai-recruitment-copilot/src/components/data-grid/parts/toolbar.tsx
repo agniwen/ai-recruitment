@@ -1,228 +1,262 @@
-import { IconFilterX as FilterXIcon, IconRefresh as RefreshCwIcon } from "@tabler/icons-react";
+import { useFilterSelection } from "./filter-selection";
+import { CustomFilterInput } from "./custom-filter-input";
+import { IconFilterX, IconRefresh } from "@tabler/icons-react";
 import type { CSSProperties, ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { useMemo } from "react";
+import {
+  listTextFields,
+  parseListTextFilters,
+  serializeListTextFilters,
+} from "@arc/shared/list-text-filters";
+import { parseCsvParam } from "@arc/shared/csv";
+import { Input } from "@/components/ui/input";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
+import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import type { SearchableSelectOption } from "@/components/ui/searchable-select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@arc/shared/utils";
 import { DebouncedSearchInput } from "./debounced-search-input";
+import { FilterConditions } from "./filter-conditions";
+import type { ToolbarConditionConfig, ToolbarFilterConfig } from "./filter-config";
 
-// =====================================================================
-// DataGrid 工具栏过滤器：支持搜索框、单选下拉、多选下拉。
-// 多选下拉 (`multi-select`) 在 state/URL 层用 CSV 字符串编码（"a,b,c"），
-// 与现有 `Record<string, string>` 的 filter state 兼容；空字符串表示未筛选。
-// / Multi-select filters serialize to a CSV string (`"a,b,c"`) so they fit
-// the existing Record<string,string> filter state and URL params. An empty
-// string means "no filter applied".
-// =====================================================================
-
-export type ToolbarFilterConfig =
-  | { type: "search"; key: string; placeholder?: string; minWidth?: string }
-  | {
-      type: "select";
-      key: string;
-      placeholder?: string;
-      options: SearchableSelectOption[];
-      searchPlaceholder?: string;
-      emptyMessage?: string;
-      disabled?: boolean;
-      disabledReason?: string;
-      required?: boolean;
-    }
-  | {
-      type: "multi-select";
-      key: string;
-      placeholder?: string;
-      options: SearchableSelectOption[];
-      searchPlaceholder?: string;
-      emptyMessage?: string;
-      selectedFormat?: (count: number) => string;
-      selectedPreviewLimit?: number;
-    };
+export type { ToolbarFilterConfig } from "./filter-config";
 
 export interface ToolbarProps {
   filters?: ToolbarFilterConfig[];
+  filterStorageKey?: string;
   filterValues?: Record<string, string>;
   onFilterChange?: (key: string, value: string) => void;
   searchLoading?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
-  /** 重置所有过滤器（含搜索）到初始默认值 / Reset every filter (incl. search) to defaults. */
-  onResetFilters?: () => void;
-  /** 当前是否有非默认筛选条件，用于驱动重置按钮的 disabled 态。 */
-  /** Whether any filter currently deviates from defaults. Drives reset button disabled state. */
+  onResetFilters?: (clearedValues?: Record<string, string>) => void;
   canResetFilters?: boolean;
   toolbarRight?: ReactNode;
-  /**
-   * 渲染在配置式 filters 之后、仍位于左侧 filter 区的额外节点。
-   * 用于把页面级的自定义筛选器（如归档下拉）和搜索/多选放在一起，
-   * 而不是混进右侧按钮区。
-   * Extra node rendered after the configured filters, still inside the
-   * left-side filter region. Lets pages drop in custom filters (e.g. an
-   * archived dropdown) next to the search/multi-selects instead of mixing
-   * them with action buttons on the right.
-   */
   filtersExtra?: ReactNode;
   bulkActionsSlot?: ReactNode;
 }
 
-type FilterItemStyle = CSSProperties & {
-  "--data-grid-filter-min-width"?: string;
-};
+type FilterItemStyle = CSSProperties & { "--data-grid-filter-min-width"?: string };
+const EMPTY_VALUES: Record<string, string> = {};
 
-function getFilterItemStyle(minWidth?: string): FilterItemStyle | undefined {
-  return minWidth ? { "--data-grid-filter-min-width": minWidth } : undefined;
+function isFixedFilter(filter: ToolbarFilterConfig) {
+  return filter.type === "select" && (filter.required || filter.disabled);
 }
 
-function csvToArray(value: string): string[] {
-  if (!value) {
-    return [];
+export function Toolbar({
+  bulkActionsSlot,
+  canResetFilters,
+  filters,
+  filtersExtra,
+  filterValues: rawValues = EMPTY_VALUES,
+  filterStorageKey,
+  onFilterChange: onRawChange,
+  onRefresh,
+  onResetFilters,
+  refreshing,
+  searchLoading,
+  toolbarRight,
+}: ToolbarProps) {
+  const textConfig = filters?.find((filter) => filter.type === "text-filters");
+  const textValues = parseListTextFilters(rawValues.textFilters);
+  const filterValues = {
+    ...rawValues,
+    ...Object.fromEntries(Object.entries(textValues).map(([key, value]) => [`text:${key}`, value])),
+  };
+  const expanded = useMemo(
+    () =>
+      filters?.flatMap((filter): ToolbarConditionConfig[] =>
+        filter.type === "text-filters"
+          ? Object.entries(listTextFields[filter.resource]).map(([key, label]) => ({
+              key: `text:${key}`,
+              label,
+              placeholder: `搜索${label}`,
+              type: "search",
+            }))
+          : [filter],
+      ) ?? [],
+    [filters],
+  );
+  const advanced = expanded.length > 2;
+  const conditions = advanced ? expanded.filter((filter) => !isFixedFilter(filter)) : [];
+  const directFilters = advanced ? expanded.filter(isFixedFilter) : expanded;
+  const [selected, setSelected] = useFilterSelection(
+    filterStorageKey ?? textConfig?.resource ?? "list",
+    conditions.map((filter) => filter.key),
+  );
+  const activeFields = expanded.filter(
+    (filter) =>
+      !isFixedFilter(filter) &&
+      Boolean(filterValues[filter.key]) &&
+      filterValues[filter.key] !== filter.unfilteredValue,
+  );
+  const canClear = expanded.length ? activeFields.length > 0 : canResetFilters;
+  function clearFilterValues() {
+    if (advanced) {
+      const selectedKeys = new Set(selected);
+      const activeFilters = new Set(activeFields);
+      const retainedKeys: string[] = [];
+      for (const filter of conditions) {
+        if (selectedKeys.has(filter.key) || activeFilters.has(filter)) {
+          retainedKeys.push(filter.key);
+        }
+      }
+      setSelected(retainedKeys);
+    }
+    const clearedEntries: [string, string][] = [];
+    for (const filter of filters ?? []) {
+      if (!isFixedFilter(filter)) {
+        clearedEntries.push([
+          filter.key,
+          filter.type === "text-filters" ? "" : (filter.unfilteredValue ?? ""),
+        ]);
+      }
+    }
+    const clearedValues = Object.fromEntries(clearedEntries);
+    onResetFilters?.(clearedValues);
   }
-  return value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function arrayToCsv(value: string[]): string {
-  return value.join(",");
-}
-
-export function Toolbar(props: ToolbarProps) {
-  const {
-    bulkActionsSlot,
-    canResetFilters,
-    filterValues,
-    filters,
-    filtersExtra,
-    onFilterChange,
-    onRefresh,
-    onResetFilters,
-    refreshing,
-    searchLoading,
-    toolbarRight,
-  } = props;
-
-  const hasFilters = filters && filters.length > 0;
-  const hasFiltersExtra = Boolean(filtersExtra);
+  function onFilterChange(key: string, value: string) {
+    if (key.startsWith("text:")) {
+      onRawChange?.(
+        "textFilters",
+        serializeListTextFilters({ ...textValues, [key.slice(5)]: value }),
+      );
+    } else {
+      onRawChange?.(key, value);
+    }
+  }
   if (
-    !(hasFilters || hasFiltersExtra) &&
-    !toolbarRight &&
-    !onRefresh &&
-    !onResetFilters &&
-    !bulkActionsSlot
+    ![filters?.length, filtersExtra, toolbarRight, onRefresh, onResetFilters, bulkActionsSlot].some(
+      Boolean,
+    )
   ) {
     return null;
   }
-
   return (
-    <div className="flex flex-wrap items-start gap-3" data-slot="data-grid-toolbar">
-      {hasFilters || hasFiltersExtra ? (
+    <div className="flex min-w-0 flex-wrap items-center gap-2" data-slot="data-grid-toolbar">
+      {directFilters.length > 0 ? (
         <div
-          className="grid w-full min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 lg:w-auto lg:flex-1 lg:grid-cols-4"
-          data-slot="data-grid-toolbar-filters"
+          className="flex w-full min-w-0 flex-wrap gap-3 sm:w-auto"
+          data-slot="data-grid-toolbar-search"
         >
-          {filters?.map((filter) => {
-            const value = filterValues?.[filter.key] ?? "";
+          {directFilters.map((filter) => {
             if (filter.type === "search") {
+              const style: FilterItemStyle | undefined = filter.minWidth
+                ? { "--data-grid-filter-min-width": filter.minWidth }
+                : undefined;
               return (
                 <DebouncedSearchInput
-                  className="relative w-full min-w-0"
+                  className="relative w-full min-w-0 sm:w-auto sm:min-w-(--data-grid-filter-min-width)"
                   key={filter.key}
                   loading={searchLoading}
-                  onValueChange={(next) => onFilterChange?.(filter.key, next)}
+                  onValueChange={(value) => onFilterChange?.(filter.key, value)}
                   placeholder={filter.placeholder}
-                  style={getFilterItemStyle(filter.minWidth)}
-                  value={value}
+                  style={style}
+                  value={filterValues[filter.key] ?? ""}
                 />
               );
             }
-            if (filter.type === "select") {
-              const selectControl = (
-                <SearchableSelect
-                  clearable
-                  disabled={filter.disabled}
-                  emptyMessage={filter.emptyMessage ?? "没有匹配项"}
-                  onChange={(next) => onFilterChange?.(filter.key, next ?? "")}
-                  options={filter.options}
-                  placeholder={filter.placeholder ?? "请选择"}
-                  required={filter.required}
-                  searchPlaceholder={filter.searchPlaceholder ?? "搜索…"}
-                  value={value || null}
-                />
-              );
-              if (filter.disabled && filter.disabledReason) {
-                return (
-                  <Tooltip key={filter.key}>
-                    <TooltipTrigger
-                      render={
-                        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- disabled controls cannot receive focus; the wrapper exposes the reason to keyboard users.
-                        <span className="block w-full min-w-0" tabIndex={0}>
-                          {selectControl}
-                        </span>
-                      }
-                    />
-                    <TooltipContent>{filter.disabledReason}</TooltipContent>
-                  </Tooltip>
-                );
-              }
+            if (filter.type === "multi-select") {
               return (
-                <div className="w-full min-w-0" key={filter.key}>
-                  {selectControl}
-                </div>
+                <SearchableMultiSelect
+                  key={filter.key}
+                  options={filter.options}
+                  value={parseCsvParam(filterValues[filter.key] ?? "")}
+                  onChange={(values) => onFilterChange(filter.key, values.join(","))}
+                  placeholder={filter.label ?? filter.placeholder}
+                  selectedPreviewLimit={filter.selectedPreviewLimit ?? 2}
+                />
               );
             }
-            // multi-select
-            return (
-              <div className="w-full min-w-0" key={filter.key}>
-                <SearchableMultiSelect
-                  emptyMessage={filter.emptyMessage ?? "没有匹配项"}
-                  onChange={(next) => onFilterChange?.(filter.key, arrayToCsv(next))}
-                  options={filter.options}
-                  placeholder={filter.placeholder ?? "请选择"}
-                  searchPlaceholder={filter.searchPlaceholder ?? "搜索…"}
-                  selectedFormat={filter.selectedFormat ?? ((count) => `已选 ${count} 项`)}
-                  selectedPreviewLimit={filter.selectedPreviewLimit ?? 2}
-                  showBadges={false}
-                  value={csvToArray(value)}
+            if (filter.type === "date") {
+              return (
+                <Input
+                  key={filter.key}
+                  aria-label={filter.label ?? filter.placeholder}
+                  type="date"
+                  min={filter.min}
+                  max={filter.max}
+                  value={filterValues[filter.key] ?? ""}
+                  onChange={(event) => {
+                    if (event.currentTarget.validity.valid) {
+                      onFilterChange(filter.key, event.target.value);
+                    }
+                  }}
                 />
-              </div>
+              );
+            }
+            if (filter.type === "custom") {
+              return (
+                <CustomFilterInput
+                  key={filter.key}
+                  config={filter}
+                  value={filterValues[filter.key] ?? ""}
+                  onChange={(value) => onFilterChange(filter.key, value)}
+                />
+              );
+            }
+            const control = (
+              <SearchableSelect
+                clearable={!isFixedFilter(filter)}
+                disabled={filter.disabled}
+                onChange={(value) =>
+                  onFilterChange(filter.key, value ?? filter.unfilteredValue ?? "")
+                }
+                options={filter.options}
+                placeholder={filter.label ?? filter.placeholder}
+                required={filter.required}
+                value={filterValues[filter.key] || null}
+              />
+            );
+            return filter.disabledReason ? (
+              <Tooltip key={filter.key}>
+                <TooltipTrigger
+                  render={
+                    // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Exposes the reason for the disabled control to keyboard users.
+                    <span className="min-w-0 sm:min-w-45" tabIndex={0}>
+                      {control}
+                    </span>
+                  }
+                />
+                <TooltipContent>{filter.disabledReason}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <div key={filter.key}>{control}</div>
             );
           })}
-          {filtersExtra ? (
-            // Full-width only for text/select-like controls on mobile; keep
-            // icon-only buttons square (same size-9 as refresh / reset).
-            <div className="min-w-0 [&>button:not([data-size=icon])]:w-full">{filtersExtra}</div>
-          ) : null}
         </div>
       ) : null}
-
+      {conditions.length > 0 || filtersExtra ? (
+        <div
+          className="flex min-w-0 flex-wrap items-center gap-2"
+          data-slot="data-grid-toolbar-filters"
+        >
+          {conditions.length > 0 ? (
+            <FilterConditions
+              configs={conditions}
+              selected={selected}
+              onSelectionChange={setSelected}
+              onChange={onFilterChange}
+              values={filterValues}
+            />
+          ) : null}
+          {filtersExtra}
+        </div>
+      ) : null}
       <div
-        className="flex min-w-fit shrink-0 flex-wrap items-center gap-2 sm:flex-nowrap"
+        className="flex min-w-0 flex-wrap items-center gap-2"
         data-slot="data-grid-toolbar-actions"
       >
-        {onRefresh ? (
-          <Button
-            className="shrink-0"
-            disabled={refreshing}
-            onClick={onRefresh}
-            size="icon"
-            variant="outline"
-          >
-            <RefreshCwIcon className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
-            <span className="sr-only">刷新</span>
+        {onResetFilters ? (
+          <Button disabled={!canClear} onClick={clearFilterValues} size="default" variant="outline">
+            <IconFilterX data-icon="inline-start" />
+            <span>清空筛选</span>
           </Button>
         ) : null}
-        {onResetFilters ? (
-          <Button
-            className="shrink-0"
-            disabled={!canResetFilters}
-            onClick={onResetFilters}
-            size="icon"
-            variant="outline"
-          >
-            <FilterXIcon className="size-4" />
-            <span className="sr-only">重置筛选</span>
+        {onRefresh ? (
+          <Button disabled={refreshing} onClick={onRefresh} size="default" variant="outline">
+            <IconRefresh data-icon="inline-start" className={cn(refreshing && "animate-spin")} />
+            <span>刷新</span>
           </Button>
         ) : null}
         {toolbarRight ? <div>{toolbarRight}</div> : null}

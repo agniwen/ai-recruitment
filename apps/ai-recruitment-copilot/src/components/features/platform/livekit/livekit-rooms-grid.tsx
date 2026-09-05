@@ -1,5 +1,7 @@
 "use client";
 
+import { listTextQuery } from "@arc/shared/list-text-filters";
+
 import { IconMicrophone, IconRadio, IconUsers, IconVideo } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
@@ -176,10 +178,11 @@ export function LiveKitRoomsGrid() {
   const [detailRoomName, setDetailRoomName] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const fetchRooms = useCallback(
-    (params: { page: number; pageSize: number; search: string }) =>
+    (params: { page: number; pageSize: number; filters: Record<string, string>; search: string }) =>
       rpcFetch<PaginatedResult<LiveKitRoomRecord>>(
         rpc.api.platform.livekit.rooms.$get({
           query: {
+            ...listTextQuery(params),
             page: String(params.page),
             pageSize: String(params.pageSize),
             ...(params.search ? { search: params.search } : {}),
@@ -261,10 +264,9 @@ export function LiveKitRoomsGrid() {
         }
         filters={[
           {
-            key: "search",
-            minWidth: "20rem",
-            placeholder: "搜索房间名称或 SID",
-            type: "search",
+            key: "textFilters" as const,
+            resource: "rooms" as const,
+            type: "text-filters" as const,
           },
         ]}
         getRowId={(room) => room.sid}

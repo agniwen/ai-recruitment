@@ -345,6 +345,29 @@ describe("resumeLibraryRouter behavior", () => {
     });
   });
 
+  it("passes atomic filters together with the existing workspace visibility scope", async () => {
+    const textFilters = JSON.stringify({ company: "测试公司", school: "测试大学" });
+    const response = await makeApp().request(
+      `/resumes?textFilters=${encodeURIComponent(textFilters)}`,
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.queryPaginatedResumeRecords).toHaveBeenCalledWith(
+      ORGANIZATION_ID,
+      expect.objectContaining({ textFilters }),
+      expect.any(Object),
+      { odc: { departmentIds: [], hiringUnitIds: [] }, recruiting: { kind: "all" } },
+      undefined,
+    );
+  });
+
+  it("rejects unknown atomic fields before querying resumes", async () => {
+    const response = await makeApp().request(
+      `/resumes?textFilters=${encodeURIComponent('{"organizationId":"other"}')}`,
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.queryPaginatedResumeRecords).not.toHaveBeenCalled();
+  });
+
   it("passes a known total to later list pages", async () => {
     const response = await makeApp().request("/resumes?page=2&pageSize=20&knownTotal=1103");
 

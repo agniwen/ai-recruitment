@@ -1,3 +1,4 @@
+import { listTextQuery } from "@arc/shared/list-text-filters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import type { DepartmentRecord } from "@arc/shared/departments";
@@ -59,6 +60,7 @@ export function InterviewerManagementPage({ departments }: { departments: Depart
             {
               param: { slug },
               query: {
+                ...listTextQuery(params),
                 page: String(params.page),
                 pageSize: String(params.pageSize),
                 ...(params.search ? { search: params.search } : {}),
@@ -204,10 +206,9 @@ export function InterviewerManagementPage({ departments }: { departments: Depart
   const filtersConfig = useMemo(
     () => [
       {
-        key: "search" as const,
-        minWidth: "15rem",
-        placeholder: "搜索名称或描述",
-        type: "search" as const,
+        key: "textFilters" as const,
+        resource: "interviewers" as const,
+        type: "text-filters" as const,
       },
     ],
     [],

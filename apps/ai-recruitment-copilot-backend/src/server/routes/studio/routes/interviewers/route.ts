@@ -1,3 +1,4 @@
+import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -33,6 +34,7 @@ const interviewerListQuerySchema = z.object({
   search: z.string().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
+  textFilters: listTextFiltersSchema("interviewers"),
 });
 
 const voicePreviewSchema = z.object({
@@ -57,6 +59,7 @@ export const interviewersRouter = factory
           actorUserId: c.var.user?.id,
           departmentId: q.departmentId,
           search: q.search,
+          textFilters: q.textFilters,
         },
         {
           page: q.page,

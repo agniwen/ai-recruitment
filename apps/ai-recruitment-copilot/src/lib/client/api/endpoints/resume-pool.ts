@@ -22,6 +22,7 @@ export function fetchResumePoolItems(
     pageSize?: number;
     parseStatus?: "failed" | "processing" | "queued" | "ready" | "unparsed";
     search?: string;
+    textFilters?: string;
     sortBy?: "candidateName" | "createdAt" | "updatedAt";
     sortOrder?: "asc" | "desc";
     sourceType?: "non_referral" | "referral";

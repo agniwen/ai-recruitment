@@ -1,5 +1,7 @@
 "use client";
 
+import { listTextQuery } from "@arc/shared/list-text-filters";
+
 import { IconDatabase } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
@@ -115,12 +117,7 @@ const TEXT_SOURCE_LABEL: Record<NonNullable<ResumeParseCacheRecord["parsedTextSo
 };
 
 const FILTERS = [
-  {
-    key: "search",
-    minWidth: "20rem",
-    placeholder: "搜索文件名、Hash、用户或工作区",
-    type: "search" as const,
-  },
+  { key: "textFilters" as const, resource: "parseCache" as const, type: "text-filters" as const },
   {
     key: "cacheType",
     options: [
@@ -130,6 +127,7 @@ const FILTERS = [
     ],
     placeholder: "缓存内容",
     type: "select" as const,
+    unfilteredValue: "all",
   },
   {
     key: "parsedStatus",
@@ -141,6 +139,7 @@ const FILTERS = [
     ],
     placeholder: "解析状态",
     type: "select" as const,
+    unfilteredValue: "all",
   },
   {
     key: "textSource",
@@ -150,6 +149,7 @@ const FILTERS = [
     ],
     placeholder: "文本来源",
     type: "select" as const,
+    unfilteredValue: "all",
   },
 ];
 
@@ -263,6 +263,7 @@ export function ResumeParseCacheGrid() {
         rpc.api.platform["resume-parse-cache"].$get({
           query: {
             cacheType: params.filters.cacheType,
+            ...listTextQuery(params),
             page: String(params.page),
             pageSize: String(params.pageSize),
             parsedStatus: params.filters.parsedStatus,

@@ -20,6 +20,6 @@ describe("resume library filters", () => {
     expect(pageSource).not.toContain("useResumeLibraryCollapsibleFiltersWithState");
     expect(pageSource).toContain("activityFrom");
     expect(pageSource).toContain("activityTo");
-    expect(pageSource).toContain("filtersExtra={");
+    expect(pageSource).not.toContain("filtersExtra={");
   });
 });

@@ -1,5 +1,7 @@
 "use client";
 
+import { listTextQuery } from "@arc/shared/list-text-filters";
+
 import { IconChartHistogram, IconTags } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -38,10 +40,11 @@ interface MetricsResult extends PaginatedResult<LiveKitMetricRecord> {
 export function LiveKitMetricsGrid() {
   const [selected, setSelected] = useState<LiveKitMetricRecord | null>(null);
   const fetchMetrics = useCallback(
-    (params: { page: number; pageSize: number; search: string }) =>
+    (params: { page: number; pageSize: number; filters: Record<string, string>; search: string }) =>
       rpcFetch<MetricsResult>(
         rpc.api.platform.livekit.metrics.$get({
           query: {
+            ...listTextQuery(params),
             page: String(params.page),
             pageSize: String(params.pageSize),
             ...(params.search ? { search: params.search } : {}),
@@ -119,10 +122,9 @@ export function LiveKitMetricsGrid() {
         }
         filters={[
           {
-            key: "search",
-            minWidth: "20rem",
-            placeholder: "搜索指标名称或说明",
-            type: "search",
+            key: "textFilters" as const,
+            resource: "metrics" as const,
+            type: "text-filters" as const,
           },
         ]}
         getRowId={(metric) => `${metric.name}:${JSON.stringify(metric.labels)}`}

@@ -1,3 +1,4 @@
+import { buildResumeAtomicSearch } from "../resumes/dao/atomic-search";
 /* oxlint-disable max-lines -- resume-pool persistence keeps list/detail/write transactions co-located. */
 import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -98,6 +99,7 @@ export interface QueryResumePoolItemsInput {
   page?: number;
   pageSize?: number;
   parseStatus?: ResumeParseStatus;
+  textFilters?: string;
   search?: string;
   scope: ResumePoolScope;
   sortBy?: "candidateName" | "createdAt" | "updatedAt";
@@ -535,6 +537,7 @@ export async function queryResumePoolItems(
       and ${resumePoolImport.organizationId} = ${input.organizationId}
   )`;
   const where = and(
+    buildResumeAtomicSearch(resumePoolItem, input.textFilters),
     eq(resumePoolItem.scope, input.scope),
     eq(resumePoolItem.status, "active"),
     eq(resumePoolItem.organizationId, input.organizationId),

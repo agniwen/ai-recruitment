@@ -48,6 +48,7 @@ export const mailIngestRouter = factory
         activeOrg.id,
         {
           search: q.search,
+          textFilters: q.textFilters,
         },
         {
           page: q.page,

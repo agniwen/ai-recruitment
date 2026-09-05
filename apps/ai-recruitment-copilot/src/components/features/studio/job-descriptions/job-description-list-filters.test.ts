@@ -15,8 +15,11 @@ describe("createJobDescriptionListFilters", () => {
     });
 
     expect(filters.map((filter) => filter.key)).toEqual([
-      "search",
+      "textFilters",
       "code",
+      "dateField",
+      "dateFrom",
+      "dateTo",
       "sourceSheet",
       "recruitmentStatus",
       "googleSheetStatus",
@@ -26,7 +29,7 @@ describe("createJobDescriptionListFilters", () => {
     ]);
     const recruitmentStatusFilter = filters.find((filter) => filter.key === "recruitmentStatus");
     expect(recruitmentStatusFilter?.type).toBe("multi-select");
-    if (!recruitmentStatusFilter || recruitmentStatusFilter.type === "search") {
+    if (!recruitmentStatusFilter || recruitmentStatusFilter.type !== "multi-select") {
       throw new Error("招聘状态筛选器配置无效");
     }
     expect(recruitmentStatusFilter.options).toEqual([
@@ -35,7 +38,7 @@ describe("createJobDescriptionListFilters", () => {
     ]);
     const sourceSheetFilter = filters.find((filter) => filter.key === "sourceSheet");
     expect(sourceSheetFilter?.type).toBe("select");
-    if (!sourceSheetFilter || sourceSheetFilter.type === "search") {
+    if (!sourceSheetFilter || sourceSheetFilter.type !== "select") {
       throw new Error("来源表格筛选器配置无效");
     }
     expect(sourceSheetFilter.options).toEqual([
@@ -45,7 +48,7 @@ describe("createJobDescriptionListFilters", () => {
     expect(sourceSheetFilter.searchPlaceholder).toBe("搜索来源表格…");
     const hiringUnitFilter = filters.find((filter) => filter.key === "hiringUnitId");
     expect(hiringUnitFilter?.type).toBe("multi-select");
-    if (!hiringUnitFilter || hiringUnitFilter.type === "search") {
+    if (!hiringUnitFilter || hiringUnitFilter.type !== "multi-select") {
       throw new Error("编制组织筛选器配置无效");
     }
     expect(hiringUnitFilter.options).toEqual([

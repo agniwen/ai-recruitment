@@ -295,6 +295,7 @@ export function ResumeLibraryCardList({
   return (
     <div className="flex flex-col gap-4" ref={listRootRef}>
       <Toolbar
+        filterStorageKey="studio-resumes"
         canResetFilters={grid.bind.canResetFilters}
         filterValues={grid.bind.filterValues}
         filters={filters}

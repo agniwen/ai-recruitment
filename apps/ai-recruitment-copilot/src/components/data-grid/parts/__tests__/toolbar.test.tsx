@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { Toolbar } from "../toolbar";
 
 describe("Toolbar", () => {
-  it("lays out filters in two, three, and four responsive columns", () => {
+  it("renders two direct fields without a mobile minimum width", () => {
     const html = renderToStaticMarkup(
       <Toolbar
         filterValues={{ creator: "", search: "" }}
@@ -23,21 +23,20 @@ describe("Toolbar", () => {
       />,
     );
 
-    expect(html).toContain("grid w-full");
-    expect(html).toContain("grid-cols-2");
-    expect(html).toContain("sm:grid-cols-3");
-    expect(html).toContain("lg:grid-cols-4");
-    expect(html).not.toContain("sm:flex sm:w-auto");
-    expect(html).toContain("relative w-full min-w-0");
+    expect(html).toContain('data-slot="data-grid-toolbar-search"');
     expect(html).toContain("--data-grid-filter-min-width:15rem");
     expect(html).not.toContain('style="min-width:15rem"');
+    expect(html).not.toContain("has-focus-visible:shadow-none");
+    expect(html).toContain("has-focus-visible:ring-1");
   });
 
-  it("keeps multi-select filter previews compact by default", () => {
+  it("keeps multi-select condition previews compact by default", () => {
     const html = renderToStaticMarkup(
       <Toolbar
         filterValues={{ jobIds: "job-a,job-b,job-c" }}
         filters={[
+          { key: "name", label: "名称", type: "search" },
+          { key: "email", label: "邮箱", type: "search" },
           {
             key: "jobIds",
             options: [
@@ -52,10 +51,52 @@ describe("Toolbar", () => {
       />,
     );
 
-    expect(html).toContain('title="岗位 A"');
-    expect(html).toContain('title="岗位 B"');
-    expect(html).not.toContain('title="岗位 C"');
+    expect(html).not.toContain('data-slot="data-grid-toolbar-search"');
+    expect(html).toContain("岗位 A");
+    expect(html).toContain("岗位 B");
     expect(html).toContain("+1");
+    expect(html).toContain("属于任意");
+    expect(html).toContain("移除全部岗位筛选");
+  });
+
+  it("renders one or two independent filters directly", () => {
+    const html = renderToStaticMarkup(
+      <Toolbar
+        filterValues={{ status: "" }}
+        filters={[
+          {
+            key: "status",
+            options: [{ label: "完成", value: "done" }],
+            placeholder: "状态",
+            type: "select",
+          },
+        ]}
+      />,
+    );
+    expect(html).not.toContain("添加筛选");
+    expect(html).toContain("状态");
+    expect(html).not.toContain('data-slot="filter-chip"');
+  });
+
+  it("puts conditions and actions in one wrapping row in the requested order", () => {
+    const html = renderToStaticMarkup(
+      <Toolbar
+        filters={[{ key: "textFilters", resource: "resumes", type: "text-filters" }]}
+        onResetFilters={() => {
+          /* test callback */
+        }}
+        onRefresh={() => {
+          /* test callback */
+        }}
+        toolbarRight={<button type="button">创建记录</button>}
+      />,
+    );
+    expect(html.indexOf('data-slot="data-grid-toolbar-filters"')).toBeLessThan(
+      html.indexOf("清空筛选"),
+    );
+    expect(html.indexOf("清空筛选")).toBeLessThan(html.indexOf(">刷新<"));
+    expect(html.indexOf(">刷新<")).toBeLessThan(html.indexOf("创建记录"));
+    expect(html).not.toContain('class="flex min-w-0 flex-col gap-3"');
   });
 
   it("explains why a select filter is disabled", () => {
@@ -90,7 +131,7 @@ describe("Toolbar", () => {
     );
 
     // React escapes class selectors in static markup.
-    expect(html).toContain("[&amp;&gt;button:not([data-size=icon])]:w-full");
+    expect(html).not.toContain("[&amp;&gt;button]:w-full");
     expect(html).not.toContain("[&amp;&gt;button]:w-full sm:w-auto sm:[&amp;&gt;button]:w-auto");
   });
 });

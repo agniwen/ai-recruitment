@@ -17,12 +17,12 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
       )}
       {...props}
     >
-      <CheckboxPrimitive.Indicator
+      <span
         data-slot="checkbox-indicator"
-        className="relative z-10 grid place-content-center text-current transition-none"
+        className="relative z-10 hidden place-content-center text-current transition-none in-data-[checked]:grid in-data-[indeterminate]:grid"
       >
         <IconCheck className="size-3.5" />
-      </CheckboxPrimitive.Indicator>
+      </span>
     </CheckboxPrimitive.Root>
   );
 }

@@ -1,3 +1,4 @@
+import { listTextQuery } from "@arc/shared/list-text-filters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { PageHeader } from "@/components/features/studio/page-header";
@@ -62,6 +63,7 @@ export function DepartmentManagementPage() {
             {
               param: { slug },
               query: {
+                ...listTextQuery(params),
                 page: String(params.page),
                 pageSize: String(params.pageSize),
                 ...(params.search ? { search: params.search } : {}),
@@ -238,10 +240,9 @@ export function DepartmentManagementPage() {
   const filtersConfig = useMemo(
     () => [
       {
-        key: "search" as const,
-        minWidth: "15rem",
-        placeholder: "搜索部门名称或描述",
-        type: "search" as const,
+        key: "textFilters" as const,
+        resource: "departments" as const,
+        type: "text-filters" as const,
       },
     ],
     [],

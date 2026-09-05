@@ -1,3 +1,4 @@
+import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { zValidator } from "@hono/zod-validator";
 import { and, count, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
@@ -218,6 +219,7 @@ const jobDescriptionListQuerySchema = z.object({
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
   sourceSheet: z.string().optional(),
+  textFilters: listTextFiltersSchema("jobs"),
 });
 
 const recommendationBodySchema = z.object({
@@ -289,6 +291,7 @@ export const jobDescriptionsRouter = factory
           recruitmentStatus: q.recruitmentStatus,
           search: q.search,
           sourceSheet: q.sourceSheet,
+          textFilters: q.textFilters,
         },
         {
           page: q.page,

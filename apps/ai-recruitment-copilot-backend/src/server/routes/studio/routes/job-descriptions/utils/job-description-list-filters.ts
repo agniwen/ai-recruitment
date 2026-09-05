@@ -1,3 +1,4 @@
+import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { z } from "zod";
 import { odcAnalysisDemandDateFieldValues } from "@arc/shared/odc-analysis";
 
@@ -18,6 +19,7 @@ const jobDescriptionListFiltersSchema = z.object({
   recruitmentStatus: z.string().trim().max(500).optional().nullable(),
   search: z.string().trim().max(120).optional().nullable(),
   sourceSheet: z.string().trim().max(500).optional().nullable(),
+  textFilters: listTextFiltersSchema("jobs"),
 });
 
 export type JobDescriptionGoogleSheetStatusFilter = z.infer<typeof googleSheetStatusSchema>;
@@ -32,6 +34,7 @@ export interface JobDescriptionListFilterInput {
   hiringUnitId?: string | null;
   interviewerId?: string | null;
   recruitmentStatus?: string | null;
+  textFilters?: string;
   search?: string | null;
   sourceSheet?: string | null;
 }
@@ -81,5 +84,6 @@ export function parseJobDescriptionListFilters(filters?: JobDescriptionListFilte
     recruitmentStatuses: csvToValues(parsed.data.recruitmentStatus),
     search: parsed.data.search?.trim() || undefined,
     sourceSheet: parsed.data.sourceSheet?.trim() || undefined,
+    textFilters: parsed.data.textFilters,
   };
 }

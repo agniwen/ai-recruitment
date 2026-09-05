@@ -259,7 +259,7 @@ export function MembersManagementPage() {
   );
   const hasMemberSearch = memberSearch.trim().length > 0;
   const filteredRows = useMemo(
-    () => filterWorkspaceMembersWithAncestors(allRows, memberSearch, directManagerByUserId),
+    () => filterWorkspaceMembersWithAncestors(allRows, memberSearch, directManagerByUserId, true),
     [allRows, directManagerByUserId, memberSearch],
   );
 
@@ -760,19 +760,16 @@ export function MembersManagementPage() {
                 )}
               </Empty>
             }
-            filterValues={{ search: memberSearch }}
-            filters={[
-              {
-                key: "search",
-                minWidth: "20rem",
-                placeholder: `搜索${searchSubject}`,
-                type: "search",
-              },
-            ]}
+            onResetFilters={() => {
+              setMemberSearch("");
+              setMemberRowSelection({});
+            }}
+            filterValues={{ textFilters: memberSearch }}
+            filters={[{ key: "textFilters", resource: "members", type: "text-filters" }]}
             getRowId={(r) => r.id}
             loading={isPending}
             onFilterChange={(key, value) => {
-              if (key !== "search") {
+              if (key !== "textFilters") {
                 return;
               }
               setMemberSearch(value);

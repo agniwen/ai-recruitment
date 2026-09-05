@@ -36,7 +36,6 @@ import { BulkUploadProgressDialog } from "@/components/features/studio/resumes/b
 import { useBulkUpload } from "@/components/features/studio/resumes/use-bulk-upload";
 import { UploadBatchListDialog } from "@/components/features/studio/resumes/upload-batch-list-dialog";
 import { PageHeader } from "@/components/features/studio/page-header";
-import { DatePicker } from "@/components/date-time-picker";
 import {
   Empty,
   EmptyContent,
@@ -245,6 +244,7 @@ export function ResumeLibraryPage() {
             skills: parseCsvParam(params.filters.skills),
             sortBy: params.sortBy,
             sortOrder: params.sortOrder,
+            textFilters: params.filters.textFilters || undefined,
           },
           { signal: params.signal },
         ),
@@ -437,25 +437,15 @@ export function ResumeLibraryPage() {
   const filtersConfig = useMemo(
     () => [
       {
-        key: "activity" as const,
-        options: [
-          { label: "关联简历", value: "associated_resume" },
-          { label: "待评估", value: "pending_evaluation" },
-          { label: "AI 面试", value: "ai_interview" },
-          { label: "真人面试", value: "human_interview" },
-          { label: "Offer", value: "offer" },
-          { label: "预计到岗", value: "expected_arrival" },
-          { label: "实际到岗", value: "onboarded" },
-          { label: "淘汰 / 撤回", value: "closed" },
-        ],
-        placeholder: "ODC 指标口径",
-        type: "select" as const,
-      },
-      {
         key: "id" as const,
         minWidth: "12rem",
         placeholder: "简历ID，如sdvs****xscs",
         type: "search" as const,
+      },
+      {
+        key: "textFilters" as const,
+        resource: "resumeDetails" as const,
+        type: "text-filters" as const,
       },
       {
         key: "candidateName" as const,
@@ -470,6 +460,42 @@ export function ResumeLibraryPage() {
         type: "search" as const,
       },
       {
+        key: "candidatePhone" as const,
+        minWidth: "9rem",
+        placeholder: "电话",
+        type: "search" as const,
+      },
+      {
+        boundary: "from" as const,
+        key: "activityFrom" as const,
+        label: "指标日期开始",
+        max: grid.filters.activityTo,
+        type: "date" as const,
+      },
+      {
+        boundary: "to" as const,
+        key: "activityTo" as const,
+        label: "指标日期结束",
+        min: grid.filters.activityFrom,
+        type: "date" as const,
+      },
+      {
+        key: "activity" as const,
+        options: [
+          { label: "关联简历", value: "associated_resume" },
+          { label: "待评估", value: "pending_evaluation" },
+          { label: "AI 面试", value: "ai_interview" },
+          { label: "真人面试", value: "human_interview" },
+          { label: "Offer", value: "offer" },
+          { label: "预计到岗", value: "expected_arrival" },
+          { label: "实际到岗", value: "onboarded" },
+          { label: "淘汰 / 撤回", value: "closed" },
+        ],
+        placeholder: "ODC 指标口径",
+        type: "select" as const,
+      },
+
+      {
         emptyMessage: "没有匹配的创建人",
         key: "creatorIds" as const,
         options: workspaceMembers.map((member) => ({
@@ -483,12 +509,7 @@ export function ResumeLibraryPage() {
         selectedFormat: (count: number) => `已选 ${count} 个创建人`,
         type: "multi-select" as const,
       },
-      {
-        key: "candidatePhone" as const,
-        minWidth: "9rem",
-        placeholder: "电话",
-        type: "search" as const,
-      },
+
       {
         emptyMessage: "没有匹配的用人组织",
         key: "hiringUnitId" as const,
@@ -516,6 +537,7 @@ export function ResumeLibraryPage() {
       {
         emptyMessage: "没有匹配的技能",
         key: "skills" as const,
+        match: "all" as const,
         options: skillSuggestions.map((item) => ({
           description: `${item.count} 位候选人`,
           label: item.skill,
@@ -527,7 +549,14 @@ export function ResumeLibraryPage() {
         type: "multi-select" as const,
       },
     ],
-    [hiringUnits, skillSuggestions, jobDescriptions, workspaceMembers],
+    [
+      hiringUnits,
+      skillSuggestions,
+      jobDescriptions,
+      workspaceMembers,
+      grid.filters.activityFrom,
+      grid.filters.activityTo,
+    ],
   );
 
   async function handleDelete() {
@@ -707,26 +736,6 @@ export function ResumeLibraryPage() {
           error={resumeLibraryListQuery.error}
           fetchNextPage={resumeLibraryListQuery.fetchNextPage}
           filters={filtersConfig}
-          filtersExtra={
-            grid.filters.activity ? (
-              <div className="grid grid-cols-2 gap-3">
-                <DatePicker
-                  aria-label="指标日期开始"
-                  max={grid.bind.filterValues.activityTo}
-                  onValueChange={(value) => grid.bind.onFilterChange("activityFrom", value)}
-                  placeholder="指标开始日期"
-                  value={grid.bind.filterValues.activityFrom}
-                />
-                <DatePicker
-                  aria-label="指标日期结束"
-                  min={grid.bind.filterValues.activityFrom}
-                  onValueChange={(value) => grid.bind.onFilterChange("activityTo", value)}
-                  placeholder="指标结束日期"
-                  value={grid.bind.filterValues.activityTo}
-                />
-              </div>
-            ) : undefined
-          }
           grid={grid}
           hasActiveUploadBatches={hasActiveUploadBatches}
           hasNextPage={Boolean(resumeLibraryListQuery.hasNextPage)}

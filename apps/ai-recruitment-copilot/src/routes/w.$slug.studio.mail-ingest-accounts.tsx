@@ -1,3 +1,4 @@
+import { listTextQuery } from "@arc/shared/list-text-filters";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Outlet,
@@ -482,6 +483,7 @@ function ManagedMailIngestPage() {
       rpc.api.w[":slug"].studio["mail-ingest-accounts"].managed.$get({
         param: { slug },
         query: {
+          ...listTextQuery(params),
           page: String(params.page),
           pageSize: String(params.pageSize),
           ...(params.search ? { search: params.search } : {}),
@@ -667,14 +669,7 @@ function ManagedMailIngestPage() {
             </EmptyHeader>
           </Empty>
         }
-        filters={[
-          {
-            key: "search",
-            minWidth: "20rem",
-            placeholder: "搜索成员、邮箱、IMAP 或标题关键字",
-            type: "search",
-          },
-        ]}
+        filters={[{ key: "textFilters", resource: "mailAccounts", type: "text-filters" }]}
         getRowId={(row) => `${row.user.id}:${row.account?.id ?? "empty"}`}
       />
 

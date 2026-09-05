@@ -1,9 +1,9 @@
+import { listTextQuery } from "@arc/shared/list-text-filters";
 import { useQueryClient } from "@tanstack/react-query";
 import { ClientOnly, useRouter } from "@tanstack/react-router";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import { PageHeader } from "@/components/features/studio/page-header";
-import { DatePicker } from "@/components/date-time-picker";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type {
@@ -134,6 +134,7 @@ export function JobDescriptionManagementPage({
           {
             param: { slug },
             query: {
+              ...listTextQuery(params),
               page: String(params.page),
               pageSize: String(params.pageSize),
               ...(params.search ? { search: params.search } : {}),
@@ -606,13 +607,23 @@ export function JobDescriptionManagementPage({
   const filtersConfig = useMemo(
     () =>
       createJobDescriptionListFilters({
+        dateFrom: grid.filters.dateFrom,
+        dateTo: grid.filters.dateTo,
         departments,
         hiringUnits,
         interviewers,
         recruitmentStatuses,
         sourceSheets,
       }),
-    [departments, hiringUnits, interviewers, recruitmentStatuses, sourceSheets],
+    [
+      departments,
+      hiringUnits,
+      interviewers,
+      recruitmentStatuses,
+      sourceSheets,
+      grid.filters.dateFrom,
+      grid.filters.dateTo,
+    ],
   );
 
   return (
@@ -685,24 +696,6 @@ export function JobDescriptionManagementPage({
             )
           }
           filters={filtersConfig}
-          filtersExtra={
-            <div className="grid grid-cols-2 gap-3">
-              <DatePicker
-                aria-label="岗位日期开始"
-                max={grid.bind.filterValues.dateTo}
-                onValueChange={(value) => grid.bind.onFilterChange("dateFrom", value)}
-                placeholder="开始日期"
-                value={grid.bind.filterValues.dateFrom}
-              />
-              <DatePicker
-                aria-label="岗位日期结束"
-                min={grid.bind.filterValues.dateFrom}
-                onValueChange={(value) => grid.bind.onFilterChange("dateTo", value)}
-                placeholder="结束日期"
-                value={grid.bind.filterValues.dateTo}
-              />
-            </div>
-          }
           getRowId={(r) => r.id}
           toolbarRight={
             <JobDescriptionToolbarActions

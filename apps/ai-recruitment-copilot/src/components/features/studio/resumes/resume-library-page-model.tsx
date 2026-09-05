@@ -1,3 +1,4 @@
+import { normalizeListTextSearchParam } from "@arc/shared/list-text-filters";
 import type { ReactVirtualizer, VirtualItem } from "@tanstack/react-virtual";
 import { useElementScrollRestoration, useRouter } from "@tanstack/react-router";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
@@ -33,6 +34,7 @@ export interface ResumeFilters extends Record<string, string> {
   activityTo: string;
   candidateEmail: string;
   candidateName: string;
+  textFilters: string;
   candidatePhone: string;
   creatorIds: string;
   hiringUnitId: string;
@@ -64,6 +66,7 @@ export const EMPTY_FILTERS: ResumeFilters = {
   jdIds: "",
   skills: "",
   stage: "",
+  textFilters: "",
 };
 export const RESUME_LIBRARY_FILTER_KEYS = Object.keys(EMPTY_FILTERS) as (keyof ResumeFilters &
   string)[];
@@ -416,6 +419,10 @@ export interface UseResumeLibrarySearchStateOptions {
 export function coerceSearchParams(search: Record<string, unknown>): SearchParamsRecord {
   const out: SearchParamsRecord = {};
   for (const [key, value] of Object.entries(search)) {
+    if (key === "textFilters") {
+      out[key] = normalizeListTextSearchParam(value);
+      continue;
+    }
     if (typeof value === "string") {
       out[key] = value;
       continue;
@@ -435,12 +442,15 @@ export function coerceSearchParams(search: Record<string, unknown>): SearchParam
 }
 
 export function parseResumeQuery(searchParams: SearchParamsRecord): ResumeLibraryQueryState {
-  return parseDataGridSearchParams(searchParams, {
-    allowedSortIds: resumeLibrarySortIds,
-    defaultPageSize: RESUME_LIBRARY_INFINITE_PAGE_SIZE,
-    defaultSorting: RESUME_LIBRARY_DEFAULT_SORTING,
-    initialFilters: EMPTY_FILTERS,
-  });
+  return parseDataGridSearchParams(
+    { ...searchParams, search: undefined },
+    {
+      allowedSortIds: resumeLibrarySortIds,
+      defaultPageSize: RESUME_LIBRARY_INFINITE_PAGE_SIZE,
+      defaultSorting: RESUME_LIBRARY_DEFAULT_SORTING,
+      initialFilters: EMPTY_FILTERS,
+    },
+  );
 }
 
 export function useResumeLibrarySearchState({
@@ -482,6 +492,7 @@ export function useResumeLibrarySearchState({
 
   const updateRouteSearchAndResetPage = useCallback(
     (updates: Record<string, string | undefined>) => {
+      setRowSelection({});
       updateRouteSearch({ ...updates, page: 1 });
     },
     [updateRouteSearch],
@@ -513,13 +524,23 @@ export function useResumeLibrarySearchState({
     (key) => query.filters[key] !== EMPTY_FILTERS[key],
   );
 
-  const onResetFilters = useCallback(() => {
-    const updates: Record<string, number | string | undefined> = { page: 1 };
-    for (const key of RESUME_LIBRARY_FILTER_KEYS) {
-      updates[key] = EMPTY_FILTERS[key] || undefined;
-    }
-    updateRouteSearch(updates);
-  }, [updateRouteSearch]);
+  const onResetFilters = useCallback(
+    (clearedValues?: Record<string, string>) => {
+      setRowSelection({});
+      const updates: Record<string, number | string | undefined> = { page: 1 };
+      if (clearedValues) {
+        for (const [key, value] of Object.entries(clearedValues)) {
+          updates[key] = value || undefined;
+        }
+      } else {
+        for (const key of RESUME_LIBRARY_FILTER_KEYS) {
+          updates[key] = EMPTY_FILTERS[key] || undefined;
+        }
+      }
+      updateRouteSearch(updates);
+    },
+    [updateRouteSearch],
+  );
 
   const sorting = useMemo(
     () => (query.sortBy ? [{ desc: query.sortOrder === "desc", id: query.sortBy }] : []),

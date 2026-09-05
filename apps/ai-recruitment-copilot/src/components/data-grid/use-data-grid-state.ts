@@ -1,4 +1,5 @@
 "use client";
+import { normalizeListTextSearchParam } from "@arc/shared/list-text-filters";
 
 import type { OnChangeFn, RowSelectionState, SortingState } from "@tanstack/react-table";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +36,7 @@ export interface UseDataGridStateOptions<TData, F extends Record<string, string>
   defaultSorting?: SortingState;
   enabled?: boolean;
   initialFilters: F;
+  keywordSearch?: boolean;
   maxPageSize?: number;
   refetchInterval?: number | false;
   refetchOnWindowFocus?: boolean;
@@ -95,7 +97,7 @@ export function useDataGridState<TData, F extends Record<string, string>>(
     firstSearchValue(routeSearch.pageSize),
     defaultPageSize,
   );
-  const search = firstSearchValue(routeSearch.search) ?? "";
+  const search = opts.keywordSearch ? (firstSearchValue(routeSearch.search) ?? "") : "";
   const deferredSearch = useDeferredValue(search);
 
   // Multi-key filter state via route search (each filter gets its own URL key).
@@ -106,7 +108,7 @@ export function useDataGridState<TData, F extends Record<string, string>>(
     for (const key of filterKeys) {
       out[key] = (firstSearchValue(routeSearch[key]) ?? opts.initialFilters[key]) as F[typeof key];
     }
-    return out;
+    return { ...out, textFilters: normalizeListTextSearchParam(routeSearch.textFilters) };
   }, [filterKeys, opts.initialFilters, routeSearch]);
 
   const initialSortFirst = opts.defaultSorting?.[0];
@@ -156,18 +158,22 @@ export function useDataGridState<TData, F extends Record<string, string>>(
     [updateRouteSearch],
   );
   const setFilter = useCallback(
-    (key: keyof F & string, value: string) => updateRouteSearch({ [key]: value || undefined }),
+    (key: keyof F & string, value: string) => {
+      setRowSelection({});
+      updateRouteSearch({ [key]: value || undefined, page: 1 });
+    },
     [updateRouteSearch],
   );
   const updateRouteSearchAndResetPage = useCallback(
     (updates: Record<string, string | undefined>) => {
+      setRowSelection({});
       updateRouteSearch({ ...updates, page: 1 });
     },
     [updateRouteSearch],
   );
 
   const filterResetSig = buildDataGridFilterResetSignature({
-    filterKeys,
+    filterKeys: [...filterKeys, "textFilters"],
     filters,
     search: deferredSearch,
   });
@@ -276,7 +282,7 @@ export function useDataGridState<TData, F extends Record<string, string>>(
   };
 
   const filterValues = useMemo(() => {
-    const out: Record<string, string> = { search };
+    const out: Record<string, string> = { search, textFilters: filters.textFilters };
     for (const key of filterKeys) {
       out[key] = filters[key];
     }
@@ -294,13 +300,23 @@ export function useDataGridState<TData, F extends Record<string, string>>(
   // 是否处于"非默认"过滤状态（用于决定 reset 按钮的 disabled 态）。
   // / Whether any filter (incl. search) deviates from initialFilters defaults.
   const canResetFilters =
-    search.trim() !== "" || filterKeys.some((k) => filters[k] !== opts.initialFilters[k]);
+    search.trim() !== "" ||
+    Boolean(filters.textFilters) ||
+    filterKeys.some((k) => filters[k] !== opts.initialFilters[k]);
 
-  const onResetFilters = () => {
+  const onResetFilters = (clearedValues?: Record<string, string>) => {
+    setRowSelection({});
     const updates: Record<string, number | string | undefined> = { page: 1, search: undefined };
-    for (const key of filterKeys) {
-      updates[key] = opts.initialFilters[key] || undefined;
+    if (clearedValues) {
+      for (const [key, value] of Object.entries(clearedValues)) {
+        updates[key] = value || undefined;
+      }
+    } else {
+      for (const key of filterKeys) {
+        updates[key] = opts.initialFilters[key] || undefined;
+      }
     }
+    updates.textFilters = clearedValues?.textFilters || undefined;
     updateRouteSearch(updates);
   };
 
@@ -308,6 +324,7 @@ export function useDataGridState<TData, F extends Record<string, string>>(
     canResetFilters,
     data: data.records,
     error: listQuery.error,
+    filterStorageKey: String(opts.queryKeyBase[0]),
     filterValues,
     loading,
     onFilterChange,

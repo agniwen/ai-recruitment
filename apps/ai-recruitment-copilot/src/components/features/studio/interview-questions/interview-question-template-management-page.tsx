@@ -1,4 +1,5 @@
-import { IconChevronDown, IconListCheck, IconPlus, IconSparkles } from "@tabler/icons-react";
+import { listTextQuery } from "@arc/shared/list-text-filters";
+import { IconListCheck, IconPlus, IconSparkles } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
@@ -18,13 +19,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   actionsColumn,
   customColumn,
@@ -52,16 +46,6 @@ import { useHasPermission } from "@/hooks/use-has-permission";
 
 function scopeLabel(scope: InterviewQuestionTemplateScope) {
   return scope === "global" ? "全局" : "岗位绑定";
-}
-
-function archivedFilterLabelOf(value: "active" | "archived" | "all"): string {
-  if (value === "archived") {
-    return "已归档";
-  }
-  if (value === "all") {
-    return "全部";
-  }
-  return "未归档";
 }
 
 function firstSearchValue(value: unknown): string {
@@ -99,6 +83,7 @@ export function InterviewQuestionTemplateManagementPage({
           {
             param: { slug },
             query: {
+              ...listTextQuery(params),
               page: String(params.page),
               pageSize: String(params.pageSize),
               ...(params.search ? { search: params.search } : {}),
@@ -148,8 +133,6 @@ export function InterviewQuestionTemplateManagementPage({
     queryFn: fetchTemplates,
     queryKeyBase: ["interview-question-templates", slug],
   });
-  const archivedFilter = (grid.filters.archivedFilter as "active" | "archived" | "all") || "active";
-  const archivedFilterLabel = archivedFilterLabelOf(archivedFilter);
 
   const routeSearch = useSearch({
     from: "/w/$slug/studio/interview-questions",
@@ -405,10 +388,19 @@ export function InterviewQuestionTemplateManagementPage({
   const filtersConfig = useMemo(
     () => [
       {
-        key: "search" as const,
-        minWidth: "15rem",
-        placeholder: "搜索模版标题或说明",
-        type: "search" as const,
+        key: "archivedFilter",
+        label: "归档状态",
+        options: [
+          { label: "未归档", value: "active" },
+          { label: "已归档", value: "archived" },
+        ],
+        type: "select" as const,
+        unfilteredValue: "all",
+      },
+      {
+        key: "textFilters" as const,
+        resource: "questions" as const,
+        type: "text-filters" as const,
       },
       {
         key: "scope" as const,
@@ -483,28 +475,6 @@ export function InterviewQuestionTemplateManagementPage({
             </Empty>
           }
           filters={filtersConfig}
-          filtersExtra={
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button type="button" variant="outline">
-                    {archivedFilterLabel}
-                    <IconChevronDown className="size-4" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="start">
-                <DropdownMenuRadioGroup
-                  onValueChange={(v) => grid.setFilter("archivedFilter", v)}
-                  value={archivedFilter}
-                >
-                  <DropdownMenuRadioItem value="active">未归档</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="archived">已归档</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="all">全部</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          }
           getRowId={(r) => r.id}
           toolbarRight={
             canCreateQuestionTemplate ? (

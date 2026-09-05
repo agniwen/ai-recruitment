@@ -39,6 +39,7 @@ export interface ResumeListParams {
   id?: string;
   /** 候选人姓名（模糊匹配）。 */
   candidateName?: string;
+  textFilters?: string;
   /** 候选人邮箱（模糊匹配）。 */
   candidateEmail?: string;
   /** 候选人电话（模糊匹配）。 */
@@ -79,6 +80,9 @@ function buildResumeListQuery(params: ResumeListParams): Record<string, string> 
   }
   if (params.pageSize !== undefined) {
     query.pageSize = String(params.pageSize);
+  }
+  if (params.textFilters) {
+    query.textFilters = params.textFilters;
   }
   if (params.knownTotal !== undefined) {
     query.knownTotal = String(params.knownTotal);

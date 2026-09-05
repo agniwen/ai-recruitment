@@ -543,6 +543,7 @@ export function QueuesGrid() {
   const grid = useDataGridState<QueueJobRecord, QueueFilters>({
     defaultPageSize: 20,
     initialFilters: DEFAULT_FILTERS,
+    keywordSearch: true,
     queryFn: fetchJobs,
     queryKeyBase: ["platform-queue-jobs"],
     refetchOnWindowFocus: false,
@@ -714,8 +715,10 @@ export function QueuesGrid() {
         filters={[
           {
             key: "search",
+            label: "任务 ID",
             minWidth: "22rem",
-            placeholder: "按 Job ID / Item ID 精确查找",
+            operator: { label: "是", value: "is" },
+            placeholder: "按任务 ID 精确查找",
             type: "search",
           },
           {
@@ -723,6 +726,7 @@ export function QueuesGrid() {
             options: [...JOB_STATE_OPTIONS],
             placeholder: "任务状态",
             type: "select",
+            unfilteredValue: "all",
           },
           ...(isResumeParseQueue
             ? [
@@ -731,12 +735,14 @@ export function QueuesGrid() {
                   options: [...UPLOAD_STATUS_FILTER_OPTIONS],
                   placeholder: "上传任务状态",
                   type: "select" as const,
+                  unfilteredValue: "all",
                 },
                 {
                   key: "parseStatus",
                   options: [...PARSE_STATUS_FILTER_OPTIONS],
                   placeholder: "解析状态",
                   type: "select" as const,
+                  unfilteredValue: "all",
                 },
               ]
             : []),
