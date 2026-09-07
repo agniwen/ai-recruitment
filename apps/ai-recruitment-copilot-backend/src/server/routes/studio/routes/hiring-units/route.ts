@@ -7,7 +7,6 @@ import {
   hiringUnitFormSchema,
   hiringUnitUpdateSchema,
   odcBatchAssignmentSchema,
-  odcAssignmentSchema,
 } from "@arc/shared/hiring-units";
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -19,11 +18,11 @@ import {
   listSelectableHiringUnits,
   loadHiringUnitById,
   queryPaginatedHiringUnits,
-  replaceHiringUnitOdcMembers,
   replaceOdcMembersForTargets,
   serializeHiringUnit,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/dao";
 import { areEligibleOdcMembers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
+import { hiringUnitOdcRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/routes/odc/route";
 import { areDepartmentsVisible } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 
 const hiringUnitListQuerySchema = z.object({
@@ -220,32 +219,6 @@ export const hiringUnitsRouter = factory
       return c.json(updated, 200);
     },
   )
-  .put(
-    "/:id/odc",
-    requirePermission("hiringUnit", "update"),
-    zValidator("json", odcAssignmentSchema, jsonValidatorError("ODC 设置参数无效。")),
-    async (c) => {
-      const { activeOrg } = c.var;
-      if (!activeOrg) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
-      const { assignments } = c.req.valid("json");
-      const memberIds = assignments.map((assignment) => assignment.memberId);
-      if (!(await areEligibleOdcMembers({ memberIds, organizationId: activeOrg.id }))) {
-        return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
-      }
-      const updated = await replaceHiringUnitOdcMembers({
-        assignments,
-        id: c.req.param("id"),
-        organizationId: activeOrg.id,
-      });
-      if (!updated) {
-        return c.json({ error: "用人组织不存在。" }, 404);
-      }
-      safeUpdateTag(`hiring-units:${activeOrg.id}`);
-      return c.json({ success: true }, 200);
-    },
-  )
   .delete("/:id", requirePermission("hiringUnit", "delete"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
@@ -262,4 +235,5 @@ export const hiringUnitsRouter = factory
       .where(and(eq(hiringUnit.id, id), eq(hiringUnit.organizationId, activeOrg.id)));
     safeUpdateTag(`hiring-units:${activeOrg.id}`);
     return c.json({ success: true }, 200);
-  });
+  })
+  .route("/:id/odc", hiringUnitOdcRouter);

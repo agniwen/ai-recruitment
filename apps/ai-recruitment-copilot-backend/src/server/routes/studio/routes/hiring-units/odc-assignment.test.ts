@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { canAssignOdcMembers } from "./odc-assignment-policy";
-import { odcAssignmentSchema, odcBatchAssignmentSchema } from "@arc/shared/hiring-units";
+import {
+  odcAssignmentSchema,
+  odcAssignmentUpdateSchema,
+  odcBatchAssignmentSchema,
+} from "@arc/shared/hiring-units";
+import { parseOdcAssignmentPagination } from "./routes/odc/schema";
 
 describe("canAssignOdcMembers", () => {
   it("accepts every selected member when all workspace roles are marked as ODC", () => {
@@ -34,14 +39,43 @@ describe("canAssignOdcMembers", () => {
 
 describe("department ODC route", () => {
   it("resolves the department through the actor scope before updating it", () => {
-    const source = readFileSync(new URL("../departments/route.ts", import.meta.url), "utf-8");
-    const route = source.slice(source.indexOf('"/:id/odc"'), source.indexOf('.delete("/:id"'));
+    const source = readFileSync(
+      new URL("../departments/routes/odc/route.ts", import.meta.url),
+      "utf-8",
+    );
+    const route = source.slice(source.indexOf(".put("), source.indexOf(".get("));
 
     expect(route).toContain("loadDepartmentById(id, activeOrg.id");
     expect(route).toContain("actorUserId: c.var.user?.id");
     expect(route.indexOf("loadDepartmentById")).toBeLessThan(
       route.indexOf("replaceDepartmentOdcMembers"),
     );
+  });
+
+  it("exposes paginated list, scope update, and delete operations", () => {
+    const hiringUnitRoute = readFileSync(new URL("route.ts", import.meta.url), "utf-8");
+    const departmentRoute = readFileSync(
+      new URL("../departments/route.ts", import.meta.url),
+      "utf-8",
+    );
+    const hiringUnitOdcRoute = readFileSync(
+      new URL("routes/odc/route.ts", import.meta.url),
+      "utf-8",
+    );
+    const departmentOdcRoute = readFileSync(
+      new URL("../departments/routes/odc/route.ts", import.meta.url),
+      "utf-8",
+    );
+
+    expect(hiringUnitRoute).toContain('.route("/:id/odc", hiringUnitOdcRouter)');
+    expect(departmentRoute).toContain('.route("/:id/odc", departmentOdcRouter)');
+    for (const source of [hiringUnitOdcRoute, departmentOdcRoute]) {
+      expect(source).toMatch(/\.put\(\s*"\/"/u);
+      expect(source).toMatch(/\.get\(\s*"\/"/u);
+      expect(source).toMatch(/\.patch\(\s*"\/:memberId"/u);
+      expect(source).toMatch(/\.delete\(\s*"\/:memberId"/u);
+      expect(source).toContain("odcAssignmentPaginationSchema");
+    }
   });
 });
 
@@ -59,6 +93,30 @@ describe("ODC candidate route", () => {
 });
 
 describe("batch ODC assignment", () => {
+  it("parses ODC management pagination with stable defaults", () => {
+    expect(parseOdcAssignmentPagination({})).toEqual({
+      page: 1,
+      pageSize: 10,
+      sortBy: "createdAt",
+      sortOrder: "desc",
+    });
+    expect(parseOdcAssignmentPagination({ page: "2", pageSize: "20" })).toMatchObject({
+      page: 2,
+      pageSize: 20,
+    });
+    expect(() => parseOdcAssignmentPagination({ page: "invalid" })).toThrow();
+    expect(() => parseOdcAssignmentPagination({ pageSize: "101" })).toThrow();
+  });
+
+  it("validates an editable ODC scope without changing the member", () => {
+    expect(
+      odcAssignmentUpdateSchema.safeParse({ jobSeries: "派驻", serviceUnit: "无极" }).success,
+    ).toBe(true);
+    expect(
+      odcAssignmentUpdateSchema.safeParse({ jobSeries: "其他", serviceUnit: null }).success,
+    ).toBe(false);
+  });
+
   it("accepts optional per-member job series and service-unit scopes", () => {
     expect(
       odcAssignmentSchema.safeParse({

@@ -25,7 +25,7 @@ import {
   user,
 } from "@arc/db-schema/schema";
 import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
-import type { OdcAssignmentItem, OdcAssignmentSummary } from "@arc/shared/hiring-units";
+import type { OdcAssignmentSummary } from "@arc/shared/hiring-units";
 
 const departmentListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
@@ -420,48 +420,6 @@ export async function loadDepartmentReferenceCounts(id: string) {
     interviewerCount: interviewerCountResult[0]?.count ?? 0,
     jobDescriptionCount: jobDescriptionCountResult[0]?.count ?? 0,
   };
-}
-
-export function replaceDepartmentOdcMembers({
-  assignments,
-  id,
-  organizationId,
-}: {
-  assignments: OdcAssignmentItem[];
-  id: string;
-  organizationId: string;
-}): Promise<boolean> {
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .update(department)
-      .set({ updatedAt: new Date() })
-      .where(and(eq(department.id, id), eq(department.organizationId, organizationId)))
-      .returning({ id: department.id });
-    if (rows.length === 0) {
-      return false;
-    }
-
-    await tx
-      .delete(departmentOdcMember)
-      .where(
-        and(
-          eq(departmentOdcMember.departmentId, id),
-          eq(departmentOdcMember.organizationId, organizationId),
-        ),
-      );
-    if (assignments.length > 0) {
-      await tx.insert(departmentOdcMember).values(
-        assignments.map((assignment) => ({
-          departmentId: id,
-          jobSeries: assignment.jobSeries ?? null,
-          memberId: assignment.memberId,
-          organizationId,
-          serviceUnit: assignment.serviceUnit?.trim() || null,
-        })),
-      );
-    }
-    return true;
-  });
 }
 
 export async function loadDepartmentById(

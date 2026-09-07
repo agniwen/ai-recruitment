@@ -123,6 +123,24 @@ describe("hiring unit management list", () => {
     expect(dialogSource).toContain("此操作会覆盖");
   });
 
+  it("opens paginated ODC management from the action column", () => {
+    const pageSource = readFileSync(
+      new URL("hiring-unit-management-page.tsx", import.meta.url),
+      "utf-8",
+    );
+    const modalSource = readFileSync(
+      new URL("../odc-management-modal.tsx", import.meta.url),
+      "utf-8",
+    );
+
+    expect(pageSource).toContain('label: "管理 ODC"');
+    expect(pageSource).toContain("<OdcManagementModal");
+    expect(modalSource).toContain("useModalPagination");
+    expect(modalSource).toContain("<DataGrid<OdcManagedAssignment>");
+    expect(modalSource).toContain('label: "编辑"');
+    expect(modalSource).toContain('label: "删除"');
+  });
+
   it("submits per-member ODC scopes for one hiring unit or department", () => {
     const source = readFileSync(new URL("../odc-assignment-dialog.tsx", import.meta.url), "utf-8");
     const scopeFieldsSource = readFileSync(

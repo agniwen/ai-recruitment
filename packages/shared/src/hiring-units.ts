@@ -38,6 +38,18 @@ export interface OdcAssignmentSummary extends OdcMemberSummary {
   serviceUnit: string | null;
 }
 
+export interface OdcManagedAssignment extends OdcAssignmentSummary {
+  createdAt: string | Date;
+}
+
+export interface PaginatedOdcAssignmentResult {
+  page: number;
+  pageSize: number;
+  records: OdcManagedAssignment[];
+  total: number;
+  totalPages: number;
+}
+
 export interface HiringUnitTreeDepartment {
   createdAt: string | Date;
   description: string | null;
@@ -65,6 +77,9 @@ const odcAssignmentItemSchema = z.object({
   memberId: z.string().trim().min(1),
   serviceUnit: z.string().trim().max(120, "服务单位不能超过 120 个字符").nullable().optional(),
 });
+
+export const odcAssignmentUpdateSchema = odcAssignmentItemSchema.omit({ memberId: true }).strict();
+export type OdcAssignmentUpdateInput = z.infer<typeof odcAssignmentUpdateSchema>;
 
 export const odcAssignmentSchema = z.object({
   assignments: z

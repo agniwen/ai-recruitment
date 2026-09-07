@@ -27,6 +27,7 @@ import { HiringUnitFormDialog } from "@/components/features/studio/hiring-units/
 import { flattenHiringUnitTree } from "@/components/features/studio/hiring-units/hiring-unit-tree";
 import type { HiringUnitTreeRow } from "@/components/features/studio/hiring-units/hiring-unit-tree";
 import { OdcAssignmentDialog } from "@/components/features/studio/odc-assignment-dialog";
+import { OdcManagementModal } from "@/components/features/studio/odc-management-modal";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { OdcAvatarGroup } from "@/components/features/studio/odc-avatar-group";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
@@ -59,6 +60,7 @@ export function HiringUnitManagementPage() {
   );
   const [search, setSearch] = useState("");
   const [odcTarget, setOdcTarget] = useState<HiringUnitTreeRow | null>(null);
+  const [managedOdcTarget, setManagedOdcTarget] = useState<HiringUnitTreeRow | null>(null);
   const [batchOdcTargets, setBatchOdcTargets] = useState<HiringUnitTreeRow[]>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
@@ -221,6 +223,12 @@ export function HiringUnitManagementPage() {
         actionsColumn<HiringUnitTreeRow>({
           inline: [
             {
+              label: "管理 ODC",
+              onClick: setManagedOdcTarget,
+              show: (row) =>
+                row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment,
+            },
+            {
               label: "编辑",
               onClick: (row) => void crud.openEdit(row),
               show: (row) => row.rowType === "hiringUnit" && canUpdateHiringUnit,
@@ -365,6 +373,22 @@ export function HiringUnitManagementPage() {
         onSaved={invalidateHiringUnitData}
         open={odcTarget !== null}
         target={odcTarget}
+      />
+
+      <OdcManagementModal
+        key={
+          managedOdcTarget
+            ? `${managedOdcTarget.rowType}:${managedOdcTarget.id}`
+            : "closed-odc-management"
+        }
+        onOpenChange={(open) => {
+          if (!open) {
+            setManagedOdcTarget(null);
+          }
+        }}
+        onSaved={invalidateHiringUnitData}
+        open={managedOdcTarget !== null}
+        target={managedOdcTarget}
       />
 
       <BulkOdcAssignmentDialog

@@ -399,48 +399,6 @@ export async function listHiringUnitTree({
   };
 }
 
-export function replaceHiringUnitOdcMembers({
-  assignments,
-  id,
-  organizationId,
-}: {
-  assignments: OdcAssignmentItem[];
-  id: string;
-  organizationId: string;
-}): Promise<boolean> {
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .update(hiringUnit)
-      .set({ updatedAt: new Date() })
-      .where(and(eq(hiringUnit.id, id), eq(hiringUnit.organizationId, organizationId)))
-      .returning({ id: hiringUnit.id });
-    if (rows.length === 0) {
-      return false;
-    }
-
-    await tx
-      .delete(hiringUnitOdcMember)
-      .where(
-        and(
-          eq(hiringUnitOdcMember.hiringUnitId, id),
-          eq(hiringUnitOdcMember.organizationId, organizationId),
-        ),
-      );
-    if (assignments.length > 0) {
-      await tx.insert(hiringUnitOdcMember).values(
-        assignments.map((assignment) => ({
-          hiringUnitId: id,
-          jobSeries: assignment.jobSeries ?? null,
-          memberId: assignment.memberId,
-          organizationId,
-          serviceUnit: assignment.serviceUnit?.trim() || null,
-        })),
-      );
-    }
-    return true;
-  });
-}
-
 export function replaceOdcMembersForTargets({
   assignments,
   organizationId,
