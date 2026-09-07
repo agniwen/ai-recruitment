@@ -152,6 +152,27 @@ describe("studio pre-registration routes", () => {
     expect(mocks.provision).toHaveBeenCalledWith("member@example.com", "alpha");
   });
 
+  it.each(["POST", "PATCH"])("allows no recruiting groups on %s", async (method) => {
+    const withoutGroups = { ...input, recruitingGroupNames: [] };
+    const saved = { ...withoutGroups, id: "entry-1", workspaceSlug: "alpha" };
+    mocks.create.mockResolvedValue(saved);
+    mocks.update.mockResolvedValue(saved);
+    mocks.provision.mockResolvedValue("unmatched");
+
+    const response = await app.request(`/pre-registrations${method === "POST" ? "" : "/entry-1"}`, {
+      body: JSON.stringify(withoutGroups),
+      headers: { "Content-Type": "application/json" },
+      method,
+    });
+
+    expect(response.status).toBe(method === "POST" ? 201 : 200);
+    if (method === "POST") {
+      expect(mocks.create).toHaveBeenCalledWith("alpha", withoutGroups);
+    } else {
+      expect(mocks.update).toHaveBeenCalledWith("alpha", "entry-1", withoutGroups);
+    }
+  });
+
   it("rejects a manager cycle", async () => {
     mocks.update.mockResolvedValue("cycle");
 

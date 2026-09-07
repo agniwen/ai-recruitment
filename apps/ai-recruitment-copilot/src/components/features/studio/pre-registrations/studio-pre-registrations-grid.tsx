@@ -179,7 +179,6 @@ function PreRegistrationEditorDialog({
     form.displayName.trim().length > 0 &&
     form.email.trim().length > 0 &&
     form.telegram.trim().length > 0 &&
-    groupNames.length > 0 &&
     roleOptions.some((option) => option.value === form.workspaceRole);
   const mutation = useMutation({
     mutationFn: () => {
