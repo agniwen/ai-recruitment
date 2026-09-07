@@ -43,6 +43,7 @@ export interface OdcManagedAssignment extends OdcAssignmentSummary {
 }
 
 export interface PaginatedOdcAssignmentResult {
+  assignedMemberIds: string[];
   page: number;
   pageSize: number;
   records: OdcManagedAssignment[];
@@ -77,6 +78,9 @@ const odcAssignmentItemSchema = z.object({
   memberId: z.string().trim().min(1),
   serviceUnit: z.string().trim().max(120, "服务单位不能超过 120 个字符").nullable().optional(),
 });
+
+export const odcAssignmentCreateSchema = odcAssignmentItemSchema.strict();
+export type OdcAssignmentCreateInput = z.infer<typeof odcAssignmentCreateSchema>;
 
 export const odcAssignmentUpdateSchema = odcAssignmentItemSchema.omit({ memberId: true }).strict();
 export type OdcAssignmentUpdateInput = z.infer<typeof odcAssignmentUpdateSchema>;

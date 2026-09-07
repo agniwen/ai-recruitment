@@ -1,4 +1,5 @@
 import type {
+  OdcAssignmentCreateInput,
   OdcAssignmentItem,
   OdcAssignmentUpdateInput,
   PaginatedOdcAssignmentResult,
@@ -9,6 +10,38 @@ import { calcTotalPages } from "@arc/ai-recruitment-copilot-backend/lib/server/d
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
 import { hiringUnit, hiringUnitOdcMember, member, user } from "@arc/db-schema/schema";
 import { parseOdcAssignmentPagination } from "./schema";
+
+export function createHiringUnitOdcAssignment({
+  hiringUnitId,
+  input,
+  organizationId,
+}: {
+  hiringUnitId: string;
+  input: OdcAssignmentCreateInput;
+  organizationId: string;
+}): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(hiringUnitOdcMember)
+      .values({
+        hiringUnitId,
+        jobSeries: input.jobSeries ?? null,
+        memberId: input.memberId,
+        organizationId,
+        serviceUnit: input.serviceUnit?.trim() || null,
+      })
+      .onConflictDoNothing()
+      .returning({ memberId: hiringUnitOdcMember.memberId });
+    if (rows.length === 0) {
+      return false;
+    }
+    await tx
+      .update(hiringUnit)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(hiringUnit.id, hiringUnitId), eq(hiringUnit.organizationId, organizationId)));
+    return true;
+  });
+}
 
 export async function queryPaginatedHiringUnitOdcAssignments({
   hiringUnitId,
@@ -24,7 +57,7 @@ export async function queryPaginatedHiringUnitOdcAssignments({
     eq(hiringUnitOdcMember.hiringUnitId, hiringUnitId),
     eq(hiringUnitOdcMember.organizationId, organizationId),
   );
-  const [rows, totalRows] = await Promise.all([
+  const [rows, totalRows, assignedRows] = await Promise.all([
     db
       .select({
         createdAt: hiringUnitOdcMember.createdAt,
@@ -44,9 +77,11 @@ export async function queryPaginatedHiringUnitOdcAssignments({
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ value: count() }).from(hiringUnitOdcMember).where(where),
+    db.select({ memberId: hiringUnitOdcMember.memberId }).from(hiringUnitOdcMember).where(where),
   ]);
   const total = totalRows[0]?.value ?? 0;
   return {
+    assignedMemberIds: assignedRows.map((row) => row.memberId),
     page,
     pageSize,
     records: rows.map((row) => ({ ...row, createdAt: serializeDate(row.createdAt) })),

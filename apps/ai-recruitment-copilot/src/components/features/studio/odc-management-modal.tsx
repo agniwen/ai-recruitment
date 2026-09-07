@@ -2,6 +2,7 @@
 
 import type { OdcManagedAssignment, PaginatedOdcAssignmentResult } from "@arc/shared/hiring-units";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { IconPlus } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -12,6 +13,7 @@ import {
   textColumn,
 } from "@/components/data-grid";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
+import { OdcAddDialog } from "@/components/features/studio/odc-add-dialog";
 import type { OdcAssignmentTarget } from "@/components/features/studio/odc-assignment-dialog";
 import type { OdcAssignmentDraft } from "@/components/features/studio/odc-assignment-draft";
 import { OdcAssignmentScopeFields } from "@/components/features/studio/odc-assignment-scope-fields";
@@ -53,6 +55,7 @@ export function OdcManagementModal({
   const { page, pageSize, setPage, setPageSize } = useModalPagination(DEFAULT_PAGE_SIZE);
   const [editing, setEditing] = useState<OdcManagedAssignment | null>(null);
   const [draft, setDraft] = useState<OdcAssignmentDraft | null>(null);
+  const [adding, setAdding] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<OdcManagedAssignment | null>(null);
 
   const listQueryKey = [
@@ -69,7 +72,7 @@ export function OdcManagementModal({
     placeholderData: (previous) => previous,
     queryFn: () => {
       if (!target) {
-        return { page, pageSize, records: [], total: 0, totalPages: 1 };
+        return { assignedMemberIds: [], page, pageSize, records: [], total: 0, totalPages: 1 };
       }
       const query = { page: String(page), pageSize: String(pageSize) };
       if (target.rowType === "hiringUnit") {
@@ -216,6 +219,7 @@ export function OdcManagementModal({
   );
 
   const data = listQuery.data ?? {
+    assignedMemberIds: [],
     page,
     pageSize,
     records: [],
@@ -240,7 +244,7 @@ export function OdcManagementModal({
             <Empty className="border-border">
               <EmptyHeader>
                 <EmptyTitle>暂无 ODC 配置</EmptyTitle>
-                <EmptyDescription>可从操作列的“设置 ODC”入口添加配置。</EmptyDescription>
+                <EmptyDescription>点击上方“添加 ODC”创建第一条配置。</EmptyDescription>
               </EmptyHeader>
             </Empty>
           }
@@ -258,8 +262,25 @@ export function OdcManagementModal({
           refetching={listQuery.isRefetching}
           total={data.total}
           totalPages={data.totalPages}
+          toolbarRight={
+            <Button onClick={() => setAdding(true)}>
+              <IconPlus className="size-4" />
+              添加 ODC
+            </Button>
+          }
         />
       </Modal>
+
+      <OdcAddDialog
+        assignedMemberIds={data.assignedMemberIds}
+        onOpenChange={setAdding}
+        onSaved={async () => {
+          setPage(1);
+          await invalidateAssignments();
+        }}
+        open={adding}
+        target={target}
+      />
 
       <Dialog
         onOpenChange={(next) => {

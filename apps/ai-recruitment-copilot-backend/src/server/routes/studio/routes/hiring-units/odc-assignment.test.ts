@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { canAssignOdcMembers } from "./odc-assignment-policy";
 import {
+  odcAssignmentCreateSchema,
   odcAssignmentSchema,
   odcAssignmentUpdateSchema,
   odcBatchAssignmentSchema,
@@ -71,6 +72,7 @@ describe("department ODC route", () => {
     expect(departmentRoute).toContain('.route("/:id/odc", departmentOdcRouter)');
     for (const source of [hiringUnitOdcRoute, departmentOdcRoute]) {
       expect(source).toMatch(/\.put\(\s*"\/"/u);
+      expect(source).toMatch(/\.post\(\s*"\/"/u);
       expect(source).toMatch(/\.get\(\s*"\/"/u);
       expect(source).toMatch(/\.patch\(\s*"\/:memberId"/u);
       expect(source).toMatch(/\.delete\(\s*"\/:memberId"/u);
@@ -115,6 +117,17 @@ describe("batch ODC assignment", () => {
     expect(
       odcAssignmentUpdateSchema.safeParse({ jobSeries: "其他", serviceUnit: null }).success,
     ).toBe(false);
+  });
+
+  it("validates one ODC configuration for append-only creation", () => {
+    expect(
+      odcAssignmentCreateSchema.safeParse({
+        jobSeries: "直属",
+        memberId: "member-1",
+        serviceUnit: "悦达",
+      }).success,
+    ).toBe(true);
+    expect(odcAssignmentCreateSchema.safeParse({ memberId: "" }).success).toBe(false);
   });
 
   it("accepts optional per-member job series and service-unit scopes", () => {

@@ -1,9 +1,14 @@
 import { zValidator } from "@hono/zod-validator";
-import { odcAssignmentSchema, odcAssignmentUpdateSchema } from "@arc/shared/hiring-units";
+import {
+  odcAssignmentCreateSchema,
+  odcAssignmentSchema,
+  odcAssignmentUpdateSchema,
+} from "@arc/shared/hiring-units";
 import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import {
+  createHiringUnitOdcAssignment,
   deleteHiringUnitOdcAssignment,
   queryPaginatedHiringUnitOdcAssignments,
   replaceHiringUnitOdcMembers,
@@ -43,6 +48,40 @@ export const hiringUnitOdcRouter = factory
       }
       safeUpdateTag(`hiring-units:${activeOrg.id}`);
       return c.json({ success: true }, 200);
+    },
+  )
+  .post(
+    "/",
+    requirePermission("hiringUnit", "update"),
+    zValidator("json", odcAssignmentCreateSchema, jsonValidatorError("ODC 设置参数无效。")),
+    async (c) => {
+      const { activeOrg } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const id = c.req.param("id");
+      if (!id || !(await loadHiringUnitById(id, activeOrg.id))) {
+        return c.json({ error: "用人组织不存在。" }, 404);
+      }
+      const input = c.req.valid("json");
+      if (
+        !(await areEligibleOdcMembers({
+          memberIds: [input.memberId],
+          organizationId: activeOrg.id,
+        }))
+      ) {
+        return c.json({ error: "所选成员的角色未标记为 ODC。" }, 400);
+      }
+      const created = await createHiringUnitOdcAssignment({
+        hiringUnitId: id,
+        input,
+        organizationId: activeOrg.id,
+      });
+      if (!created) {
+        return c.json({ error: "该 ODC 配置已存在。" }, 409);
+      }
+      safeUpdateTag(`hiring-units:${activeOrg.id}`);
+      return c.json({ success: true }, 201);
     },
   )
   .get(

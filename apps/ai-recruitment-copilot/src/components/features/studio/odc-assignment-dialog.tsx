@@ -1,9 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { OdcAssignmentSummary, OdcMemberSummary } from "@arc/shared/hiring-units";
+import type { OdcAssignmentSummary } from "@arc/shared/hiring-units";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +21,7 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { selectOdcAssignmentDrafts, serializeOdcAssignmentDrafts } from "./odc-assignment-draft";
 import type { OdcAssignmentDraft } from "./odc-assignment-draft";
 import { OdcAssignmentScopeFields } from "./odc-assignment-scope-fields";
+import { toOdcCandidateOption, useOdcCandidates } from "./use-odc-candidates";
 
 export interface OdcAssignmentTarget {
   id: string;
@@ -46,19 +46,7 @@ export function OdcAssignmentDialog({
   const slug = useWorkspaceSlug();
   const [assignments, setAssignments] = useState<OdcAssignmentDraft[]>([]);
   const [saving, setSaving] = useState(false);
-  const candidatesQuery = useQuery({
-    enabled: open,
-    queryFn: async () => {
-      const payload = await rpcFetch<{ records: OdcMemberSummary[] }>(
-        rpc.api.w[":slug"].studio.workspace.members["odc-candidates"].$get({
-          param: { slug },
-        }),
-        "加载 ODC 人员失败",
-      );
-      return payload.records;
-    },
-    queryKey: ["workspace-members", slug, "odc-candidates"],
-  });
+  const candidatesQuery = useOdcCandidates(open);
 
   useEffect(() => {
     if (open) {
@@ -74,13 +62,9 @@ export function OdcAssignmentDialog({
 
   const options = useMemo(() => {
     const candidates = candidatesQuery.data ?? [];
-    const next: SearchableSelectOption[] = candidates.map((candidate) => ({
-      avatarUrl: candidate.image,
-      description: candidate.email,
-      label: candidate.name,
-      searchValue: `${candidate.name} ${candidate.email}`,
-      value: candidate.memberId,
-    }));
+    const next: SearchableSelectOption[] = candidates.map((candidate) =>
+      toOdcCandidateOption(candidate),
+    );
     for (const current of target?.odcMembers ?? []) {
       if (!candidates.some((candidate) => candidate.memberId === current.memberId)) {
         next.unshift({

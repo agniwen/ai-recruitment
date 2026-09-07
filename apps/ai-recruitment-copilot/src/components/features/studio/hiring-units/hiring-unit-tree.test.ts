@@ -132,11 +132,19 @@ describe("hiring unit management list", () => {
       new URL("../odc-management-modal.tsx", import.meta.url),
       "utf-8",
     );
+    const addDialogSource = readFileSync(
+      new URL("../odc-add-dialog.tsx", import.meta.url),
+      "utf-8",
+    );
 
     expect(pageSource).toContain('label: "管理 ODC"');
     expect(pageSource).toContain("<OdcManagementModal");
     expect(modalSource).toContain("useModalPagination");
     expect(modalSource).toContain("<DataGrid<OdcManagedAssignment>");
+    expect(modalSource).toContain("toolbarRight={");
+    expect(modalSource).toContain("添加 ODC");
+    expect(modalSource).toContain("<OdcAddDialog");
+    expect(addDialogSource).toContain(".$post({");
     expect(modalSource).toContain('label: "编辑"');
     expect(modalSource).toContain('label: "删除"');
   });

@@ -1,9 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { OdcMemberSummary } from "@arc/shared/hiring-units";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +21,7 @@ import type { OdcAssignmentTarget } from "./odc-assignment-dialog";
 import { selectOdcAssignmentDrafts, serializeOdcAssignmentDrafts } from "./odc-assignment-draft";
 import type { OdcAssignmentDraft } from "./odc-assignment-draft";
 import { OdcAssignmentScopeFields } from "./odc-assignment-scope-fields";
+import { toOdcCandidateOption, useOdcCandidates } from "./use-odc-candidates";
 
 interface BulkOdcAssignmentDialogProps {
   onOpenChange: (open: boolean) => void;
@@ -40,29 +39,10 @@ export function BulkOdcAssignmentDialog({
   const slug = useWorkspaceSlug();
   const [assignments, setAssignments] = useState<OdcAssignmentDraft[]>([]);
   const [saving, setSaving] = useState(false);
-  const candidatesQuery = useQuery({
-    enabled: open,
-    queryFn: async () => {
-      const payload = await rpcFetch<{ records: OdcMemberSummary[] }>(
-        rpc.api.w[":slug"].studio.workspace.members["odc-candidates"].$get({
-          param: { slug },
-        }),
-        "加载 ODC 人员失败",
-      );
-      return payload.records;
-    },
-    queryKey: ["workspace-members", slug, "odc-candidates"],
-  });
+  const candidatesQuery = useOdcCandidates(open);
 
   const options = useMemo<SearchableSelectOption[]>(
-    () =>
-      (candidatesQuery.data ?? []).map((candidate) => ({
-        avatarUrl: candidate.image,
-        description: candidate.email,
-        label: candidate.name,
-        searchValue: `${candidate.name} ${candidate.email}`,
-        value: candidate.memberId,
-      })),
+    () => (candidatesQuery.data ?? []).map((candidate) => toOdcCandidateOption(candidate)),
     [candidatesQuery.data],
   );
 

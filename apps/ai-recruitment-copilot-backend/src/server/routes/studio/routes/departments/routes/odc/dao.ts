@@ -1,4 +1,5 @@
 import type {
+  OdcAssignmentCreateInput,
   OdcAssignmentItem,
   OdcAssignmentUpdateInput,
   PaginatedOdcAssignmentResult,
@@ -9,6 +10,38 @@ import { calcTotalPages } from "@arc/ai-recruitment-copilot-backend/lib/server/d
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
 import { department, departmentOdcMember, member, user } from "@arc/db-schema/schema";
 import { parseOdcAssignmentPagination } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/routes/odc/schema";
+
+export function createDepartmentOdcAssignment({
+  departmentId,
+  input,
+  organizationId,
+}: {
+  departmentId: string;
+  input: OdcAssignmentCreateInput;
+  organizationId: string;
+}): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(departmentOdcMember)
+      .values({
+        departmentId,
+        jobSeries: input.jobSeries ?? null,
+        memberId: input.memberId,
+        organizationId,
+        serviceUnit: input.serviceUnit?.trim() || null,
+      })
+      .onConflictDoNothing()
+      .returning({ memberId: departmentOdcMember.memberId });
+    if (rows.length === 0) {
+      return false;
+    }
+    await tx
+      .update(department)
+      .set({ updatedAt: new Date() })
+      .where(and(eq(department.id, departmentId), eq(department.organizationId, organizationId)));
+    return true;
+  });
+}
 
 export async function queryPaginatedDepartmentOdcAssignments({
   departmentId,
@@ -24,7 +57,7 @@ export async function queryPaginatedDepartmentOdcAssignments({
     eq(departmentOdcMember.departmentId, departmentId),
     eq(departmentOdcMember.organizationId, organizationId),
   );
-  const [rows, totalRows] = await Promise.all([
+  const [rows, totalRows, assignedRows] = await Promise.all([
     db
       .select({
         createdAt: departmentOdcMember.createdAt,
@@ -44,9 +77,11 @@ export async function queryPaginatedDepartmentOdcAssignments({
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ value: count() }).from(departmentOdcMember).where(where),
+    db.select({ memberId: departmentOdcMember.memberId }).from(departmentOdcMember).where(where),
   ]);
   const total = totalRows[0]?.value ?? 0;
   return {
+    assignedMemberIds: assignedRows.map((row) => row.memberId),
     page,
     pageSize,
     records: rows.map((row) => ({ ...row, createdAt: serializeDate(row.createdAt) })),
