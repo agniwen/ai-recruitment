@@ -200,13 +200,14 @@ export const departmentsRouter = factory
       if (!existing) {
         return c.json({ error: "部门不存在。" }, 404);
       }
-      const { memberIds } = c.req.valid("json");
+      const { assignments } = c.req.valid("json");
+      const memberIds = assignments.map((assignment) => assignment.memberId);
       if (!(await areEligibleOdcMembers({ memberIds, organizationId: activeOrg.id }))) {
         return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
       }
       const updated = await replaceDepartmentOdcMembers({
+        assignments,
         id,
-        memberIds,
         organizationId: activeOrg.id,
       });
       if (!updated) {

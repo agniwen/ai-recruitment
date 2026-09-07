@@ -718,15 +718,21 @@ export const hiringUnitOdcMember = pgTable(
     hiringUnitId: text("hiring_unit_id")
       .notNull()
       .references(() => hiringUnit.id, { onDelete: "cascade" }),
+    jobSeries: text("job_series").$type<"直属" | "派驻">(),
     memberId: text("member_id")
       .notNull()
       .references(() => member.id, { onDelete: "cascade" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    serviceUnit: text("service_unit"),
   },
   (table) => [
     primaryKey({ columns: [table.hiringUnitId, table.memberId] }),
+    check(
+      "hiring_unit_odc_member_job_series_check",
+      sql`${table.jobSeries} IS NULL OR ${table.jobSeries} IN ('直属', '派驻')`,
+    ),
     foreignKey({
       columns: [table.organizationId, table.hiringUnitId],
       foreignColumns: [hiringUnit.organizationId, hiringUnit.id],
@@ -806,15 +812,21 @@ export const departmentOdcMember = pgTable(
     departmentId: text("department_id")
       .notNull()
       .references(() => department.id, { onDelete: "cascade" }),
+    jobSeries: text("job_series").$type<"直属" | "派驻">(),
     memberId: text("member_id")
       .notNull()
       .references(() => member.id, { onDelete: "cascade" }),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    serviceUnit: text("service_unit"),
   },
   (table) => [
     primaryKey({ columns: [table.departmentId, table.memberId] }),
+    check(
+      "department_odc_member_job_series_check",
+      sql`${table.jobSeries} IS NULL OR ${table.jobSeries} IN ('直属', '派驻')`,
+    ),
     foreignKey({
       columns: [table.organizationId, table.departmentId],
       foreignColumns: [department.organizationId, department.id],

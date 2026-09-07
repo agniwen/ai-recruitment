@@ -17,16 +17,10 @@ describe("buildResumeVisibilityCondition", () => {
 
     const query = new PgDialect().sqlToQuery(condition);
     expect(query.sql).toContain('"studio_interview"."created_by" in');
-    expect(query.sql).toContain('"studio_interview"."hiring_unit_id" in');
+    expect(query.sql).not.toContain('"studio_interview"."hiring_unit_id" in');
     expect(query.sql).toContain('"department"."hiring_unit_id" in');
     expect(query.sql).toContain('"job_description"."department_id" in');
-    expect(query.params).toEqual([
-      "user-1",
-      "hiring-unit-1",
-      "hiring-unit-1",
-      "hiring-unit-1",
-      "department-1",
-    ]);
+    expect(query.params).toEqual(["user-1", "hiring-unit-1", "hiring-unit-1", "department-1"]);
   });
 
   it("does not grant sibling departments for a department-only ODC", () => {
@@ -59,5 +53,13 @@ describe("buildResumeVisibilityCondition", () => {
     expect(query.sql).toContain('"hiring_unit_odc_member"');
     expect(query.sql).toContain('"department_odc_member"');
     expect(query.sql).toContain('"organization_role"."role" = "member"."role"');
+    expect(query.sql).toContain('"hiring_unit_odc_member"."job_series" is null');
+    expect(query.sql).toContain(
+      '"hiring_unit_odc_member"."job_series" = "job_description"."job_series"',
+    );
+    expect(query.sql).toContain('"hiring_unit_odc_member"."service_unit" is null');
+    expect(query.sql).toContain(
+      '"department_odc_member"."service_unit" = "job_description"."service_unit"',
+    );
   });
 });

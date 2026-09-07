@@ -30,6 +30,14 @@ export interface OdcMemberSummary {
   userId: string;
 }
 
+export const odcJobSeriesValues = ["直属", "派驻"] as const;
+export type OdcJobSeries = (typeof odcJobSeriesValues)[number];
+
+export interface OdcAssignmentSummary extends OdcMemberSummary {
+  jobSeries: OdcJobSeries | null;
+  serviceUnit: string | null;
+}
+
 export interface HiringUnitTreeDepartment {
   createdAt: string | Date;
   description: string | null;
@@ -38,13 +46,13 @@ export interface HiringUnitTreeDepartment {
   interviewerCount: number;
   jobDescriptionCount: number;
   name: string;
-  odcMembers: OdcMemberSummary[];
+  odcMembers: OdcAssignmentSummary[];
   updatedAt: string | Date;
 }
 
 export interface HiringUnitTreeNode extends HiringUnitRecord {
   departments: HiringUnitTreeDepartment[];
-  odcMembers: OdcMemberSummary[];
+  odcMembers: OdcAssignmentSummary[];
 }
 
 export interface HiringUnitTreeResult {
@@ -52,16 +60,26 @@ export interface HiringUnitTreeResult {
   unassignedDepartments: HiringUnitTreeDepartment[];
 }
 
+const odcAssignmentItemSchema = z.object({
+  jobSeries: z.enum(odcJobSeriesValues).nullable().optional(),
+  memberId: z.string().trim().min(1),
+  serviceUnit: z.string().trim().max(120, "服务单位不能超过 120 个字符").nullable().optional(),
+});
+
 export const odcAssignmentSchema = z.object({
-  memberIds: z
-    .array(z.string().trim().min(1))
-    .refine((ids) => new Set(ids).size === ids.length, "ODC 人员不能重复"),
+  assignments: z
+    .array(odcAssignmentItemSchema)
+    .refine(
+      (items) => new Set(items.map((item) => item.memberId)).size === items.length,
+      "ODC 人员不能重复",
+    ),
 });
 
 export type OdcAssignmentInput = z.infer<typeof odcAssignmentSchema>;
+export type OdcAssignmentItem = OdcAssignmentInput["assignments"][number];
 
 export const odcBatchAssignmentSchema = z.object({
-  memberIds: odcAssignmentSchema.shape.memberIds,
+  assignments: odcAssignmentSchema.shape.assignments,
   targets: z
     .array(
       z.object({

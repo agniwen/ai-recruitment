@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { OdcMemberSummary } from "@arc/shared/hiring-units";
+import type { OdcAssignmentSummary, OdcMemberSummary } from "@arc/shared/hiring-units";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,11 +19,14 @@ import type { SearchableSelectOption } from "@/components/ui/searchable-select";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { selectOdcAssignmentDrafts, serializeOdcAssignmentDrafts } from "./odc-assignment-draft";
+import type { OdcAssignmentDraft } from "./odc-assignment-draft";
+import { OdcAssignmentScopeFields } from "./odc-assignment-scope-fields";
 
 export interface OdcAssignmentTarget {
   id: string;
   name: string;
-  odcMembers: OdcMemberSummary[];
+  odcMembers: OdcAssignmentSummary[];
   rowType: "department" | "hiringUnit";
 }
 
@@ -41,7 +44,7 @@ export function OdcAssignmentDialog({
   target,
 }: OdcAssignmentDialogProps) {
   const slug = useWorkspaceSlug();
-  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [assignments, setAssignments] = useState<OdcAssignmentDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const candidatesQuery = useQuery({
     enabled: open,
@@ -59,7 +62,13 @@ export function OdcAssignmentDialog({
 
   useEffect(() => {
     if (open) {
-      setMemberIds(target?.odcMembers.map((member) => member.memberId) ?? []);
+      setAssignments(
+        target?.odcMembers.map((member) => ({
+          jobSeries: member.jobSeries,
+          memberId: member.memberId,
+          serviceUnit: member.serviceUnit ?? "",
+        })) ?? [],
+      );
     }
   }, [open, target]);
 
@@ -87,32 +96,33 @@ export function OdcAssignmentDialog({
     return next;
   }, [candidatesQuery.data, target?.odcMembers]);
 
+  function handleMemberIdsChange(memberIds: string[]) {
+    setAssignments((current) => selectOdcAssignmentDrafts(current, memberIds));
+  }
+
   async function handleSave() {
     if (!target) {
       return;
     }
     setSaving(true);
     try {
-      const response =
+      const json = { assignments: serializeOdcAssignmentDrafts(assignments) };
+      const request =
         target.rowType === "hiringUnit"
-          ? await rpc.api.w[":slug"].studio["hiring-units"][":id"].odc.$put({
-              json: { memberIds },
+          ? rpc.api.w[":slug"].studio["hiring-units"][":id"].odc.$put({
+              json,
               param: { id: target.id, slug },
             })
-          : await rpc.api.w[":slug"].studio.departments[":id"].odc.$put({
-              json: { memberIds },
+          : rpc.api.w[":slug"].studio.departments[":id"].odc.$put({
+              json,
               param: { id: target.id, slug },
             });
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        toast.error(payload?.error ?? "设置 ODC 失败");
-        return;
-      }
-      toast.success(memberIds.length > 0 ? "ODC 已设置" : "ODC 设置已清除");
+      await rpcFetch(request, "设置 ODC 失败");
+      toast.success(assignments.length > 0 ? "ODC 已设置" : "ODC 设置已清除");
       onSaved();
       onOpenChange(false);
-    } catch {
-      toast.error("设置 ODC 失败");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "设置 ODC 失败");
     } finally {
       setSaving(false);
     }
@@ -125,7 +135,7 @@ export function OdcAssignmentDialog({
           <DialogTitle>设置 ODC</DialogTitle>
           <DialogDescription>
             为{target?.rowType === "department" ? "部门" : "用人组织"}“{target?.name ?? ""}”设置
-            ODC。这里只显示角色设置中已勾选“是否为 ODC”的成员。
+            ODC。这里只显示角色设置中已勾选“是否为 ODC”的成员；序列或服务单位留空表示不限。
           </DialogDescription>
         </DialogHeader>
         <Field>
@@ -135,7 +145,7 @@ export function OdcAssignmentDialog({
               disabled={candidatesQuery.isLoading || saving}
               emptyMessage="暂无角色标记为 ODC 的成员"
               id="odc-members"
-              onChange={setMemberIds}
+              onChange={handleMemberIdsChange}
               options={options}
               placeholder={
                 candidatesQuery.isLoading ? "加载 ODC 人员..." : "请选择 ODC 人员（可多选）"
@@ -143,10 +153,16 @@ export function OdcAssignmentDialog({
               searchPlaceholder="搜索姓名或邮箱"
               selectedPreviewLimit={3}
               showBadges
-              value={memberIds}
+              value={assignments.map((assignment) => assignment.memberId)}
             />
           </FieldContent>
         </Field>
+        <OdcAssignmentScopeFields
+          assignments={assignments}
+          candidates={[...(candidatesQuery.data ?? []), ...(target?.odcMembers ?? [])]}
+          disabled={saving}
+          onChange={setAssignments}
+        />
         <DialogFooter>
           <Button disabled={saving} onClick={() => onOpenChange(false)} variant="outline">
             取消

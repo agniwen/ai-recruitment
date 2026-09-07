@@ -20,6 +20,9 @@ import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import type { OdcAssignmentTarget } from "./odc-assignment-dialog";
+import { selectOdcAssignmentDrafts, serializeOdcAssignmentDrafts } from "./odc-assignment-draft";
+import type { OdcAssignmentDraft } from "./odc-assignment-draft";
+import { OdcAssignmentScopeFields } from "./odc-assignment-scope-fields";
 
 interface BulkOdcAssignmentDialogProps {
   onOpenChange: (open: boolean) => void;
@@ -35,7 +38,7 @@ export function BulkOdcAssignmentDialog({
   targets,
 }: BulkOdcAssignmentDialogProps) {
   const slug = useWorkspaceSlug();
-  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [assignments, setAssignments] = useState<OdcAssignmentDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const candidatesQuery = useQuery({
     enabled: open,
@@ -65,12 +68,16 @@ export function BulkOdcAssignmentDialog({
 
   useEffect(() => {
     if (open) {
-      setMemberIds([]);
+      setAssignments([]);
     }
   }, [open]);
 
   function handleOpenChange(nextOpen: boolean) {
     onOpenChange(nextOpen);
+  }
+
+  function handleMemberIdsChange(memberIds: string[]) {
+    setAssignments((current) => selectOdcAssignmentDrafts(current, memberIds));
   }
 
   async function handleSave() {
@@ -79,23 +86,21 @@ export function BulkOdcAssignmentDialog({
     }
     setSaving(true);
     try {
-      const response = await rpc.api.w[":slug"].studio["hiring-units"].odc.batch.$put({
-        json: {
-          memberIds,
-          targets: targets.map((target) => ({ id: target.id, rowType: target.rowType })),
-        },
-        param: { slug },
-      });
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        toast.error(payload?.error ?? "批量设置 ODC 失败");
-        return;
-      }
-      toast.success(memberIds.length > 0 ? "已批量设置 ODC" : "已批量清除 ODC 设置");
+      await rpcFetch(
+        rpc.api.w[":slug"].studio["hiring-units"].odc.batch.$put({
+          json: {
+            assignments: serializeOdcAssignmentDrafts(assignments),
+            targets: targets.map((target) => ({ id: target.id, rowType: target.rowType })),
+          },
+          param: { slug },
+        }),
+        "批量设置 ODC 失败",
+      );
+      toast.success(assignments.length > 0 ? "已批量设置 ODC" : "已批量清除 ODC 设置");
       onSaved();
       handleOpenChange(false);
-    } catch {
-      toast.error("批量设置 ODC 失败");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "批量设置 ODC 失败");
     } finally {
       setSaving(false);
     }
@@ -108,7 +113,7 @@ export function BulkOdcAssignmentDialog({
           <DialogTitle>批量设置 ODC</DialogTitle>
           <DialogDescription>
             为已选的 {targets.length} 个用人组织或部门设置相同的 ODC。此操作会覆盖每个已选项原有的
-            ODC 设置；不选择人员并保存将清空原设置。
+            ODC 设置；每位 ODC 的序列或服务单位留空表示不限，不选择人员并保存将清空原设置。
           </DialogDescription>
         </DialogHeader>
         <Field>
@@ -118,7 +123,7 @@ export function BulkOdcAssignmentDialog({
               disabled={candidatesQuery.isLoading || saving}
               emptyMessage="暂无角色标记为 ODC 的成员"
               id="bulk-odc-members"
-              onChange={setMemberIds}
+              onChange={handleMemberIdsChange}
               options={options}
               placeholder={
                 candidatesQuery.isLoading ? "加载 ODC 人员..." : "请选择 ODC 人员（可多选）"
@@ -126,10 +131,16 @@ export function BulkOdcAssignmentDialog({
               searchPlaceholder="搜索姓名或邮箱"
               selectedPreviewLimit={3}
               showBadges
-              value={memberIds}
+              value={assignments.map((assignment) => assignment.memberId)}
             />
           </FieldContent>
         </Field>
+        <OdcAssignmentScopeFields
+          assignments={assignments}
+          candidates={candidatesQuery.data ?? []}
+          disabled={saving}
+          onChange={setAssignments}
+        />
         <DialogFooter>
           <Button disabled={saving} onClick={() => handleOpenChange(false)} variant="outline">
             取消

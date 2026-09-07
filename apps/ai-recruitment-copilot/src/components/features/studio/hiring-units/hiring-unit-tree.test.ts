@@ -27,15 +27,19 @@ const tree: HiringUnitTreeNode[] = [
       {
         email: "odc-1@example.com",
         image: null,
+        jobSeries: "直属",
         memberId: "member-1",
         name: "ODC 一",
+        serviceUnit: "悦达",
         userId: "user-1",
       },
       {
         email: "odc-2@example.com",
         image: null,
+        jobSeries: null,
         memberId: "member-2",
         name: "ODC 二",
+        serviceUnit: null,
         userId: "user-2",
       },
     ],
@@ -119,12 +123,20 @@ describe("hiring unit management list", () => {
     expect(dialogSource).toContain("此操作会覆盖");
   });
 
-  it("submits multiple ODC members for one hiring unit or department", () => {
+  it("submits per-member ODC scopes for one hiring unit or department", () => {
     const source = readFileSync(new URL("../odc-assignment-dialog.tsx", import.meta.url), "utf-8");
+    const scopeFieldsSource = readFileSync(
+      new URL("../odc-assignment-scope-fields.tsx", import.meta.url),
+      "utf-8",
+    );
 
     expect(source).toContain("<SearchableMultiSelect");
-    expect(source).toContain("json: { memberIds }");
+    expect(source).toContain("serializeOdcAssignmentDrafts(assignments)");
     expect(source).toContain("target?.odcMembers.map");
+    expect(scopeFieldsSource).toContain("不限序列");
+    expect(scopeFieldsSource).toContain("直属");
+    expect(scopeFieldsSource).toContain("派驻");
+    expect(scopeFieldsSource).toContain("留空表示不限服务单位");
   });
 
   it("edits and safely deletes department rows from the tree", () => {

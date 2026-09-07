@@ -1,7 +1,7 @@
 import type {
   HiringUnitTreeDepartment,
   HiringUnitTreeNode,
-  OdcMemberSummary,
+  OdcAssignmentSummary,
 } from "@arc/shared/hiring-units";
 
 export interface HiringUnitTreeRow {
@@ -13,7 +13,7 @@ export interface HiringUnitTreeRow {
   interviewerCount: number;
   jobDescriptionCount: number;
   name: string;
-  odcMembers: OdcMemberSummary[];
+  odcMembers: OdcAssignmentSummary[];
   parentHiringUnitId: string | null;
   rowType: "department" | "hiringUnit";
   treeDepth: number;

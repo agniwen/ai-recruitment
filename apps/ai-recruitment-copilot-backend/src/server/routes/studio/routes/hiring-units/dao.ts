@@ -3,8 +3,9 @@ import type {
   HiringUnitRecord,
   HiringUnitTreeDepartment,
   HiringUnitTreeResult,
+  OdcAssignmentItem,
+  OdcAssignmentSummary,
   OdcBatchAssignmentTarget,
-  OdcMemberSummary,
 } from "@arc/shared/hiring-units";
 import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
@@ -57,13 +58,13 @@ const ODC_TARGET_QUERY_BATCH_SIZE = 5000;
 
 function* buildOdcAssignmentBatches<T>(
   targetIds: string[],
-  memberIds: string[],
-  createAssignment: (targetId: string, memberId: string) => T,
+  assignments: OdcAssignmentItem[],
+  createAssignment: (targetId: string, assignment: OdcAssignmentItem) => T,
 ): Generator<T[]> {
   let batch: T[] = [];
   for (const targetId of targetIds) {
-    for (const memberId of memberIds) {
-      batch.push(createAssignment(targetId, memberId));
+    for (const assignment of assignments) {
+      batch.push(createAssignment(targetId, assignment));
       if (batch.length === ODC_ASSIGNMENT_INSERT_BATCH_SIZE) {
         yield batch;
         batch = [];
@@ -242,18 +243,22 @@ export async function loadHiringUnitById(
   return row ? serializeHiringUnit(row) : null;
 }
 
-function toOdcMemberSummary(row: {
+function toOdcAssignmentSummary(row: {
   email: string;
   image: string | null;
+  jobSeries: "直属" | "派驻" | null;
   memberId: string;
   name: string;
+  serviceUnit: string | null;
   userId: string;
-}): OdcMemberSummary {
+}): OdcAssignmentSummary {
   return {
     email: row.email,
     image: row.image,
+    jobSeries: row.jobSeries,
     memberId: row.memberId,
     name: row.name,
+    serviceUnit: row.serviceUnit,
     userId: row.userId,
   };
 }
@@ -264,8 +269,10 @@ async function loadOdcMembersByTarget(organizationId: string) {
       .select({
         email: user.email,
         image: user.image,
+        jobSeries: hiringUnitOdcMember.jobSeries,
         memberId: member.id,
         name: user.name,
+        serviceUnit: hiringUnitOdcMember.serviceUnit,
         targetId: hiringUnitOdcMember.hiringUnitId,
         userId: user.id,
       })
@@ -278,8 +285,10 @@ async function loadOdcMembersByTarget(organizationId: string) {
       .select({
         email: user.email,
         image: user.image,
+        jobSeries: departmentOdcMember.jobSeries,
         memberId: member.id,
         name: user.name,
+        serviceUnit: departmentOdcMember.serviceUnit,
         targetId: departmentOdcMember.departmentId,
         userId: user.id,
       })
@@ -291,14 +300,14 @@ async function loadOdcMembersByTarget(organizationId: string) {
   ]);
 
   const groupRows = (
-    rows: (OdcMemberSummary & {
+    rows: (OdcAssignmentSummary & {
       targetId: string;
     })[],
   ) => {
-    const grouped = new Map<string, OdcMemberSummary[]>();
+    const grouped = new Map<string, OdcAssignmentSummary[]>();
     for (const row of rows) {
       const records = grouped.get(row.targetId) ?? [];
-      records.push(toOdcMemberSummary(row));
+      records.push(toOdcAssignmentSummary(row));
       grouped.set(row.targetId, records);
     }
     return grouped;
@@ -391,12 +400,12 @@ export async function listHiringUnitTree({
 }
 
 export function replaceHiringUnitOdcMembers({
+  assignments,
   id,
-  memberIds,
   organizationId,
 }: {
+  assignments: OdcAssignmentItem[];
   id: string;
-  memberIds: string[];
   organizationId: string;
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
@@ -417,12 +426,14 @@ export function replaceHiringUnitOdcMembers({
           eq(hiringUnitOdcMember.organizationId, organizationId),
         ),
       );
-    if (memberIds.length > 0) {
+    if (assignments.length > 0) {
       await tx.insert(hiringUnitOdcMember).values(
-        memberIds.map((memberId) => ({
+        assignments.map((assignment) => ({
           hiringUnitId: id,
-          memberId,
+          jobSeries: assignment.jobSeries ?? null,
+          memberId: assignment.memberId,
           organizationId,
+          serviceUnit: assignment.serviceUnit?.trim() || null,
         })),
       );
     }
@@ -431,11 +442,11 @@ export function replaceHiringUnitOdcMembers({
 }
 
 export function replaceOdcMembersForTargets({
-  memberIds,
+  assignments,
   organizationId,
   targets,
 }: {
-  memberIds: string[];
+  assignments: OdcAssignmentItem[];
   organizationId: string;
   targets: OdcBatchAssignmentTarget[];
 }): Promise<boolean> {
@@ -499,13 +510,19 @@ export function replaceOdcMembersForTargets({
             ),
           );
       }
-      if (memberIds.length > 0) {
-        for (const assignments of buildOdcAssignmentBatches(
+      if (assignments.length > 0) {
+        for (const assignmentBatch of buildOdcAssignmentBatches(
           hiringUnitIds,
-          memberIds,
-          (hiringUnitId, memberId) => ({ hiringUnitId, memberId, organizationId }),
+          assignments,
+          (hiringUnitId, assignment) => ({
+            hiringUnitId,
+            jobSeries: assignment.jobSeries ?? null,
+            memberId: assignment.memberId,
+            organizationId,
+            serviceUnit: assignment.serviceUnit?.trim() || null,
+          }),
         )) {
-          await tx.insert(hiringUnitOdcMember).values(assignments);
+          await tx.insert(hiringUnitOdcMember).values(assignmentBatch);
         }
       }
     }
@@ -528,13 +545,19 @@ export function replaceOdcMembersForTargets({
             ),
           );
       }
-      if (memberIds.length > 0) {
-        for (const assignments of buildOdcAssignmentBatches(
+      if (assignments.length > 0) {
+        for (const assignmentBatch of buildOdcAssignmentBatches(
           departmentIds,
-          memberIds,
-          (departmentId, memberId) => ({ departmentId, memberId, organizationId }),
+          assignments,
+          (departmentId, assignment) => ({
+            departmentId,
+            jobSeries: assignment.jobSeries ?? null,
+            memberId: assignment.memberId,
+            organizationId,
+            serviceUnit: assignment.serviceUnit?.trim() || null,
+          }),
         )) {
-          await tx.insert(departmentOdcMember).values(assignments);
+          await tx.insert(departmentOdcMember).values(assignmentBatch);
         }
       }
     }

@@ -270,7 +270,8 @@ function RoleFormDialog({
               <FieldContent className="min-w-0">
                 <FieldLabel htmlFor="workspace-role-is-odc">是否为 ODC</FieldLabel>
                 <FieldDescription>
-                  勾选后，该角色成员按招聘组与编制组织范围可见的数据会计入 ODC 分析。
+                  勾选后，该角色成员按招聘组及其 ODC 挂靠的组织、部门、序列和服务单位查看招聘数据，
+                  并计入 ODC 分析。
                 </FieldDescription>
               </FieldContent>
             </Field>

@@ -1,5 +1,5 @@
 import type { SQL } from "drizzle-orm";
-import { and, eq, exists, inArray, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
@@ -114,10 +114,31 @@ function buildCurrentOdcVisibilityCondition(actor: {
           eq(member.userId, actor.userId),
           eq(member.organizationId, studioInterview.organizationId),
           or(
-            eq(hiringUnitOdcMember.hiringUnitId, studioInterview.hiringUnitId),
-            eq(hiringUnitOdcMember.hiringUnitId, jobDescription.hiringUnitId),
-            eq(hiringUnitOdcMember.hiringUnitId, department.hiringUnitId),
-            eq(departmentOdcMember.departmentId, jobDescription.departmentId),
+            and(
+              or(
+                eq(hiringUnitOdcMember.hiringUnitId, jobDescription.hiringUnitId),
+                eq(hiringUnitOdcMember.hiringUnitId, department.hiringUnitId),
+              ),
+              or(
+                isNull(hiringUnitOdcMember.jobSeries),
+                eq(hiringUnitOdcMember.jobSeries, jobDescription.jobSeries),
+              ),
+              or(
+                isNull(hiringUnitOdcMember.serviceUnit),
+                eq(hiringUnitOdcMember.serviceUnit, jobDescription.serviceUnit),
+              ),
+            ),
+            and(
+              eq(departmentOdcMember.departmentId, jobDescription.departmentId),
+              or(
+                isNull(departmentOdcMember.jobSeries),
+                eq(departmentOdcMember.jobSeries, jobDescription.jobSeries),
+              ),
+              or(
+                isNull(departmentOdcMember.serviceUnit),
+                eq(departmentOdcMember.serviceUnit, jobDescription.serviceUnit),
+              ),
+            ),
           ),
         ),
       ),
@@ -138,10 +159,6 @@ export function buildResumeVisibilityCondition(
   const recruitingCondition =
     normalized.recruiting.kind === "restricted" && normalized.recruiting.userIds.length > 0
       ? inArray(studioInterview.createdBy, normalized.recruiting.userIds)
-      : undefined;
-  const directHiringUnitCondition =
-    normalized.odc.hiringUnitIds.length > 0
-      ? inArray(studioInterview.hiringUnitId, normalized.odc.hiringUnitIds)
       : undefined;
   const odcJobCondition = buildJobDescriptionHiringUnitScopeCondition({
     canAccessAll: false,
@@ -173,7 +190,7 @@ export function buildResumeVisibilityCondition(
       : undefined;
   const odcCondition = normalized.odcActor
     ? buildCurrentOdcVisibilityCondition(normalized.odcActor)
-    : or(directHiringUnitCondition, assignedOdcCondition);
+    : assignedOdcCondition;
 
   if (
     !recruitingCondition &&

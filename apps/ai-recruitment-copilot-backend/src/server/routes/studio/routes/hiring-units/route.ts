@@ -130,7 +130,8 @@ export const hiringUnitsRouter = factory
       if (!activeOrg) {
         return c.json({ message: "Unauthorized" }, 401);
       }
-      const { memberIds, targets } = c.req.valid("json");
+      const { assignments, targets } = c.req.valid("json");
+      const memberIds = assignments.map((assignment) => assignment.memberId);
       const authorize = createRequestWorkspaceAuthorizer({
         headers: c.req.raw.headers,
         memberRole: c.var.member?.role,
@@ -164,7 +165,7 @@ export const hiringUnitsRouter = factory
         return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
       }
       const updated = await replaceOdcMembersForTargets({
-        memberIds,
+        assignments,
         organizationId: activeOrg.id,
         targets,
       });
@@ -228,13 +229,14 @@ export const hiringUnitsRouter = factory
       if (!activeOrg) {
         return c.json({ message: "Unauthorized" }, 401);
       }
-      const { memberIds } = c.req.valid("json");
+      const { assignments } = c.req.valid("json");
+      const memberIds = assignments.map((assignment) => assignment.memberId);
       if (!(await areEligibleOdcMembers({ memberIds, organizationId: activeOrg.id }))) {
         return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
       }
       const updated = await replaceHiringUnitOdcMembers({
+        assignments,
         id: c.req.param("id"),
-        memberIds,
         organizationId: activeOrg.id,
       });
       if (!updated) {

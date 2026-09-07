@@ -25,7 +25,7 @@ import {
   user,
 } from "@arc/db-schema/schema";
 import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
-import type { OdcMemberSummary } from "@arc/shared/hiring-units";
+import type { OdcAssignmentItem, OdcAssignmentSummary } from "@arc/shared/hiring-units";
 
 const departmentListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
@@ -230,7 +230,7 @@ export async function loadDepartmentOdcMembersByIds({
 }: {
   departmentIds: string[];
   organizationId: string;
-}): Promise<Map<string, OdcMemberSummary[]>> {
+}): Promise<Map<string, OdcAssignmentSummary[]>> {
   if (departmentIds.length === 0) {
     return new Map();
   }
@@ -240,8 +240,10 @@ export async function loadDepartmentOdcMembersByIds({
       departmentId: departmentOdcMember.departmentId,
       email: user.email,
       image: user.image,
+      jobSeries: departmentOdcMember.jobSeries,
       memberId: member.id,
       name: user.name,
+      serviceUnit: departmentOdcMember.serviceUnit,
       userId: user.id,
     })
     .from(departmentOdcMember)
@@ -255,14 +257,16 @@ export async function loadDepartmentOdcMembersByIds({
     )
     .orderBy(user.name, user.email);
 
-  const membersByDepartmentId = new Map<string, OdcMemberSummary[]>();
+  const membersByDepartmentId = new Map<string, OdcAssignmentSummary[]>();
   for (const row of rows) {
     const records = membersByDepartmentId.get(row.departmentId) ?? [];
     records.push({
       email: row.email,
       image: row.image,
+      jobSeries: row.jobSeries,
       memberId: row.memberId,
       name: row.name,
+      serviceUnit: row.serviceUnit,
       userId: row.userId,
     });
     membersByDepartmentId.set(row.departmentId, records);
@@ -273,7 +277,7 @@ export async function loadDepartmentOdcMembersByIds({
 function toDepartmentListRecord(
   row: Awaited<ReturnType<typeof listDepartmentRows>>[number],
   refs: { interviewerCount: number; jobDescriptionCount: number },
-  odcMembers: OdcMemberSummary[],
+  odcMembers: OdcAssignmentSummary[],
 ): DepartmentListRecord {
   return {
     createdAt: serializeDate(row.createdAt),
@@ -419,12 +423,12 @@ export async function loadDepartmentReferenceCounts(id: string) {
 }
 
 export function replaceDepartmentOdcMembers({
+  assignments,
   id,
-  memberIds,
   organizationId,
 }: {
+  assignments: OdcAssignmentItem[];
   id: string;
-  memberIds: string[];
   organizationId: string;
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
@@ -445,12 +449,14 @@ export function replaceDepartmentOdcMembers({
           eq(departmentOdcMember.organizationId, organizationId),
         ),
       );
-    if (memberIds.length > 0) {
+    if (assignments.length > 0) {
       await tx.insert(departmentOdcMember).values(
-        memberIds.map((memberId) => ({
+        assignments.map((assignment) => ({
           departmentId: id,
-          memberId,
+          jobSeries: assignment.jobSeries ?? null,
+          memberId: assignment.memberId,
           organizationId,
+          serviceUnit: assignment.serviceUnit?.trim() || null,
         })),
       );
     }

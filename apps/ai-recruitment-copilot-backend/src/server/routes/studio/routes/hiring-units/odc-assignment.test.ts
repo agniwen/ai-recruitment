@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { canAssignOdcMembers } from "./odc-assignment-policy";
-import { odcBatchAssignmentSchema } from "@arc/shared/hiring-units";
+import { odcAssignmentSchema, odcBatchAssignmentSchema } from "@arc/shared/hiring-units";
 
 describe("canAssignOdcMembers", () => {
   it("accepts every selected member when all workspace roles are marked as ODC", () => {
@@ -59,10 +59,34 @@ describe("ODC candidate route", () => {
 });
 
 describe("batch ODC assignment", () => {
+  it("accepts optional per-member job series and service-unit scopes", () => {
+    expect(
+      odcAssignmentSchema.safeParse({
+        assignments: [
+          { jobSeries: "直属", memberId: "member-1", serviceUnit: "悦达" },
+          { jobSeries: null, memberId: "member-2", serviceUnit: null },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      odcAssignmentSchema.safeParse({
+        assignments: [{ jobSeries: "其他", memberId: "member-1", serviceUnit: null }],
+      }).success,
+    ).toBe(false);
+    expect(
+      odcAssignmentSchema.safeParse({
+        assignments: [
+          { jobSeries: null, memberId: "member-1", serviceUnit: null },
+          { jobSeries: "派驻", memberId: "member-1", serviceUnit: "无极" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
   it("accepts mixed unique targets and rejects duplicate targets", () => {
     expect(
       odcBatchAssignmentSchema.safeParse({
-        memberIds: ["member-1"],
+        assignments: [{ jobSeries: "派驻", memberId: "member-1", serviceUnit: "无极" }],
         targets: [
           { id: "unit-1", rowType: "hiringUnit" },
           { id: "department-1", rowType: "department" },
@@ -71,7 +95,7 @@ describe("batch ODC assignment", () => {
     ).toBe(true);
     expect(
       odcBatchAssignmentSchema.safeParse({
-        memberIds: [],
+        assignments: [],
         targets: [
           { id: "unit-1", rowType: "hiringUnit" },
           { id: "unit-1", rowType: "hiringUnit" },

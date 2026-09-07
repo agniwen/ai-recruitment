@@ -24,6 +24,6 @@ describe("department ODC management", () => {
     expect(pageSource).toContain("<OdcAssignmentDialog");
     expect(daoSource).toContain("loadDepartmentOdcMembersByIds");
     expect(daoSource).toContain("odcMembers:");
-    expect(sharedSource).toContain("odcMembers: OdcMemberSummary[]");
+    expect(sharedSource).toContain("odcMembers: OdcAssignmentSummary[]");
   });
 });
