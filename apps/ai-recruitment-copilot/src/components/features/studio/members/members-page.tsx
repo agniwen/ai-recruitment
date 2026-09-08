@@ -175,21 +175,21 @@ export function MembersManagementPage() {
     queryKey: groupsQueryKey,
     refetchOnWindowFocus: false,
   });
-  const { data: hiringUnits = [] } = useQuery({
+  const { data: resumeSources = [] } = useQuery({
     enabled: activeTab === "groups",
     queryFn: async () => {
       const payload = await rpcFetch<{ records: { id: string; name: string }[] }>(
-        rpc.api.w[":slug"].studio["hiring-units"].all.$get({ param: { slug } }),
-        "加载用人组织失败",
+        rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
+        "加载简历来源失败",
       );
       return payload.records;
     },
-    queryKey: ["hiring-units", slug, workspaceId, "all"],
+    queryKey: ["resume-sources", slug, workspaceId, "all"],
     refetchOnWindowFocus: false,
   });
-  const hiringUnitOptions = useMemo<SearchableSelectOption[]>(
-    () => hiringUnits.map((unit) => ({ label: unit.name, value: unit.id })),
-    [hiringUnits],
+  const resumeSourceOptions = useMemo<SearchableSelectOption[]>(
+    () => resumeSources.map((unit) => ({ label: unit.name, value: unit.id })),
+    [resumeSources],
   );
   const [collapsedMemberUserIds, setCollapsedMemberUserIds] = useState<Set<string>>(
     () => new Set(),
@@ -496,22 +496,22 @@ export function MembersManagementPage() {
     });
   }
 
-  async function changeGroupHiringUnits(group: RecruitingGroupRow, hiringUnitIds: string[]) {
-    const pendingKey = `hiring-units:${group.id}`;
+  async function changeGroupResumeSources(group: RecruitingGroupRow, resumeSourceIds: string[]) {
+    const pendingKey = `resume-sources:${group.id}`;
     setPending(pendingKey);
     await runAsyncAction({
       cleanup: () => setPending(null),
-      onError: () => toast.error("更新负责用人组织失败"),
+      onError: () => toast.error("更新负责简历来源失败"),
       operation: async () => {
         await rpcFetch<{ success: boolean }>(
-          rpc.api.w[":slug"].studio.workspace.groups[":id"]["hiring-units"].$put({
-            json: { hiringUnitIds },
+          rpc.api.w[":slug"].studio.workspace.groups[":id"]["resume-sources"].$put({
+            json: { resumeSourceIds },
             param: { id: group.id, slug },
           }),
-          "更新负责用人组织失败",
+          "更新负责简历来源失败",
         );
         await refetchGroups();
-        toast.success("负责用人组织已更新");
+        toast.success("负责简历来源已更新");
       },
     });
   }
@@ -810,7 +810,7 @@ export function MembersManagementPage() {
             canUpdate={canUpdate}
             groupNameDrafts={groupNameDrafts}
             groups={groups}
-            hiringUnitOptions={hiringUnitOptions}
+            resumeSourceOptions={resumeSourceOptions}
             newGroupName={newGroupName}
             onAddMemberToGroup={(row, groupId) => void addMemberToGroup(row, groupId)}
             onCreateGroup={() => void createGroup()}
@@ -818,8 +818,8 @@ export function MembersManagementPage() {
             onGroupNameDraftChange={(groupId, value) =>
               setGroupNameDrafts((current) => ({ ...current, [groupId]: value }))
             }
-            onHiringUnitsChange={(group, hiringUnitIds) =>
-              void changeGroupHiringUnits(group, hiringUnitIds)
+            onResumeSourcesChange={(group, resumeSourceIds) =>
+              void changeGroupResumeSources(group, resumeSourceIds)
             }
             onRemoveGroupMember={(groupId, member) => void removeGroupMember(groupId, member)}
             onRenameGroup={(group, name) => void renameGroup(group, name)}

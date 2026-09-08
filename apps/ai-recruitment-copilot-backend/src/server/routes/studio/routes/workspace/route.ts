@@ -15,7 +15,7 @@ import {
   loadMyResumeActivity,
   removeRecruitingGroupMember,
   updateRecruitingGroupMemberRole,
-  updateRecruitingGroupHiringUnits,
+  updateRecruitingGroupResumeSources,
   updateWorkspaceMemberInterviewer,
   updateWorkspaceMemberProfile,
 } from "./dao";
@@ -24,7 +24,7 @@ import { membersRouter } from "./routes/members/route";
 import {
   recruitingGroupMemberInputSchema,
   recruitingGroupMemberRoleInputSchema,
-  recruitingGroupHiringUnitsInputSchema,
+  recruitingGroupResumeSourcesInputSchema,
   recruitingGroupInputSchema,
   memberInterviewerInputSchema,
   memberProfileInputSchema,
@@ -266,29 +266,29 @@ export const workspaceRouter = factory
     return c.json({ success: true }, 200);
   })
   .put(
-    "/groups/:id/hiring-units",
+    "/groups/:id/resume-sources",
     requirePermission("member", "update"),
     zValidator(
       "json",
-      recruitingGroupHiringUnitsInputSchema,
-      jsonValidatorError("负责用人组织参数无效。"),
+      recruitingGroupResumeSourcesInputSchema,
+      jsonValidatorError("负责简历来源参数无效。"),
     ),
     async (c) => {
       const { activeOrg, user } = c.var;
       if (!activeOrg) {
         return c.json({ message: "Unauthorized" }, 401);
       }
-      const result = await updateRecruitingGroupHiringUnits({
+      const result = await updateRecruitingGroupResumeSources({
         actorUserId: user?.id,
         groupId: c.req.param("id"),
-        hiringUnitIds: c.req.valid("json").hiringUnitIds,
         organizationId: activeOrg.id,
+        resumeSourceIds: c.req.valid("json").resumeSourceIds,
       });
       if (result.status === "missing") {
         return c.json({ error: "组别不存在。" }, 404);
       }
-      if (result.status === "invalid_hiring_unit") {
-        return c.json({ error: "存在无效的用人组织，请刷新后重试。" }, 400);
+      if (result.status === "invalid_resume_source") {
+        return c.json({ error: "存在无效的简历来源，请刷新后重试。" }, 400);
       }
       return c.json({ success: true }, 200);
     },

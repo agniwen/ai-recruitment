@@ -351,6 +351,7 @@ export const relations = defineRelations(schema, (r) => ({
       from: r.recruitingGroup.organizationId,
       to: r.organization.id,
     }),
+    resumeSourceLinks: r.many.recruitingGroupResumeSource(),
     user: r.one.user({
       from: r.recruitingGroup.createdBy,
       to: r.user.id,
@@ -385,6 +386,24 @@ export const relations = defineRelations(schema, (r) => ({
     }),
     user: r.one.user({
       from: r.recruitingGroupMember.userId,
+      to: r.user.id,
+    }),
+  },
+  recruitingGroupResumeSource: {
+    group: r.one.recruitingGroup({
+      from: r.recruitingGroupResumeSource.groupId,
+      to: r.recruitingGroup.id,
+    }),
+    organization: r.one.organization({
+      from: r.recruitingGroupResumeSource.organizationId,
+      to: r.organization.id,
+    }),
+    resumeSource: r.one.resumeSource({
+      from: r.recruitingGroupResumeSource.resumeSourceId,
+      to: r.resumeSource.id,
+    }),
+    user: r.one.user({
+      from: r.recruitingGroupResumeSource.createdBy,
       to: r.user.id,
     }),
   },

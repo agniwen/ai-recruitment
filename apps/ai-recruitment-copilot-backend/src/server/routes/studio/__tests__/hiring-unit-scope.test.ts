@@ -14,6 +14,7 @@ import {
   organization,
   organizationRole,
   recruitingGroup,
+  recruitingGroupResumeSource,
   recruitingGroupHiringUnit,
   recruitingGroupMember,
   user,
@@ -51,9 +52,15 @@ async function clean() {
   await db.delete(interviewer).where(eq(interviewer.organizationId, ORG));
   await db.delete(department).where(eq(department.organizationId, ORG));
   await db
+    .delete(recruitingGroupResumeSource)
+    .where(eq(recruitingGroupResumeSource.organizationId, ORG));
+  await db
     .delete(recruitingGroupHiringUnit)
     .where(eq(recruitingGroupHiringUnit.organizationId, ORG));
   await db.delete(hiringUnit).where(eq(hiringUnit.organizationId, ORG));
+  await db.delete(resumeSourceOdcMember).where(eq(resumeSourceOdcMember.organizationId, ORG));
+  await db.delete(resumeSource).where(eq(resumeSource.organizationId, ORG));
+  await db.delete(organizationRole).where(eq(organizationRole.organizationId, ORG));
   await db.delete(recruitingGroupMember).where(eq(recruitingGroupMember.organizationId, ORG));
   await db.delete(recruitingGroup).where(eq(recruitingGroup.organizationId, ORG));
   await db.delete(member).where(eq(member.organizationId, ORG));
@@ -129,6 +136,9 @@ async function seedWorkspace() {
       userId: NO_GROUP_MEMBER,
     },
   ]);
+  await db
+    .insert(resumeSource)
+    .values({ id: "group_source_a", name: "招聘来源 A", organizationId: ORG });
   await db.insert(hiringUnit).values([
     {
       createdAt: NOW,
@@ -136,6 +146,7 @@ async function seedWorkspace() {
       id: HIRING_UNIT_A,
       name: "A 用人组织",
       organizationId: ORG,
+      resumeSourceId: "group_source_a",
       updatedAt: NOW,
     },
     {
@@ -165,13 +176,13 @@ async function seedWorkspace() {
     updatedAt: NOW,
     userId: MEMBER,
   });
-  await db.insert(recruitingGroupHiringUnit).values({
+  await db.insert(recruitingGroupResumeSource).values({
     createdAt: NOW,
     createdBy: OWNER,
     groupId: GROUP_A,
-    hiringUnitId: HIRING_UNIT_A,
     id: "hiring_scope_group_unit_a",
     organizationId: ORG,
+    resumeSourceId: "group_source_a",
   });
   await db.insert(department).values([
     {
@@ -282,7 +293,7 @@ describe("hiring unit recruiting-group scope", () => {
 
   afterEach(clean, 30_000);
 
-  it("普通招聘组成员只能看到公共部门和其招聘组负责用人组织下的数据", async () => {
+  it("普通招聘组成员只能看到公共部门和其招聘组负责简历来源下的数据", async () => {
     const [departments, interviewers, jobDescriptions] = await Promise.all([
       listAllDepartments(ORG, { actorUserId: MEMBER }),
       listAllInterviewers(ORG, { actorUserId: MEMBER }),
@@ -294,7 +305,57 @@ describe("hiring unit recruiting-group scope", () => {
     expect(ids(jobDescriptions)).toEqual([JD_A, JD_PUBLIC].toSorted());
   });
 
-  it("owner 不受招聘组用人组织范围限制", async () => {
+  it("来源内新增同名组织自动授权，移到其他来源立即撤销，旧配置不授权", async () => {
+    await db
+      .insert(resumeSource)
+      .values({ id: "other_source", name: "其他来源", organizationId: ORG });
+    await db.insert(hiringUnit).values([
+      {
+        id: "new_source_unit",
+        name: "A 用人组织",
+        organizationId: ORG,
+        resumeSourceId: "group_source_a",
+      },
+      {
+        id: "other_source_unit",
+        name: "A 用人组织",
+        organizationId: ORG,
+        resumeSourceId: "other_source",
+      },
+    ]);
+    await db.insert(department).values([
+      {
+        hiringUnitId: "new_source_unit",
+        id: "new_source_dept",
+        name: "A 部门",
+        organizationId: ORG,
+      },
+      {
+        hiringUnitId: "other_source_unit",
+        id: "other_source_dept",
+        name: "A 部门",
+        organizationId: ORG,
+      },
+    ]);
+    await db.insert(recruitingGroupHiringUnit).values({
+      groupId: GROUP_A,
+      hiringUnitId: "other_source_unit",
+      id: "legacy_grant",
+      organizationId: ORG,
+    });
+    expect(ids(await listAllDepartments(ORG, { actorUserId: MEMBER }))).toEqual(
+      [DEPT_A, DEPT_PUBLIC, "new_source_dept"].toSorted(),
+    );
+    await db
+      .update(hiringUnit)
+      .set({ resumeSourceId: "other_source" })
+      .where(eq(hiringUnit.id, "new_source_unit"));
+    expect(ids(await listAllDepartments(ORG, { actorUserId: MEMBER }))).toEqual(
+      [DEPT_A, DEPT_PUBLIC].toSorted(),
+    );
+  });
+
+  it("owner 不受招聘组简历来源范围限制", async () => {
     const [departments, interviewers, jobDescriptions] = await Promise.all([
       listAllDepartments(ORG, { actorUserId: OWNER }),
       listAllInterviewers(ORG, { actorUserId: OWNER }),
@@ -320,13 +381,13 @@ describe("hiring unit recruiting-group scope", () => {
     expect(jobDescriptions).toEqual([]);
   });
 
-  it("移除招聘组负责用人组织后，普通成员只保留公共范围", async () => {
+  it("移除招聘组负责简历来源后，普通成员只保留公共范围", async () => {
     await db
-      .delete(recruitingGroupHiringUnit)
+      .delete(recruitingGroupResumeSource)
       .where(
         and(
-          eq(recruitingGroupHiringUnit.organizationId, ORG),
-          eq(recruitingGroupHiringUnit.groupId, GROUP_A),
+          eq(recruitingGroupResumeSource.organizationId, ORG),
+          eq(recruitingGroupResumeSource.groupId, GROUP_A),
         ),
       );
 

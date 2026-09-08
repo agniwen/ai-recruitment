@@ -2,11 +2,11 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
-  hiringUnit,
+  resumeSource,
   member,
   organization,
   recruitingGroup,
-  recruitingGroupHiringUnit,
+  recruitingGroupResumeSource,
   recruitingGroupMember,
   user,
 } from "@arc/db-schema/schema";
@@ -15,7 +15,7 @@ import {
   ensureDefaultRecruitingGroupForWorkspace,
   listRecruitingGroupBoard,
   UNGROUPED_RECRUITING_GROUP_ID,
-  updateRecruitingGroupHiringUnits,
+  updateRecruitingGroupResumeSources,
   updateWorkspaceMemberProfile,
 } from "../dao";
 
@@ -25,9 +25,9 @@ const MEMBER = "test_workspace_groups_member";
 
 async function clean() {
   await db
-    .delete(recruitingGroupHiringUnit)
-    .where(eq(recruitingGroupHiringUnit.organizationId, ORG));
-  await db.delete(hiringUnit).where(eq(hiringUnit.organizationId, ORG));
+    .delete(recruitingGroupResumeSource)
+    .where(eq(recruitingGroupResumeSource.organizationId, ORG));
+  await db.delete(resumeSource).where(eq(resumeSource.organizationId, ORG));
   await db.delete(recruitingGroupMember).where(eq(recruitingGroupMember.organizationId, ORG));
   await db.delete(recruitingGroup).where(eq(recruitingGroup.organizationId, ORG));
   await db.delete(member).where(eq(member.organizationId, ORG));
@@ -214,17 +214,17 @@ describe("workspace recruiting group dao", () => {
     expect(stored?.telegram).toBe("@member");
   }, 30_000);
 
-  it("stores and returns hiring units managed by a recruiting group", async () => {
+  it("stores and returns resume sources managed by a recruiting group", async () => {
     const defaultGroup = await ensureDefaultRecruitingGroupForWorkspace({
       creatorUserId: CREATOR,
       organizationId: ORG,
     });
-    await db.insert(hiringUnit).values([
+    await db.insert(resumeSource).values([
       {
         createdAt: new Date(),
         createdBy: CREATOR,
         id: "test_workspace_hiring_unit_a",
-        name: "A 用人组织",
+        name: "A 简历来源",
         organizationId: ORG,
         updatedAt: new Date(),
       },
@@ -232,33 +232,50 @@ describe("workspace recruiting group dao", () => {
         createdAt: new Date(),
         createdBy: CREATOR,
         id: "test_workspace_hiring_unit_b",
-        name: "B 用人组织",
+        name: "B 简历来源",
         organizationId: ORG,
         updatedAt: new Date(),
       },
     ]);
 
-    const first = await updateRecruitingGroupHiringUnits({
+    const first = await updateRecruitingGroupResumeSources({
       actorUserId: CREATOR,
       groupId: defaultGroup.id,
-      hiringUnitIds: ["test_workspace_hiring_unit_b", "test_workspace_hiring_unit_a"],
       organizationId: ORG,
+      resumeSourceIds: ["test_workspace_hiring_unit_b", "test_workspace_hiring_unit_a"],
     });
-    const second = await updateRecruitingGroupHiringUnits({
+    const second = await updateRecruitingGroupResumeSources({
       actorUserId: CREATOR,
       groupId: defaultGroup.id,
-      hiringUnitIds: ["test_workspace_hiring_unit_a"],
       organizationId: ORG,
+      resumeSourceIds: ["test_workspace_hiring_unit_a"],
     });
 
     expect(first.status).toBe("updated");
     expect(second.status).toBe("updated");
 
+    await expect(
+      updateRecruitingGroupResumeSources({
+        actorUserId: CREATOR,
+        groupId: defaultGroup.id,
+        organizationId: ORG,
+        resumeSourceIds: ["missing-source"],
+      }),
+    ).resolves.toEqual({ status: "invalid_resume_source" });
+
     const groups = await listRecruitingGroupBoard(ORG);
     expect(groups[0]).toMatchObject({
-      hiringUnitIds: ["test_workspace_hiring_unit_a"],
-      hiringUnits: [{ id: "test_workspace_hiring_unit_a", name: "A 用人组织" }],
       id: defaultGroup.id,
+      resumeSourceIds: ["test_workspace_hiring_unit_a"],
+      resumeSources: [{ id: "test_workspace_hiring_unit_a", name: "A 简历来源" }],
     });
+    await updateRecruitingGroupResumeSources({
+      actorUserId: CREATOR,
+      groupId: defaultGroup.id,
+      organizationId: ORG,
+      resumeSourceIds: [],
+    });
+    const clearedGroups = await listRecruitingGroupBoard(ORG);
+    expect(clearedGroups[0]?.resumeSourceIds).toEqual([]);
   }, 30_000);
 });

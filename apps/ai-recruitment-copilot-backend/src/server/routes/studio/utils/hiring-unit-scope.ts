@@ -8,7 +8,7 @@ import {
   jobDescription,
   member,
   organizationRole,
-  recruitingGroupHiringUnit,
+  recruitingGroupResumeSource,
   recruitingGroupMember,
 } from "@arc/db-schema/schema";
 
@@ -121,14 +121,21 @@ export async function resolveHiringUnitAccessScope({
     db
       .select({
         groupId: recruitingGroupMember.groupId,
-        hiringUnitId: recruitingGroupHiringUnit.hiringUnitId,
+        hiringUnitId: hiringUnit.id,
       })
       .from(recruitingGroupMember)
       .leftJoin(
-        recruitingGroupHiringUnit,
+        recruitingGroupResumeSource,
         and(
-          eq(recruitingGroupHiringUnit.organizationId, recruitingGroupMember.organizationId),
-          eq(recruitingGroupHiringUnit.groupId, recruitingGroupMember.groupId),
+          eq(recruitingGroupResumeSource.organizationId, recruitingGroupMember.organizationId),
+          eq(recruitingGroupResumeSource.groupId, recruitingGroupMember.groupId),
+        ),
+      )
+      .leftJoin(
+        hiringUnit,
+        and(
+          eq(hiringUnit.organizationId, recruitingGroupResumeSource.organizationId),
+          eq(hiringUnit.resumeSourceId, recruitingGroupResumeSource.resumeSourceId),
         ),
       )
       .where(

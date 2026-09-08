@@ -125,7 +125,7 @@ interface RecruitingGroupsPanelProps {
   onCreateGroup: () => void;
   onDeleteGroup: (group: RecruitingGroupRow) => void;
   onGroupNameDraftChange: (groupId: string, value: string) => void;
-  onHiringUnitsChange: (group: RecruitingGroupRow, hiringUnitIds: string[]) => void;
+  onResumeSourcesChange: (group: RecruitingGroupRow, resumeSourceIds: string[]) => void;
   onRemoveGroupMember: (groupId: string, member: RecruitingGroupMemberRow) => void;
   onRenameGroup: (group: RecruitingGroupRow, name: string) => void;
   onMoveMemberToGroup: (row: MemberRow, sourceGroupId: string, targetGroupId: string) => void;
@@ -135,7 +135,7 @@ interface RecruitingGroupsPanelProps {
     role: RecruitingGroupRole,
   ) => void;
   pending: string | null;
-  hiringUnitOptions: SearchableSelectOption[];
+  resumeSourceOptions: SearchableSelectOption[];
   setNewGroupName: (value: string) => void;
 }
 
@@ -149,13 +149,13 @@ export function RecruitingGroupsPanel({
   onCreateGroup,
   onDeleteGroup,
   onGroupNameDraftChange,
-  onHiringUnitsChange,
+  onResumeSourcesChange,
   onRemoveGroupMember,
   onRenameGroup,
   onMoveMemberToGroup,
   onRoleChange,
   pending,
-  hiringUnitOptions,
+  resumeSourceOptions,
   setNewGroupName,
 }: RecruitingGroupsPanelProps) {
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
@@ -264,12 +264,12 @@ export function RecruitingGroupsPanel({
                 canUpdate={canUpdate}
                 draftName={groupNameDrafts[group.id] ?? group.name}
                 group={group}
-                hiringUnitOptions={hiringUnitOptions}
+                resumeSourceOptions={resumeSourceOptions}
                 id={getColumnId(group.id)}
                 key={group.id}
                 onDeleteGroup={onDeleteGroup}
                 onGroupNameDraftChange={onGroupNameDraftChange}
-                onHiringUnitsChange={onHiringUnitsChange}
+                onResumeSourcesChange={onResumeSourcesChange}
                 onRemoveGroupMember={onRemoveGroupMember}
                 onRenameGroup={onRenameGroup}
                 onRoleChange={onRoleChange}
@@ -293,11 +293,11 @@ interface RecruitingGroupColumnProps {
   canUpdate: boolean;
   draftName?: string;
   group: RecruitingGroupRow;
-  hiringUnitOptions: SearchableSelectOption[];
+  resumeSourceOptions: SearchableSelectOption[];
   id: string;
   onDeleteGroup: (group: RecruitingGroupRow) => void;
   onGroupNameDraftChange: (groupId: string, value: string) => void;
-  onHiringUnitsChange: (group: RecruitingGroupRow, hiringUnitIds: string[]) => void;
+  onResumeSourcesChange: (group: RecruitingGroupRow, resumeSourceIds: string[]) => void;
   onRemoveGroupMember: (groupId: string, member: RecruitingGroupMemberRow) => void;
   onRenameGroup: (group: RecruitingGroupRow, name: string) => void;
   onRoleChange: (
@@ -312,11 +312,11 @@ function RecruitingGroupColumn({
   canUpdate,
   draftName,
   group,
-  hiringUnitOptions,
+  resumeSourceOptions,
   id,
   onDeleteGroup,
   onGroupNameDraftChange,
-  onHiringUnitsChange,
+  onResumeSourcesChange,
   onRemoveGroupMember,
   onRenameGroup,
   onRoleChange,
@@ -327,25 +327,25 @@ function RecruitingGroupColumn({
     id,
   });
   const canManageGroup = canUpdate && !group.isVirtual;
-  const hiringUnitPendingKey = `hiring-units:${group.id}`;
-  let hiringUnitControl: ReactNode = null;
+  const resumeSourcePendingKey = `resume-sources:${group.id}`;
+  let resumeSourceControl: ReactNode = null;
   if (!group.isVirtual && canManageGroup) {
-    hiringUnitControl = (
+    resumeSourceControl = (
       <SearchableMultiSelect
-        disabled={pending === hiringUnitPendingKey}
-        emptyMessage="暂无用人组织"
-        onChange={(value) => onHiringUnitsChange(group, value)}
-        options={hiringUnitOptions}
-        placeholder="负责用人组织"
-        searchPlaceholder="搜索用人组织"
-        value={group.hiringUnitIds}
+        disabled={pending === resumeSourcePendingKey}
+        emptyMessage="暂无简历来源"
+        onChange={(value) => onResumeSourcesChange(group, value)}
+        options={resumeSourceOptions}
+        placeholder="负责简历来源"
+        searchPlaceholder="搜索简历来源"
+        value={group.resumeSourceIds}
       />
     );
   } else if (!group.isVirtual) {
-    hiringUnitControl = (
+    resumeSourceControl = (
       <div className="flex flex-wrap gap-1">
-        {group.hiringUnits.length > 0 ? (
-          group.hiringUnits.map((unit) => (
+        {group.resumeSources.length > 0 ? (
+          group.resumeSources.map((unit) => (
             <Badge key={unit.id} variant="secondary">
               {unit.name}
             </Badge>
@@ -407,7 +407,7 @@ function RecruitingGroupColumn({
             </span>
           ) : null}
         </div>
-        {hiringUnitControl}
+        {resumeSourceControl}
       </div>
       <div className="flex-1 space-y-2 overflow-x-hidden overflow-y-auto p-3">
         {group.members.length > 0 ? (

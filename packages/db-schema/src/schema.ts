@@ -386,6 +386,7 @@ export const recruitingGroup = pgTable(
       .notNull(),
   },
   (table) => [
+    uniqueIndex("recruiting_group_org_id_uq").on(table.organizationId, table.id),
     uniqueIndex("recruiting_group_org_name_uq").on(table.organizationId, table.name),
     uniqueIndex("recruiting_group_org_default_uq")
       .on(table.organizationId)
@@ -844,6 +845,46 @@ export const recruitingGroupHiringUnit = pgTable(
     ),
     index("recruiting_group_hiring_unit_group_idx").on(table.organizationId, table.groupId),
     index("recruiting_group_hiring_unit_unit_idx").on(table.organizationId, table.hiringUnitId),
+  ],
+);
+
+export const recruitingGroupResumeSource = pgTable(
+  "recruiting_group_resume_source",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => recruitingGroup.id, { onDelete: "cascade" }),
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    resumeSourceId: text("resume_source_id")
+      .notNull()
+      .references(() => resumeSource.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.organizationId, table.groupId],
+      foreignColumns: [recruitingGroup.organizationId, recruitingGroup.id],
+      name: "recruiting_group_resume_source_group_org_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.resumeSourceId],
+      foreignColumns: [resumeSource.organizationId, resumeSource.id],
+      name: "recruiting_group_resume_source_source_org_fk",
+    }).onDelete("cascade"),
+    uniqueIndex("recruiting_group_resume_source_uq").on(
+      table.organizationId,
+      table.groupId,
+      table.resumeSourceId,
+    ),
+    index("recruiting_group_resume_source_group_idx").on(table.organizationId, table.groupId),
+    index("recruiting_group_resume_source_source_idx").on(
+      table.organizationId,
+      table.resumeSourceId,
+    ),
   ],
 );
 

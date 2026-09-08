@@ -66,30 +66,30 @@ describe("TanStack Start studio CRUD route migration", () => {
     expect(source).toContain('className="mx-auto w-full max-w-[96rem] space-y-6"');
   });
 
-  it("shows recruiting group hiring unit selections by item names inside the select only", () => {
+  it("shows recruiting group resume source selections by item names inside the select only", () => {
     const membersSource = readSource("components/features/studio/members/members-groups.tsx");
-    const hiringUnitSelectIndex = membersSource.indexOf('placeholder="负责用人组织"');
-    const hiringUnitSelectSource = membersSource.slice(
-      hiringUnitSelectIndex,
-      hiringUnitSelectIndex + 500,
+    const resumeSourceSelectIndex = membersSource.indexOf('placeholder="负责简历来源"');
+    const resumeSourceSelectSource = membersSource.slice(
+      resumeSourceSelectIndex,
+      resumeSourceSelectIndex + 500,
     );
 
-    expect(hiringUnitSelectIndex).toBeGreaterThanOrEqual(0);
-    expect(hiringUnitSelectSource).not.toContain('selectedDisplay="count"');
-    expect(hiringUnitSelectSource).not.toMatch(/负责 \$\{count\} 个用人组织/u);
-    expect(hiringUnitSelectSource).not.toContain("showBadges");
+    expect(resumeSourceSelectIndex).toBeGreaterThanOrEqual(0);
+    expect(resumeSourceSelectSource).not.toContain('selectedDisplay="count"');
+    expect(resumeSourceSelectSource).not.toMatch(/负责 \$\{count\} 个简历来源/u);
+    expect(resumeSourceSelectSource).not.toContain("showBadges");
   });
 
-  it("loads and saves recruiting group hiring unit scope through typed RPC", () => {
+  it("loads and saves recruiting group resume source scope through typed RPC", () => {
     const membersPageSource = readSource("components/features/studio/members/members-page.tsx");
-    const saveStart = membersPageSource.indexOf("async function changeGroupHiringUnits");
+    const saveStart = membersPageSource.indexOf("async function changeGroupResumeSources");
     const saveEnd = membersPageSource.indexOf("async function changeWorkspaceRole", saveStart);
     const saveSource = membersPageSource.slice(saveStart, saveEnd);
 
-    expect(membersPageSource).toContain('studio["hiring-units"].all.$get');
+    expect(membersPageSource).toContain('studio["resume-sources"].$get');
     expect(membersPageSource).toContain("rpcFetch<{ records:");
-    expect(saveSource).toContain('["hiring-units"].$put');
-    expect(saveSource).toContain("json: { hiringUnitIds }");
+    expect(saveSource).toContain('["resume-sources"].$put');
+    expect(saveSource).toContain("json: { resumeSourceIds }");
     expect(saveSource).toContain("await refetchGroups()");
   });
 
