@@ -146,6 +146,11 @@ describe("Google sheet organization hierarchy", () => {
     expect(linked.departmentId).not.toBe(oldDeptId);
     const [after] = await db.select().from(hiringUnit).where(eq(hiringUnit.id, oldUnitId));
     expect(after).toEqual(before);
+    const [job] = await db
+      .select()
+      .from(jobDescription)
+      .where(eq(jobDescription.organizationId, orgId));
+    expect(job).toMatchObject({ resumeSourceId: linked.sourceId, sourceSheet: "来源A" });
   });
   it("reuses normalized names without changing existing names or descriptions", async () => {
     const sourceId = `${namespace}_source`;
@@ -184,6 +189,11 @@ describe("Google sheet organization hierarchy", () => {
       db.select().from(department).where(eq(department.id, deptId)),
     ]);
     expect(after).toEqual(before);
+    const [job] = await db
+      .select()
+      .from(jobDescription)
+      .where(eq(jobDescription.organizationId, orgId));
+    expect(job).toMatchObject({ resumeSourceId: sourceId, sourceSheet: "来源A" });
   });
   it("creates separate default units and departments for each source", async () => {
     await sync([row("REQ-000001", "", "", ""), row("REQ-000002", "来源B", "", "")]);

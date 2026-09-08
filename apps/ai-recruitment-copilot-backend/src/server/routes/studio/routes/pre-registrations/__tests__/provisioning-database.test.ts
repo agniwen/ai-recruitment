@@ -43,6 +43,7 @@ const registration = {
   displayName: "新人",
   email: "new@example.com",
   id: "entry",
+  odcAssignments: [],
   recruitingGroupNames: [],
   recruitingRole: "hr",
   telegram: "@new",

@@ -58,6 +58,7 @@ import {
 } from "./job-description-linked-resources";
 import { useWorkspaceInterviewerMembers } from "../use-workspace-interviewer-members";
 import { createJobDescriptionFormValues } from "./job-description-form-values";
+import { JobDescriptionSourceSelect } from "./job-description-source-select";
 
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -157,6 +158,7 @@ function toFormValues(record: JobDescriptionRecord): JobDescriptionFormValues {
     requester: record.requester ?? "",
     resumeContact: record.resumeContact ?? "",
     resumeScreeningPolicy: record.resumeScreeningPolicy,
+    resumeSourceId: record.resumeSourceId,
     salaryCurrency: record.salaryCurrency,
     salaryMaxAmount: record.salaryMaxAmount,
     salaryMinAmount: record.salaryMinAmount,
@@ -304,6 +306,7 @@ export function JobDescriptionFormDialog({
         requester: value.requester?.trim() || null,
         resumeContact: value.resumeContact?.trim() || null,
         resumeScreeningPolicy: value.resumeScreeningPolicy,
+        resumeSourceId: value.resumeSourceId,
         salaryCurrency: value.salaryCurrency?.trim() || null,
         salaryMaxAmount: value.salaryMaxAmount ?? null,
         salaryMinAmount: value.salaryMinAmount ?? null,
@@ -372,6 +375,7 @@ export function JobDescriptionFormDialog({
     form.store,
     (state) => state.values.allowCrossDepartmentInterviewers,
   );
+  const selectedResumeSourceId = useStore(form.store, (state) => state.values.resumeSourceId);
   const selectedDepartmentId = useStore(form.store, (state) => state.values.departmentId);
   const selectedInterviewerIds = useStore(form.store, (state) => state.values.interviewerIds);
   // Prefer the job-level 编制组织 (Google sync writes it directly). Fall back to
@@ -863,15 +867,17 @@ export function JobDescriptionFormDialog({
                         <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
                           <FieldLabel htmlFor={field.name}>来源表格</FieldLabel>
                           <FieldContent className="gap-2">
-                            <Input
+                            <JobDescriptionSourceSelect
                               disabled={readOnly}
-                              aria-invalid={!!errors?.length}
+                              invalid={!!errors?.length}
                               id={field.name}
-                              maxLength={SHORT_TEXT_MAX_LENGTH}
-                              onBlur={field.handleBlur}
-                              onChange={(event) => field.handleChange(event.target.value || null)}
-                              placeholder="如：技术中心"
-                              value={field.state.value ?? ""}
+                              sourceId={selectedResumeSourceId}
+                              onChange={(value, sourceId) => {
+                                form.setFieldValue("resumeSourceId", sourceId);
+                                field.handleChange(value);
+                                field.handleBlur();
+                              }}
+                              value={field.state.value ?? null}
                             />
                             <FieldError errors={errors} />
                           </FieldContent>

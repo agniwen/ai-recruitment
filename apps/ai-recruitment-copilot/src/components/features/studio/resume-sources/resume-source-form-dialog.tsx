@@ -38,7 +38,7 @@ export function ResumeSourceFormDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   record: ResumeSourceRecord | null;
-  onSaved: () => void;
+  onSaved: (values: ResumeSourceFormValues & { id: string }) => void;
 }) {
   const slug = useWorkspaceSlug();
   const isEdit = record !== null;
@@ -51,8 +51,9 @@ export function ResumeSourceFormDialog({
         name: value.name.trim(),
       };
 
+      let savedId = record?.id ?? "";
       try {
-        await rpcFetch(
+        const result = await rpcFetch<{ id?: string }>(
           isEdit
             ? rpc.api.w[":slug"].studio["resume-sources"][":id"].$patch({
                 json: body,
@@ -61,13 +62,14 @@ export function ResumeSourceFormDialog({
             : rpc.api.w[":slug"].studio["resume-sources"].$post({ json: body, param: { slug } }),
           isEdit ? "更新简历来源失败" : "创建简历来源失败",
         );
+        savedId = result.id ?? savedId;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "保存简历来源失败");
         return;
       }
 
       toast.success(isEdit ? "简历来源已更新" : "简历来源已创建");
-      onSaved();
+      onSaved({ ...body, id: savedId });
       onOpenChange(false);
     },
     open,

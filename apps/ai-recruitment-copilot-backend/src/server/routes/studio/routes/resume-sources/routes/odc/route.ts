@@ -1,6 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import {
   odcAssignmentCreateSchema,
+  odcAssignmentBatchCreateSchema,
   odcAssignmentSchema,
   odcAssignmentUpdateSchema,
 } from "@arc/shared/hiring-units";
@@ -8,7 +9,7 @@ import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import {
-  createResumeSourceOdcAssignment,
+  createResumeSourceOdcAssignments,
   deleteResumeSourceOdcAssignment,
   queryPaginatedResumeSourceOdcAssignments,
   replaceResumeSourceOdcMembers,
@@ -53,7 +54,11 @@ export const resumeSourceOdcRouter = factory
   .post(
     "/",
     requirePermission("hiringUnit", "update"),
-    zValidator("json", odcAssignmentCreateSchema, jsonValidatorError("ODC 设置参数无效。")),
+    zValidator(
+      "json",
+      odcAssignmentCreateSchema.or(odcAssignmentBatchCreateSchema),
+      jsonValidatorError("ODC 设置参数无效。"),
+    ),
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
@@ -64,21 +69,22 @@ export const resumeSourceOdcRouter = factory
         return c.json({ error: "简历来源不存在。" }, 404);
       }
       const input = c.req.valid("json");
+      const assignments = "assignments" in input ? input.assignments : [input];
       if (
         !(await areEligibleOdcMembers({
-          memberIds: [input.memberId],
+          memberIds: assignments.map((assignment) => assignment.memberId),
           organizationId: activeOrg.id,
         }))
       ) {
-        return c.json({ error: "所选成员的角色未标记为 ODC。" }, 400);
+        return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
       }
-      const created = await createResumeSourceOdcAssignment({
-        input,
+      const created = await createResumeSourceOdcAssignments({
+        assignments,
         organizationId: activeOrg.id,
         resumeSourceId: id,
       });
       if (!created) {
-        return c.json({ error: "该 ODC 配置已存在。" }, 409);
+        return c.json({ error: "所选人员中已有 ODC 配置，请刷新后重试。" }, 409);
       }
       safeUpdateTag(`resume-sources:${activeOrg.id}`);
       return c.json({ success: true }, 201);

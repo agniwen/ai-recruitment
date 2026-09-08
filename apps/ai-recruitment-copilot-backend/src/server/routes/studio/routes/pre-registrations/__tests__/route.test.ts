@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   delete: vi.fn(),
   listManagerOptions: vi.fn(),
+  listSources: vi.fn(),
   provision: vi.fn(),
   query: vi.fn(),
   role: "admin",
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../dao", () => ({
   createStudioPreRegistration: mocks.create,
   deleteStudioPreRegistration: mocks.delete,
+  listPreRegistrationResumeSources: mocks.listSources,
   listStudioPreRegistrationManagerOptions: mocks.listManagerOptions,
   queryPaginatedStudioPreRegistrations: mocks.query,
   updateStudioPreRegistration: mocks.update,
@@ -72,6 +74,7 @@ const input = {
   directManagerEmail: null,
   displayName: "张三",
   email: "member@example.com",
+  odcAssignments: [],
   recruitingGroupNames: ["燎原社"],
   recruitingRole: "hr",
   telegram: "@member",
@@ -81,7 +84,7 @@ const input = {
 describe("studio pre-registration routes", () => {
   it.each(["member", "custom-hr", "noAccess"])("denies all endpoints to %s", async (role) => {
     mocks.role = role;
-    for (const path of ["", "/manager-options", "/role-options"]) {
+    for (const path of ["", "/manager-options", "/role-options", "/resume-source-options"]) {
       const response = await app.request(`/pre-registrations${path}`);
       expect(response.status).toBe(403);
     }
@@ -196,5 +199,89 @@ describe("studio pre-registration routes", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("pre-registration ODC input", () => {
+  const assignments = [
+    { jobSeries: "直属", resumeSourceId: "source-a", serviceUnit: "悦达" },
+    { jobSeries: "派驻", resumeSourceId: "source-b", serviceUnit: "无极" },
+  ];
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.role = "admin";
+    mocks.canAssign.mockResolvedValue(true);
+    mocks.create.mockResolvedValue({ email: input.email, id: "entry" });
+    mocks.update.mockResolvedValue({ email: input.email, id: "entry" });
+  });
+  it.each(["POST", "PATCH"])("accepts multiple source scopes on %s", async (method) => {
+    const payload = { ...input, odcAssignments: assignments };
+    const response = await app.request(`/pre-registrations${method === "POST" ? "" : "/entry"}`, {
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+      method,
+    });
+    expect(response.status).toBe(method === "POST" ? 201 : 200);
+    if (method === "POST") {
+      expect(mocks.create).toHaveBeenCalledWith("alpha", payload);
+    } else {
+      expect(mocks.update).toHaveBeenCalledWith("alpha", "entry", payload);
+    }
+  });
+  it.each(["POST", "PATCH"])("allows omitted or empty scope fields on %s", async (method) => {
+    const payload = {
+      ...input,
+      odcAssignments: [
+        { resumeSourceId: "source-a" },
+        { jobSeries: null, resumeSourceId: "source-b", serviceUnit: "" },
+      ],
+    };
+    const response = await app.request(`/pre-registrations${method === "POST" ? "" : "/entry"}`, {
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+      method,
+    });
+    expect(response.status).toBe(method === "POST" ? 201 : 200);
+    const normalized = {
+      ...payload,
+      odcAssignments: [
+        { jobSeries: null, resumeSourceId: "source-a", serviceUnit: null },
+        { jobSeries: null, resumeSourceId: "source-b", serviceUnit: "" },
+      ],
+    };
+    if (method === "POST") {
+      expect(mocks.create).toHaveBeenCalledWith("alpha", normalized);
+    } else {
+      expect(mocks.update).toHaveBeenCalledWith("alpha", "entry", normalized);
+    }
+  });
+  it.each([
+    [assignments[0], assignments[0]],
+    [{ ...assignments[0], jobSeries: "无效序列" }],
+    [{ ...assignments[0], serviceUnit: "a".repeat(121) }],
+  ])("rejects invalid assignments: %j", async (...odcAssignments) => {
+    const response = await app.request("/pre-registrations", {
+      body: JSON.stringify({ ...input, odcAssignments }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it.each(["invalid_odc_role", "invalid_resume_source"])("returns 400 for %s", async (reason) => {
+    mocks.create.mockResolvedValue(reason);
+    const response = await app.request("/pre-registrations", {
+      body: JSON.stringify({ ...input, odcAssignments: assignments }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.provision).not.toHaveBeenCalled();
+  });
+  it("loads only the active workspace's source options", async () => {
+    mocks.listSources.mockResolvedValue([{ id: "source-a", name: "来源 A" }]);
+    const response = await app.request("/pre-registrations/resume-source-options");
+    expect(response.status).toBe(200);
+    expect(mocks.listSources).toHaveBeenCalledWith("org-alpha");
   });
 });

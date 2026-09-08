@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { hiringUnit, resumeSource } from "@arc/db-schema/schema";
+import { hiringUnit, jobDescription, resumeSource } from "@arc/db-schema/schema";
 import { resumeSourceFormSchema } from "@arc/shared/resume-sources";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
@@ -49,16 +49,30 @@ export const resumeSourcesRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
-      const rows = await db
-        .update(resumeSource)
-        .set({ description: input.description || null, name: input.name, updatedAt: new Date() })
-        .where(
-          and(
-            eq(resumeSource.id, c.req.param("id")),
-            eq(resumeSource.organizationId, activeOrg.id),
-          ),
-        )
-        .returning({ id: resumeSource.id });
+      const rows = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(resumeSource)
+          .set({ description: input.description || null, name: input.name, updatedAt: new Date() })
+          .where(
+            and(
+              eq(resumeSource.id, c.req.param("id")),
+              eq(resumeSource.organizationId, activeOrg.id),
+            ),
+          )
+          .returning({ id: resumeSource.id });
+        if (updated.length) {
+          await tx
+            .update(jobDescription)
+            .set({ sourceSheet: input.name })
+            .where(
+              and(
+                eq(jobDescription.organizationId, activeOrg.id),
+                eq(jobDescription.resumeSourceId, c.req.param("id")),
+              ),
+            );
+        }
+        return updated;
+      });
       if (!rows.length) {
         return c.json({ error: "简历来源不存在。" }, 404);
       }
@@ -85,7 +99,17 @@ export const resumeSourcesRouter = factory
         .from(hiringUnit)
         .where(and(eq(hiringUnit.resumeSourceId, id), eq(hiringUnit.organizationId, activeOrg.id)))
         .limit(1);
-      if (unit) {
+      const [job] = await tx
+        .select({ id: jobDescription.id })
+        .from(jobDescription)
+        .where(
+          and(
+            eq(jobDescription.resumeSourceId, id),
+            eq(jobDescription.organizationId, activeOrg.id),
+          ),
+        )
+        .limit(1);
+      if (unit || job) {
         return "in_use";
       }
       await tx
@@ -97,7 +121,7 @@ export const resumeSourcesRouter = factory
       return c.json({ error: "简历来源不存在。" }, 404);
     }
     if (result === "in_use") {
-      return c.json({ error: "请先调整下属用人组织的简历来源，再删除。" }, 409);
+      return c.json({ error: "请先调整关联岗位和下属用人组织的简历来源，再删除。" }, 409);
     }
     return c.json({ success: true }, 200);
   })

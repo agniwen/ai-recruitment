@@ -5,6 +5,7 @@ import { IconAlertCircle } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { OdcAssignmentTarget } from "@/components/features/studio/odc-assignment-dialog";
+import { selectOdcAssignmentDrafts, serializeOdcAssignmentDrafts } from "./odc-assignment-draft";
 import type { OdcAssignmentDraft } from "@/components/features/studio/odc-assignment-draft";
 import { OdcAssignmentScopeFields } from "@/components/features/studio/odc-assignment-scope-fields";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
@@ -39,7 +40,7 @@ export function OdcAddDialog({
   target,
 }: OdcAddDialogProps) {
   const slug = useWorkspaceSlug();
-  const [draft, setDraft] = useState<OdcAssignmentDraft | null>(null);
+  const [drafts, setDrafts] = useState<OdcAssignmentDraft[]>([]);
   const candidatesQuery = useOdcCandidates(open);
   const assignedMemberIdSet = useMemo(() => new Set(assignedMemberIds), [assignedMemberIds]);
   const options = useMemo(
@@ -51,15 +52,11 @@ export function OdcAddDialog({
   );
 
   const createMutation = useMutation({
-    mutationFn: (assignment: OdcAssignmentDraft) => {
+    mutationFn: (assignments: OdcAssignmentDraft[]) => {
       if (!target) {
         throw new Error("未选择要管理的简历来源");
       }
-      const json = {
-        jobSeries: assignment.jobSeries,
-        memberId: assignment.memberId,
-        serviceUnit: assignment.serviceUnit.trim() || null,
-      };
+      const json = { assignments: serializeOdcAssignmentDrafts(assignments) };
 
       return rpcFetch(
         rpc.api.w[":slug"].studio["resume-sources"][":id"].odc.$post({
@@ -74,7 +71,7 @@ export function OdcAddDialog({
     },
     onSuccess: async () => {
       toast.success("ODC 已添加");
-      setDraft(null);
+      setDrafts([]);
       onOpenChange(false);
       await onSaved();
     },
@@ -84,17 +81,17 @@ export function OdcAddDialog({
     <Dialog
       onOpenChange={(next) => {
         if (!next && !createMutation.isPending) {
-          setDraft(null);
+          setDrafts([]);
           onOpenChange(false);
         }
       }}
       open={open}
     >
-      <DialogContent>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>添加 ODC</DialogTitle>
           <DialogDescription>
-            选择一名角色已标记为 ODC 的成员，并设置其负责的序列和服务单位。
+            可多选角色已标记为 ODC 的成员，分别设置其负责的序列和服务单位。
           </DialogDescription>
         </DialogHeader>
         {candidatesQuery.isError ? (
@@ -109,35 +106,34 @@ export function OdcAddDialog({
           <Field>
             <FieldLabel htmlFor="odc-management-add-member">ODC 人员</FieldLabel>
             <FieldContent>
-              <SearchableSelect
+              <SearchableMultiSelect
                 disabled={candidatesQuery.isLoading || createMutation.isPending}
                 emptyMessage="暂无可选择的 ODC 人员"
                 id="odc-management-add-member"
-                onChange={(memberId) =>
-                  setDraft(memberId ? { jobSeries: null, memberId, serviceUnit: "" } : null)
+                onChange={(memberIds) =>
+                  setDrafts((current) => selectOdcAssignmentDrafts(current, memberIds))
                 }
                 options={options}
                 placeholder={candidatesQuery.isLoading ? "加载 ODC 人员..." : "请选择 ODC 人员"}
-                required
                 searchPlaceholder="搜索姓名或邮箱"
-                value={draft?.memberId}
+                value={drafts.map((draft) => draft.memberId)}
               />
             </FieldContent>
           </Field>
         )}
-        {draft ? (
+        {drafts.length > 0 ? (
           <OdcAssignmentScopeFields
-            assignments={[draft]}
+            assignments={drafts}
             candidates={candidatesQuery.data ?? []}
             disabled={createMutation.isPending}
-            onChange={(assignments) => setDraft(assignments[0] ?? null)}
+            onChange={setDrafts}
           />
         ) : null}
         <DialogFooter>
           <Button
             disabled={createMutation.isPending}
             onClick={() => {
-              setDraft(null);
+              setDrafts([]);
               onOpenChange(false);
             }}
             variant="outline"
@@ -146,14 +142,14 @@ export function OdcAddDialog({
           </Button>
           <Button
             disabled={
-              !draft ||
+              drafts.length === 0 ||
               candidatesQuery.isLoading ||
               candidatesQuery.isError ||
               createMutation.isPending
             }
             onClick={() => {
-              if (draft) {
-                createMutation.mutate(draft);
+              if (drafts.length > 0) {
+                createMutation.mutate(drafts);
               }
             }}
           >

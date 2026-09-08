@@ -12,6 +12,7 @@ import {
   createStudioPreRegistration,
   deleteStudioPreRegistration,
   listStudioPreRegistrationManagerOptions,
+  listPreRegistrationResumeSources,
   queryPaginatedStudioPreRegistrations,
   updateStudioPreRegistration,
 } from "./dao";
@@ -20,8 +21,25 @@ import { studioPreRegistrationInputSchema, studioPreRegistrationsQuerySchema } f
 
 function mutationErrorResponse(
   c: Context,
-  result: "cycle" | "duplicate" | "manager_not_found" | "not_found",
+  result:
+    | "cycle"
+    | "duplicate"
+    | "manager_not_found"
+    | "not_found"
+    | "invalid_odc_role"
+    | "invalid_resume_source",
 ) {
+  if (result === "invalid_odc_role" || result === "invalid_resume_source") {
+    return c.json(
+      {
+        error:
+          result === "invalid_odc_role"
+            ? "只有 ODC 角色可以设置负责简历来源。"
+            : "所选简历来源不存在或不属于当前工作区。",
+      },
+      400,
+    );
+  }
   if (result === "not_found" || result === "manager_not_found") {
     return c.json(
       { error: result === "not_found" ? "预录入信息不存在。" : "直属上级不存在。" },
@@ -46,13 +64,17 @@ export const studioPreRegistrationsRouter = factory
   .get("/role-options", async (c) => {
     const { member, organization } = getWorkspaceRequestContext(c);
     const customRoles = await db
-      .select({ label: organizationRole.name, value: organizationRole.role })
+      .select({
+        isOdc: organizationRole.isOdc,
+        label: organizationRole.name,
+        value: organizationRole.role,
+      })
       .from(organizationRole)
       .where(eq(organizationRole.organizationId, organization.id));
     const builtInRoles = [
-      ...(member.role === "owner" ? [{ label: "管理员", value: "admin" }] : []),
-      { label: "成员", value: "member" },
-      { label: "无权限", value: "noAccess" },
+      ...(member.role === "owner" ? [{ isOdc: false, label: "管理员", value: "admin" }] : []),
+      { isOdc: false, label: "成员", value: "member" },
+      { isOdc: false, label: "无权限", value: "noAccess" },
     ];
     return c.json({ records: [...builtInRoles, ...customRoles] }, 200);
   })
@@ -67,6 +89,12 @@ export const studioPreRegistrationsRouter = factory
       return c.json(result, 200);
     },
   )
+  .get("/resume-source-options", async (c) => {
+    const records = await listPreRegistrationResumeSources(
+      getWorkspaceRequestContext(c).organization.id,
+    );
+    return c.json({ records }, 200);
+  })
   .get("/manager-options", async (c) => {
     const records = await listStudioPreRegistrationManagerOptions(
       getWorkspaceRequestContext(c).organization.slug,

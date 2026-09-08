@@ -286,6 +286,7 @@ describe("Google Sheet mapped job changes", () => {
           requestedDate: updateValues.requestedDate,
           requester: updateValues.requester,
           resumeContact: updateValues.resumeContact,
+          resumeSourceId: updateValues.resumeSourceId,
           salaryRangeRaw: updateValues.salaryRangeRaw,
           serviceUnit: updateValues.serviceUnit,
           sourceSheet: updateValues.sourceSheet,

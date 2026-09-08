@@ -1,3 +1,4 @@
+import { resolveJobDescriptionResumeSource } from "./resume-source";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { zValidator } from "@hono/zod-validator";
 import { and, count, eq, inArray, ne } from "drizzle-orm";
@@ -189,6 +190,7 @@ function buildManualJobDescriptionRecord(args: {
     resumeScreeningPolicy: input.resumeScreeningPolicy,
     resumeScreeningPolicyHash,
     resumeScreeningPolicyVersion: input.resumeScreeningPolicy.version,
+    resumeSourceId: input.resumeSourceId ?? null,
     salaryCurrency: nullableText(input.salaryCurrency),
     salaryMaxAmount: input.salaryMaxAmount ?? null,
     salaryMinAmount: input.salaryMinAmount ?? null,
@@ -385,6 +387,17 @@ export const jobDescriptionsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
+      const source = await resolveJobDescriptionResumeSource({
+        actorUserId: c.var.user?.id,
+        organizationId: activeOrg.id,
+        resumeSourceId: input.resumeSourceId,
+        sourceSheet: input.sourceSheet,
+      });
+      if (source.error) {
+        return c.json({ error: source.error }, 400);
+      }
+      input.resumeSourceId = source.resumeSourceId;
+      input.sourceSheet = source.sourceSheet;
       const resumeScreeningPolicyHash = computeResumeScreeningPolicyHash(
         input.resumeScreeningPolicy,
       );
@@ -550,6 +563,17 @@ export const jobDescriptionsRouter = factory
       }
 
       const input = c.req.valid("json");
+      const source = await resolveJobDescriptionResumeSource({
+        actorUserId: c.var.user?.id,
+        organizationId: activeOrg.id,
+        resumeSourceId: input.resumeSourceId,
+        sourceSheet: input.sourceSheet,
+      });
+      if (source.error) {
+        return c.json({ error: source.error }, 400);
+      }
+      input.resumeSourceId = source.resumeSourceId;
+      input.sourceSheet = source.sourceSheet;
       const nextPolicyHash = computeResumeScreeningPolicyHash(input.resumeScreeningPolicy);
       const existingPolicyHash =
         existing.resumeScreeningPolicyHash ??
@@ -610,6 +634,7 @@ export const jobDescriptionsRouter = factory
         },
         resumeScreeningPolicyHash: nextPolicyHash,
         resumeScreeningPolicyVersion: nextPolicyVersion,
+        resumeSourceId: input.resumeSourceId ?? null,
         salaryCurrency: nullableText(input.salaryCurrency),
         salaryMaxAmount: input.salaryMaxAmount ?? null,
         salaryMinAmount: input.salaryMinAmount ?? null,

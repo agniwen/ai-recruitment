@@ -1,5 +1,7 @@
 "use client";
 
+import type { PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
+import { PreRegistrationOdcFields } from "./pre-registration-odc-fields";
 import { IconClipboardList, IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -63,6 +65,7 @@ interface StudioPreRegistrationRecord {
   displayName: string;
   email: string;
   id: string;
+  odcAssignments: PreRegistrationOdcAssignment[];
   recruitingGroupNames: string[];
   recruitingRole: RecruitingRole;
   registeredUserId: string | null;
@@ -90,6 +93,7 @@ interface EditorForm {
   directManagerEmail: string | null;
   displayName: string;
   email: string;
+  odcAssignments: PreRegistrationOdcAssignment[];
   recruitingGroupNames: string;
   recruitingRole: RecruitingRole;
   telegram: string;
@@ -100,6 +104,7 @@ const EMPTY_FORM: EditorForm = {
   directManagerEmail: null,
   displayName: "",
   email: "",
+  odcAssignments: [],
   recruitingGroupNames: "",
   recruitingRole: "hr",
   telegram: "",
@@ -127,6 +132,7 @@ function toEditorForm(record: StudioPreRegistrationRecord | null): EditorForm {
     directManagerEmail: record.directManagerEmail,
     displayName: record.displayName,
     email: record.email,
+    odcAssignments: record.odcAssignments ?? [],
     recruitingGroupNames: record.recruitingGroupNames.join("，"),
     recruitingRole: record.recruitingRole,
     telegram: record.telegram,
@@ -145,7 +151,7 @@ function parseGroupNames(value: string) {
   ];
 }
 
-function PreRegistrationEditorDialog({
+export function PreRegistrationEditorDialog({
   roleOptions,
   managerOptions,
   onOpenChange,
@@ -154,7 +160,7 @@ function PreRegistrationEditorDialog({
   record,
 }: {
   managerOptions: ManagerOption[];
-  roleOptions: { label: string; value: string }[];
+  roleOptions: { isOdc: boolean; label: string; value: string }[];
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
   open: boolean;
@@ -174,18 +180,41 @@ function PreRegistrationEditorDialog({
         })),
     [form.email, managerOptions],
   );
+  const isOdc = roleOptions.find((option) => option.value === form.workspaceRole)?.isOdc === true;
+  const sourcesQuery = useQuery({
+    enabled: open && isOdc,
+    queryFn: () =>
+      rpcFetch<{ records: { id: string; name: string }[] }>(
+        rpc.api.w[":slug"].studio["pre-registrations"]["resume-source-options"].$get({
+          param: { slug },
+        }),
+        "加载简历来源失败",
+      ),
+    queryKey: ["pre-registration-resume-source-options", slug],
+  });
   const groupNames = parseGroupNames(form.recruitingGroupNames);
   const canSubmit =
     form.displayName.trim().length > 0 &&
     form.email.trim().length > 0 &&
     form.telegram.trim().length > 0 &&
-    roleOptions.some((option) => option.value === form.workspaceRole);
+    roleOptions.some((option) => option.value === form.workspaceRole) &&
+    (!isOdc ||
+      (sourcesQuery.isSuccess &&
+        form.odcAssignments.every((assignment) =>
+          sourcesQuery.data.records.some((source) => source.id === assignment.resumeSourceId),
+        )));
   const mutation = useMutation({
     mutationFn: () => {
       const json = {
         directManagerEmail: form.directManagerEmail,
         displayName: form.displayName,
         email: form.email,
+        odcAssignments: isOdc
+          ? form.odcAssignments.map((assignment) => ({
+              ...assignment,
+              serviceUnit: assignment.serviceUnit?.trim() || null,
+            }))
+          : [],
         recruitingGroupNames: groupNames,
         recruitingRole: form.recruitingRole,
         telegram: form.telegram,
@@ -221,7 +250,7 @@ function PreRegistrationEditorDialog({
         <DialogHeader>
           <DialogTitle>{record ? "编辑预录入信息" : "新增预录入信息"}</DialogTitle>
           <DialogDescription>
-            用户注册后会自动加入当前工作区，并应用工作区角色、招聘组、直属上级和 TG。
+            用户注册后会自动加入当前工作区，并应用工作区角色、招聘组、ODC 负责来源、直属上级和 TG。
           </DialogDescription>
         </DialogHeader>
         <form
@@ -304,7 +333,13 @@ function PreRegistrationEditorDialog({
                 value={form.workspaceRole}
                 onValueChange={(value) => {
                   if (value) {
-                    setForm((current) => ({ ...current, workspaceRole: value }));
+                    setForm((current) => ({
+                      ...current,
+                      odcAssignments: roleOptions.find((option) => option.value === value)?.isOdc
+                        ? current.odcAssignments
+                        : [],
+                      workspaceRole: value,
+                    }));
                   }
                 }}
               >
@@ -328,6 +363,18 @@ function PreRegistrationEditorDialog({
                 首次加入工作区时自动设置；已有成员的工作区角色保持不变。
               </FieldDescription>
             </Field>
+            {isOdc ? (
+              <PreRegistrationOdcFields
+                assignments={form.odcAssignments}
+                sources={sourcesQuery.data?.records ?? []}
+                disabled={mutation.isPending}
+                loading={sourcesQuery.isPending}
+                failed={sourcesQuery.isError}
+                onChange={(odcAssignments) =>
+                  setForm((current) => ({ ...current, odcAssignments }))
+                }
+              />
+            ) : null}
             <Field data-disabled={mutation.isPending}>
               <FieldLabel htmlFor="pre-registration-role">招聘角色</FieldLabel>
               <Select
@@ -398,7 +445,7 @@ export function StudioPreRegistrationsGrid() {
   const [deletingRecord, setDeletingRecord] = useState<StudioPreRegistrationRecord | null>(null);
   const roleOptionsQuery = useQuery({
     queryFn: () =>
-      rpcFetch<{ records: { label: string; value: string }[] }>(
+      rpcFetch<{ records: { isOdc: boolean; label: string; value: string }[] }>(
         rpc.api.w[":slug"].studio["pre-registrations"]["role-options"].$get({ param: { slug } }),
         "加载工作区角色失败",
       ),

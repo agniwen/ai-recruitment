@@ -172,6 +172,7 @@ export const jobDescriptionBaseSchema = z
     requester: nullableTextSchema(500, "需求发起人"),
     resumeContact: nullableTextSchema(500, "简历对接人"),
     resumeScreeningPolicy: resumeScreeningPolicySchema,
+    resumeSourceId: z.string().trim().min(1).nullable().optional(),
     salaryCurrency: nullableSalaryCurrencySchema,
     salaryMaxAmount: nullableSalaryAmountSchema,
     salaryMinAmount: nullableSalaryAmountSchema,
@@ -248,6 +249,7 @@ export interface JobDescriptionRecord {
   salaryMinAmount: number | null;
   salaryRangeRaw: string | null;
   serviceUnit: string | null;
+  resumeSourceId?: string | null;
   sourceSheet: string | null;
   workEndTime: string | null;
   workLocation: string | null;

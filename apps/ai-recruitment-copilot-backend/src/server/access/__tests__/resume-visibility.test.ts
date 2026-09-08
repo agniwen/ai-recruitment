@@ -51,7 +51,7 @@ describe("buildResumeVisibilityCondition", () => {
     const query = new PgDialect().sqlToQuery(condition);
     expect(query.sql).toContain('"organization_role"."is_odc"');
     expect(query.sql).toContain(
-      '"hiring_unit"."resume_source_id" = "resume_source_odc_member"."resume_source_id"',
+      '"job_description"."resume_source_id" = "resume_source_odc_member"."resume_source_id"',
     );
     expect(query.params).toContain("organization-1");
     expect(query.params).toContain("user-1");

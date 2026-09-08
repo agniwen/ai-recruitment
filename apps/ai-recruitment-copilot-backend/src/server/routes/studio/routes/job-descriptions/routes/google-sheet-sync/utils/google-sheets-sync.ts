@@ -114,6 +114,7 @@ export interface GoogleSheetJobValues {
   resumeContact: string | null;
   salaryRangeRaw: string | null;
   serviceUnit: string | null;
+  resumeSourceId: string | null;
   sourceSheet: string | null;
   workLocation: string | null;
 }
@@ -458,6 +459,7 @@ export function buildGoogleSheetJobValues(
   record: GoogleSheetJobRecord,
   departmentId: string | undefined,
   hiringUnitId: string | null,
+  resumeSourceId: string | null = null,
 ): GoogleSheetJobValues {
   return {
     controlCategory: record.controlCategory,
@@ -478,6 +480,7 @@ export function buildGoogleSheetJobValues(
     requestedDate: record.requestedDate,
     requester: record.requester,
     resumeContact: record.resumeContact,
+    resumeSourceId,
     salaryRangeRaw: record.salaryRangeRaw,
     serviceUnit: record.serviceUnit,
     sourceSheet: record.sourceSheet,
@@ -549,6 +552,7 @@ export async function syncGoogleSheetJobDescriptions({
           requestedDate: jobDescription.requestedDate,
           requester: jobDescription.requester,
           resumeContact: jobDescription.resumeContact,
+          resumeSourceId: jobDescription.resumeSourceId,
           salaryRangeRaw: jobDescription.salaryRangeRaw,
           serviceUnit: jobDescription.serviceUnit,
           sourceSheet: jobDescription.sourceSheet,
@@ -569,18 +573,26 @@ export async function syncGoogleSheetJobDescriptions({
 
       for (const record of parsed.records) {
         const existing = jobsByCode.get(record.code);
-        const { hiringUnitId: hiringUnitIdForWrite, departmentId: departmentIdForWrite } =
-          await hierarchy.resolve(record, existing?.departmentId);
+        const {
+          hiringUnitId: hiringUnitIdForWrite,
+          departmentId: departmentIdForWrite,
+          resumeSourceId,
+          sourceName,
+        } = await hierarchy.resolve(record, existing?.departmentId);
 
         // Sync semantics (sheet is source of truth for mapped fields only):
         // - present in sheet → googleSheetDeleted=false, hiringUnitId=sheet 编制组织
         // - missing from sheet → google_sheets jobs get googleSheetDeleted=true (below)
         // - empty sheet 部门 preserves the existing department only within the same parent
-        const mappedValues = buildGoogleSheetJobValues(
-          record,
-          departmentIdForWrite,
-          hiringUnitIdForWrite,
-        );
+        const mappedValues = {
+          ...buildGoogleSheetJobValues(
+            record,
+            departmentIdForWrite,
+            hiringUnitIdForWrite,
+            resumeSourceId,
+          ),
+          sourceSheet: sourceName,
+        };
         if (existing) {
           const needsDeletedFlagClear = existing.googleSheetDeleted !== false;
           if (!hasGoogleSheetJobChanges(existing, mappedValues) && !needsDeletedFlagClear) {
@@ -599,6 +611,7 @@ export async function syncGoogleSheetJobDescriptions({
             );
           existing.googleSheetDeleted = false;
           existing.hiringUnitId = hiringUnitIdForWrite;
+          existing.resumeSourceId = resumeSourceId;
           if (departmentIdForWrite) {
             existing.departmentId = departmentIdForWrite;
           }

@@ -1,3 +1,5 @@
+import type { PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
+import { applyPreRegistrationOdcAssignments } from "./odc-assignments";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { acquireReportingLineWriteLock } from "@arc/ai-recruitment-copilot-backend/lib/server/db/reporting-line-write-lock";
@@ -19,6 +21,7 @@ export interface PreRegistrationProvisioningRecord {
   displayName: string;
   email: string;
   id: string;
+  odcAssignments: PreRegistrationOdcAssignment[];
   recruitingGroupNames: string[];
   recruitingRole: PreRegistrationRecruitingRole;
   telegram: string;
@@ -174,6 +177,7 @@ async function findRegistrationsByEmail(
       displayName: platformPreRegistration.displayName,
       email: platformPreRegistration.email,
       id: platformPreRegistration.id,
+      odcAssignments: platformPreRegistration.odcAssignments,
       recruitingGroupNames: platformPreRegistration.recruitingGroupNames,
       recruitingRole: platformPreRegistration.recruitingRole,
       telegram: platformPreRegistration.telegram,
@@ -224,6 +228,13 @@ async function applyRegistration(
         userId,
       })
       .onConflictDoNothing({ target: [member.userId, member.organizationId] });
+
+    await applyPreRegistrationOdcAssignments({
+      assignments: registration.odcAssignments,
+      organizationId: workspace.id,
+      tx,
+      userId,
+    });
 
     if (registration.recruitingGroupNames.length === 0) {
       return;

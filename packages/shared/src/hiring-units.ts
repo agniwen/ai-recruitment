@@ -96,6 +96,12 @@ export const odcAssignmentSchema = z.object({
     ),
 });
 
+export const odcAssignmentBatchCreateSchema = odcAssignmentSchema
+  .extend({
+    assignments: odcAssignmentSchema.shape.assignments.min(1, "请至少选择一名 ODC 人员"),
+  })
+  .strict();
+
 export type OdcAssignmentInput = z.infer<typeof odcAssignmentSchema>;
 export type OdcAssignmentItem = OdcAssignmentInput["assignments"][number];
 

@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { department, jobDescription, resumePoolEvent, resumePoolItem } from "@arc/db-schema/schema";
-import { buildDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import { buildJobDescriptionHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import type { HiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 interface BindResumePoolItemJobDescriptionInput {
@@ -16,7 +16,7 @@ export async function bindResumePoolItemJobDescription(
   input: BindResumePoolItemJobDescriptionInput,
 ): Promise<"already_bound" | "bound" | "job_description_not_found"> {
   return await db.transaction(async (tx) => {
-    const scopeCondition = buildDepartmentHiringUnitScopeCondition(input.hiringUnitScope);
+    const scopeCondition = buildJobDescriptionHiringUnitScopeCondition(input.hiringUnitScope);
     const [visibleJobDescription] = await tx
       .select({ id: jobDescription.id })
       .from(jobDescription)

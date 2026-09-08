@@ -1,5 +1,5 @@
 import type { SQL } from "drizzle-orm";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   department,
@@ -15,11 +15,13 @@ import {
 export interface HiringUnitAccessScope {
   canAccessAll: boolean;
   canAccessPublic: boolean;
+  resumeSourceIds?: string[];
   departmentIds: string[];
   hiringUnitIds: string[];
 }
 
 export interface OdcAccessScope {
+  resumeSourceIds?: string[];
   departmentIds: string[];
   hiringUnitIds: string[];
 }
@@ -27,6 +29,7 @@ export interface OdcAccessScope {
 export const EMPTY_ODC_ACCESS_SCOPE: OdcAccessScope = {
   departmentIds: [],
   hiringUnitIds: [],
+  resumeSourceIds: [],
 };
 
 export const ALL_HIRING_UNIT_SCOPE: HiringUnitAccessScope = {
@@ -34,6 +37,7 @@ export const ALL_HIRING_UNIT_SCOPE: HiringUnitAccessScope = {
   canAccessPublic: true,
   departmentIds: [],
   hiringUnitIds: [],
+  resumeSourceIds: [],
 };
 
 export const EMPTY_HIRING_UNIT_SCOPE: HiringUnitAccessScope = {
@@ -41,6 +45,7 @@ export const EMPTY_HIRING_UNIT_SCOPE: HiringUnitAccessScope = {
   canAccessPublic: false,
   departmentIds: [],
   hiringUnitIds: [],
+  resumeSourceIds: [],
 };
 
 export async function resolveOdcAccessScope({
@@ -71,9 +76,9 @@ export async function resolveOdcAccessScope({
   }
 
   const hiringUnitRows = await db
-    .select({ id: hiringUnit.id })
+    .select({ id: hiringUnit.id, sourceId: resumeSourceOdcMember.resumeSourceId })
     .from(resumeSourceOdcMember)
-    .innerJoin(
+    .leftJoin(
       hiringUnit,
       and(
         eq(hiringUnit.resumeSourceId, resumeSourceOdcMember.resumeSourceId),
@@ -88,7 +93,10 @@ export async function resolveOdcAccessScope({
     );
   return {
     departmentIds: [],
-    hiringUnitIds: [...new Set(hiringUnitRows.map((row) => row.id))],
+    hiringUnitIds: [
+      ...new Set(hiringUnitRows.map((row) => row.id).filter((id): id is string => id !== null)),
+    ],
+    resumeSourceIds: [...new Set(hiringUnitRows.map((row) => row.sourceId))],
   };
 }
 
@@ -122,6 +130,7 @@ export async function resolveHiringUnitAccessScope({
       .select({
         groupId: recruitingGroupMember.groupId,
         hiringUnitId: hiringUnit.id,
+        sourceId: recruitingGroupResumeSource.resumeSourceId,
       })
       .from(recruitingGroupMember)
       .leftJoin(
@@ -150,6 +159,7 @@ export async function resolveHiringUnitAccessScope({
   ]);
 
   if (
+    (odcScope.resumeSourceIds?.length ?? 0) === 0 &&
     rows.length === 0 &&
     odcScope.hiringUnitIds.length === 0 &&
     odcScope.departmentIds.length === 0
@@ -167,6 +177,12 @@ export async function resolveHiringUnitAccessScope({
         ...odcScope.hiringUnitIds,
       ]),
     ],
+    resumeSourceIds: [
+      ...new Set([
+        ...rows.map((row) => row.sourceId).filter((id): id is string => id !== null),
+        ...(odcScope.resumeSourceIds ?? []),
+      ]),
+    ],
   };
 }
 
@@ -177,6 +193,7 @@ export function buildDepartmentHiringUnitScopeCondition(
     return;
   }
   if (
+    (scope.resumeSourceIds?.length ?? 0) === 0 &&
     !scope.canAccessPublic &&
     scope.hiringUnitIds.length === 0 &&
     scope.departmentIds.length === 0
@@ -184,6 +201,20 @@ export function buildDepartmentHiringUnitScopeCondition(
     return sql`false`;
   }
   return or(
+    scope.resumeSourceIds?.length
+      ? exists(
+          db
+            .select({ value: sql`1` })
+            .from(jobDescription)
+            .where(
+              and(
+                eq(jobDescription.departmentId, department.id),
+                eq(jobDescription.organizationId, department.organizationId),
+                inArray(jobDescription.resumeSourceId, scope.resumeSourceIds),
+              ),
+            ),
+        )
+      : undefined,
     scope.departmentIds.length > 0 ? inArray(department.id, scope.departmentIds) : undefined,
     scope.hiringUnitIds.length > 0
       ? inArray(department.hiringUnitId, scope.hiringUnitIds)
@@ -194,7 +225,8 @@ export function buildDepartmentHiringUnitScopeCondition(
 
 /**
  * Job-description visibility:
- * - A hiring-unit assignment includes every job in its child departments.
+ * - Resolved actor scopes use the job's source ID, regardless of its old organization.
+ * - Explicit hiring-unit filters include every job in their child departments.
  * - A direct department assignment includes only that department's jobs.
  * - Public access preserves the legacy source-aware null-unit behavior.
  */
@@ -205,11 +237,31 @@ export function buildJobDescriptionHiringUnitScopeCondition(
     return;
   }
   if (
+    (scope.resumeSourceIds?.length ?? 0) === 0 &&
     !scope.canAccessPublic &&
     scope.hiringUnitIds.length === 0 &&
     scope.departmentIds.length === 0
   ) {
     return sql`false`;
+  }
+
+  const publicAccess = scope.canAccessPublic
+    ? and(
+        isNull(jobDescription.resumeSourceId),
+        isNull(jobDescription.hiringUnitId),
+        or(
+          eq(jobDescription.creationSource, "google_sheets"),
+          and(eq(jobDescription.creationSource, "manual"), isNull(department.hiringUnitId)),
+        ),
+      )
+    : undefined;
+  if (scope.resumeSourceIds !== undefined) {
+    return or(
+      scope.resumeSourceIds.length > 0
+        ? inArray(jobDescription.resumeSourceId, scope.resumeSourceIds)
+        : sql`false`,
+      publicAccess,
+    );
   }
 
   const jobUnitInScope =
@@ -224,16 +276,6 @@ export function buildJobDescriptionHiringUnitScopeCondition(
     scope.departmentIds.length > 0
       ? inArray(jobDescription.departmentId, scope.departmentIds)
       : undefined;
-  const publicAccess = scope.canAccessPublic
-    ? and(
-        isNull(jobDescription.hiringUnitId),
-        or(
-          eq(jobDescription.creationSource, "google_sheets"),
-          and(eq(jobDescription.creationSource, "manual"), isNull(department.hiringUnitId)),
-        ),
-      )
-    : undefined;
-
   return or(jobUnitInScope, departmentUnitInScope, departmentInScope, publicAccess);
 }
 

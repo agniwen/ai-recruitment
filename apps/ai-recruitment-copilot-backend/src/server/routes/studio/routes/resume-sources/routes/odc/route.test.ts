@@ -28,7 +28,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
 vi.mock("../../../hiring-units/odc-assignment", () => ({ areEligibleOdcMembers: mocks.eligible }));
 vi.mock("../../dao", () => ({ loadResumeSourceById: mocks.load }));
 vi.mock("./dao", () => ({
-  createResumeSourceOdcAssignment: mocks.create,
+  createResumeSourceOdcAssignments: mocks.create,
   deleteResumeSourceOdcAssignment: mocks.remove,
   queryPaginatedResumeSourceOdcAssignments: mocks.list,
   replaceResumeSourceOdcMembers: mocks.replace,
@@ -59,6 +59,7 @@ function request(path: string, body: unknown, method = "PUT", permitted = true) 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.eligible.mockResolvedValue(true);
+  mocks.create.mockResolvedValue(true);
   mocks.replace.mockResolvedValue(true);
   mocks.load.mockResolvedValue({ id: "source-a" });
 });
@@ -128,4 +129,79 @@ describe("resume source ODC boundary", () => {
       }
     },
   );
+});
+
+describe("batch adding source ODC members", () => {
+  const assignments = [
+    { jobSeries: "直属", memberId: "member-a", serviceUnit: "悦达" },
+    { jobSeries: "派驻", memberId: "member-b", serviceUnit: "无极" },
+  ];
+
+  it("adds multiple members with individual scopes in one call", async () => {
+    await expect(request("/sources/source-a/odc", { assignments }, "POST")).resolves.toHaveProperty(
+      "status",
+      201,
+    );
+    expect(mocks.eligible).toHaveBeenCalledWith({
+      memberIds: ["member-a", "member-b"],
+      organizationId: "org-a",
+    });
+    expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+      assignments,
+      organizationId: "org-a",
+      resumeSourceId: "source-a",
+    });
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("continues to accept a single assignment", async () => {
+    await expect(request("/sources/source-a/odc", assignments[0], "POST")).resolves.toHaveProperty(
+      "status",
+      201,
+    );
+    expect(mocks.create).toHaveBeenCalledWith({
+      assignments: [assignments[0]],
+      organizationId: "org-a",
+      resumeSourceId: "source-a",
+    });
+  });
+
+  it.each([{ items: [] }, { items: [assignments[0], assignments[0]] }])(
+    "rejects empty or duplicate selections: $items",
+    async ({ items }) => {
+      await expect(
+        request("/sources/source-a/odc", { assignments: items }, "POST"),
+      ).resolves.toHaveProperty("status", 400);
+      expect(mocks.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects the batch if any member is ineligible", async () => {
+    mocks.eligible.mockResolvedValue(false);
+    await expect(request("/sources/source-a/odc", { assignments }, "POST")).resolves.toHaveProperty(
+      "status",
+      400,
+    );
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("returns a conflict when an assignment already exists", async () => {
+    mocks.create.mockResolvedValue(false);
+    await expect(request("/sources/source-a/odc", { assignments }, "POST")).resolves.toHaveProperty(
+      "status",
+      409,
+    );
+  });
+
+  it("requires permission and a source in the active workspace", async () => {
+    await expect(
+      request("/sources/source-a/odc", { assignments }, "POST", false),
+    ).resolves.toHaveProperty("status", 403);
+    mocks.load.mockResolvedValue(null);
+    await expect(request("/sources/foreign/odc", { assignments }, "POST")).resolves.toHaveProperty(
+      "status",
+      404,
+    );
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
 });

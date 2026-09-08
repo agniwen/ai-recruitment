@@ -139,7 +139,12 @@ export async function loadGoogleSheetHierarchy({
         departmentIdForWrite = departmentRow.id;
       }
 
-      return { departmentId: departmentIdForWrite, hiringUnitId: hiringUnitIdForWrite };
+      return {
+        departmentId: departmentIdForWrite,
+        hiringUnitId: hiringUnitIdForWrite,
+        resumeSourceId: source.id,
+        sourceName: source.name,
+      };
     },
   };
 }

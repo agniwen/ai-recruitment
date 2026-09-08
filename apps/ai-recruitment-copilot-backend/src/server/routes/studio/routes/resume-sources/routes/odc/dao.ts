@@ -1,5 +1,4 @@
 import type {
-  OdcAssignmentCreateInput,
   OdcAssignmentItem,
   OdcAssignmentUpdateInput,
   PaginatedOdcAssignmentResult,
@@ -11,38 +10,51 @@ import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db
 import { resumeSource, resumeSourceOdcMember, member, user } from "@arc/db-schema/schema";
 import { parseOdcAssignmentPagination } from "../../../hiring-units/routes/odc/schema";
 
-export function createResumeSourceOdcAssignment({
+class DuplicateOdcAssignmentError extends Error {
+  override name = "DuplicateOdcAssignmentError";
+}
+
+export async function createResumeSourceOdcAssignments({
   resumeSourceId,
-  input,
+  assignments,
   organizationId,
 }: {
   resumeSourceId: string;
-  input: OdcAssignmentCreateInput;
+  assignments: OdcAssignmentItem[];
   organizationId: string;
 }): Promise<boolean> {
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .insert(resumeSourceOdcMember)
-      .values({
-        jobSeries: input.jobSeries ?? null,
-        memberId: input.memberId,
-        organizationId,
-        resumeSourceId,
-        serviceUnit: input.serviceUnit?.trim() || null,
-      })
-      .onConflictDoNothing()
-      .returning({ memberId: resumeSourceOdcMember.memberId });
-    if (rows.length === 0) {
+  try {
+    return await db.transaction(async (tx) => {
+      const rows = await tx
+        .insert(resumeSourceOdcMember)
+        .values(
+          assignments.map((assignment) => ({
+            jobSeries: assignment.jobSeries ?? null,
+            memberId: assignment.memberId,
+            organizationId,
+            resumeSourceId,
+            serviceUnit: assignment.serviceUnit?.trim() || null,
+          })),
+        )
+        .onConflictDoNothing()
+        .returning({ memberId: resumeSourceOdcMember.memberId });
+      if (rows.length !== assignments.length) {
+        throw new DuplicateOdcAssignmentError();
+      }
+      await tx
+        .update(resumeSource)
+        .set({ updatedAt: new Date() })
+        .where(
+          and(eq(resumeSource.id, resumeSourceId), eq(resumeSource.organizationId, organizationId)),
+        );
+      return true;
+    });
+  } catch (error) {
+    if (error instanceof DuplicateOdcAssignmentError) {
       return false;
     }
-    await tx
-      .update(resumeSource)
-      .set({ updatedAt: new Date() })
-      .where(
-        and(eq(resumeSource.id, resumeSourceId), eq(resumeSource.organizationId, organizationId)),
-      );
-    return true;
-  });
+    throw error;
+  }
 }
 
 export async function queryPaginatedResumeSourceOdcAssignments({

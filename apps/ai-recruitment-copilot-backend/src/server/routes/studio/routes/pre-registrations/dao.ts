@@ -7,12 +7,17 @@ import {
   memberReportingLine,
   organization,
   platformPreRegistration,
+  resumeSource,
   user,
 } from "@arc/db-schema/schema";
 import {
   buildProspectiveManagerRelationships,
   hasPreRegistrationManagerCycle,
 } from "./provisioning";
+import {
+  applyPreRegistrationOdcAssignments,
+  validatePreRegistrationOdcAssignments,
+} from "./odc-assignments";
 import type { StudioPreRegistrationInput } from "./schema";
 
 const directManagerPreRegistration = alias(
@@ -32,14 +37,21 @@ export interface StudioPreRegistrationsQuery {
   sortOrder: "asc" | "desc";
 }
 
-type MutationResult<T> = T | "cycle" | "duplicate" | "manager_not_found" | "not_found";
+type MutationResult<T> =
+  | T
+  | "cycle"
+  | "duplicate"
+  | "manager_not_found"
+  | "not_found"
+  | "invalid_odc_role"
+  | "invalid_resume_source";
 type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type DatabaseExecutor = typeof db | DatabaseTransaction;
 
 async function lockWorkspaceReportingLines(
   tx: DatabaseTransaction,
   workspaceSlug: string,
-): Promise<void> {
+): Promise<string> {
   const [workspace] = await tx
     .select({ id: organization.id })
     .from(organization)
@@ -49,6 +61,7 @@ async function lockWorkspaceReportingLines(
     throw new Error("Pre-registration workspace not found");
   }
   await acquireReportingLineWriteLock(tx, workspace.id);
+  return workspace.id;
 }
 
 function orderBy(query: StudioPreRegistrationsQuery) {
@@ -99,6 +112,7 @@ export async function queryPaginatedStudioPreRegistrations(
         displayName: platformPreRegistration.displayName,
         email: platformPreRegistration.email,
         id: platformPreRegistration.id,
+        odcAssignments: platformPreRegistration.odcAssignments,
         recruitingGroupNames: platformPreRegistration.recruitingGroupNames,
         recruitingRole: platformPreRegistration.recruitingRole,
         registeredUserId: user.id,
@@ -313,7 +327,16 @@ export function createStudioPreRegistration(
   input: StudioPreRegistrationInput,
 ): Promise<MutationResult<typeof platformPreRegistration.$inferSelect>> {
   return db.transaction(async (tx) => {
-    await lockWorkspaceReportingLines(tx, workspaceSlug);
+    const organizationId = await lockWorkspaceReportingLines(tx, workspaceSlug);
+    const odcError = await validatePreRegistrationOdcAssignments(
+      tx,
+      organizationId,
+      input.workspaceRole,
+      input.odcAssignments,
+    );
+    if (odcError) {
+      return odcError;
+    }
     if (await emailExists(tx, workspaceSlug, input.email)) {
       return "duplicate";
     }
@@ -342,9 +365,22 @@ export function updateStudioPreRegistration(
   input: StudioPreRegistrationInput,
 ): Promise<MutationResult<typeof platformPreRegistration.$inferSelect>> {
   return db.transaction(async (tx) => {
-    await lockWorkspaceReportingLines(tx, workspaceSlug);
+    const organizationId = await lockWorkspaceReportingLines(tx, workspaceSlug);
+    const odcError = await validatePreRegistrationOdcAssignments(
+      tx,
+      organizationId,
+      input.workspaceRole,
+      input.odcAssignments,
+    );
+    if (odcError) {
+      return odcError;
+    }
     const [existing] = await tx
-      .select({ email: platformPreRegistration.email, id: platformPreRegistration.id })
+      .select({
+        email: platformPreRegistration.email,
+        id: platformPreRegistration.id,
+        odcAssignments: platformPreRegistration.odcAssignments,
+      })
       .from(platformPreRegistration)
       .where(
         and(
@@ -399,6 +435,20 @@ export function updateStudioPreRegistration(
           ),
         );
     }
+    const [registeredUser] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(sql`lower(${user.email}) = ${input.email.toLowerCase()}`)
+      .limit(1);
+    if (registeredUser) {
+      await applyPreRegistrationOdcAssignments({
+        assignments: input.odcAssignments,
+        organizationId,
+        previousAssignments: emailChanged ? [] : existing.odcAssignments,
+        tx,
+        userId: registeredUser.id,
+      });
+    }
     return changed[0] ?? "not_found";
   });
 }
@@ -452,4 +502,12 @@ export function deleteStudioPreRegistration(workspaceSlug: string, id: string): 
     }
     return true;
   });
+}
+
+export function listPreRegistrationResumeSources(organizationId: string) {
+  return db
+    .select({ id: resumeSource.id, name: resumeSource.name })
+    .from(resumeSource)
+    .where(eq(resumeSource.organizationId, organizationId))
+    .orderBy(asc(resumeSource.name));
 }

@@ -11,7 +11,6 @@ import {
 import type { OdcAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import {
   department,
-  hiringUnit,
   resumeSourceOdcMember,
   jobDescription,
   member,
@@ -47,7 +46,9 @@ export async function resolveResumeVisibilityScope({
   return {
     odc,
     odcActor:
-      odc.departmentIds.length > 0 || odc.hiringUnitIds.length > 0
+      (odc.resumeSourceIds?.length ?? 0) > 0 ||
+      odc.departmentIds.length > 0 ||
+      odc.hiringUnitIds.length > 0
         ? { organizationId, userId }
         : undefined,
     recruiting,
@@ -94,26 +95,9 @@ function buildCurrentOdcVisibilityCondition(actor: {
           eq(jobDescription.organizationId, studioInterview.organizationId),
         ),
       )
-      .leftJoin(
-        department,
-        and(
-          eq(department.id, jobDescription.departmentId),
-          eq(department.organizationId, jobDescription.organizationId),
-        ),
-      )
-      .innerJoin(
-        hiringUnit,
-        and(
-          eq(hiringUnit.organizationId, jobDescription.organizationId),
-          or(
-            eq(hiringUnit.id, jobDescription.hiringUnitId),
-            eq(hiringUnit.id, department.hiringUnitId),
-          ),
-          eq(hiringUnit.resumeSourceId, resumeSourceOdcMember.resumeSourceId),
-        ),
-      )
       .where(
         and(
+          eq(jobDescription.resumeSourceId, resumeSourceOdcMember.resumeSourceId),
           eq(member.organizationId, actor.organizationId),
           eq(member.userId, actor.userId),
           eq(member.organizationId, studioInterview.organizationId),
@@ -150,9 +134,12 @@ export function buildResumeVisibilityCondition(
     canAccessPublic: false,
     departmentIds: normalized.odc.departmentIds,
     hiringUnitIds: normalized.odc.hiringUnitIds,
+    resumeSourceIds: normalized.odc.resumeSourceIds,
   });
   const assignedOdcCondition =
-    normalized.odc.departmentIds.length > 0 || normalized.odc.hiringUnitIds.length > 0
+    (normalized.odc.resumeSourceIds?.length ?? 0) > 0 ||
+    normalized.odc.departmentIds.length > 0 ||
+    normalized.odc.hiringUnitIds.length > 0
       ? exists(
           db
             .select({ value: sql`1` })
@@ -179,6 +166,7 @@ export function buildResumeVisibilityCondition(
 
   if (
     !recruitingCondition &&
+    (normalized.odc.resumeSourceIds?.length ?? 0) === 0 &&
     normalized.odc.departmentIds.length === 0 &&
     normalized.odc.hiringUnitIds.length === 0
   ) {

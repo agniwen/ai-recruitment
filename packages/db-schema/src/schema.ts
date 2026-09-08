@@ -1,5 +1,6 @@
 /* oxlint-disable no-inline-comments -- `/* @__PURE__ *\/` is a bundler annotation, not a human comment. */
 
+import type { PreRegistrationOdcAssignment } from "./pre-registration";
 import type { ArcMessage, ArcMessageRole } from "./ai-message";
 import type {
   CandidateFormDisplayMode,
@@ -339,6 +340,10 @@ export const platformPreRegistration = pgTable(
     displayName: text("display_name").notNull(),
     email: text("email").notNull(),
     id: text("id").primaryKey(),
+    odcAssignments: jsonb("odc_assignments")
+      .$type<PreRegistrationOdcAssignment[]>()
+      .default([])
+      .notNull(),
     recruitingGroupNames: text("recruiting_group_names").array().notNull(),
     recruitingRole: text("recruiting_role").notNull(),
     telegram: text("telegram").notNull(),
@@ -1081,6 +1086,7 @@ export const jobDescription = pgTable(
     resumeScreeningPolicy: jsonb("resume_screening_policy").$type<Record<string, unknown> | null>(),
     resumeScreeningPolicyHash: text("resume_screening_policy_hash"),
     resumeScreeningPolicyVersion: integer("resume_screening_policy_version").notNull().default(1),
+    resumeSourceId: text("resume_source_id"),
     salaryCurrency: text("salary_currency"),
     salaryMaxAmount: integer("salary_max_amount"),
     salaryMinAmount: integer("salary_min_amount"),
@@ -1098,6 +1104,12 @@ export const jobDescription = pgTable(
     workTimezone: text("work_timezone"),
   },
   (table) => [
+    foreignKey({
+      columns: [table.organizationId, table.resumeSourceId],
+      foreignColumns: [resumeSource.organizationId, resumeSource.id],
+      name: "job_description_resume_source_org_fk",
+    }).onDelete("no action"),
+    index("job_description_resume_source_idx").on(table.organizationId, table.resumeSourceId),
     index("job_description_department_idx").on(table.departmentId),
     index("job_description_hiring_unit_idx").on(table.organizationId, table.hiringUnitId),
     index("job_description_name_idx").on(table.name),

@@ -1,7 +1,16 @@
+import { bindResumePoolItemJobDescription } from "../routes/resume-pool/dao/bind-job-description";
+import { resolveHiringUnitAccessScope } from "../utils/hiring-unit-scope";
+import {
+  buildResumeVisibilityCondition,
+  resolveResumeVisibilityScope,
+} from "../../../access/resume-visibility";
+import { resolveJobDescriptionResumeSource } from "../routes/job-descriptions/resume-source";
 import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  resumePoolItem,
+  studioInterview,
   department,
   departmentOdcMember,
   hiringUnit,
@@ -48,6 +57,8 @@ function ids<T extends { id: string }>(rows: T[]) {
 }
 
 async function clean() {
+  await db.delete(resumePoolItem).where(eq(resumePoolItem.organizationId, ORG));
+  await db.delete(studioInterview).where(eq(studioInterview.organizationId, ORG));
   await db.delete(jobDescription).where(eq(jobDescription.organizationId, ORG));
   await db.delete(interviewer).where(eq(interviewer.organizationId, ORG));
   await db.delete(department).where(eq(department.organizationId, ORG));
@@ -65,6 +76,7 @@ async function clean() {
   await db.delete(recruitingGroup).where(eq(recruitingGroup.organizationId, ORG));
   await db.delete(member).where(eq(member.organizationId, ORG));
   await db.delete(organization).where(eq(organization.id, ORG));
+  await db.delete(organization).where(eq(organization.id, "another_workspace"));
   await db.delete(user).where(eq(user.id, OWNER));
   await db.delete(user).where(eq(user.id, MEMBER));
   await db.delete(user).where(eq(user.id, NO_GROUP_MEMBER));
@@ -269,6 +281,7 @@ async function seedWorkspace() {
       name: "A 岗位",
       organizationId: ORG,
       prompt: "A 岗位 prompt",
+      resumeSourceId: "group_source_a",
       updatedAt: NOW,
     },
     {
@@ -355,6 +368,24 @@ describe("hiring unit recruiting-group scope", () => {
     );
   });
 
+  it("岗位来源切换立即改变招聘组可见性，不依赖旧部门或用人组织", async () => {
+    await db
+      .insert(resumeSource)
+      .values({ id: "source_without_units", name: "独立来源", organizationId: ORG });
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "source_without_units" })
+      .where(eq(jobDescription.id, JD_A));
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: MEMBER }))).toEqual([JD_PUBLIC]);
+    await db
+      .update(recruitingGroupResumeSource)
+      .set({ resumeSourceId: "source_without_units" })
+      .where(eq(recruitingGroupResumeSource.groupId, GROUP_A));
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: MEMBER }))).toEqual(
+      [JD_A, JD_PUBLIC].toSorted(),
+    );
+  });
+
   it("owner 不受招聘组简历来源范围限制", async () => {
     const [departments, interviewers, jobDescriptions] = await Promise.all([
       listAllDepartments(ORG, { actorUserId: OWNER }),
@@ -417,6 +448,10 @@ describe("hiring unit recruiting-group scope", () => {
       .update(hiringUnit)
       .set({ resumeSourceId: "hiring_scope_source" })
       .where(eq(hiringUnit.id, HIRING_UNIT_A));
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "hiring_scope_source" })
+      .where(eq(jobDescription.id, JD_A));
     await db.insert(resumeSourceOdcMember).values({
       memberId: NO_GROUP_MEMBER_ID,
       organizationId: ORG,
@@ -430,6 +465,13 @@ describe("hiring unit recruiting-group scope", () => {
       .update(hiringUnit)
       .set({ resumeSourceId: "hiring_scope_source" })
       .where(eq(hiringUnit.id, HIRING_UNIT_B));
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual([
+      JD_A,
+    ]);
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "hiring_scope_source" })
+      .where(eq(jobDescription.id, JD_B));
     expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual(
       [JD_A, JD_B].toSorted(),
     );
@@ -437,9 +479,148 @@ describe("hiring unit recruiting-group scope", () => {
       .update(hiringUnit)
       .set({ resumeSourceId: null })
       .where(eq(hiringUnit.id, HIRING_UNIT_A));
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual(
+      [JD_A, JD_B].toSorted(),
+    );
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: null })
+      .where(eq(jobDescription.id, JD_A));
     expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual([
       JD_B,
     ]);
+  });
+
+  it("ODC 按岗位来源及序列、服务单位读取简历，来源切换和撤销挂靠即时生效", async () => {
+    await db
+      .insert(resumeSource)
+      .values({ id: "odc_standalone_source", name: "无下属组织的来源", organizationId: ORG });
+    await db
+      .update(jobDescription)
+      .set({ jobSeries: "派驻", resumeSourceId: "odc_standalone_source", serviceUnit: "服务A" })
+      .where(eq(jobDescription.id, JD_A));
+    await db
+      .update(jobDescription)
+      .set({ jobSeries: "直属", resumeSourceId: "odc_standalone_source", serviceUnit: "服务A" })
+      .where(eq(jobDescription.id, JD_B));
+    await db.insert(resumeSourceOdcMember).values({
+      jobSeries: "派驻",
+      memberId: NO_GROUP_MEMBER_ID,
+      organizationId: ORG,
+      resumeSourceId: "odc_standalone_source",
+      serviceUnit: "服务A",
+    });
+    await db.insert(studioInterview).values([
+      {
+        candidateName: "候选人A",
+        createdBy: OWNER,
+        id: "source_candidate_a",
+        jobDescriptionId: JD_A,
+        organizationId: ORG,
+      },
+      {
+        candidateName: "候选人B",
+        createdBy: OWNER,
+        id: "source_candidate_b",
+        jobDescriptionId: JD_B,
+        organizationId: ORG,
+      },
+    ]);
+    const scope = await resolveResumeVisibilityScope({
+      currentRole: "odc",
+      organizationId: ORG,
+      userId: NO_GROUP_MEMBER,
+    });
+    const visible = () =>
+      db
+        .select({ id: studioInterview.id })
+        .from(studioInterview)
+        .where(and(eq(studioInterview.organizationId, ORG), buildResumeVisibilityCondition(scope)));
+    expect(ids(await visible())).toEqual(["source_candidate_a"]);
+    await db
+      .update(jobDescription)
+      .set({ serviceUnit: "服务B" })
+      .where(eq(jobDescription.id, JD_A));
+    expect(await visible()).toEqual([]);
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "group_source_a", serviceUnit: "服务A" })
+      .where(eq(jobDescription.id, JD_A));
+    expect(await visible()).toEqual([]);
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "odc_standalone_source" })
+      .where(eq(jobDescription.id, JD_A));
+    expect(ids(await visible())).toEqual(["source_candidate_a"]);
+    await db.delete(resumeSourceOdcMember).where(eq(resumeSourceOdcMember.organizationId, ORG));
+    expect(await visible()).toEqual([]);
+  });
+
+  it("来源保存按 ID 校验范围，并拒绝其他工作区的来源", async () => {
+    expect(
+      await resolveJobDescriptionResumeSource({
+        actorUserId: MEMBER,
+        organizationId: ORG,
+        resumeSourceId: "group_source_a",
+        sourceSheet: "过期名称",
+      }),
+    ).toMatchObject({ error: null, resumeSourceId: "group_source_a", sourceSheet: "招聘来源 A" });
+    await db
+      .insert(resumeSource)
+      .values({ id: "unassigned_source", name: "未授权来源", organizationId: ORG });
+    const denied = await resolveJobDescriptionResumeSource({
+      actorUserId: MEMBER,
+      organizationId: ORG,
+      resumeSourceId: "unassigned_source",
+    });
+    expect(denied.error).toBeTruthy();
+    const foreign = await resolveJobDescriptionResumeSource({
+      actorUserId: OWNER,
+      organizationId: "another_workspace",
+      resumeSourceId: "group_source_a",
+    });
+    expect(foreign.error).toBeTruthy();
+    await db
+      .insert(organization)
+      .values({ id: "another_workspace", name: "Other", slug: "another-workspace" });
+    await expect(
+      db
+        .update(jobDescription)
+        .set({ organizationId: "another_workspace", resumeSourceId: "group_source_a" })
+        .where(eq(jobDescription.id, JD_B)),
+    ).rejects.toThrow();
+  });
+
+  it("简历池绑定岗位不能通过旧部门绕过来源范围", async () => {
+    await db
+      .insert(resumeSource)
+      .values({ id: "pool_other_source", name: "其他来源", organizationId: ORG });
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "pool_other_source" })
+      .where(eq(jobDescription.id, JD_A));
+    await db.insert(resumePoolItem).values({
+      candidateName: "候选人",
+      createdBy: MEMBER,
+      id: "source_pool_item",
+      organizationId: ORG,
+      scope: "private",
+    });
+    const scope = await resolveHiringUnitAccessScope({ actorUserId: MEMBER, organizationId: ORG });
+    const bind = () =>
+      bindResumePoolItemJobDescription({
+        actorId: MEMBER,
+        hiringUnitScope: scope,
+        jobDescriptionId: JD_A,
+        organizationId: ORG,
+        poolItemId: "source_pool_item",
+      });
+    expect(await bind()).toBe("job_description_not_found");
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "group_source_a" })
+      .where(eq(jobDescription.id, JD_A));
+    expect(await bind()).toBe("bound");
   });
 
   it("角色取消 ODC 标记后立即失去已分配范围", async () => {
@@ -450,6 +631,10 @@ describe("hiring unit recruiting-group scope", () => {
       .update(hiringUnit)
       .set({ resumeSourceId: "hiring_scope_source" })
       .where(eq(hiringUnit.id, HIRING_UNIT_A));
+    await db
+      .update(jobDescription)
+      .set({ resumeSourceId: "hiring_scope_source" })
+      .where(eq(jobDescription.id, JD_A));
     await db.insert(resumeSourceOdcMember).values({
       memberId: NO_GROUP_MEMBER_ID,
       organizationId: ORG,
