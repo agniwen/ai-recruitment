@@ -1089,6 +1089,7 @@ export const jobDescriptionGoogleSheetSyncRun = pgTable(
     requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
     requestedByRole: text("requested_by_role"),
     result: jsonb("result").$type<{
+      resumeSourcesCreated?: number;
       departmentsCreated: number;
       hiringUnitsCreated: number;
       jobsCreated: number;

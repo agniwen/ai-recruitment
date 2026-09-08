@@ -26,6 +26,9 @@ export async function processGoogleSheetSyncRun({ runId }: { runId: string }): P
       values,
     });
 
+    if ((result.resumeSourcesCreated ?? 0) > 0 || result.hiringUnitsCreated > 0) {
+      safeUpdateTag(`resume-sources:${claimed.organizationId}`);
+    }
     if (result.hiringUnitsCreated > 0) {
       safeUpdateTag(`hiring-units:${claimed.organizationId}`);
     }

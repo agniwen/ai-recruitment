@@ -47,7 +47,7 @@ export function buildGoogleSheetSyncResultDescription(
   const imported = result.jobsCreated + result.jobsUpdated;
   const lines = [
     `处理 ${result.processedRows} 行（导入/更新 ${imported}，未变化 ${result.jobsUnchanged}，跳过 ${result.skipped.length}）`,
-    `用人组织新增 ${result.hiringUnitsCreated}，部门新增 ${result.departmentsCreated}`,
+    `简历来源新增 ${result.resumeSourcesCreated ?? 0}，用人组织新增 ${result.hiringUnitsCreated}，部门新增 ${result.departmentsCreated}`,
     `岗位新增 ${result.jobsCreated}，岗位更新 ${result.jobsUpdated}`,
   ];
   appendLimitedLines(lines, result.skipped.map(formatSkippedLine), "跳过");
@@ -127,7 +127,11 @@ export function GoogleSheetsSyncButton({
       return;
     }
     void Promise.resolve(onSynced(run.result));
+    for (const key of ["resume-sources", "hiring-units", "departments"]) {
+      void queryClient.invalidateQueries({ queryKey: [key, slug] });
+    }
     const changed =
+      (run.result.resumeSourcesCreated ?? 0) +
       run.result.hiringUnitsCreated +
       run.result.departmentsCreated +
       run.result.jobsCreated +
@@ -141,7 +145,7 @@ export function GoogleSheetsSyncButton({
       ),
       duration: SYNC_TOAST_DURATION_MS,
     });
-  }, [onSynced, run]);
+  }, [onSynced, queryClient, run, slug]);
 
   return (
     <Button disabled={syncing} onClick={() => mutation.mutate()} variant="outline">

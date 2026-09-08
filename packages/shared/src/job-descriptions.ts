@@ -283,6 +283,8 @@ export interface JobDescriptionGoogleSheetsSyncWarning {
 }
 
 export interface JobDescriptionGoogleSheetsSyncResult {
+  /** Absent on sync runs saved before resume-source hierarchy support. */
+  resumeSourcesCreated?: number;
   departmentsCreated: number;
   hiringUnitsCreated: number;
   jobsCreated: number;

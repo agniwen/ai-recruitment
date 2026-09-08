@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildGoogleSheetJobValues,
   DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME,
+  DEFAULT_GOOGLE_SHEET_HIRING_UNIT_NAME,
+  DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME,
   hasGoogleSheetJobChanges,
   parseGoogleSheetJobRows,
 } from "./google-sheets-sync";
@@ -87,6 +89,34 @@ describe("parseGoogleSheetJobRows", () => {
     });
   });
 
+  it("accepts 简历来源 as the source column and prefers it when both headers exist", () => {
+    const aliasedHeaders = HEADERS.map((header) => (header === "来源表格" ? "简历来源" : header));
+    expect(parseGoogleSheetJobRows([aliasedHeaders, row()]).records[0].sourceSheet).toBe(
+      "技术中心",
+    );
+    expect(
+      parseGoogleSheetJobRows([
+        [...HEADERS, "简历来源"],
+        [...row(), "合作方A"],
+      ]).records[0].sourceSheet,
+    ).toBe("合作方A");
+  });
+
+  it("uses explicit defaults for empty source and hiring unit cells", () => {
+    const parsed = parseGoogleSheetJobRows([
+      HEADERS,
+      row({ 来源表格: "", 编制组织: "", 部门: "" }),
+    ]);
+    expect(parsed.records[0]).toMatchObject({
+      departmentName: DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME,
+      hiringUnitName: DEFAULT_GOOGLE_SHEET_HIRING_UNIT_NAME,
+      sourceSheet: DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME,
+    });
+    expect(parsed.warnings.map((warning) => warning.field)).toEqual(
+      expect.arrayContaining(["简历来源", "编制组织", "部门"]),
+    );
+  });
+
   it("accepts the legacy stable id header", () => {
     const legacyHeaders = HEADERS.map((header) =>
       header === "岗位唯一编码" ? "稳定唯一值" : header,
@@ -120,11 +150,11 @@ describe("parseGoogleSheetJobRows", () => {
     expect(result.records).toHaveLength(1);
     expect(result.records[0]).toMatchObject({
       code: "REQ-000010",
-      hiringUnitName: "",
+      hiringUnitName: DEFAULT_GOOGLE_SHEET_HIRING_UNIT_NAME,
     });
 
-    const values = buildGoogleSheetJobValues(result.records[0], "department-1", null);
-    expect(values.hiringUnitId).toBeNull();
+    const values = buildGoogleSheetJobValues(result.records[0], "department-1", "default-unit-id");
+    expect(values.hiringUnitId).toBe("default-unit-id");
     expect(
       hasGoogleSheetJobChanges(
         {
@@ -176,13 +206,13 @@ describe("parseGoogleSheetJobRows", () => {
     expect(result.warnings).toContainEqual({
       code: "REQ-000020",
       field: "部门",
-      message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位保留本系统部门；编制组织仍按表格写入。`,
+      message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位仅在所属用人组织不变时保留本系统部门。`,
       rowNumber: 2,
     });
     expect(result.warnings).toContainEqual({
       code: "REQ-000021",
       field: "部门",
-      message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位保留本系统部门；编制组织仍按表格写入。`,
+      message: `部门为空：新建岗位归入「${DEFAULT_GOOGLE_SHEET_DEPARTMENT_NAME}」，已有岗位仅在所属用人组织不变时保留本系统部门。`,
       rowNumber: 3,
     });
   });
