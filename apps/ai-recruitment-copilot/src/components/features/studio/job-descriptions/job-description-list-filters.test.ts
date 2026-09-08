@@ -41,6 +41,7 @@ describe("createJobDescriptionListFilters", () => {
     if (!sourceSheetFilter || sourceSheetFilter.type !== "select") {
       throw new Error("来源表格筛选器配置无效");
     }
+    expect(sourceSheetFilter.label).toBe("来源表格");
     expect(sourceSheetFilter.options).toEqual([
       { label: "汇总表", value: "汇总表" },
       { label: "研发岗位", value: "研发岗位" },

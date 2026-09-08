@@ -32,6 +32,14 @@ describe("parseJobDescriptionListFilters", () => {
     });
   });
 
+  it("combines job series and service unit with a source-sheet selection", () => {
+    const textFilters = JSON.stringify({ jobSeries: "直属", serviceUnit: "悦达" });
+    expect(parseJobDescriptionListFilters({ sourceSheet: " 招聘表 ", textFilters })).toMatchObject({
+      sourceSheet: "招聘表",
+      textFilters,
+    });
+  });
+
   it("drops unsupported enum values", () => {
     expect(
       parseJobDescriptionListFilters({

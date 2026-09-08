@@ -1,5 +1,6 @@
 "use client";
 
+import { RecruitmentCopilotBrand } from "@/components/layout/app-sidebar/recruitment-copilot-brand";
 import type { ComponentProps } from "react";
 import {
   Sidebar,
@@ -24,7 +25,8 @@ type PlatformSidebarProps = ComponentProps<typeof Sidebar>;
 export function PlatformSidebar({ ...props }: PlatformSidebarProps) {
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
-      <SidebarHeader className="gap-3">
+      <SidebarHeader className="relative gap-3 overflow-x-clip">
+        <RecruitmentCopilotBrand />
         <SidebarHeaderPortalTarget className="contents" />
       </SidebarHeader>
       <SidebarContent>

@@ -220,8 +220,10 @@ function buildWhereConditions({
     conditions.push(scopeCondition);
   }
   const atomic = buildListTextFilterWhere("jobs", textFilters, {
+    jobSeries: jobDescription.jobSeries,
     name: jobDescription.name,
     prompt: jobDescription.prompt,
+    serviceUnit: jobDescription.serviceUnit,
   });
   if (atomic) {
     conditions.push(atomic);

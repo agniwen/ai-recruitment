@@ -12,7 +12,7 @@ export const listTextFields = {
     targetRole: "岗位",
     title: "轮次名称",
   },
-  jobs: { name: "岗位名称", prompt: "岗位 JD" },
+  jobs: { jobSeries: "序列", name: "岗位名称", prompt: "岗位 JD", serviceUnit: "服务单位" },
   mailAccounts: {
     emailAddress: "监听邮箱",
     imapHost: "IMAP 主机",

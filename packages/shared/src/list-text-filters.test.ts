@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeListTextSearchParam,
+  listTextFields,
   listTextFiltersSchema,
   matchesListTextFilters,
   parseListTextFilters,
@@ -21,6 +22,15 @@ describe("atomic list text filter contract", () => {
       expect(listTextFiltersSchema("users").safeParse(value).success).toBe(false);
     },
   );
+
+  it("exposes and validates job series and service-unit filters", () => {
+    expect(listTextFields.jobs).toMatchObject({ jobSeries: "序列", serviceUnit: "服务单位" });
+    expect(
+      listTextFiltersSchema("jobs").safeParse(
+        JSON.stringify({ jobSeries: "直属", serviceUnit: "悦达" }),
+      ).success,
+    ).toBe(true);
+  });
 
   it("serializes non-empty values in canonical field order", () => {
     const serialized = serializeListTextFilters({ company: "极光", email: "  ", school: "清华" });

@@ -18,6 +18,7 @@ import {
   SidebarFooterSkeleton,
   SidebarSlotHydrationFallback,
 } from "./sidebar-slot-skeleton";
+import { RecruitmentCopilotBrand } from "./recruitment-copilot-brand";
 import { SidebarTabs } from "./sidebar-tabs";
 
 type AppSidebarProps = ComponentProps<typeof Sidebar>;
@@ -26,7 +27,10 @@ export function AppSidebar({ ...props }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
       <SidebarHeader className="relative gap-3 overflow-x-clip">
-        <SidebarTabs />
+        <div className="flex w-full flex-col gap-3 group-data-[collapsible=icon]:gap-0">
+          <RecruitmentCopilotBrand />
+          <SidebarTabs />
+        </div>
         <SidebarHeaderPortalTarget className="contents" />
       </SidebarHeader>
       <SidebarContent className="relative overflow-x-hidden">

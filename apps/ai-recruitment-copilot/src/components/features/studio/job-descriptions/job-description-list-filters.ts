@@ -41,6 +41,7 @@ export function createJobDescriptionListFilters({
     {
       emptyMessage: "没有匹配的来源表格",
       key: "sourceSheet",
+      label: "来源表格",
       options: sourceSheets.map((sourceSheet) => ({
         label: sourceSheet,
         value: sourceSheet,
