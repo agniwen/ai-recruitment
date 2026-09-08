@@ -1,3 +1,4 @@
+import type { ResumeSourceRecord } from "@arc/shared/resume-sources";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import {
@@ -7,8 +8,7 @@ import {
   IconPlus,
   IconWorld,
 } from "@tabler/icons-react";
-import type { RowSelectionState } from "@tanstack/react-table";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { HiringUnitRecord, HiringUnitTreeResult } from "@arc/shared/hiring-units";
 import {
@@ -16,20 +16,15 @@ import {
   customColumn,
   DataGrid,
   dateColumn,
-  selectColumn,
   textColumn,
 } from "@/components/data-grid";
-import { BulkOdcAssignmentDialog } from "@/components/features/studio/bulk-odc-assignment-dialog";
 import { DepartmentDeleteDialog } from "@/components/features/studio/departments/department-delete-dialog";
 import { DepartmentFormDialog } from "@/components/features/studio/departments/department-form-dialog";
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { HiringUnitFormDialog } from "@/components/features/studio/hiring-units/hiring-unit-form-dialog";
 import { flattenHiringUnitTree } from "@/components/features/studio/hiring-units/hiring-unit-tree";
 import type { HiringUnitTreeRow } from "@/components/features/studio/hiring-units/hiring-unit-tree";
-import { OdcAssignmentDialog } from "@/components/features/studio/odc-assignment-dialog";
-import { OdcManagementModal } from "@/components/features/studio/odc-management-modal";
 import { PageHeader } from "@/components/features/studio/page-header";
-import { OdcAvatarGroup } from "@/components/features/studio/odc-avatar-group";
 import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,11 +54,19 @@ export function HiringUnitManagementPage() {
     () => new Set(),
   );
   const [search, setSearch] = useState("");
-  const [odcTarget, setOdcTarget] = useState<HiringUnitTreeRow | null>(null);
-  const [managedOdcTarget, setManagedOdcTarget] = useState<HiringUnitTreeRow | null>(null);
-  const [batchOdcTargets, setBatchOdcTargets] = useState<HiringUnitTreeRow[]>([]);
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
+  const sources = useQuery({
+    queryFn: () =>
+      rpcFetch<{ records: ResumeSourceRecord[] }>(
+        rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
+        "加载简历来源失败",
+      ),
+    queryKey: ["resume-sources", slug],
+  });
+  const sourceNames = useMemo(
+    () => new Map((sources.data?.records ?? []).map((source) => [source.id, source.name])),
+    [sources.data],
+  );
   const treeQuery = useQuery({
     queryFn: () =>
       rpcFetch<HiringUnitTreeResult>(
@@ -84,20 +87,8 @@ export function HiringUnitManagementPage() {
     [collapsedHiringUnitIds, search, treeQuery.data],
   );
 
-  useEffect(() => {
-    const selectableRowIds = new Set(
-      rows
-        .filter((row) => (row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment))
-        .map((row) => `${row.rowType}:${row.id}`),
-    );
-    setRowSelection((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([id, selected]) => selected && selectableRowIds.has(id)),
-      ),
-    );
-  }, [canUpdateDepartment, canUpdateHiringUnit, rows]);
-
   function invalidateHiringUnitData() {
+    void queryClient.invalidateQueries({ queryKey: ["resume-sources"] });
     void queryClient.invalidateQueries({ queryKey: ["hiring-units"] });
     void queryClient.invalidateQueries({ queryKey: ["departments"] });
     void router.invalidate();
@@ -114,6 +105,7 @@ export function HiringUnitManagementPage() {
       description: record.description,
       id: record.id,
       name: record.name,
+      resumeSourceId: record.resumeSourceId,
       updatedAt: record.updatedAt,
     }),
     invalidate: invalidateHiringUnitData,
@@ -152,14 +144,6 @@ export function HiringUnitManagementPage() {
 
   const columns = useMemo(() => {
     const baseColumns = [
-      ...(canUpdateHiringUnit || canUpdateDepartment
-        ? [
-            selectColumn<HiringUnitTreeRow>({
-              getRowLabel: (row) => row.name,
-              scopeLabel: "组织与部门",
-            }),
-          ]
-        : []),
       customColumn<HiringUnitTreeRow>({
         cell: (row) => {
           const collapsed = collapsedHiringUnitIds.has(row.id) && !search;
@@ -200,20 +184,25 @@ export function HiringUnitManagementPage() {
         key: "name",
         title: "组织 / 部门",
       }),
+      customColumn<HiringUnitTreeRow>({
+        cell: (row) => {
+          if (row.rowType === "department") {
+            return "—";
+          }
+          if (!row.resumeSourceId) {
+            return "未设置";
+          }
+          return sourceNames.get(row.resumeSourceId) ?? "加载中...";
+        },
+        key: "resumeSourceId",
+        title: "简历来源",
+      }),
       textColumn<HiringUnitTreeRow>({
         fallback: "—",
         key: "description",
         muted: true,
         title: "描述",
         truncate: true,
-      }),
-      customColumn<HiringUnitTreeRow>({
-        cell: (row) => <OdcAvatarGroup members={row.odcMembers} />,
-        key: "odcMembers",
-        maxSize: 160,
-        minSize: 160,
-        size: 160,
-        title: "ODC",
       }),
       dateColumn<HiringUnitTreeRow>({ key: "createdAt", title: "创建时间" }),
     ];
@@ -222,12 +211,6 @@ export function HiringUnitManagementPage() {
       baseColumns.push(
         actionsColumn<HiringUnitTreeRow>({
           inline: [
-            {
-              label: "管理 ODC",
-              onClick: setManagedOdcTarget,
-              show: (row) =>
-                row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment,
-            },
             {
               label: "编辑",
               onClick: (row) => void crud.openEdit(row),
@@ -240,12 +223,6 @@ export function HiringUnitManagementPage() {
             },
           ],
           menu: [
-            {
-              label: "设置 ODC",
-              onClick: setOdcTarget,
-              show: (row) =>
-                row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment,
-            },
             {
               label: "删除",
               onClick: (row) => crud.setDeleteRecord(row),
@@ -272,24 +249,17 @@ export function HiringUnitManagementPage() {
     crud,
     departmentCrud,
     search,
+    sourceNames,
   ]);
 
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
-          description="按用人组织展开查看所属部门，并设置组织或部门的 ODC。"
+          description="管理简历来源下的用人组织及所属部门。ODC 请在简历来源中设置。"
           title="用人组织"
         />
         <DataGrid<HiringUnitTreeRow>
-          bulkActions={({ selectedRows }) => (
-            <Button onClick={() => setBatchOdcTargets(selectedRows)} variant="secondary">
-              批量设置 ODC
-            </Button>
-          )}
-          canSelectRow={(row) =>
-            row.rowType === "hiringUnit" ? canUpdateHiringUnit : canUpdateDepartment
-          }
           columns={columns}
           data={rows}
           empty={
@@ -330,9 +300,7 @@ export function HiringUnitManagementPage() {
           onFilterChange={(_, value) => setSearch(value)}
           onRefresh={() => void treeQuery.refetch()}
           onRetry={() => void treeQuery.refetch()}
-          onRowSelectionChange={setRowSelection}
           refetching={treeQuery.isRefetching}
-          rowSelection={rowSelection}
           toolbarRight={
             canCreateHiringUnit ? (
               <Button className="flex-1 sm:flex-none" onClick={crud.openCreate}>
@@ -363,47 +331,6 @@ export function HiringUnitManagementPage() {
           record={departmentCrud.editingRecord}
         />
       ) : null}
-
-      <OdcAssignmentDialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setOdcTarget(null);
-          }
-        }}
-        onSaved={invalidateHiringUnitData}
-        open={odcTarget !== null}
-        target={odcTarget}
-      />
-
-      <OdcManagementModal
-        key={
-          managedOdcTarget
-            ? `${managedOdcTarget.rowType}:${managedOdcTarget.id}`
-            : "closed-odc-management"
-        }
-        onOpenChange={(open) => {
-          if (!open) {
-            setManagedOdcTarget(null);
-          }
-        }}
-        onSaved={invalidateHiringUnitData}
-        open={managedOdcTarget !== null}
-        target={managedOdcTarget}
-      />
-
-      <BulkOdcAssignmentDialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setBatchOdcTargets([]);
-          }
-        }}
-        onSaved={() => {
-          setRowSelection({});
-          invalidateHiringUnitData();
-        }}
-        open={batchOdcTargets.length > 0}
-        targets={batchOdcTargets}
-      />
 
       {canDeleteHiringUnit ? (
         <EntityDeleteDialog

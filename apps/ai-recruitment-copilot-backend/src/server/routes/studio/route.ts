@@ -1,3 +1,4 @@
+import { resumeSourcesRouter } from "./routes/resume-sources/route";
 import { studioPreRegistrationsRouter } from "./routes/pre-registrations/route";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { departmentsRouter } from "./routes/departments/route";
@@ -26,6 +27,7 @@ export const studioRouter = factory
   .route("/resume-pool", resumePoolRouter)
   .route("/resumes", resumeLibraryRouter)
   .route("/resume-upload-batches", resumeUploadBatchesRouter)
+  .route("/resume-sources", resumeSourcesRouter)
   .route("/hiring-units", hiringUnitsRouter)
   .route("/departments", departmentsRouter)
   .route("/global-config", globalConfigRouter)

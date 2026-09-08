@@ -33,9 +33,6 @@ import { useHasPermission } from "@/hooks/use-has-permission";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DepartmentFormDialog } from "@/components/features/studio/departments/department-form-dialog";
 import { DepartmentDeleteDialog } from "@/components/features/studio/departments/department-delete-dialog";
-import { OdcAvatarGroup } from "@/components/features/studio/odc-avatar-group";
-import { OdcAssignmentDialog } from "@/components/features/studio/odc-assignment-dialog";
-import type { OdcAssignmentTarget } from "@/components/features/studio/odc-assignment-dialog";
 
 export function DepartmentManagementPage() {
   const slug = useWorkspaceSlug();
@@ -93,7 +90,6 @@ export function DepartmentManagementPage() {
   );
   const [jobDescriptionsModalDept, setJobDescriptionsModalDept] =
     useState<DepartmentListRecord | null>(null);
-  const [odcTarget, setOdcTarget] = useState<OdcAssignmentTarget | null>(null);
 
   function invalidateDepartmentData() {
     grid.invalidate();
@@ -138,14 +134,6 @@ export function DepartmentManagementPage() {
           muted: true,
           title: "描述",
           truncate: true,
-        }),
-        customColumn<DepartmentListRecord>({
-          cell: (r) => <OdcAvatarGroup members={r.odcMembers} />,
-          key: "odcMembers",
-          maxSize: 160,
-          minSize: 160,
-          size: 160,
-          title: "ODC",
         }),
         customColumn<DepartmentListRecord>({
           cell: (r) => {
@@ -210,17 +198,6 @@ export function DepartmentManagementPage() {
             ],
             menu: [
               {
-                label: "设置 ODC",
-                onClick: (r) =>
-                  setOdcTarget({
-                    id: r.id,
-                    name: r.name,
-                    odcMembers: r.odcMembers,
-                    rowType: "department",
-                  }),
-                show: () => canUpdateDepartment,
-              },
-              {
                 label: "删除",
                 onClick: (r) => crud.setDeleteRecord(r),
                 show: () => canDeleteDepartment,
@@ -251,7 +228,10 @@ export function DepartmentManagementPage() {
   return (
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader description="设置岗位、面试官所属部门及部门 ODC。" title="部门设置" />
+        <PageHeader
+          description="设置岗位、面试官所属部门。ODC 请在简历来源中设置。"
+          title="部门设置"
+        />
 
         <DataGrid<DepartmentListRecord>
           {...grid.bind}
@@ -303,17 +283,6 @@ export function DepartmentManagementPage() {
         onClose={() => crud.setDeleteRecord(null)}
         onConfirm={crud.handleDelete}
         record={canDeleteDepartment ? crud.deleteRecord : null}
-      />
-
-      <OdcAssignmentDialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setOdcTarget(null);
-          }
-        }}
-        onSaved={invalidateDepartmentData}
-        open={odcTarget !== null}
-        target={odcTarget}
       />
 
       <ScopedInterviewersModal

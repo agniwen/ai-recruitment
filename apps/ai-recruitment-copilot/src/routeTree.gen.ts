@@ -56,6 +56,7 @@ import { Route as WSlugAgentIndexRouteImport } from './routes/w.$slug.agent.inde
 import { Route as PlatformMastraStudioAgentBuilderIndexRouteImport } from './routes/platform.mastra-studio.agent-builder.index'
 import { Route as PlatformMastraStudioMainIndexRouteImport } from './routes/platform.mastra-studio._main.index'
 import { Route as WSlugStudioResumesRouteImport } from './routes/w.$slug.studio.resumes'
+import { Route as WSlugStudioResumeSourcesRouteImport } from './routes/w.$slug.studio.resume-sources'
 import { Route as WSlugStudioResumePoolRouteImport } from './routes/w.$slug.studio.resume-pool'
 import { Route as WSlugStudioPreRegistrationsRouteImport } from './routes/w.$slug.studio.pre-registrations'
 import { Route as WSlugStudioPermissionsRouteImport } from './routes/w.$slug.studio.permissions'
@@ -427,6 +428,12 @@ const WSlugStudioResumesRoute = WSlugStudioResumesRouteImport.update({
   path: '/resumes',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
+const WSlugStudioResumeSourcesRoute =
+  WSlugStudioResumeSourcesRouteImport.update({
+    id: '/resume-sources',
+    path: '/resume-sources',
+    getParentRoute: () => WSlugStudioRoute,
+  } as any)
 const WSlugStudioResumePoolRoute = WSlugStudioResumePoolRouteImport.update({
   id: '/resume-pool',
   path: '/resume-pool',
@@ -1259,6 +1266,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/pre-registrations': typeof WSlugStudioPreRegistrationsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
+  '/w/$slug/studio/resume-sources': typeof WSlugStudioResumeSourcesRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/platform/mastra-studio/': typeof PlatformMastraStudioMainIndexRoute
   '/platform/mastra-studio/agent-builder/': typeof PlatformMastraStudioAgentBuilderIndexRoute
@@ -1421,6 +1429,7 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/pre-registrations': typeof WSlugStudioPreRegistrationsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
+  '/w/$slug/studio/resume-sources': typeof WSlugStudioResumeSourcesRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/platform/mastra-studio/agent-builder': typeof PlatformMastraStudioAgentBuilderIndexRoute
   '/w/$slug/agent': typeof WSlugAgentIndexRoute
@@ -1586,6 +1595,7 @@ export interface FileRoutesById {
   '/w/$slug/studio/permissions': typeof WSlugStudioPermissionsRoute
   '/w/$slug/studio/pre-registrations': typeof WSlugStudioPreRegistrationsRoute
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
+  '/w/$slug/studio/resume-sources': typeof WSlugStudioResumeSourcesRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
   '/platform/mastra-studio/_main/': typeof PlatformMastraStudioMainIndexRoute
   '/platform/mastra-studio/agent-builder/': typeof PlatformMastraStudioAgentBuilderIndexRoute
@@ -1761,6 +1771,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/permissions'
     | '/w/$slug/studio/pre-registrations'
     | '/w/$slug/studio/resume-pool'
+    | '/w/$slug/studio/resume-sources'
     | '/w/$slug/studio/resumes'
     | '/platform/mastra-studio/'
     | '/platform/mastra-studio/agent-builder/'
@@ -1923,6 +1934,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/permissions'
     | '/w/$slug/studio/pre-registrations'
     | '/w/$slug/studio/resume-pool'
+    | '/w/$slug/studio/resume-sources'
     | '/w/$slug/studio/resumes'
     | '/platform/mastra-studio/agent-builder'
     | '/w/$slug/agent'
@@ -2087,6 +2099,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/permissions'
     | '/w/$slug/studio/pre-registrations'
     | '/w/$slug/studio/resume-pool'
+    | '/w/$slug/studio/resume-sources'
     | '/w/$slug/studio/resumes'
     | '/platform/mastra-studio/_main/'
     | '/platform/mastra-studio/agent-builder/'
@@ -2523,6 +2536,13 @@ declare module '@tanstack/react-router' {
       path: '/resumes'
       fullPath: '/w/$slug/studio/resumes'
       preLoaderRoute: typeof WSlugStudioResumesRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
+    '/w/$slug/studio/resume-sources': {
+      id: '/w/$slug/studio/resume-sources'
+      path: '/resume-sources'
+      fullPath: '/w/$slug/studio/resume-sources'
+      preLoaderRoute: typeof WSlugStudioResumeSourcesRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
     '/w/$slug/studio/resume-pool': {
@@ -4098,6 +4118,7 @@ interface WSlugStudioRouteChildren {
   WSlugStudioPermissionsRoute: typeof WSlugStudioPermissionsRoute
   WSlugStudioPreRegistrationsRoute: typeof WSlugStudioPreRegistrationsRoute
   WSlugStudioResumePoolRoute: typeof WSlugStudioResumePoolRoute
+  WSlugStudioResumeSourcesRoute: typeof WSlugStudioResumeSourcesRoute
   WSlugStudioResumesRoute: typeof WSlugStudioResumesRouteWithChildren
 }
 
@@ -4121,6 +4142,7 @@ const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
   WSlugStudioPermissionsRoute: WSlugStudioPermissionsRoute,
   WSlugStudioPreRegistrationsRoute: WSlugStudioPreRegistrationsRoute,
   WSlugStudioResumePoolRoute: WSlugStudioResumePoolRoute,
+  WSlugStudioResumeSourcesRoute: WSlugStudioResumeSourcesRoute,
   WSlugStudioResumesRoute: WSlugStudioResumesRouteWithChildren,
 }
 

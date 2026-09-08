@@ -1,12 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
-import type { ResumeSourceRecord } from "@arc/shared/resume-sources";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 
-import type { HiringUnitFormValues, HiringUnitRecord } from "@arc/shared/hiring-units";
-import { hiringUnitFormSchema } from "@arc/shared/hiring-units";
+import type { ResumeSourceFormValues, ResumeSourceRecord } from "@arc/shared/resume-sources";
+import { resumeSourceFormSchema } from "@arc/shared/resume-sources";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { toast } from "sonner";
@@ -21,19 +18,18 @@ import { hasFieldErrors, toFieldErrors } from "../interviews/interview-form";
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
 
-function defaultValues(): HiringUnitFormValues {
-  return { description: "", name: "", resumeSourceId: null };
+function defaultValues(): ResumeSourceFormValues {
+  return { description: "", name: "" };
 }
 
-function toFormValues(record: HiringUnitRecord): HiringUnitFormValues {
+function toFormValues(record: ResumeSourceRecord): ResumeSourceFormValues {
   return {
     description: record.description ?? "",
     name: record.name,
-    resumeSourceId: record.resumeSourceId ?? null,
   };
 }
 
-export function HiringUnitFormDialog({
+export function ResumeSourceFormDialog({
   open,
   onOpenChange,
   record,
@@ -41,101 +37,62 @@ export function HiringUnitFormDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  record: HiringUnitRecord | null;
+  record: ResumeSourceRecord | null;
   onSaved: () => void;
 }) {
   const slug = useWorkspaceSlug();
   const isEdit = record !== null;
-  const sources = useQuery({
-    enabled: open,
-    queryFn: () =>
-      rpcFetch<{ records: ResumeSourceRecord[] }>(
-        rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
-        "加载简历来源失败",
-      ),
-    queryKey: ["resume-sources", slug],
-  });
 
-  const { form, isSubmitting } = useEntityForm<HiringUnitFormValues>({
+  const { form, isSubmitting } = useEntityForm<ResumeSourceFormValues>({
     buildValues: () => (record ? toFormValues(record) : defaultValues()),
     onSubmit: async (value) => {
       const body = {
         description: value.description?.trim() || "",
         name: value.name.trim(),
-        resumeSourceId: value.resumeSourceId ?? null,
       };
 
-      const response = isEdit
-        ? await rpc.api.w[":slug"].studio["hiring-units"][":id"].$patch({
-            json: body,
-            param: { id: record.id, slug },
-          })
-        : await rpc.api.w[":slug"].studio["hiring-units"].$post({
-            json: body,
-            param: { slug },
-          });
-
-      const payload = (await response.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-
-      if (!response.ok) {
-        toast.error(payload?.error ?? (isEdit ? "更新失败" : "创建失败"));
+      try {
+        await rpcFetch(
+          isEdit
+            ? rpc.api.w[":slug"].studio["resume-sources"][":id"].$patch({
+                json: body,
+                param: { id: record.id, slug },
+              })
+            : rpc.api.w[":slug"].studio["resume-sources"].$post({ json: body, param: { slug } }),
+          isEdit ? "更新简历来源失败" : "创建简历来源失败",
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "保存简历来源失败");
         return;
       }
 
-      toast.success(isEdit ? "用人组织已更新" : "用人组织已创建");
+      toast.success(isEdit ? "简历来源已更新" : "简历来源已创建");
       onSaved();
       onOpenChange(false);
     },
     open,
-    schema: hiringUnitFormSchema,
+    schema: resumeSourceFormSchema,
   });
 
   return (
     <EntityFormDialog
-      description="用人组织用于承载业务侧招聘需求，后续可作为招聘组负责范围的基础。"
-      formId="hiring-unit-form"
+      description="简历来源是用人组织的上级；ODC 在此层级统一设置。"
+      formId="resume-source-form"
       isEdit={isEdit}
       isSubmitting={isSubmitting}
       onOpenChange={onOpenChange}
       onSubmit={() => void form.handleSubmit()}
       open={open}
       size="md"
-      title={isEdit ? "编辑用人组织" : "新建用人组织"}
+      title={isEdit ? "编辑简历来源" : "新建简历来源"}
     >
-      <form.Field name="resumeSourceId">
-        {(field) => (
-          <Field>
-            <FieldLabel htmlFor="hiring-unit-resume-source">简历来源</FieldLabel>
-            <FieldContent>
-              <SearchableSelect
-                id="hiring-unit-resume-source"
-                value={field.state.value ?? ""}
-                onChange={(value) => field.handleChange(value || null)}
-                options={(sources.data?.records ?? []).map((source) => ({
-                  label: source.name,
-                  value: source.id,
-                }))}
-                placeholder={sources.isLoading ? "加载中..." : "选择所属简历来源"}
-                disabled={sources.isLoading || sources.isError}
-              />
-              {sources.isError ? (
-                <p role="alert" className="text-sm text-destructive">
-                  加载简历来源失败，请关闭后重试。
-                </p>
-              ) : null}
-            </FieldContent>
-          </Field>
-        )}
-      </form.Field>
       <form.Field name="name">
         {(field) => {
           const errors = toFieldErrors(field.state.meta.errors);
           return (
             <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
               <FieldLabel htmlFor={field.name}>
-                用人组织名称 <span className="text-destructive">*</span>
+                简历来源名称 <span className="text-destructive">*</span>
               </FieldLabel>
               <FieldContent className="gap-2">
                 <Input
@@ -144,7 +101,7 @@ export function HiringUnitFormDialog({
                   maxLength={NAME_MAX_LENGTH}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder="如：商业化事业部、上海研发中心"
+                  placeholder="请输入简历来源名称"
                   value={field.state.value}
                 />
                 <FieldError errors={errors} />
@@ -169,7 +126,7 @@ export function HiringUnitFormDialog({
                     maxLength={DESCRIPTION_MAX_LENGTH}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
-                    placeholder="简要说明该用人组织的业务范围或招聘边界"
+                    placeholder="简要说明该简历来源的业务范围或招聘边界"
                     rows={3}
                     value={field.state.value ?? ""}
                   />

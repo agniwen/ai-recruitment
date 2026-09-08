@@ -50,16 +50,21 @@ describe("buildResumeVisibilityCondition", () => {
 
     const query = new PgDialect().sqlToQuery(condition);
     expect(query.sql).toContain('"organization_role"."is_odc"');
-    expect(query.sql).toContain('"hiring_unit_odc_member"');
-    expect(query.sql).toContain('"department_odc_member"');
-    expect(query.sql).toContain('"organization_role"."role" = "member"."role"');
-    expect(query.sql).toContain('"hiring_unit_odc_member"."job_series" is null');
     expect(query.sql).toContain(
-      '"hiring_unit_odc_member"."job_series" = "job_description"."job_series"',
+      '"hiring_unit"."resume_source_id" = "resume_source_odc_member"."resume_source_id"',
     );
-    expect(query.sql).toContain('"hiring_unit_odc_member"."service_unit" is null');
+    expect(query.params).toContain("organization-1");
+    expect(query.params).toContain("user-1");
+    expect(query.sql).not.toContain('"hiring_unit_odc_member"');
+    expect(query.sql).not.toContain('"department_odc_member"');
+    expect(query.sql).toContain('"organization_role"."role" = "member"."role"');
+    expect(query.sql).toContain('"resume_source_odc_member"."job_series" is null');
     expect(query.sql).toContain(
-      '"department_odc_member"."service_unit" = "job_description"."service_unit"',
+      '"resume_source_odc_member"."job_series" = "job_description"."job_series"',
+    );
+    expect(query.sql).toContain('"resume_source_odc_member"."service_unit" is null');
+    expect(query.sql).toContain(
+      '"resume_source_odc_member"."service_unit" = "job_description"."service_unit"',
     );
   });
 });

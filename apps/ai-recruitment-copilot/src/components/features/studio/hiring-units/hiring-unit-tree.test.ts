@@ -43,6 +43,7 @@ const tree: HiringUnitTreeNode[] = [
         userId: "user-2",
       },
     ],
+    resumeSourceId: "source-1",
     updatedAt: "2026-09-01T00:00:00.000Z",
   },
 ];
@@ -57,6 +58,7 @@ describe("flattenHiringUnitTree", () => {
           expect.objectContaining({ memberId: "member-1" }),
           expect.objectContaining({ memberId: "member-2" }),
         ],
+        resumeSourceId: "source-1",
         rowType: "hiringUnit",
         treeDepth: 0,
       }),
@@ -90,66 +92,28 @@ describe("hiring unit management list", () => {
       new URL("hiring-unit-management-page.tsx", import.meta.url),
       "utf-8",
     );
-    const avatarGroupSource = readFileSync(
-      new URL("../odc-avatar-group.tsx", import.meta.url),
-      "utf-8",
-    );
-
     expect(source).toContain('["hiring-units"].tree.$get');
     expect(source).not.toContain("useDataGridState");
     expect(source).not.toMatch(/pagination=\{/u);
-    expect(source).toContain("<OdcAvatarGroup members={row.odcMembers}");
-    expect(avatarGroupSource).toContain("<AvatarGroup>");
-    expect(avatarGroupSource).toContain("members.slice(0, 5)");
-    expect(avatarGroupSource).toContain("<AvatarGroupCount");
-    expect(source).toContain("minSize: 160");
-    expect(source).toContain("maxSize: 160");
+    expect(source).not.toContain("<OdcAvatarGroup");
+    expect(source).not.toContain('label: "设置 ODC"');
+    expect(source).not.toContain("批量设置 ODC");
+    expect(source).not.toContain("<OdcManagementModal");
   });
 
-  it("supports selecting mixed rows for overwrite-style batch ODC assignment", () => {
-    const pageSource = readFileSync(
-      new URL("hiring-unit-management-page.tsx", import.meta.url),
+  it("manages ODC only on resume sources", () => {
+    const page = readFileSync(
+      new URL("../resume-sources/resume-source-management-page.tsx", import.meta.url),
       "utf-8",
     );
-    const dialogSource = readFileSync(
-      new URL("../bulk-odc-assignment-dialog.tsx", import.meta.url),
-      "utf-8",
-    );
-
-    expect(pageSource).toContain("selectColumn<HiringUnitTreeRow>({");
-    expect(pageSource).toContain("rowSelection={rowSelection}");
-    expect(pageSource).toContain("批量设置 ODC");
-    expect(dialogSource).toContain('["hiring-units"].odc.batch.$put');
-    expect(dialogSource).toContain("此操作会覆盖");
+    const modal = readFileSync(new URL("../odc-management-modal.tsx", import.meta.url), "utf-8");
+    expect(page).toContain("<OdcManagementModal");
+    expect(page).toContain("<OdcAssignmentDialog");
+    expect(modal).toContain('["resume-sources"][":id"].odc');
+    expect(modal).not.toContain("studio.departments");
   });
 
-  it("opens paginated ODC management from the action column", () => {
-    const pageSource = readFileSync(
-      new URL("hiring-unit-management-page.tsx", import.meta.url),
-      "utf-8",
-    );
-    const modalSource = readFileSync(
-      new URL("../odc-management-modal.tsx", import.meta.url),
-      "utf-8",
-    );
-    const addDialogSource = readFileSync(
-      new URL("../odc-add-dialog.tsx", import.meta.url),
-      "utf-8",
-    );
-
-    expect(pageSource).toContain('label: "管理 ODC"');
-    expect(pageSource).toContain("<OdcManagementModal");
-    expect(modalSource).toContain("useModalPagination");
-    expect(modalSource).toContain("<DataGrid<OdcManagedAssignment>");
-    expect(modalSource).toContain("toolbarRight={");
-    expect(modalSource).toContain("添加 ODC");
-    expect(modalSource).toContain("<OdcAddDialog");
-    expect(addDialogSource).toContain(".$post({");
-    expect(modalSource).toContain('label: "编辑"');
-    expect(modalSource).toContain('label: "删除"');
-  });
-
-  it("submits per-member ODC scopes for one hiring unit or department", () => {
+  it("submits per-member ODC scopes for one resume source", () => {
     const source = readFileSync(new URL("../odc-assignment-dialog.tsx", import.meta.url), "utf-8");
     const scopeFieldsSource = readFileSync(
       new URL("../odc-assignment-scope-fields.tsx", import.meta.url),

@@ -685,8 +685,8 @@ export const studioOrgSkill = pgTable(
   ],
 );
 
-export const hiringUnit = pgTable(
-  "hiring_unit",
+export const resumeSource = pgTable(
+  "resume_source",
   {
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
@@ -704,6 +704,78 @@ export const hiringUnit = pgTable(
       .notNull(),
   },
   (table) => [
+    index("resume_source_name_idx").on(table.name),
+    index("resume_source_created_at_idx").on(table.createdAt),
+    index("resume_source_organization_idx").on(table.organizationId),
+    uniqueIndex("resume_source_organization_id_id_uq").on(table.organizationId, table.id),
+  ],
+);
+
+export const resumeSourceOdcMember = pgTable(
+  "resume_source_odc_member",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    jobSeries: text("job_series").$type<"直属" | "派驻">(),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    resumeSourceId: text("resume_source_id")
+      .notNull()
+      .references(() => resumeSource.id, { onDelete: "cascade" }),
+    serviceUnit: text("service_unit"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.resumeSourceId, table.memberId] }),
+    check(
+      "resume_source_odc_member_job_series_check",
+      sql`${table.jobSeries} IS NULL OR ${table.jobSeries} IN ('直属', '派驻')`,
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.resumeSourceId],
+      foreignColumns: [resumeSource.organizationId, resumeSource.id],
+      name: "resume_source_odc_member_resume_source_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.memberId],
+      foreignColumns: [member.organizationId, member.id],
+      name: "resume_source_odc_member_member_fk",
+    }).onDelete("cascade"),
+    index("resume_source_odc_member_organization_idx").on(table.organizationId),
+    index("resume_source_odc_member_member_idx").on(table.organizationId, table.memberId),
+  ],
+);
+
+export const hiringUnit = pgTable(
+  "hiring_unit",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    description: text("description"),
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, {
+        onDelete: "cascade",
+      }),
+    resumeSourceId: text("resume_source_id").references(() => resumeSource.id, {
+      onDelete: "restrict",
+    }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.organizationId, table.resumeSourceId],
+      foreignColumns: [resumeSource.organizationId, resumeSource.id],
+      name: "hiring_unit_resume_source_fk",
+    }).onDelete("restrict"),
+    index("hiring_unit_resume_source_idx").on(table.organizationId, table.resumeSourceId),
     index("hiring_unit_name_idx").on(table.name),
     index("hiring_unit_created_at_idx").on(table.createdAt),
     index("hiring_unit_organization_idx").on(table.organizationId),

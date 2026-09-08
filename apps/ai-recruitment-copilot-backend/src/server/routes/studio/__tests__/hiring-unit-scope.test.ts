@@ -6,6 +6,8 @@ import {
   departmentOdcMember,
   hiringUnit,
   hiringUnitOdcMember,
+  resumeSource,
+  resumeSourceOdcMember,
   interviewer,
   jobDescription,
   member,
@@ -339,39 +341,62 @@ describe("hiring unit recruiting-group scope", () => {
     expect(ids(jobDescriptions)).toEqual([JD_PUBLIC]);
   });
 
-  it("部门 ODC 只看到本部门，改为用人组织 ODC 后看到其全部下属部门", async () => {
-    await db.insert(departmentOdcMember).values({
-      departmentId: DEPT_B,
+  it("旧部门和用人组织 ODC 不再授权，简历来源覆盖下属组织", async () => {
+    await db
+      .insert(departmentOdcMember)
+      .values({ departmentId: DEPT_B, memberId: NO_GROUP_MEMBER_ID, organizationId: ORG });
+    await db
+      .insert(hiringUnitOdcMember)
+      .values({ hiringUnitId: HIRING_UNIT_A, memberId: NO_GROUP_MEMBER_ID, organizationId: ORG });
+    expect(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER })).toEqual([]);
+    await db
+      .insert(resumeSource)
+      .values({ id: "hiring_scope_source", name: "来源", organizationId: ORG });
+    await db
+      .update(hiringUnit)
+      .set({ resumeSourceId: "hiring_scope_source" })
+      .where(eq(hiringUnit.id, HIRING_UNIT_A));
+    await db.insert(resumeSourceOdcMember).values({
       memberId: NO_GROUP_MEMBER_ID,
       organizationId: ORG,
+      resumeSourceId: "hiring_scope_source",
     });
-
+    expect(ids(await listAllDepartments(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual([DEPT_A]);
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual([
+      JD_A,
+    ]);
+    await db
+      .update(hiringUnit)
+      .set({ resumeSourceId: "hiring_scope_source" })
+      .where(eq(hiringUnit.id, HIRING_UNIT_B));
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual(
+      [JD_A, JD_B].toSorted(),
+    );
+    await db
+      .update(hiringUnit)
+      .set({ resumeSourceId: null })
+      .where(eq(hiringUnit.id, HIRING_UNIT_A));
     expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual([
       JD_B,
     ]);
-    expect(await listAllInterviewers(ORG, { actorUserId: NO_GROUP_MEMBER })).toEqual([]);
-
-    await db.delete(departmentOdcMember).where(eq(departmentOdcMember.organizationId, ORG));
-    await db.insert(hiringUnitOdcMember).values({
-      hiringUnitId: HIRING_UNIT_A,
-      memberId: NO_GROUP_MEMBER_ID,
-      organizationId: ORG,
-    });
-
-    const [departments, jobDescriptions] = await Promise.all([
-      listAllDepartments(ORG, { actorUserId: NO_GROUP_MEMBER }),
-      listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }),
-    ]);
-    expect(ids(departments)).toEqual([DEPT_A]);
-    expect(ids(jobDescriptions)).toEqual([JD_A]);
   });
 
   it("角色取消 ODC 标记后立即失去已分配范围", async () => {
-    await db.insert(hiringUnitOdcMember).values({
-      hiringUnitId: HIRING_UNIT_A,
+    await db
+      .insert(resumeSource)
+      .values({ id: "hiring_scope_source", name: "来源", organizationId: ORG });
+    await db
+      .update(hiringUnit)
+      .set({ resumeSourceId: "hiring_scope_source" })
+      .where(eq(hiringUnit.id, HIRING_UNIT_A));
+    await db.insert(resumeSourceOdcMember).values({
       memberId: NO_GROUP_MEMBER_ID,
       organizationId: ORG,
+      resumeSourceId: "hiring_scope_source",
     });
+    expect(ids(await listAllJobDescriptions(ORG, { actorUserId: NO_GROUP_MEMBER }))).toEqual([
+      JD_A,
+    ]);
     await db
       .update(organizationRole)
       .set({ isOdc: false })

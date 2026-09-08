@@ -5,6 +5,7 @@ import type {
 } from "@arc/shared/hiring-units";
 
 export interface HiringUnitTreeRow {
+  resumeSourceId?: string | null;
   createdAt: string | Date;
   createdBy: string | null;
   description: string | null;
@@ -78,6 +79,7 @@ export function flattenHiringUnitTree(
       name: unit.name,
       odcMembers: unit.odcMembers,
       parentHiringUnitId: null,
+      resumeSourceId: unit.resumeSourceId,
       rowType: "hiringUnit",
       treeDepth: 0,
       updatedAt: unit.updatedAt,

@@ -13,6 +13,7 @@ export const STUDIO_PAGE_PATHS = [
   { action: "odcAnalysis", path: "/odc-analysis" },
   { action: "dataExport", path: "/data-export" },
   { action: "hiringUnits", path: "/hiring-units" },
+  { action: "hiringUnits", path: "/resume-sources" },
   { action: "departments", path: "/departments" },
   { action: "interviewers", path: "/interviewers" },
   { action: "jobDescriptions", path: "/job-descriptions" },

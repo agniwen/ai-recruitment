@@ -8,27 +8,21 @@ import { safeUpdateTag } from "@arc/ai-recruitment-copilot-backend/server/cache-
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import {
-  createDepartmentOdcAssignment,
-  deleteDepartmentOdcAssignment,
-  queryPaginatedDepartmentOdcAssignments,
-  replaceDepartmentOdcMembers,
-  updateDepartmentOdcAssignment,
+  createResumeSourceOdcAssignment,
+  deleteResumeSourceOdcAssignment,
+  queryPaginatedResumeSourceOdcAssignments,
+  replaceResumeSourceOdcMembers,
+  updateResumeSourceOdcAssignment,
 } from "./dao";
-import { loadDepartmentById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/departments/dao";
 import { areEligibleOdcMembers } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/odc-assignment";
+import { loadResumeSourceById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-sources/dao";
 import { odcAssignmentPaginationSchema } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/hiring-units/routes/odc/schema";
 
-export const departmentOdcRouter = factory
+export const resumeSourceOdcRouter = factory
   .createApp()
-  .use("*", async (c, next) => {
-    if (c.req.method !== "GET") {
-      return c.json({ error: "请在简历来源中设置 ODC。" }, 410);
-    }
-    await next();
-  })
   .put(
     "/",
-    requirePermission("department", "update"),
+    requirePermission("hiringUnit", "update"),
     zValidator("json", odcAssignmentSchema, jsonValidatorError("ODC 设置参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -37,35 +31,28 @@ export const departmentOdcRouter = factory
       }
       const id = c.req.param("id");
       if (!id) {
-        return c.json({ error: "部门不存在。" }, 404);
-      }
-      const existing = await loadDepartmentById(id, activeOrg.id, {
-        actorUserId: c.var.user?.id,
-      });
-      if (!existing) {
-        return c.json({ error: "部门不存在。" }, 404);
+        return c.json({ error: "简历来源不存在。" }, 404);
       }
       const { assignments } = c.req.valid("json");
       const memberIds = assignments.map((assignment) => assignment.memberId);
       if (!(await areEligibleOdcMembers({ memberIds, organizationId: activeOrg.id }))) {
         return c.json({ error: "所选成员中存在角色未标记为 ODC 的人员。" }, 400);
       }
-      const updated = await replaceDepartmentOdcMembers({
+      const updated = await replaceResumeSourceOdcMembers({
         assignments,
         id,
         organizationId: activeOrg.id,
       });
       if (!updated) {
-        return c.json({ error: "部门不存在。" }, 404);
+        return c.json({ error: "简历来源不存在。" }, 404);
       }
-      safeUpdateTag(`departments:${activeOrg.id}`);
-      safeUpdateTag(`hiring-units:${activeOrg.id}`);
+      safeUpdateTag(`resume-sources:${activeOrg.id}`);
       return c.json({ success: true }, 200);
     },
   )
   .post(
     "/",
-    requirePermission("department", "update"),
+    requirePermission("hiringUnit", "update"),
     zValidator("json", odcAssignmentCreateSchema, jsonValidatorError("ODC 设置参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -73,13 +60,8 @@ export const departmentOdcRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const id = c.req.param("id");
-      if (
-        !id ||
-        !(await loadDepartmentById(id, activeOrg.id, {
-          actorUserId: c.var.user?.id,
-        }))
-      ) {
-        return c.json({ error: "部门不存在。" }, 404);
+      if (!id || !(await loadResumeSourceById(id, activeOrg.id))) {
+        return c.json({ error: "简历来源不存在。" }, 404);
       }
       const input = c.req.valid("json");
       if (
@@ -90,22 +72,21 @@ export const departmentOdcRouter = factory
       ) {
         return c.json({ error: "所选成员的角色未标记为 ODC。" }, 400);
       }
-      const created = await createDepartmentOdcAssignment({
-        departmentId: id,
+      const created = await createResumeSourceOdcAssignment({
         input,
         organizationId: activeOrg.id,
+        resumeSourceId: id,
       });
       if (!created) {
         return c.json({ error: "该 ODC 配置已存在。" }, 409);
       }
-      safeUpdateTag(`departments:${activeOrg.id}`);
-      safeUpdateTag(`hiring-units:${activeOrg.id}`);
+      safeUpdateTag(`resume-sources:${activeOrg.id}`);
       return c.json({ success: true }, 201);
     },
   )
   .get(
     "/",
-    requirePermission("department", "update"),
+    requirePermission("hiringUnit", "update"),
     zValidator("query", odcAssignmentPaginationSchema, jsonValidatorError("查询参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -113,20 +94,14 @@ export const departmentOdcRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const id = c.req.param("id");
-      if (!id) {
-        return c.json({ error: "部门不存在。" }, 404);
-      }
-      const existing = await loadDepartmentById(id, activeOrg.id, {
-        actorUserId: c.var.user?.id,
-      });
-      if (!existing) {
-        return c.json({ error: "部门不存在。" }, 404);
+      if (!id || !(await loadResumeSourceById(id, activeOrg.id))) {
+        return c.json({ error: "简历来源不存在。" }, 404);
       }
       return c.json(
-        await queryPaginatedDepartmentOdcAssignments({
-          departmentId: id,
+        await queryPaginatedResumeSourceOdcAssignments({
           organizationId: activeOrg.id,
           pagination: c.req.valid("query"),
+          resumeSourceId: id,
         }),
         200,
       );
@@ -134,7 +109,7 @@ export const departmentOdcRouter = factory
   )
   .patch(
     "/:memberId",
-    requirePermission("department", "update"),
+    requirePermission("hiringUnit", "update"),
     zValidator("json", odcAssignmentUpdateSchema, jsonValidatorError("ODC 设置参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;
@@ -143,54 +118,38 @@ export const departmentOdcRouter = factory
       }
       const id = c.req.param("id");
       if (!id) {
-        return c.json({ error: "部门不存在。" }, 404);
+        return c.json({ error: "简历来源不存在。" }, 404);
       }
-      if (
-        !(await loadDepartmentById(id, activeOrg.id, {
-          actorUserId: c.var.user?.id,
-        }))
-      ) {
-        return c.json({ error: "部门不存在。" }, 404);
-      }
-      const updated = await updateDepartmentOdcAssignment({
-        departmentId: id,
+      const updated = await updateResumeSourceOdcAssignment({
         input: c.req.valid("json"),
         memberId: c.req.param("memberId"),
         organizationId: activeOrg.id,
+        resumeSourceId: id,
       });
       if (!updated) {
         return c.json({ error: "ODC 配置不存在。" }, 404);
       }
-      safeUpdateTag(`departments:${activeOrg.id}`);
-      safeUpdateTag(`hiring-units:${activeOrg.id}`);
+      safeUpdateTag(`resume-sources:${activeOrg.id}`);
       return c.json({ success: true }, 200);
     },
   )
-  .delete("/:memberId", requirePermission("department", "update"), async (c) => {
+  .delete("/:memberId", requirePermission("hiringUnit", "update"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
     if (!id) {
-      return c.json({ error: "部门不存在。" }, 404);
+      return c.json({ error: "简历来源不存在。" }, 404);
     }
-    if (
-      !(await loadDepartmentById(id, activeOrg.id, {
-        actorUserId: c.var.user?.id,
-      }))
-    ) {
-      return c.json({ error: "部门不存在。" }, 404);
-    }
-    const deleted = await deleteDepartmentOdcAssignment({
-      departmentId: id,
+    const deleted = await deleteResumeSourceOdcAssignment({
       memberId: c.req.param("memberId"),
       organizationId: activeOrg.id,
+      resumeSourceId: id,
     });
     if (!deleted) {
       return c.json({ error: "ODC 配置不存在。" }, 404);
     }
-    safeUpdateTag(`departments:${activeOrg.id}`);
-    safeUpdateTag(`hiring-units:${activeOrg.id}`);
+    safeUpdateTag(`resume-sources:${activeOrg.id}`);
     return c.json({ success: true }, 200);
   });

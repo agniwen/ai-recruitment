@@ -20,6 +20,12 @@ import { odcAssignmentPaginationSchema } from "@arc/ai-recruitment-copilot-backe
 
 export const hiringUnitOdcRouter = factory
   .createApp()
+  .use("*", async (c, next) => {
+    if (c.req.method !== "GET") {
+      return c.json({ error: "请在简历来源中设置 ODC。" }, 410);
+    }
+    await next();
+  })
   .put(
     "/",
     requirePermission("hiringUnit", "update"),

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("department ODC management", () => {
-  it("shows ODC avatars and opens the shared assignment dialog", () => {
+  it("hides legacy ODC configuration entries", () => {
     const pageSource = readFileSync(
       new URL("department-management-page.tsx", import.meta.url),
       "utf-8",
@@ -19,9 +19,9 @@ describe("department ODC management", () => {
       "utf-8",
     );
 
-    expect(pageSource).toContain("<OdcAvatarGroup");
-    expect(pageSource).toContain('label: "设置 ODC"');
-    expect(pageSource).toContain("<OdcAssignmentDialog");
+    expect(pageSource).not.toContain("<OdcAvatarGroup");
+    expect(pageSource).not.toContain('label: "设置 ODC"');
+    expect(pageSource).not.toContain("<OdcAssignmentDialog");
     expect(daoSource).toContain("loadDepartmentOdcMembersByIds");
     expect(daoSource).toContain("odcMembers:");
     expect(sharedSource).toContain("odcMembers: OdcAssignmentSummary[]");

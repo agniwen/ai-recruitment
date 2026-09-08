@@ -75,17 +75,9 @@ export function OdcManagementModal({
         return { assignedMemberIds: [], page, pageSize, records: [], total: 0, totalPages: 1 };
       }
       const query = { page: String(page), pageSize: String(pageSize) };
-      if (target.rowType === "hiringUnit") {
-        return rpcFetch<PaginatedOdcAssignmentResult>(
-          rpc.api.w[":slug"].studio["hiring-units"][":id"].odc.$get({
-            param: { id: target.id, slug },
-            query,
-          }),
-          "加载 ODC 配置失败",
-        );
-      }
+
       return rpcFetch<PaginatedOdcAssignmentResult>(
-        rpc.api.w[":slug"].studio.departments[":id"].odc.$get({
+        rpc.api.w[":slug"].studio["resume-sources"][":id"].odc.$get({
           param: { id: target.id, slug },
           query,
         }),
@@ -106,23 +98,15 @@ export function OdcManagementModal({
   const updateMutation = useMutation({
     mutationFn: (assignment: OdcAssignmentDraft) => {
       if (!target) {
-        throw new Error("未选择要管理的组织或部门");
+        throw new Error("未选择要管理的简历来源");
       }
       const json = {
         jobSeries: assignment.jobSeries,
         serviceUnit: assignment.serviceUnit.trim() || null,
       };
-      if (target.rowType === "hiringUnit") {
-        return rpcFetch(
-          rpc.api.w[":slug"].studio["hiring-units"][":id"].odc[":memberId"].$patch({
-            json,
-            param: { id: target.id, memberId: assignment.memberId, slug },
-          }),
-          "更新 ODC 配置失败",
-        );
-      }
+
       return rpcFetch(
-        rpc.api.w[":slug"].studio.departments[":id"].odc[":memberId"].$patch({
+        rpc.api.w[":slug"].studio["resume-sources"][":id"].odc[":memberId"].$patch({
           json,
           param: { id: target.id, memberId: assignment.memberId, slug },
         }),
@@ -143,18 +127,11 @@ export function OdcManagementModal({
   const deleteMutation = useMutation({
     mutationFn: (assignment: OdcManagedAssignment) => {
       if (!target) {
-        throw new Error("未选择要管理的组织或部门");
+        throw new Error("未选择要管理的简历来源");
       }
-      if (target.rowType === "hiringUnit") {
-        return rpcFetch(
-          rpc.api.w[":slug"].studio["hiring-units"][":id"].odc[":memberId"].$delete({
-            param: { id: target.id, memberId: assignment.memberId, slug },
-          }),
-          "删除 ODC 配置失败",
-        );
-      }
+
       return rpcFetch(
-        rpc.api.w[":slug"].studio.departments[":id"].odc[":memberId"].$delete({
+        rpc.api.w[":slug"].studio["resume-sources"][":id"].odc[":memberId"].$delete({
           param: { id: target.id, memberId: assignment.memberId, slug },
         }),
         "删除 ODC 配置失败",
@@ -235,7 +212,7 @@ export function OdcManagementModal({
         onOpenChange={onOpenChange}
         open={open}
         size="2xl"
-        title={`管理 ${target?.rowType === "department" ? "部门" : "用人组织"}“${target?.name ?? ""}”的 ODC`}
+        title={`管理 简历来源“${target?.name ?? ""}”的 ODC`}
       >
         <DataGrid<OdcManagedAssignment>
           columns={columns}
@@ -332,9 +309,7 @@ export function OdcManagementModal({
       <EntityDeleteDialog
         confirmDisabled={deleteMutation.isPending}
         confirmLabel={deleteMutation.isPending ? "删除中..." : "删除"}
-        description={(record) =>
-          `即将删除 ${record.name} 在该${target?.rowType === "department" ? "部门" : "用人组织"}下的 ODC 配置。`
-        }
+        description={(record) => `即将删除 ${record.name} 在该简历来源下的 ODC 配置。`}
         onClose={() => {
           if (!deleteMutation.isPending) {
             setDeleteTarget(null);

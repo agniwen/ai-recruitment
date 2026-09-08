@@ -3,8 +3,8 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   department,
-  departmentOdcMember,
-  hiringUnitOdcMember,
+  hiringUnit,
+  resumeSourceOdcMember,
   jobDescription,
   member,
   organizationRole,
@@ -70,29 +70,24 @@ export async function resolveOdcAccessScope({
     return EMPTY_ODC_ACCESS_SCOPE;
   }
 
-  const [hiringUnitRows, departmentRows] = await Promise.all([
-    db
-      .select({ id: hiringUnitOdcMember.hiringUnitId })
-      .from(hiringUnitOdcMember)
-      .where(
-        and(
-          eq(hiringUnitOdcMember.organizationId, organizationId),
-          eq(hiringUnitOdcMember.memberId, workspaceMember.id),
-        ),
+  const hiringUnitRows = await db
+    .select({ id: hiringUnit.id })
+    .from(resumeSourceOdcMember)
+    .innerJoin(
+      hiringUnit,
+      and(
+        eq(hiringUnit.resumeSourceId, resumeSourceOdcMember.resumeSourceId),
+        eq(hiringUnit.organizationId, resumeSourceOdcMember.organizationId),
       ),
-    db
-      .select({ id: departmentOdcMember.departmentId })
-      .from(departmentOdcMember)
-      .where(
-        and(
-          eq(departmentOdcMember.organizationId, organizationId),
-          eq(departmentOdcMember.memberId, workspaceMember.id),
-        ),
+    )
+    .where(
+      and(
+        eq(resumeSourceOdcMember.organizationId, organizationId),
+        eq(resumeSourceOdcMember.memberId, workspaceMember.id),
       ),
-  ]);
-
+    );
   return {
-    departmentIds: [...new Set(departmentRows.map((row) => row.id))],
+    departmentIds: [],
     hiringUnitIds: [...new Set(hiringUnitRows.map((row) => row.id))],
   };
 }

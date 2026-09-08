@@ -111,6 +111,13 @@ const navGroups: NavGroup[] = [
       {
         action: "hiringUnits",
         icon: GlobeIcon,
+        path: "/studio/resume-sources",
+        resource: "page",
+        title: "简历来源",
+      },
+      {
+        action: "hiringUnits",
+        icon: GlobeIcon,
         path: "/studio/hiring-units",
         resource: "page",
         title: "用人组织",

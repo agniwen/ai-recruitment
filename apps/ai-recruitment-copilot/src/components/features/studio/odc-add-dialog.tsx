@@ -53,24 +53,16 @@ export function OdcAddDialog({
   const createMutation = useMutation({
     mutationFn: (assignment: OdcAssignmentDraft) => {
       if (!target) {
-        throw new Error("未选择要管理的组织或部门");
+        throw new Error("未选择要管理的简历来源");
       }
       const json = {
         jobSeries: assignment.jobSeries,
         memberId: assignment.memberId,
         serviceUnit: assignment.serviceUnit.trim() || null,
       };
-      if (target.rowType === "hiringUnit") {
-        return rpcFetch(
-          rpc.api.w[":slug"].studio["hiring-units"][":id"].odc.$post({
-            json,
-            param: { id: target.id, slug },
-          }),
-          "添加 ODC 失败",
-        );
-      }
+
       return rpcFetch(
-        rpc.api.w[":slug"].studio.departments[":id"].odc.$post({
+        rpc.api.w[":slug"].studio["resume-sources"][":id"].odc.$post({
           json,
           param: { id: target.id, slug },
         }),

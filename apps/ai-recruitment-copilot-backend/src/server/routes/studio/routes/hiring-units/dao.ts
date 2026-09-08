@@ -161,6 +161,7 @@ export function serializeHiringUnit(row: typeof hiringUnit.$inferSelect): Hiring
     description: row.description,
     id: row.id,
     name: row.name,
+    resumeSourceId: row.resumeSourceId,
     updatedAt: serializeDate(row.updatedAt),
   };
 }
@@ -338,6 +339,7 @@ export async function listHiringUnitTree({
         description: hiringUnit.description,
         id: hiringUnit.id,
         name: hiringUnit.name,
+        resumeSourceId: hiringUnit.resumeSourceId,
         updatedAt: hiringUnit.updatedAt,
       })
       .from(hiringUnit)
@@ -393,6 +395,7 @@ export async function listHiringUnitTree({
       id: row.id,
       name: row.name,
       odcMembers: odcMembersByTarget.hiringUnits.get(row.id) ?? [],
+      resumeSourceId: row.resumeSourceId,
       updatedAt: serializeDate(row.updatedAt),
     })),
     unassignedDepartments,

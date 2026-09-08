@@ -1,3 +1,4 @@
+import { loadResumeSourceById } from "../resume-sources/dao";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -35,6 +36,7 @@ const hiringUnitListQuerySchema = z.object({
 
 export const hiringUnitsRouter = factory
   .createApp()
+  .use("/odc/batch", (c) => Promise.resolve(c.json({ error: "请在简历来源中设置 ODC。" }, 410)))
   .get(
     "/",
     requirePermission("hiringUnit", "read"),
@@ -104,6 +106,12 @@ export const hiringUnitsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
+      if (
+        input.resumeSourceId &&
+        !(await loadResumeSourceById(input.resumeSourceId, activeOrg.id))
+      ) {
+        return c.json({ error: "简历来源不存在。" }, 400);
+      }
       const now = new Date();
       const record = {
         createdAt: now,
@@ -112,6 +120,7 @@ export const hiringUnitsRouter = factory
         id: crypto.randomUUID(),
         name: input.name.trim(),
         organizationId: activeOrg.id,
+        resumeSourceId: input.resumeSourceId ?? null,
         updatedAt: now,
       } satisfies typeof hiringUnit.$inferInsert;
 
@@ -204,10 +213,17 @@ export const hiringUnitsRouter = factory
       }
 
       const input = c.req.valid("json");
+      if (
+        input.resumeSourceId &&
+        !(await loadResumeSourceById(input.resumeSourceId, activeOrg.id))
+      ) {
+        return c.json({ error: "简历来源不存在。" }, 400);
+      }
       const now = new Date();
       await db
         .update(hiringUnit)
         .set({
+          ...(input.resumeSourceId === undefined ? {} : { resumeSourceId: input.resumeSourceId }),
           description: input.description?.trim() || null,
           name: input.name.trim(),
           updatedAt: now,

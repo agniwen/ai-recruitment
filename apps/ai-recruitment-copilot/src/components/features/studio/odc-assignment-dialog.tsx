@@ -27,7 +27,7 @@ export interface OdcAssignmentTarget {
   id: string;
   name: string;
   odcMembers: OdcAssignmentSummary[];
-  rowType: "department" | "hiringUnit";
+  rowType: "resumeSource";
 }
 
 interface OdcAssignmentDialogProps {
@@ -91,16 +91,10 @@ export function OdcAssignmentDialog({
     setSaving(true);
     try {
       const json = { assignments: serializeOdcAssignmentDrafts(assignments) };
-      const request =
-        target.rowType === "hiringUnit"
-          ? rpc.api.w[":slug"].studio["hiring-units"][":id"].odc.$put({
-              json,
-              param: { id: target.id, slug },
-            })
-          : rpc.api.w[":slug"].studio.departments[":id"].odc.$put({
-              json,
-              param: { id: target.id, slug },
-            });
+      const request = rpc.api.w[":slug"].studio["resume-sources"][":id"].odc.$put({
+        json,
+        param: { id: target.id, slug },
+      });
       await rpcFetch(request, "设置 ODC 失败");
       toast.success(assignments.length > 0 ? "ODC 已设置" : "ODC 设置已清除");
       onSaved();
@@ -118,8 +112,8 @@ export function OdcAssignmentDialog({
         <DialogHeader>
           <DialogTitle>设置 ODC</DialogTitle>
           <DialogDescription>
-            为{target?.rowType === "department" ? "部门" : "用人组织"}“{target?.name ?? ""}”设置
-            ODC。这里只显示角色设置中已勾选“是否为 ODC”的成员；序列或服务单位留空表示不限。
+            为简历来源“{target?.name ?? ""}”设置 ODC。这里只显示角色设置中已勾选“是否为
+            ODC”的成员；序列或服务单位留空表示不限。
           </DialogDescription>
         </DialogHeader>
         <Field>

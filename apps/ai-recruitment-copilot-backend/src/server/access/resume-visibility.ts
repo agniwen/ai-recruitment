@@ -11,8 +11,8 @@ import {
 import type { OdcAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import {
   department,
-  departmentOdcMember,
-  hiringUnitOdcMember,
+  hiringUnit,
+  resumeSourceOdcMember,
   jobDescription,
   member,
   organizationRole,
@@ -81,17 +81,10 @@ function buildCurrentOdcVisibilityCondition(actor: {
         ),
       )
       .leftJoin(
-        hiringUnitOdcMember,
+        resumeSourceOdcMember,
         and(
-          eq(hiringUnitOdcMember.organizationId, member.organizationId),
-          eq(hiringUnitOdcMember.memberId, member.id),
-        ),
-      )
-      .leftJoin(
-        departmentOdcMember,
-        and(
-          eq(departmentOdcMember.organizationId, member.organizationId),
-          eq(departmentOdcMember.memberId, member.id),
+          eq(resumeSourceOdcMember.organizationId, member.organizationId),
+          eq(resumeSourceOdcMember.memberId, member.id),
         ),
       )
       .leftJoin(
@@ -108,37 +101,29 @@ function buildCurrentOdcVisibilityCondition(actor: {
           eq(department.organizationId, jobDescription.organizationId),
         ),
       )
+      .innerJoin(
+        hiringUnit,
+        and(
+          eq(hiringUnit.organizationId, jobDescription.organizationId),
+          or(
+            eq(hiringUnit.id, jobDescription.hiringUnitId),
+            eq(hiringUnit.id, department.hiringUnitId),
+          ),
+          eq(hiringUnit.resumeSourceId, resumeSourceOdcMember.resumeSourceId),
+        ),
+      )
       .where(
         and(
           eq(member.organizationId, actor.organizationId),
           eq(member.userId, actor.userId),
           eq(member.organizationId, studioInterview.organizationId),
           or(
-            and(
-              or(
-                eq(hiringUnitOdcMember.hiringUnitId, jobDescription.hiringUnitId),
-                eq(hiringUnitOdcMember.hiringUnitId, department.hiringUnitId),
-              ),
-              or(
-                isNull(hiringUnitOdcMember.jobSeries),
-                eq(hiringUnitOdcMember.jobSeries, jobDescription.jobSeries),
-              ),
-              or(
-                isNull(hiringUnitOdcMember.serviceUnit),
-                eq(hiringUnitOdcMember.serviceUnit, jobDescription.serviceUnit),
-              ),
-            ),
-            and(
-              eq(departmentOdcMember.departmentId, jobDescription.departmentId),
-              or(
-                isNull(departmentOdcMember.jobSeries),
-                eq(departmentOdcMember.jobSeries, jobDescription.jobSeries),
-              ),
-              or(
-                isNull(departmentOdcMember.serviceUnit),
-                eq(departmentOdcMember.serviceUnit, jobDescription.serviceUnit),
-              ),
-            ),
+            isNull(resumeSourceOdcMember.jobSeries),
+            eq(resumeSourceOdcMember.jobSeries, jobDescription.jobSeries),
+          ),
+          or(
+            isNull(resumeSourceOdcMember.serviceUnit),
+            eq(resumeSourceOdcMember.serviceUnit, jobDescription.serviceUnit),
           ),
         ),
       ),
