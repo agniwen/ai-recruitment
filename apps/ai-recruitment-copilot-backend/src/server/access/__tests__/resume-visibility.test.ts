@@ -1,6 +1,11 @@
 import { PgDialect } from "drizzle-orm/pg-core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildResumeVisibilityCondition } from "../resume-visibility";
+
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", async () => {
+  const { drizzle } = await import("drizzle-orm/node-postgres");
+  return { db: drizzle.mock() };
+});
 
 describe("buildResumeVisibilityCondition", () => {
   it("unions inherited recruiter records with hiring-unit and department ODC assignments", () => {

@@ -1,6 +1,7 @@
 import type { SQL } from "drizzle-orm";
 import { and, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { createRequestWorkspaceAuthorizer } from "./workspace-access-policy";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@arc/db-schema/schema";
 
 export interface ResumeVisibilityScope {
+  aiReviewOrganizationId?: string;
   odc: OdcAccessScope;
   odcActor?: { organizationId: string; userId: string };
   recruiting: RecruitingVisibilityScope;
@@ -39,11 +41,18 @@ export async function resolveResumeVisibilityScope({
     return { odc: EMPTY_ODC_ACCESS_SCOPE, recruiting: { kind: "all" } };
   }
 
-  const [recruiting, odc] = await Promise.all([
+  const authorize = createRequestWorkspaceAuthorizer({
+    memberRole: currentRole,
+    organizationId,
+    userId,
+  });
+  const [recruiting, odc, canApproveAiReview] = await Promise.all([
     resolveRecruitingVisibilityScope({ currentRole, organizationId, userId }),
     resolveOdcAccessScope({ actorUserId: userId, organizationId }),
+    authorize({ action: "approve", resource: "aiReview" }),
   ]);
   return {
+    ...(canApproveAiReview ? { aiReviewOrganizationId: organizationId } : {}),
     odc,
     odcActor:
       (odc.resumeSourceIds?.length ?? 0) > 0 ||
@@ -129,6 +138,14 @@ export function buildResumeVisibilityCondition(
     normalized.recruiting.kind === "restricted" && normalized.recruiting.userIds.length > 0
       ? inArray(studioInterview.createdBy, normalized.recruiting.userIds)
       : undefined;
+  // Approval grants visibility to the pending stage across reporting lines and
+  // recruiting groups, without granting access to other stages or workspaces.
+  const aiReviewCondition = normalized.aiReviewOrganizationId
+    ? and(
+        eq(studioInterview.organizationId, normalized.aiReviewOrganizationId),
+        eq(studioInterview.pipelineStage, "ai_review"),
+      )
+    : undefined;
   const odcJobCondition = buildJobDescriptionHiringUnitScopeCondition({
     canAccessAll: false,
     canAccessPublic: false,
@@ -165,6 +182,7 @@ export function buildResumeVisibilityCondition(
     : assignedOdcCondition;
 
   if (
+    !aiReviewCondition &&
     !recruitingCondition &&
     (normalized.odc.resumeSourceIds?.length ?? 0) === 0 &&
     normalized.odc.departmentIds.length === 0 &&
@@ -172,5 +190,5 @@ export function buildResumeVisibilityCondition(
   ) {
     return sql`false`;
   }
-  return or(recruitingCondition, odcCondition);
+  return or(recruitingCondition, odcCondition, aiReviewCondition);
 }
