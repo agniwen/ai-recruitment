@@ -59,7 +59,7 @@ export function HiringUnitManagementPage() {
     queryFn: () =>
       rpcFetch<{ records: ResumeSourceRecord[] }>(
         rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
-        "加载简历来源失败",
+        "加载部门/中心（来源）失败",
       ),
     queryKey: ["resume-sources", slug],
   });
@@ -195,7 +195,7 @@ export function HiringUnitManagementPage() {
           return sourceNames.get(row.resumeSourceId) ?? "加载中...";
         },
         key: "resumeSourceId",
-        title: "简历来源",
+        title: "部门/中心（来源）",
       }),
       textColumn<HiringUnitTreeRow>({
         fallback: "—",
@@ -256,7 +256,7 @@ export function HiringUnitManagementPage() {
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
-          description="管理简历来源下的用人组织及所属部门。ODC 请在简历来源中设置。"
+          description="管理部门/中心（来源）下的用人组织及所属部门。ODC 请在部门/中心（来源）中设置。"
           title="用人组织"
         />
         <DataGrid<HiringUnitTreeRow>

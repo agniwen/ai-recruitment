@@ -224,7 +224,7 @@ describe("workspace recruiting group dao", () => {
         createdAt: new Date(),
         createdBy: CREATOR,
         id: "test_workspace_hiring_unit_a",
-        name: "A 简历来源",
+        name: "A 部门/中心（来源）",
         organizationId: ORG,
         updatedAt: new Date(),
       },
@@ -232,7 +232,7 @@ describe("workspace recruiting group dao", () => {
         createdAt: new Date(),
         createdBy: CREATOR,
         id: "test_workspace_hiring_unit_b",
-        name: "B 简历来源",
+        name: "B 部门/中心（来源）",
         organizationId: ORG,
         updatedAt: new Date(),
       },
@@ -267,7 +267,7 @@ describe("workspace recruiting group dao", () => {
     expect(groups[0]).toMatchObject({
       id: defaultGroup.id,
       resumeSourceIds: ["test_workspace_hiring_unit_a"],
-      resumeSources: [{ id: "test_workspace_hiring_unit_a", name: "A 简历来源" }],
+      resumeSources: [{ id: "test_workspace_hiring_unit_a", name: "A 部门/中心（来源）" }],
     });
     await updateRecruitingGroupResumeSources({
       actorUserId: CREATOR,

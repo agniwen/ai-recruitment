@@ -180,7 +180,7 @@ export function MembersManagementPage() {
     queryFn: async () => {
       const payload = await rpcFetch<{ records: { id: string; name: string }[] }>(
         rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
-        "加载简历来源失败",
+        "加载部门/中心（来源）失败",
       );
       return payload.records;
     },
@@ -512,17 +512,17 @@ export function MembersManagementPage() {
     setPending(pendingKey);
     await runAsyncAction({
       cleanup: () => setPending(null),
-      onError: () => toast.error("更新负责简历来源失败"),
+      onError: () => toast.error("更新负责部门/中心（来源）失败"),
       operation: async () => {
         await rpcFetch<{ success: boolean }>(
           rpc.api.w[":slug"].studio.workspace.groups[":id"]["resume-sources"].$put({
             json: { resumeSourceIds },
             param: { id: group.id, slug },
           }),
-          "更新负责简历来源失败",
+          "更新负责部门/中心（来源）失败",
         );
         await refetchGroups();
-        toast.success("负责简历来源已更新");
+        toast.success("负责部门/中心（来源）已更新");
       },
     });
   }

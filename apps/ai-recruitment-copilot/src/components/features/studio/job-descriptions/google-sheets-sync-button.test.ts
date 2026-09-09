@@ -54,7 +54,7 @@ describe("buildGoogleSheetSyncResultDescription", () => {
     );
 
     expect(text).toContain("处理 8 行（导入/更新 3，未变化 3，跳过 2）");
-    expect(text).toContain("简历来源新增 2，用人组织新增 1，部门新增 1");
+    expect(text).toContain("部门/中心（来源）新增 2，用人组织新增 1，部门新增 1");
     expect(text).toContain("岗位新增 2，岗位更新 1");
     expect(text).toContain("跳过 2 条：");
     expect(text).toContain("第 2 行（待生成）：岗位唯一编码缺失或格式无效。");

@@ -140,7 +140,7 @@ describe("job description source selection", () => {
     mocks.canCreate = false;
     const { select } = await render("已维护来源", true);
     expect(select.disabled).toBe(true);
-    expect(select.textContent).not.toContain("新建简历来源");
+    expect(select.textContent).not.toContain("新建部门/中心（来源）");
     expect(select.selectedOptions[0].textContent).toBe("已维护来源");
   });
 });

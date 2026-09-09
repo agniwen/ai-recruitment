@@ -113,7 +113,7 @@ export function OdcAssignmentDialog({
         <DialogHeader>
           <DialogTitle>设置 ODC</DialogTitle>
           <DialogDescription>
-            为简历来源“{target?.name ?? ""}”设置 ODC。这里只显示角色设置中已勾选“是否为
+            为部门/中心（来源）“{target?.name ?? ""}”设置 ODC。这里只显示角色设置中已勾选“是否为
             ODC”的成员；序列或服务单位留空表示不限。
           </DialogDescription>
         </DialogHeader>

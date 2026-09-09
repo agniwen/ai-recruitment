@@ -56,21 +56,21 @@ export function PreRegistrationOdcFields({
   return (
     <FieldGroup>
       <Field>
-        <FieldLabel htmlFor="pre-registration-odc-sources">负责简历来源</FieldLabel>
+        <FieldLabel htmlFor="pre-registration-odc-sources">负责部门/中心（来源）</FieldLabel>
         <SearchableMultiSelect
           id="pre-registration-odc-sources"
           disabled={disabled || loading || failed}
           options={options}
           value={assignments.map((assignment) => assignment.resumeSourceId)}
           onChange={(ids) => onChange(selectPreRegistrationOdcSources(assignments, ids))}
-          placeholder={loading ? "加载简历来源中…" : "请选择简历来源（可多选）"}
-          searchPlaceholder="搜索简历来源"
-          emptyMessage="暂无可选简历来源"
+          placeholder={loading ? "加载部门/中心（来源）中…" : "请选择部门/中心（来源）（可多选）"}
+          searchPlaceholder="搜索部门/中心（来源）"
+          emptyMessage="暂无可选部门/中心（来源）"
         />
         <FieldDescription>可分别设置每个来源的负责范围，留空表示不限。</FieldDescription>
         {failed ? (
           <p role="alert" className="text-sm text-destructive">
-            简历来源加载失败，请重新打开表单重试。
+            部门/中心（来源）加载失败，请重新打开表单重试。
           </p>
         ) : null}
       </Field>

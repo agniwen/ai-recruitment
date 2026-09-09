@@ -65,7 +65,7 @@ export function ResumeSourceManagementPage() {
     queryFn: () =>
       rpcFetch<{ records: ResumeSourceRecord[] }>(
         rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
-        "加载简历来源失败",
+        "加载部门/中心（来源）失败",
       ),
     queryKey: ["resume-sources", slug],
   });
@@ -87,7 +87,7 @@ export function ResumeSourceManagementPage() {
       }),
     detailFromList: (record) => record,
     invalidate,
-    messages: { deleteSuccess: "简历来源已删除" },
+    messages: { deleteSuccess: "部门/中心（来源）已删除" },
   });
   const rows = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -96,7 +96,7 @@ export function ResumeSourceManagementPage() {
     );
   }, [search, sources.data]);
   const columns = [
-    textColumn<ResumeSourceRecord>({ key: "name", primary: true, title: "简历来源" }),
+    textColumn<ResumeSourceRecord>({ key: "name", primary: true, title: "部门/中心（来源）" }),
     textColumn<ResumeSourceRecord>({
       fallback: "—",
       key: "description",
@@ -157,8 +157,8 @@ export function ResumeSourceManagementPage() {
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
-          title="简历来源"
-          description="按“简历来源 → 用人组织 → 部门”组织招聘范围。ODC 在简历来源统一设置，覆盖下属组织和部门，并按序列、服务单位筛选。"
+          title="部门/中心（来源）"
+          description="按“部门/中心（来源） → 用人组织 → 部门”组织招聘范围。ODC 在部门/中心（来源）统一设置，覆盖下属组织和部门，并按序列、服务单位筛选。"
         />
         <DataGrid<ResumeSourceRecord>
           columns={columns}
@@ -169,7 +169,7 @@ export function ResumeSourceManagementPage() {
           total={rows.length}
           totalPages={1}
           filterValues={{ search }}
-          filters={[{ key: "search", placeholder: "搜索简历来源", type: "search" }]}
+          filters={[{ key: "search", placeholder: "搜索部门/中心（来源）", type: "search" }]}
           onFilterChange={(_, value) => setSearch(value)}
           onRefresh={() => void sources.refetch()}
           onRetry={() => void sources.refetch()}
@@ -177,15 +177,15 @@ export function ResumeSourceManagementPage() {
           empty={
             <div className="p-10 text-center text-muted-foreground">
               {search
-                ? "没有匹配的简历来源"
-                : "还没有简历来源。新建后，请在用人组织中选择所属来源。"}
+                ? "没有匹配的部门/中心（来源）"
+                : "还没有部门/中心（来源）。新建后，请在用人组织中选择所属来源。"}
             </div>
           }
           toolbarRight={
             canCreate ? (
               <Button onClick={crud.openCreate}>
                 <IconPlus className="size-4" />
-                新建简历来源
+                新建部门/中心（来源）
               </Button>
             ) : null
           }
@@ -229,7 +229,7 @@ export function ResumeSourceManagementPage() {
         />
       ) : null}
       <EntityDeleteDialog
-        title="删除简历来源？"
+        title="删除部门/中心（来源）？"
         description={(record) =>
           `即将删除“${record.name}”及其 ODC 配置。请先调整下属用人组织的归属。`
         }

@@ -333,11 +333,11 @@ function RecruitingGroupColumn({
     resumeSourceControl = (
       <SearchableMultiSelect
         disabled={pending === resumeSourcePendingKey}
-        emptyMessage="暂无简历来源"
+        emptyMessage="暂无部门/中心（来源）"
         onChange={(value) => onResumeSourcesChange(group, value)}
         options={resumeSourceOptions}
-        placeholder="负责简历来源"
-        searchPlaceholder="搜索简历来源"
+        placeholder="负责部门/中心（来源）"
+        searchPlaceholder="搜索部门/中心（来源）"
         value={group.resumeSourceIds}
       />
     );

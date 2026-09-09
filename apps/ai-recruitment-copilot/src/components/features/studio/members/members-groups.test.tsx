@@ -17,7 +17,7 @@ vi.mock("@/components/ui/searchable-multi-select", () => ({
     options: { label: string; value: string }[];
     value: string[];
   }) => (
-    <button aria-label="负责简历来源" onClick={() => onChange(["unit-2"])} type="button">
+    <button aria-label="负责部门/中心（来源）" onClick={() => onChange(["unit-2"])} type="button">
       {options
         .filter((option) => value.includes(option.value))
         .map((option) => option.label)
@@ -97,7 +97,9 @@ describe("RecruitingGroupsPanel hiring unit scope", () => {
     const onResumeSourcesChange = vi.fn();
     const host = renderPanel({ canUpdate: true, onResumeSourcesChange });
 
-    const selector = host.querySelector<HTMLButtonElement>('button[aria-label="负责简历来源"]');
+    const selector = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="负责部门/中心（来源）"]',
+    );
     expect(selector?.textContent).toBe("研发中心");
 
     act(() => selector?.click());
@@ -108,7 +110,7 @@ describe("RecruitingGroupsPanel hiring unit scope", () => {
   it("shows assigned hiring units read-only when update permission is absent", () => {
     const host = renderPanel({ canUpdate: false });
 
-    expect(host.querySelector('button[aria-label="负责简历来源"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="负责部门/中心（来源）"]')).toBeNull();
     expect(host.textContent).toContain("研发中心");
   });
 

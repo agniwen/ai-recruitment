@@ -37,7 +37,9 @@ const hiringUnitListQuerySchema = z.object({
 
 export const hiringUnitsRouter = factory
   .createApp()
-  .use("/odc/batch", (c) => Promise.resolve(c.json({ error: "请在简历来源中设置 ODC。" }, 410)))
+  .use("/odc/batch", (c) =>
+    Promise.resolve(c.json({ error: "请在部门/中心（来源）中设置 ODC。" }, 410)),
+  )
   .get(
     "/",
     requirePermission("hiringUnit", "read"),
@@ -111,7 +113,7 @@ export const hiringUnitsRouter = factory
         input.resumeSourceId &&
         !(await loadResumeSourceById(input.resumeSourceId, activeOrg.id))
       ) {
-        return c.json({ error: "简历来源不存在。" }, 400);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 400);
       }
       const now = new Date();
       const record = {
@@ -218,7 +220,7 @@ export const hiringUnitsRouter = factory
         input.resumeSourceId &&
         !(await loadResumeSourceById(input.resumeSourceId, activeOrg.id))
       ) {
-        return c.json({ error: "简历来源不存在。" }, 400);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 400);
       }
       const now = new Date();
       await db

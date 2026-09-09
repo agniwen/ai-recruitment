@@ -271,7 +271,7 @@ export const workspaceRouter = factory
     zValidator(
       "json",
       recruitingGroupResumeSourcesInputSchema,
-      jsonValidatorError("负责简历来源参数无效。"),
+      jsonValidatorError("负责部门/中心（来源）参数无效。"),
     ),
     async (c) => {
       const { activeOrg, user } = c.var;
@@ -288,7 +288,7 @@ export const workspaceRouter = factory
         return c.json({ error: "组别不存在。" }, 404);
       }
       if (result.status === "invalid_resume_source") {
-        return c.json({ error: "存在无效的简历来源，请刷新后重试。" }, 400);
+        return c.json({ error: "存在无效的部门/中心（来源），请刷新后重试。" }, 400);
       }
       return c.json({ success: true }, 200);
     },

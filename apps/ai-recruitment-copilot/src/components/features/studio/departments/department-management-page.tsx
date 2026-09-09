@@ -229,7 +229,7 @@ export function DepartmentManagementPage() {
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
-          description="设置岗位、面试官所属部门。ODC 请在简历来源中设置。"
+          description="设置岗位、面试官所属部门。ODC 请在部门/中心（来源）中设置。"
           title="部门设置"
         />
 

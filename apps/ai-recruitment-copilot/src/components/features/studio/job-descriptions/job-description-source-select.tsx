@@ -34,7 +34,7 @@ export function JobDescriptionSourceSelect({
     queryFn: () =>
       rpcFetch<{ records: ResumeSourceRecord[] }>(
         rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
-        "加载简历来源失败",
+        "加载部门/中心（来源）失败",
       ),
     queryKey: ["resume-sources", slug],
   });
@@ -47,7 +47,7 @@ export function JobDescriptionSourceSelect({
     options.push({ label: value, value: CURRENT_SOURCE });
   }
   if (canCreate && !disabled && sources.isSuccess) {
-    options.push({ label: "新建简历来源…", value: CREATE_SOURCE });
+    options.push({ label: "新建部门/中心（来源）…", value: CREATE_SOURCE });
   }
 
   return (
@@ -55,7 +55,7 @@ export function JobDescriptionSourceSelect({
       <SearchableSelect
         clearable
         disabled={disabled || sources.isPending || sources.isError}
-        emptyMessage="没有匹配的简历来源"
+        emptyMessage="没有匹配的部门/中心（来源）"
         id={id}
         invalid={invalid}
         onChange={(next) => {
@@ -67,13 +67,13 @@ export function JobDescriptionSourceSelect({
           }
         }}
         options={options}
-        placeholder={sources.isPending ? "加载简历来源中…" : "请选择简历来源"}
-        searchPlaceholder="搜索简历来源…"
+        placeholder={sources.isPending ? "加载部门/中心（来源）中…" : "请选择部门/中心（来源）"}
+        searchPlaceholder="搜索部门/中心（来源）…"
         value={selected?.id ?? (value ? CURRENT_SOURCE : null)}
       />
       {sources.isError ? (
         <p role="alert" className="text-destructive text-sm">
-          加载简历来源失败，请重新打开表单重试。
+          加载部门/中心（来源）失败，请重新打开表单重试。
         </p>
       ) : null}
       {canCreate && !disabled ? (

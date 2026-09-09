@@ -39,7 +39,7 @@ export const recruitingGroupMemberRoleInputSchema = z.object({
 });
 
 export const recruitingGroupResumeSourcesInputSchema = z.object({
-  resumeSourceIds: z.array(z.string().trim().min(1)).max(100, "最多选择 100 个简历来源"),
+  resumeSourceIds: z.array(z.string().trim().min(1)).max(100, "最多选择 100 个部门/中心（来源）"),
 });
 
 export type WorkspaceUpdateInput = z.infer<typeof workspaceUpdateSchema>;

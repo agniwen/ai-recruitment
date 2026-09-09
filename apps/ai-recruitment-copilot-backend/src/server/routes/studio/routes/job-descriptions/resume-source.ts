@@ -32,14 +32,18 @@ export async function resolveJobDescriptionResumeSource({
     .limit(1);
   if (!source) {
     return {
-      error: "简历来源不存在，请选择或新建简历来源。",
+      error: "部门/中心（来源）不存在，请选择或新建部门/中心（来源）。",
       resumeSourceId: null,
       sourceSheet: null,
     };
   }
   const scope = await resolveHiringUnitAccessScope({ actorUserId, organizationId });
   if (!scope.canAccessAll && !scope.resumeSourceIds?.includes(source.id)) {
-    return { error: "所选简历来源不在当前可访问范围内。", resumeSourceId: null, sourceSheet: null };
+    return {
+      error: "所选部门/中心（来源）不在当前可访问范围内。",
+      resumeSourceId: null,
+      sourceSheet: null,
+    };
   }
   return { error: null, resumeSourceId: source.id, sourceSheet: source.name };
 }

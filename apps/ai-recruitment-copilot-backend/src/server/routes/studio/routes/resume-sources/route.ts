@@ -8,7 +8,7 @@ import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/mi
 import { listResumeSources } from "./dao";
 import { resumeSourceOdcRouter } from "./routes/odc/route";
 
-// 简历来源与用人组织共用招聘组织管理权限。
+// 部门/中心（来源）与用人组织共用招聘组织管理权限。
 export const resumeSourcesRouter = factory
   .createApp()
   .get("/", requirePermission("hiringUnit", "read"), async (c) => {
@@ -74,7 +74,7 @@ export const resumeSourcesRouter = factory
         return updated;
       });
       if (!rows.length) {
-        return c.json({ error: "简历来源不存在。" }, 404);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 404);
       }
       return c.json({ success: true }, 200);
     },
@@ -118,10 +118,10 @@ export const resumeSourcesRouter = factory
       return "deleted";
     });
     if (result === "missing") {
-      return c.json({ error: "简历来源不存在。" }, 404);
+      return c.json({ error: "部门/中心（来源）不存在。" }, 404);
     }
     if (result === "in_use") {
-      return c.json({ error: "请先调整关联岗位和下属用人组织的简历来源，再删除。" }, 409);
+      return c.json({ error: "请先调整关联岗位和下属用人组织的部门/中心（来源），再删除。" }, 409);
     }
     return c.json({ success: true }, 200);
   })

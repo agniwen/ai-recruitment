@@ -51,7 +51,7 @@ function JobDescriptionPreview({ record }: { record: JobDescriptionRecord }) {
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
         {[
           ["用人组织", record.hiringUnitName],
-          ["简历来源", record.resumeSourceName],
+          ["部门/中心（来源）", record.resumeSourceName],
           ["部门", record.departmentName],
           ["序列", record.jobSeries],
           ["服务单位", record.serviceUnit],

@@ -47,7 +47,7 @@ export function buildGoogleSheetSyncResultDescription(
   const imported = result.jobsCreated + result.jobsUpdated;
   const lines = [
     `处理 ${result.processedRows} 行（导入/更新 ${imported}，未变化 ${result.jobsUnchanged}，跳过 ${result.skipped.length}）`,
-    `简历来源新增 ${result.resumeSourcesCreated ?? 0}，用人组织新增 ${result.hiringUnitsCreated}，部门新增 ${result.departmentsCreated}`,
+    `部门/中心（来源）新增 ${result.resumeSourcesCreated ?? 0}，用人组织新增 ${result.hiringUnitsCreated}，部门新增 ${result.departmentsCreated}`,
     `岗位新增 ${result.jobsCreated}，岗位更新 ${result.jobsUpdated}`,
   ];
   appendLimitedLines(lines, result.skipped.map(formatSkippedLine), "跳过");

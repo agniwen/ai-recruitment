@@ -22,7 +22,7 @@ export const departmentOdcRouter = factory
   .createApp()
   .use("*", async (c, next) => {
     if (c.req.method !== "GET") {
-      return c.json({ error: "请在简历来源中设置 ODC。" }, 410);
+      return c.json({ error: "请在部门/中心（来源）中设置 ODC。" }, 410);
     }
     await next();
   })

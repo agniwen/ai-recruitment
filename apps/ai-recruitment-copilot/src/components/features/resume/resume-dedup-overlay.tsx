@@ -534,7 +534,7 @@ export function ResumeDuplicateMatchesDialog({
 
   if (isLoading) {
     content = (
-      <div className="flex h-[min(68vh,720px)] items-center justify-center gap-2 text-muted-foreground text-sm">
+      <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-muted-foreground text-sm">
         <Loader2Icon className="size-4 animate-spin" />
         正在加载疑似重复简历
       </div>
@@ -543,16 +543,16 @@ export function ResumeDuplicateMatchesDialog({
     content = <p className="py-8 text-center text-destructive text-sm">疑似重复简历加载失败。</p>;
   } else if (matches.length > 0 || source) {
     content = (
-      <div className={cn("flex h-[min(68vh,720px)] min-h-0", source ? "gap-0" : null)}>
+      <div className={cn("flex min-h-0 flex-col lg:flex-1 lg:flex-row", source ? "gap-0" : null)}>
         {source ? (
-          <div className="hidden w-2/5 shrink-0 border-border/70 border-r pr-5 lg:block">
+          <div className="hidden min-h-0 w-2/5 shrink-0 overflow-y-auto border-border/70 border-r pr-5 lg:block">
             <SourceCandidatePanel source={source} />
           </div>
         ) : null}
 
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", source ? "lg:pl-5" : null)}>
           {source ? (
-            <div className="mb-3 border-border/70 border-b pb-3 lg:hidden">
+            <div className="mb-3 shrink-0 border-border/70 border-b pb-3 lg:hidden">
               <SourceCandidatePanel source={source} />
             </div>
           ) : null}
@@ -563,7 +563,11 @@ export function ResumeDuplicateMatchesDialog({
           </div>
 
           {matches.length > 0 ? (
-            <ResumeDedupMatchList className="min-h-0 flex-1" matches={matches} source={source} />
+            <ResumeDedupMatchList
+              className="shrink-0 overflow-visible lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+              matches={matches}
+              source={source}
+            />
           ) : (
             <p className="py-10 text-center text-muted-foreground text-sm">暂无疑似重复简历</p>
           )}
@@ -574,7 +578,8 @@ export function ResumeDuplicateMatchesDialog({
 
   return (
     <Modal
-      bodyClassName="overflow-hidden"
+      className="h-[min(90dvh,900px)] max-h-[90dvh]"
+      bodyClassName="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto [overflow-wrap:anywhere] lg:overflow-hidden"
       description="对照当前候选人与疑似记录的联系方式、履历与技能，结合判断依据确认是否为同一人。"
       onOpenChange={onOpenChange}
       open={open}

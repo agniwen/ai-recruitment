@@ -68,7 +68,7 @@ describe("TanStack Start studio CRUD route migration", () => {
 
   it("shows recruiting group resume source selections by item names inside the select only", () => {
     const membersSource = readSource("components/features/studio/members/members-groups.tsx");
-    const resumeSourceSelectIndex = membersSource.indexOf('placeholder="负责简历来源"');
+    const resumeSourceSelectIndex = membersSource.indexOf('placeholder="负责部门/中心（来源）"');
     const resumeSourceSelectSource = membersSource.slice(
       resumeSourceSelectIndex,
       resumeSourceSelectIndex + 500,
@@ -76,7 +76,7 @@ describe("TanStack Start studio CRUD route migration", () => {
 
     expect(resumeSourceSelectIndex).toBeGreaterThanOrEqual(0);
     expect(resumeSourceSelectSource).not.toContain('selectedDisplay="count"');
-    expect(resumeSourceSelectSource).not.toMatch(/负责 \$\{count\} 个简历来源/u);
+    expect(resumeSourceSelectSource).not.toMatch(/负责 \$\{count\} 个部门\/中心（来源）/u);
     expect(resumeSourceSelectSource).not.toContain("showBadges");
   });
 

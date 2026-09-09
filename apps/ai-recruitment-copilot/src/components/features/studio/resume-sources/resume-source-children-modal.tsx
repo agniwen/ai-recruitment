@@ -135,7 +135,7 @@ function SourceChildDetail({
   return (
     <Modal open onOpenChange={onOpenChange} title={selected.record.name}>
       <dl className="grid grid-cols-[auto_1fr] gap-4 text-sm">
-        <dt className="text-muted-foreground">简历来源</dt>
+        <dt className="text-muted-foreground">部门/中心（来源）</dt>
         <dd>{sourceName}</dd>
         <dt className="text-muted-foreground">名称</dt>
         <dd>{selected.record.name}</dd>
@@ -254,7 +254,7 @@ export function ResumeSourceChildrenModal({
         <DataGrid<Row>
           empty={
             <p className="p-10 text-center text-muted-foreground">
-              {search ? "没有匹配的数据" : "当前简历来源下暂无数据"}
+              {search ? "没有匹配的数据" : "当前部门/中心（来源）下暂无数据"}
             </p>
           }
           columns={[

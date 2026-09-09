@@ -306,7 +306,7 @@ describe("hiring unit recruiting-group scope", () => {
 
   afterEach(clean, 30_000);
 
-  it("普通招聘组成员只能看到公共部门和其招聘组负责简历来源下的数据", async () => {
+  it("普通招聘组成员只能看到公共部门和其招聘组负责部门/中心（来源）下的数据", async () => {
     const [departments, interviewers, jobDescriptions] = await Promise.all([
       listAllDepartments(ORG, { actorUserId: MEMBER }),
       listAllInterviewers(ORG, { actorUserId: MEMBER }),
@@ -386,7 +386,7 @@ describe("hiring unit recruiting-group scope", () => {
     );
   });
 
-  it("owner 不受招聘组简历来源范围限制", async () => {
+  it("owner 不受招聘组部门/中心（来源）范围限制", async () => {
     const [departments, interviewers, jobDescriptions] = await Promise.all([
       listAllDepartments(ORG, { actorUserId: OWNER }),
       listAllInterviewers(ORG, { actorUserId: OWNER }),
@@ -412,7 +412,7 @@ describe("hiring unit recruiting-group scope", () => {
     expect(jobDescriptions).toEqual([]);
   });
 
-  it("移除招聘组负责简历来源后，普通成员只保留公共范围", async () => {
+  it("移除招聘组负责部门/中心（来源）后，普通成员只保留公共范围", async () => {
     await db
       .delete(recruitingGroupResumeSource)
       .where(
@@ -433,7 +433,7 @@ describe("hiring unit recruiting-group scope", () => {
     expect(ids(jobDescriptions)).toEqual([JD_PUBLIC]);
   });
 
-  it("旧部门和用人组织 ODC 不再授权，简历来源覆盖下属组织", async () => {
+  it("旧部门和用人组织 ODC 不再授权，部门/中心（来源）覆盖下属组织", async () => {
     await db
       .insert(departmentOdcMember)
       .values({ departmentId: DEPT_B, memberId: NO_GROUP_MEMBER_ID, organizationId: ORG });

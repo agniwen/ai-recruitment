@@ -60,15 +60,15 @@ export function ResumeSourceFormDialog({
                 param: { id: record.id, slug },
               })
             : rpc.api.w[":slug"].studio["resume-sources"].$post({ json: body, param: { slug } }),
-          isEdit ? "更新简历来源失败" : "创建简历来源失败",
+          isEdit ? "更新部门/中心（来源）失败" : "创建部门/中心（来源）失败",
         );
         savedId = result.id ?? savedId;
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "保存简历来源失败");
+        toast.error(error instanceof Error ? error.message : "保存部门/中心（来源）失败");
         return;
       }
 
-      toast.success(isEdit ? "简历来源已更新" : "简历来源已创建");
+      toast.success(isEdit ? "部门/中心（来源）已更新" : "部门/中心（来源）已创建");
       onSaved({ ...body, id: savedId });
       onOpenChange(false);
     },
@@ -78,7 +78,7 @@ export function ResumeSourceFormDialog({
 
   return (
     <EntityFormDialog
-      description="简历来源是用人组织的上级；ODC 在此层级统一设置。"
+      description="部门/中心（来源）是用人组织的上级；ODC 在此层级统一设置。"
       formId="resume-source-form"
       isEdit={isEdit}
       isSubmitting={isSubmitting}
@@ -86,7 +86,7 @@ export function ResumeSourceFormDialog({
       onSubmit={() => void form.handleSubmit()}
       open={open}
       size="md"
-      title={isEdit ? "编辑简历来源" : "新建简历来源"}
+      title={isEdit ? "编辑部门/中心（来源）" : "新建部门/中心（来源）"}
     >
       <form.Field name="name">
         {(field) => {
@@ -94,7 +94,7 @@ export function ResumeSourceFormDialog({
           return (
             <Field data-invalid={hasFieldErrors(field.state.meta.errors) || undefined}>
               <FieldLabel htmlFor={field.name}>
-                简历来源名称 <span className="text-destructive">*</span>
+                部门/中心（来源）名称 <span className="text-destructive">*</span>
               </FieldLabel>
               <FieldContent className="gap-2">
                 <Input
@@ -103,7 +103,7 @@ export function ResumeSourceFormDialog({
                   maxLength={NAME_MAX_LENGTH}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder="请输入简历来源名称"
+                  placeholder="请输入部门/中心（来源）名称"
                   value={field.state.value}
                 />
                 <FieldError errors={errors} />
@@ -128,7 +128,7 @@ export function ResumeSourceFormDialog({
                     maxLength={DESCRIPTION_MAX_LENGTH}
                     onBlur={field.handleBlur}
                     onChange={(event) => field.handleChange(event.target.value)}
-                    placeholder="简要说明该简历来源的业务范围或招聘边界"
+                    placeholder="简要说明该部门/中心（来源）的业务范围或招聘边界"
                     rows={3}
                     value={field.state.value ?? ""}
                   />

@@ -4,5 +4,5 @@ import { formatDocumentTitle } from "@/lib/start/document-title";
 
 export const Route = createFileRoute("/w/$slug/studio/resume-sources")({
   component: ResumeSourceManagementPage,
-  head: () => ({ meta: [{ title: formatDocumentTitle("简历来源") }] }),
+  head: () => ({ meta: [{ title: formatDocumentTitle("部门/中心（来源）") }] }),
 });

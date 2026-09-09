@@ -54,7 +54,7 @@ export function OdcAddDialog({
   const createMutation = useMutation({
     mutationFn: (assignments: OdcAssignmentDraft[]) => {
       if (!target) {
-        throw new Error("未选择要管理的简历来源");
+        throw new Error("未选择要管理的部门/中心（来源）");
       }
       const json = { assignments: serializeOdcAssignmentDrafts(assignments) };
 

@@ -51,7 +51,7 @@ export function HiringUnitFormDialog({
     queryFn: () =>
       rpcFetch<{ records: ResumeSourceRecord[] }>(
         rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
-        "加载简历来源失败",
+        "加载部门/中心（来源）失败",
       ),
     queryKey: ["resume-sources", slug],
   });
@@ -107,7 +107,7 @@ export function HiringUnitFormDialog({
       <form.Field name="resumeSourceId">
         {(field) => (
           <Field>
-            <FieldLabel htmlFor="hiring-unit-resume-source">简历来源</FieldLabel>
+            <FieldLabel htmlFor="hiring-unit-resume-source">部门/中心（来源）</FieldLabel>
             <FieldContent>
               <SearchableSelect
                 id="hiring-unit-resume-source"
@@ -117,12 +117,12 @@ export function HiringUnitFormDialog({
                   label: source.name,
                   value: source.id,
                 }))}
-                placeholder={sources.isLoading ? "加载中..." : "选择所属简历来源"}
+                placeholder={sources.isLoading ? "加载中..." : "选择所属部门/中心（来源）"}
                 disabled={sources.isLoading || sources.isError}
               />
               {sources.isError ? (
                 <p role="alert" className="text-sm text-destructive">
-                  加载简历来源失败，请关闭后重试。
+                  加载部门/中心（来源）失败，请关闭后重试。
                 </p>
               ) : null}
             </FieldContent>

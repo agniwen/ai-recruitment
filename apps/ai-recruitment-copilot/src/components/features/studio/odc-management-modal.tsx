@@ -98,7 +98,7 @@ export function OdcManagementModal({
   const updateMutation = useMutation({
     mutationFn: (assignment: OdcAssignmentDraft) => {
       if (!target) {
-        throw new Error("未选择要管理的简历来源");
+        throw new Error("未选择要管理的部门/中心（来源）");
       }
       const json = {
         canApproveAiReview: assignment.canApproveAiReview ?? false,
@@ -128,7 +128,7 @@ export function OdcManagementModal({
   const deleteMutation = useMutation({
     mutationFn: (assignment: OdcManagedAssignment) => {
       if (!target) {
-        throw new Error("未选择要管理的简历来源");
+        throw new Error("未选择要管理的部门/中心（来源）");
       }
 
       return rpcFetch(
@@ -214,7 +214,7 @@ export function OdcManagementModal({
         onOpenChange={onOpenChange}
         open={open}
         size="2xl"
-        title={`管理 简历来源“${target?.name ?? ""}”的 ODC`}
+        title={`管理 部门/中心（来源）“${target?.name ?? ""}”的 ODC`}
       >
         <DataGrid<OdcManagedAssignment>
           columns={columns}
@@ -311,7 +311,7 @@ export function OdcManagementModal({
       <EntityDeleteDialog
         confirmDisabled={deleteMutation.isPending}
         confirmLabel={deleteMutation.isPending ? "删除中..." : "删除"}
-        description={(record) => `即将删除 ${record.name} 在该简历来源下的 ODC 配置。`}
+        description={(record) => `即将删除 ${record.name} 在该部门/中心（来源）下的 ODC 配置。`}
         onClose={() => {
           if (!deleteMutation.isPending) {
             setDeleteTarget(null);

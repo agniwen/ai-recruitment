@@ -34,8 +34,8 @@ function mutationErrorResponse(
       {
         error:
           result === "invalid_odc_role"
-            ? "只有 ODC 角色可以设置负责简历来源。"
-            : "所选简历来源不存在或不属于当前工作区。",
+            ? "只有 ODC 角色可以设置负责部门/中心（来源）。"
+            : "所选部门/中心（来源）不存在或不属于当前工作区。",
       },
       400,
     );

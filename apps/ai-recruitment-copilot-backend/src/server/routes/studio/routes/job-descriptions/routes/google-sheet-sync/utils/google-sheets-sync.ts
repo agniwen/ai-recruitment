@@ -40,7 +40,8 @@ const HEADERS = {
   workLocation: "工作地点",
 } as const;
 
-const RESUME_SOURCE_HEADER = "简历来源";
+const RESUME_SOURCE_HEADER = "部门/中心（来源）";
+const RESUME_SOURCE_HEADERS = [RESUME_SOURCE_HEADER, "部门/中心", "简历来源", HEADERS.sourceSheet];
 export const DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME = "默认简历来源";
 export const DEFAULT_GOOGLE_SHEET_HIRING_UNIT_NAME = "默认用人组织";
 
@@ -259,7 +260,9 @@ function parseGoogleSheetJobRow(args: {
   const hiringUnitName = rawHiringUnitName || DEFAULT_GOOGLE_SHEET_HIRING_UNIT_NAME;
   const rawSourceSheet = cellText(
     row,
-    headerIndexes.get(RESUME_SOURCE_HEADER) ?? headerIndexes.get(HEADERS.sourceSheet),
+    RESUME_SOURCE_HEADERS.map((header) => headerIndexes.get(header)).find(
+      (index) => index !== undefined,
+    ),
   );
   const sourceSheet = rawSourceSheet || DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME;
   const rawDepartmentName = cellText(row, headerIndexes.get(HEADERS.departmentName));
@@ -284,7 +287,7 @@ function parseGoogleSheetJobRow(args: {
     warnings.push({
       code,
       field: RESUME_SOURCE_HEADER,
-      message: `简历来源为空，已归入「${DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME}」。`,
+      message: `部门/中心（来源）为空，已归入「${DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME}」。`,
       rowNumber,
     });
   }
@@ -387,7 +390,7 @@ export function parseGoogleSheetJobRows(values: unknown[][]): {
   const codeColumnIndex = headerIndexes.get(HEADERS.code) ?? headerIndexes.get(LEGACY_CODE_HEADER);
   const missingHeaders = REQUIRED_HEADERS.filter((header) => {
     if (header === HEADERS.sourceSheet) {
-      return !headerIndexes.has(RESUME_SOURCE_HEADER) && !headerIndexes.has(HEADERS.sourceSheet);
+      return !RESUME_SOURCE_HEADERS.some((alias) => headerIndexes.has(alias));
     }
     if (header === HEADERS.code) {
       return codeColumnIndex === undefined;

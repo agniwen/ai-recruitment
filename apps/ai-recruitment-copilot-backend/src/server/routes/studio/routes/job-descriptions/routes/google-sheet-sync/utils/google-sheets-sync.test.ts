@@ -89,18 +89,21 @@ describe("parseGoogleSheetJobRows", () => {
     });
   });
 
-  it("accepts 简历来源 as the source column and prefers it when both headers exist", () => {
-    const aliasedHeaders = HEADERS.map((header) => (header === "来源表格" ? "简历来源" : header));
-    expect(parseGoogleSheetJobRows([aliasedHeaders, row()]).records[0].sourceSheet).toBe(
-      "技术中心",
-    );
-    expect(
-      parseGoogleSheetJobRows([
-        [...HEADERS, "简历来源"],
-        [...row(), "合作方A"],
-      ]).records[0].sourceSheet,
-    ).toBe("合作方A");
-  });
+  it.each(["部门/中心（来源）", "部门/中心", "简历来源"])(
+    "accepts %s as the source column and prefers it over the legacy sheet column",
+    (headerName) => {
+      const aliasedHeaders = HEADERS.map((header) => (header === "来源表格" ? headerName : header));
+      expect(parseGoogleSheetJobRows([aliasedHeaders, row()]).records[0].sourceSheet).toBe(
+        "技术中心",
+      );
+      expect(
+        parseGoogleSheetJobRows([
+          [...HEADERS, headerName],
+          [...row(), "合作方A"],
+        ]).records[0].sourceSheet,
+      ).toBe("合作方A");
+    },
+  );
 
   it("uses explicit defaults for empty source and hiring unit cells", () => {
     const parsed = parseGoogleSheetJobRows([
@@ -113,7 +116,7 @@ describe("parseGoogleSheetJobRows", () => {
       sourceSheet: DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME,
     });
     expect(parsed.warnings.map((warning) => warning.field)).toEqual(
-      expect.arrayContaining(["简历来源", "编制组织", "部门"]),
+      expect.arrayContaining(["部门/中心（来源）", "编制组织", "部门"]),
     );
   });
 

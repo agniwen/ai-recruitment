@@ -120,7 +120,7 @@ const navGroups: NavGroup[] = [
         icon: GlobeIcon,
         path: "/studio/resume-sources",
         resource: "page",
-        title: "简历来源",
+        title: "部门/中心（来源）",
       },
       {
         action: "hiringUnits",

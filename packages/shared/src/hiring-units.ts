@@ -3,7 +3,7 @@ import { z } from "zod";
 export const hiringUnitBaseSchema = z.object({
   description: z.string().trim().max(500, "描述不能超过 500 字").optional().or(z.literal("")),
   name: z.string().trim().min(1, "请输入用人组织名称").max(120, "名称不能超过 120 个字符"),
-  resumeSourceId: z.string().trim().min(1, "请选择简历来源").nullable().optional(),
+  resumeSourceId: z.string().trim().min(1, "请选择部门/中心（来源）").nullable().optional(),
 });
 
 export const hiringUnitFormSchema = hiringUnitBaseSchema;

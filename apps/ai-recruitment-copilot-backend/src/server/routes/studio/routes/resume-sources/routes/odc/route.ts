@@ -32,7 +32,7 @@ export const resumeSourceOdcRouter = factory
       }
       const id = c.req.param("id");
       if (!id) {
-        return c.json({ error: "简历来源不存在。" }, 404);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 404);
       }
       const { assignments } = c.req.valid("json");
       const memberIds = assignments.map((assignment) => assignment.memberId);
@@ -45,7 +45,7 @@ export const resumeSourceOdcRouter = factory
         organizationId: activeOrg.id,
       });
       if (!updated) {
-        return c.json({ error: "简历来源不存在。" }, 404);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 404);
       }
       safeUpdateTag(`resume-sources:${activeOrg.id}`);
       return c.json({ success: true }, 200);
@@ -66,7 +66,7 @@ export const resumeSourceOdcRouter = factory
       }
       const id = c.req.param("id");
       if (!id || !(await loadResumeSourceById(id, activeOrg.id))) {
-        return c.json({ error: "简历来源不存在。" }, 404);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 404);
       }
       const input = c.req.valid("json");
       const assignments = "assignments" in input ? input.assignments : [input];
@@ -101,7 +101,7 @@ export const resumeSourceOdcRouter = factory
       }
       const id = c.req.param("id");
       if (!id || !(await loadResumeSourceById(id, activeOrg.id))) {
-        return c.json({ error: "简历来源不存在。" }, 404);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 404);
       }
       return c.json(
         await queryPaginatedResumeSourceOdcAssignments({
@@ -124,7 +124,7 @@ export const resumeSourceOdcRouter = factory
       }
       const id = c.req.param("id");
       if (!id) {
-        return c.json({ error: "简历来源不存在。" }, 404);
+        return c.json({ error: "部门/中心（来源）不存在。" }, 404);
       }
       const updated = await updateResumeSourceOdcAssignment({
         input: c.req.valid("json"),
@@ -146,7 +146,7 @@ export const resumeSourceOdcRouter = factory
     }
     const id = c.req.param("id");
     if (!id) {
-      return c.json({ error: "简历来源不存在。" }, 404);
+      return c.json({ error: "部门/中心（来源）不存在。" }, 404);
     }
     const deleted = await deleteResumeSourceOdcAssignment({
       memberId: c.req.param("memberId"),
