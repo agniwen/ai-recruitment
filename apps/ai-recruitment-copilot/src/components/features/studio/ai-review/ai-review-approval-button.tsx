@@ -99,7 +99,7 @@ export function AiReviewApprovalButton({
             审批通过后进入简历筛选，并向通知人员发送 Telegram 消息。
           </p>
           <Field>
-            <FieldLabel htmlFor={`${id}-recipient`}>通知人员（必填）</FieldLabel>
+            <FieldLabel htmlFor={`${id}-recipient`}>推送给ODC，简历评估</FieldLabel>
             <SearchableSelect
               id={`${id}-recipient`}
               required
