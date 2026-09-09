@@ -1,3 +1,4 @@
+import { listAiReviewNotificationRecipients } from "../../ai-review/dao";
 import { canApproveCandidateAiReview } from "../dao/ai-review-approval";
 import { and, eq, sql } from "drizzle-orm";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
@@ -160,6 +161,7 @@ export async function transitionCandidateStage(command: {
       return { kind: "not_found" } as const;
     }
 
+    let approvalRecipient: { chatId: string; name: string; userId: string } | undefined;
     if (existing.pipelineStage === "ai_review" && command.input.pipelineStage === "screening") {
       if (
         !(await canApproveCandidateAiReview(
@@ -172,9 +174,36 @@ export async function transitionCandidateStage(command: {
       ) {
         return { kind: "forbidden" } as const;
       }
-      if (!command.input.approvalNote?.trim() || command.input.approvalNote.trim().length > 2000) {
-        return { kind: "invalid", message: "请填写审批说明（1–2000 字）。" } as const;
+      if ((command.input.approvalNote?.trim().length ?? 0) > 2000) {
+        return { kind: "invalid", message: "审批说明不能超过 2000 字。" } as const;
       }
+      if (!command.input.notificationUserId?.trim()) {
+        return { kind: "invalid", message: "请选择通知人员。" } as const;
+      }
+      const recipients = await listAiReviewNotificationRecipients(
+        {
+          candidateId: command.candidateId,
+          organizationId: command.organizationId,
+        },
+        tx,
+      );
+      const recipient = recipients.find(
+        (entry) => entry.userId === command.input.notificationUserId,
+      );
+      if (!recipient) {
+        return { kind: "invalid", message: "通知人员必须是候选人关联来源下的 ODC 用户。" } as const;
+      }
+      if (!recipient.chatId) {
+        return {
+          kind: "invalid",
+          message: "该通知人员尚未完成 Telegram 绑定，请选择已绑定的用户。",
+        } as const;
+      }
+      approvalRecipient = {
+        chatId: recipient.chatId,
+        name: recipient.name,
+        userId: recipient.userId,
+      };
       if (existing.resumeReviewStatus !== "ready") {
         return { kind: "invalid", message: "请等待 AI 评价生成完成后再审批。" } as const;
       }
@@ -314,6 +343,12 @@ export async function transitionCandidateStage(command: {
         ...transition.auditDetail,
         ...provenanceDetail,
         ...automaticClosureDetail,
+        ...(approvalRecipient
+          ? {
+              notificationUserId: approvalRecipient.userId,
+              notificationUserName: approvalRecipient.name,
+            }
+          : {}),
       },
       id: crypto.randomUUID(),
       interviewRecordId: command.candidateId,
@@ -326,6 +361,7 @@ export async function transitionCandidateStage(command: {
     return {
       kind: "ok",
       notification: {
+        ...(approvalRecipient ? { aiReviewNotificationChatId: approvalRecipient.chatId } : {}),
         fromOutcome: existing.outcome,
         fromStage: existing.pipelineStage,
         toOutcome: transition.patch.outcome,

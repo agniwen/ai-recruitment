@@ -12,13 +12,17 @@ afterEach(() => {
 });
 
 describe("formatTimeDisplayText", () => {
-  it("always uses the China timezone regardless of the runtime timezone", () => {
-    process.env.TZ = "America/Los_Angeles";
+  it.each(["UTC", "Asia/Tokyo", "Asia/Shanghai", "America/Los_Angeles"])(
+    "always uses China time in %s",
+    (zone) => {
+      process.env.TZ = zone;
 
-    expect(formatTimeDisplayText("2026-06-02T09:30:00.000Z", "YY/MM/DD HH:mm")).toBe(
-      "26/06/02 17:30",
-    );
-  });
+      expect(formatTimeDisplayText("2026-09-09T14:06:00.000Z")).toBe("26/09/09 22:06");
+      expect(formatTimeDisplayText("2026-06-02T09:30:00.000Z", "YY/MM/DD HH:mm")).toBe(
+        "26/06/02 17:30",
+      );
+    },
+  );
 
   it("returns null for invalid values", () => {
     expect(formatTimeDisplayText("not-a-date")).toBeNull();
@@ -26,12 +30,9 @@ describe("formatTimeDisplayText", () => {
 });
 
 describe("formatTimeDisplayTooltipRows", () => {
-  it("formats the fixed country timezones", () => {
+  it("shows only China time", () => {
     expect(formatTimeDisplayTooltipRows("2026-06-02T09:30:00.000Z")).toEqual([
       { label: "中国时区", text: "26/06/02 17:30" },
-      { label: "英国时区", text: "26/06/02 10:30" },
-      { label: "日韩时区", text: "26/06/02 18:30" },
-      { label: "美国时区（纽约）", text: "26/06/02 05:30" },
     ]);
   });
 

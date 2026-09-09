@@ -1,3 +1,4 @@
+import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
 import { buildListTextFilterWhere } from "@arc/ai-recruitment-copilot-backend/lib/server/db/list-text-filters";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { z } from "zod";
@@ -255,7 +256,7 @@ function toIsoString(value: Date | string | null | undefined) {
   if (value instanceof Date) {
     return value.toISOString();
   }
-  const date = new Date(value);
+  const date = parseDatabaseTimestamp(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 

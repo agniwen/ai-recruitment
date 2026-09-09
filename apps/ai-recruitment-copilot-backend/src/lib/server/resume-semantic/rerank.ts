@@ -1,3 +1,4 @@
+import { normalizeResumeProfile } from "@arc/shared/resume-profile";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 
 export interface VectorSimilarityScores {
@@ -64,8 +65,15 @@ function levelForScore(score: number): "high" | "low" | "medium" {
 
 // oxlint-disable-next-line complexity -- scoring intentionally combines vector and structured resume signals.
 export function rerankResumeDuplicate(
-  input: ResumeDuplicateRerankInput,
+  value: ResumeDuplicateRerankInput,
 ): ResumeDuplicateRerankResult {
+  const input = {
+    ...value,
+    candidateProfile: value.candidateProfile
+      ? normalizeResumeProfile(value.candidateProfile)
+      : null,
+    queryProfile: normalizeResumeProfile(value.queryProfile),
+  };
   const vectorMax = Math.max(
     input.vectorScores.resumeOverview ?? 0,
     input.vectorScores.skillRole ?? 0,

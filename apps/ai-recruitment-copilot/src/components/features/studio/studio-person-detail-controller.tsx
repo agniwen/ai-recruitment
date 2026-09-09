@@ -744,6 +744,7 @@ export function useStudioPersonDetailController({
     actionBarPipelineStage &&
     record.outcome ? (
       <PipelineStageActionBar
+        recordId={record.id}
         aiInterviewDisabled={record.jobDescriptionAiInterviewDisabled}
         humanInterviewDone={Boolean(
           resumeRecord?.stageProgress.humanInterview &&
@@ -785,9 +786,10 @@ export function useStudioPersonDetailController({
         hasJobDescription={Boolean(resumeRecord?.jobDescriptionId)}
         missingJobAction={missingJobAction}
         resumeEvaluationPassed={canProgressResumeRecordToInterview}
-        onAdvance={async (target, approvalNote) => {
+        onAdvance={async (target, approvalNote, notificationUserId) => {
           const error = await advancePipelineStage({
             approvalNote,
+            notificationUserId,
             queryClient,
             recordId: record.id,
             slug,
@@ -795,7 +797,7 @@ export function useStudioPersonDetailController({
           });
           if (error) {
             toast.error(error);
-            if (approvalNote) {
+            if (notificationUserId || approvalNote) {
               throw new Error(error);
             }
             return;

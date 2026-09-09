@@ -30,6 +30,7 @@ describe("PipelineStageActionBar", () => {
         onRequestReactivate: () => {},
         onViewCurrentStage: () => {},
         pipelineStage: "screening",
+        recordId: "candidate-a",
       }),
     );
     const stageTrigger = markup.match(

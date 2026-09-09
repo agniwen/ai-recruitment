@@ -1,3 +1,4 @@
+import { aiReviewNotificationRecipientsRouter } from "./routes/notification-recipients/route";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -15,6 +16,7 @@ const querySchema = z.object({
 
 export const aiReviewRouter = factory
   .createApp()
+  .route("/:id/notification-recipients", aiReviewNotificationRecipientsRouter)
   .use("*", requirePermission("page", "aiReview"), requirePermission("aiReview", "read"))
   .get("/", zValidator("query", querySchema, jsonValidatorError("查询参数无效。")), async (c) => {
     const { activeOrg, user } = c.var;
@@ -60,13 +62,10 @@ export const aiReviewRouter = factory
     zValidator(
       "json",
       z.object({
-        approvalNote: z
-          .string()
-          .trim()
-          .min(1, "请填写审批说明")
-          .max(2000, "审批说明不能超过 2000 字"),
+        approvalNote: z.string().trim().max(2000, "审批说明不能超过 2000 字").optional(),
+        notificationUserId: z.string().trim().min(1, "请选择通知人员").max(200),
       }),
-      jsonValidatorError("请填写有效的审批说明。"),
+      jsonValidatorError("请选择通知人员并检查审批说明。"),
     ),
     async (c) => {
       const { activeOrg, user, member } = c.var;
@@ -84,7 +83,7 @@ export const aiReviewRouter = factory
           userId: user.id,
         }),
         candidateId: record.id,
-        input: { approvalNote: c.req.valid("json").approvalNote, pipelineStage: "screening" },
+        input: { ...c.req.valid("json"), pipelineStage: "screening" },
         operatorId: user.id,
         operatorRole: member?.role,
         organizationId: activeOrg.id,

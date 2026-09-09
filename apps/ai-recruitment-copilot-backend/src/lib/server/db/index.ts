@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { relations } from "@arc/db-schema/relations";
+import { databaseCodecs } from "./timestamp-codecs";
 import { getPostgresConnectionOptions } from "./connection-options";
 
 if (!process.env.DATABASE_URL) {
@@ -22,7 +23,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForDb.__arcPostgresClient = client;
 }
 
-export const db = drizzle({ client, relations });
+export const db = drizzle({ client, codecs: databaseCodecs, relations });
 export type Database = typeof db;
 
 export async function pingDatabase(): Promise<void> {

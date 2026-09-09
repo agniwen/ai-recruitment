@@ -52,12 +52,13 @@ const dedupCheckInputSchema = z.object({
 // invariant: closed ⇔ a terminal outcome; everything else stays in_pipeline.
 const transitionInputSchema = z
   .object({
-    approvalNote: z.string().trim().min(1).max(2000).optional(),
+    approvalNote: z.string().trim().max(2000).optional(),
     // 结案元数据；只在 pipelineStage='closed' 时使用，partial 写入（merge 进现有）。
     // previousStage 不接受用户输入——服务端自动写当前 stage。
     closedMeta: closedMetaSchema.omit({ previousStage: true }).partial().optional(),
     // @deprecated 旧字段，HR 端逐步迁移到 closedMeta.internalNotes；保留以兼容。
     closedReason: z.string().trim().max(500, "结案原因不能超过 500 字").optional().nullable(),
+    notificationUserId: z.string().trim().min(1).max(200).optional(),
     outcome: candidateOutcomeSchema.optional(),
     pipelineStage: pipelineStageSchema,
     reactivationReason: z.string().trim().max(500, "重新激活原因不能超过 500 字").optional(),

@@ -2,11 +2,78 @@
 
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import { act } from "react";
+import { setTimeout as delay } from "node:timers/promises";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PipelineStageActionBar } from "../pipeline-stage-action-bar";
+
+const clients: QueryClient[] = [];
+vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "workspace-a" }));
+vi.mock("@/lib/client/api/rpc-fetch", () => ({ rpcFetch: (request: Promise<unknown>) => request }));
+vi.mock("@/lib/client/rpc", () => ({
+  rpc: {
+    api: {
+      w: {
+        ":slug": {
+          studio: {
+            "ai-review": {
+              ":id": {
+                "notification-recipients": {
+                  $get: () =>
+                    Promise.resolve({
+                      recipients: [
+                        {
+                          email: "odc@example.com",
+                          name: "ODC甲",
+                          telegramBound: true,
+                          userId: "notify-a",
+                        },
+                      ],
+                    }),
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+}));
+vi.mock("@/components/ui/searchable-select", () => ({
+  SearchableSelect: ({
+    id,
+    value,
+    onChange,
+    options,
+    disabled,
+    required,
+  }: {
+    id: string;
+    value: string | null;
+    onChange: (value: string | null) => void;
+    options: { value: string; label: string; disabled?: boolean }[];
+    disabled?: boolean;
+    required?: boolean;
+  }) => (
+    <select
+      id={id}
+      value={value ?? ""}
+      disabled={disabled}
+      required={required}
+      onChange={(event) => onChange(event.target.value || null)}
+    >
+      <option value="">请选择通知人员</option>
+      {options.map((option) => (
+        <option key={option.value} value={option.value} disabled={option.disabled}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
 
 const copyInterviewLinkMock = vi.hoisted(() => vi.fn());
 
@@ -58,24 +125,29 @@ function renderActionBar({
   const root = createRoot(host);
   mountedRoots.push({ host, root });
 
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  clients.push(client);
   act(() => {
     root.render(
-      <PipelineStageActionBar
-        canApproveAiReview={canApproveAiReview}
-        aiReviewReady={aiReviewReady}
-        aiRoundInterviewLink={aiRoundInterviewLink}
-        aiInterviewDisabled={aiInterviewDisabled}
-        evaluationActions={evaluationActions}
-        hasJobDescription={hasJobDescription}
-        missingJobAction={missingJobAction}
-        onAdvance={onAdvance}
-        onRequestClose={vi.fn()}
-        onRequestReactivate={vi.fn()}
-        onViewCurrentStage={vi.fn()}
-        pipelineStage={pipelineStage}
-        primaryAction={primaryAction}
-        resumeEvaluationPassed={resumeEvaluationPassed}
-      />,
+      <QueryClientProvider client={client}>
+        <PipelineStageActionBar
+          recordId="candidate-a"
+          canApproveAiReview={canApproveAiReview}
+          aiReviewReady={aiReviewReady}
+          aiRoundInterviewLink={aiRoundInterviewLink}
+          aiInterviewDisabled={aiInterviewDisabled}
+          evaluationActions={evaluationActions}
+          hasJobDescription={hasJobDescription}
+          missingJobAction={missingJobAction}
+          onAdvance={onAdvance}
+          onRequestClose={vi.fn()}
+          onRequestReactivate={vi.fn()}
+          onViewCurrentStage={vi.fn()}
+          pipelineStage={pipelineStage}
+          primaryAction={primaryAction}
+          resumeEvaluationPassed={resumeEvaluationPassed}
+        />
+      </QueryClientProvider>,
     );
   });
 
@@ -97,6 +169,9 @@ afterEach(() => {
     act(() => root.unmount());
     host.remove();
   }
+  for (const client of clients.splice(0)) {
+    client.clear();
+  }
   vi.clearAllMocks();
 });
 
@@ -116,9 +191,24 @@ describe("PipelineStageActionBar interactions", () => {
       getButton(authorized, "审批通过，进入简历筛选").click();
       await Promise.resolve();
     });
+    expect(getButton(authorized, "审批通过，进入简历筛选").dataset.size).toBe("sm");
     expect(onAdvance).not.toHaveBeenCalled();
     const confirm = getButton(authorized, "确认审批通过");
     expect(confirm.disabled).toBe(true);
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await delay(0);
+      });
+      expect(authorized.querySelector('option[value="notify-a"]')).not.toBeNull();
+    });
+    act(() => {
+      const select = authorized.querySelector("select");
+      if (!select) {
+        throw new Error("Missing recipient selector");
+      }
+      select.value = "notify-a";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     const textarea = authorized.querySelector("textarea");
     if (!textarea) {
       throw new Error("Missing approval explanation");
@@ -134,7 +224,7 @@ describe("PipelineStageActionBar interactions", () => {
       confirm.click();
       await Promise.resolve();
     });
-    expect(onAdvance).toHaveBeenCalledWith("screening", "已核实项目经验");
+    expect(onAdvance).toHaveBeenCalledWith("screening", "已核实项目经验", "notify-a");
   });
   it("disables approval until the AI review is ready", () => {
     const host = renderActionBar({

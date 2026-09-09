@@ -122,3 +122,16 @@ describe("automatic related-candidate closure timeline", () => {
     ]);
   });
 });
+
+it("records approval activity and its notification user even without an explanation", () => {
+  const detail = {
+    fromStage: "ai_review",
+    notificationUserName: "ODC甲",
+    reason: null,
+    toStage: "screening",
+  };
+  expect(auditDescription(detail, "candidate_transition")).toBe("AI 评价审核通过，进入简历筛选。");
+  expect(auditMetadata(detail, "candidate_transition")).toEqual([
+    { label: "通知人员", value: "ODC甲" },
+  ]);
+});

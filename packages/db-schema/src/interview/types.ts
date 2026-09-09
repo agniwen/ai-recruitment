@@ -12,6 +12,7 @@
  */
 
 import { z } from "zod";
+import { structuredSchema } from "../resume-parser-schema";
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nullableStringSchema = z.string().trim().nullable();
@@ -61,32 +62,42 @@ export const resumeEducationExperienceSchema = z.object({
  * 简历画像：候选人的结构化档案，由 LLM 从 PDF 简历中抽取。
  * Resume profile — the candidate's structured dossier, extracted from PDF by the LLM.
  */
-export const resumeProfileSchema = z.object({
-  age: z.number().nullable().describe("候选人年龄，只有简历明确给出时才填写，否则为 null"),
-  educationExperiences: z
-    .array(resumeEducationExperienceSchema)
-    .optional()
-    .describe("教育经历列表，可能包含多个学历；未知时返回空数组"),
-  email: nullableStringSchema.describe("候选人邮箱地址，简历中明确给出时填写；无法确认时返回 null"),
-  gender: nullableStringSchema.describe('候选人性别；无法从简历中确认时，优先返回"未发现信息"'),
-  name: nonEmptyStringSchema.describe(
-    '候选人姓名，必须非空；如果简历中无法确认姓名，返回"未发现信息"',
-  ),
-  personalStrengths: z
-    .array(nonEmptyStringSchema)
-    .describe("个人优势列表，基于简历归纳，未知时返回空数组"),
-  phone: nullableStringSchema.describe(
-    "候选人手机号或联系电话，简历中明确给出时填写；无法确认时返回 null",
-  ),
-  projectExperiences: z
-    .array(resumeProjectExperienceSchema)
-    .describe("项目经历列表，没有则返回空数组"),
-  schools: z.array(nonEmptyStringSchema).describe("毕业院校列表，可能为多个，未知时返回空数组"),
-  skills: z.array(nonEmptyStringSchema).describe("掌握技能列表，未知时返回空数组"),
-  targetRoles: z.array(nonEmptyStringSchema).describe("求职岗位列表，可能为多个，未知时返回空数组"),
-  workExperiences: z.array(resumeWorkExperienceSchema).describe("工作经历列表，没有则返回空数组"),
-  workYears: z.number().nullable().describe("工作年限，能明确判断时返回数字，否则为 null"),
-});
+export const resumeProfileSchema = z.preprocess(
+  (value) => {
+    const parsed = structuredSchema.safeParse(value ?? {});
+    return parsed.success ? { ...parsed.data, name: parsed.data.name || "未发现信息" } : value;
+  },
+  z.object({
+    age: z.number().nullable().describe("候选人年龄，只有简历明确给出时才填写，否则为 null"),
+    educationExperiences: z
+      .array(resumeEducationExperienceSchema)
+      .optional()
+      .describe("教育经历列表，可能包含多个学历；未知时返回空数组"),
+    email: nullableStringSchema.describe(
+      "候选人邮箱地址，简历中明确给出时填写；无法确认时返回 null",
+    ),
+    gender: nullableStringSchema.describe('候选人性别；无法从简历中确认时，优先返回"未发现信息"'),
+    name: nonEmptyStringSchema.describe(
+      '候选人姓名，必须非空；如果简历中无法确认姓名，返回"未发现信息"',
+    ),
+    personalStrengths: z
+      .array(nonEmptyStringSchema)
+      .describe("个人优势列表，基于简历归纳，未知时返回空数组"),
+    phone: nullableStringSchema.describe(
+      "候选人手机号或联系电话，简历中明确给出时填写；无法确认时返回 null",
+    ),
+    projectExperiences: z
+      .array(resumeProjectExperienceSchema)
+      .describe("项目经历列表，没有则返回空数组"),
+    schools: z.array(nonEmptyStringSchema).describe("毕业院校列表，可能为多个，未知时返回空数组"),
+    skills: z.array(nonEmptyStringSchema).describe("掌握技能列表，未知时返回空数组"),
+    targetRoles: z
+      .array(nonEmptyStringSchema)
+      .describe("求职岗位列表，可能为多个，未知时返回空数组"),
+    workExperiences: z.array(resumeWorkExperienceSchema).describe("工作经历列表，没有则返回空数组"),
+    workYears: z.number().nullable().describe("工作年限，能明确判断时返回数字，否则为 null"),
+  }),
+);
 
 /**
  * LLM 生成的单道面试题。

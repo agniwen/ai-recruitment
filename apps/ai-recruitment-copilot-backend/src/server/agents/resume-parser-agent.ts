@@ -1,9 +1,9 @@
+import { normalizeResumeProfile } from "@arc/shared/resume-profile";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { readPdfBytes } from "@arc/shared/resume-pdf";
 import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
-import type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
 
-export type { ResumeParserStructured };
+export type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
 export { structuredSchema };
 
 function uniqueTrimmedStrings(values: readonly string[]): string[] {
@@ -20,7 +20,7 @@ function uniqueTrimmedStrings(values: readonly string[]): string[] {
   return out;
 }
 
-function collectProfileSkills(structured: ResumeParserStructured): string[] {
+function collectProfileSkills(structured: ResumeProfile): string[] {
   return uniqueTrimmedStrings([
     ...structured.skills,
     ...structured.projectExperiences.flatMap((experience) => experience.techStack),
@@ -33,22 +33,9 @@ function collectProfileSkills(structured: ResumeParserStructured): string[] {
  * contact info, degree/major/graduationYear/education) are dropped here —
  * callers that need them should consume `structured` directly.
  */
-export function toResumeProfile(structured: ResumeParserStructured): ResumeProfile {
-  return {
-    age: structured.age,
-    educationExperiences: structured.educationExperiences ?? [],
-    email: structured.email,
-    gender: structured.gender,
-    name: structured.name?.trim() || "未发现信息",
-    personalStrengths: structured.personalStrengths,
-    phone: structured.phone,
-    projectExperiences: structured.projectExperiences,
-    schools: structured.schools,
-    skills: collectProfileSkills(structured),
-    targetRoles: structured.targetRoles,
-    workExperiences: structured.workExperiences,
-    workYears: structured.workYears,
-  };
+export function toResumeProfile(value: unknown): ResumeProfile {
+  const profile = normalizeResumeProfile(value);
+  return { ...profile, skills: collectProfileSkills(profile) };
 }
 
 // 把 chat_attachment 行的 superset parsedStructured 投影到 ResumeProfile，
@@ -62,7 +49,8 @@ export function projectAttachmentToResumeProfile(parsedStructured: unknown): Res
   if (
     typeof parsedStructured !== "object" ||
     parsedStructured === null ||
-    !Object.keys(parsedStructured).some((key) => Object.hasOwn(structuredSchema.shape, key))
+    (Object.keys(parsedStructured).length > 0 &&
+      !Object.keys(parsedStructured).some((key) => Object.hasOwn(structuredSchema.shape, key)))
   ) {
     return null;
   }

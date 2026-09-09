@@ -1,8 +1,24 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildCandidateStageNotification,
+  notifyCandidateStageChange,
   resolveCandidateStageNotificationRecipientIds,
 } from "./candidate-stage-notification";
+
+const mocks = vi.hoisted(() => ({ configured: vi.fn(), post: vi.fn(), select: vi.fn() }));
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
+  db: { select: mocks.select },
+}));
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot", () => ({
+  isTelegramBotConfigured: mocks.configured,
+  postTelegramDirectMessage: mocks.post,
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.configured.mockReturnValue(true);
+  mocks.post.mockResolvedValue(null);
+});
 
 describe("buildCandidateStageNotification", () => {
   it("builds a Telegram card with recruiting context and a detail action", () => {
@@ -110,5 +126,62 @@ describe("resolveCandidateStageNotificationRecipientIds", () => {
         },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("AI approval Telegram delivery", () => {
+  it("sends only to the selected bound chat with the standalone resume-review detail link", async () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://recruit.example.com/");
+    const query = {
+      from: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([
+        {
+          candidateName: "候选人甲",
+          departmentName: "研发部",
+          hiringUnitName: "中心甲",
+          jobDescriptionName: "工程师",
+          organizationName: "招聘主体",
+          organizationSlug: "work",
+          resumeContact: "@contact",
+          telegram: "@uploader",
+          telegramBoundUsername: "uploader",
+          telegramChatId: "uploader-chat",
+        },
+      ]),
+      where: vi.fn().mockReturnThis(),
+    };
+    mocks.select.mockReturnValue(query);
+    try {
+      await notifyCandidateStageChange({
+        aiReviewNotificationChatId: "10001",
+        candidateId: "d95914df-8243-415b-bff3-fb477e5a3577",
+        fromOutcome: "in_pipeline",
+        fromStage: "ai_review",
+        organizationId: "org-a",
+        toOutcome: "in_pipeline",
+        toStage: "screening",
+      });
+      expect(mocks.post).toHaveBeenCalledOnce();
+      expect(mocks.post).toHaveBeenCalledWith(
+        "10001",
+        expect.objectContaining({
+          children: expect.arrayContaining([
+            expect.objectContaining({
+              children: [
+                expect.objectContaining({
+                  url: "https://recruit.example.com/resume-review/work/d95914df-8243-415b-bff3-fb477e5a3577",
+                }),
+              ],
+              type: "actions",
+            }),
+          ]),
+        }),
+      );
+      expect(mocks.select).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

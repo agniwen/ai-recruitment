@@ -1,3 +1,4 @@
+import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
 import { dehydrate } from "@tanstack/react-query";
 import { asc, count, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -18,7 +19,7 @@ function toIsoString(value: Date | string | null | undefined) {
   if (value instanceof Date) {
     return value.toISOString();
   }
-  const date = new Date(value);
+  const date = parseDatabaseTimestamp(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 

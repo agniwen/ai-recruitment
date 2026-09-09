@@ -1,3 +1,4 @@
+import { normalizeResumeProfile } from "@arc/shared/resume-profile";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 
 export type ResumeSemanticChunkType = "resume_overview" | "skill_role" | "work_project";
@@ -105,7 +106,8 @@ export function buildJobDescriptionSemanticTexts(
   ];
 }
 
-export function buildResumeSemanticTexts(profile: ResumeProfile): ResumeSemanticTextChunk[] {
+export function buildResumeSemanticTexts(value: ResumeProfile): ResumeSemanticTextChunk[] {
+  const profile = normalizeResumeProfile(value);
   const recentWork = latestWork(profile);
   const educationSummary = profile.educationExperiences?.map((item) =>
     [

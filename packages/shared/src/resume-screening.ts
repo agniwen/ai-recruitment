@@ -1,3 +1,4 @@
+import { normalizeResumeProfile } from "./resume-profile";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { z } from "zod";
 
@@ -189,8 +190,9 @@ function makeEvidence(input: ResumeScreeningEvidence): ResumeScreeningEvidence[]
 
 function evaluateFieldRule(
   rule: ResumeScreeningFieldRule,
-  resumeProfile: ResumeProfile,
+  value: ResumeProfile,
 ): ResumeScreeningRuleResult {
+  const resumeProfile = normalizeResumeProfile(value);
   if (rule.field === "minimumEducation") {
     if (rule.level === "none") {
       return {

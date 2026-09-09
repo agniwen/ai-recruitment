@@ -54,7 +54,7 @@ export async function runInterviewQuestionsWorkflow(
   input: z.input<typeof resumeProfileSchema>,
 ): Promise<InterviewQuestionsWorkflowOutput> {
   const run = await interviewQuestionsWorkflow.createRun();
-  const result = await run.start({ inputData: input });
+  const result = await run.start({ inputData: resumeProfileSchema.parse(input) });
 
   if (result.status === "success") {
     return interviewQuestionsOutputSchema.parse(result.result);
@@ -70,7 +70,7 @@ export async function streamInterviewQuestionsWorkflow(
   options: { onWorkflowEvent: (event: AiRunEvent) => void },
 ): Promise<InterviewQuestionsWorkflowOutput> {
   const run = await interviewQuestionsWorkflow.createRun();
-  const output = await run.stream({ inputData: input });
+  const output = await run.stream({ inputData: resumeProfileSchema.parse(input) });
   await emitMastraWorkflowStreamEvents(
     output.fullStream as AsyncIterable<WorkflowStreamEvent>,
     options.onWorkflowEvent,

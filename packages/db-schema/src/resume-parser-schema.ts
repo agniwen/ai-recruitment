@@ -1,63 +1,84 @@
 import { z } from "zod";
 
-// Missing resume information must not become invented values. Keep the output
-// shape stable for consumers: unknown scalars are null and absent lists are [].
+// Normalize recoverable model output locally so one malformed field does not
+// discard the rest of a resume. Unknown facts stay null rather than being guessed.
+const resumeText = z.preprocess((value) => {
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : null;
+}, z.string().nullable());
+
+const resumeNumber = z.preprocess((value) => {
+  const number = typeof value === "string" && value.trim() ? Number(value) : value;
+  return typeof number === "number" && Number.isFinite(number) ? number : null;
+}, z.number().nullable());
+
 function resumeList<T extends z.ZodType>(item: T) {
-  return z.preprocess((value) => value ?? [], z.array(item));
+  return z.preprocess((value) => {
+    const entries = Array.isArray(value) ? value : [value];
+    return entries.flatMap((entry) => {
+      const parsed = item.safeParse(entry);
+      return parsed.success ? [parsed.data] : [];
+    });
+  }, z.array(item));
 }
 
 const timelineSummarySchema = z.object({
-  currentStatus: z.string().nullable().default(null),
+  currentStatus: resumeText,
   dateRanges: resumeList(z.string()),
-  estimatedExperienceYears: z.number().nullable().default(null),
+  estimatedExperienceYears: resumeNumber,
   riskSignals: resumeList(z.string()),
 });
 
 const workExperienceSchema = z.object({
-  company: z.string().nullable().default(null),
-  period: z.string().nullable().default(null),
-  role: z.string().nullable().default(null),
-  summary: z.string().nullable().default(null),
+  company: resumeText,
+  period: resumeText,
+  role: resumeText,
+  summary: resumeText,
 });
 
 const projectExperienceSchema = z.object({
-  name: z.string().nullable().default(null),
-  period: z.string().nullable().default(null),
-  role: z.string().nullable().default(null),
-  summary: z.string().nullable().default(null),
+  name: resumeText,
+  period: resumeText,
+  role: resumeText,
+  summary: resumeText,
   techStack: resumeList(z.string()),
 });
 
 const educationExperienceSchema = z.object({
-  degree: z.string().nullable().default(null),
-  educationLevel: z.string().nullable().default(null),
-  graduationYear: z.string().nullable().default(null),
-  major: z.string().nullable().default(null),
-  period: z.string().nullable().default(null),
-  school: z.string().nullable().default(null),
-  summary: z.string().nullable().default(null),
+  degree: resumeText,
+  educationLevel: resumeText,
+  graduationYear: resumeText,
+  major: resumeText,
+  period: resumeText,
+  school: resumeText,
+  summary: resumeText,
 });
 
 export const structuredSchema = z.object({
-  age: z.number().nullable().default(null),
-  degree: z.string().nullable().default(null),
-  education: z.string().nullable().default(null),
+  age: resumeNumber,
+  degree: resumeText,
+  education: resumeText,
   educationExperiences: resumeList(educationExperienceSchema),
-  email: z.string().nullable().default(null),
-  gender: z.string().nullable().default(null),
-  graduationYear: z.string().nullable().default(null),
+  email: resumeText,
+  gender: resumeText,
+  graduationYear: resumeText,
   links: resumeList(z.string()),
-  major: z.string().nullable().default(null),
-  name: z.string().nullable().default(null),
+  major: resumeText,
+  name: resumeText,
   personalStrengths: resumeList(z.string()),
-  phone: z.string().nullable().default(null),
+  phone: resumeText,
   projectExperiences: resumeList(projectExperienceSchema),
   schools: resumeList(z.string()),
   skills: resumeList(z.string()),
   targetRoles: resumeList(z.string()),
-  timelineSummary: z.preprocess((value) => value ?? {}, timelineSummarySchema),
+  timelineSummary: z.preprocess(
+    (value) => (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}),
+    timelineSummarySchema,
+  ),
   workExperiences: resumeList(workExperienceSchema),
-  workYears: z.number().nullable().default(null),
+  workYears: resumeNumber,
 });
 
 export type ResumeParserStructured = z.infer<typeof structuredSchema>;

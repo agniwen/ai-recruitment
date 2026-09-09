@@ -63,6 +63,15 @@ export function auditMetadata(
       ...(similarityScore ? [{ label: "相似度", value: similarityScore }] : []),
     ];
   }
+  if (
+    action === "candidate_transition" &&
+    detail.fromStage === "ai_review" &&
+    detail.toStage === "screening" &&
+    typeof detail.notificationUserName === "string" &&
+    detail.notificationUserName.trim()
+  ) {
+    return [{ label: "通知人员", value: detail.notificationUserName.trim() }];
+  }
   if (action !== "candidate_information_updated") {
     return [];
   }

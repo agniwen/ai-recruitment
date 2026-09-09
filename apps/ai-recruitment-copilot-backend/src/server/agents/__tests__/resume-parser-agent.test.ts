@@ -92,3 +92,26 @@ describe("projectAttachmentToResumeProfile", () => {
     expect(result?.name).toBe("未发现信息");
   });
 });
+
+describe("missing extracted objects", () => {
+  it.each([
+    undefined,
+    null,
+    {},
+    {
+      name: "候选人",
+      projectExperiences: [null, { techStack: null }],
+      timelineSummary: null,
+      workExperiences: null,
+    },
+  ])("projects missing content safely (%j)", (value) => {
+    const profile = toResumeProfile(value);
+    expect(profile.skills).toEqual([]);
+    expect(profile.workExperiences).toEqual([]);
+    expect(profile.educationExperiences).toEqual([]);
+    expect(profile.projectExperiences.every((item) => Array.isArray(item.techStack))).toBe(true);
+  });
+  it("reuses an explicitly empty parsed object", () => {
+    expect(projectAttachmentToResumeProfile({})).toEqual(toResumeProfile({}));
+  });
+});

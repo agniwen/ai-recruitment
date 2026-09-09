@@ -21,6 +21,7 @@ export interface CandidateTransitionInput {
   outcome?: CandidateOutcome;
   pipelineStage: PipelineStage;
   approvalNote?: string;
+  notificationUserId?: string;
   reactivationReason?: string;
 }
 
@@ -183,7 +184,7 @@ export function resolveCandidateTransitionPatch({
       reactivationReason: wasClosed && !isClosing ? (input.reactivationReason ?? null) : null,
       reason:
         existing.pipelineStage === "ai_review" && input.pipelineStage === "screening"
-          ? (input.approvalNote?.trim() ?? null)
+          ? input.approvalNote?.trim() || null
           : (input.closedReason ?? null),
       toOutcome: outcome,
       toStage: input.pipelineStage,

@@ -424,6 +424,7 @@ export async function resetInterviewRound({
 
 export async function advancePipelineStage({
   approvalNote,
+  notificationUserId,
   queryClient,
   recordId,
   slug,
@@ -434,11 +435,13 @@ export async function advancePipelineStage({
   slug: string;
   target: PipelineStage;
   approvalNote?: string;
+  notificationUserId?: string;
 }): Promise<string | null> {
   try {
     await transitionInterviewRecord(slug, recordId, {
       pipelineStage: target,
       ...(approvalNote ? { approvalNote } : {}),
+      ...(notificationUserId ? { notificationUserId } : {}),
     });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["studio-resumes"] }),

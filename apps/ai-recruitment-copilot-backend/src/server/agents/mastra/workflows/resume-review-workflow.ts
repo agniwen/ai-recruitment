@@ -118,7 +118,7 @@ export async function runResumeReviewWorkflow(
   input: z.input<typeof resumeReviewInputSchema>,
 ): Promise<ResumeReviewGenerationResult> {
   const run = await resumeReviewWorkflow.createRun();
-  const result = await run.start({ inputData: input });
+  const result = await run.start({ inputData: resumeReviewInputSchema.parse(input) });
 
   if (result.status === "success") {
     return resumeReviewOutputSchema.parse(result.result) as ResumeReviewGenerationResult;
@@ -134,7 +134,7 @@ export async function streamResumeReviewWorkflow(
   options: { onWorkflowEvent: (event: AiRunEvent) => void },
 ): Promise<ResumeReviewGenerationResult> {
   const run = await resumeReviewWorkflow.createRun();
-  const output = await run.stream({ inputData: input });
+  const output = await run.stream({ inputData: resumeReviewInputSchema.parse(input) });
   await emitMastraWorkflowStreamEvents(
     output.fullStream as AsyncIterable<WorkflowStreamEvent>,
     options.onWorkflowEvent,

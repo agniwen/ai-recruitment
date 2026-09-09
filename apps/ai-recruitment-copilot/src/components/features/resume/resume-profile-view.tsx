@@ -1,3 +1,4 @@
+import { normalizeResumeProfile } from "@arc/shared/resume-profile";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import {
   formatResumeEducationItem,
@@ -256,11 +257,15 @@ function ResumeProfileBasicFields({ profile }: { profile: ResumeProfile }) {
   );
 }
 
-export function ResumeProfileView({ profile, showBasicInfo = true }: ResumeProfileViewProps) {
-  if (!profile) {
+export function ResumeProfileView({
+  profile: value,
+  showBasicInfo = true,
+}: ResumeProfileViewProps) {
+  if (!value) {
     return <p className="text-muted-foreground text-sm">暂无结构化简历，仅有候选人基础信息。</p>;
   }
 
+  const profile = normalizeResumeProfile(value);
   const educationExperiences = sortResumeEducationExperiences(profile.educationExperiences);
 
   return (

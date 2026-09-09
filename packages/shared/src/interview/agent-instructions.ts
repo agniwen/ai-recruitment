@@ -1,3 +1,4 @@
+import { normalizeResumeProfile } from "../resume-profile";
 /**
  * AI 面试官 prompt 拼装：把候选人信息 / 岗位 / 题目组合成最终 system prompt。
  * AI interviewer prompt assembly: merges candidate info / role / questions into the
@@ -212,9 +213,10 @@ function formatPrefixSections(
 export function buildAgentInstructions(context: AgentInstructionContext): string {
   const candidateName = context.candidateName?.trim() || "候选人";
   const targetRole = context.targetRole?.trim() || "未指定岗位";
-  const skills = context.resumeProfile?.skills ?? [];
+  const profile = normalizeResumeProfile(context.resumeProfile);
+  const { skills } = profile;
   const skillsText = skills.length > 0 ? skills.join("、") : "未提供";
-  const experienceText = formatExperienceText(context.resumeProfile);
+  const experienceText = formatExperienceText(profile);
   const requiredQuestions = buildRequiredInterviewQuestions(context);
   const presetQuestionsText = formatPresetQuestionsText(requiredQuestions);
   const companyContext = context.companyContext?.trim() ?? "";

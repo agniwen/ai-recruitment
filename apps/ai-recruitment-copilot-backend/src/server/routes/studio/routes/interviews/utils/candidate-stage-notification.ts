@@ -64,15 +64,23 @@ export function buildCandidateStageNotification(input: CandidateStageNotificatio
   });
 }
 
-function buildCandidateDetailUrl(candidateId: string, organizationSlug: string): string | null {
+export function buildCandidateDetailUrl(
+  candidateId: string,
+  organizationSlug: string,
+  aiReviewApproval = false,
+): string | null {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || process.env.BETTER_AUTH_URL?.trim();
   if (!baseUrl) {
     return null;
   }
-  return `${baseUrl.replace(/\/+$/u, "")}/w/${encodeURIComponent(organizationSlug)}/studio/resumes/${encodeURIComponent(candidateId)}`;
+  const path = aiReviewApproval
+    ? `/resume-review/${encodeURIComponent(organizationSlug)}/${encodeURIComponent(candidateId)}`
+    : `/w/${encodeURIComponent(organizationSlug)}/studio/resumes/${encodeURIComponent(candidateId)}`;
+  return `${baseUrl.replace(/\/+$/u, "")}${path}`;
 }
 
 interface CandidateStageChangeInput {
+  aiReviewNotificationChatId?: string;
   candidateId: string;
   fromOutcome: CandidateOutcome;
   fromStage: PipelineStage;
@@ -159,14 +167,19 @@ async function sendCandidateStageChange(input: CandidateStageChangeInput): Promi
     return;
   }
 
-  const resumeContactRecipient = await findResumeContactRecipient(
-    input.organizationId,
-    candidate.resumeContact,
-  );
-  const recipientIds = resolveCandidateStageNotificationRecipientIds([
-    candidate,
-    ...(resumeContactRecipient ? [resumeContactRecipient] : []),
-  ]);
+  let recipientIds: string[];
+  if (input.aiReviewNotificationChatId) {
+    recipientIds = [input.aiReviewNotificationChatId];
+  } else {
+    const resumeContactRecipient = await findResumeContactRecipient(
+      input.organizationId,
+      candidate.resumeContact,
+    );
+    recipientIds = resolveCandidateStageNotificationRecipientIds([
+      candidate,
+      ...(resumeContactRecipient ? [resumeContactRecipient] : []),
+    ]);
+  }
   if (recipientIds.length === 0) {
     return;
   }
@@ -174,7 +187,11 @@ async function sendCandidateStageChange(input: CandidateStageChangeInput): Promi
   const message = buildCandidateStageNotification({
     candidateName: candidate.candidateName,
     departmentName: candidate.departmentName,
-    detailUrl: buildCandidateDetailUrl(input.candidateId, candidate.organizationSlug),
+    detailUrl: buildCandidateDetailUrl(
+      input.candidateId,
+      candidate.organizationSlug,
+      Boolean(input.aiReviewNotificationChatId),
+    ),
     fromOutcome: input.fromOutcome,
     fromStage: input.fromStage,
     hiringUnitName: candidate.hiringUnitName,

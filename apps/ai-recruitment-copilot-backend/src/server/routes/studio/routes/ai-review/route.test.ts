@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   canApprove: vi.fn(),
   detail: vi.fn(),
   list: vi.fn(),
+  recipients: vi.fn(),
   transition: vi.fn(),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
@@ -22,6 +23,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy", () => ({
   createRequestWorkspaceAuthorizer: () => vi.fn(),
 }));
+vi.mock("./dao", () => ({ listAiReviewNotificationRecipients: mocks.recipients }));
 vi.mock("../resumes/dao/resumes", () => ({
   loadResumeDetail: mocks.detail,
   queryPaginatedResumeRecords: mocks.list,
@@ -56,7 +58,9 @@ function request(
   return app.request(`/ai-review${path}`, {
     body:
       options.method === "POST"
-        ? JSON.stringify(options.body ?? { approvalNote: "  已核实项目经验  " })
+        ? JSON.stringify(
+            options.body ?? { approvalNote: "  已核实项目经验  ", notificationUserId: "notify-a" },
+          )
         : undefined,
     headers: {
       "content-type": "application/json",
@@ -70,6 +74,9 @@ function request(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.recipients.mockResolvedValue([
+    { chatId: "10001", email: "odc@example.com", name: "ODC甲", userId: "notify-a" },
+  ]);
   mocks.list.mockResolvedValue({ records: [], total: 0 });
   mocks.detail.mockResolvedValue({
     id: "candidate-a",
@@ -81,14 +88,15 @@ beforeEach(() => {
 });
 
 describe("AI analysis approval API", () => {
-  it.each([{}, { approvalNote: "   " }, { approvalNote: "字".repeat(2001) }])(
-    "rejects invalid explanations",
-    async (body) => {
-      const response = await request("/candidate-a/approve", { body, method: "POST" });
-      expect(response.status).toBe(400);
-      expect(mocks.transition).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    {},
+    { notificationUserId: " " },
+    { approvalNote: "字".repeat(2001), notificationUserId: "notify-a" },
+  ])("rejects missing recipients or oversized explanations", async (body) => {
+    const response = await request("/candidate-a/approve", { body, method: "POST" });
+    expect(response.status).toBe(400);
+    expect(mocks.transition).not.toHaveBeenCalled();
+  });
   it.each(["", "/candidate-a", "/candidate-a/approve"])(
     "requires both page and read permissions for %s",
     async (path) => {
@@ -139,6 +147,21 @@ describe("AI analysis approval API", () => {
     const response = await request("/candidate-a");
     expect(await response.json()).toMatchObject({ canApproveAiReview: false });
   });
+  it.each([undefined, "", "   "])("allows an optional explanation (%j)", async (approvalNote) => {
+    const response = await request("/candidate-a/approve", {
+      body: { approvalNote, notificationUserId: "notify-a" },
+      method: "POST",
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.transition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          notificationUserId: "notify-a",
+          pipelineStage: "screening",
+        }),
+      }),
+    );
+  });
   it("approves using the authenticated user and shared stage transition", async () => {
     await expect(request("/candidate-a/approve", { method: "POST" })).resolves.toHaveProperty(
       "status",
@@ -147,7 +170,11 @@ describe("AI analysis approval API", () => {
     expect(mocks.transition).toHaveBeenCalledWith(
       expect.objectContaining({
         candidateId: "candidate-a",
-        input: { approvalNote: "已核实项目经验", pipelineStage: "screening" },
+        input: {
+          approvalNote: "已核实项目经验",
+          notificationUserId: "notify-a",
+          pipelineStage: "screening",
+        },
         operatorId: "odc-a",
         operatorRole: "odc",
         organizationId: "org-a",
@@ -163,5 +190,32 @@ describe("AI analysis approval API", () => {
       "status",
       status,
     );
+  });
+});
+
+describe("AI approval notification recipients", () => {
+  it("requires approval permission", async () => {
+    const response = await request("/candidate-a/notification-recipients", { approve: false });
+    expect(response.status).toBe(403);
+    expect(mocks.recipients).not.toHaveBeenCalled();
+  });
+  it("returns candidate-scoped users without exposing their Telegram chat ids", async () => {
+    const response = await request("/candidate-a/notification-recipients");
+    expect(response.status).toBe(200);
+    expect(mocks.recipients).toHaveBeenCalledWith({
+      candidateId: "candidate-a",
+      organizationId: "org-a",
+    });
+    expect(await response.json()).toEqual({
+      recipients: [
+        { email: "odc@example.com", name: "ODC甲", telegramBound: true, userId: "notify-a" },
+      ],
+    });
+  });
+  it("does not list users for processed or missing candidates", async () => {
+    mocks.detail.mockResolvedValue(null);
+    const response = await request("/candidate-a/notification-recipients");
+    expect(response.status).toBe(404);
+    expect(mocks.recipients).not.toHaveBeenCalled();
   });
 });

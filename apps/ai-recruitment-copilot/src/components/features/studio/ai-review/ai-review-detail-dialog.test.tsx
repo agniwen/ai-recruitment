@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   approve: vi.fn(),
   error: vi.fn(),
   get: vi.fn(),
+  recipients: vi.fn(),
   success: vi.fn(),
 }));
 vi.mock("@/lib/client/rpc", () => ({
@@ -19,7 +20,13 @@ vi.mock("@/lib/client/rpc", () => ({
       w: {
         ":slug": {
           studio: {
-            "ai-review": { ":id": { $get: mocks.get, approve: { $post: mocks.approve } } },
+            "ai-review": {
+              ":id": {
+                $get: mocks.get,
+                approve: { $post: mocks.approve },
+                "notification-recipients": { $get: mocks.recipients },
+              },
+            },
           },
         },
       },
@@ -29,6 +36,38 @@ vi.mock("@/lib/client/rpc", () => ({
 vi.mock("@/lib/client/api/rpc-fetch", () => ({ rpcFetch: (request: Promise<unknown>) => request }));
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "workspace-a" }));
 vi.mock("sonner", () => ({ toast: { error: mocks.error, success: mocks.success } }));
+vi.mock("@/components/ui/searchable-select", () => ({
+  SearchableSelect: ({
+    id,
+    value,
+    onChange,
+    options,
+    disabled,
+    required,
+  }: {
+    id: string;
+    value: string | null;
+    onChange: (value: string | null) => void;
+    options: { value: string; label: string; disabled?: boolean }[];
+    disabled?: boolean;
+    required?: boolean;
+  }) => (
+    <select
+      id={id}
+      value={value ?? ""}
+      disabled={disabled}
+      required={required}
+      onChange={(event) => onChange(event.target.value || null)}
+    >
+      <option value="">请选择通知人员</option>
+      {options.map((option) => (
+        <option key={option.value} value={option.value} disabled={option.disabled}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
 vi.mock("@/components/ui/modal", () => ({
   Modal: ({
     children,
@@ -113,7 +152,7 @@ function approvalButton() {
     (button) => button.textContent === "审批通过",
   );
 }
-async function confirmApproval() {
+async function confirmApproval(note = "  已核实项目经验  ") {
   act(() => approvalButton()?.click());
   expect(mocks.approve).not.toHaveBeenCalled();
   const confirm = [...document.querySelectorAll("button")].find(
@@ -123,6 +162,21 @@ async function confirmApproval() {
     throw new Error("Missing approval form");
   }
   expect(confirm.disabled).toBe(true);
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await delay(0);
+    });
+    expect(document.querySelector('option[value="notify-a"]')).not.toBeNull();
+  });
+  act(() => {
+    const select = document.querySelector("select");
+    if (!select) {
+      throw new Error("Missing notification user selector");
+    }
+    select.value = "notify-a";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(confirm.disabled).toBe(false);
   const textarea = document.querySelector("textarea");
   if (!textarea) {
     throw new Error("Missing approval explanation");
@@ -130,7 +184,7 @@ async function confirmApproval() {
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
       textarea,
-      "  已核实项目经验  ",
+      note,
     );
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
   });
@@ -141,6 +195,11 @@ async function confirmApproval() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.recipients.mockResolvedValue({
+    recipients: [
+      { email: "odc@example.com", name: "ODC甲", telegramBound: true, userId: "notify-a" },
+    ],
+  });
   mocks.get.mockResolvedValue(ready);
   mocks.approve.mockResolvedValue({ ok: true });
 });
@@ -188,10 +247,39 @@ describe("AI approval detail", () => {
     const { onApproved } = await render();
     await confirmApproval();
     expect(mocks.approve).toHaveBeenCalledWith({
-      json: { approvalNote: "已核实项目经验" },
+      json: { approvalNote: "已核实项目经验", notificationUserId: "notify-a" },
       param: { id: "candidate-a", slug: "workspace-a" },
     });
     expect(onApproved).toHaveBeenCalledOnce();
+  });
+  it("submits a selected notification user with an empty optional note", async () => {
+    await render();
+    await confirmApproval("");
+    expect(mocks.approve).toHaveBeenCalledWith({
+      json: { approvalNote: "", notificationUserId: "notify-a" },
+      param: { id: "candidate-a", slug: "workspace-a" },
+    });
+  });
+  it("cannot approve when no bound ODC user is available", async () => {
+    mocks.recipients.mockResolvedValue({
+      recipients: [
+        { email: "other@example.com", name: "ODC乙", telegramBound: false, userId: "unbound" },
+      ],
+    });
+    await render();
+    act(() => approvalButton()?.click());
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await delay(0);
+      });
+      expect(document.body.textContent).toContain("暂无可通知人员");
+    });
+    const confirm = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "确认审批通过",
+    );
+    expect(confirm?.disabled).toBe(true);
+    expect(document.querySelector("textarea")?.required).toBe(false);
+    expect(mocks.approve).not.toHaveBeenCalled();
   });
   it("keeps the record open when permission has been revoked", async () => {
     mocks.approve.mockRejectedValue(new Error("审批权限已撤销"));

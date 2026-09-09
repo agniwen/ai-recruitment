@@ -161,11 +161,26 @@ describe("updateStructuredByHash", () => {
     });
   });
 
+  it("stores usable fields even when another field has the wrong type", async () => {
+    insertFakeRow("f".repeat(64), "chat-attachments/f.pdf", null);
+    const partial = {
+      name: "候选人",
+      skills: "React",
+      workYears: "unknown",
+    } as unknown as ResumeParserStructured;
+    await updateStructuredByHash("f".repeat(64), partial);
+    expect(rows[0]?.parsedStructured).toMatchObject({
+      name: "候选人",
+      skills: ["React"],
+      workYears: null,
+    });
+  });
+
   it("silently noop's when the input fails schema validation", async () => {
     insertFakeRow("f".repeat(64), "chat-attachments/f.pdf", null);
 
-    // 字段缺失允许，但已有字段的错误类型仍应拒绝。
-    const malformed = { name: 123 } as unknown as ResumeParserStructured;
+    // 局部字段允许归一化，但根节点必须仍是对象。
+    const malformed = "not a resume" as unknown as ResumeParserStructured;
 
     // 静音 sanitizeParsedStructured 内部的 console.warn / suppress its warning
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

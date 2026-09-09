@@ -346,6 +346,7 @@ export interface TransitionInterviewInput {
   // Partial closedMeta; previousStage is server-controlled.
   closedMeta?: Omit<Partial<ClosedMeta>, "previousStage">;
   approvalNote?: string;
+  notificationUserId?: string;
   reactivationReason?: string;
 }
 

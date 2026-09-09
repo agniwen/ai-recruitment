@@ -1,3 +1,4 @@
+import { normalizeResumeProfile } from "@arc/shared/resume-profile";
 import { createHash } from "node:crypto";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 
@@ -21,7 +22,8 @@ function cleanList(values: readonly string[] | null | undefined): string[] {
   ].toSorted((a, b) => a.localeCompare(b, "zh-Hans-CN"));
 }
 
-function stableProfile(profile: ResumeProfile) {
+function stableProfile(value: ResumeProfile) {
+  const profile = normalizeResumeProfile(value);
   return {
     educationExperiences: (profile.educationExperiences ?? []).map((item) => ({
       degree: cleanText(item.degree),

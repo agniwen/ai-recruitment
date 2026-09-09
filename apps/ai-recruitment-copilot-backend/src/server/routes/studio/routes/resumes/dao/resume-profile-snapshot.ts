@@ -1,3 +1,4 @@
+import { normalizeResumeProfile } from "@arc/shared/resume-profile";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { formatResumeEducationSchoolWithLevel } from "@arc/shared/resume-education";
 import type { ResumeLibraryProfileSnapshot } from "@arc/shared/studio-resumes";
@@ -223,11 +224,12 @@ function assembleSnapshot(
 
 /** Snapshot for duplicate-match cards (3 companies / 2 education / 3 projects). */
 export function buildResumeProfileSnapshotFromProfile(
-  profile: ResumeProfile | null | undefined,
+  value: ResumeProfile | null | undefined,
 ): ResumeLibraryProfileSnapshot {
-  if (!profile) {
+  if (!value) {
     return EMPTY_RESUME_PROFILE_SNAPSHOT;
   }
+  const profile = normalizeResumeProfile(value);
   return assembleSnapshot(
     {
       education: buildEducationLines(profile.educationExperiences ?? []),

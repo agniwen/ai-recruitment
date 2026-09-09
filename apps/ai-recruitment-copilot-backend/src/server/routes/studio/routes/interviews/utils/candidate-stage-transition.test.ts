@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   invalidateCaches: vi.fn(),
   loadReadiness: vi.fn(),
   notifyCandidateStageChange: vi.fn(),
+  recipients: vi.fn(),
   refreshDirectUploadDuplicateMatchesBeforeHire: vi.fn(),
   transaction: vi.fn(),
 }));
@@ -21,6 +22,8 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
   invalidateStudioInterviewCaches: mocks.invalidateCaches,
 }));
+
+vi.mock("../../ai-review/dao", () => ({ listAiReviewNotificationRecipients: mocks.recipients }));
 
 vi.mock("../dao/ai-review-approval", () => ({
   canApproveCandidateAiReview: mocks.canApproveAiReview,
@@ -91,12 +94,13 @@ function createTransaction(existing: {
 describe("transitionCandidateStage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.recipients.mockResolvedValue([{ chatId: "10001", name: "ODC甲", userId: "notify-a" }]);
     mocks.autoCloseRelatedCandidatesAfterHire.mockResolvedValue([]);
     mocks.notifyCandidateStageChange.mockImplementation(() => Promise.resolve());
     mocks.refreshDirectUploadDuplicateMatchesBeforeHire.mockImplementation(() => Promise.resolve());
   });
 
-  it.each([undefined, "   ", "字".repeat(2001)])(
+  it.each(["字".repeat(2001)])(
     "rejects approval without a valid explanation",
     async (approvalNote) => {
       const { tx, insertedValues, updatedWhere } = createTransaction({
@@ -111,7 +115,7 @@ describe("transitionCandidateStage", () => {
       const result = await transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
-        input: { approvalNote, pipelineStage: "screening" },
+        input: { approvalNote, notificationUserId: "notify-a", pipelineStage: "screening" },
         operatorId: "odc-user",
         organizationId: "org-a",
         provenance: { kind: "manual" },
@@ -136,7 +140,11 @@ describe("transitionCandidateStage", () => {
     const result = await transitionCandidateStage({
       authorize,
       candidateId: "candidate-a",
-      input: { approvalNote: "  已核实项目经验  ", pipelineStage: "screening" },
+      input: {
+        approvalNote: "  已核实项目经验  ",
+        notificationUserId: "notify-a",
+        pipelineStage: "screening",
+      },
       operatorId: "odc-user",
       organizationId: "org-a",
       provenance: { kind: "manual" },
@@ -160,6 +168,105 @@ describe("transitionCandidateStage", () => {
         }),
       );
     }
+  });
+
+  it.each([undefined, "", "   "])(
+    "approves without a note and audits the selected ODC recipient (%j)",
+    async (approvalNote) => {
+      const { tx, insertedValues, updatedWhere } = createTransaction({
+        closedMeta: null,
+        jobDescriptionId: "jd-a",
+        outcome: "in_pipeline",
+        pipelineStage: "ai_review",
+        resumeReviewStatus: "ready",
+      });
+      mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+      mocks.canApproveAiReview.mockResolvedValue(true);
+      const result = await transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: { approvalNote, notificationUserId: "notify-a", pipelineStage: "screening" },
+        operatorId: "approver-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      });
+      expect(result.kind).toBe("ok");
+      expect(updatedWhere).toHaveBeenCalledOnce();
+      expect(mocks.recipients).toHaveBeenCalledWith(
+        { candidateId: "candidate-a", organizationId: "org-a" },
+        tx,
+      );
+      expect(insertedValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          detail: expect.objectContaining({
+            notificationUserId: "notify-a",
+            notificationUserName: "ODC甲",
+            reason: null,
+          }),
+        }),
+      );
+      expect(mocks.notifyCandidateStageChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiReviewNotificationChatId: "10001",
+          fromStage: "ai_review",
+          toStage: "screening",
+        }),
+      );
+    },
+  );
+
+  it.each([undefined, "", "other-user"])(
+    "rejects missing or out-of-scope notification users (%j)",
+    async (notificationUserId) => {
+      const { tx, insertedValues, updatedWhere } = createTransaction({
+        closedMeta: null,
+        jobDescriptionId: "jd-a",
+        outcome: "in_pipeline",
+        pipelineStage: "ai_review",
+        resumeReviewStatus: "ready",
+      });
+      mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+      mocks.canApproveAiReview.mockResolvedValue(true);
+      const result = await transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: { notificationUserId, pipelineStage: "screening" },
+        operatorId: "approver-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      });
+      expect(result.kind).toBe("invalid");
+      expect(updatedWhere).not.toHaveBeenCalled();
+      expect(insertedValues).not.toHaveBeenCalled();
+      expect(mocks.notifyCandidateStageChange).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a recipient whose Telegram binding was removed after opening the dialog", async () => {
+    const { tx, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "ai_review",
+      resumeReviewStatus: "ready",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    mocks.canApproveAiReview.mockResolvedValue(true);
+    mocks.recipients.mockResolvedValue([{ chatId: null, name: "ODC甲", userId: "notify-a" }]);
+    const result = await transitionCandidateStage({
+      authorize: vi.fn().mockResolvedValue(true),
+      candidateId: "candidate-a",
+      input: { notificationUserId: "notify-a", pipelineStage: "screening" },
+      operatorId: "approver-a",
+      organizationId: "org-a",
+      provenance: { kind: "manual" },
+    });
+    expect(result).toMatchObject({
+      kind: "invalid",
+      message: expect.stringContaining("Telegram 绑定"),
+    });
+    expect(updatedWhere).not.toHaveBeenCalled();
+    expect(mocks.notifyCandidateStageChange).not.toHaveBeenCalled();
   });
 
   it.each(["screening", "ai_interview", "human_interview", "offer"] as const)(
@@ -198,7 +305,11 @@ describe("transitionCandidateStage", () => {
     const result = await transitionCandidateStage({
       authorize: vi.fn().mockResolvedValue(true),
       candidateId: "candidate-a",
-      input: { approvalNote: "  已核实项目经验  ", pipelineStage: "screening" },
+      input: {
+        approvalNote: "  已核实项目经验  ",
+        notificationUserId: "notify-a",
+        pipelineStage: "screening",
+      },
       operatorId: "odc-user",
       organizationId: "org-a",
       provenance: { kind: "manual" },
@@ -547,7 +658,11 @@ describe("transitionCandidateStage", () => {
       transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
-        input: { approvalNote: "  已核实项目经验  ", pipelineStage: "screening" },
+        input: {
+          approvalNote: "  已核实项目经验  ",
+          notificationUserId: "notify-a",
+          pipelineStage: "screening",
+        },
         operatorId: "user-a",
         organizationId: "org-a",
         provenance: { kind: "manual" },

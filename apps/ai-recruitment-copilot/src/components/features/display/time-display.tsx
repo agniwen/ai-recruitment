@@ -1,12 +1,9 @@
 "use client";
 
-import dayjs from "dayjs";
-import timezone from "dayjs/plugin/timezone";
-import utc from "dayjs/plugin/utc";
 import { IconCalendar as CalendarIcon } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { cn } from "@arc/shared/utils";
-import { DISPLAY_TIME_ZONE } from "@arc/shared/utils/time";
+import { formatDate } from "@arc/shared/utils/time";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -18,36 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 // across locales (no separator / order drift), always in Asia/Shanghai.
 export const DATE_TIME_DISPLAY_OPTIONS = "YY/MM/DD HH:mm";
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
-
 type TimeValue = string | number | Date | null | undefined;
-
-const TOOLTIP_TIME_ZONES = [
-  { label: "中国时区", timeZone: "Asia/Shanghai" },
-  { label: "英国时区", timeZone: "Europe/London" },
-  { label: "日韩时区", timeZone: "Asia/Tokyo" },
-  { label: "美国时区（纽约）", timeZone: "America/New_York" },
-] as const;
-
-const TOOLTIP_TIME_FORMATTER_OPTIONS = {
-  day: "2-digit",
-  hour: "2-digit",
-  hour12: false,
-  minute: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-} satisfies Intl.DateTimeFormatOptions;
-
-const tooltipTimeFormatters = new Map(
-  TOOLTIP_TIME_ZONES.map(({ timeZone }) => [
-    timeZone,
-    new Intl.DateTimeFormat("en-US", {
-      ...TOOLTIP_TIME_FORMATTER_OPTIONS,
-      timeZone,
-    }),
-  ]),
-);
 
 function normalizeDate(value: TimeValue) {
   if (value === null || value === undefined || value === "") {
@@ -68,16 +36,7 @@ export function formatTimeDisplayText(
   options: string = DATE_TIME_DISPLAY_OPTIONS,
 ) {
   const date = normalizeDate(value);
-  return date ? dayjs(date).tz(DISPLAY_TIME_ZONE).format(options) : null;
-}
-
-function formatTimeInTimeZone(
-  date: Date,
-  timeZone: (typeof TOOLTIP_TIME_ZONES)[number]["timeZone"],
-) {
-  const parts = tooltipTimeFormatters.get(timeZone)?.formatToParts(date) ?? [];
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year?.slice(-2)}/${values.month}/${values.day} ${values.hour}:${values.minute}`;
+  return date ? formatDate(date, options) : null;
 }
 
 export function formatTimeDisplayTooltipRows(value: TimeValue) {
@@ -86,10 +45,7 @@ export function formatTimeDisplayTooltipRows(value: TimeValue) {
     return [];
   }
 
-  return TOOLTIP_TIME_ZONES.map((zone) => ({
-    label: zone.label,
-    text: formatTimeInTimeZone(date, zone.timeZone),
-  }));
+  return [{ label: "中国时区", text: formatDate(date) }];
 }
 
 export function TimeDisplay({

@@ -1,3 +1,4 @@
+import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
 import { and, asc, count, desc, eq, exists, gte, inArray, notExists, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { startOfBeijingDay } from "@arc/shared/beijing-calendar";
@@ -590,7 +591,7 @@ function toIso(value: unknown): string | null {
   if (value instanceof Date) {
     return value.toISOString();
   }
-  const date = new Date(value as string);
+  const date = parseDatabaseTimestamp(value as string);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 

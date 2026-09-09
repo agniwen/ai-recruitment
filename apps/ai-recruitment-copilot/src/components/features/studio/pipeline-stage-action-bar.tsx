@@ -42,6 +42,7 @@ import { cn } from "@arc/shared/utils";
 import { copyInterviewLink } from "@/components/features/studio/interviews/interview-link-actions";
 
 export interface PipelineStageActionBarProps {
+  recordId: string;
   pipelineStage: PipelineStage;
   evaluationActions?: ReactNode;
   primaryAction?: ReactNode;
@@ -71,7 +72,11 @@ export interface PipelineStageActionBarProps {
   aiRoundInterviewLink?: string;
   // 推进到指定阶段的回调（仅 stage 跳变，无元数据）。
   // Advance to a target stage (no metadata). May return a Promise so the bar can lock while pending.
-  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
+  onAdvance: (
+    target: PipelineStage,
+    approvalNote?: string,
+    notificationUserId?: string,
+  ) => void | Promise<void>;
   // 查看当前阶段对应内容；不对应独立 tab 时由上层回到概览。
   // View content for the current stage; parent falls back to overview when no stage tab exists.
   onViewCurrentStage: () => void;
@@ -103,6 +108,7 @@ function shouldShowInterviewProgressAction(input: {
 
 // oxlint-disable-next-line complexity -- action visibility follows permissions and each pipeline stage in one component.
 export function PipelineStageActionBar({
+  recordId,
   pipelineStage,
   evaluationActions,
   primaryAction,
@@ -127,13 +133,20 @@ export function PipelineStageActionBar({
   const [isAdvancing, setIsAdvancing] = useState(false);
   const isBusy = isAdvancing || Boolean(aiRoundReset?.isResetting);
 
-  async function handleAdvance(target: PipelineStage, approvalNote?: string) {
+  async function handleAdvance(
+    target: PipelineStage,
+    approvalNote?: string,
+    notificationUserId?: string,
+  ) {
     if (isBusy) {
       return;
     }
     setIsAdvancing(true);
     await withCleanup(
-      () => (approvalNote ? onAdvance(target, approvalNote) : onAdvance(target)),
+      () =>
+        approvalNote || notificationUserId
+          ? onAdvance(target, approvalNote, notificationUserId)
+          : onAdvance(target),
       () => setIsAdvancing(false),
     );
   }
@@ -152,6 +165,7 @@ export function PipelineStageActionBar({
     onAdvance: handleAdvance,
     onRequestReactivate,
     pipelineStage,
+    recordId,
     resumeEvaluationPassed,
   });
   const groupedEvaluationActions = hasJobDescription ? evaluationActions : null;
@@ -431,6 +445,7 @@ interface StageButton {
 }
 
 function getStageActions(props: {
+  recordId: string;
   aiInterviewDisabled: boolean;
   pipelineStage: PipelineStage;
   canCreateHumanInterview: boolean;
@@ -443,7 +458,11 @@ function getStageActions(props: {
   humanInterviewDone?: boolean;
   isAdvancing: boolean;
   isBusy: boolean;
-  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
+  onAdvance: (
+    target: PipelineStage,
+    approvalNote?: string,
+    notificationUserId?: string,
+  ) => void | Promise<void>;
   onRequestReactivate: () => void;
 }): { left: ReactNode[]; right: ReactNode[] } {
   const {
@@ -497,10 +516,11 @@ function getStageActions(props: {
         key: "approve-ai-review",
         node: canApproveAiReview ? (
           <AiReviewApprovalButton
+            recordId={props.recordId}
             key="approve-ai-review"
             disabled={isBusy || !aiReviewReady || !hasJobDescription}
-            onConfirm={async (note) => {
-              await onAdvance("screening", note);
+            onConfirm={async (note, notificationUserId) => {
+              await onAdvance("screening", note, notificationUserId);
             }}
             label={aiReviewReady ? "审批通过，进入简历筛选" : "等待 AI 评价生成"}
           />
@@ -687,7 +707,11 @@ function HumanInterviewAdvanceButton({
   disabledReason: string | null;
   isAdvancing: boolean;
   isBusy: boolean;
-  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
+  onAdvance: (
+    target: PipelineStage,
+    approvalNote?: string,
+    notificationUserId?: string,
+  ) => void | Promise<void>;
   variant?: ComponentProps<typeof Button>["variant"];
 }) {
   const targetStage: PipelineStage = "human_interview";
@@ -735,7 +759,11 @@ function OfferAdvanceButton({
   humanInterviewDone?: boolean;
   isAdvancing: boolean;
   isBusy: boolean;
-  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
+  onAdvance: (
+    target: PipelineStage,
+    approvalNote?: string,
+    notificationUserId?: string,
+  ) => void | Promise<void>;
 }) {
   const targetStage: PipelineStage = "offer";
   const locked = isBusy || Boolean(disabledReason);
