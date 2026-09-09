@@ -286,7 +286,6 @@ export const resumeLibraryReadRouter = factory
         canApproveAiReview:
           record.pipelineStage === "ai_review" &&
           (await canApproveCandidateAiReview({
-            jobDescriptionId: record.jobDescriptionId,
             organizationId: activeOrg.id,
             userId: c.var.user?.id ?? null,
           })),

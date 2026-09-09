@@ -59,7 +59,11 @@ export function toResumeProfile(structured: ResumeParserStructured): ResumeProfi
 // parseResumeFast. Returns null on shape mismatch so callers fall back
 // to a full parse.
 export function projectAttachmentToResumeProfile(parsedStructured: unknown): ResumeProfile | null {
-  if (parsedStructured === null || parsedStructured === undefined) {
+  if (
+    typeof parsedStructured !== "object" ||
+    parsedStructured === null ||
+    !Object.keys(parsedStructured).some((key) => Object.hasOwn(structuredSchema.shape, key))
+  ) {
     return null;
   }
   const parsed = structuredSchema.safeParse(parsedStructured);

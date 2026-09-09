@@ -2,7 +2,6 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
-import { resolveResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import { createRequestWorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { loadResumeDetail, queryPaginatedResumeRecords } from "../resumes/dao/resumes";
 import { canApproveCandidateAiReview } from "../interviews/dao/ai-review-approval";
@@ -18,15 +17,10 @@ export const aiReviewRouter = factory
   .createApp()
   .use("*", requirePermission("page", "aiReview"), requirePermission("aiReview", "read"))
   .get("/", zValidator("query", querySchema, jsonValidatorError("查询参数无效。")), async (c) => {
-    const { activeOrg, user, member } = c.var;
+    const { activeOrg, user } = c.var;
     if (!activeOrg || !user) {
       return c.json({ message: "Unauthorized" }, 401);
     }
-    const scope = await resolveResumeVisibilityScope({
-      currentRole: member?.role,
-      organizationId: activeOrg.id,
-      userId: user.id,
-    });
     const query = c.req.valid("query");
     const result = await queryPaginatedResumeRecords(
       activeOrg.id,
@@ -36,21 +30,16 @@ export const aiReviewRouter = factory
         pipelineStages: ["ai_review"],
       },
       { page: query.page, pageSize: query.pageSize, sortBy: "createdAt", sortOrder: "asc" },
-      scope,
+      { kind: "all" },
     );
     return c.json(result, 200);
   })
   .get("/:id", async (c) => {
-    const { activeOrg, user, member } = c.var;
+    const { activeOrg, user } = c.var;
     if (!activeOrg || !user) {
       return c.json({ message: "Unauthorized" }, 401);
     }
-    const scope = await resolveResumeVisibilityScope({
-      currentRole: member?.role,
-      organizationId: activeOrg.id,
-      userId: user.id,
-    });
-    const record = await loadResumeDetail(c.req.param("id"), activeOrg.id, scope);
+    const record = await loadResumeDetail(c.req.param("id"), activeOrg.id, { kind: "all" });
     if (!record || record.pipelineStage !== "ai_review") {
       return c.json({ error: "待审批简历不存在或已处理。" }, 404);
     }
@@ -58,7 +47,6 @@ export const aiReviewRouter = factory
       {
         ...record,
         canApproveAiReview: await canApproveCandidateAiReview({
-          jobDescriptionId: record.jobDescriptionId,
           organizationId: activeOrg.id,
           userId: user.id,
         }),
@@ -68,6 +56,7 @@ export const aiReviewRouter = factory
   })
   .post(
     "/:id/approve",
+    requirePermission("aiReview", "approve"),
     zValidator(
       "json",
       z.object({
@@ -84,12 +73,7 @@ export const aiReviewRouter = factory
       if (!activeOrg || !user) {
         return c.json({ message: "Unauthorized" }, 401);
       }
-      const scope = await resolveResumeVisibilityScope({
-        currentRole: member?.role,
-        organizationId: activeOrg.id,
-        userId: user.id,
-      });
-      const record = await loadResumeDetail(c.req.param("id"), activeOrg.id, scope);
+      const record = await loadResumeDetail(c.req.param("id"), activeOrg.id, { kind: "all" });
       if (!record || record.pipelineStage !== "ai_review") {
         return c.json({ error: "待审批简历不存在或已处理。" }, 404);
       }
@@ -107,7 +91,7 @@ export const aiReviewRouter = factory
         provenance: { kind: "manual" },
       });
       if (result.kind === "forbidden") {
-        return c.json({ error: "仅负责该简历来源且具有 AI 评价审批权限的 ODC 可以审批。" }, 403);
+        return c.json({ error: "当前角色没有 AI 分析审批的审批权限。" }, 403);
       }
       if (result.kind === "not_found") {
         return c.json({ error: "待审批简历不存在。" }, 404);

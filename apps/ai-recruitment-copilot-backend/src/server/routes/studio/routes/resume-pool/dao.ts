@@ -1,3 +1,4 @@
+import { isWorkspaceAdministrator } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-administrator";
 import { buildResumeAtomicSearch } from "../resumes/dao/atomic-search";
 /* oxlint-disable max-lines -- resume-pool persistence keeps list/detail/write transactions co-located. */
 import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
@@ -378,7 +379,11 @@ async function loadAccessiblePoolItem(input: {
   if (isPublicPoolItemInOrganization(row, input.organizationId)) {
     return row;
   }
-  if (row.organizationId === input.organizationId && row.createdBy === input.userId) {
+  if (
+    row.organizationId === input.organizationId &&
+    (row.createdBy === input.userId ||
+      (await isWorkspaceAdministrator(input.organizationId, input.userId)))
+  ) {
     return row;
   }
   return null;
@@ -967,6 +972,7 @@ export function importPoolItemToResumeLibrary(
 }
 
 export async function deleteOwnPoolItem(input: DeleteOwnPoolItemInput): Promise<void> {
+  const isAdmin = await isWorkspaceAdministrator(input.organizationId, input.userId);
   const deleted = await db
     .delete(resumePoolItem)
     .where(
@@ -974,7 +980,7 @@ export async function deleteOwnPoolItem(input: DeleteOwnPoolItemInput): Promise<
         eq(resumePoolItem.id, input.poolItemId),
         eq(resumePoolItem.status, "active"),
         eq(resumePoolItem.organizationId, input.organizationId),
-        eq(resumePoolItem.createdBy, input.userId),
+        isAdmin ? undefined : eq(resumePoolItem.createdBy, input.userId),
       ),
     )
     .returning({ id: resumePoolItem.id });

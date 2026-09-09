@@ -147,11 +147,25 @@ describe("updateStructuredByHash", () => {
     expect(rows[1]?.parsedStructured).toBeNull();
   });
 
+  it("stores partial resume information with normalized missing fields", async () => {
+    insertFakeRow("f".repeat(64), "chat-attachments/f.pdf", null);
+    const partial = { name: "incomplete" } as ResumeParserStructured;
+
+    await updateStructuredByHash("f".repeat(64), partial);
+
+    expect(rows[0]?.parsedStructured).toMatchObject({
+      name: "incomplete",
+      skills: [],
+      timelineSummary: { estimatedExperienceYears: null, riskSignals: [] },
+      workYears: null,
+    });
+  });
+
   it("silently noop's when the input fails schema validation", async () => {
     insertFakeRow("f".repeat(64), "chat-attachments/f.pdf", null);
 
-    // 缺少必填字段的脏数据 / malformed payload missing required fields
-    const malformed = { name: "incomplete" } as unknown as ResumeParserStructured;
+    // 字段缺失允许，但已有字段的错误类型仍应拒绝。
+    const malformed = { name: 123 } as unknown as ResumeParserStructured;
 
     // 静音 sanitizeParsedStructured 内部的 console.warn / suppress its warning
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

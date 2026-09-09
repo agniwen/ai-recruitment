@@ -164,7 +164,6 @@ export async function transitionCandidateStage(command: {
       if (
         !(await canApproveCandidateAiReview(
           {
-            jobDescriptionId: existing.jobDescriptionId,
             organizationId: command.organizationId,
             userId: command.operatorId,
           },

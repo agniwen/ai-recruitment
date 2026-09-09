@@ -100,8 +100,11 @@ async function render(initialTab: "overview" | "ai-review" = "overview") {
       </QueryClientProvider>,
     );
   });
-  await act(async () => {
-    await delay(0);
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await delay(0);
+    });
+    expect(host.textContent).toContain("候选人甲 · AI 分析审批");
   });
   return { host, onApproved };
 }
@@ -170,7 +173,7 @@ describe("AI approval detail", () => {
     expect(host.textContent).toContain("AI 分析内容");
     expect(host.textContent).toContain("候选人甲 · AI 分析审批");
   });
-  it("does not show approval for a reader without source permission", async () => {
+  it("does not show approval for a reader without role approval permission", async () => {
     mocks.get.mockResolvedValue({ ...ready, canApproveAiReview: false });
     const { host } = await render();
     expect(host.textContent).toContain("概览：候选人甲");

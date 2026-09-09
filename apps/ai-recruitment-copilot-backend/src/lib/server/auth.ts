@@ -41,12 +41,6 @@ function isBuiltInOwnerAssignableRole(role: string): boolean {
   return role === "admin" || isBuiltInAdminAssignableRole(role);
 }
 
-async function canAdminSetRole(organizationId: string, role: string): Promise<boolean> {
-  return (
-    isBuiltInAdminAssignableRole(role) || (await dynamicWorkspaceRoleExists(organizationId, role))
-  );
-}
-
 async function canOwnerSetRole(organizationId: string, role: string): Promise<boolean> {
   return (
     isBuiltInOwnerAssignableRole(role) || (await dynamicWorkspaceRoleExists(organizationId, role))
@@ -343,13 +337,7 @@ export const auth = betterAuth({
       dynamicAccessControl: {
         enabled: true,
       },
-      // 服务端硬约束：只有 owner/admin 可以调整工作区级角色；admin 不能调整
-      // owner/admin 或自己的角色。owner 角色本身的转让仍由 better-auth 内置
-      // transferOwnership 单独处理。
-      //
-      // Server-side gate: only owner/admin can update workspace-level roles;
-      // admin cannot edit owner/admin or itself. Ownership transfer remains a
-      // separate better-auth flow.
+      // Workspace administrators and owners share member-management capabilities.
       organizationHooks: {
         afterAcceptInvitation: async ({ invitation, member: acceptedMember, user }) => {
           if (isNoAccessWorkspaceRole(acceptedMember.role) || acceptedMember.role !== "member") {
@@ -412,11 +400,11 @@ export const auth = betterAuth({
           );
           if (requestedRoles.length === 0 || allowed.some((ok) => !ok)) {
             throw new APIError("FORBIDDEN", {
-              message: "只能邀请为低于自己级别的工作区角色。",
+              message: "无权邀请为所选工作区角色。",
             });
           }
         },
-        beforeUpdateMemberRole: async ({ member: targetMember, newRole, organization: org }) => {
+        beforeUpdateMemberRole: async ({ newRole, organization: org }) => {
           // ⚠️ 注意：better-auth 这里的 `user` 参数实际是 **目标用户**（被改的人），
           // 不是触发请求的人——文档跟实现不一致，源码里写的是
           // `user: userBeingUpdated`（见 better-auth crud-members.mjs:283）。
@@ -459,21 +447,6 @@ export const auth = betterAuth({
             throw new APIError("FORBIDDEN", {
               message: "请选择有效的工作区角色。",
             });
-          }
-
-          if (invoker.role === "admin") {
-            if (targetMember.userId === invoker.userId) {
-              throw new APIError("FORBIDDEN", { message: "管理员不能调整自己的角色。" });
-            }
-            if (targetMember.role === "owner" || targetMember.role === "admin") {
-              throw new APIError("FORBIDDEN", { message: "管理员不能调整拥有者或管理员。" });
-            }
-            if (!(await canAdminSetRole(org.id, nextRole))) {
-              throw new APIError("FORBIDDEN", {
-                message: "只能设置为普通成员、空权限用户或自定义角色。",
-              });
-            }
-            return;
           }
 
           if (!(await canOwnerSetRole(org.id, nextRole))) {

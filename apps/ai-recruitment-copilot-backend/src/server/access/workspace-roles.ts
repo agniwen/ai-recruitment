@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { organizationRole } from "@arc/db-schema/schema";
-import { NO_ACCESS_WORKSPACE_ROLE } from "@arc/shared/permissions";
+import { isWorkspaceAdministratorRole, NO_ACCESS_WORKSPACE_ROLE } from "@arc/shared/permissions";
 
 type BuiltInWorkspaceRole = "owner" | "admin" | "member" | typeof NO_ACCESS_WORKSPACE_ROLE;
 
@@ -46,6 +46,12 @@ export async function canAssignWorkspaceRole({
   organizationId: string;
   targetRole: string;
 }): Promise<boolean> {
+  if (isWorkspaceAdministratorRole(invokerRole)) {
+    return (
+      WORKSPACE_ROLES.has(targetRole as BuiltInWorkspaceRole) ||
+      (await dynamicWorkspaceRoleExists(organizationId, targetRole))
+    );
+  }
   if (WORKSPACE_ROLES.has(targetRole as BuiltInWorkspaceRole)) {
     if (!WORKSPACE_ROLES.has(invokerRole as BuiltInWorkspaceRole)) {
       return false;

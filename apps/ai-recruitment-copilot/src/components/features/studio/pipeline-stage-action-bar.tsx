@@ -506,7 +506,7 @@ function getStageActions(props: {
           />
         ) : (
           <span key="await-ai-review" className="text-sm text-muted-foreground">
-            等待有审批权限的 ODC 审核 AI 评价
+            等待有审批权限的成员审核 AI 评价
           </span>
         ),
         side: "right",

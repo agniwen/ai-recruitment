@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
+import { manageWorkspaceMember } from "./role-management";
 import { zValidator } from "@hono/zod-validator";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
@@ -12,6 +15,60 @@ import { listOdcMemberCandidates } from "../../../hiring-units/odc-assignment";
 
 export const membersRouter = factory
   .createApp()
+  .patch(
+    "/:memberId/role",
+    requirePermission("member", "update"),
+    zValidator(
+      "json",
+      z.object({
+        role: z
+          .string()
+          .trim()
+          .min(1)
+          .max(120)
+          .refine((role) => !role.includes(",")),
+      }),
+      jsonValidatorError("请选择有效角色。"),
+    ),
+    async (c) => {
+      const { activeOrg, user, member } = c.var;
+      if (!activeOrg || !user) {
+        return c.json({ error: "未登录。" }, 401);
+      }
+      if (!isWorkspaceAdministratorRole(member?.role)) {
+        return c.json({ error: "只有管理员可以调整角色。" }, 403);
+      }
+      const result = await manageWorkspaceMember({
+        actorId: user.id,
+        memberId: c.req.param("memberId"),
+        organizationId: activeOrg.id,
+        role: c.req.valid("json").role,
+      });
+      if (result.error) {
+        return c.json({ error: result.error }, 409);
+      }
+      return c.json({ success: true }, 200);
+    },
+  )
+  .delete("/:memberId", requirePermission("member", "delete"), async (c) => {
+    const { activeOrg, user, member } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ error: "未登录。" }, 401);
+    }
+    if (!isWorkspaceAdministratorRole(member?.role)) {
+      return c.json({ error: "只有管理员可以移除成员。" }, 403);
+    }
+    const result = await manageWorkspaceMember({
+      actorId: user.id,
+      memberId: c.req.param("memberId"),
+      organizationId: activeOrg.id,
+      role: null,
+    });
+    if (result.error) {
+      return c.json({ error: result.error }, 409);
+    }
+    return c.json({ success: true }, 200);
+  })
   .get("/odc-candidates", async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {

@@ -101,9 +101,9 @@ afterEach(() => {
 });
 
 describe("PipelineStageActionBar interactions", () => {
-  it("only offers AI approval to authorized ODC users", async () => {
+  it("only offers AI approval to members with role approval permission", async () => {
     const unauthorized = renderActionBar({ aiReviewReady: true, pipelineStage: "ai_review" });
-    expect(unauthorized.textContent).toContain("等待有审批权限的 ODC");
+    expect(unauthorized.textContent).toContain("等待有审批权限的成员");
     expect(unauthorized.textContent).not.toContain("审批通过，进入简历筛选");
     const onAdvance = vi.fn();
     const authorized = renderActionBar({

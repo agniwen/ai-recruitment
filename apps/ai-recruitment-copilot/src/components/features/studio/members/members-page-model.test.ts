@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildWorkspaceMemberTreeRows,
+  buildAssignableWorkspaceRoles,
+  canEditMemberWorkspaceRole,
   filterWorkspaceMembers,
   filterWorkspaceMembersWithAncestors,
   retainVisibleMemberSelection,
@@ -80,5 +82,34 @@ describe("buildWorkspaceMemberTreeRows", () => {
         new Set(["manager"]),
       ).map((row) => row.userId),
     ).toEqual(["manager", "orphan"]);
+  });
+});
+
+describe("administrator member controls", () => {
+  it.each(["owner", "admin"])("allows %s to edit peers, owners and themselves", (currentRole) => {
+    const assignableRoles = buildAssignableWorkspaceRoles(currentRole, []);
+    expect(assignableRoles).toContain("admin");
+    for (const role of ["owner", "admin", "member"]) {
+      expect(
+        canEditMemberWorkspaceRole({
+          assignableRoles,
+          canUpdate: true,
+          currentRole,
+          currentUserId: MEMBER.userId,
+          row: { ...MEMBER, role },
+        }),
+      ).toBe(true);
+    }
+  });
+  it("does not grant role management to ordinary members", () => {
+    expect(
+      canEditMemberWorkspaceRole({
+        assignableRoles: ["admin"],
+        canUpdate: true,
+        currentRole: "member",
+        currentUserId: MEMBER.userId,
+        row: MEMBER,
+      }),
+    ).toBe(false);
   });
 });

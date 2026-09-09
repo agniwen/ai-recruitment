@@ -169,11 +169,6 @@ export function OdcManagementModal({
         key: "serviceUnit",
         title: "服务单位",
       }),
-      customColumn<OdcManagedAssignment>({
-        cell: (record) => (record.canApproveAiReview ? "允许" : "不允许"),
-        key: "canApproveAiReview",
-        title: "AI 评价审批",
-      }),
       dateColumn<OdcManagedAssignment>({ key: "createdAt", title: "设置时间" }),
       actionsColumn<OdcManagedAssignment>({
         inline: [

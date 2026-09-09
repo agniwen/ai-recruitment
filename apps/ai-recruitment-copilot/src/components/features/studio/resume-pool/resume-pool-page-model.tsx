@@ -1,5 +1,7 @@
 "use client";
 
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
+
 import { useQuery } from "@tanstack/react-query";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
 import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
@@ -245,21 +247,36 @@ export function sourceActorLabel(record: ResumePoolListRecord) {
   return record.sourceChannel === "referral" ? "内推人" : "上传人";
 }
 
+export function canManagePoolRecord(
+  record: Pick<ResumePoolListRecord, "scope" | "createdBy"> | null,
+  currentUserId: string | null,
+  role: string | null,
+) {
+  return Boolean(
+    record &&
+    (isWorkspaceAdministratorRole(role) ||
+      record.scope !== "private" ||
+      record.createdBy === currentUserId),
+  );
+}
+
 export function canDeletePoolRecord(
   record: ResumePoolListRecord,
   {
     currentOrganizationId,
     currentUserId,
+    currentMemberRole,
   }: {
     currentOrganizationId: string | null;
     currentUserId: string | null;
+    currentMemberRole?: string | null;
   },
 ) {
   return Boolean(
     currentOrganizationId &&
     currentUserId &&
     record.organizationId === currentOrganizationId &&
-    record.createdBy === currentUserId,
+    (record.createdBy === currentUserId || isWorkspaceAdministratorRole(currentMemberRole)),
   );
 }
 

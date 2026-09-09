@@ -1,5 +1,4 @@
 import type { OdcJobSeries, OdcMemberSummary } from "@arc/shared/hiring-units";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
 import {
@@ -50,17 +49,6 @@ export function OdcAssignmentScopeFields({
                 <span className="ml-2 font-normal text-muted-foreground">{candidate.email}</span>
               ) : null}
             </div>
-            <Field orientation="horizontal">
-              <Checkbox
-                id={`${fieldPrefix}-approve-ai-review`}
-                checked={assignment.canApproveAiReview ?? false}
-                disabled={disabled}
-                onCheckedChange={(checked) =>
-                  updateAssignment(assignment.memberId, { canApproveAiReview: checked === true })
-                }
-              />
-              <FieldLabel htmlFor={`${fieldPrefix}-approve-ai-review`}>允许审批 AI 评价</FieldLabel>
-            </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor={`${fieldPrefix}-job-series`}>序列（非必填）</FieldLabel>

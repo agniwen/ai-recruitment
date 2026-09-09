@@ -47,9 +47,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Modal } from "@/components/ui/modal";
 import { Separator } from "@/components/ui/separator";
 import { fetchResumePoolItem } from "@/lib/client/api";
-import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { useWorkspaceSlug, useOptionalWorkspaceMemberRole } from "@/lib/client/workspace-context";
 
 import {
+  canManagePoolRecord,
   duplicateMatchBadge,
   getCandidateDisplayTitle,
   getCandidateTitle,
@@ -411,6 +412,7 @@ export function ResumePoolDetailDialog({
   onOpenChange: (open: boolean) => void;
   onOpenDuplicateMatches?: (record: ResumePoolListRecord) => void;
 }) {
+  const currentMemberRole = useOptionalWorkspaceMemberRole();
   const itemId = record?.id ?? recordId ?? "";
   const detailQuery = useQuery({
     enabled: Boolean(itemId),
@@ -423,7 +425,7 @@ export function ResumePoolDetailDialog({
     queryKey: ["resume-pool", "detail", slug, itemId],
   });
   const detail: ResumePoolDetail | ResumePoolListRecord | null = detailQuery.data ?? record;
-  const canManageDetail = detail?.scope !== "private" || detail.createdBy === currentUserId;
+  const canManageDetail = canManagePoolRecord(detail, currentUserId, currentMemberRole);
   const resumeProfile = detailQuery.data?.resumeProfile ?? null;
   const [recommendationsOpen, setRecommendationsOpen] = useState(false);
   const bound = Boolean(detailQuery.data?.jobDescriptionId);

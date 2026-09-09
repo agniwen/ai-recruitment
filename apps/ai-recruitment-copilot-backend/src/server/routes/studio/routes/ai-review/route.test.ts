@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   canApprove: vi.fn(),
   detail: vi.fn(),
   list: vi.fn(),
-  scope: vi.fn(),
   transition: vi.fn(),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
@@ -19,9 +18,6 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () 
       }
       await next();
     },
-}));
-vi.mock("@arc/ai-recruitment-copilot-backend/server/access/resume-visibility", () => ({
-  resolveResumeVisibilityScope: mocks.scope,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy", () => ({
   createRequestWorkspaceAuthorizer: () => vi.fn(),
@@ -39,7 +35,13 @@ vi.mock("../interviews/utils/candidate-stage-transition", () => ({
 
 function request(
   path: string,
-  options: { method?: string; page?: boolean; read?: boolean; body?: unknown } = {},
+  options: {
+    method?: string;
+    page?: boolean;
+    read?: boolean;
+    approve?: boolean;
+    body?: unknown;
+  } = {},
 ) {
   const app = new Hono<{
     Variables: { activeOrg: { id: string }; user: { id: string }; member: { role: string } };
@@ -58,6 +60,7 @@ function request(
         : undefined,
     headers: {
       "content-type": "application/json",
+      "x-permission-aiReview-approve": options.approve === false ? "no" : "yes",
       "x-permission-aiReview-read": options.read === false ? "no" : "yes",
       "x-permission-page-aiReview": options.page === false ? "no" : "yes",
     },
@@ -67,10 +70,6 @@ function request(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.scope.mockResolvedValue({
-    odc: { resumeSourceIds: ["source-a"] },
-    recruiting: { kind: "none" },
-  });
   mocks.list.mockResolvedValue({ records: [], total: 0 });
   mocks.detail.mockResolvedValue({
     id: "candidate-a",
@@ -101,20 +100,15 @@ describe("AI analysis approval API", () => {
       expect(mocks.transition).not.toHaveBeenCalled();
     },
   );
-  it("fixes the queue stage and respects workspace visibility even with forged filters", async () => {
+  it("lists all sources within the workspace and fixes the queue stage despite forged filters", async () => {
     await expect(
       request("?pipelineStages=offer&candidateName=Alice&page=2&pageSize=10"),
     ).resolves.toHaveProperty("status", 200);
-    expect(mocks.scope).toHaveBeenCalledWith({
-      currentRole: "odc",
-      organizationId: "org-a",
-      userId: "odc-a",
-    });
     expect(mocks.list).toHaveBeenCalledWith(
       "org-a",
       { candidateName: "Alice", outcomes: ["in_pipeline"], pipelineStages: ["ai_review"] },
       { page: 2, pageSize: 10, sortBy: "createdAt", sortOrder: "asc" },
-      await mocks.scope.mock.results[0].value,
+      { kind: "all" },
     );
   });
   it.each([null, { id: "candidate-a", pipelineStage: "screening" }])(
@@ -129,12 +123,23 @@ describe("AI analysis approval API", () => {
       expect(mocks.transition).not.toHaveBeenCalled();
     },
   );
-  it("exposes source approval permission separately from page access", async () => {
+  it("rejects approval when the role only has page and read permissions", async () => {
+    const response = await request("/candidate-a/approve", { approve: false, method: "POST" });
+    expect(response.status).toBe(403);
+    expect(mocks.detail).not.toHaveBeenCalled();
+    expect(mocks.transition).not.toHaveBeenCalled();
+  });
+  it("loads cross-source details using the authenticated workspace scope", async () => {
+    await request("/candidate-a");
+    expect(mocks.detail).toHaveBeenCalledWith("candidate-a", "org-a", { kind: "all" });
+    expect(mocks.canApprove).toHaveBeenCalledWith({ organizationId: "org-a", userId: "odc-a" });
+  });
+  it("exposes role approval permission separately from page access", async () => {
     mocks.canApprove.mockResolvedValue(false);
     const response = await request("/candidate-a");
     expect(await response.json()).toMatchObject({ canApproveAiReview: false });
   });
-  it("approves using the authenticated ODC and shared stage transition", async () => {
+  it("approves using the authenticated user and shared stage transition", async () => {
     await expect(request("/candidate-a/approve", { method: "POST" })).resolves.toHaveProperty(
       "status",
       200,

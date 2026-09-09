@@ -122,7 +122,7 @@ export function AiReviewDetailDialog({
           <p className="text-sm text-muted-foreground">
             {detail?.canApproveAiReview
               ? "确认 AI 评价后，审批通过即可进入简历筛选。"
-              : "审批需具备该简历来源的 AI 评价审批权限。"}
+              : "审批需具备角色中的 AI 分析审批权限。"}
           </p>
           <div className="flex shrink-0 gap-2">
             <Button variant="outline" disabled={approval.isPending} onClick={onClose}>

@@ -232,6 +232,17 @@ export function MembersManagementPage() {
     [assignableRoles, dynamicWorkspaceRoles],
   );
 
+  const memberRoleOptions = useMemo(
+    () =>
+      buildWorkspaceRoleOptions(
+        currentMemberRole === "admin" || currentMemberRole === "owner"
+          ? ["owner", ...assignableRoles]
+          : assignableRoles,
+        dynamicWorkspaceRoles,
+      ),
+    [assignableRoles, currentMemberRole, dynamicWorkspaceRoles],
+  );
+
   const allRows: MemberRow[] = useMemo(() => {
     const list = org?.members ?? [];
     return list.map((m) => {
@@ -516,23 +527,35 @@ export function MembersManagementPage() {
     });
   }
 
-  async function changeWorkspaceRole(row: MemberRow, role: string) {
+  async function changeWorkspaceRole(row: MemberRow, role: string, ownershipConfirmed = false) {
     if (row.role === role) {
       return;
     }
-    setPending(row.id);
-    const { error } = await authClient.organization.updateMemberRole({
-      memberId: row.id,
-      organizationId: workspaceId,
-      role: role as "admin" | "member",
-    });
-    setPending(null);
-    if (error) {
-      toast.error(error.message ?? "更新工作区角色失败");
+    if (role === "owner" && !ownershipConfirmed) {
+      toast(`确认将所有权转移给「${row.email}」？原拥有者将变为管理员。`, {
+        action: { label: "确认转移", onClick: () => void changeWorkspaceRole(row, role, true) },
+      });
       return;
     }
-    await refetch();
-    toast.success("工作区角色已更新");
+    setPending(row.id);
+    try {
+      await rpcFetch(
+        rpc.api.w[":slug"].studio.workspace.members[":memberId"].role.$patch({
+          json: { role },
+          param: { memberId: row.id, slug },
+        }),
+        "更新工作区角色失败",
+      );
+      await refetch();
+      toast.success("工作区角色已更新");
+      if (row.userId === session?.user?.id || role === "owner") {
+        window.location.reload();
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "更新工作区角色失败");
+    } finally {
+      setPending(null);
+    }
   }
 
   function removeMember(row: MemberRow) {
@@ -541,17 +564,34 @@ export function MembersManagementPage() {
         label: "确认移除",
         onClick: async () => {
           setPending(row.id);
-          const { error } = await authClient.organization.removeMember({
-            memberIdOrEmail: row.id,
-            organizationId: workspaceId,
-          });
-          setPending(null);
-          if (error) {
-            toast.error(error.message ?? "移除成员失败");
+          try {
+            if (currentMemberRole === "admin" || currentMemberRole === "owner") {
+              await rpcFetch(
+                rpc.api.w[":slug"].studio.workspace.members[":memberId"].$delete({
+                  param: { memberId: row.id, slug },
+                }),
+                "移除成员失败",
+              );
+            } else {
+              const { error } = await authClient.organization.removeMember({
+                memberIdOrEmail: row.id,
+                organizationId: workspaceId,
+              });
+              if (error) {
+                throw new Error(error.message ?? "移除成员失败");
+              }
+            }
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "移除成员失败");
             return;
+          } finally {
+            setPending(null);
           }
           await refetch();
           toast.success("成员已移除");
+          if (row.userId === session?.user?.id) {
+            window.location.reload();
+          }
         },
       },
     });
@@ -628,7 +668,7 @@ export function MembersManagementPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {assignableRoleOptions.map((option) => (
+                {memberRoleOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

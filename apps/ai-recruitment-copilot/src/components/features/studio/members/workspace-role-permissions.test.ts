@@ -19,6 +19,13 @@ const permissionsSectionSource = readFileSync(
 );
 
 describe("workspace role permission helpers", () => {
+  it("exposes AI approval as a separate role permission for all resume sources", () => {
+    const approval = buildPermissionItems().find((item) => item.key === "aiReview:approve");
+    expect(approval).toMatchObject({ actionLabel: "审批", resource: "aiReview" });
+    expect(approval?.description).toContain("当前工作区所有");
+    expect(buildPermissionItems().some((item) => item.key === "aiReview:read")).toBe(true);
+  });
+
   it("treats ODC as a role form setting instead of a permission-table checkbox", () => {
     expect(permissionsSectionSource).toContain(
       "additionalFields: { isOdc: input.isOdc, name: input.name }",

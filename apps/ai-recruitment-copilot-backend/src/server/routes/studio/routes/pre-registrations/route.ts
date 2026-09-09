@@ -72,7 +72,9 @@ export const studioPreRegistrationsRouter = factory
       .from(organizationRole)
       .where(eq(organizationRole.organizationId, organization.id));
     const builtInRoles = [
-      ...(member.role === "owner" ? [{ isOdc: false, label: "管理员", value: "admin" }] : []),
+      ...(member.role === "owner" || member.role === "admin"
+        ? [{ isOdc: false, label: "管理员", value: "admin" }]
+        : []),
       { isOdc: false, label: "成员", value: "member" },
       { isOdc: false, label: "无权限", value: "noAccess" },
     ];

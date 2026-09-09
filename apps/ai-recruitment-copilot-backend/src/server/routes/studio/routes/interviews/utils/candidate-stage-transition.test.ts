@@ -122,7 +122,7 @@ describe("transitionCandidateStage", () => {
     },
   );
 
-  it.each([false, true])("requires the scoped ODC approval permission (%s)", async (allowed) => {
+  it.each([false, true])("requires the role approval permission (%s)", async (allowed) => {
     const { tx, insertedValues, updatedWhere } = createTransaction({
       closedMeta: null,
       jobDescriptionId: "jd-a",
@@ -143,7 +143,7 @@ describe("transitionCandidateStage", () => {
     });
     expect(result).toEqual({ kind: allowed ? "ok" : "forbidden" });
     expect(mocks.canApproveAiReview).toHaveBeenCalledWith(
-      { jobDescriptionId: "jd-a", organizationId: "org-a", userId: "odc-user" },
+      { organizationId: "org-a", userId: "odc-user" },
       tx,
     );
     expect(updatedWhere).toHaveBeenCalledTimes(allowed ? 1 : 0);

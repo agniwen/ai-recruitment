@@ -228,10 +228,8 @@ export function buildAssignableWorkspaceRoles(
   dynamicRoles: readonly DynamicWorkspaceRole[],
 ): readonly string[] {
   let builtInRoles: string[] = [];
-  if (currentRole === "owner") {
+  if (currentRole === "owner" || currentRole === "admin") {
     builtInRoles = ["admin", "member", "noAccess"];
-  } else if (currentRole === "admin") {
-    builtInRoles = ["member", "noAccess"];
   }
   return [...builtInRoles, ...dynamicRoles.map((role) => role.role)].filter(
     (role, index, list) => list.indexOf(role) === index,
@@ -242,8 +240,6 @@ export function canEditMemberWorkspaceRole({
   assignableRoles,
   canUpdate,
   currentRole,
-  currentUserId,
-  row,
 }: {
   assignableRoles: readonly string[];
   canUpdate: boolean;
@@ -254,15 +250,7 @@ export function canEditMemberWorkspaceRole({
   if (!(canUpdate && assignableRoles.length > 0)) {
     return false;
   }
-  if (currentRole === "owner") {
-    return row.role !== "owner";
-  }
-  return (
-    currentRole === "admin" &&
-    row.role !== "owner" &&
-    row.role !== "admin" &&
-    row.userId !== currentUserId
-  );
+  return currentRole === "owner" || currentRole === "admin";
 }
 
 export function useDynamicWorkspaceRoles(workspaceId: string, enabled: boolean) {

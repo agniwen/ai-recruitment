@@ -6,7 +6,7 @@ const WORKSPACE_ROLE_LABELS = {
 } as const;
 
 const WORKSPACE_ROLE_DESCRIPTIONS = {
-  admin: "可管理工作区成员、邀请和招聘组；不能调整其他管理员或自己的角色，不能转让工作区。",
+  admin: "拥有完整工作区权限，可管理所有成员、转移所有权及删除工作区。",
   member: "可进入工作区；具体招聘权限由所在招聘组内的角色决定。",
   noAccess: "暂不能访问系统页面；需要等待管理员分配其他角色。",
   owner: "拥有完整权限，可调整角色并转让工作区所有权。",

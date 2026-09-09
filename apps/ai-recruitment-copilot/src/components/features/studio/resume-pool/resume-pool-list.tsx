@@ -1,5 +1,7 @@
 "use client";
 
+import { useOptionalWorkspaceMemberRole } from "@/lib/client/workspace-context";
+
 import { IconFileText, IconHistory, IconLoader2, IconTrash, IconUpload } from "@tabler/icons-react";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
 import type { ResumePoolListRecord } from "@arc/shared/resume-pool";
@@ -18,7 +20,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 
-import { canDeletePoolRecord } from "./resume-pool-page-model";
+import { canDeletePoolRecord, canManagePoolRecord } from "./resume-pool-page-model";
 import { ResumePoolCard } from "./resume-pool-details";
 
 const ResumePoolMasonry = lazy(async () => {
@@ -153,14 +155,16 @@ export function ResumePoolListContent({
   retryingRecordId: string | null;
   retriedRecordIds: ReadonlySet<string>;
 }) {
+  const currentMemberRole = useOptionalWorkspaceMemberRole();
   if (records.length > 0) {
     const cards = records.map((record) => {
       const canDelete =
         canDeletePoolRecord(record, {
+          currentMemberRole,
           currentOrganizationId,
           currentUserId,
         }) && canDeletePoolRecords;
-      const canManageRecord = scope !== "private" || record.createdBy === currentUserId;
+      const canManageRecord = canManagePoolRecord(record, currentUserId, currentMemberRole);
       return (
         <ResumePoolCard
           canDelete={canDelete}

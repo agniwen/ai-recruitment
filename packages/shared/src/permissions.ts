@@ -9,12 +9,7 @@
 // ac, and roles. Lives under shared/ because it has no node:* imports.
 
 import { createAccessControl } from "better-auth/plugins/access";
-import {
-  adminAc,
-  defaultStatements,
-  memberAc,
-  ownerAc,
-} from "better-auth/plugins/organization/access";
+import { defaultStatements, memberAc } from "better-auth/plugins/organization/access";
 
 export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "resumes",
@@ -84,7 +79,7 @@ const memberStudioPagePermissions = [
 
 export const statement = {
   ...defaultStatements,
-  aiReview: ["read"],
+  aiReview: ["read", "approve"],
   auditLog: ["read"],
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
@@ -118,73 +113,10 @@ export function isWorkspaceAdministratorRole(role: string | null | undefined): b
   return role === "owner" || role === "admin";
 }
 
-export const owner = ac.newRole({
-  ...ownerAc.statements,
-  aiReview: ["read"],
-  auditLog: ["read"],
-  candidateClose: ["create"],
-  candidateForm: ["create", "read", "update", "delete"],
-  chat: ["create", "read", "update", "delete"],
-  dataExport: ["export"],
-  department: ["create", "read", "update", "delete"],
-  // Hold for assignment only — evaluation is never disabled for owner (see helper).
-  disableResumeEvaluation: ["create"],
-  globalConfig: ["read", "update"],
-  hiringUnit: ["create", "read", "update", "delete"],
-  humanInterview: ["create", "read", "update", "delete"],
-  interview: ["create", "read", "update", "delete"],
-  interviewer: ["create", "read", "update", "delete"],
-  jd: ["create", "read", "update", "delete"],
-  mailIngestAccount: ["create", "read", "update", "delete", "manage"],
-  offer: ["create", "read", "update", "delete"],
-  page: STUDIO_PAGE_PERMISSION_ACTIONS,
-  questionTemplate: ["create", "read", "update", "delete"],
-  resumeLibrary: ["create", "read", "update", "delete"],
-  resumePool: ["create", "read", "publish", "import", "delete"],
-  resumeUploadBatch: ["create", "read", "process", "cancel", "delete"],
-});
-
-export const admin = ac.newRole({
-  ...adminAc.statements,
-  // admin 与 owner 业务能力一致；workspace delete / transferOwnership 由 better-auth
-  // organization 插件内置只许 owner，admin 拿不到。
-  //
-  // member.update：admin 可以调整成员角色，但**仅限设置为非管理角色**。
-  // 真正阻止 admin "互相提权 / 自我提权" 的硬约束在服务端 hook
-  // `organizationHooks.beforeUpdateMemberRole`（见 src/lib/server/auth.ts），
-  // 校验内容：(1) admin 不能改 admin/owner 角色；(2) admin 不能改自己；
-  // (3) admin 给出的新角色必须是 recruitingSupervisor / recruitingLead / hr / viewer。
-  // 矩阵这里开放 "update" 动词
-  // 只是为了让请求能到达 hook；具体策略由 hook 兜底，矩阵不承担安全边界。
-  //
-  // Admin gains member.update so the UI/hook code path becomes reachable, but
-  // the actual ceiling (non-admin targets only, no self-edit, no peer-admin
-  // edits) is enforced server-side in `beforeUpdateMemberRole`. The matrix only
-  // authorizes the verb; the hook is the security boundary.
-  aiReview: ["read"],
-  auditLog: ["read"],
-  candidateClose: ["create"],
-  candidateForm: ["create", "read", "update", "delete"],
-  chat: ["create", "read", "update", "delete"],
-  dataExport: ["export"],
-  department: ["create", "read", "update", "delete"],
-  // Hold for assignment only — evaluation is never disabled for admin (see helper).
-  disableResumeEvaluation: ["create"],
-  globalConfig: ["read", "update"],
-  hiringUnit: ["create", "read", "update", "delete"],
-  humanInterview: ["create", "read", "update", "delete"],
-  interview: ["create", "read", "update", "delete"],
-  interviewer: ["create", "read", "update", "delete"],
-  jd: ["create", "read", "update", "delete"],
-  mailIngestAccount: ["create", "read", "update", "delete", "manage"],
-  member: ["create", "update", "delete"],
-  offer: ["create", "read", "update", "delete"],
-  page: STUDIO_PAGE_PERMISSION_ACTIONS,
-  questionTemplate: ["create", "read", "update", "delete"],
-  resumeLibrary: ["create", "read", "update", "delete"],
-  resumePool: ["create", "read", "publish", "import", "delete"],
-  resumeUploadBatch: ["create", "read", "process", "cancel", "delete"],
-});
+// Administrators and owners receive the entire catalog, including future permissions.
+// Deny flags are assignment capabilities; their consumers exempt administrators.
+export const owner = ac.newRole(statement);
+export const admin = ac.newRole(statement);
 
 const recruitingMemberStatements = {
   ...memberAc.statements,

@@ -6,10 +6,14 @@ import { describe, expect, it } from "vitest";
 import {
   isWorkspaceAdministratorRole,
   roles,
+  statement,
   STUDIO_PAGE_PERMISSION_ACTIONS,
 } from "@arc/shared/permissions";
 
 describe("permissions matrix", () => {
+  it.each(["admin", "owner"] as const)("grants %s every catalog permission", (role) => {
+    expect(roles[role].statements).toEqual(statement);
+  });
   it("recognizes only built-in workspace administrators", () => {
     expect(isWorkspaceAdministratorRole("owner")).toBe(true);
     expect(isWorkspaceAdministratorRole("admin")).toBe(true);
@@ -308,6 +312,10 @@ describe("permission matrix cross-cut", () => {
     ["admin", "member", "delete", true],
     ["member", "member", "create", false],
     ["member", "member", "delete", false],
+    ["admin", "aiReview", "approve", true],
+    ["owner", "aiReview", "approve", true],
+    ["member", "aiReview", "approve", false],
+    ["noAccess", "aiReview", "approve", false],
     ["admin", "aiReview", "read", true],
     ["owner", "aiReview", "read", true],
     ["member", "aiReview", "read", false],
