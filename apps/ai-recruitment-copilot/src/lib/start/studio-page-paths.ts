@@ -7,6 +7,7 @@ import type { StudioPagePermissionAction } from "@/lib/start/auth-session-types"
 export const STUDIO_PAGE_PATHS = [
   { action: "resumes", path: "/resumes" },
   { action: "resumePool", path: "/resume-pool" },
+  { action: "aiReview", path: "/ai-review" },
   { action: "interviews", path: "/interviews" },
   { action: "calendar", path: "/calendar" },
   { action: "dashboard", path: "/dashboard" },

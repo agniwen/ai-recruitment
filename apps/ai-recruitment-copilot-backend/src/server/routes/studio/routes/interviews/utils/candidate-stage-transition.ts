@@ -1,3 +1,4 @@
+import { canApproveCandidateAiReview } from "../dao/ai-review-approval";
 import { and, eq, sql } from "drizzle-orm";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -99,7 +100,10 @@ export async function transitionCandidateStage(command: {
   provenance: CandidateStageTransitionProvenance;
 }): Promise<CandidateStageTransitionResult> {
   const transitionPermission = resolveTransitionPermission(command.input.pipelineStage);
-  if (!(await command.authorize(transitionPermission))) {
+  if (
+    command.input.pipelineStage !== "screening" &&
+    !(await command.authorize(transitionPermission))
+  ) {
     return { kind: "forbidden" };
   }
 
@@ -132,6 +136,7 @@ export async function transitionCandidateStage(command: {
         jobDescriptionId: studioInterview.jobDescriptionId,
         outcome: studioInterview.outcome,
         pipelineStage: studioInterview.pipelineStage,
+        resumeReviewStatus: studioInterview.resumeReviewStatus,
         resumeSourcePoolItemId: studioInterview.resumeSourcePoolItemId,
         resumeSourceType: studioInterview.resumeSourceType,
       })
@@ -153,6 +158,47 @@ export async function transitionCandidateStage(command: {
       .limit(1);
     if (!existing) {
       return { kind: "not_found" } as const;
+    }
+
+    if (existing.pipelineStage === "ai_review" && command.input.pipelineStage === "screening") {
+      if (
+        !(await canApproveCandidateAiReview(
+          {
+            jobDescriptionId: existing.jobDescriptionId,
+            organizationId: command.organizationId,
+            userId: command.operatorId,
+          },
+          tx,
+        ))
+      ) {
+        return { kind: "forbidden" } as const;
+      }
+      if (!command.input.approvalNote?.trim() || command.input.approvalNote.trim().length > 2000) {
+        return { kind: "invalid", message: "请填写审批说明（1–2000 字）。" } as const;
+      }
+      if (existing.resumeReviewStatus !== "ready") {
+        return { kind: "invalid", message: "请等待 AI 评价生成完成后再审批。" } as const;
+      }
+    } else if (
+      command.input.pipelineStage === "screening" &&
+      !(await command.authorize(transitionPermission))
+    ) {
+      return { kind: "forbidden" } as const;
+    }
+    if (
+      existing.pipelineStage === "closed" &&
+      existing.closedMeta?.previousStage === "ai_review" &&
+      command.input.pipelineStage !== "closed" &&
+      command.input.pipelineStage !== "ai_review"
+    ) {
+      return {
+        kind: "invalid",
+        message: "该候选人尚未通过 AI 评价审核，请重新激活到审核阶段。",
+      } as const;
+    }
+
+    if (isHiringCandidate && existing.pipelineStage === "ai_review") {
+      return { kind: "invalid", message: "请先完成 AI 评价审核。" } as const;
     }
 
     const reactivationError = getCandidateReactivationError({

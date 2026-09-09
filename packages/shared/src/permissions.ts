@@ -19,6 +19,7 @@ import {
 export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "resumes",
   "resumePool",
+  "aiReview",
   "interviews",
   "calendar",
   "dashboard",
@@ -40,6 +41,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
 ] as const;
 
 export const STUDIO_PAGE_PERMISSION_LABELS = {
+  aiReview: "AI 分析审批",
   // page:chat still keys the former Chat browse flag; UI now gates the Agent tab.
   calendar: "面试日程",
   chat: "Agent",
@@ -82,6 +84,7 @@ const memberStudioPagePermissions = [
 
 export const statement = {
   ...defaultStatements,
+  aiReview: ["read"],
   auditLog: ["read"],
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
@@ -117,6 +120,7 @@ export function isWorkspaceAdministratorRole(role: string | null | undefined): b
 
 export const owner = ac.newRole({
   ...ownerAc.statements,
+  aiReview: ["read"],
   auditLog: ["read"],
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],
@@ -157,6 +161,7 @@ export const admin = ac.newRole({
   // the actual ceiling (non-admin targets only, no self-edit, no peer-admin
   // edits) is enforced server-side in `beforeUpdateMemberRole`. The matrix only
   // authorizes the verb; the hook is the security boundary.
+  aiReview: ["read"],
   auditLog: ["read"],
   candidateClose: ["create"],
   candidateForm: ["create", "read", "update", "delete"],

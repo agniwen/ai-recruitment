@@ -14,5 +14,7 @@ export interface ResumeSourceRecord {
   createdAt: string;
   updatedAt: string;
   hiringUnitCount: number;
+  departmentCount: number;
+  jobDescriptionCount: number;
   odcMembers: OdcAssignmentSummary[];
 }

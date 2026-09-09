@@ -1,3 +1,4 @@
+import { aiReviewRouter } from "./routes/ai-review/route";
 import { resumeSourcesRouter } from "./routes/resume-sources/route";
 import { studioPreRegistrationsRouter } from "./routes/pre-registrations/route";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -21,6 +22,7 @@ import { workspaceRouter } from "./routes/workspace/route";
 // All /studio/* sub-routes mount here; the /w/:slug aggregator owns auth and scope.
 export const studioRouter = factory
   .createApp()
+  .route("/ai-review", aiReviewRouter)
   .route("/pre-registrations", studioPreRegistrationsRouter)
   .route("/calendar", studioCalendarRouter)
   .route("/interviews", studioInterviewsRouter)

@@ -78,6 +78,7 @@ export function buildCandidateInterviewFeedback(input: {
 // Funnel order: screening → written_test → ai_interview → human_interview →
 // offer → closed (terminal; outcome describes the verdict).
 export const pipelineStageValues = [
+  "ai_review",
   "screening",
   "written_test",
   "ai_interview",
@@ -94,6 +95,7 @@ export const pipelineStageMeta: Record<
   { label: string; tone: "success" | "warning" | "info" | "outline" }
 > = {
   ai_interview: { label: "AI 面试", tone: "warning" },
+  ai_review: { label: "AI 评价审核", tone: "warning" },
   closed: { label: "已结案", tone: "outline" },
   human_interview: { label: "真人复面", tone: "warning" },
   offer: { label: "Offer", tone: "info" },

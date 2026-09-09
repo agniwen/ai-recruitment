@@ -21,6 +21,7 @@ import { resolveHiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backen
 const departmentListQuerySchema = z.object({
   page: z.string().optional(),
   pageSize: z.string().optional(),
+  resumeSourceId: z.string().trim().min(1).optional(),
   search: z.string().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
@@ -71,6 +72,7 @@ export const departmentsRouter = factory
         {
           actorUserId: c.var.user?.id,
           organizationId: activeOrg.id,
+          resumeSourceId: q.resumeSourceId,
           search: q.search,
           textFilters: q.textFilters,
         },

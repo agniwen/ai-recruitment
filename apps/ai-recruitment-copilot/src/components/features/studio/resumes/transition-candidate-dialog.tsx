@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { candidateOutcomeMeta } from "@arc/db-schema/studio-interviews";
 import type { CandidateOutcome, ClosedMeta } from "@arc/db-schema/studio-interviews";
 import type { ApiError } from "@/lib/client/api/errors";
-import { transitionInterviewRecord } from "@/lib/client/api";
+import { fetchStudioResume, transitionInterviewRecord } from "@/lib/client/api";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DatePicker } from "@/components/date-time-picker";
@@ -357,12 +357,17 @@ function ReactivateDialog({
         toast.error(message);
       },
       operation: async () => {
+        const detail = await fetchStudioResume(slug, candidate.id);
+        const reactivationStage =
+          detail?.closedMeta?.previousStage === "ai_review" ? "ai_review" : REACTIVATE_TARGET_STAGE;
         await transitionInterviewRecord(slug, candidate.id, {
           outcome: "in_pipeline",
-          pipelineStage: REACTIVATE_TARGET_STAGE,
+          pipelineStage: reactivationStage,
           reactivationReason: trimmedReason,
         });
-        toast.success(`已重新激活，回到「${REACTIVATE_TARGET_STAGE_LABEL}」`);
+        toast.success(
+          `已重新激活，回到「${reactivationStage === "ai_review" ? "AI 评价审核" : REACTIVATE_TARGET_STAGE_LABEL}」`,
+        );
         await queryClient.invalidateQueries({
           queryKey: ["studio-resumes", slug, "detail", candidate.id],
         });
@@ -380,7 +385,9 @@ function ReactivateDialog({
         <DialogHeader>
           <DialogTitle>重新激活：{candidateLabel}</DialogTitle>
           <DialogDescription>
-            恢复到简历初筛阶段。确认后简历评估会重置为「未评估」，已存在的轮次 / Offer 记录会保留。
+            恢复到简历初筛；尚未通过 AI
+            评价审核的候选人返回审核阶段。确认后简历评估会重置为「未评估」，已存在的轮次 / Offer
+            记录会保留。
           </DialogDescription>
         </DialogHeader>
 

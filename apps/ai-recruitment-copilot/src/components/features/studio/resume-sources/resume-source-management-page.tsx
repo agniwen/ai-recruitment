@@ -1,3 +1,5 @@
+import { ResumeSourceChildrenModal } from "./resume-source-children-modal";
+import type { SourceChildKind } from "./resume-source-children-modal";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResumeSourceRecord } from "@arc/shared/resume-sources";
@@ -28,6 +30,34 @@ export function ResumeSourceManagementPage() {
   const canCreate = useHasPermission("hiringUnit", "create");
   const canUpdate = useHasPermission("hiringUnit", "update");
   const canDelete = useHasPermission("hiringUnit", "delete");
+  const canReadUnits = useHasPermission("hiringUnit", "read");
+  const canReadDepartments = useHasPermission("department", "read");
+  const canReadJobs = useHasPermission("jd", "read");
+  const canViewUnitsPage = useHasPermission("page", "hiringUnits");
+  const canViewDepartmentsPage = useHasPermission("page", "departments");
+  const canViewJobsPage = useHasPermission("page", "jobDescriptions");
+  const [childrenTarget, setChildrenTarget] = useState<{
+    source: ResumeSourceRecord;
+    kind: SourceChildKind;
+  } | null>(null);
+  function countCell(
+    source: ResumeSourceRecord,
+    kind: SourceChildKind,
+    text: string,
+    allowed: boolean,
+  ) {
+    return allowed ? (
+      <Button
+        variant="link"
+        className="h-auto p-0"
+        onClick={() => setChildrenTarget({ kind, source })}
+      >
+        {text}
+      </Button>
+    ) : (
+      text
+    );
+  }
   const [search, setSearch] = useState("");
   const [odcSource, setOdcSource] = useState<ResumeSourceRecord | null>(null);
   const [managedSource, setManagedSource] = useState<ResumeSourceRecord | null>(null);
@@ -74,9 +104,32 @@ export function ResumeSourceManagementPage() {
       title: "描述",
     }),
     customColumn<ResumeSourceRecord>({
-      cell: (row) => `${row.hiringUnitCount} 个用人组织`,
+      cell: (row) =>
+        countCell(
+          row,
+          "hiringUnit",
+          `${row.hiringUnitCount} 个用人组织`,
+          canReadUnits && canViewUnitsPage,
+        ),
       key: "hiringUnitCount",
       title: "下属用人组织",
+    }),
+    customColumn<ResumeSourceRecord>({
+      cell: (row) =>
+        countCell(
+          row,
+          "department",
+          `${row.departmentCount} 个部门`,
+          canReadDepartments && canViewDepartmentsPage,
+        ),
+      key: "departmentCount",
+      title: "下属部门",
+    }),
+    customColumn<ResumeSourceRecord>({
+      cell: (row) =>
+        countCell(row, "jd", `${row.jobDescriptionCount} 个岗位`, canReadJobs && canViewJobsPage),
+      key: "jobDescriptionCount",
+      title: "下属岗位",
     }),
     customColumn<ResumeSourceRecord>({
       cell: (row) => <OdcAvatarGroup members={row.odcMembers} />,
@@ -167,6 +220,14 @@ export function ResumeSourceManagementPage() {
         target={managedSource ? { ...managedSource, rowType: "resumeSource" } : null}
         onSaved={invalidate}
       />
+      {childrenTarget ? (
+        <ResumeSourceChildrenModal
+          key={`${childrenTarget.kind}:${childrenTarget.source.id}`}
+          {...childrenTarget}
+          onClose={() => setChildrenTarget(null)}
+          onChanged={invalidate}
+        />
+      ) : null}
       <EntityDeleteDialog
         title="删除简历来源？"
         description={(record) =>

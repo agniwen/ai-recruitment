@@ -776,6 +776,8 @@ export function useStudioPersonDetailController({
               }
             : undefined
         }
+        canApproveAiReview={resumeRecord?.canApproveAiReview ?? false}
+        aiReviewReady={resumeRecord?.resumeReviewStatus === "ready"}
         canCloseCandidate={canCloseCandidate}
         canCreateHumanInterview={canCreateHumanInterview}
         canCreateOffer={canCreateOffer}
@@ -783,8 +785,9 @@ export function useStudioPersonDetailController({
         hasJobDescription={Boolean(resumeRecord?.jobDescriptionId)}
         missingJobAction={missingJobAction}
         resumeEvaluationPassed={canProgressResumeRecordToInterview}
-        onAdvance={async (target) => {
+        onAdvance={async (target, approvalNote) => {
           const error = await advancePipelineStage({
+            approvalNote,
             queryClient,
             recordId: record.id,
             slug,
@@ -792,6 +795,9 @@ export function useStudioPersonDetailController({
           });
           if (error) {
             toast.error(error);
+            if (approvalNote) {
+              throw new Error(error);
+            }
             return;
           }
           toast.success(`已推进到「${pipelineStageMeta[target].label}」`);

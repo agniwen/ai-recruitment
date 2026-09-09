@@ -1,7 +1,9 @@
 import { and, asc, count, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  department,
   hiringUnit,
+  jobDescription,
   member,
   resumeSource,
   resumeSourceOdcMember,
@@ -19,7 +21,7 @@ export async function loadResumeSourceById(id: string, organizationId: string) {
 }
 
 export async function listResumeSources(organizationId: string): Promise<ResumeSourceRecord[]> {
-  const [sources, units, assignments] = await Promise.all([
+  const [sources, units, assignments, departments, jobs] = await Promise.all([
     db
       .select()
       .from(resumeSource)
@@ -32,6 +34,7 @@ export async function listResumeSources(organizationId: string): Promise<ResumeS
       .groupBy(hiringUnit.resumeSourceId),
     db
       .select({
+        canApproveAiReview: resumeSourceOdcMember.canApproveAiReview,
         email: user.email,
         image: user.image,
         jobSeries: resumeSourceOdcMember.jobSeries,
@@ -46,8 +49,27 @@ export async function listResumeSources(organizationId: string): Promise<ResumeS
       .innerJoin(user, eq(user.id, member.userId))
       .where(eq(resumeSourceOdcMember.organizationId, organizationId))
       .orderBy(asc(user.name)),
+    db
+      .select({ count: count(), sourceId: hiringUnit.resumeSourceId })
+      .from(department)
+      .innerJoin(
+        hiringUnit,
+        and(
+          eq(department.hiringUnitId, hiringUnit.id),
+          eq(hiringUnit.organizationId, organizationId),
+        ),
+      )
+      .where(eq(department.organizationId, organizationId))
+      .groupBy(hiringUnit.resumeSourceId),
+    db
+      .select({ count: count(), sourceId: jobDescription.resumeSourceId })
+      .from(jobDescription)
+      .where(eq(jobDescription.organizationId, organizationId))
+      .groupBy(jobDescription.resumeSourceId),
   ]);
   const counts = new Map(units.map((unit) => [unit.sourceId, unit.count]));
+  const departmentCounts = new Map(departments.map((row) => [row.sourceId, row.count]));
+  const jobCounts = new Map(jobs.map((row) => [row.sourceId, row.count]));
   const members = new Map<string, ResumeSourceRecord["odcMembers"]>();
   for (const { sourceId, ...assignment } of assignments) {
     const group = members.get(sourceId) ?? [];
@@ -57,7 +79,9 @@ export async function listResumeSources(organizationId: string): Promise<ResumeS
   return sources.map((source) => ({
     ...source,
     createdAt: source.createdAt.toISOString(),
+    departmentCount: departmentCounts.get(source.id) ?? 0,
     hiringUnitCount: counts.get(source.id) ?? 0,
+    jobDescriptionCount: jobCounts.get(source.id) ?? 0,
     odcMembers: members.get(source.id) ?? [],
     updatedAt: source.updatedAt.toISOString(),
   }));

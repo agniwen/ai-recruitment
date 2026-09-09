@@ -75,6 +75,7 @@ import { Route as WSlugStudioDepartmentsRouteImport } from './routes/w.$slug.stu
 import { Route as WSlugStudioDataExportRouteImport } from './routes/w.$slug.studio.data-export'
 import { Route as WSlugStudioDashboardRouteImport } from './routes/w.$slug.studio.dashboard'
 import { Route as WSlugStudioCalendarRouteImport } from './routes/w.$slug.studio.calendar'
+import { Route as WSlugStudioAiReviewRouteImport } from './routes/w.$slug.studio.ai-review'
 import { Route as WSlugChatSessionIdRouteImport } from './routes/w.$slug.chat.$sessionId'
 import { Route as WSlugAgentSessionIdRouteImport } from './routes/w.$slug.agent.$sessionId'
 import { Route as PlatformMastraStudioAgentBuilderSkillsRouteImport } from './routes/platform.mastra-studio.agent-builder.skills'
@@ -526,6 +527,11 @@ const WSlugStudioDashboardRoute = WSlugStudioDashboardRouteImport.update({
 const WSlugStudioCalendarRoute = WSlugStudioCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
+  getParentRoute: () => WSlugStudioRoute,
+} as any)
+const WSlugStudioAiReviewRoute = WSlugStudioAiReviewRouteImport.update({
+  id: '/ai-review',
+  path: '/ai-review',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
 const WSlugChatSessionIdRoute = WSlugChatSessionIdRouteImport.update({
@@ -1248,6 +1254,7 @@ export interface FileRoutesByFullPath {
   '/platform/mastra-studio/agent-builder/skills': typeof PlatformMastraStudioAgentBuilderSkillsRouteWithChildren
   '/w/$slug/agent/$sessionId': typeof WSlugAgentSessionIdRoute
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
+  '/w/$slug/studio/ai-review': typeof WSlugStudioAiReviewRoute
   '/w/$slug/studio/calendar': typeof WSlugStudioCalendarRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/data-export': typeof WSlugStudioDataExportRoute
@@ -1411,6 +1418,7 @@ export interface FileRoutesByTo {
   '/platform/mastra-studio/agent-builder/skills': typeof PlatformMastraStudioAgentBuilderSkillsListingIndexRoute
   '/w/$slug/agent/$sessionId': typeof WSlugAgentSessionIdRoute
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
+  '/w/$slug/studio/ai-review': typeof WSlugStudioAiReviewRoute
   '/w/$slug/studio/calendar': typeof WSlugStudioCalendarRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/data-export': typeof WSlugStudioDataExportRoute
@@ -1577,6 +1585,7 @@ export interface FileRoutesById {
   '/platform/mastra-studio/agent-builder/skills': typeof PlatformMastraStudioAgentBuilderSkillsRouteWithChildren
   '/w/$slug/agent/$sessionId': typeof WSlugAgentSessionIdRoute
   '/w/$slug/chat/$sessionId': typeof WSlugChatSessionIdRoute
+  '/w/$slug/studio/ai-review': typeof WSlugStudioAiReviewRoute
   '/w/$slug/studio/calendar': typeof WSlugStudioCalendarRoute
   '/w/$slug/studio/dashboard': typeof WSlugStudioDashboardRoute
   '/w/$slug/studio/data-export': typeof WSlugStudioDataExportRoute
@@ -1753,6 +1762,7 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio/agent-builder/skills'
     | '/w/$slug/agent/$sessionId'
     | '/w/$slug/chat/$sessionId'
+    | '/w/$slug/studio/ai-review'
     | '/w/$slug/studio/calendar'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/data-export'
@@ -1916,6 +1926,7 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio/agent-builder/skills'
     | '/w/$slug/agent/$sessionId'
     | '/w/$slug/chat/$sessionId'
+    | '/w/$slug/studio/ai-review'
     | '/w/$slug/studio/calendar'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/data-export'
@@ -2081,6 +2092,7 @@ export interface FileRouteTypes {
     | '/platform/mastra-studio/agent-builder/skills'
     | '/w/$slug/agent/$sessionId'
     | '/w/$slug/chat/$sessionId'
+    | '/w/$slug/studio/ai-review'
     | '/w/$slug/studio/calendar'
     | '/w/$slug/studio/dashboard'
     | '/w/$slug/studio/data-export'
@@ -2669,6 +2681,13 @@ declare module '@tanstack/react-router' {
       path: '/calendar'
       fullPath: '/w/$slug/studio/calendar'
       preLoaderRoute: typeof WSlugStudioCalendarRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
+    '/w/$slug/studio/ai-review': {
+      id: '/w/$slug/studio/ai-review'
+      path: '/ai-review'
+      fullPath: '/w/$slug/studio/ai-review'
+      preLoaderRoute: typeof WSlugStudioAiReviewRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
     '/w/$slug/chat/$sessionId': {
@@ -4100,6 +4119,7 @@ const WSlugStudioResumesRouteWithChildren =
   WSlugStudioResumesRoute._addFileChildren(WSlugStudioResumesRouteChildren)
 
 interface WSlugStudioRouteChildren {
+  WSlugStudioAiReviewRoute: typeof WSlugStudioAiReviewRoute
   WSlugStudioCalendarRoute: typeof WSlugStudioCalendarRoute
   WSlugStudioDashboardRoute: typeof WSlugStudioDashboardRoute
   WSlugStudioDataExportRoute: typeof WSlugStudioDataExportRoute
@@ -4123,6 +4143,7 @@ interface WSlugStudioRouteChildren {
 }
 
 const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
+  WSlugStudioAiReviewRoute: WSlugStudioAiReviewRoute,
   WSlugStudioCalendarRoute: WSlugStudioCalendarRoute,
   WSlugStudioDashboardRoute: WSlugStudioDashboardRoute,
   WSlugStudioDataExportRoute: WSlugStudioDataExportRoute,

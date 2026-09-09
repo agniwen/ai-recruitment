@@ -18,6 +18,7 @@ import type { ResumeLibraryMetrics } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
 
 type PipelineBucket =
+  | "ai_review"
   | "screening"
   | "ai_interview"
   | "human_interview"
@@ -26,6 +27,7 @@ type PipelineBucket =
   | "closed_rejected";
 
 const BUCKET_ORDER: PipelineBucket[] = [
+  "ai_review",
   "screening",
   "ai_interview",
   "human_interview",
@@ -36,6 +38,7 @@ const BUCKET_ORDER: PipelineBucket[] = [
 
 const BUCKET_LABEL: Record<PipelineBucket, string> = {
   ai_interview: "AI 面试",
+  ai_review: "AI 评价审核",
   closed_hired: "已到岗",
   closed_rejected: "已淘汰 / 撤回",
   human_interview: "真人复面",
@@ -45,6 +48,7 @@ const BUCKET_LABEL: Record<PipelineBucket, string> = {
 
 const BUCKET_COLORS: Record<PipelineBucket, string> = {
   ai_interview: "var(--chart-2)",
+  ai_review: "var(--chart-5)",
   closed_hired: "oklch(0.65 0.16 150)",
   closed_rejected: "oklch(0.64 0.2 345)",
   human_interview: "var(--chart-3)",
@@ -260,6 +264,7 @@ function bucketForRow(row: ResumeLibraryMetrics["byPipeline"][number]): Pipeline
     return "ai_interview";
   }
   if (
+    row.stage === "ai_review" ||
     row.stage === "screening" ||
     row.stage === "ai_interview" ||
     row.stage === "human_interview" ||
@@ -273,6 +278,7 @@ function bucketForRow(row: ResumeLibraryMetrics["byPipeline"][number]): Pipeline
 function buildPipelineRow(rows: ResumeLibraryMetrics["byPipeline"]) {
   const counts: Record<PipelineBucket, number> = {
     ai_interview: 0,
+    ai_review: 0,
     closed_hired: 0,
     closed_rejected: 0,
     human_interview: 0,
@@ -296,7 +302,12 @@ function buildPipelineRow(rows: ResumeLibraryMetrics["byPipeline"]) {
     label: BUCKET_LABEL[bucket],
     value: counts[bucket],
   }));
-  const active = counts.screening + counts.ai_interview + counts.human_interview + counts.offer;
+  const active =
+    counts.ai_review +
+    counts.screening +
+    counts.ai_interview +
+    counts.human_interview +
+    counts.offer;
   return { active, counts, stackRows, total };
 }
 

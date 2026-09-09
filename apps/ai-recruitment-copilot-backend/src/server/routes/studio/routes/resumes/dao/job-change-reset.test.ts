@@ -34,7 +34,7 @@ describe("resetCandidateWorkflowForJobDescriptionChange", () => {
     vi.clearAllMocks();
   });
 
-  it("returns the candidate to screening while preserving stage history and resetting AI inputs", async () => {
+  it("returns the candidate to AI review while preserving stage history and resetting AI inputs", async () => {
     const scheduleRows = [
       {
         conversationId: "conversation-1",
@@ -108,7 +108,7 @@ describe("resetCandidateWorkflowForJobDescriptionChange", () => {
       closedMeta: null,
       closedReason: null,
       outcome: "in_pipeline",
-      pipelineStage: "screening",
+      pipelineStage: "ai_review",
     });
     expect(deletedTables).toEqual([candidateFormSubmission]);
     expect(updatedTables).toEqual([studioInterviewSchedule, studioInterviewSchedule]);

@@ -104,7 +104,7 @@ describe("pickLatestPassEvaluationTimeSlots", () => {
   });
 });
 
-function createTransaction(currentStatus: "fail" | "pass" | null) {
+function createTransaction(currentStatus: "fail" | "pass" | null, pipelineStage = "screening") {
   const auditRows: Record<string, unknown>[] = [];
   const updatePatches: Record<string, unknown>[] = [];
   const tx = {
@@ -118,7 +118,7 @@ function createTransaction(currentStatus: "fail" | "pass" | null) {
       from: () => ({
         where: () => ({
           limit: () => ({
-            for: () => Promise.resolve([{ resumeEvaluationStatus: currentStatus }]),
+            for: () => Promise.resolve([{ pipelineStage, resumeEvaluationStatus: currentStatus }]),
           }),
         }),
       }),
@@ -139,6 +139,23 @@ function useTransaction(tx: unknown) {
 }
 
 describe("submitResumeEvaluation", () => {
+  it("blocks resume screening decisions until AI review approval", async () => {
+    const { tx, auditRows, updatePatches } = createTransaction(null, "ai_review");
+    useTransaction(tx);
+    expect(
+      await submitResumeEvaluation({
+        departmentName: "研发部",
+        id: "resume-1",
+        operatorId: "hr",
+        organizationId: "org-1",
+        reason: "通过",
+        status: "pass",
+      }),
+    ).toEqual({ status: "awaiting_ai_review" });
+    expect(updatePatches).toEqual([]);
+    expect(auditRows).toEqual([]);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

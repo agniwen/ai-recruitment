@@ -257,6 +257,7 @@ export function firstSearchValue(value: unknown): string | undefined {
 // tabs stay compact in narrow viewports.
 export const PIPELINE_STAGE_TAB_DESCRIPTIONS: Record<string, string> = {
   ai_interview: "AI 面试阶段",
+  ai_review: "AI 评价审核中",
   all: "全部候选人",
   closed: "已结案候选人",
   human_interview: "等候真人复面",

@@ -48,6 +48,23 @@ function JobDescriptionPreview({ record }: { record: JobDescriptionRecord }) {
         </p>
       </div>
 
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
+        {[
+          ["用人组织", record.hiringUnitName],
+          ["简历来源", record.resumeSourceName],
+          ["部门", record.departmentName],
+          ["序列", record.jobSeries],
+          ["服务单位", record.serviceUnit],
+        ].map(([label, value]) => (
+          <div className="contents" key={label}>
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 whitespace-pre-wrap wrap-break-word">
+              {value?.trim() || "未设置"}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
       <section className="flex flex-col gap-1">
         <h4 className="font-medium text-muted-foreground text-xs">岗位描述</h4>
         <ScrollArea className="max-h-32 [--scroll-fade-reveal:1rem]" scrollFade>

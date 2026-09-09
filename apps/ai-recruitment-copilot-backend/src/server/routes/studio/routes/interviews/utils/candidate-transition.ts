@@ -20,6 +20,7 @@ export interface CandidateTransitionInput {
   closedReason?: string | null;
   outcome?: CandidateOutcome;
   pipelineStage: PipelineStage;
+  approvalNote?: string;
   reactivationReason?: string;
 }
 
@@ -141,7 +142,9 @@ export function resolveCandidateTransitionPatch({
     closedMeta = {
       ...existing.closedMeta,
       ...input.closedMeta,
-      previousStage: existing.pipelineStage,
+      previousStage: wasClosed
+        ? (existing.closedMeta?.previousStage ?? existing.pipelineStage)
+        : existing.pipelineStage,
     };
   } else if (wasClosed) {
     closedAt = null;
@@ -178,7 +181,10 @@ export function resolveCandidateTransitionPatch({
       fromOutcome: existing.outcome,
       fromStage: existing.pipelineStage,
       reactivationReason: wasClosed && !isClosing ? (input.reactivationReason ?? null) : null,
-      reason: input.closedReason ?? null,
+      reason:
+        existing.pipelineStage === "ai_review" && input.pipelineStage === "screening"
+          ? (input.approvalNote?.trim() ?? null)
+          : (input.closedReason ?? null),
       toOutcome: outcome,
       toStage: input.pipelineStage,
     },

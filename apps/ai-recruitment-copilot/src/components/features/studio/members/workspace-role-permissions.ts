@@ -60,6 +60,7 @@ export const WORKSPACE_PERMISSION_GROUPS = [
   {
     description: "招聘主流程和候选人资料。",
     resources: [
+      { actions: ["read"] as const, key: "aiReview", label: "AI 分析审批" },
       {
         actions: ["create", "read", "update", "delete"] as const,
         key: "resumeLibrary",
@@ -196,6 +197,8 @@ const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
 };
 
 const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
+  aiReview:
+    "控制 AI 分析审批页面入口和访问；查看待审简历还需 AI 分析审批的查看权限。实际审批需要在简历来源为 ODC 勾选允许审批 AI 评价，并匹配负责范围。",
   calendar:
     "控制是否能在侧边栏看到并访问「面试日程」页面；未勾选时侧边栏不展示入口，直接访问会进入 404。用于按日历查看 AI 面试和真人面试安排。日程列表与 AI 面试事件预览接口也受该页面权限控制。日历事件 hovercard 上的「查看候选人 / 查看面试」仍分别受「候选人管理」「AI面试管理」页面权限控制。",
   chat: "控制是否能使用侧边栏 Agent tab 并访问 Agent 页面；未勾选时 Agent tab 会禁用，直接访问或点击会跳回 Studio 候选人管理。页面内接口暂不按该页面权限限制。",
@@ -235,6 +238,9 @@ const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
 };
 
 const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<string, string>>> = {
+  aiReview: {
+    read: "允许查看待审批候选人、候选人概览和 AI 评价。审批仍需简历来源中授予的 ODC 审批权限。",
+  },
   auditLog: {
     read: "允许查看工作区审计日志。当前主要作为系统能力预留，具体入口会按该权限控制。",
   },

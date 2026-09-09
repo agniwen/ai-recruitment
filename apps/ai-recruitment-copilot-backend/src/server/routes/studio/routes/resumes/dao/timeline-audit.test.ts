@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { auditDescription, auditMetadata, auditTitle, auditTone } from "./timeline-audit";
 
 describe("resume evaluation audit timeline", () => {
+  it("shows the approval explanation in candidate activity", () => {
+    expect(
+      auditDescription(
+        { fromStage: "ai_review", reason: "已核实项目经验", toStage: "screening" },
+        "candidate_transition",
+      ),
+    ).toBe("AI 评价审核通过，进入简历筛选。审批说明：已核实项目经验");
+  });
   it("includes department and reason in evaluation activity copy", () => {
     expect(
       auditDescription(

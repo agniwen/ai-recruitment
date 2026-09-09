@@ -10,6 +10,17 @@ import {
 } from "@arc/shared/candidate-pipeline-machine";
 
 describe("candidate pipeline machine", () => {
+  it("starts in AI review and only approval unlocks screening", () => {
+    const actor = createActor(candidatePipelineMachine).start();
+    expect(actor.getSnapshot().value).toBe("ai_review");
+    actor.send({ type: "START_AI_INTERVIEW" });
+    actor.send({ type: "SKIP_TO_HUMAN_INTERVIEW" });
+    expect(actor.getSnapshot().value).toBe("ai_review");
+    actor.send({ type: "APPROVE_AI_REVIEW" });
+    expect(actor.getSnapshot().value).toBe("screening");
+    actor.stop();
+  });
+
   it("derives semantic activity only from the terminal pipeline stage", () => {
     expect(getCandidateActivityStatus("screening")).toBe("active");
     expect(getCandidateActivityStatus("offer")).toBe("active");

@@ -78,12 +78,17 @@ function* buildOdcAssignmentBatches<T>(
 
 function buildWhereConditions({
   organizationId,
+  resumeSourceId,
   search,
 }: {
   organizationId: string;
+  resumeSourceId?: string;
   search?: string;
 }) {
-  const orgFilter = eq(hiringUnit.organizationId, organizationId);
+  const orgFilter = and(
+    eq(hiringUnit.organizationId, organizationId),
+    resumeSourceId ? eq(hiringUnit.resumeSourceId, resumeSourceId) : undefined,
+  );
   if (!search) {
     return orgFilter;
   }
@@ -96,6 +101,7 @@ function buildWhereConditions({
 
 function listHiringUnitRows({
   organizationId,
+  resumeSourceId,
   search,
   sortBy = "createdAt",
   sortOrder = "desc",
@@ -103,13 +109,14 @@ function listHiringUnitRows({
   offset,
 }: {
   organizationId: string;
+  resumeSourceId?: string;
   search?: string;
   sortBy?: SortColumn;
   sortOrder?: "asc" | "desc";
   limit?: number;
   offset?: number;
 }) {
-  const where = buildWhereConditions({ organizationId, search });
+  const where = buildWhereConditions({ organizationId, resumeSourceId, search });
 
   let query = db
     .select()
@@ -130,12 +137,14 @@ function listHiringUnitRows({
 
 async function countHiringUnitRows({
   organizationId,
+  resumeSourceId,
   search,
 }: {
   organizationId: string;
+  resumeSourceId?: string;
   search?: string;
 }) {
-  const where = buildWhereConditions({ organizationId, search });
+  const where = buildWhereConditions({ organizationId, resumeSourceId, search });
   const [result] = await db.select({ count: count() }).from(hiringUnit).where(where);
   return result?.count ?? 0;
 }
@@ -167,7 +176,7 @@ export function serializeHiringUnit(row: typeof hiringUnit.$inferSelect): Hiring
 }
 
 export async function queryPaginatedHiringUnits(
-  filters: { organizationId: string; search?: string | null },
+  filters: { organizationId: string; resumeSourceId?: string; search?: string | null },
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedHiringUnitResult> {
   const { search } = parseFilters(filters);
@@ -176,8 +185,16 @@ export async function queryPaginatedHiringUnits(
   const offset = (page - 1) * pageSize;
 
   const [records, total] = await Promise.all([
-    listHiringUnitRows({ limit: pageSize, offset, organizationId, search, sortBy, sortOrder }),
-    countHiringUnitRows({ organizationId, search }),
+    listHiringUnitRows({
+      limit: pageSize,
+      offset,
+      organizationId,
+      resumeSourceId: filters.resumeSourceId,
+      search,
+      sortBy,
+      sortOrder,
+    }),
+    countHiringUnitRows({ organizationId, resumeSourceId: filters.resumeSourceId, search }),
   ]);
 
   return {

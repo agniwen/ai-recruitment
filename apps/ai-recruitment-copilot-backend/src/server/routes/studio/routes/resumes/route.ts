@@ -717,7 +717,7 @@ export const resumeLibraryRouter = factory
 
       if (
         jobDescriptionChanged &&
-        (existing.pipelineStage !== "screening" || existing.outcome !== "in_pipeline")
+        (existing.pipelineStage !== "ai_review" || existing.outcome !== "in_pipeline")
       ) {
         await notifyCandidateStageChange({
           candidateId: id,
@@ -725,7 +725,7 @@ export const resumeLibraryRouter = factory
           fromStage: existing.pipelineStage,
           organizationId: activeOrg.id,
           toOutcome: "in_pipeline",
-          toStage: "screening",
+          toStage: "ai_review",
         });
       }
 
@@ -931,7 +931,7 @@ export const resumeLibraryRouter = factory
 
       if (
         jobDescriptionChanged &&
-        (existing.pipelineStage !== "screening" || existing.outcome !== "in_pipeline")
+        (existing.pipelineStage !== "ai_review" || existing.outcome !== "in_pipeline")
       ) {
         await notifyCandidateStageChange({
           candidateId: id,
@@ -939,7 +939,7 @@ export const resumeLibraryRouter = factory
           fromStage: existing.pipelineStage,
           organizationId: activeOrg.id,
           toOutcome: "in_pipeline",
-          toStage: "screening",
+          toStage: "ai_review",
         });
       }
 

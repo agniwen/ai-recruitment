@@ -5,6 +5,7 @@ import { transitionCandidateStage } from "./candidate-stage-transition";
 
 const mocks = vi.hoisted(() => ({
   autoCloseRelatedCandidatesAfterHire: vi.fn(),
+  canApproveAiReview: vi.fn(),
   getReadinessError: vi.fn(),
   invalidateCaches: vi.fn(),
   loadReadiness: vi.fn(),
@@ -19,6 +20,10 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
   invalidateStudioInterviewCaches: mocks.invalidateCaches,
+}));
+
+vi.mock("../dao/ai-review-approval", () => ({
+  canApproveCandidateAiReview: mocks.canApproveAiReview,
 }));
 
 vi.mock("./candidate-stage-notification", () => ({
@@ -44,11 +49,12 @@ vi.mock(
 
 function createTransaction(existing: {
   candidateName?: string;
-  closedMeta: null;
+  closedMeta: null | { previousStage: "ai_review" };
   jobDescriptionAiInterviewDisabled?: boolean;
   jobDescriptionId: string | null;
   outcome: "archived" | "in_pipeline";
-  pipelineStage: "closed" | "human_interview" | "screening";
+  pipelineStage: "ai_review" | "closed" | "human_interview" | "screening";
+  resumeReviewStatus?: "ready" | "processing";
   resumeSourcePoolItemId?: string | null;
   resumeSourceType?: "direct_upload" | "private_pool" | "public_pool" | null;
 }) {
@@ -88,6 +94,117 @@ describe("transitionCandidateStage", () => {
     mocks.autoCloseRelatedCandidatesAfterHire.mockResolvedValue([]);
     mocks.notifyCandidateStageChange.mockImplementation(() => Promise.resolve());
     mocks.refreshDirectUploadDuplicateMatchesBeforeHire.mockImplementation(() => Promise.resolve());
+  });
+
+  it.each([undefined, "   ", "字".repeat(2001)])(
+    "rejects approval without a valid explanation",
+    async (approvalNote) => {
+      const { tx, insertedValues, updatedWhere } = createTransaction({
+        closedMeta: null,
+        jobDescriptionId: "jd-a",
+        outcome: "in_pipeline",
+        pipelineStage: "ai_review",
+        resumeReviewStatus: "ready",
+      });
+      mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+      mocks.canApproveAiReview.mockResolvedValue(true);
+      const result = await transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: { approvalNote, pipelineStage: "screening" },
+        operatorId: "odc-user",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      });
+      expect(result.kind).toBe("invalid");
+      expect(updatedWhere).not.toHaveBeenCalled();
+      expect(insertedValues).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])("requires the scoped ODC approval permission (%s)", async (allowed) => {
+    const { tx, insertedValues, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "ai_review",
+      resumeReviewStatus: "ready",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    mocks.canApproveAiReview.mockResolvedValue(allowed);
+    const authorize = vi.fn().mockResolvedValue(false);
+    const result = await transitionCandidateStage({
+      authorize,
+      candidateId: "candidate-a",
+      input: { approvalNote: "  已核实项目经验  ", pipelineStage: "screening" },
+      operatorId: "odc-user",
+      organizationId: "org-a",
+      provenance: { kind: "manual" },
+    });
+    expect(result).toEqual({ kind: allowed ? "ok" : "forbidden" });
+    expect(mocks.canApproveAiReview).toHaveBeenCalledWith(
+      { jobDescriptionId: "jd-a", organizationId: "org-a", userId: "odc-user" },
+      tx,
+    );
+    expect(updatedWhere).toHaveBeenCalledTimes(allowed ? 1 : 0);
+    expect(insertedValues).toHaveBeenCalledTimes(allowed ? 1 : 0);
+    if (allowed) {
+      expect(insertedValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          detail: expect.objectContaining({
+            fromStage: "ai_review",
+            reason: "已核实项目经验",
+            toStage: "screening",
+          }),
+          operatorId: "odc-user",
+        }),
+      );
+    }
+  });
+
+  it.each(["screening", "ai_interview", "human_interview", "offer"] as const)(
+    "prevents reactivation from bypassing pending approval into %s",
+    async (pipelineStage) => {
+      const { tx, updatedWhere } = createTransaction({
+        closedMeta: { previousStage: "ai_review" },
+        jobDescriptionId: "jd-a",
+        outcome: "archived",
+        pipelineStage: "closed",
+      });
+      mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+      const result = await transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: { pipelineStage, reactivationReason: "重新招聘" },
+        operatorId: "odc-user",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      });
+      expect(result.kind).toBe("invalid");
+      expect(updatedWhere).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects approval while the AI evaluation is processing", async () => {
+    const { tx, updatedWhere } = createTransaction({
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "in_pipeline",
+      pipelineStage: "ai_review",
+      resumeReviewStatus: "processing",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    mocks.canApproveAiReview.mockResolvedValue(true);
+    const result = await transitionCandidateStage({
+      authorize: vi.fn().mockResolvedValue(true),
+      candidateId: "candidate-a",
+      input: { approvalNote: "  已核实项目经验  ", pipelineStage: "screening" },
+      operatorId: "odc-user",
+      organizationId: "org-a",
+      provenance: { kind: "manual" },
+    });
+    expect(result.kind).toBe("invalid");
+    expect(updatedWhere).not.toHaveBeenCalled();
   });
 
   it("authorizes protected target stages before opening the transaction", async () => {
@@ -430,7 +547,7 @@ describe("transitionCandidateStage", () => {
       transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
-        input: { pipelineStage: "screening" },
+        input: { approvalNote: "  已核实项目经验  ", pipelineStage: "screening" },
         operatorId: "user-a",
         organizationId: "org-a",
         provenance: { kind: "manual" },

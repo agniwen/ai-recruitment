@@ -29,6 +29,7 @@ import { areDepartmentsVisible } from "@arc/ai-recruitment-copilot-backend/serve
 const hiringUnitListQuerySchema = z.object({
   page: z.string().optional(),
   pageSize: z.string().optional(),
+  resumeSourceId: z.string().trim().min(1).optional(),
   search: z.string().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.string().optional(),
@@ -48,7 +49,7 @@ export const hiringUnitsRouter = factory
       }
       const q = c.req.valid("query");
       const result = await queryPaginatedHiringUnits(
-        { organizationId: activeOrg.id, search: q.search },
+        { organizationId: activeOrg.id, resumeSourceId: q.resumeSourceId, search: q.search },
         {
           page: q.page,
           pageSize: q.pageSize,

@@ -311,6 +311,7 @@ export function parseDepartmentPagination(
 export async function queryPaginatedDepartments(
   filters: {
     organizationId: string;
+    resumeSourceId?: string;
     textFilters?: string;
     search?: string | null;
     actorUserId?: string | null;
@@ -321,10 +322,26 @@ export async function queryPaginatedDepartments(
   const { organizationId } = filters;
   const { page, pageSize, sortBy, sortOrder } = parseDepartmentPagination(pagination);
   const offset = (page - 1) * pageSize;
-  const scopeCondition = await resolveDepartmentHiringUnitScopeCondition({
-    actorUserId: filters.actorUserId,
-    organizationId,
-  });
+  const scopeCondition = and(
+    await resolveDepartmentHiringUnitScopeCondition({
+      actorUserId: filters.actorUserId,
+      organizationId,
+    }),
+    filters.resumeSourceId
+      ? inArray(
+          department.hiringUnitId,
+          db
+            .select({ id: hiringUnit.id })
+            .from(hiringUnit)
+            .where(
+              and(
+                eq(hiringUnit.organizationId, organizationId),
+                eq(hiringUnit.resumeSourceId, filters.resumeSourceId),
+              ),
+            ),
+        )
+      : undefined,
+  );
 
   const [records, total] = await Promise.all([
     listDepartmentRows({

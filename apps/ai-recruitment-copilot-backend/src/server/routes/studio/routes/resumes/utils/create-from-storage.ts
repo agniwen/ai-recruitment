@@ -83,6 +83,7 @@ export async function createResumeRecordFromStorage(
       jobDescriptionId: input.jobDescriptionId,
       notes: input.notes,
       organizationId: input.organizationId,
+      pipelineStage: "ai_review",
       recommendationText: input.recommendationText ?? null,
       recruitmentSource: input.recruitmentSource ?? null,
       recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,

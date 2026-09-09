@@ -93,6 +93,9 @@ export const studioInterviewHumanRouter = factory
       if (!candidate) {
         return c.json({ error: "候选人记录不存在。" }, 404);
       }
+      if (candidate.pipelineStage === "ai_review") {
+        return c.json({ error: "请先完成 AI 评价审核。" }, 400);
+      }
       if (candidate.pipelineStage === "closed") {
         return c.json({ error: "已结案的候选人请先重新激活。" }, 400);
       }

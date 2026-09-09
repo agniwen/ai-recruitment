@@ -2,6 +2,7 @@ import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-inte
 import { setup, transition } from "xstate";
 
 export type CandidatePipelineEventType =
+  | "APPROVE_AI_REVIEW"
   | "START_AI_INTERVIEW"
   | "SKIP_TO_HUMAN_INTERVIEW"
   | "ADVANCE_TO_HUMAN_INTERVIEW"
@@ -10,6 +11,7 @@ export type CandidatePipelineEventType =
   | "REACTIVATE";
 
 export type CandidatePipelineEvent =
+  | { type: "APPROVE_AI_REVIEW" }
   | { type: "START_AI_INTERVIEW" }
   | { type: "SKIP_TO_HUMAN_INTERVIEW" }
   | { type: "ADVANCE_TO_HUMAN_INTERVIEW" }
@@ -52,7 +54,7 @@ export const candidatePipelineMachine = setup({
     humanInterviewReadyForOffer: false,
   },
   id: "candidatePipeline",
-  initial: "screening",
+  initial: "ai_review",
   states: {
     ai_interview: {
       on: {
@@ -60,9 +62,14 @@ export const candidatePipelineMachine = setup({
         CLOSE: { target: "closed" },
       },
     },
+    ai_review: { on: { APPROVE_AI_REVIEW: { target: "screening" }, CLOSE: { target: "closed" } } },
     closed: {
       on: {
         REACTIVATE: [
+          {
+            guard: { params: { target: "ai_review" }, type: "reactivatesTo" },
+            target: "ai_review",
+          },
           {
             guard: { params: { target: "screening" }, type: "reactivatesTo" },
             target: "screening",
@@ -166,6 +173,9 @@ export function getCandidatePipelineEventForTargetStage({
   }
   if (from === "closed") {
     return { target: to, type: "REACTIVATE" };
+  }
+  if (from === "ai_review" && to === "screening") {
+    return { type: "APPROVE_AI_REVIEW" };
   }
   if (from === "screening" || from === "written_test") {
     if (to === "ai_interview") {

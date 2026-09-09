@@ -1,5 +1,7 @@
 "use client";
 
+import { AiReviewApprovalButton } from "./ai-review/ai-review-approval-button";
+
 import {
   IconArrowBackUp,
   IconArrowRight,
@@ -45,6 +47,8 @@ export interface PipelineStageActionBarProps {
   primaryAction?: ReactNode;
   aiInterviewDisabled?: boolean;
   canCreateHumanInterview?: boolean;
+  canApproveAiReview?: boolean;
+  aiReviewReady?: boolean;
   canCreateOffer?: boolean;
   /** When false, hide the 标记结案 button (needs candidateClose:create). */
   canCloseCandidate?: boolean;
@@ -67,7 +71,7 @@ export interface PipelineStageActionBarProps {
   aiRoundInterviewLink?: string;
   // 推进到指定阶段的回调（仅 stage 跳变，无元数据）。
   // Advance to a target stage (no metadata). May return a Promise so the bar can lock while pending.
-  onAdvance: (target: PipelineStage) => void | Promise<void>;
+  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
   // 查看当前阶段对应内容；不对应独立 tab 时由上层回到概览。
   // View content for the current stage; parent falls back to overview when no stage tab exists.
   onViewCurrentStage: () => void;
@@ -104,6 +108,8 @@ export function PipelineStageActionBar({
   primaryAction,
   aiInterviewDisabled = false,
   canCreateHumanInterview = true,
+  canApproveAiReview = false,
+  aiReviewReady = false,
   canCreateOffer = true,
   canCloseCandidate = true,
   hasJobDescription = true,
@@ -121,19 +127,21 @@ export function PipelineStageActionBar({
   const [isAdvancing, setIsAdvancing] = useState(false);
   const isBusy = isAdvancing || Boolean(aiRoundReset?.isResetting);
 
-  async function handleAdvance(target: PipelineStage) {
+  async function handleAdvance(target: PipelineStage, approvalNote?: string) {
     if (isBusy) {
       return;
     }
     setIsAdvancing(true);
     await withCleanup(
-      () => onAdvance(target),
+      () => (approvalNote ? onAdvance(target, approvalNote) : onAdvance(target)),
       () => setIsAdvancing(false),
     );
   }
 
   const actions = getStageActions({
     aiInterviewDisabled,
+    aiReviewReady,
+    canApproveAiReview,
     canCreateHumanInterview,
     canCreateOffer,
     hasJobDescription,
@@ -317,6 +325,7 @@ function AiRoundResetAction({
 }
 
 const DEFAULT_FLOW_STEPS: PipelineStage[] = [
+  "ai_review",
   "screening",
   "ai_interview",
   "human_interview",
@@ -325,6 +334,7 @@ const DEFAULT_FLOW_STEPS: PipelineStage[] = [
 ];
 
 const WRITTEN_TEST_FLOW_STEPS: PipelineStage[] = [
+  "ai_review",
   "screening",
   "written_test",
   "ai_interview",
@@ -424,6 +434,8 @@ function getStageActions(props: {
   aiInterviewDisabled: boolean;
   pipelineStage: PipelineStage;
   canCreateHumanInterview: boolean;
+  canApproveAiReview: boolean;
+  aiReviewReady: boolean;
   canCreateOffer: boolean;
   hasJobDescription: boolean;
   resumeEvaluationPassed: boolean;
@@ -431,13 +443,15 @@ function getStageActions(props: {
   humanInterviewDone?: boolean;
   isAdvancing: boolean;
   isBusy: boolean;
-  onAdvance: (target: PipelineStage) => void | Promise<void>;
+  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
   onRequestReactivate: () => void;
 }): { left: ReactNode[]; right: ReactNode[] } {
   const {
     aiInterviewDisabled,
     pipelineStage,
     canCreateHumanInterview,
+    canApproveAiReview,
+    aiReviewReady,
     canCreateOffer,
     hasJobDescription,
     resumeEvaluationPassed,
@@ -478,6 +492,27 @@ function getStageActions(props: {
     canApplyCandidatePipelineEvent(pipelineSnapshot, event);
 
   switch (pipelineStage) {
+    case "ai_review": {
+      buttons.push({
+        key: "approve-ai-review",
+        node: canApproveAiReview ? (
+          <AiReviewApprovalButton
+            key="approve-ai-review"
+            disabled={isBusy || !aiReviewReady || !hasJobDescription}
+            onConfirm={async (note) => {
+              await onAdvance("screening", note);
+            }}
+            label={aiReviewReady ? "审批通过，进入简历筛选" : "等待 AI 评价生成"}
+          />
+        ) : (
+          <span key="await-ai-review" className="text-sm text-muted-foreground">
+            等待有审批权限的 ODC 审核 AI 评价
+          </span>
+        ),
+        side: "right",
+      });
+      break;
+    }
     case "screening": {
       // 简历筛选阶段：可发起 AI 面试，也可跳过 AI 直接进入真人复面；Offer 必须在真人复面后。
       // Screening: start AI, or skip to human interview. Offer requires human interview first.
@@ -652,7 +687,7 @@ function HumanInterviewAdvanceButton({
   disabledReason: string | null;
   isAdvancing: boolean;
   isBusy: boolean;
-  onAdvance: (target: PipelineStage) => void | Promise<void>;
+  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
   variant?: ComponentProps<typeof Button>["variant"];
 }) {
   const targetStage: PipelineStage = "human_interview";
@@ -700,7 +735,7 @@ function OfferAdvanceButton({
   humanInterviewDone?: boolean;
   isAdvancing: boolean;
   isBusy: boolean;
-  onAdvance: (target: PipelineStage) => void | Promise<void>;
+  onAdvance: (target: PipelineStage, approvalNote?: string) => void | Promise<void>;
 }) {
   const targetStage: PipelineStage = "offer";
   const locked = isBusy || Boolean(disabledReason);

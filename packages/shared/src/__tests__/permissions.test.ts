@@ -308,6 +308,12 @@ describe("permission matrix cross-cut", () => {
     ["admin", "member", "delete", true],
     ["member", "member", "create", false],
     ["member", "member", "delete", false],
+    ["admin", "aiReview", "read", true],
+    ["owner", "aiReview", "read", true],
+    ["member", "aiReview", "read", false],
+    ["noAccess", "aiReview", "read", false],
+    ["admin", "page", "aiReview", true],
+    ["member", "page", "aiReview", false],
     // page browsing
     ["admin", "page", "dashboard", true],
     ["admin", "page", "odcAnalysis", true],

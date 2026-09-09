@@ -101,6 +101,7 @@ export function OdcManagementModal({
         throw new Error("未选择要管理的简历来源");
       }
       const json = {
+        canApproveAiReview: assignment.canApproveAiReview ?? false,
         jobSeries: assignment.jobSeries,
         serviceUnit: assignment.serviceUnit.trim() || null,
       };
@@ -168,6 +169,11 @@ export function OdcManagementModal({
         key: "serviceUnit",
         title: "服务单位",
       }),
+      customColumn<OdcManagedAssignment>({
+        cell: (record) => (record.canApproveAiReview ? "允许" : "不允许"),
+        key: "canApproveAiReview",
+        title: "AI 评价审批",
+      }),
       dateColumn<OdcManagedAssignment>({ key: "createdAt", title: "设置时间" }),
       actionsColumn<OdcManagedAssignment>({
         inline: [
@@ -176,6 +182,7 @@ export function OdcManagementModal({
             onClick: (record) => {
               setEditing(record);
               setDraft({
+                canApproveAiReview: record.canApproveAiReview ?? false,
                 jobSeries: record.jobSeries,
                 memberId: record.memberId,
                 serviceUnit: record.serviceUnit ?? "",

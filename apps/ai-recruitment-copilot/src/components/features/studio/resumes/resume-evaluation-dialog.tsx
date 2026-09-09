@@ -64,7 +64,7 @@ export function shouldShowResumeEvaluationActions(input: {
   if (input.layoutMode !== "page" || !input.hasJobDescription) {
     return false;
   }
-  if (input.pipelineStage === "closed") {
+  if (input.pipelineStage === "closed" || input.pipelineStage === "ai_review") {
     return false;
   }
   return input.status === null || input.status === "fail";

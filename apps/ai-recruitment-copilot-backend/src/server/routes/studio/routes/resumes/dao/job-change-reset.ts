@@ -16,7 +16,7 @@ export const JOB_DESCRIPTION_CHANGE_PIPELINE_RESET = {
   closedMeta: null,
   closedReason: null,
   outcome: "in_pipeline" as const,
-  pipelineStage: "screening" as const,
+  pipelineStage: "ai_review" as const,
 };
 
 export async function resetCandidateWorkflowForJobDescriptionChange(

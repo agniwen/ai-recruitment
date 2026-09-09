@@ -153,6 +153,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
           jobDescriptionId: input.jdMode === "bind" ? input.jobDescriptionId : null,
           notes: null,
           organizationId: input.organizationId,
+          pipelineStage: "ai_review" as const,
           recruitmentSource: input.recruitmentSource ?? null,
           recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
           resumeContentHash: file.contentHash,

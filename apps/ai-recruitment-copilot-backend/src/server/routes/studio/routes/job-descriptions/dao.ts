@@ -46,6 +46,7 @@ import {
   jobDescription,
   jobDescriptionHumanInterviewer,
   jobDescriptionInterviewer,
+  resumeSource,
   studioInterview,
   studioInterviewSchedule,
 } from "@arc/db-schema/schema";
@@ -602,7 +603,10 @@ export function parseJobDescriptionPagination(
 
 export async function queryPaginatedJobDescriptions(
   organizationId: string,
-  filters?: JobDescriptionListFilterInput & { actorUserId?: string | null },
+  filters?: JobDescriptionListFilterInput & {
+    actorUserId?: string | null;
+    resumeSourceId?: string;
+  },
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedJobDescriptionResult> {
   const {
@@ -622,10 +626,13 @@ export async function queryPaginatedJobDescriptions(
   const { page, pageSize, sortBy, sortOrder } = parseJobDescriptionPagination(pagination);
   const offset = (page - 1) * pageSize;
   const jdIdsForInterviewers = await resolveJdIdsForInterviewers(organizationId, interviewerIds);
-  const scopeCondition = await resolveJobDescriptionHiringUnitScopeCondition({
-    actorUserId: filters?.actorUserId,
-    organizationId,
-  });
+  const scopeCondition = and(
+    await resolveJobDescriptionHiringUnitScopeCondition({
+      actorUserId: filters?.actorUserId,
+      organizationId,
+    }),
+    filters?.resumeSourceId ? eq(jobDescription.resumeSourceId, filters.resumeSourceId) : undefined,
+  );
 
   const [records, total] = await Promise.all([
     listJobDescriptionRows({
@@ -839,6 +846,7 @@ export async function loadJobDescriptionById(
       departmentHiringUnitId: department.hiringUnitId,
       departmentHiringUnitName: departmentHiringUnit.name,
       departmentId: jobDescription.departmentId,
+      departmentName: department.name,
       description: jobDescription.description,
       expectedOnboardDate: jobDescription.expectedOnboardDate,
       feishuChatBoundAt: jobDescription.feishuChatBoundAt,
@@ -868,6 +876,7 @@ export async function loadJobDescriptionById(
       resumeScreeningPolicyHash: jobDescription.resumeScreeningPolicyHash,
       resumeScreeningPolicyVersion: jobDescription.resumeScreeningPolicyVersion,
       resumeSourceId: jobDescription.resumeSourceId,
+      resumeSourceName: resumeSource.name,
       salaryCurrency: jobDescription.salaryCurrency,
       salaryMaxAmount: jobDescription.salaryMaxAmount,
       salaryMinAmount: jobDescription.salaryMinAmount,
@@ -882,6 +891,7 @@ export async function loadJobDescriptionById(
     })
     .from(jobDescription)
     .leftJoin(department, eq(jobDescription.departmentId, department.id))
+    .leftJoin(resumeSource, eq(jobDescription.resumeSourceId, resumeSource.id))
     .leftJoin(jobHiringUnit, eq(jobDescription.hiringUnitId, jobHiringUnit.id))
     .leftJoin(departmentHiringUnit, eq(department.hiringUnitId, departmentHiringUnit.id))
     .where(where)
@@ -1078,6 +1088,8 @@ export function loadJobDescriptionMetrics(
 
 export function serializeJobDescription(
   row: Omit<typeof jobDescription.$inferSelect, "createdByRole"> & {
+    departmentName?: string | null;
+    resumeSourceName?: string | null;
     departmentHiringUnitId?: string | null;
     departmentHiringUnitName?: string | null;
     hiringUnitId?: string | null;
@@ -1097,6 +1109,7 @@ export function serializeJobDescription(
     createdBy: row.createdBy,
     creationSource: row.creationSource,
     departmentId: row.departmentId,
+    departmentName: row.departmentName ?? null,
     description: row.description,
     expectedOnboardDate: row.expectedOnboardDate,
     gapCount: row.gapCount,
@@ -1124,6 +1137,7 @@ export function serializeJobDescription(
     resumeScreeningPolicyHash: row.resumeScreeningPolicyHash,
     resumeScreeningPolicyVersion: row.resumeScreeningPolicyVersion,
     resumeSourceId: row.resumeSourceId,
+    resumeSourceName: row.resumeSourceName ?? null,
     salaryCurrency: row.salaryCurrency,
     salaryMaxAmount: row.salaryMaxAmount,
     salaryMinAmount: row.salaryMinAmount,

@@ -225,6 +225,7 @@ export interface ResumeAvailableTimeSlot {
  * (may be empty for legacy rows).
  */
 export interface ResumeLibraryDetail extends ResumeLibraryListRecord {
+  canApproveAiReview?: boolean;
   /**
    * 最近一次评估通过时填写的可预约时间段；仅详情返回。
    * 仅当当前 `resumeEvaluationStatus === "pass"` 时有值；换岗重置后、
@@ -414,6 +415,9 @@ export function describeResumeProgress(record: {
   }
 
   switch (pipelineStage) {
+    case "ai_review": {
+      return { label: "AI 评价审核 · 待审批", tone: "warning" };
+    }
     case "screening": {
       return { label: "简历筛选 · 待处理", tone: "outline" };
     }

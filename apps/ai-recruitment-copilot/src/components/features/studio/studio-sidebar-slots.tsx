@@ -69,6 +69,13 @@ const navGroups: NavGroup[] = [
         title: "简历池",
       },
       {
+        action: "aiReview",
+        icon: ShieldCheckIcon,
+        path: "/studio/ai-review",
+        resource: "page",
+        title: "AI 分析审批",
+      },
+      {
         action: "interviews",
         icon: BotIcon,
         path: "/studio/interviews",

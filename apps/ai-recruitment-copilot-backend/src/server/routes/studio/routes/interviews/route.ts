@@ -52,6 +52,7 @@ const dedupCheckInputSchema = z.object({
 // invariant: closed ⇔ a terminal outcome; everything else stays in_pipeline.
 const transitionInputSchema = z
   .object({
+    approvalNote: z.string().trim().min(1).max(2000).optional(),
     // 结案元数据；只在 pipelineStage='closed' 时使用，partial 写入（merge 进现有）。
     // previousStage 不接受用户输入——服务端自动写当前 stage。
     closedMeta: closedMetaSchema.omit({ previousStage: true }).partial().optional(),

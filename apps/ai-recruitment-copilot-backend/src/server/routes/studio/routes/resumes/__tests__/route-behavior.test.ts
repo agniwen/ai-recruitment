@@ -133,7 +133,7 @@ vi.mock(
       closedMeta: null,
       closedReason: null,
       outcome: "in_pipeline",
-      pipelineStage: "screening",
+      pipelineStage: "ai_review",
     },
     applyJobDescriptionChangeEffects: mocks.applyJobDescriptionChangeEffects,
   }),
@@ -843,7 +843,7 @@ describe("resumeLibraryRouter behavior", () => {
         closedMeta: null,
         closedReason: null,
         outcome: "in_pipeline",
-        pipelineStage: "screening",
+        pipelineStage: "ai_review",
       }),
     );
     expect(mocks.enqueueResumeReassessmentForRecord).toHaveBeenCalledWith({
@@ -873,7 +873,7 @@ describe("resumeLibraryRouter behavior", () => {
     });
   });
 
-  it("restarts a later-stage candidate at screening when rebinding to an AI-disabled job", async () => {
+  it("restarts a later-stage candidate at AI review when rebinding to an AI-disabled job", async () => {
     mocks.loadResumeDetail.mockResolvedValue({
       ...EXISTING_RECORD,
       pipelineStage: "human_interview",
@@ -904,7 +904,7 @@ describe("resumeLibraryRouter behavior", () => {
     expect(mocks.updatePatches).toContainEqual(
       expect.objectContaining({
         outcome: "in_pipeline",
-        pipelineStage: "screening",
+        pipelineStage: "ai_review",
       }),
     );
     expect(mocks.applyJobDescriptionChangeEffects).toHaveBeenCalled();
@@ -976,7 +976,7 @@ describe("resumeLibraryRouter behavior", () => {
     expect(mocks.updatePatches).toContainEqual(
       expect.objectContaining({
         outcome: "in_pipeline",
-        pipelineStage: "screening",
+        pipelineStage: "ai_review",
       }),
     );
   });

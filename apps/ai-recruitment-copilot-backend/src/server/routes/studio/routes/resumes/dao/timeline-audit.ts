@@ -107,6 +107,11 @@ export function auditDescription(detail: Record<string, unknown>, action: string
     if (automaticClosure) {
       return automaticClosure.reason;
     }
+    if (detail.fromStage === "ai_review" && detail.toStage === "screening") {
+      return typeof detail.reason === "string" && detail.reason.trim()
+        ? `AI 评价审核通过，进入简历筛选。审批说明：${detail.reason}`
+        : "AI 评价审核通过，进入简历筛选。";
+    }
     const from = stageLabel(detail.fromStage);
     const to = stageLabel(detail.toStage);
     const outcome = outcomeLabel(detail.toOutcome);

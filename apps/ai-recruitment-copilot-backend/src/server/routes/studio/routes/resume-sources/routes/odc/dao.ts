@@ -29,6 +29,7 @@ export async function createResumeSourceOdcAssignments({
         .insert(resumeSourceOdcMember)
         .values(
           assignments.map((assignment) => ({
+            canApproveAiReview: assignment.canApproveAiReview ?? false,
             jobSeries: assignment.jobSeries ?? null,
             memberId: assignment.memberId,
             organizationId,
@@ -74,6 +75,7 @@ export async function queryPaginatedResumeSourceOdcAssignments({
   const [rows, totalRows, assignedRows] = await Promise.all([
     db
       .select({
+        canApproveAiReview: resumeSourceOdcMember.canApproveAiReview,
         createdAt: resumeSourceOdcMember.createdAt,
         email: user.email,
         image: user.image,
@@ -136,6 +138,7 @@ export function replaceResumeSourceOdcMembers({
     if (assignments.length > 0) {
       await tx.insert(resumeSourceOdcMember).values(
         assignments.map((assignment) => ({
+          canApproveAiReview: assignment.canApproveAiReview ?? false,
           jobSeries: assignment.jobSeries ?? null,
           memberId: assignment.memberId,
           organizationId,
@@ -163,6 +166,7 @@ export function updateResumeSourceOdcAssignment({
     const rows = await tx
       .update(resumeSourceOdcMember)
       .set({
+        canApproveAiReview: input.canApproveAiReview,
         jobSeries: input.jobSeries ?? null,
         serviceUnit: input.serviceUnit?.trim() || null,
       })

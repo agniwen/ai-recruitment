@@ -36,6 +36,7 @@ export const odcJobSeriesValues = ["直属", "派驻"] as const;
 export type OdcJobSeries = (typeof odcJobSeriesValues)[number];
 
 export interface OdcAssignmentSummary extends OdcMemberSummary {
+  canApproveAiReview?: boolean;
   jobSeries: OdcJobSeries | null;
   serviceUnit: string | null;
 }
@@ -76,6 +77,7 @@ export interface HiringUnitTreeResult {
 }
 
 const odcAssignmentItemSchema = z.object({
+  canApproveAiReview: z.boolean().optional(),
   jobSeries: z.enum(odcJobSeriesValues).nullable().optional(),
   memberId: z.string().trim().min(1),
   serviceUnit: z.string().trim().max(120, "服务单位不能超过 120 个字符").nullable().optional(),

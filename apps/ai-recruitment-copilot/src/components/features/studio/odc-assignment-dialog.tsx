@@ -52,6 +52,7 @@ export function OdcAssignmentDialog({
     if (open) {
       setAssignments(
         target?.odcMembers.map((member) => ({
+          canApproveAiReview: member.canApproveAiReview ?? false,
           jobSeries: member.jobSeries,
           memberId: member.memberId,
           serviceUnit: member.serviceUnit ?? "",

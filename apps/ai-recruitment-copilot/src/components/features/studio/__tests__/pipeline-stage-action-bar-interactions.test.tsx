@@ -14,11 +14,23 @@ vi.mock("@/components/features/studio/interviews/interview-link-actions", () => 
   copyInterviewLink: copyInterviewLinkMock,
 }));
 
+vi.mock("@/components/ui/modal", () => ({
+  Modal: ({ open, children, footer }: { open: boolean; children: ReactNode; footer: ReactNode }) =>
+    open ? (
+      <div>
+        {children}
+        {footer}
+      </div>
+    ) : null,
+}));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mountedRoots: { host: HTMLDivElement; root: ReturnType<typeof createRoot> }[] = [];
 
 function renderActionBar({
+  canApproveAiReview,
+  aiReviewReady,
   aiRoundInterviewLink,
   aiInterviewDisabled,
   evaluationActions,
@@ -29,6 +41,8 @@ function renderActionBar({
   primaryAction,
   resumeEvaluationPassed,
 }: {
+  canApproveAiReview?: boolean;
+  aiReviewReady?: boolean;
   aiRoundInterviewLink?: string;
   aiInterviewDisabled?: boolean;
   evaluationActions?: ReactNode;
@@ -47,6 +61,8 @@ function renderActionBar({
   act(() => {
     root.render(
       <PipelineStageActionBar
+        canApproveAiReview={canApproveAiReview}
+        aiReviewReady={aiReviewReady}
         aiRoundInterviewLink={aiRoundInterviewLink}
         aiInterviewDisabled={aiInterviewDisabled}
         evaluationActions={evaluationActions}
@@ -85,6 +101,50 @@ afterEach(() => {
 });
 
 describe("PipelineStageActionBar interactions", () => {
+  it("only offers AI approval to authorized ODC users", async () => {
+    const unauthorized = renderActionBar({ aiReviewReady: true, pipelineStage: "ai_review" });
+    expect(unauthorized.textContent).toContain("等待有审批权限的 ODC");
+    expect(unauthorized.textContent).not.toContain("审批通过，进入简历筛选");
+    const onAdvance = vi.fn();
+    const authorized = renderActionBar({
+      aiReviewReady: true,
+      canApproveAiReview: true,
+      onAdvance,
+      pipelineStage: "ai_review",
+    });
+    await act(async () => {
+      getButton(authorized, "审批通过，进入简历筛选").click();
+      await Promise.resolve();
+    });
+    expect(onAdvance).not.toHaveBeenCalled();
+    const confirm = getButton(authorized, "确认审批通过");
+    expect(confirm.disabled).toBe(true);
+    const textarea = authorized.querySelector("textarea");
+    if (!textarea) {
+      throw new Error("Missing approval explanation");
+    }
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+        textarea,
+        "已核实项目经验",
+      );
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      confirm.click();
+      await Promise.resolve();
+    });
+    expect(onAdvance).toHaveBeenCalledWith("screening", "已核实项目经验");
+  });
+  it("disables approval until the AI review is ready", () => {
+    const host = renderActionBar({
+      aiReviewReady: false,
+      canApproveAiReview: true,
+      pipelineStage: "ai_review",
+    });
+    expect(getButton(host, "等待 AI 评价生成").disabled).toBe(true);
+  });
+
   it("copies the pending AI interview link from the stage action bar", () => {
     const host = renderActionBar({ aiRoundInterviewLink: "https://example.com/interview/1" });
 

@@ -211,6 +211,7 @@ export interface JobDescriptionRecord {
   controlCategory: string | null;
   creationSource: JobDescriptionCreationSource;
   departmentId: string;
+  departmentName?: string | null;
   /**
    * 编制组织（用人组织）ID / 名称。
    * - Google 同步：直接写入表格「编制组织」对应的用人组织
@@ -250,6 +251,7 @@ export interface JobDescriptionRecord {
   salaryRangeRaw: string | null;
   serviceUnit: string | null;
   resumeSourceId?: string | null;
+  resumeSourceName?: string | null;
   sourceSheet: string | null;
   workEndTime: string | null;
   workLocation: string | null;

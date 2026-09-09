@@ -1,6 +1,7 @@
 import type { OdcAssignmentItem, OdcJobSeries } from "@arc/shared/hiring-units";
 
 export interface OdcAssignmentDraft {
+  canApproveAiReview?: boolean;
   jobSeries: OdcJobSeries | null;
   memberId: string;
   serviceUnit: string;

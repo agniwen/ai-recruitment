@@ -53,7 +53,8 @@ export type ResumeEvaluationMutationResult =
   | { status: "updated"; currentStatus: ResumeEvaluationStatus | null }
   | { status: "unchanged"; currentStatus: ResumeEvaluationStatus | null }
   | { status: "already_passed"; currentStatus: "pass" }
-  | { status: "not_found" };
+  | { status: "not_found" }
+  | { status: "awaiting_ai_review" };
 
 async function loadJobDescriptionNames(
   ids: (string | null)[],
@@ -158,7 +159,10 @@ export async function submitResumeEvaluation(input: {
   const now = new Date();
   return await db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ resumeEvaluationStatus: studioInterview.resumeEvaluationStatus })
+      .select({
+        pipelineStage: studioInterview.pipelineStage,
+        resumeEvaluationStatus: studioInterview.resumeEvaluationStatus,
+      })
       .from(studioInterview)
       .where(
         and(
@@ -171,6 +175,9 @@ export async function submitResumeEvaluation(input: {
 
     if (!existing) {
       return { status: "not_found" };
+    }
+    if (existing.pipelineStage === "ai_review") {
+      return { status: "awaiting_ai_review" };
     }
     if (existing.resumeEvaluationStatus === "pass") {
       return { currentStatus: "pass", status: "already_passed" };

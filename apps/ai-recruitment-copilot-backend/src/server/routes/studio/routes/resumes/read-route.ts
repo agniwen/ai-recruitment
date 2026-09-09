@@ -1,3 +1,4 @@
+import { canApproveCandidateAiReview } from "../interviews/dao/ai-review-approval";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
@@ -279,7 +280,19 @@ export const resumeLibraryReadRouter = factory
     if (!record) {
       return c.json({ error: "记录不存在。" }, 404);
     }
-    return c.json(record, 200);
+    return c.json(
+      {
+        ...record,
+        canApproveAiReview:
+          record.pipelineStage === "ai_review" &&
+          (await canApproveCandidateAiReview({
+            jobDescriptionId: record.jobDescriptionId,
+            organizationId: activeOrg.id,
+            userId: c.var.user?.id ?? null,
+          })),
+      },
+      200,
+    );
   })
   .get("/:id/duplicate-matches", requirePermission("resumeLibrary", "read"), async (c) => {
     const { activeOrg, user } = c.var;
@@ -532,6 +545,9 @@ export const resumeLibraryReadRouter = factory
         reason: input.reason,
         status: input.status,
       });
+      if (result.status === "awaiting_ai_review") {
+        return c.json({ error: "请先完成 AI 评价审核。" }, 409);
+      }
       if (result.status === "already_passed") {
         return c.json({ error: "该简历已评估通过，不能继续评估。" }, 409);
       }

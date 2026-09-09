@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createResumeSourceOdcAssignments } from "./dao";
 
-const mocks = vi.hoisted(() => ({ returning: vi.fn(), rolledBack: vi.fn(), update: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  returning: vi.fn(),
+  rolledBack: vi.fn(),
+  update: vi.fn(),
+  values: vi.fn(),
+}));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
     transaction: async (runTransaction: (tx: unknown) => Promise<unknown>) => {
       try {
         return await runTransaction({
           insert: () => ({
-            values: () => ({ onConflictDoNothing: () => ({ returning: mocks.returning }) }),
+            values: mocks.values,
           }),
           update: mocks.update,
         });
@@ -21,6 +26,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 }));
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.values.mockReturnValue({ onConflictDoNothing: () => ({ returning: mocks.returning }) });
   mocks.update.mockReturnValue({ set: () => ({ where: () => Promise.resolve() }) });
 });
 describe("batch ODC transaction boundary", () => {
@@ -29,6 +35,17 @@ describe("batch ODC transaction boundary", () => {
     organizationId: "org-a",
     resumeSourceId: "source-a",
   };
+  it("persists approval permission per ODC, defaulting to denied", async () => {
+    mocks.returning.mockResolvedValue([{ memberId: "member-a" }, { memberId: "member-b" }]);
+    await createResumeSourceOdcAssignments({
+      ...input,
+      assignments: [{ canApproveAiReview: true, memberId: "member-a" }, { memberId: "member-b" }],
+    });
+    expect(mocks.values).toHaveBeenCalledWith([
+      expect.objectContaining({ canApproveAiReview: true, memberId: "member-a" }),
+      expect.objectContaining({ canApproveAiReview: false, memberId: "member-b" }),
+    ]);
+  });
   it("commits only when every assignment was inserted", async () => {
     mocks.returning.mockResolvedValue([{ memberId: "member-a" }, { memberId: "member-b" }]);
     await expect(createResumeSourceOdcAssignments(input)).resolves.toBe(true);

@@ -544,10 +544,10 @@ export const studioInterview = pgTable(
     // outcome != 'in_pipeline' ⇔ pipelineStage = 'closed'（DB CHECK 强制）。
     // Verdict axis; CHECK constraint pairs non-'in_pipeline' with stage='closed'.
     outcome: text("outcome").$type<CandidateOutcome>().notNull().default("in_pipeline"),
-    // 新模型：候选人所在 pipeline 阶段（默认 screening）。
+    // 新模型：候选人所在 pipeline 阶段（默认 ai_review）。
     // default 让 prod 旧 INSERT 路径不传值时也能写入。
     // Stage axis; default lets pre-migration INSERTs succeed.
-    pipelineStage: text("pipeline_stage").$type<PipelineStage>().notNull().default("screening"),
+    pipelineStage: text("pipeline_stage").$type<PipelineStage>().notNull().default("ai_review"),
     recommendationText: text("recommendation_text"),
     recruitmentSource: text("recruitment_source").$type<ResumeRecruitmentSource>(),
     recruitmentSourceDetail: text("recruitment_source_detail"),
@@ -720,6 +720,7 @@ export const resumeSource = pgTable(
 export const resumeSourceOdcMember = pgTable(
   "resume_source_odc_member",
   {
+    canApproveAiReview: boolean("can_approve_ai_review").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     jobSeries: text("job_series").$type<"直属" | "派驻">(),
     memberId: text("member_id")
