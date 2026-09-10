@@ -1,4 +1,5 @@
 /* oxlint-disable max-lines -- resume route keeps its collection and item mutations in one route-owned module. */
+import { notifyAiReviewPending } from "./utils/ai-review-notification";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { resumeLibraryReadRouter } from "./read-route";
@@ -436,6 +437,9 @@ export const resumeLibraryRouter = factory
         userRole: c.var.member?.role ?? null,
       });
 
+      if (resumeReview) {
+        await notifyAiReviewPending({ candidateId: recordId, organizationId: activeOrg.id });
+      }
       await replaceDuplicateMatchesForSource({
         matches: dedupMatches,
         organizationId: activeOrg.id,

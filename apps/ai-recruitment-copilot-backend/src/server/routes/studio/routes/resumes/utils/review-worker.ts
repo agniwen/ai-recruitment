@@ -1,3 +1,4 @@
+import { notifyAiReviewPending } from "./ai-review-notification";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { resumePoolItem, studioInterview } from "@arc/db-schema/schema";
@@ -139,6 +140,12 @@ const lifecycleDeps: ResumeAssessmentLifecycleDeps = {
       })
       .where(guardedRecordWhere(input))
       .returning({ id: studioInterview.id });
+    if (updated.length > 0) {
+      await notifyAiReviewPending({
+        candidateId: input.resumeRecordId,
+        organizationId: input.organizationId,
+      });
+    }
     return updated.length > 0;
   },
 };

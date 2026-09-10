@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   findSemanticResumeDuplicates: vi.fn(),
   flattenPresetQuestionsFromContextSnapshot: vi.fn(),
   forceResumeReparse: vi.fn(),
+  generateResumeReviewBestEffort: vi.fn(),
   insertedValues: [] as Record<string, unknown>[],
   invalidateStudioInterviewCaches: vi.fn(),
   jobDescriptionIdsExist: vi.fn(),
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   loadResumeDetail: vi.fn(),
   loadResumeDetailForAuthenticatedReviewer: vi.fn(),
   loadResumeLibraryMetrics: vi.fn(),
+  notifyAiReviewPending: vi.fn(),
   permissionChecks: [] as [string, string][],
   queryPaginatedResumeRecords: vi.fn(),
   recordCandidateActivityInTransaction: vi.fn(),
@@ -44,6 +46,9 @@ const mocks = vi.hoisted(() => ({
   updateResumeEvaluationStatusInTransaction: vi.fn(),
 }));
 
+vi.mock("../utils/ai-review-notification", () => ({
+  notifyAiReviewPending: mocks.notifyAiReviewPending,
+}));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
     delete: () => ({
@@ -215,7 +220,7 @@ vi.mock(
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/review-generation",
   () => ({
-    generateResumeReviewBestEffort: vi.fn(),
+    generateResumeReviewBestEffort: mocks.generateResumeReviewBestEffort,
     generateResumeScreeningBestEffort: vi.fn(),
   }),
 );
@@ -521,6 +526,36 @@ describe("resumeLibraryRouter behavior", () => {
     expect(response.status).toBe(403);
     expect(mocks.forceResumeReparse).not.toHaveBeenCalled();
   });
+
+  it.each([true, false])(
+    "notifies after synchronous scoring only when an assessment was generated: %s",
+    async (scored) => {
+      mocks.resolveResumeUploadStorage.mockResolvedValue({
+        cachedResumeProfile: { name: "候选人" },
+      });
+      mocks.generateResumeReviewBestEffort.mockResolvedValue(
+        scored ? { screeningResult: {}, structuredReview: { overall: { baseScore: 85 } } } : null,
+      );
+      mocks.createResumeRecordFromStorage.mockResolvedValue(RECORD_ID);
+      mocks.loadResumeDetail.mockResolvedValue({ id: RECORD_ID });
+      const formData = new FormData();
+      formData.set("candidateName", "候选人");
+      formData.set("jobDescriptionId", "jd-new");
+      const response = await makeApp().request("/resumes", { body: formData, method: "POST" });
+      expect(response.status).toBe(201);
+      if (scored) {
+        expect(mocks.notifyAiReviewPending).toHaveBeenCalledWith({
+          candidateId: RECORD_ID,
+          organizationId: ORGANIZATION_ID,
+        });
+        expect(mocks.createResumeRecordFromStorage.mock.invocationCallOrder[0]).toBeLessThan(
+          mocks.notifyAiReviewPending.mock.invocationCallOrder[0] ?? 0,
+        );
+      } else {
+        expect(mocks.notifyAiReviewPending).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it("persists duplicate matches after creating a resume-library record", async () => {
     const matches = [{ id: "duplicate-1" }];

@@ -4,7 +4,9 @@ const mocks = vi.hoisted(() => ({
   generateResumeReviewBestEffort: vi.fn(),
   listAllJobDescriptions: vi.fn(),
   matchJobDescriptionForResume: vi.fn(),
+  notifyAiReviewPending: vi.fn(),
   record: null as null | Record<string, unknown>,
+  superseded: false,
   updates: [] as Record<string, unknown>[],
 }));
 
@@ -24,12 +26,20 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
           mocks.record.jobDescriptionId = patch.jobDescriptionId;
         }
         return {
-          where: () => ({ returning: () => Promise.resolve([{ id: "resume-1" }]) }),
+          where: () => ({
+            returning: () =>
+              Promise.resolve(
+                mocks.superseded && patch.resumeReviewStatus === "ready"
+                  ? []
+                  : [{ id: "resume-1" }],
+              ),
+          }),
         };
       },
     }),
   },
 }));
+vi.mock("./ai-review-notification", () => ({ notifyAiReviewPending: mocks.notifyAiReviewPending }));
 vi.mock("./review-generation", () => ({
   generateResumeReviewBestEffort: mocks.generateResumeReviewBestEffort,
 }));
@@ -69,6 +79,8 @@ function assessmentRecord(overrides: Record<string, unknown>) {
 describe("processResumeReviewGenerationJob", () => {
   beforeEach(() => {
     mocks.record = null;
+    mocks.superseded = false;
+    mocks.notifyAiReviewPending.mockReset();
     mocks.updates.length = 0;
     mocks.generateResumeReviewBestEffort.mockReset();
     mocks.listAllJobDescriptions.mockReset();
@@ -82,6 +94,7 @@ describe("processResumeReviewGenerationJob", () => {
 
     await processResumeReviewGenerationJob(JOB);
 
+    expect(mocks.notifyAiReviewPending).not.toHaveBeenCalled();
     expect(mocks.generateResumeReviewBestEffort).not.toHaveBeenCalled();
     expect(mocks.updates).toHaveLength(1);
     expect(mocks.updates[0]).toMatchObject({
@@ -90,6 +103,18 @@ describe("processResumeReviewGenerationJob", () => {
       resumeScreeningError: null,
       resumeScreeningStatus: "idle",
     });
+  });
+
+  it("does not notify when another scoring run supersedes this result", async () => {
+    mocks.record = assessmentRecord({ pipelineStage: "ai_review" });
+    mocks.superseded = true;
+    mocks.generateResumeReviewBestEffort.mockResolvedValue({
+      review: "AI 分析",
+      screeningResult: {},
+      structuredReview: {},
+    });
+    expect(await processResumeReviewGenerationJob(JOB)).toMatchObject({ status: "skipped" });
+    expect(mocks.notifyAiReviewPending).not.toHaveBeenCalled();
   });
 
   it("moves a new review through processing to ready", async () => {
@@ -103,6 +128,10 @@ describe("processResumeReviewGenerationJob", () => {
     await processResumeReviewGenerationJob(JOB);
 
     expect(mocks.updates).toHaveLength(2);
+    expect(mocks.notifyAiReviewPending).toHaveBeenCalledWith({
+      candidateId: "resume-1",
+      organizationId: "org-1",
+    });
     expect(mocks.updates[0]).toMatchObject({
       resumeReviewStatus: "processing",
       resumeScreeningStatus: "processing",
@@ -124,6 +153,7 @@ describe("processResumeReviewGenerationJob", () => {
     await expect(processResumeReviewGenerationJob(JOB)).rejects.toThrow("model unavailable");
 
     expect(mocks.updates).toHaveLength(2);
+    expect(mocks.notifyAiReviewPending).not.toHaveBeenCalled();
     expect(mocks.updates[1]).toMatchObject({
       resumeReviewError: "model unavailable",
       resumeReviewStatus: "failed",
@@ -152,6 +182,10 @@ describe("processResumeReviewGenerationJob", () => {
 
     expect(mocks.generateResumeReviewBestEffort).toHaveBeenCalled();
     expect(mocks.updates).toHaveLength(2);
+    expect(mocks.notifyAiReviewPending).toHaveBeenCalledWith({
+      candidateId: "resume-1",
+      organizationId: "org-1",
+    });
     expect(mocks.updates[0]).toMatchObject({
       resumeReviewStatus: "processing",
       resumeScreeningStatus: "processing",
@@ -191,6 +225,7 @@ describe("processResumeReviewGenerationJob", () => {
       }),
     );
     expect(mocks.updates).toEqual([expect.objectContaining({ notes: "人才库 AI 评价" })]);
+    expect(mocks.notifyAiReviewPending).not.toHaveBeenCalled();
   });
 
   it("matches an automatic JD in the review worker after parse readiness", async () => {
