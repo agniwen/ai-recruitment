@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   flattenPresetQuestionsFromContextSnapshot: vi.fn(),
   forceResumeReparse: vi.fn(),
   generateResumeReviewBestEffort: vi.fn(),
+  generateResumeScreeningBestEffort: vi.fn(),
   insertedValues: [] as Record<string, unknown>[],
   invalidateStudioInterviewCaches: vi.fn(),
   jobDescriptionIdsExist: vi.fn(),
@@ -221,7 +222,7 @@ vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/review-generation",
   () => ({
     generateResumeReviewBestEffort: mocks.generateResumeReviewBestEffort,
-    generateResumeScreeningBestEffort: vi.fn(),
+    generateResumeScreeningBestEffort: mocks.generateResumeScreeningBestEffort,
   }),
 );
 vi.mock(
@@ -525,6 +526,53 @@ describe("resumeLibraryRouter behavior", () => {
 
     expect(response.status).toBe(403);
     expect(mocks.forceResumeReparse).not.toHaveBeenCalled();
+  });
+
+  it("saves version 5 without running or marking a rule check as failed", async () => {
+    const review = {
+      detailedOverall: { judgment: "符合岗位", matchingEvidence: "项目证据", risks: "职责待确认" },
+      dimensions: Object.fromEntries(
+        [
+          "skillMatch",
+          "experienceRelevance",
+          "projectMatch",
+          "educationBackground",
+          "potential",
+          "stability",
+        ].map((key) => [key, { basis: "job", rationale: "项目证据", score: 80 }]),
+      ),
+      levelRecommendation: null,
+      nextStep: {
+        action: "interview",
+        disclaimer: "以上为初步结论",
+        interviewFocus: [],
+        rationale: "直接经验",
+      },
+      overall: { baseScore: 80, conclusion: "符合岗位", scoreRationale: "六维加权" },
+      schemaVersion: 5,
+      teamPositioning: null,
+      version: 5,
+    };
+    mocks.resolveResumeUploadStorage.mockResolvedValue({ cachedResumeProfile: { name: "候选人" } });
+    mocks.createResumeRecordFromStorage.mockResolvedValue(RECORD_ID);
+    mocks.loadResumeDetail.mockResolvedValue({ id: RECORD_ID });
+    const formData = new FormData();
+    formData.set("candidateName", "候选人");
+    formData.set("jobDescriptionId", "jd-new");
+    formData.set("resumeReview", JSON.stringify(review));
+    const response = await makeApp().request("/resumes", { body: formData, method: "POST" });
+    expect(response.status).toBe(201);
+    expect(mocks.generateResumeScreeningBestEffort).not.toHaveBeenCalled();
+    expect(mocks.generateResumeReviewBestEffort).not.toHaveBeenCalled();
+    expect(mocks.createResumeRecordFromStorage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeReview: review,
+        resumeReviewStatus: "ready",
+        resumeScreeningError: null,
+        resumeScreeningResult: null,
+        resumeScreeningStatus: "idle",
+      }),
+    );
   });
 
   it.each([true, false])(

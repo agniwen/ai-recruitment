@@ -44,20 +44,15 @@ export async function generateResumeAssessment(input: {
     input.organizationId,
     input.jobDescriptionId,
   );
-  const screeningResult = await generateResumeScreeningResult({
-    policy: context.screeningPolicy,
-    resumeProfile: input.resumeProfile,
-    resumeText: input.resumeText,
-  });
   const review = await generateResumeReview({
     jobDescription: context.jobDescription,
     resumeProfile: input.resumeProfile,
-    screeningResult,
+    resumeText: input.resumeText,
   });
   if (!review.review) {
     throw new Error("AI 分析生成失败。");
   }
-  return { ...review, screeningResult };
+  return review;
 }
 
 export async function generateResumeReviewBestEffort(input: {
@@ -66,7 +61,9 @@ export async function generateResumeReviewBestEffort(input: {
   organizationId: string;
   resumeProfile: ResumeProfile;
   resumeText?: string | null;
-}): Promise<(ResumeReviewGenerationResult & { screeningResult: ResumeScreeningResult }) | null> {
+}): Promise<
+  (ResumeReviewGenerationResult & { screeningResult: ResumeScreeningResult | null }) | null
+> {
   try {
     return await generateResumeAssessment(input);
   } catch (error) {

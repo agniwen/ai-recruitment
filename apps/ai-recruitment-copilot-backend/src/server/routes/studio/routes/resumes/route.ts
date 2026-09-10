@@ -7,7 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { studioInterview } from "@arc/db-schema/schema";
-import { resumeReviewSchema } from "@arc/shared/resume-review";
+import { isResumeReviewV5, resumeReviewSchema } from "@arc/shared/resume-review";
 import type { ResumeReview } from "@arc/shared/resume-review";
 import {
   buildResumeVisibilityCondition,
@@ -394,7 +394,7 @@ export const resumeLibraryRouter = factory
         });
         resumeReview = generatedReview?.structuredReview ?? null;
         resumeScreeningResult = generatedReview?.screeningResult ?? null;
-      } else if (resumeProfile) {
+      } else if (resumeProfile && resumeReview && !isResumeReviewV5(resumeReview)) {
         resumeScreeningResult = await generateResumeScreeningBestEffort({
           jobDescriptionId: input.data.jobDescriptionId || null,
           logPrefix: "[studio-resumes]",
@@ -405,9 +405,12 @@ export const resumeLibraryRouter = factory
       }
       let resumeReviewStatus: "failed" | "idle" | "ready" = "idle";
       let resumeScreeningStatus: "failed" | "idle" | "ready" = "idle";
+      const usesLegacyScreening = Boolean(resumeReview && !isResumeReviewV5(resumeReview));
       if (resumeProfile) {
         resumeReviewStatus = resumeReview ? "ready" : "failed";
-        resumeScreeningStatus = resumeScreeningResult ? "ready" : "failed";
+        if (usesLegacyScreening) {
+          resumeScreeningStatus = resumeScreeningResult ? "ready" : "failed";
+        }
       }
 
       const recordId = await createResumeRecordFromStorage({
@@ -427,7 +430,8 @@ export const resumeLibraryRouter = factory
         resumeReview,
         resumeReviewError: resumeProfile && !resumeReview ? "AI 分析生成失败。" : null,
         resumeReviewStatus,
-        resumeScreeningError: resumeProfile && !resumeScreeningResult ? "AI 分析生成失败。" : null,
+        resumeScreeningError:
+          usesLegacyScreening && !resumeScreeningResult ? "AI 分析生成失败。" : null,
         resumeScreeningResult,
         resumeScreeningStatus,
         resumeText,

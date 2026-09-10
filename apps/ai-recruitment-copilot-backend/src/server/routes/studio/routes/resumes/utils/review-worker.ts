@@ -96,8 +96,6 @@ const lifecycleDeps: ResumeAssessmentLifecycleDeps = {
         resumeReviewError: errorMessage,
         resumeReviewRunId: input.runId ? null : undefined,
         resumeReviewStatus: "failed",
-        resumeScreeningError: errorMessage,
-        resumeScreeningStatus: "failed",
         updatedAt: new Date(),
       })
       .where(guardedRecordWhere({ ...input, runId: input.runId ?? null }))
@@ -113,8 +111,6 @@ const lifecycleDeps: ResumeAssessmentLifecycleDeps = {
         resumeReviewQueuedAt: now,
         resumeReviewRunId: input.runId,
         resumeReviewStatus: "processing",
-        resumeScreeningError: null,
-        resumeScreeningStatus: "processing",
         updatedAt: now,
       })
       .where(guardedRecordWhere({ ...input, runId: undefined }))
@@ -133,9 +129,9 @@ const lifecycleDeps: ResumeAssessmentLifecycleDeps = {
         resumeReviewRunId: null,
         resumeReviewStatus: "ready",
         resumeScreeningError: null,
-        resumeScreeningEvaluatedAt: now,
+        resumeScreeningEvaluatedAt: input.assessment.screeningResult ? now : null,
         resumeScreeningResult: input.assessment.screeningResult,
-        resumeScreeningStatus: "ready",
+        resumeScreeningStatus: input.assessment.screeningResult ? "ready" : "idle",
         updatedAt: now,
       })
       .where(guardedRecordWhere(input))

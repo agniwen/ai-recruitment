@@ -11,6 +11,7 @@ import {
 import type { ResumeReviewDimensionKey, ResumeReviewLoose } from "../resume-review";
 import {
   getResumeReviewBaseScore,
+  isResumeReviewV5,
   getResumeReviewDimension,
   RESUME_REVIEW_DIMENSIONS,
 } from "../resume-review";
@@ -47,7 +48,15 @@ export function buildCandidateAiReview(
         ? [{ key, label, rationale: dimension.rationale, score: dimension.score }]
         : [];
     }),
-    strengths: review.strengths.map(({ evidence, impact, point }) => ({ evidence, impact, point })),
+    strengths: isResumeReviewV5(review)
+      ? [
+          {
+            evidence: review.detailedOverall.matchingEvidence,
+            impact: review.detailedOverall.judgment,
+            point: "匹配依据",
+          },
+        ]
+      : review.strengths.map(({ evidence, impact, point }) => ({ evidence, impact, point })),
   };
 }
 

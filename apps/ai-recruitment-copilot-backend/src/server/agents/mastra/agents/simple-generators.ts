@@ -22,6 +22,7 @@ export interface MastraGenerateOptions {
 }
 
 export interface MastraGenerateResult {
+  finishReason?: string;
   error?: Error;
   object?: unknown;
   text: string;
@@ -246,59 +247,173 @@ export async function* streamTextWithMastraAgent({
   }
 }
 
+function isTransientGenerationError(error: Error): boolean {
+  let status: unknown;
+  if ("statusCode" in error) {
+    status = error.statusCode;
+  } else if ("status" in error) {
+    ({ status } = error);
+  }
+  if (typeof status === "number") {
+    return status === 408 || status === 429 || status >= 500;
+  }
+  return /timeout|timed out|econnreset|etimedout|eai_again|socket hang up|rate limit/i.test(
+    error.message,
+  );
+}
+
+function isStructuredCapabilityError(error: Error): boolean {
+  return (
+    /response.?format|json.?schema/i.test(error.message) &&
+    /not supported|does not support|unsupported|unknown parameter|invalid parameter|不支持/i.test(
+      error.message,
+    )
+  );
+}
+
+function parseGeneratedObject<TSchema extends z.ZodType>(
+  result: MastraGenerateResult,
+  schema: TSchema,
+  strictJson: boolean,
+): z.infer<TSchema> {
+  if (result.finishReason === "length") {
+    throw new Error("AI 结构化输出被截断。");
+  }
+  const parsed = schema.safeParse(result.object);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  if (result.text.trim()) {
+    // Strict mode never salvages a nested object from truncated JSON.
+    return parseJsonOutput(
+      result.text,
+      schema as z.ZodType<z.infer<TSchema>>,
+      "structured-output-fallback",
+      { strict: strictJson },
+    );
+  }
+  throw new Error(parsed.error.issues[0]?.message ?? "AI 生成的结构化内容校验失败。");
+}
+
+function withModelResponse(error: Error, result: MastraGenerateResult | undefined): Error {
+  if (!result) {
+    return error;
+  }
+  return Object.assign(new Error(error.message, { cause: error }), {
+    modelResponse: {
+      text: result.text,
+      ...(result.object === undefined ? {} : { objectJson: JSON.stringify(result.object) }),
+    },
+  });
+}
+
+async function generateTextJsonWithRetry<TSchema extends z.ZodType>(
+  agent: MastraGeneratorLike,
+  prompt: string,
+  schema: TSchema,
+  {
+    maxOutputTokens,
+    retryOnTransient,
+    strictJson,
+    temperature,
+  }: {
+    maxOutputTokens?: number;
+    retryOnTransient?: boolean;
+    strictJson: boolean;
+    temperature?: number;
+  },
+): Promise<z.infer<TSchema>> {
+  let lastError = new Error("AI 生成的 JSON 内容无效。");
+  const fallbackPrompt = `${prompt}\n\n请只输出一个完整的 JSON 对象，不要输出 Markdown、分析或解释。`;
+  for (let attempt = 0; attempt < (retryOnTransient ? 2 : 1); attempt += 1) {
+    let result: MastraGenerateResult | undefined;
+    try {
+      result = await agent.generate(fallbackPrompt, {
+        modelSettings: buildModelSettings({ maxOutputTokens, temperature }),
+        providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
+      });
+      if (result.error) {
+        throw result.error;
+      }
+      return parseGeneratedObject(result, schema, strictJson);
+    } catch (error) {
+      const cause = error instanceof Error ? error : new Error(String(error));
+      lastError = withModelResponse(cause, result);
+      if (!(retryOnTransient && attempt === 0 && isTransientGenerationError(cause))) {
+        throw lastError;
+      }
+    }
+  }
+  throw lastError;
+}
+
 export async function generateStructuredWithMastraAgent<TSchema extends z.ZodType>({
   agent,
+  fallbackToTextGeneration,
   maxOutputTokens,
   prompt,
   retryOnInvalid,
+  retryOnTransient,
   schema,
+  strictJson = false,
   temperature,
 }: {
   agent: MastraGeneratorLike;
+  fallbackToTextGeneration?: boolean;
   maxOutputTokens?: number;
   prompt: string;
   retryOnInvalid?: boolean;
+  retryOnTransient?: boolean;
   schema: TSchema;
+  strictJson?: boolean;
   temperature?: number;
 }): Promise<z.infer<TSchema>> {
   let attemptPrompt = prompt;
   let lastError = new Error("AI 生成的结构化内容校验失败。");
-  const maxAttempts = retryOnInvalid ? 2 : 1;
+  const maxAttempts = retryOnInvalid || retryOnTransient ? 2 : 1;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const result = await agent.generate(attemptPrompt, {
-      modelSettings: buildModelSettings({ maxOutputTokens, temperature }),
-      providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
-      structuredOutput: { schema },
-    });
-    if (result.error) {
-      lastError = result.error;
-    } else {
-      const parsed = schema.safeParse(result.object);
-      if (parsed.success) {
-        return parsed.data;
+    let result: MastraGenerateResult | undefined;
+    try {
+      result = await agent.generate(attemptPrompt, {
+        modelSettings: buildModelSettings({ maxOutputTokens, temperature }),
+        providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
+        structuredOutput: { schema },
+      });
+      if (result.error) {
+        throw result.error;
       }
-      lastError = new Error(parsed.error.issues[0]?.message ?? "AI 生成的结构化内容校验失败。");
-      if (result.text.trim()) {
-        try {
-          return parseJsonOutput(
-            result.text,
-            schema as z.ZodType<z.infer<TSchema>>,
-            "structured-output-fallback",
-          );
-        } catch {
-          // Retry below with concise schema feedback and the original task context.
+      return parseGeneratedObject(result, schema, strictJson);
+    } catch (error) {
+      const cause = error instanceof Error ? error : new Error(String(error));
+      lastError = withModelResponse(cause, result);
+      if (fallbackToTextGeneration && isStructuredCapabilityError(cause)) {
+        break;
+      }
+      if (isTransientGenerationError(cause)) {
+        if (retryOnTransient && attempt + 1 < maxAttempts) {
+          continue;
         }
+        throw lastError;
       }
-    }
-    lastError = Object.assign(new Error(lastError.message, { cause: lastError }), {
-      modelResponse: {
-        text: result.text,
-        ...(result.object === undefined ? {} : { objectJson: JSON.stringify(result.object) }),
-      },
-    });
-    if (attempt + 1 < maxAttempts) {
+      const invalidOutput =
+        (result && !result.error) ||
+        /structured.?output|schema.?validation|provider validation/i.test(cause.message);
+      if (!invalidOutput) {
+        throw lastError;
+      }
+      if (!retryOnInvalid || attempt + 1 >= maxAttempts) {
+        break;
+      }
       attemptPrompt = `${prompt}\n\n上一次结构化输出无效：${lastError.message}\n请严格按照原字段和类型重新输出完整的 JSON 对象，不要输出 Markdown 或解释。`;
     }
   }
-  throw lastError;
+  if (!fallbackToTextGeneration) {
+    throw lastError;
+  }
+  return generateTextJsonWithRetry(agent, prompt, schema, {
+    maxOutputTokens,
+    retryOnTransient,
+    strictJson,
+    temperature,
+  });
 }

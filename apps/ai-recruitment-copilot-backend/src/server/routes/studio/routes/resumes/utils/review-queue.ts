@@ -31,8 +31,6 @@ export async function markResumeReviewQueued(input: {
       resumeReviewError: null,
       resumeReviewQueuedAt: now,
       resumeReviewStatus: "queued",
-      resumeScreeningError: null,
-      resumeScreeningStatus: "processing",
       updatedAt: now,
     })
     .where(and(...conditions));
@@ -57,8 +55,6 @@ async function markResumeReviewQueueFailed(input: {
     .set({
       resumeReviewError: errorMessage,
       resumeReviewStatus: "failed",
-      resumeScreeningError: errorMessage,
-      resumeScreeningStatus: "failed",
       updatedAt: new Date(),
     })
     .where(and(...conditions));
@@ -197,8 +193,6 @@ export async function enqueueResumeReassessmentForRecord(input: {
         resumeReviewError: null,
         resumeReviewQueuedAt: now,
         resumeReviewStatus: "processing",
-        resumeScreeningError: null,
-        resumeScreeningStatus: "processing",
         updatedAt: now,
       })
       .where(

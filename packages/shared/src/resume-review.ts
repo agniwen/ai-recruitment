@@ -6,6 +6,7 @@ import type {
   ResumeReviewDimension,
   ResumeReviewDimensionKey,
   ResumeReviewLoose,
+  ResumeReviewV5,
   ResumeReviewPoint,
 } from "@arc/db-schema/resume-review";
 import { RESUME_REVIEW_DIMENSION_DEFINITIONS } from "@arc/db-schema/resume-review";
@@ -13,6 +14,11 @@ import type { ResumeReviewStatus } from "@arc/db-schema/studio-interviews";
 
 export {
   RESUME_REVIEW_SCHEMA_VERSION,
+  RESUME_REVIEW_VERSION,
+  resumeReviewV5Schema,
+  resumeReviewLegacySchema,
+  resumeReviewLegacyLooseSchema,
+  resumeReviewBasisSchema,
   resumeReviewActionSchema,
   resumeReviewBiasCategorySchema,
   resumeReviewBiasItemSchema,
@@ -24,6 +30,8 @@ export {
 } from "@arc/db-schema/resume-review";
 export type {
   ResumeReview,
+  ResumeReviewV5,
+  ResumeReviewLegacyLoose,
   ResumeReviewAction,
   ResumeReviewBiasCategory,
   ResumeReviewBiasItem,
@@ -32,6 +40,16 @@ export type {
   ResumeReviewLoose,
   ResumeReviewPoint,
 } from "@arc/db-schema/resume-review";
+
+export function isResumeReviewV5(review: ResumeReviewLoose): review is ResumeReviewV5 {
+  return review.schemaVersion === 5;
+}
+
+export const resumeReviewBasisLabel = {
+  both: "岗位要求与通用职业标准",
+  general: "通用职业标准",
+  job: "岗位要求",
+};
 
 export const resumeReviewActionLabel: Record<ResumeReviewAction, string> = {
   hold: "暂缓",
@@ -150,6 +168,30 @@ function formatNextStep(review: ResumeReviewLoose) {
 }
 
 export function formatResumeReviewMarkdown(review: ResumeReviewLoose): string {
+  if (isResumeReviewV5(review)) {
+    return [
+      ["**候选人结论**", review.overall.conclusion].join("\n"),
+      ["**综合评分**", `${review.overall.baseScore} / 100。${review.overall.scoreRationale}`].join(
+        "\n",
+      ),
+      ["**判断**", review.detailedOverall.judgment].join("\n"),
+      ["**匹配依据**", review.detailedOverall.matchingEvidence].join("\n"),
+      ["**风险与待确认项**", review.detailedOverall.risks].join("\n"),
+      ...RESUME_REVIEW_DIMENSIONS.map(({ key, label }) => {
+        const dimension = review.dimensions[key];
+        return `**${label}：${dimension.score} / 100**\n依据：${resumeReviewBasisLabel[dimension.basis]}\n${dimension.rationale}`;
+      }),
+      review.teamPositioning
+        ? `**团队定位建议**\n${review.teamPositioning.suggestion}。${review.teamPositioning.rationale}`
+        : null,
+      review.levelRecommendation
+        ? `**职级建议**\n${review.levelRecommendation.level}。${review.levelRecommendation.rationale}`
+        : null,
+      ["**下一步建议**", formatNextStep(review)].join("\n"),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
   const baseScore = getResumeReviewBaseScore(review);
   const scoreText = baseScore === null ? "—" : `${baseScore} / 100`;
   return [

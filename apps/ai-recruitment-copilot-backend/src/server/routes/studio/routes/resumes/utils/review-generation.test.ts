@@ -44,7 +44,7 @@ describe("generateResumeReviewBestEffort", () => {
     }
   });
 
-  it("generates a structured V2 review with job description context", async () => {
+  it("passes job text into one generation without evaluating configured rules", async () => {
     const structuredReview = { overall: { baseScore: 86 } };
     mocks.loadJobDescriptionById.mockResolvedValue({
       description: "负责 Web 端研发",
@@ -62,6 +62,7 @@ describe("generateResumeReviewBestEffort", () => {
     });
     mocks.generateResumeReview.mockResolvedValue({
       review: "评价 markdown",
+      screeningResult: null,
       structuredReview,
     });
 
@@ -72,19 +73,15 @@ describe("generateResumeReviewBestEffort", () => {
     });
 
     expect(result?.structuredReview).toBe(structuredReview);
+    expect(result?.screeningResult).toBeNull();
+    expect(mocks.generateResumeScreeningResult).not.toHaveBeenCalled();
+    expect(mocks.generateResumeReview).toHaveBeenCalledTimes(1);
     expect(mocks.loadJobDescriptionById).toHaveBeenCalledWith("org-1", "jd-1");
     expect(mocks.generateResumeReview).toHaveBeenCalledWith({
       jobDescription:
         "岗位名称：前端工程师\n\n岗位描述：负责 Web 端研发\n\n岗位 Prompt：\n需要 React 经验",
       resumeProfile: RESUME_PROFILE,
-      screeningResult: {
-        policyEmpty: true,
-        policyEnabled: true,
-        policyHash: "hash",
-        policyVersion: 1,
-        recommendation: "pass",
-        ruleResults: [],
-      },
+      resumeText: undefined,
     });
   });
 

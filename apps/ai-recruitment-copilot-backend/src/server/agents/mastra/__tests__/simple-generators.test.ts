@@ -134,3 +134,87 @@ describe("simple Mastra generators", () => {
     expect(generate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("resume structured generation recovery", () => {
+  const schema = z.object({ name: z.string().nullable() });
+  it("retries a thrown transient error before using the next valid result", async () => {
+    const generate = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("rate limited"), { statusCode: 429 }))
+      .mockResolvedValueOnce({ object: { name: "张三" }, text: "" });
+    await expect(
+      generateStructuredWithMastraAgent({
+        agent: { generate },
+        prompt: "解析",
+        retryOnTransient: true,
+        schema,
+      }),
+    ).resolves.toEqual({ name: "张三" });
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to text JSON when native structured output is unsupported", async () => {
+    const generate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("response_format json_schema is not supported"))
+      .mockResolvedValueOnce({ text: '{"name":"张三"}' });
+    await expect(
+      generateStructuredWithMastraAgent({
+        agent: { generate },
+        fallbackToTextGeneration: true,
+        prompt: "解析",
+        schema,
+        strictJson: true,
+      }),
+    ).resolves.toEqual({ name: "张三" });
+    expect(generate.mock.calls[1]?.[1]).not.toHaveProperty("structuredOutput");
+  });
+
+  it.each([
+    '{"name":"张三","work":{}} trailing',
+    '[{"name":"张三"}]',
+    '{"name":"张三","work":{"name":"李四"}',
+  ])("does not accept a nested object from malformed or non-object JSON (%s)", async (text) => {
+    const generate = vi.fn().mockResolvedValue({ text });
+    await expect(
+      generateStructuredWithMastraAgent({
+        agent: { generate },
+        prompt: "解析",
+        schema,
+        strictJson: true,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects truncated output even if the provider also returns a usable object", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      finishReason: "length",
+      object: { name: "张三" },
+      text: '{"name":"张三"}',
+    });
+    await expect(
+      generateStructuredWithMastraAgent({
+        agent: { generate },
+        prompt: "解析",
+        schema,
+        strictJson: true,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("does not hide authentication errors behind a text fallback", async () => {
+    const error = Object.assign(new Error("Unauthorized"), { statusCode: 401 });
+    const generate = vi.fn().mockRejectedValue(error);
+    await expect(
+      generateStructuredWithMastraAgent({
+        agent: { generate },
+        fallbackToTextGeneration: true,
+        prompt: "解析",
+        retryOnInvalid: true,
+        retryOnTransient: true,
+        schema,
+      }),
+    ).rejects.toThrow("Unauthorized");
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+});

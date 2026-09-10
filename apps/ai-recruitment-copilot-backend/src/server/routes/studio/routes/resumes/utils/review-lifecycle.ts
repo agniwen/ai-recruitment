@@ -9,7 +9,7 @@ import type { ResumeScreeningResult } from "@arc/shared/resume-screening";
 
 export interface ResumeAssessment {
   review: string;
-  screeningResult: ResumeScreeningResult;
+  screeningResult: ResumeScreeningResult | null;
   structuredReview: ResumeReview;
 }
 

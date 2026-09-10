@@ -77,7 +77,11 @@ export function AiReviewDetailDialog({
         </TabsContent>
         <TabsContent value="ai-review">
           {detail.resumeReviewStatus === "ready" ? (
-            <ResumeReviewStructuredView review={detail.resumeReview} />
+            <ResumeReviewStructuredView
+              error={detail.resumeReviewError}
+              review={detail.resumeReview}
+              status={detail.resumeReviewStatus}
+            />
           ) : (
             <Empty>
               <EmptyHeader>

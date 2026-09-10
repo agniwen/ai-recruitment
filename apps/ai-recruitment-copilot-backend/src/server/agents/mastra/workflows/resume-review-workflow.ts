@@ -2,116 +2,45 @@ import { createStep, createWorkflow } from "@mastra/core/workflows";
 import type { WorkflowStreamEvent } from "@mastra/core/stream";
 import { z } from "zod";
 import { resumeProfileSchema } from "@arc/db-schema/interview/types";
-import {
-  composeResumeReviewResult,
-  generateResumeQualitativeReview,
-  generateResumeReviewScoring,
-} from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import { resumeReviewSchema } from "@arc/db-schema/resume-review";
+import { generateResumeReview } from "../../resume-analysis-review";
+import type { ResumeReviewGenerationResult } from "../../resume-analysis-review";
 import type { AiRunEvent } from "@arc/shared/ai-run-events";
-import { emitMastraWorkflowStreamEvents } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/adapters/ai-run-stream";
-import { resumeScreeningResultSchema } from "@arc/shared/resume-screening";
-import type {
-  ResumeQualitativeReview,
-  ResumeReviewGenerationResult,
-  ResumeReviewScoring,
-} from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
+import { emitMastraWorkflowStreamEvents } from "../adapters/ai-run-stream";
 
 const resumeReviewInputSchema = z.object({
   jobDescription: z.string().nullable().optional(),
   resumeProfile: resumeProfileSchema,
-  screeningResult: resumeScreeningResultSchema.nullable().optional(),
+  resumeText: z.string().nullable().optional(),
 });
-
 const resumeReviewOutputSchema = z.object({
   review: z.string(),
-  structuredReview: z.unknown(),
+  screeningResult: z.null(),
+  structuredReview: resumeReviewSchema,
 });
 
-const qualitativeOutputSchema = resumeReviewInputSchema.extend({
-  qualitative: z.unknown().nullable(),
-});
-
-const scoringOutputSchema = qualitativeOutputSchema.extend({
-  scoring: z.unknown().nullable(),
-});
-
-export interface ResumeReviewWorkflowDeps {
-  composeReview: typeof composeResumeReviewResult;
-  generateQualitativeReview: typeof generateResumeQualitativeReview;
-  generateScoring: typeof generateResumeReviewScoring;
-}
-
-export function createResumeReviewWorkflow(deps: ResumeReviewWorkflowDeps) {
-  const qualitativeReviewStep = createStep({
-    execute: async ({ inputData }) => {
-      const qualitative = await deps.generateQualitativeReview({
-        jobDescription: inputData.jobDescription,
-        resumeProfile: inputData.resumeProfile,
-        screeningResult: inputData.screeningResult,
-      });
-      return { ...inputData, qualitative };
-    },
-    id: "qualitative-review",
+export function createResumeReviewWorkflow(deps: { generateReview: typeof generateResumeReview }) {
+  const reviewStep = createStep({
+    execute: async ({ inputData }) => await deps.generateReview(inputData),
+    id: "resume-review",
     inputSchema: resumeReviewInputSchema,
-    outputSchema: qualitativeOutputSchema,
-  });
-
-  const scoringStep = createStep({
-    execute: async ({ inputData }) => {
-      if (!inputData.qualitative) {
-        return { ...inputData, scoring: null };
-      }
-      const scoring = await deps.generateScoring({
-        jobDescription: inputData.jobDescription,
-        qualitative: inputData.qualitative as ResumeQualitativeReview,
-        resumeProfile: inputData.resumeProfile,
-        screeningResult: inputData.screeningResult,
-      });
-      return { ...inputData, scoring };
-    },
-    id: "scoring",
-    inputSchema: qualitativeOutputSchema,
-    outputSchema: scoringOutputSchema,
-  });
-
-  const composeReviewStep = createStep({
-    // oxlint-disable-next-line require-await -- Mastra step execute functions are typed as async.
-    execute: async ({ inputData }) => {
-      if (!(inputData.qualitative && inputData.scoring)) {
-        throw new Error("Resume review workflow reached compose step without review outputs.");
-      }
-      return deps.composeReview(
-        inputData.qualitative as ResumeQualitativeReview,
-        inputData.scoring as ResumeReviewScoring,
-        { screeningResult: inputData.screeningResult },
-      );
-    },
-    id: "compose-review",
-    inputSchema: scoringOutputSchema,
     outputSchema: resumeReviewOutputSchema,
   });
-
   return (
     createWorkflow({
-      description: "Run qualitative review and scoring for a resume.",
+      description: "Generate resume evidence, judgment and numeric scores in one model call.",
       id: "resume-review-workflow",
       inputSchema: resumeReviewInputSchema,
       outputSchema: resumeReviewOutputSchema,
     })
-      // oxlint-disable-next-line prefer-await-to-then -- Mastra workflows compose steps with .then().
-      .then(qualitativeReviewStep)
-      // oxlint-disable-next-line prefer-await-to-then -- Mastra workflows compose steps with .then().
-      .then(scoringStep)
-      // oxlint-disable-next-line prefer-await-to-then -- Mastra workflows compose steps with .then().
-      .then(composeReviewStep)
+      // oxlint-disable-next-line prefer-await-to-then -- Mastra composes workflow steps with .then().
+      .then(reviewStep)
       .commit()
   );
 }
 
 export const resumeReviewWorkflow = createResumeReviewWorkflow({
-  composeReview: composeResumeReviewResult,
-  generateQualitativeReview: generateResumeQualitativeReview,
-  generateScoring: generateResumeReviewScoring,
+  generateReview: generateResumeReview,
 });
 
 export async function runResumeReviewWorkflow(
@@ -140,9 +69,7 @@ export async function streamResumeReviewWorkflow(
     options.onWorkflowEvent,
     {
       stepLabels: {
-        "compose-review": "生成评价摘要",
-        "qualitative-review": "生成定性评价",
-        scoring: "生成维度评分",
+        "resume-review": "生成简历评价与评分",
       },
       title: "生成简历评价",
       workflowId: "resume-review-workflow",

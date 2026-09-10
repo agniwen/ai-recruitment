@@ -788,7 +788,9 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
             <TabsContent value="ai-analysis">
               <div className="space-y-6">
                 <ResumeReviewStructuredView
+                  error={resumeRecord?.resumeReviewError}
                   review={resumeRecord?.resumeReview}
+                  status={resumeRecord?.resumeReviewStatus}
                   screeningResultSlot={<ResumeScreeningResultPanel resumeRecord={resumeRecord} />}
                   summaryAction={
                     canUseManagementActions && resumeRecord?.jobDescriptionId ? (

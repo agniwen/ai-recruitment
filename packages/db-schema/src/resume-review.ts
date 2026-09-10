@@ -45,6 +45,7 @@ const resumeReviewDimensionKeys = [
 export const resumeReviewDimensionKeySchema = z.enum(resumeReviewDimensionKeys);
 export type ResumeReviewDimensionKey = z.infer<typeof resumeReviewDimensionKeySchema>;
 
+// Historical v4 contract; new generations use RESUME_REVIEW_VERSION below.
 export const RESUME_REVIEW_SCHEMA_VERSION = 4;
 
 export const RESUME_REVIEW_DIMENSION_DEFINITIONS: {
@@ -111,9 +112,8 @@ export const RESUME_REVIEW_DIMENSION_DEFINITIONS: {
   },
 ];
 
-// v4 严格 schema —— 新写入路径用，保证产品 6 维度齐全。
-// Strict v4 schema for new writes; guarantees all product six dimensions are present.
-export const resumeReviewSchema = z.object({
+// 保留历史 v4 的完整结构，供兼容已有评价使用。
+export const resumeReviewLegacySchema = z.object({
   biasScan: z.object({
     items: z.array(resumeReviewBiasItemSchema),
   }),
@@ -153,7 +153,7 @@ export const resumeReviewSchema = z.object({
 // 旧 json 缺少新维度字段时不报错，消费方用 lodash get 取值，缺失就跳过展示。
 // Loose schema for reads; tolerates legacy v1/v2/v3 rows so DB reads don't throw.
 // Consumers use lodash `get` to access fields; missing keys render as absent.
-export const resumeReviewLooseSchema = z.object({
+export const resumeReviewLegacyLooseSchema = z.object({
   biasScan: z.object({
     items: z.array(resumeReviewBiasItemSchema),
   }),
@@ -188,6 +188,42 @@ export const resumeReviewLooseSchema = z.object({
   weaknesses: z.array(resumeReviewPointSchema).min(1).max(4),
 });
 
+// Version 5 keeps numeric scoring while combining evidence and judgment in one generation.
+export const RESUME_REVIEW_VERSION = 5;
+export const resumeReviewBasisSchema = z.enum(["job", "general", "both"]);
+export const resumeReviewScoredDimensionSchema = resumeReviewDimensionSchema.extend({
+  basis: resumeReviewBasisSchema,
+});
+export const resumeReviewV5Schema = z.object({
+  detailedOverall: z.object({
+    judgment: nonEmptyStringSchema.max(2000),
+    matchingEvidence: nonEmptyStringSchema.max(4000),
+    risks: nonEmptyStringSchema.max(4000),
+  }),
+  dimensions: z.object({
+    educationBackground: resumeReviewScoredDimensionSchema,
+    experienceRelevance: resumeReviewScoredDimensionSchema,
+    potential: resumeReviewScoredDimensionSchema,
+    projectMatch: resumeReviewScoredDimensionSchema,
+    skillMatch: resumeReviewScoredDimensionSchema,
+    stability: resumeReviewScoredDimensionSchema,
+  }),
+  levelRecommendation: resumeReviewLegacySchema.shape.levelRecommendation.nullable(),
+  nextStep: resumeReviewLegacySchema.shape.nextStep,
+  overall: resumeReviewLegacySchema.shape.overall,
+  schemaVersion: z.literal(RESUME_REVIEW_VERSION),
+  teamPositioning: resumeReviewLegacySchema.shape.teamPositioning.nullable(),
+  version: z.literal(RESUME_REVIEW_VERSION),
+});
+
+// Never coerce historical rows into the new contract on reads.
+export const resumeReviewSchema = z.union([resumeReviewV5Schema, resumeReviewLegacySchema]);
+export const resumeReviewLooseSchema = z.union([
+  resumeReviewV5Schema,
+  resumeReviewLegacyLooseSchema,
+]);
+export type ResumeReviewV5 = z.infer<typeof resumeReviewV5Schema>;
+export type ResumeReviewLegacyLoose = z.infer<typeof resumeReviewLegacyLooseSchema>;
 export type ResumeReview = z.infer<typeof resumeReviewSchema>;
 export type ResumeReviewLoose = z.infer<typeof resumeReviewLooseSchema>;
 export type ResumeReviewDimension = z.infer<typeof resumeReviewDimensionSchema>;

@@ -1,28 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
-
-const mocks = vi.hoisted(() => ({
-  composeReview: vi.fn(),
-  generateQualitativeReview: vi.fn(),
-  generateScoring: vi.fn(),
-}));
-
-vi.mock("@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent", () => ({
-  composeResumeReviewResult: mocks.composeReview,
-  generateResumeQualitativeReview: mocks.generateQualitativeReview,
-  generateResumeReviewScoring: mocks.generateScoring,
-}));
-
-// oxlint-disable-next-line import/first -- must follow vi.mock() for correct hoisting
-import { runResumeReviewWorkflow } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/resume-review-workflow";
-
+import { createResumeReviewWorkflow } from "../workflows/resume-review-workflow";
 const PROFILE: ResumeProfile = {
   age: null,
   educationExperiences: [],
   email: "candidate@example.com",
   gender: null,
   name: "候选人",
-  personalStrengths: ["工程化"],
+  personalStrengths: ["前端工程化"],
   phone: null,
   projectExperiences: [],
   schools: [],
@@ -32,53 +17,22 @@ const PROFILE: ResumeProfile = {
   workYears: 5,
 };
 
-describe("runResumeReviewWorkflow", () => {
-  beforeEach(() => {
-    for (const mock of Object.values(mocks)) {
-      mock.mockReset();
-    }
-  });
-
-  it("runs qualitative review, scoring, and composition", async () => {
-    const qualitative = { overall: { conclusion: "匹配" } };
-    const scoring = { dimensions: {} };
-    const composed = {
-      review: "候选人与岗位匹配。",
-      structuredReview: { overall: { baseScore: 88 } },
-    };
-
-    mocks.generateQualitativeReview.mockResolvedValue(qualitative);
-    mocks.generateScoring.mockResolvedValue(scoring);
-    mocks.composeReview.mockReturnValue(composed);
-
-    const screeningResult = {
-      policyEmpty: false,
-      policyEnabled: true,
-      policyHash: "hash",
-      policyVersion: 1,
-      recommendation: "hold" as const,
-      ruleResults: [],
-    };
-    const result = await runResumeReviewWorkflow({
-      jobDescription: "岗位名称：前端工程师",
-      resumeProfile: PROFILE,
-      screeningResult,
+describe("single-call resume review workflow", () => {
+  it("invokes generation once and propagates provider failure without a second scoring step", async () => {
+    const generateReview = vi.fn().mockRejectedValue(new Error("provider unavailable"));
+    const workflow = createResumeReviewWorkflow({ generateReview });
+    const run = await workflow.createRun();
+    const result = await run.start({
+      inputData: { jobDescription: "React 岗位", resumeProfile: PROFILE, resumeText: "原文" },
     });
-
-    expect(result).toEqual(composed);
-    expect(mocks.generateQualitativeReview).toHaveBeenCalledWith({
-      jobDescription: "岗位名称：前端工程师",
-      resumeProfile: PROFILE,
-      screeningResult,
-    });
-    expect(mocks.generateScoring).toHaveBeenCalledWith({
-      jobDescription: "岗位名称：前端工程师",
-      qualitative,
-      resumeProfile: PROFILE,
-      screeningResult,
-    });
-    expect(mocks.composeReview).toHaveBeenCalledWith(qualitative, scoring, {
-      screeningResult,
-    });
+    expect(result.status).toBe("failed");
+    expect(generateReview).toHaveBeenCalledTimes(1);
+    expect(generateReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobDescription: "React 岗位",
+        resumeProfile: PROFILE,
+        resumeText: "原文",
+      }),
+    );
   });
 });

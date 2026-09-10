@@ -8,16 +8,20 @@
 // between the resume-mode detail dialog and the launch-interview dialog so the
 // same data renders the same way in both places.
 
+import { ResumeReviewV5Panel } from "./resume-review-v5-panel";
+import type { ResumeReviewStatus } from "@arc/db-schema/studio-interviews";
 import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import { canEditResumeRecord, describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
 import type { ResumeIdentityUpdateInput, ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import type {
-  ResumeReview,
+  ResumeReviewLegacyLoose,
   ResumeReviewAction,
   ResumeReviewLoose,
 } from "@arc/shared/resume-review";
 import {
   countResumeReviewBiasCategories,
+  isResumeReviewV5,
+  resumeReviewBasisLabel,
   getResumeReviewBaseScore,
   getResumeReviewDimension,
   RESUME_REVIEW_DIMENSIONS,
@@ -74,6 +78,7 @@ function actionVariant(action: ResumeReviewAction) {
 }
 
 interface ReviewDimensionDisplay {
+  basis?: string;
   key: string;
   label: string;
   rationale: string;
@@ -89,6 +94,9 @@ function getReviewDimensionDisplays(review: ResumeReviewLoose): ReviewDimensionD
     }
     return [
       {
+        basis: isResumeReviewV5(review)
+          ? resumeReviewBasisLabel[review.dimensions[key].basis]
+          : undefined,
         key,
         label,
         rationale: dim.rationale,
@@ -174,7 +182,7 @@ function ResumeOverviewAiScoreSection({
                 {baseScore ?? <EmptyValue />}
               </div>
             </div>
-            {/* {review ? <Badge variant="outline">{review.levelRecommendation.level}</Badge> : null} */}
+            {/* {review ? {review.levelRecommendation ? <Badge variant="outline">{review.levelRecommendation.level}</Badge> : null} : null} */}
           </div>
           <div className="space-y-1.5">
             <h4 className="font-semibold text-sm leading-6">
@@ -220,7 +228,12 @@ function DimensionScoreItem({ dimension }: { dimension: ReviewDimensionDisplay }
         </div>
         <div className="font-semibold text-xl tabular-nums leading-none">{dimension.score}</div>
       </div>
-      <p className="mt-3 text-muted-foreground text-sm leading-6">{dimension.rationale}</p>
+      {dimension.basis ? (
+        <p className="mt-3 text-muted-foreground text-xs">评价依据：{dimension.basis}</p>
+      ) : null}
+      <p className="mt-3 whitespace-pre-line text-muted-foreground text-sm leading-6">
+        {dimension.rationale}
+      </p>
     </div>
   );
 }
@@ -247,7 +260,7 @@ function ReviewPointList({
   items,
   tone,
 }: {
-  items: ResumeReview["strengths"] | undefined;
+  items: ResumeReviewLegacyLoose["strengths"] | undefined;
   tone: "positive" | "negative";
 }) {
   const markerClass =
@@ -292,7 +305,7 @@ function BiasScanSection({
   review,
 }: {
   biasCounts: ReturnType<typeof countResumeReviewBiasCategories>;
-  review: ResumeReviewLoose | null | undefined;
+  review: ResumeReviewLegacyLoose | null | undefined;
 }) {
   const items = review?.biasScan.items ?? [];
   let body: ReactNode;
@@ -369,7 +382,9 @@ function ReviewSummaryHero({
                   <Badge variant={actionVariant(review.nextStep.action)}>
                     {resumeReviewActionLabel[review.nextStep.action]}
                   </Badge>
-                  <Badge variant="outline">{review.levelRecommendation.level}</Badge>
+                  {review.levelRecommendation ? (
+                    <Badge variant="outline">{review.levelRecommendation.level}</Badge>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <h3 className="font-semibold text-base leading-7">{review.overall.conclusion}</h3>
@@ -384,7 +399,9 @@ function ReviewSummaryHero({
                   </div>
                   <div className="min-w-0 space-y-1">
                     <div className="text-muted-foreground text-xs">团队定位</div>
-                    <p className="text-sm leading-6">{review.teamPositioning.suggestion}</p>
+                    <p className="text-sm leading-6">
+                      {review.teamPositioning?.suggestion ?? "信息不足，待确认"}
+                    </p>
                   </div>
                 </div>
               </>
@@ -406,16 +423,84 @@ function ReviewSummaryHero({
   );
 }
 
+function ReviewGuidance({ review }: { review: ResumeReviewLoose | null | undefined }) {
+  return (
+    <div className="grid gap-6 md:grid-cols-2">
+      <Frame className="h-full">
+        <ReviewSectionHeader title="团队定位建议" />
+        <FramePanel className="flex flex-1 items-center">
+          {review ? (
+            <div className="space-y-2 text-sm leading-6">
+              <p className="font-medium">
+                {review.teamPositioning?.suggestion ?? "信息不足，待确认"}
+              </p>
+              <p className="text-muted-foreground">{review.teamPositioning?.rationale}</p>
+            </div>
+          ) : (
+            <UnevaluatedText />
+          )}
+        </FramePanel>
+      </Frame>
+
+      <Frame className="h-full">
+        <ReviewSectionHeader title="职级建议" />
+        <FramePanel className="flex flex-1 items-center">
+          {review ? (
+            <div className="space-y-2 text-sm leading-6">
+              {review.levelRecommendation ? (
+                <Badge variant="outline">{review.levelRecommendation.level}</Badge>
+              ) : null}
+              <p className="text-muted-foreground">
+                {review.levelRecommendation?.rationale ?? "信息不足，待确认"}
+              </p>
+            </div>
+          ) : (
+            <UnevaluatedText />
+          )}
+        </FramePanel>
+      </Frame>
+    </div>
+  );
+}
+
 export function ResumeReviewStructuredView({
   review,
   screeningResultSlot,
   summaryAction,
+  status,
+  error,
 }: {
   review: ResumeReviewLoose | null | undefined;
   screeningResultSlot?: ReactNode;
   summaryAction?: ReactNode;
+  status?: ResumeReviewStatus;
+  error?: string | null;
 }) {
-  const biasCounts = countResumeReviewBiasCategories(review?.biasScan.items ?? []);
+  if (review && isResumeReviewV5(review)) {
+    return (
+      <ResumeReviewV5Panel
+        error={error}
+        review={review}
+        status={status}
+        summaryAction={summaryAction}
+      />
+    );
+  }
+  if (!review) {
+    let message = "暂无 AI 评分。";
+    if (status === "queued" || status === "processing") {
+      message = "正在生成 AI 评分，完成后会在这里展示。";
+    } else if (status === "failed") {
+      message = error || "AI 评分失败";
+    }
+    return (
+      <div className="flex items-center justify-between gap-4 rounded-lg border p-6">
+        <p className="text-muted-foreground text-sm">{message}</p>
+        {summaryAction}
+      </div>
+    );
+  }
+  const biasCounts = countResumeReviewBiasCategories(review.biasScan.items);
   const baseScore = review ? getResumeReviewBaseScore(review) : null;
   const dimensionScores = review ? getReviewDimensionDisplays(review) : [];
   const dimensionScoreGroups = [
@@ -460,62 +545,36 @@ export function ResumeReviewStructuredView({
         )}
       </Frame>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Frame className="h-full">
-          <ReviewSectionHeader title="优点" />
-          <FramePanel className="flex-1">
-            <ScrollArea className="h-[24rem]" scrollFade>
-              <ReviewPointList items={review?.strengths} tone="positive" />
-            </ScrollArea>
-          </FramePanel>
-        </Frame>
+      <>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Frame className="h-full">
+            <ReviewSectionHeader title="优点" />
+            <FramePanel className="flex-1">
+              <ScrollArea className="h-[24rem]" scrollFade>
+                <ReviewPointList items={review?.strengths} tone="positive" />
+              </ScrollArea>
+            </FramePanel>
+          </Frame>
 
-        <Frame className="h-full">
-          <ReviewSectionHeader title="缺点" />
-          <FramePanel className="flex-1">
-            <ScrollArea className="h-[24rem]" scrollFade>
-              <ReviewPointList items={review?.weaknesses} tone="negative" />
-            </ScrollArea>
-          </FramePanel>
-        </Frame>
-      </div>
+          <Frame className="h-full">
+            <ReviewSectionHeader title="缺点" />
+            <FramePanel className="flex-1">
+              <ScrollArea className="h-[24rem]" scrollFade>
+                <ReviewPointList items={review?.weaknesses} tone="negative" />
+              </ScrollArea>
+            </FramePanel>
+          </Frame>
+        </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <BiasScanSection biasCounts={biasCounts} review={review} />
-        {screeningResultSlot ? (
-          <div className="h-full min-w-0 [&>[data-slot=frame]]:h-full">{screeningResultSlot}</div>
-        ) : null}
-      </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <BiasScanSection biasCounts={biasCounts} review={review} />
+          {screeningResultSlot ? (
+            <div className="h-full min-w-0 [&>[data-slot=frame]]:h-full">{screeningResultSlot}</div>
+          ) : null}
+        </div>
+      </>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Frame className="h-full">
-          <ReviewSectionHeader title="团队定位建议" />
-          <FramePanel className="flex flex-1 items-center">
-            {review ? (
-              <div className="space-y-2 text-sm leading-6">
-                <p className="font-medium">{review.teamPositioning.suggestion}</p>
-                <p className="text-muted-foreground">{review.teamPositioning.rationale}</p>
-              </div>
-            ) : (
-              <UnevaluatedText />
-            )}
-          </FramePanel>
-        </Frame>
-
-        <Frame className="h-full">
-          <ReviewSectionHeader title="职级建议" />
-          <FramePanel className="flex flex-1 items-center">
-            {review ? (
-              <div className="space-y-2 text-sm leading-6">
-                <Badge variant="outline">{review.levelRecommendation.level}</Badge>
-                <p className="text-muted-foreground">{review.levelRecommendation.rationale}</p>
-              </div>
-            ) : (
-              <UnevaluatedText />
-            )}
-          </FramePanel>
-        </Frame>
-      </div>
+      <ReviewGuidance review={review} />
     </div>
   );
 }

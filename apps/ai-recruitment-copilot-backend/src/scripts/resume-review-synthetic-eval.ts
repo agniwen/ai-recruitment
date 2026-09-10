@@ -60,7 +60,6 @@ async function main() {
         const result = await generateResumeReview({
           jobDescription: testCase.jobDescription,
           resumeProfile: testCase.resumeProfile,
-          screeningResult: testCase.screeningResult,
         });
         records.push({
           caseId: testCase.id,

@@ -655,16 +655,10 @@ export async function generateInterviewQuestionsForProfile(
 }
 
 // =====================================================================
-// Stage 3: Resume review generation (three-agent pipeline)
+// Stage 3: Single-call resume review generation
 //
-// Agent 0 (hard filter):  从 JD 文本提取结构化硬性门槛 → 代码规则引擎匹配简历。
-//                          命中任一非 null 门槛且不满足 → 短路淘汰，跳过 Agent 1/2。
-// Agent 1 (qualitative):  生成结论 / 亮点 / 风险 / 偏差 / 团队定位 / 职级 / 下一步建议。
-// Agent 2 (scoring):      基于简历 + JD + Agent 1 输出，按产品六维框架打分。
-// 组装层:                  把 Agent 1 定性结果 + Agent 2 维度分 + 代码计算的 baseScore 合并成 ResumeReview。
-//
-// baseScore 由代码按共享框架权重加权得出，LLM 不输出总分，保证子分与总分自洽。
-// 历史面试加权（架构图 Stage 3）暂未接入，数据源到位后由调用方在 baseScore 之上叠加。
+// 一次模型调用生成评价与维度分；代码计算加权总分，不执行岗位规则检查。
+// 历史评价按原 schema 读取，新生成结果使用 version 5。
 // =====================================================================
 
 export {
@@ -674,19 +668,11 @@ export {
   runResumeReviewHardFilter,
 } from "./resume-analysis-hard-filter";
 export {
-  composeResumeReviewResult,
-  generateResumeQualitativeReview,
-  generateResumeQualitativeReviewFromMarkdown,
   generateResumeReview,
-  generateResumeReviewScoring,
   streamGenerateResumeReview,
   streamGenerateResumeReviewMarkdownFirst,
 } from "./resume-analysis-review";
-export type {
-  ResumeQualitativeReview,
-  ResumeReviewGenerationResult,
-  ResumeReviewScoring,
-} from "./resume-analysis-review";
+export type { ResumeReviewGenerationResult } from "./resume-analysis-review";
 
 export async function analyzeResumeFile(file: File): Promise<ResumeAnalysisResult> {
   const { runResumeAnalysisWorkflow } =

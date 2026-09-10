@@ -49,9 +49,18 @@ function extractJsonObjects(text: string): string[] {
  * blocks or output it inline. This helper tries both patterns, then validates
  * the extracted object against the supplied Zod schema.
  */
-export function parseJsonOutput<T>(text: string, schema: z.ZodType<T>, label: string): T {
+export function parseJsonOutput<T>(
+  text: string,
+  schema: z.ZodType<T>,
+  label: string,
+  options: { strict?: boolean } = {},
+): T {
   const trimmed = text.trim();
 
+  if (options.strict) {
+    const completeDocument = trimmed.replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, "$1");
+    return schema.parse(JSON.parse(completeDocument));
+  }
   const blockMatch = JSON_BLOCK_RE.exec(trimmed);
   const sources = blockMatch ? [blockMatch[1], trimmed] : [trimmed];
   const candidates = [...new Set(sources.flatMap(extractJsonObjects))];

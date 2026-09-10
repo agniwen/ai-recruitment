@@ -21,10 +21,14 @@ const PROFILE = {
   workYears: 3,
 } satisfies ResumeProfile;
 
-const OLD_REVIEW = { overall: { conclusion: "上一次成功结果" } } as ResumeReview;
+const OLD_REVIEW = { overall: { conclusion: "上一次成功结果" }, schemaVersion: 4 } as ResumeReview;
 const OLD_SCREENING = { recommendation: "flag" } as ResumeScreeningResult;
-const NEW_REVIEW = { overall: { conclusion: "本次结果" } } as ResumeReview;
-const NEW_SCREENING = { recommendation: "pass" } as ResumeScreeningResult;
+const NEW_REVIEW = {
+  overall: { conclusion: "本次结果" },
+  schemaVersion: 5,
+  version: 5,
+} as ResumeReview;
+const NEW_SCREENING = null;
 
 function createStore(overrides: Partial<ResumeAssessmentRecord> = {}) {
   const record: ResumeAssessmentRecord & {
@@ -80,8 +84,6 @@ function createStore(overrides: Partial<ResumeAssessmentRecord> = {}) {
       record.resumeReviewError = errorMessage;
       record.resumeReviewRunId = null;
       record.resumeReviewStatus = "failed";
-      record.resumeScreeningError = errorMessage;
-      record.resumeScreeningStatus = "failed";
       return Promise.resolve(true);
     },
     markProcessing: ({ expectedJobDescriptionId, runId }) => {
@@ -91,8 +93,6 @@ function createStore(overrides: Partial<ResumeAssessmentRecord> = {}) {
       record.resumeReviewError = null;
       record.resumeReviewRunId = runId;
       record.resumeReviewStatus = "processing";
-      record.resumeScreeningError = null;
-      record.resumeScreeningStatus = "processing";
       return Promise.resolve(true);
     },
     markReady: ({ assessment, expectedJobDescriptionId, runId }) => {
@@ -108,7 +108,7 @@ function createStore(overrides: Partial<ResumeAssessmentRecord> = {}) {
       record.resumeReviewStatus = "ready";
       record.resumeScreeningResult = assessment.screeningResult;
       record.resumeScreeningError = null;
-      record.resumeScreeningStatus = "ready";
+      record.resumeScreeningStatus = assessment.screeningResult ? "ready" : "idle";
       return Promise.resolve(true);
     },
   };
@@ -116,6 +116,20 @@ function createStore(overrides: Partial<ResumeAssessmentRecord> = {}) {
 }
 
 describe("runResumeAssessmentLifecycle", () => {
+  it("does not upgrade an existing legacy review during a normal queued run", async () => {
+    const { deps, record } = createStore();
+    deps.generate = () => {
+      throw new Error("must not regenerate historical results");
+    };
+    const result = await runResumeAssessmentLifecycle(
+      { force: false, organizationId: "org-1", resumeRecordId: "resume-1" },
+      deps,
+    );
+    expect(result).toEqual({ reason: "already_ready", status: "skipped" });
+    expect(record.resumeReview).toBe(OLD_REVIEW);
+    expect(record.resumeReview).not.toHaveProperty("version");
+  });
+
   it("reassesses screening and review as one ready result", async () => {
     const { deps, record } = createStore();
 
@@ -133,7 +147,7 @@ describe("runResumeAssessmentLifecycle", () => {
     expect(record.resumeReview).toEqual(NEW_REVIEW);
     expect(record.resumeScreeningResult).toEqual(NEW_SCREENING);
     expect(record.resumeReviewStatus).toBe("ready");
-    expect(record.resumeScreeningStatus).toBe("ready");
+    expect(record.resumeScreeningStatus).toBe("idle");
   });
 
   it("keeps the last successful screening and review when reassessment fails", async () => {
@@ -155,7 +169,7 @@ describe("runResumeAssessmentLifecycle", () => {
     expect(record.resumeReview).toEqual(OLD_REVIEW);
     expect(record.resumeScreeningResult).toEqual(OLD_SCREENING);
     expect(record.resumeReviewStatus).toBe("failed");
-    expect(record.resumeScreeningStatus).toBe("failed");
+    expect(record.resumeScreeningStatus).toBe("ready");
   });
 
   it("ignores a stale queued job after the bound job description changed", async () => {

@@ -134,13 +134,30 @@ describe("processResumeReviewGenerationJob", () => {
     });
     expect(mocks.updates[0]).toMatchObject({
       resumeReviewStatus: "processing",
-      resumeScreeningStatus: "processing",
     });
     expect(mocks.updates[1]).toMatchObject({
       resumeReview: { overall: { baseScore: 85 } },
       resumeReviewStatus: "ready",
       resumeScreeningResult: { recommendation: "pass" },
       resumeScreeningStatus: "ready",
+    });
+  });
+
+  it("clears legacy screening only after a successful version 5 evaluation", async () => {
+    mocks.record = assessmentRecord({ resumeScreeningResult: { recommendation: "hold" } });
+    mocks.generateResumeReviewBestEffort.mockResolvedValue({
+      review: "新版评分",
+      screeningResult: null,
+      structuredReview: { schemaVersion: 5, version: 5 },
+    });
+    await processResumeReviewGenerationJob({ ...JOB, force: true });
+    expect(mocks.updates[0]).not.toHaveProperty("resumeScreeningStatus");
+    expect(mocks.updates[1]).toMatchObject({
+      resumeReviewStatus: "ready",
+      resumeScreeningError: null,
+      resumeScreeningEvaluatedAt: null,
+      resumeScreeningResult: null,
+      resumeScreeningStatus: "idle",
     });
   });
 
@@ -154,11 +171,11 @@ describe("processResumeReviewGenerationJob", () => {
 
     expect(mocks.updates).toHaveLength(2);
     expect(mocks.notifyAiReviewPending).not.toHaveBeenCalled();
+    expect(mocks.updates[1]).not.toHaveProperty("resumeScreeningStatus");
+    expect(mocks.updates[1]).not.toHaveProperty("resumeScreeningResult");
     expect(mocks.updates[1]).toMatchObject({
       resumeReviewError: "model unavailable",
       resumeReviewStatus: "failed",
-      resumeScreeningError: "model unavailable",
-      resumeScreeningStatus: "failed",
     });
   });
 
@@ -188,7 +205,6 @@ describe("processResumeReviewGenerationJob", () => {
     });
     expect(mocks.updates[0]).toMatchObject({
       resumeReviewStatus: "processing",
-      resumeScreeningStatus: "processing",
     });
     expect(mocks.updates[1]).toMatchObject({
       resumeReview: { overall: { baseScore: 90 } },

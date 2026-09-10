@@ -88,13 +88,9 @@ describe("Mastra recruitment workflows", () => {
     ]);
   });
 
-  it("models resume review as explicit hard filter, review, scoring, and composition steps", () => {
+  it("models resume review as one combined generation step", () => {
     expect(recruitmentWorkflows.resumeReviewWorkflow.id).toBe("resume-review-workflow");
-    expect(stepIds(recruitmentWorkflows.resumeReviewWorkflow)).toEqual([
-      "qualitative-review",
-      "scoring",
-      "compose-review",
-    ]);
+    expect(stepIds(recruitmentWorkflows.resumeReviewWorkflow)).toEqual(["resume-review"]);
   });
 
   it("models interview reporting as explicit load, summary, evaluation, and composition steps", () => {
