@@ -84,7 +84,7 @@ describe("notifyAiReviewPending", () => {
     expect(mocks.post).toHaveBeenCalledTimes(1);
     const [chatId, message] = mocks.post.mock.calls[0] ?? [];
     expect(chatId).toBe("123");
-    expect(message.title).toBe("📋 AI 评价待审批");
+    expect(message.title).toBe("简历AI评分推荐-待审批");
     expect(JSON.stringify(message)).toContain("张三");
     expect(JSON.stringify(message)).toContain("https://example.com/resume-review/work/candidate-1");
   });

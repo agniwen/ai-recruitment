@@ -88,7 +88,7 @@ async function sendAiReviewPending(input: PendingReviewInput): Promise<void> {
       ]),
       Actions([LinkButton({ label: "查看候选人详情", url: detailUrl })]),
     ],
-    title: "📋 AI 评价待审批",
+    title: "简历AI评分推荐-待审批",
   });
   const results = await Promise.allSettled(
     [...recipientIds].map((id) => postTelegramDirectMessage(id, message)),
