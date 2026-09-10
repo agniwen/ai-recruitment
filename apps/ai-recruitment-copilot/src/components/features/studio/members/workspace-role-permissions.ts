@@ -67,7 +67,7 @@ export const WORKSPACE_PERMISSION_GROUPS = [
         label: "候选人管理",
       },
       {
-        actions: ["create", "read", "publish", "import", "delete"] as const,
+        actions: ["create", "read", "publish", "import", "delete", "retryFailed"] as const,
         key: "resumePool",
         label: "简历池",
       },
@@ -195,6 +195,7 @@ const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
   "candidateClose:create": "允许",
   "disableResumeEvaluation:create": "启用",
   "resumePool:create": "上传",
+  "resumePool:retryFailed": "一键重试失败",
 };
 
 const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
@@ -351,6 +352,8 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
       "允许从「简历池」将简历入库到候选人管理。与「候选人管理 · 新增」相互独立：仅有导入权限时不能在候选人管理直接新建，仅有新增权限时也不能从简历池入库。",
     publish: "允许把自己的私有简历发布到本工作区共享的公共简历池。",
     read: "允许加载「简历池」列表、详情、简历文件和预览；在招岗位里的推荐候选人接口也需要该权限（同时需要「候选人管理」查看权限）。",
+    retryFailed:
+      "允许将当前简历池中有数据权限查看的全部解析失败简历重新加入解析队列，包含已重试过的失败记录；同时需要简历池查看权限。管理员默认拥有。",
   },
   resumeUploadBatch: {
     cancel: "允许取消正在处理或暂停中的上传批次。",

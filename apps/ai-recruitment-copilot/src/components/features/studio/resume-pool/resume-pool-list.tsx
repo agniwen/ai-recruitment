@@ -2,7 +2,14 @@
 
 import { useOptionalWorkspaceMemberRole } from "@/lib/client/workspace-context";
 
-import { IconFileText, IconHistory, IconLoader2, IconTrash, IconUpload } from "@tabler/icons-react";
+import {
+  IconRefresh,
+  IconFileText,
+  IconHistory,
+  IconLoader2,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
 import type { ResumePoolListRecord } from "@arc/shared/resume-pool";
 
@@ -221,6 +228,9 @@ export function ResumePoolListContent({
 }
 
 export function ResumePoolToolbarActions({
+  canRetryFailed,
+  retryingFailed,
+  onRetryFailed,
   canOpenBatchList,
   canUpload,
   hasActiveUploadBatches,
@@ -232,6 +242,9 @@ export function ResumePoolToolbarActions({
   onUpload,
   selectedCount,
 }: {
+  canRetryFailed?: boolean;
+  retryingFailed?: boolean;
+  onRetryFailed?: () => void;
   canOpenBatchList: boolean;
   canUpload: boolean;
   hasActiveUploadBatches: boolean;
@@ -243,11 +256,27 @@ export function ResumePoolToolbarActions({
   onOpenBatchList: () => void;
   onUpload: () => void;
 }) {
-  if (!canUpload && !canOpenBatchList && !hasSelectedPrivateResumes) {
+  if (!canRetryFailed && !canUpload && !canOpenBatchList && !hasSelectedPrivateResumes) {
     return null;
   }
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      {canRetryFailed ? (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={retryingFailed}
+          onClick={onRetryFailed}
+          title="重新排队解析当前简历池中有权限查看的全部失败简历，不受筛选和分页限制"
+        >
+          {retryingFailed ? (
+            <IconLoader2 className="size-4 animate-spin" />
+          ) : (
+            <IconRefresh className="size-4" />
+          )}
+          {retryingFailed ? "正在加入队列…" : "一键重试失败"}
+        </Button>
+      ) : null}
       {canUpload || canOpenBatchList ? (
         <ButtonGroup>
           {canUpload ? (

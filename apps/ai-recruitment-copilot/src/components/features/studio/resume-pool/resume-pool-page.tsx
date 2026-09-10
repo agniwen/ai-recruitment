@@ -43,6 +43,7 @@ import {
   fetchResumePoolItems,
   fetchResumePoolUploaders,
   publishResumePoolItem,
+  retryFailedResumePoolItems,
   retryResumePoolItemParse,
 } from "@/lib/client/api";
 import { listBulkResumeBatches } from "@/lib/client/api/endpoints/bulk-resume-upload";
@@ -109,6 +110,7 @@ export function ResumePoolPage() {
   const canPublishResumePool = useHasPermission("resumePool", "publish");
   const canReadResumeUploadBatch = useHasPermission("resumeUploadBatch", "read");
   const canCreateResumeUploadBatch = useHasPermission("resumeUploadBatch", "create");
+  const canRetryFailedResumes = useHasPermission("resumePool", "retryFailed");
   const canRetryResumeParse = useHasPermission("resumeUploadBatch", "process");
   const search = useSearch({ from: "/w/$slug/studio/resume-pool" }) as ResumePoolSearch;
   const navigate = useNavigate({ from: "/w/$slug/studio/resume-pool" });
@@ -405,6 +407,23 @@ export function ResumePoolPage() {
       invalidatePool();
     },
   });
+  const retryFailedMutation = useMutation({
+    mutationFn: (targetScope: ResumePoolScope) => retryFailedResumePoolItems(slug, targetScope),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "批量重试失败"),
+    onSettled: invalidatePool,
+    onSuccess: (result) => {
+      if (result.total === 0) {
+        toast.info("当前简历池没有解析失败的简历");
+        return;
+      }
+      const message = `已入队 ${result.queued} 份，跳过 ${result.skipped} 份，入队失败 ${result.failed} 份`;
+      if (result.failed > 0) {
+        toast.warning(message);
+      } else {
+        toast.success(message);
+      }
+    },
+  });
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       await Promise.all(ids.map((id) => deleteResumePoolItem(slug, id)));
@@ -528,6 +547,9 @@ export function ResumePoolPage() {
             searchLoading={poolListQuery.isFetching}
             toolbarRight={
               <ResumePoolToolbarActions
+                canRetryFailed={canRetryFailedResumes}
+                retryingFailed={retryFailedMutation.isPending}
+                onRetryFailed={() => retryFailedMutation.mutate(scope)}
                 canOpenBatchList={canReadResumeUploadBatch}
                 canUpload={canUploadResumePool}
                 hasActiveUploadBatches={hasActiveUploadBatches}

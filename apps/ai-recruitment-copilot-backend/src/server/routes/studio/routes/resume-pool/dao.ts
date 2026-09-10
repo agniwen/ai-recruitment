@@ -998,3 +998,24 @@ export async function deleteOwnPoolItem(input: DeleteOwnPoolItemInput): Promise<
     sourceType: "resume_pool_item",
   });
 }
+
+export function listFailedResumePoolItemIds(input: {
+  organizationId: string;
+  scope: ResumePoolScope;
+  creatorIds: string[] | null;
+}) {
+  return db
+    .select({ id: resumePoolItem.id })
+    .from(resumePoolItem)
+    .where(
+      and(
+        eq(resumePoolItem.organizationId, input.organizationId),
+        eq(resumePoolItem.scope, input.scope),
+        eq(resumePoolItem.status, "active"),
+        eq(resumePoolItem.resumeParseStatus, "failed"),
+        input.scope === "private" && input.creatorIds !== null
+          ? inArray(resumePoolItem.createdBy, input.creatorIds)
+          : undefined,
+      ),
+    );
+}

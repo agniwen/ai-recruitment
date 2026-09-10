@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   createPptxPreviewPdfResponse: vi.fn(),
   createResumePoolItem: vi.fn(),
   deleteOwnPoolItem: vi.fn(),
+  denyBulkRetry: false,
   findSemanticResumeDuplicates: vi.fn(),
   getObjectBytes: vi.fn(),
   getObjectStream: vi.fn(),
@@ -40,9 +41,13 @@ const mocks = vi.hoisted(() => ({
   resolveHiringUnitAccessScope: vi.fn(),
   resolveRecruitingVisibilityScope: vi.fn(),
   retryFailedResumeParse: vi.fn(),
+  retryFailedResumePoolItems: vi.fn(),
   storeInterviewResume: vi.fn(),
 }));
 
+vi.mock("../utils/retry-failed", () => ({
+  retryFailedResumePoolItems: mocks.retryFailedResumePoolItems,
+}));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
     select: () => ({
@@ -65,7 +70,13 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility
   resolveRecruitingVisibilityScope: mocks.resolveRecruitingVisibilityScope,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
-  requirePermission: () => (_c: unknown, next: () => Promise<void>) => next(),
+  requirePermission:
+    (resource: string, action: string) => (_c: unknown, next: () => Promise<void>) => {
+      if (mocks.denyBulkRetry && resource === "resumePool" && action === "retryFailed") {
+        return Response.json({ error: "Forbidden" }, { status: 403 });
+      }
+      return next();
+    },
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope", () => ({
   resolveHiringUnitAccessScope: mocks.resolveHiringUnitAccessScope,
@@ -135,6 +146,7 @@ function makeApp() {
 describe("resume pool private uploader visibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.denyBulkRetry = false;
     mocks.queryResumePoolItems.mockResolvedValue({
       page: 1,
       pageSize: 100,
@@ -235,6 +247,48 @@ describe("resume pool private uploader visibility", () => {
       sortOrder: "desc",
       userId: USER_ID,
     });
+  });
+
+  it.each(["public", "private"])(
+    "bulk retry respects the workspace and %s visibility",
+    async (scope) => {
+      const counts = { failed: 0, queued: 2, skipped: 1, total: 3 };
+      mocks.retryFailedResumePoolItems.mockResolvedValue(counts);
+      const response = await makeApp().request("/resume-pool/retry-failed", {
+        body: JSON.stringify({ scope }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(counts);
+      expect(mocks.retryFailedResumePoolItems).toHaveBeenCalledWith({
+        creatorIds: scope === "private" ? [USER_ID, "subordinate-user"] : null,
+        organizationId: ORGANIZATION_ID,
+        requestedBy: USER_ID,
+        scope,
+      });
+    },
+  );
+
+  it("rejects bulk retry without its dedicated permission before touching the queue", async () => {
+    mocks.denyBulkRetry = true;
+    const response = await makeApp().request("/resume-pool/retry-failed", {
+      body: JSON.stringify({ scope: "public" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(403);
+    expect(mocks.retryFailedResumePoolItems).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid bulk retry scope before accessing the queue", async () => {
+    const response = await makeApp().request("/resume-pool/retry-failed", {
+      body: JSON.stringify({ scope: "all" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.retryFailedResumePoolItems).not.toHaveBeenCalled();
   });
 
   it("queues one retry for an eligible failed resume", async () => {

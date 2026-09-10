@@ -1,3 +1,4 @@
+import { retryFailedResumePoolItems } from "./utils/retry-failed";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -40,6 +41,7 @@ import {
 import { resumePoolRecommendationsRouter } from "./routes/recommendations/route";
 import { retryFailedResumeParse } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/retry";
 import {
+  resumePoolRetryFailedSchema,
   resumePoolBindSchema,
   resumePoolCreateInputSchema,
   resumePoolImportInputSchema,
@@ -221,6 +223,39 @@ export const resumePoolRouter = factory
     });
     return c.json({ matches }, 200);
   })
+  .post(
+    "/retry-failed",
+    requirePermission("resumePool", "read"),
+    requirePermission("resumePool", "retryFailed"),
+    zValidator("json", resumePoolRetryFailedSchema, jsonValidatorError("重试参数无效。")),
+    async (c) => {
+      const { activeOrg, user } = c.var;
+      if (!activeOrg || !user) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const { scope } = c.req.valid("json");
+      const visibilityScope = await resolveRecruitingVisibilityScope({
+        currentRole: c.var.member?.role,
+        organizationId: activeOrg.id,
+        userId: user.id,
+      });
+      try {
+        const result = await retryFailedResumePoolItems({
+          creatorIds:
+            scope === "private" ? intersectRequestedCreatorIds(null, visibilityScope) : null,
+          organizationId: activeOrg.id,
+          requestedBy: user.id,
+          scope,
+        });
+        return c.json(result, 200);
+      } catch (error) {
+        return c.json(
+          { error: error instanceof Error ? error.message : "批量重试入队失败。" },
+          503,
+        );
+      }
+    },
+  )
   .post(
     "/:id/retry-parse",
     requirePermission("resumePool", "read"),

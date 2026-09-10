@@ -31,6 +31,7 @@ export type ResumeForceReparseClaim =
   | { status: "busy" | "not_found" | "no_file" };
 
 export type ResumeParseRetryRequest = ResumeParseRetryTarget & {
+  allowExhaustedRetries?: boolean;
   organizationId: string;
   requestedBy: string;
 };
@@ -197,7 +198,7 @@ export async function claimFailedResumeParseRetry(
     if (row.item.status !== "failed") {
       return { status: "not_failed" };
     }
-    if (row.item.attemptCount > 1) {
+    if (row.item.attemptCount > 1 && !input.allowExhaustedRetries) {
       return { status: "retry_exhausted" };
     }
 

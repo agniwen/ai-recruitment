@@ -132,6 +132,7 @@ describe("workspace role permission helpers", () => {
     expect(items.map((item) => item.key)).toContain("dataExport:export");
     expect(items.map((item) => item.key)).toContain("resumeLibrary:read");
     expect(items.map((item) => item.key)).toContain("resumePool:import");
+    expect(items.map((item) => item.key)).toContain("resumePool:retryFailed");
     expect(items.map((item) => item.key)).toContain("resumeUploadBatch:process");
     expect(items.map((item) => item.key)).toContain("humanInterview:create");
     expect(items.map((item) => item.key)).toContain("humanInterview:read");
@@ -175,6 +176,7 @@ describe("workspace role permission helpers", () => {
       "发布",
       "导入",
       "删除",
+      "一键重试失败",
     ]);
     expect(groups.find((group) => group.resource === "humanInterview")?.items).toHaveLength(4);
     expect(groups.find((group) => group.resource === "offer")?.items).toHaveLength(4);

@@ -140,3 +140,13 @@ export async function deleteResumePoolItem(slug: string, id: string): Promise<vo
     "删除简历失败",
   );
 }
+
+export function retryFailedResumePoolItems(slug: string, scope: ResumePoolScope) {
+  return rpcFetch<{ total: number; queued: number; skipped: number; failed: number }>(
+    rpc.api.w[":slug"].studio["resume-pool"]["retry-failed"].$post({
+      json: { scope },
+      param: { slug },
+    }),
+    "批量重试失败",
+  );
+}

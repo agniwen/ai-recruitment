@@ -37,3 +37,5 @@ export const resumePoolCreateInputSchema = resumePoolCreateSchema;
 export const resumePoolBindSchema = z.object({
   jobDescriptionId: z.string().trim().min(1),
 });
+
+export const resumePoolRetryFailedSchema = z.object({ scope: z.enum(["private", "public"]) });

@@ -101,7 +101,7 @@ export const statement = {
   page: STUDIO_PAGE_PERMISSION_ACTIONS,
   questionTemplate: ["create", "read", "update", "delete"],
   resumeLibrary: ["create", "read", "update", "delete"],
-  resumePool: ["create", "read", "publish", "import", "delete"],
+  resumePool: ["create", "read", "publish", "import", "delete", "retryFailed"],
   resumeUploadBatch: ["create", "read", "process", "cancel", "delete"],
 } as const;
 

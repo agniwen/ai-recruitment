@@ -11,6 +11,12 @@ import {
 } from "@arc/shared/permissions";
 
 describe("permissions matrix", () => {
+  it("grants bulk failed parse retries to administrators but not ordinary members by default", () => {
+    expect(statement.resumePool).toContain("retryFailed");
+    expect(roles.admin.statements.resumePool).toContain("retryFailed");
+    expect(roles.owner.statements.resumePool).toContain("retryFailed");
+    expect(roles.member.statements.resumePool).not.toContain("retryFailed");
+  });
   it.each(["admin", "owner"] as const)("grants %s every catalog permission", (role) => {
     expect(roles[role].statements).toEqual(statement);
   });
