@@ -12,7 +12,6 @@ RUN corepack enable
 FROM base AS deps
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY patches patches
 COPY apps/ai-recruitment-copilot/package.json apps/ai-recruitment-copilot/
 COPY apps/ai-recruitment-copilot-backend/package.json apps/ai-recruitment-copilot-backend/
 COPY packages packages

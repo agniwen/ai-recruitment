@@ -1,38 +1,47 @@
 import { readFileSync } from "node:fs";
-import path from "node:path";
+import type {
+  HumanInterviewMeetingRecord,
+  HumanInterviewRoundRecord,
+} from "@arc/shared/studio-pipeline-stages";
 import { describe, expect, it } from "vitest";
+import { canCompleteHumanInterviewRound } from "./human-interview-stage-utils";
 
-const source = readFileSync(
-  path.resolve(import.meta.dirname, "human-interview-stage-panel.tsx"),
+const dialogSource = readFileSync(
+  new URL("human-interview-stage-dialogs.tsx", import.meta.url),
   "utf-8",
 );
 
-describe("HumanInterviewStagePanel editing gates", () => {
-  it("lets pending human interview edits submit interviewers with the schedule", () => {
-    expect(source).toContain("const [interviewerIds, setInterviewerIds] = useState(() =>");
-    expect(source).toContain("round.interviewers.map((interviewer) => interviewer.id)");
-    expect(source).toContain("interviewerIds,");
-    expect(source).toContain("disabled={mutation.isPending || interviewerIds.length === 0}");
+describe("human interview editing gates", () => {
+  it("initializes scheduling from the configured interviewers and requires a selection", () => {
+    expect(dialogSource).toContain("setInterviewerIds([...defaultInterviewerIds])");
+    expect(dialogSource).toContain("interviewerIds,");
+    expect(dialogSource).toContain("disabled={mutation.isPending || interviewerIds.length === 0}");
   });
 
-  it("only offers members marked as interviewers in human interview selectors", () => {
-    expect(source).toContain("isInterviewer: boolean;");
-    expect(source).toContain("member.isInterviewer");
-    expect(source).toContain("interviewerMemberOptions");
-    expect(source).toContain('emptyMessage="暂无可选面试官"');
+  it("validates and trims feedback before submitting completion", () => {
+    const validation = dialogSource.indexOf('throw new Error("请填写面试评价")');
+    const submission = dialogSource.indexOf("return completeHumanInterviewRound(");
+    expect(validation).toBeGreaterThan(0);
+    expect(submission).toBeGreaterThan(validation);
+    expect(dialogSource).toContain("feedback: trimmedFeedback");
   });
 
-  it("requires feedback before completing a human interview round", () => {
-    expect(source).toContain("const trimmedFeedback = feedback.trim();");
-    expect(source).toContain("请填写面试评价");
-    expect(source).toContain("feedback: trimmedFeedback");
-    expect(source).toContain("disabled={mutation.isPending || !feedback.trim()}");
-    expect(source).toContain("面试评价");
-  });
-
-  it("blocks scheduling another round while a completed round is missing feedback", () => {
-    expect(source).toContain("missingFeedbackRounds");
-    expect(source).toContain("请先填写已完成轮次的面试评价，再安排下一轮。");
-    expect(source).toContain("disabled={hasMissingCompletedRoundFeedback}");
-  });
+  it.each([
+    ["pending", "ended", false, true],
+    ["pending", "in_progress", false, false],
+    ["pending", "scheduled", false, false],
+    ["pending", null, false, false],
+    ["completed", "ended", false, false],
+    ["cancelled", "ended", false, false],
+    ["pending", "ended", true, false],
+  ] as const)(
+    "completion gate: round %s, meeting %s, disabled %s",
+    (status, meetingStatus, disabled, expected) => {
+      const round = { status } as HumanInterviewRoundRecord;
+      const meeting = meetingStatus
+        ? ({ status: meetingStatus } as HumanInterviewMeetingRecord)
+        : null;
+      expect(canCompleteHumanInterviewRound(round, meeting, disabled)).toBe(expected);
+    },
+  );
 });

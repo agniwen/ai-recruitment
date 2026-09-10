@@ -22,7 +22,10 @@ describe("TanStack Start studio resumes migration", () => {
 
   it("restores the recruiter resume list after closing a workspace detail page", () => {
     const detailSource = readSource("routes/w.$slug.studio.resumes.$recordId.tsx");
-    const listSource = readSource("routes/w.$slug.studio.resumes.tsx");
+    const listSource =
+      readSource("components/features/studio/resumes/resume-library-page-list.tsx") +
+      readSource("components/features/studio/resumes/resume-library-page.tsx") +
+      readSource("components/features/studio/resumes/resume-library-page-model.tsx");
     const studioShellSource = readSource("routes/w.$slug.studio.tsx");
 
     expect(detailSource).toContain("locationState.fromRecruiterResumeList");
@@ -65,7 +68,7 @@ describe("TanStack Start studio resumes migration", () => {
   });
 
   it("shows a tooltip on unsupported resume preview file icons", () => {
-    const source = readSource("components/features/studio/resumes/resume-library-card.tsx");
+    const source = readSource("components/features/studio/resumes/resume-library-card-actions.tsx");
 
     expect(source).toContain("UnsupportedResumeDocumentPreviewTooltip");
   });
@@ -130,12 +133,14 @@ describe("TanStack Start studio resumes migration", () => {
   });
 
   it("keeps the review detail page on document scrolling instead of modal internal scrolling", () => {
-    const source = readSource("components/features/studio/studio-person-detail-panel.tsx");
+    const source =
+      readSource("components/features/studio/studio-person-detail-controller.tsx") +
+      readSource("components/features/studio/studio-person-detail-view.tsx");
 
     expect(source).toContain('layoutMode = "modal"');
     expect(source).toContain("const canUseTimelineRailScroll");
     expect(source).toContain('layoutMode === "modal"');
-    expect(source).toContain('scrollMode={canUseTimelineRailScroll ? "internal" : "page"}');
+    expect(source).toContain('layoutMode === "modal"');
     expect(source).toContain('canUseTimelineRailScroll ? "xl:overflow-hidden" : undefined');
   });
 

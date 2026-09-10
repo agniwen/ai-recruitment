@@ -564,6 +564,7 @@ describe("resume pool import route", () => {
       dedupPolicy: "force",
       hiringUnitId: "hu_resume_pool_import",
       importedBy: USER_ID,
+      importedByRole: "member",
       jobDescriptionId: null,
       organizationId: ORGANIZATION_ID,
       poolItemId: "pool-item-1",

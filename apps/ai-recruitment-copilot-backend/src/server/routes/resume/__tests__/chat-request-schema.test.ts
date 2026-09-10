@@ -19,15 +19,18 @@ describe("resumeChatRequestSchema", () => {
     });
   });
 
-  it.each(["studioResumeId", "model", "jobDescription", "enableThinking"])(
-    "rejects the removed legacy field %s",
+  it.each(["studioResumeId", "model", "jobDescription"])(
+    "accepts the supported context field %s",
     (field) => {
-      expect(() =>
-        resumeChatRequestSchema.parse({
-          ...baseRequest,
-          [field]: field === "enableThinking" ? false : "legacy-value",
-        }),
-      ).toThrow();
+      expect(
+        resumeChatRequestSchema.parse({ ...baseRequest, [field]: "context-value" }),
+      ).toMatchObject({ [field]: "context-value" });
     },
   );
+
+  it("strips unsupported thinking options", () => {
+    expect(
+      resumeChatRequestSchema.parse({ ...baseRequest, enableThinking: false }),
+    ).not.toHaveProperty("enableThinking");
+  });
 });

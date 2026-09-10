@@ -3,6 +3,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const routeSource = readFileSync(join(import.meta.dirname, "..", "route.ts"), "utf-8");
+const odcRouteSource = readFileSync(
+  join(import.meta.dirname, "..", "routes", "odc", "route.ts"),
+  "utf-8",
+);
 const daoSource = readFileSync(join(import.meta.dirname, "..", "dao.ts"), "utf-8");
 
 describe("hiring units route permissions", () => {
@@ -23,7 +27,8 @@ describe("hiring units route permissions", () => {
     expect(routeSource).toContain('requirePermission("hiringUnit", "update")');
     expect(routeSource).toContain('requirePermission("hiringUnit", "delete")');
     expect(routeSource).toContain('requirePermission("department", "read")');
-    expect(routeSource).toContain('"/:id/odc",\n    requirePermission("hiringUnit", "update")');
+    expect(routeSource).toContain('.route("/:id/odc", hiringUnitOdcRouter)');
+    expect(odcRouteSource).toContain('requirePermission("hiringUnit", "update")');
   });
 
   it("applies the actor hiring-unit scope to departments in the tree", () => {

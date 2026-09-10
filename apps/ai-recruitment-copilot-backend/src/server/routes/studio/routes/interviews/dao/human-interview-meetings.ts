@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
+import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   studioHumanInterviewMeeting,
@@ -236,6 +237,11 @@ export async function createHumanInterviewMeeting({
 }): Promise<HumanInterviewMeetingRecord> {
   const uniqueRoundIds = uniq(input.roundIds);
   const uniqueInterviewerIds = uniq(input.interviewerIds);
+  await assertWorkspaceInterviewers({
+    makeError: (message) => new HumanInterviewMeetingError(message, 400),
+    organizationId,
+    userIds: uniqueInterviewerIds,
+  });
   const rounds = await db
     .select({
       id: studioHumanInterviewRound.id,

@@ -212,7 +212,7 @@ describe("getCandidateStageTransitionError", () => {
         humanInterviewReadyForOffer: false,
         to: "human_interview",
       }),
-    ).toBe("请先绑定在招岗位后再安排真人面试");
+    ).toBe("请先绑定在招岗位后再推进招聘阶段。");
     expect(
       getCandidateStageTransitionError({
         from: "ai_interview",
@@ -220,7 +220,7 @@ describe("getCandidateStageTransitionError", () => {
         humanInterviewReadyForOffer: false,
         to: "human_interview",
       }),
-    ).toBe("请先绑定在招岗位后再安排真人面试");
+    ).toBe("请先绑定在招岗位后再推进招聘阶段。");
     expect(
       getCandidateStageTransitionError({
         from: "screening",

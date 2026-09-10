@@ -71,7 +71,7 @@ describe("TanStack Start migration patterns", () => {
     expect(rootRoute).not.toContain("useRouterState");
     expect(rootRoute).not.toContain("opacity-70");
     expect(pendingOutlet).toContain("useRouterState");
-    expect(pendingOutlet).toContain("state.isLoading || state.isTransitioning");
+    expect(pendingOutlet).toContain("state.isLoading");
     expect(pendingOutlet).toContain("opacity-70");
     expect(studioLayout).toContain("PendingOutlet");
     expect(agentLayout).toContain("PendingOutlet");
@@ -296,7 +296,7 @@ describe("TanStack Start migration patterns", () => {
     expect(`${resumesFunctions}\n${resumesState}`).not.toContain("await import");
   });
 
-  it("handles notFound at the root instead of rendering inside layout routes", () => {
+  it("keeps root not-found handling and the workspace fallback", () => {
     const rootRoute = readSource("src/routes/__root.tsx");
     const router = readSource("src/router.tsx");
     const studioLayoutRoute = readSource("src/routes/w.$slug.studio.tsx");
@@ -305,7 +305,7 @@ describe("TanStack Start migration patterns", () => {
     expect(router).toContain('notFoundMode: "root"');
     expect(rootRoute).toContain("notFoundComponent:");
     expect(rootRoute).toContain("NotFoundPage");
-    expect(studioLayoutRoute).not.toContain("notFoundComponent:");
+    expect(studioLayoutRoute).toContain("notFoundComponent:");
   });
 
   it("keeps Recharts dashboards out of the server-rendered shell", () => {

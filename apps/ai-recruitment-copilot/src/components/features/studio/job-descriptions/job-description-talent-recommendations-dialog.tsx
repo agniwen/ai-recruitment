@@ -210,9 +210,7 @@ function CandidateRecommendationCard({
                 </button>
               </CardTitle>
               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <Badge className="font-normal" variant="secondary">
-                  {sourceLabel}
-                </Badge>
+                <Badge variant="secondary">{sourceLabel}</Badge>
                 <CopyableResumeRecordId
                   displayIdClassName="text-[11px] text-muted-foreground/70"
                   id={candidate.id}

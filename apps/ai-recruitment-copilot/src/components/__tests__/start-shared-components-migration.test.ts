@@ -22,18 +22,11 @@ describe("TanStack Start shared component migration", () => {
     );
   });
 
-  it("keeps PDF preview lazy loading failures scoped to the preview button", () => {
-    const previewButtonSource = readSource("components/features/pdf/pdf-preview-button.tsx");
-
-    expect(previewButtonSource).toContain('import("@/components/features/pdf/pdf-preview-dialog")');
-    expect(previewButtonSource).toContain("isDynamicImportFetchError");
-    expect(previewButtonSource).toContain("String(error)");
-    expect(previewButtonSource).toContain("pdf-preview-dialog.tsx?retry=");
-    expect(previewButtonSource).toContain("import(/* @vite-ignore */ retryUrl)");
-    expect(previewButtonSource).toContain("PdfPreviewErrorBoundary");
-    expect(previewButtonSource).toContain("PdfPreviewFallbackDialog");
-    expect(previewButtonSource).toContain("<iframe");
-    expect(previewButtonSource).not.toContain('toast.error("简历预览加载失败，请刷新后重试")');
+  it("routes PDF previews through the shared document modal", () => {
+    const source = readSource("components/features/pdf/pdf-preview-button.tsx");
+    expect(source).toContain("<ResumeDocumentPreviewModal");
+    expect(source).toContain('kind="pdf"');
+    expect(source).toContain("url={open && !disabled ? url : null}");
   });
 
   it("persists generated structured resume review through chat one-click import", () => {

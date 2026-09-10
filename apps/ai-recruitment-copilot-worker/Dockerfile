@@ -11,7 +11,6 @@ FROM base AS deps
 WORKDIR /repo
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY patches patches
 COPY apps/ai-recruitment-copilot-worker/package.json apps/ai-recruitment-copilot-worker/
 COPY apps/ai-recruitment-copilot-backend/package.json apps/ai-recruitment-copilot-backend/
 COPY packages/adapter-feishu/package.json packages/adapter-feishu/

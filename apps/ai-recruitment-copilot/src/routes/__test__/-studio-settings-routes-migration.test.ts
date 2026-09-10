@@ -173,12 +173,7 @@ describe("TanStack Start studio settings and detail route migration", () => {
     const accessIndex = resumesState.indexOf("canReadStudioResumes(access)");
 
     expect(resumesRoute).toContain("loadStudioResumesState");
-    expect(resumesAccess).toContain(
-      'hasPermissionInStatements(access.permissions, "page", "resumes")',
-    );
-    expect(resumesAccess).toContain(
-      'hasPermissionInStatements(access.permissions, "resumeLibrary", "read")',
-    );
+    expect(resumesAccess).toContain('canAccessStudioPage(access.permissions, "resumes")');
     expect(accessIndex).toBeGreaterThanOrEqual(0);
     expect(resumesState).toContain('return { status: "ready" }');
     expect(resumesState).not.toContain("loadStudioResumesData");
@@ -236,7 +231,7 @@ describe("TanStack Start studio settings and detail route migration", () => {
     expect(source).toContain("<MemberCell");
     expect(source).toContain("useDataGridState<ManagedMailIngestRow");
     expect(source).toContain("<DataGrid<ManagedMailIngestRow>");
-    expect(source).toContain('type: "search"');
+    expect(source).toContain('type: "text-filters"');
     expect(source).toContain('columnPinning={{ end: ["actions"] }}');
     expect(source).not.toContain("<Table>");
     expect(source).not.toContain("function getInitials");

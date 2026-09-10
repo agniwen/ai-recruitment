@@ -64,7 +64,7 @@ describe("TanStack Start platform route migration", () => {
     expect(gridSource).toContain("<MemberCell");
     expect(gridSource).toContain("actionsColumn<PlatformMailIngestAccountRow>");
     expect(gridSource).toContain('columnPinning={{ end: ["actions"] }}');
-    expect(gridSource).toContain('type: "search"');
+    expect(gridSource).toContain('type: "text-filters"');
   });
 
   it("links platform admins and the platform sidebar back to the workspace", () => {

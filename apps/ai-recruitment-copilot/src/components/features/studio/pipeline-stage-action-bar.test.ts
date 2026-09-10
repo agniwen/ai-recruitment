@@ -33,7 +33,7 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(source).toContain('import { ButtonGroup } from "@/components/ui/button-group";');
     expect(source).toContain("<ButtonGroup");
     expect(source).toContain("{groupedPrimaryAction}");
-    expect(source).toContain("const hasPrimaryActions =");
+    expect(source).toContain("const hasGroupedPrimaryActions =");
     expect(source).toContain("Boolean(groupedPrimaryAction)");
     expect(source).toContain("安排真人面试");
     expect(source).toContain('key: "to-offer"');
@@ -53,7 +53,7 @@ describe("PipelineStageActionBar floating actions", () => {
     );
 
     expect(renderSource).toContain(
-      'const groupedPrimaryAction = pipelineStage === "closed" ? null : primaryAction;',
+      "const groupedPrimaryAction = shouldShowInterviewProgressAction({",
     );
     expect(renderSource).toContain("Boolean(groupedPrimaryAction)");
     expect(renderSource).toContain("{groupedPrimaryAction}");
@@ -144,7 +144,7 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(source).toContain("owns mutations");
     expect(source).toContain("const [isAdvancing, setIsAdvancing] = useState(false);");
     expect(source).toContain("await withCleanup(");
-    expect(source).toContain("() => onAdvance(target)");
+    expect(source).toContain("onAdvance(target, approvalNote, notificationUserId)");
     expect(source).toContain("() => setIsAdvancing(false)");
     expect(source).toContain("void onAdvance(targetStage);");
     expect(source).toContain("disabled={isBusy}");

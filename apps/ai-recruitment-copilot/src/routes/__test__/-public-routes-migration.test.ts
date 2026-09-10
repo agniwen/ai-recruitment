@@ -35,7 +35,7 @@ describe("TanStack Start public route migration", () => {
       readSource("routes/interview.tsx"),
       readSource("routes/interview.$id.tsx"),
       readSource("routes/interview.$id.$roundId.tsx"),
-      readSource("components/features/human-interview/human-meeting-room.tsx"),
+      readSource("components/features/human-interview/human-meeting-audio-controls.tsx"),
       readSource("components/features/interview/interview-room.tsx"),
       readSource("components/features/interview/interview-copy-guard.tsx"),
     ];
@@ -59,16 +59,18 @@ describe("TanStack Start public route migration", () => {
     expect(source).toContain("<Outlet />");
   });
 
-  it("keeps human interview voice effects limited to original and clear phone audio", () => {
-    const source = readSource("components/features/human-interview/human-meeting-room.tsx");
+  it("offers the supported human interview voice effects", () => {
+    const source = readSource(
+      "components/features/human-interview/human-meeting-audio-controls.tsx",
+    );
     const optionsStart = source.indexOf("const voiceEffectOptions = [");
     const optionsSource = source.slice(optionsStart, source.indexOf("] satisfies", optionsStart));
 
     expect(optionsSource).toContain('{ id: "none", label: "原声" }');
     expect(optionsSource).toContain('{ id: "phoneClear", label: "清晰电话音" }');
-    expect(optionsSource).not.toContain("轻微低沉");
-    expect(optionsSource).not.toContain("稳重低沉");
-    expect(optionsSource).not.toContain("轻机器人");
-    expect(optionsSource).not.toContain("卡通高音");
+    expect(optionsSource).toContain("轻微低沉");
+    expect(optionsSource).toContain("稳重低沉");
+    expect(optionsSource).toContain("轻机器人");
+    expect(optionsSource).toContain("卡通高音");
   });
 });

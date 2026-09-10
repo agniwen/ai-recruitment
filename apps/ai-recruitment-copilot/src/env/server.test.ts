@@ -1,10 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyServerEnv, createServerEnv } from "./server";
 
-const ORIGINAL_ALIBABA_MODEL = process.env.ALIBABA_MODEL;
-
 afterEach(() => {
-  process.env.ALIBABA_MODEL = ORIGINAL_ALIBABA_MODEL;
+  vi.unstubAllEnvs();
 });
 
 describe("server env", () => {
@@ -71,7 +69,10 @@ describe("server env", () => {
   it("reads process env at call time instead of module load time", () => {
     const target: Record<string, string | undefined> = {};
 
-    process.env.ALIBABA_MODEL = "per-request-model";
+    for (const [key, value] of Object.entries(configuredEnv)) {
+      vi.stubEnv(key, value);
+    }
+    vi.stubEnv("ALIBABA_MODEL", "per-request-model");
     applyServerEnv(target);
 
     expect(target.ALIBABA_MODEL).toBe("per-request-model");
