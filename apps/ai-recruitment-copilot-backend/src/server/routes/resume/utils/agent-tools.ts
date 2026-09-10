@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { isResumeStructuredSourceFileNameCompatible } from "@arc/db-schema/resume-parser-schema";
 import { getResumeReviewFramework } from "@arc/shared/resume-review";
 import { generateResumeStructured } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-pipeline";
 import { selectUploadedResumePdfs } from "@arc/shared/resume-pdf";
@@ -7,6 +8,7 @@ import { matchJobDescriptionForResume } from "@arc/ai-recruitment-copilot-backen
 import { toResumeProfile } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-parser-agent";
 import {
   findContentHashByAttachmentId,
+  getUserAttachment,
   updateStructuredByHash,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat-attachments";
 import { listAllJobDescriptions } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
@@ -85,22 +87,46 @@ export function createListUploadedResumePdfsTool({
 // one recommendation + reason; UI shows a one-pick approval card.
 // =====================================================================
 
+async function extractResumeForSuggestion(
+  resume: BakedParsedResume,
+  orgId: string,
+  userId?: string | null,
+) {
+  const attachment = userId ? await getUserAttachment(userId, orgId, resume.attachmentId) : null;
+  if (
+    attachment?.parsedStructured &&
+    isResumeStructuredSourceFileNameCompatible(attachment.parsedStructured, resume.filename)
+  ) {
+    return attachment.parsedStructured;
+  }
+  const structured = await generateResumeStructured(resume.parsedText ?? "", {
+    fileName: resume.filename,
+  });
+  const contentHash = await findContentHashByAttachmentId(resume.attachmentId);
+  if (contentHash) {
+    await updateStructuredByHash(contentHash, structured).catch((error) => {
+      console.warn("[suggest_jd] updateStructuredByHash backfill failed:", error);
+    });
+  }
+  return structured;
+}
+
 export function createSuggestJobDescriptionTool({
   orgId,
   resumes,
+  userId,
 }: {
   orgId: string;
   resumes: BakedParsedResume[];
+  userId?: string | null;
 }) {
+  // 同一轮工具调用共享正在进行或已完成的提取；失败后允许重新尝试。
+  const extractions = new Map<string, ReturnType<typeof extractResumeForSuggestion>>();
   return tool({
     description:
       "当用户上传了简历文件且当前未配置在招岗位时，调用此工具从后台已配置的在招岗位中智能匹配最接近的岗位。返回单个推荐岗位与简短理由，供用户在 UI 上点击确认或忽略。",
     execute: async ({ resumeName }) => {
-      // 直接消费 message 里 baked 好的解析结果，不做任何 OCR / DB 读取。
-      // 没有 baked 数据就直接当作"没简历"返回，让上层依据 system prompt 提示用户重传。
-      // Consume the parsed data already baked into the message — no OCR / DB.
-      // If nothing baked, return as "no-resume" and let the prompt instruct
-      // the user to re-upload.
+      // 从消息选择简历；结构化快照缺失时，优先复用当前用户附件中的已完成结果。
       if (resumes.length === 0) {
         return { status: "no-resume" as const };
       }
@@ -138,20 +164,15 @@ export function createSuggestJobDescriptionTool({
         profile = toResumeProfile(primaryResume.parsedStructured);
       } else if (primaryResume.parsedText && primaryResume.parsedText.trim().length > 0) {
         try {
-          const structured = await generateResumeStructured(primaryResume.parsedText);
-          // 用 attachmentId 反查 contentHash（chat 上传时算的是 PDF 字节 hash，
-          // 这里手头只有 OCR 文本，不能重算），然后回填同 hash 全部行。
-          // Look up contentHash by attachmentId — the chat upload hash is over
-          // raw PDF bytes; we can't re-derive it from OCR text alone. Once we
-          // have the hash, fan out the backfill to every row sharing it.
-          const contentHash = await findContentHashByAttachmentId(primaryResume.attachmentId);
-          if (contentHash) {
-            await updateStructuredByHash(contentHash, structured).catch((error) => {
-              console.warn("[suggest_jd] updateStructuredByHash backfill failed:", error);
-            });
+          let extraction = extractions.get(primaryResume.attachmentId);
+          if (!extraction) {
+            extraction = extractResumeForSuggestion(primaryResume, orgId, userId);
+            extractions.set(primaryResume.attachmentId, extraction);
           }
+          const structured = await extraction;
           profile = toResumeProfile(structured);
         } catch (error) {
+          extractions.delete(primaryResume.attachmentId);
           // 区分"结构化抽取这一步失败"与"matcher 找不到合适岗位"——前者是 LLM
           // 调用抖动/超时，应该建议重试；后者是数据层面没有匹配项。两者复用同一个
           // reason 会让 LLM 把技术性失败说成"没有合适岗位"，误导用户。

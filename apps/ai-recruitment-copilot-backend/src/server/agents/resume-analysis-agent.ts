@@ -1,3 +1,4 @@
+import { isResumeStructuredSourceFileNameCompatible } from "@arc/db-schema/resume-parser-schema";
 import type {
   GeneratedInterviewQuestion,
   ResumeAnalysisResult,
@@ -464,7 +465,10 @@ export function streamParseResumeProfile(
         cachedAttachment && isResumeParseCacheSourceCompatible(cachedAttachment.parsedTextSource)
           ? cachedAttachment
           : null;
-      if (existing?.parsedStructured) {
+      if (
+        existing?.parsedStructured &&
+        isResumeStructuredSourceFileNameCompatible(existing.parsedStructured, file.name)
+      ) {
         const cached = projectAttachmentToResumeProfile(existing.parsedStructured);
         if (cached) {
           emitAiRun({
@@ -486,7 +490,9 @@ export function streamParseResumeProfile(
           type: "step.started",
         });
 
-        const structured = await generateResumeStructured(existing.parsedText);
+        const structured = await generateResumeStructured(existing.parsedText, {
+          fileName: file.name,
+        });
         await updateStructuredByHash(contentHash, structured);
 
         emitAiRun({

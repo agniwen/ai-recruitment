@@ -4,7 +4,6 @@ import { BackgroundStreamToaster } from "@/components/features/chat/background-s
 import { AppVersionProvider } from "@/components/features/app-version/app-version-provider";
 import { AppSidebarShell } from "@/components/layout/app-sidebar/app-sidebar-shell";
 import { WorkspaceSlugProvider } from "@/lib/client/workspace-context";
-import { getWorkspaceAccessState } from "@/lib/start/auth-session";
 import { resolveWorkspaceLandingHref } from "@/lib/start/workspace-landing";
 
 function WorkspaceRoute() {
@@ -38,6 +37,7 @@ export const Route = createFileRoute("/w/$slug")({
       location: { href: string; pathname: string };
       params: { slug: string };
     };
+    const { getWorkspaceAccessState } = await import("@/lib/start/auth-session");
     const state = await getWorkspaceAccessState({ data: { slug: params.slug } });
 
     if (state.status === "unauthenticated") {

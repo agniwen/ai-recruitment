@@ -3,6 +3,10 @@
 import {
   IconCalendarEvent as CalendarEventIcon,
   IconChartBar as ChartNoAxesCombinedIcon,
+  IconChartPie as ChartPieIcon,
+  IconHierarchy as HierarchyIcon,
+  IconUserPlus as UserPlusIcon,
+  IconFileCheck as FileCheckIcon,
   IconRobot as BotIcon,
   IconBuilding as Building2Icon,
   IconClipboardList as ClipboardListIcon,
@@ -74,7 +78,7 @@ const navGroups: NavGroup[] = [
       },
       {
         action: "aiReview",
-        icon: ShieldCheckIcon,
+        icon: FileCheckIcon,
         path: "/studio/ai-review",
         resource: "page",
         title: "AI 分析审批",
@@ -102,7 +106,7 @@ const navGroups: NavGroup[] = [
       },
       {
         action: "odcAnalysis",
-        icon: ChartNoAxesCombinedIcon,
+        icon: ChartPieIcon,
         path: "/studio/odc-analysis",
         resource: "page",
         title: "ODC分析",
@@ -128,7 +132,7 @@ const navGroups: NavGroup[] = [
       },
       {
         action: "hiringUnits",
-        icon: GlobeIcon,
+        icon: HierarchyIcon,
         path: "/studio/hiring-units",
         resource: "page",
         title: "用人组织",
@@ -201,7 +205,7 @@ const navGroups: NavGroup[] = [
       },
       {
         action: "preRegistrations",
-        icon: ClipboardListIcon,
+        icon: UserPlusIcon,
         path: "/studio/pre-registrations",
         resource: "page",
         title: "预录入信息",

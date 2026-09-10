@@ -2,10 +2,9 @@
 
 import { IconDownload, IconLoader2, IconPhotoOff, IconX } from "@tabler/icons-react";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { DocxViewerPreview } from "@/components/ui/docx-viewer";
+import { PdfPreviewDialog, PdfPreviewContent } from "@/components/features/pdf/pdf-preview-dialog";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { XlsxViewerPreview } from "@/components/ui/xlsx-viewer";
 import type { PDFViewerHandle } from "@/components/ui/pdf-viewer";
 import { cn } from "@arc/shared/utils";
 import { runAsyncAction } from "@/lib/client/async-control";
@@ -13,21 +12,29 @@ import { runAsyncAction } from "@/lib/client/async-control";
 export type OfficeResumePreviewKind = "docx" | "xlsx";
 export type ResumeDocumentPreviewKind = "pdf" | "image" | OfficeResumePreviewKind;
 
-const PdfPreviewDialog = lazy(async () => {
-  const mod = await import("@/components/features/pdf/pdf-preview-dialog");
-  return { default: mod.PdfPreviewDialog };
+const DocxViewerPreview = lazy(async () => {
+  const mod = await import("@/components/ui/docx-viewer");
+  return { default: mod.DocxViewerPreview };
 });
-
-const PdfPreviewContent = lazy(async () => {
-  const mod = await import("@/components/features/pdf/pdf-preview-dialog");
-  return { default: mod.PdfPreviewContent };
+const XlsxViewerPreview = lazy(async () => {
+  const mod = await import("@/components/ui/xlsx-viewer");
+  return { default: mod.XlsxViewerPreview };
 });
+function ResumeDocumentViewerLoading({ kind }: { kind: OfficeResumePreviewKind }) {
+  return (
+    <output className="flex h-full items-center justify-center gap-2 text-muted-foreground text-sm">
+      <IconLoader2 className="size-5 animate-spin" />
+      {kind === "docx" ? "Word" : "Excel"} 加载中…
+    </output>
+  );
+}
 
 export interface ResumeDocumentPreviewDialogProps {
   downloadUrl?: string;
   kind: ResumeDocumentPreviewKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenChangeComplete?: (open: boolean) => void;
   url: string;
   filename?: string;
 }
@@ -279,7 +286,25 @@ export function ResumeDocumentPreviewPane({
   if (kind === "docx") {
     return (
       <div className="h-full" ref={viewerRootRef}>
-        <DocxViewerPreview
+        <Suspense fallback={<ResumeDocumentViewerLoading kind={kind} />}>
+          <DocxViewerPreview
+            className="h-full"
+            fileName={filename}
+            isDark={isDark}
+            onIsDarkChange={setIsDark}
+            showDownload={false}
+            showUpload={false}
+            src={url}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full" ref={viewerRootRef}>
+      <Suspense fallback={<ResumeDocumentViewerLoading kind={kind} />}>
+        <XlsxViewerPreview
           className="h-full"
           fileName={filename}
           isDark={isDark}
@@ -288,21 +313,7 @@ export function ResumeDocumentPreviewPane({
           showUpload={false}
           src={url}
         />
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full" ref={viewerRootRef}>
-      <XlsxViewerPreview
-        className="h-full"
-        fileName={filename}
-        isDark={isDark}
-        onIsDarkChange={setIsDark}
-        showDownload={false}
-        showUpload={false}
-        src={url}
-      />
+      </Suspense>
     </div>
   );
 }
@@ -312,6 +323,7 @@ export function ResumeDocumentPreviewDialog({
   kind,
   open,
   onOpenChange,
+  onOpenChangeComplete,
   url,
   filename,
 }: ResumeDocumentPreviewDialogProps) {
@@ -322,16 +334,15 @@ export function ResumeDocumentPreviewDialog({
 
   if (kind === "pdf") {
     return (
-      <Suspense fallback={null}>
-        <PdfPreviewDialog
-          downloadFileName={downloadFileName}
-          downloadUrl={resolvedDownloadUrl}
-          filename={filename}
-          onOpenChange={onOpenChange}
-          open={open}
-          url={url}
-        />
-      </Suspense>
+      <PdfPreviewDialog
+        downloadFileName={downloadFileName}
+        downloadUrl={resolvedDownloadUrl}
+        filename={filename}
+        onOpenChange={onOpenChange}
+        onOpenChangeComplete={onOpenChangeComplete}
+        open={open}
+        url={url}
+      />
     );
   }
 
@@ -344,6 +355,7 @@ export function ResumeDocumentPreviewDialog({
         headerClassName="px-5 py-3"
         headerLayout="row"
         onOpenChange={onOpenChange}
+        onOpenChangeComplete={onOpenChangeComplete}
         open={open}
         showCloseButton={false}
         size="full"
@@ -369,6 +381,7 @@ export function ResumeDocumentPreviewDialog({
       headerClassName="px-5 py-3"
       headerLayout="row"
       onOpenChange={onOpenChange}
+      onOpenChangeComplete={onOpenChangeComplete}
       open={open}
       showCloseButton={false}
       size="full"
@@ -382,25 +395,29 @@ export function ResumeDocumentPreviewDialog({
       }
     >
       {kind === "docx" ? (
-        <DocxViewerPreview
-          className="h-full"
-          fileName={filename}
-          isDark={isDark}
-          onIsDarkChange={setIsDark}
-          showDownload={false}
-          showUpload={false}
-          src={url}
-        />
+        <Suspense fallback={<ResumeDocumentViewerLoading kind={kind} />}>
+          <DocxViewerPreview
+            className="h-full"
+            fileName={filename}
+            isDark={isDark}
+            onIsDarkChange={setIsDark}
+            showDownload={false}
+            showUpload={false}
+            src={url}
+          />
+        </Suspense>
       ) : (
-        <XlsxViewerPreview
-          className="h-full"
-          fileName={filename}
-          isDark={isDark}
-          onIsDarkChange={setIsDark}
-          showDownload={false}
-          showUpload={false}
-          src={url}
-        />
+        <Suspense fallback={<ResumeDocumentViewerLoading kind={kind} />}>
+          <XlsxViewerPreview
+            className="h-full"
+            fileName={filename}
+            isDark={isDark}
+            onIsDarkChange={setIsDark}
+            showDownload={false}
+            showUpload={false}
+            src={url}
+          />
+        </Suspense>
       )}
     </Modal>
   );

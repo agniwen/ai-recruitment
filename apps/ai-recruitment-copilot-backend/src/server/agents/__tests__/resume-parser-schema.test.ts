@@ -1,7 +1,10 @@
 import { resumeProfileSchema } from "@arc/db-schema/interview/types";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
+import {
+  isResumeStructuredSourceFileNameCompatible,
+  structuredSchema,
+} from "@arc/db-schema/resume-parser-schema";
 import { parseJsonOutput } from "../json-output";
 import { toResumeProfile } from "../resume-parser-agent";
 
@@ -153,4 +156,140 @@ describe("downstream profile validation", () => {
       true,
     );
   });
+});
+
+describe("resume scoring facts compatibility", () => {
+  it("preserves valid facts while normalizing malformed siblings", () => {
+    const structured = structuredSchema.parse({
+      name: "候选人",
+      scoringFacts: {
+        employmentEpisodes: [
+          null,
+          {
+            currentStatus: "invalid",
+            endMonth: "2024-99",
+            evidence: ["2022年1月加入示例公司", null],
+            primaryStatus: null,
+            sourceIndex: "0",
+            startMonth: "2022-01",
+          },
+        ],
+        projects: false,
+        skillFacts: [
+          { evidence: "使用 React 开发", evidenceLevel: "applied", normalizedSkill: "React" },
+          null,
+        ],
+        version: 1,
+      },
+      skills: ["React"],
+      workExperiences: [{ company: "示例公司" }],
+    });
+    expect(structured.scoringFacts).toMatchObject({
+      employmentEpisodes: [
+        {
+          currentStatus: "unknown",
+          endMonth: null,
+          evidence: ["2022年1月加入示例公司"],
+          primaryStatus: "unresolved",
+          sourceIndex: 0,
+          startMonth: "2022-01",
+        },
+      ],
+      projects: [],
+      skillFacts: [
+        { evidence: ["使用 React 开发"], evidenceLevel: "applied", normalizedSkill: "React" },
+      ],
+      version: 1,
+    });
+    expect(toResumeProfile(structured).scoringFacts).toMatchObject({
+      employmentEpisodes: [{ sourceIndex: 0, startMonth: "2022-01" }],
+      skillFacts: [{ evidence: ["使用 React 开发"], normalizedSkill: "React" }],
+    });
+    expect(resumeProfileSchema.parse(toResumeProfile(structured)).scoringFacts).toEqual(
+      toResumeProfile(structured).scoringFacts,
+    );
+  });
+
+  it.each([undefined, null, false, "invalid", {}, { version: 2 }])(
+    "keeps core fields when scoring facts are unusable (%j)",
+    (scoringFacts) => {
+      const result = toResumeProfile({ name: "候选人", scoringFacts, workYears: "3.5" });
+      expect(result).toMatchObject({ name: "候选人", workYears: 3.5 });
+      expect(result.scoringFacts).toEqual({
+        additionalEvidence: [],
+        employmentEpisodes: [],
+        projects: [],
+        skillFacts: [],
+        version: 1,
+      });
+    },
+  );
+
+  it("does not assign out-of-range evidence to a different experience", () => {
+    const result = toResumeProfile({
+      name: "候选人",
+      scoringFacts: {
+        employmentEpisodes: [{ evidence: ["其他公司"], sourceIndex: 8, startMonth: "2000-01" }],
+      },
+      workExperiences: [{ company: "公司" }],
+    });
+    expect(result.scoringFacts?.employmentEpisodes).toEqual([
+      {
+        currentStatus: "unknown",
+        endMonth: null,
+        evidence: [],
+        gapExplanation: null,
+        primaryStatus: "unresolved",
+        sourceIndex: 0,
+        startMonth: null,
+      },
+    ]);
+  });
+});
+
+it("remaps scoring evidence when malformed experience rows are removed", () => {
+  const result = toResumeProfile({
+    scoringFacts: {
+      employmentEpisodes: [
+        { evidence: ["无效公司"], sourceIndex: 0 },
+        { evidence: ["正确公司经历"], sourceIndex: 1, startMonth: "2022-01" },
+      ],
+    },
+    workExperiences: [null, { company: "正确公司" }],
+  });
+  expect(result.scoringFacts?.employmentEpisodes).toMatchObject([
+    { evidence: ["正确公司经历"], sourceIndex: 0, startMonth: "2022-01" },
+  ]);
+});
+
+it("only reuses filename-sensitive cache for the same source filename", () => {
+  expect(
+    isResumeStructuredSourceFileNameCompatible(
+      { name: "张三", sourceFileName: "张三.pdf" },
+      "张三.pdf",
+    ),
+  ).toBe(true);
+  expect(
+    isResumeStructuredSourceFileNameCompatible(
+      { name: "张三", sourceFileName: "张三.pdf" },
+      "李四.pdf",
+    ),
+  ).toBe(false);
+  expect(isResumeStructuredSourceFileNameCompatible({ name: "张三" }, "张三.pdf")).toBe(false);
+});
+
+it("keeps evidence for skills collected from project tech stacks", () => {
+  const result = toResumeProfile({
+    projectExperiences: [{ name: "系统", techStack: ["React"] }],
+    scoringFacts: {
+      skillFacts: [
+        { evidence: ["使用 React 开发系统"], evidenceLevel: "applied", normalizedSkill: "React" },
+      ],
+    },
+    skills: [],
+  });
+  expect(result.skills).toEqual(["React"]);
+  expect(result.scoringFacts?.skillFacts).toEqual([
+    { evidence: ["使用 React 开发系统"], evidenceLevel: "applied", normalizedSkill: "React" },
+  ]);
 });

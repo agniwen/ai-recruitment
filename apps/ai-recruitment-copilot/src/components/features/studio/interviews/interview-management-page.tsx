@@ -14,7 +14,7 @@ import type {
 } from "@arc/shared/studio-interview-rounds";
 import { pipelineStageMeta, scheduleEntryStatusMeta } from "@arc/db-schema/studio-interviews";
 import { IconRobot as BotIcon, IconTrash as Trash2Icon } from "@tabler/icons-react";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -51,10 +51,7 @@ import {
   ResumeDocumentFileIcon,
   getResumeDocumentFileIconKind,
 } from "@/components/features/resume/resume-document-file-icon";
-import {
-  getPreviewableResumeDocumentKind,
-  isPreviewableResumeDocumentInput,
-} from "@/components/features/resume/resume-document-preview-button";
+import { isPreviewableResumeDocumentInput } from "@/components/features/resume/resume-document-preview-button";
 import { rpc } from "@/lib/client/rpc";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
@@ -69,10 +66,7 @@ import { JobDescriptionViewDialog } from "@/components/features/studio/interview
 import { useHasPermission } from "@/hooks/use-has-permission";
 import type { SearchParamsRecord } from "@/lib/client/studio-interviews-search";
 
-const ResumeDocumentPreviewDialog = lazy(async () => {
-  const mod = await import("@/components/features/resume/resume-document-preview-dialog");
-  return { default: mod.ResumeDocumentPreviewDialog };
-});
+import { ResumeDocumentPreviewModal } from "@/components/features/resume/resume-document-preview-modal";
 
 interface FetchParams {
   signal: AbortSignal;
@@ -695,24 +689,11 @@ export function InterviewManagementPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {previewRecord
-        ? (() => {
-            const previewKind = getPreviewableResumeDocumentKind({
-              fileName: previewRecord.resumeFileName,
-            });
-            return previewKind ? (
-              <Suspense fallback={null}>
-                <ResumeDocumentPreviewDialog
-                  filename={previewRecord.resumeFileName ?? undefined}
-                  kind={previewKind}
-                  onOpenChange={(open) => !open && setPreviewRecord(null)}
-                  open={previewRecord !== null}
-                  url={`/api/w/${slug}/studio/interviews/${previewRecord.id}/resume`}
-                />
-              </Suspense>
-            ) : null;
-          })()
-        : null}
+      <ResumeDocumentPreviewModal
+        fileName={previewRecord?.resumeFileName}
+        onClose={() => setPreviewRecord(null)}
+        url={previewRecord ? `/api/w/${slug}/studio/interviews/${previewRecord.id}/resume` : null}
+      />
 
       <JobDescriptionViewDialog
         jobDescriptionId={canReadJobDescriptions ? viewJobDescriptionId : null}

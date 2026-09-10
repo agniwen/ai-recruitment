@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackgroundLayers } from "./background-layers";
 
 const mocks = vi.hoisted(() => ({
@@ -63,7 +63,34 @@ vi.mock("@/components/react-bits/grainient", () => ({
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+let runIdle: (() => void) | undefined;
+const cancelIdle = vi.fn();
+beforeEach(() => {
+  runIdle = undefined;
+  vi.stubGlobal("requestIdleCallback", (onIdle: () => void) => {
+    runIdle = onIdle;
+    return 1;
+  });
+  vi.stubGlobal("cancelIdleCallback", cancelIdle);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  cancelIdle.mockClear();
+});
+
 describe("BackgroundLayers", () => {
+  it("keeps decorative renderers out of the first render and cancels pending idle work", () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    act(() => root.render(<BackgroundLayers />));
+    act(() => window.dispatchEvent(new Event("load")));
+    expect(container.querySelector('[data-testid="mesh-gradient"]')).toBeNull();
+    expect(container.querySelector('[data-testid="grainient"]')).toBeNull();
+    expect(container.querySelector('[data-testid="ascii-hero"]')).toBeNull();
+    act(() => root.unmount());
+    expect(cancelIdle).toHaveBeenCalledWith(1);
+  });
+
   it("uses the mesh gradient with the shared ASCII field in dark mode", async () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -72,6 +99,11 @@ describe("BackgroundLayers", () => {
     await act(async () => {
       root.render(<BackgroundLayers />);
       await Promise.resolve();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("load"));
+      runIdle?.();
+      await vi.dynamicImportSettled();
     });
 
     const mesh = container.querySelector<HTMLElement>('[data-testid="mesh-gradient"]');
@@ -99,6 +131,11 @@ describe("BackgroundLayers", () => {
     await act(async () => {
       root.render(<BackgroundLayers />);
       await Promise.resolve();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("load"));
+      runIdle?.();
+      await vi.dynamicImportSettled();
     });
 
     expect(

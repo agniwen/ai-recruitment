@@ -11,7 +11,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { UploadTaskInboxPage, UploadTaskInboxRecord } from "@arc/shared/upload-task-inbox";
 import { formatRelativeTime } from "@arc/shared/utils/time";
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResumeDocumentFileIcon,
   getResumeDocumentFileIconKind,
@@ -33,10 +33,7 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { getUploadTaskPreviewTarget, getUploadTaskStatusMeta } from "./upload-task-inbox-model";
 import { HistoricalResumeImportTableDialog } from "./historical-resume-import-table-dialog";
 
-const ResumeDocumentPreviewDialog = lazy(async () => {
-  const mod = await import("@/components/features/resume/resume-document-preview-dialog");
-  return { default: mod.ResumeDocumentPreviewDialog };
-});
+import { ResumeDocumentPreviewModal } from "@/components/features/resume/resume-document-preview-modal";
 
 const TASK_ROW_ESTIMATE = 76;
 const INITIAL_PAGE_PARAM: { cursor: string | null } = { cursor: null };
@@ -319,22 +316,21 @@ export function UploadTaskInbox() {
         </PopoverContent>
       </Popover>
       <HistoricalResumeImportTableDialog onOpenChange={setHistoryOpen} open={historyOpen} />
-      {previewRecord && previewTarget ? (
-        <Suspense fallback={null}>
-          <ResumeDocumentPreviewDialog
-            downloadUrl={`/api/w/${slug}/studio/${previewTarget.resource}/${previewTarget.id}/resume`}
-            filename={previewRecord.originalFileName}
-            kind={previewTarget.kind}
-            onOpenChange={(nextOpen) => {
-              if (!nextOpen) {
-                setPreviewRecord(null);
-              }
-            }}
-            open
-            url={`/api/w/${slug}/studio/${previewTarget.resource}/${previewTarget.id}/${previewTarget.path}`}
-          />
-        </Suspense>
-      ) : null}
+      <ResumeDocumentPreviewModal
+        downloadUrl={
+          previewTarget
+            ? `/api/w/${slug}/studio/${previewTarget.resource}/${previewTarget.id}/resume`
+            : undefined
+        }
+        fileName={previewRecord?.originalFileName}
+        kind={previewTarget?.kind}
+        onClose={() => setPreviewRecord(null)}
+        url={
+          previewTarget
+            ? `/api/w/${slug}/studio/${previewTarget.resource}/${previewTarget.id}/${previewTarget.path}`
+            : null
+        }
+      />
     </>
   );
 }

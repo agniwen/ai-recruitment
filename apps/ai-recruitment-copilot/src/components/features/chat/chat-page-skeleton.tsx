@@ -14,7 +14,7 @@ export function ChatPageSkeleton() {
           <Skeleton className="h-8 w-64 max-w-[72%]" />
         </div>
         <div className="flex w-full items-end gap-2 rounded-[28px] border border-input bg-background px-3 py-2">
-          <div className="flex min-h-9 flex-1 items-center px-2 py-2">
+          <div className="flex min-h-9 flex-1 items-center ps-1 pe-14 py-1.5">
             <Skeleton className="h-4 w-40 max-w-[58%]" />
           </div>
           <Skeleton className="size-9 shrink-0 rounded-full" />

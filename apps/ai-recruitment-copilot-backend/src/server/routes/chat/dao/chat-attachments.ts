@@ -1,6 +1,6 @@
 import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
 import type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
-import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { chatAttachment } from "@arc/db-schema/schema";
 
@@ -202,14 +202,8 @@ export async function findAttachmentByStorageKey(
   return row ?? null;
 }
 
-// 按 hash 回填结构化解析结果——只更新还没有 parsedStructured 的行。
-// 同一 hash 下可能有多个用户各自的行（chat 上传时复制行），这里一次性惠及所有。
-// `WHERE parsedStructured IS NULL` 让并发 / 重复调用幂等：已经有值的行保持不变。
-// Backfill structured data by content hash — only rows missing parsedStructured.
-// Multiple per-user rows may share the same hash (chat upload duplicates rows on
-// hit), so a single UPDATE benefits all of them. The IS NULL guard keeps the
-// call idempotent under concurrent writes — rows that already have structured
-// data are left untouched.
+// 回填同一 hash、文件名下缺失或文件名不兼容的结构化结果。
+// 在 UPDATE 中检查旧值，保留并发请求已写入的兼容结果。
 export async function updateStructuredByHash(
   hash: string,
   structured: ResumeParserStructured,
@@ -218,10 +212,20 @@ export async function updateStructuredByHash(
   if (!sanitized) {
     return;
   }
+  const { sourceFileName } = sanitized;
+  const cacheCondition = sourceFileName
+    ? and(
+        eq(chatAttachment.filename, sourceFileName),
+        or(
+          isNull(chatAttachment.parsedStructured),
+          sql`${chatAttachment.parsedStructured}->>'sourceFileName' IS DISTINCT FROM ${sourceFileName}`,
+        ),
+      )
+    : isNull(chatAttachment.parsedStructured);
   await db
     .update(chatAttachment)
     .set({ parsedStructured: sanitized })
-    .where(and(eq(chatAttachment.contentHash, hash), isNull(chatAttachment.parsedStructured)));
+    .where(and(eq(chatAttachment.contentHash, hash), cacheCondition));
 }
 
 export interface UpdateParseResultByHashInput {
@@ -236,6 +240,12 @@ export interface UpdateParseResultByHashInput {
 
 export async function updateParseResultByHash(input: UpdateParseResultByHashInput): Promise<void> {
   const sanitized = sanitizeParsedStructured(input.parsedStructured);
+  const cacheIdentity = sanitized?.sourceFileName
+    ? and(
+        eq(chatAttachment.contentHash, input.contentHash),
+        eq(chatAttachment.filename, sanitized.sourceFileName),
+      )
+    : eq(chatAttachment.contentHash, input.contentHash);
   await db
     .update(chatAttachment)
     .set({
@@ -247,5 +257,5 @@ export async function updateParseResultByHash(input: UpdateParseResultByHashInpu
       parsedText: input.parsedText ?? null,
       parsedTextSource: input.parsedTextSource ?? null,
     })
-    .where(eq(chatAttachment.contentHash, input.contentHash));
+    .where(cacheIdentity);
 }

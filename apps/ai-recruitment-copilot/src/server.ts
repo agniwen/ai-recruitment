@@ -1,4 +1,4 @@
-import startHandler, { createServerEntry } from "@tanstack/react-start/server-entry";
+import type { ServerEntry } from "@tanstack/react-start/server-entry";
 import { applyServerEnv } from "./env/server";
 
 const SYSTEM_TIME_ZONE = "Asia/Shanghai";
@@ -51,6 +51,26 @@ async function createReadinessResponse() {
   }
 }
 
+type StartFetch = ServerEntry["fetch"];
+let startFetchPromise: Promise<StartFetch> | undefined;
+
+async function loadStartFetch(): Promise<StartFetch> {
+  const { createStartHandler, defaultStreamHandler } = await import("@tanstack/react-start/server");
+  return createStartHandler(defaultStreamHandler);
+}
+
+async function fetchStart(request: Request, options: Parameters<StartFetch>[1]) {
+  startFetchPromise ??= loadStartFetch();
+  const startFetch = await startFetchPromise;
+  return options === undefined ? startFetch(request) : startFetch(request, options);
+}
+
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    startFetchPromise = undefined;
+  });
+}
+
 function isApiRequest(request: Request) {
   const { pathname } = new URL(request.url);
   return pathname === "/api" || pathname.startsWith("/api/");
@@ -74,8 +94,8 @@ function isOgImageRequest(request: Request) {
   return pathname === "/og.png";
 }
 
-export default createServerEntry({
-  async fetch(request, options) {
+export default {
+  async fetch(request: Request, options?: Parameters<StartFetch>[1]) {
     applyServerEnv();
     process.env.TZ = SYSTEM_TIME_ZONE;
 
@@ -92,10 +112,7 @@ export default createServerEntry({
     }
 
     if (isAppVersionRequest(request)) {
-      if (options === undefined) {
-        return startHandler.fetch(request);
-      }
-      return startHandler.fetch(request, options);
+      return fetchStart(request, options);
     }
 
     if (isApiRequest(request)) {
@@ -103,10 +120,6 @@ export default createServerEntry({
       return honoApp.fetch(request);
     }
 
-    if (options === undefined) {
-      return startHandler.fetch(request);
-    }
-
-    return startHandler.fetch(request, options);
+    return fetchStart(request, options);
   },
-});
+} satisfies ServerEntry;

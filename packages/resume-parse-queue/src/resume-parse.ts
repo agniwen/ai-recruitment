@@ -45,7 +45,13 @@ export const resumeParseJobSchema = z.object({
 });
 
 export type ResumeParseJobData = z.infer<typeof resumeParseJobSchema>;
-export type ResumeParseJobProcessor = (payload: ResumeParseJobData) => Promise<void>;
+export interface ResumeParseJobContext {
+  hasAttemptsRemaining: boolean;
+}
+export type ResumeParseJobProcessor = (
+  payload: ResumeParseJobData,
+  context: ResumeParseJobContext,
+) => Promise<void>;
 export type ResumeParseQueueName =
   | typeof RESUME_PARSE_QUEUE_NAME
   | typeof RESUME_PARSE_HISTORICAL_QUEUE_NAME
@@ -116,9 +122,10 @@ export interface ResumeParseQueueJobsResult {
   totalPages: number;
 }
 
-const DEFAULT_ATTEMPTS = 3;
+const DEFAULT_ATTEMPTS = 2;
+const DEFAULT_HISTORICAL_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 30_000;
-const DEFAULT_CONCURRENCY = 50;
+const DEFAULT_CONCURRENCY = 9;
 const DEFAULT_DRAIN_POLL_MS = 1000;
 const DEFAULT_HISTORICAL_CONCURRENCY = 12;
 const DEFAULT_OBJECT_LOCK_TTL_MS = 10 * 60 * 1000;
@@ -345,9 +352,17 @@ export async function withHistoricalResumeObjectLock<T>(
   }
 }
 
-export function defaultResumeParseJobOptions(env: NodeJS.ProcessEnv = process.env): JobsOptions {
+export function defaultResumeParseJobOptions(
+  env: NodeJS.ProcessEnv = process.env,
+  queueName: ResumeParseQueueName = RESUME_PARSE_QUEUE_NAME,
+): JobsOptions {
   return {
-    attempts: parsePositiveInteger(env.RESUME_PARSE_QUEUE_ATTEMPTS, DEFAULT_ATTEMPTS),
+    attempts: parsePositiveInteger(
+      env.RESUME_PARSE_QUEUE_ATTEMPTS,
+      queueName === RESUME_PARSE_HISTORICAL_QUEUE_NAME
+        ? DEFAULT_HISTORICAL_ATTEMPTS
+        : DEFAULT_ATTEMPTS,
+    ),
     backoff: {
       delay: parsePositiveInteger(env.RESUME_PARSE_QUEUE_BACKOFF_MS, DEFAULT_BACKOFF_MS),
       type: "exponential",
@@ -383,7 +398,7 @@ export async function enqueueResumeParseJobs(
     return;
   }
   const q = getResumeParseQueue(resolveQueueName(options.queueName));
-  const jobOptions = defaultResumeParseJobOptions();
+  const jobOptions = defaultResumeParseJobOptions(process.env, resolveQueueName(options.queueName));
   await Promise.all(
     jobs.map(async (data) => {
       const job = await q.getJob(buildResumeParseJobId(data.itemId));
@@ -707,7 +722,9 @@ export function createResumeParseWorker(
     queueName,
     async (job) => {
       const payload = resumeParseJobSchema.parse(job.data);
-      await processJob(payload);
+      await processJob(payload, {
+        hasAttemptsRemaining: job.attemptsMade + 1 < (job.opts.attempts ?? 1),
+      });
     },
     {
       concurrency,

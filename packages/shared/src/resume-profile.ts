@@ -1,5 +1,6 @@
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
+import { normalizeResumeScoringFacts } from "@arc/db-schema/resume-scoring-facts";
 
 // Use at read boundaries too: older cached profiles may predate normalization.
 export function normalizeResumeProfile(value: unknown): ResumeProfile {
@@ -14,6 +15,12 @@ export function normalizeResumeProfile(value: unknown): ResumeProfile {
     phone: structured.phone,
     projectExperiences: structured.projectExperiences,
     schools: structured.schools,
+    scoringFacts: normalizeResumeScoringFacts({
+      facts: structured.scoringFacts,
+      projectExperienceCount: structured.projectExperiences.length,
+      skills: structured.skills,
+      workExperienceCount: structured.workExperiences.length,
+    }),
     skills: structured.skills,
     targetRoles: structured.targetRoles,
     workExperiences: structured.workExperiences,

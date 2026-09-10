@@ -13,7 +13,9 @@ interface Row {
   name: string;
 }
 
-const columns: DataGridColumnDef<Row>[] = [{ accessorKey: "name", header: "姓名" }];
+const columns: DataGridColumnDef<Row>[] = [
+  { accessorKey: "name", header: "姓名", maxSize: 180, minSize: 180, size: 180 },
+];
 
 function renderGrid({
   data = [],
@@ -31,7 +33,9 @@ function renderGrid({
   act(() => {
     root.render(
       <DataGrid
+        columnPinning={{ start: ["name"] }}
         columns={columns}
+        maxHeight="24rem"
         data={data}
         empty={<p>暂无记录</p>}
         getRowId={(row) => row.id}
@@ -65,6 +69,26 @@ describe("DataGrid initial loading", () => {
 
     expect(container.querySelector('[data-slot="data-grid-skeleton"]')).not.toBeNull();
     expect(container.textContent).not.toContain("暂无记录");
+  });
+
+  it("uses the loaded table surface, headers, pinned widths and scroll viewport", () => {
+    const loading = renderGrid({ loading: true });
+    const loaded = renderGrid({ data: [{ id: "1", name: "张三" }] });
+    const loadingHead = loading.querySelector("th");
+    const loadedHead = loaded.querySelector("th");
+
+    expect(loading.querySelector('[data-variant="card"]')).toBeNull();
+    expect(loading.querySelector('[data-variant="default"]')).not.toBeNull();
+    expect(loadingHead?.textContent).toBe("姓名");
+    expect(loadingHead?.className).toBe(loadedHead?.className);
+    expect(loadingHead?.getAttribute("style")).toBe(loadedHead?.getAttribute("style"));
+    expect(loading.querySelector("td")?.getAttribute("style")).toBe(
+      loaded.querySelector("td")?.getAttribute("style"),
+    );
+    expect(
+      loading.querySelector<HTMLElement>('[data-slot="table-container"]')?.style.maxHeight,
+    ).toBe("24rem");
+    expect(loading.querySelectorAll("tbody tr")).toHaveLength(6);
   });
 
   it("keeps existing rows visible while loading", () => {

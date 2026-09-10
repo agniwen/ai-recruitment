@@ -20,7 +20,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CardFrame } from "@/components/ui/card";
 import { cn } from "@arc/shared/utils";
 import { PaginationBar } from "./parts/pagination-bar";
 import {
@@ -40,55 +39,6 @@ import { dataGridFeatures } from "./table-features";
 import type { DataGridFeatures } from "./table-features";
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const;
-const SKELETON_CELL_WIDTHS = ["w-16", "w-24", "w-32", "w-20"] as const;
-
-function DataGridSkeleton({ columnCount, rowCount }: { columnCount: number; rowCount: number }) {
-  const columnIndexes = Array.from({ length: Math.max(columnCount, 1) }, (_, index) => index);
-  const rowIndexes = Array.from({ length: rowCount }, (_, index) => index);
-
-  return (
-    <CardFrame
-      aria-busy="true"
-      aria-label="正在加载表格"
-      className="w-full"
-      data-slot="data-grid-skeleton"
-    >
-      <Table variant="card">
-        <TableHeader>
-          <TableRow>
-            {columnIndexes.map((columnIndex) => (
-              <TableHead key={`header-${columnIndex}`}>
-                <Skeleton
-                  className={cn(
-                    "h-4",
-                    SKELETON_CELL_WIDTHS[columnIndex % SKELETON_CELL_WIDTHS.length],
-                  )}
-                />
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rowIndexes.map((rowIndex) => (
-            <TableRow key={`row-${rowIndex}`}>
-              {columnIndexes.map((columnIndex) => (
-                <TableCell key={`cell-${rowIndex}-${columnIndex}`}>
-                  <Skeleton
-                    className={cn(
-                      "h-4",
-                      SKELETON_CELL_WIDTHS[(rowIndex + columnIndex) % SKELETON_CELL_WIDTHS.length],
-                    )}
-                  />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </CardFrame>
-  );
-}
-
 export interface BulkActionContext<TData> {
   selectedIds: string[];
   selectedRows: TData[];
@@ -199,6 +149,7 @@ export interface DataGridProps<TData extends RowData> {
   maxHeight?: string | null;
 }
 
+// oxlint-disable-next-line complexity -- shares the table structure across loading, populated, empty and error states.
 export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   const {
     bulkActions,
@@ -276,15 +227,8 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
       : null;
 
   const { rows } = table.getRowModel();
+  const showSkeleton = Boolean(loading && rows.length === 0 && !error);
   let emptyContent = empty;
-  if (loading) {
-    emptyContent = (
-      <DataGridSkeleton
-        columnCount={table.getAllLeafColumns().length}
-        rowCount={getSkeletonRowCount(pagination)}
-      />
-    );
-  }
   if (error) {
     emptyContent = <ListLoadError error={error} onRetry={onRetry ?? onRefresh} />;
   }
@@ -366,8 +310,13 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
         <ListLoadError compact error={error} onRetry={onRetry ?? onRefresh} />
       ) : null}
 
-      {rows.length > 0 ? (
-        <div className="w-full overflow-hidden rounded-lg border">
+      {rows.length > 0 || showSkeleton ? (
+        <div
+          aria-busy={showSkeleton || undefined}
+          aria-label={showSkeleton ? "正在加载表格" : undefined}
+          className="w-full overflow-hidden rounded-lg border"
+          data-slot={showSkeleton ? "data-grid-skeleton" : undefined}
+        >
           <Table
             render={
               <div
@@ -417,6 +366,28 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
               ))}
             </TableHeader>
             <TableBody>
+              {showSkeleton
+                ? Array.from({ length: getSkeletonRowCount(pagination) }, (_, rowIndex) => (
+                    <TableRow key={`skeleton-${rowIndex}`}>
+                      {table.getAllLeafColumns().map((column) => (
+                        <TableCell
+                          className={cn(column.getIsPinned() && PINNED_CELL_CLASS)}
+                          key={column.id}
+                          style={getPinningStyles(column)}
+                        >
+                          <div className="flex min-h-8 items-center">
+                            <Skeleton
+                              className={cn(
+                                "h-4 max-w-full",
+                                column.getSize() <= 48 ? "w-4" : "w-24",
+                              )}
+                            />
+                          </div>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                : null}
               {rows.map((row) => (
                 <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
                   {row.getAllCells().map((cell) => {

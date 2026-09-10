@@ -108,7 +108,7 @@ describe("streamParseResumeProfile cache policy", () => {
   it("cache disabled: ignores cached structured data and runs a fresh parse", async () => {
     process.env.RESUME_PARSE_DISABLE_CACHE = "true";
     mocks.findAttachmentByContentHash.mockResolvedValue({
-      parsedStructured: { ...STRUCTURED, name: "缓存候选人" },
+      parsedStructured: { ...STRUCTURED, name: "缓存候选人", sourceFileName: "resume.pdf" },
       storageKey: "chat-attachments/cached.pdf",
     });
     mocks.streamResumeParseWorkflow.mockResolvedValue({

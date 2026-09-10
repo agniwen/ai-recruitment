@@ -72,8 +72,9 @@ describe("attachmentsRouter match-job-description", () => {
     const profile = { name: "林雪莹", targetRoles: ["前端工程师"] };
     mocks.getUserAttachment.mockResolvedValue({
       contentHash: "a".repeat(64),
+      filename: "resume.pdf",
       id: "att-1",
-      parsedStructured: { name: "林雪莹" },
+      parsedStructured: { name: "林雪莹", sourceFileName: "resume.pdf" },
       parsedText: "ocr text",
     });
     mocks.projectAttachmentToResumeProfile.mockReturnValue(profile);
@@ -96,6 +97,7 @@ describe("attachmentsRouter match-job-description", () => {
     const profile = { name: "林雪莹", skills: ["React"], targetRoles: ["前端工程师"] };
     mocks.getUserAttachment.mockResolvedValue({
       contentHash: "b".repeat(64),
+      filename: "resume.pdf",
       id: "att-2",
       parsedStructured: null,
       parsedText: "cached ocr text",
@@ -108,7 +110,9 @@ describe("attachmentsRouter match-job-description", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(mocks.generateResumeStructured).toHaveBeenCalledWith("cached ocr text");
+    expect(mocks.generateResumeStructured).toHaveBeenCalledWith("cached ocr text", {
+      fileName: "resume.pdf",
+    });
     expect(mocks.updateStructuredByHash).toHaveBeenCalledWith("b".repeat(64), structured);
     expect(mocks.resolveJobDescriptionMatchBestEffort).toHaveBeenCalledWith({
       jobDescriptions: [{ id: "jd-1", name: "前端工程师" }],

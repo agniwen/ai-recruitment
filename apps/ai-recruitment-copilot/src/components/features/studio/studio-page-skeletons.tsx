@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
 import { DetailBodySkeleton, DetailHeaderSkeleton } from "./studio-person-detail-skeletons";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function PageShell({ children, label }: { children: ReactNode; label: string }) {
@@ -79,26 +87,31 @@ function ToolbarSkeleton({
 
 function TableSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border/70">
-      <div className="min-w-[48rem]">
-        <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_5rem] gap-4 border-b bg-muted/30 px-4 py-3">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <Skeleton className="h-3 w-4/5" key={index} />
+    <div className="w-full overflow-hidden rounded-lg border">
+      <Table className="min-w-[48rem]">
+        <TableHeader>
+          <TableRow>
+            {Array.from({ length: 5 }, (_, index) => (
+              <TableHead key={index}>
+                <Skeleton className="h-4 w-20 max-w-full" />
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: rows }, (_, rowIndex) => (
+            <TableRow key={rowIndex}>
+              {Array.from({ length: 5 }, (__, columnIndex) => (
+                <TableCell key={columnIndex}>
+                  <div className="flex min-h-8 items-center">
+                    <Skeleton className="h-4 w-24 max-w-full" />
+                  </div>
+                </TableCell>
+              ))}
+            </TableRow>
           ))}
-        </div>
-        {Array.from({ length: rows }).map((_, rowIndex) => (
-          <div
-            className="grid grid-cols-[1.4fr_1fr_1fr_1fr_5rem] gap-4 border-b border-border/60 px-4 py-4 last:border-b-0"
-            key={rowIndex}
-          >
-            <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="h-4 w-3/5" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ))}
-      </div>
+        </TableBody>
+      </Table>
     </div>
   );
 }

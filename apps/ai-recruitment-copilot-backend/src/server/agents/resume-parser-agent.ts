@@ -1,7 +1,7 @@
 import { normalizeResumeProfile } from "@arc/shared/resume-profile";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { readPdfBytes } from "@arc/shared/resume-pdf";
-import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
+import { resumeParserFieldNames, structuredSchema } from "@arc/db-schema/resume-parser-schema";
 
 export type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
 export { structuredSchema };
@@ -20,7 +20,9 @@ function uniqueTrimmedStrings(values: readonly string[]): string[] {
   return out;
 }
 
-function collectProfileSkills(structured: ResumeProfile): string[] {
+function collectProfileSkills(
+  structured: Pick<ResumeProfile, "skills" | "projectExperiences">,
+): string[] {
   return uniqueTrimmedStrings([
     ...structured.skills,
     ...structured.projectExperiences.flatMap((experience) => experience.techStack),
@@ -34,8 +36,8 @@ function collectProfileSkills(structured: ResumeProfile): string[] {
  * callers that need them should consume `structured` directly.
  */
 export function toResumeProfile(value: unknown): ResumeProfile {
-  const profile = normalizeResumeProfile(value);
-  return { ...profile, skills: collectProfileSkills(profile) };
+  const structured = structuredSchema.parse(value ?? {});
+  return normalizeResumeProfile({ ...structured, skills: collectProfileSkills(structured) });
 }
 
 // 把 chat_attachment 行的 superset parsedStructured 投影到 ResumeProfile，
@@ -50,7 +52,7 @@ export function projectAttachmentToResumeProfile(parsedStructured: unknown): Res
     typeof parsedStructured !== "object" ||
     parsedStructured === null ||
     (Object.keys(parsedStructured).length > 0 &&
-      !Object.keys(parsedStructured).some((key) => Object.hasOwn(structuredSchema.shape, key)))
+      !Object.keys(parsedStructured).some((key) => resumeParserFieldNames.includes(key)))
   ) {
     return null;
   }

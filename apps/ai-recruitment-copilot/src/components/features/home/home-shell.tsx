@@ -11,7 +11,6 @@ import { Hero } from "./hero";
 import { Personas } from "./personas";
 import { ProcessTabs } from "./process-tabs";
 import { ProductShot } from "./product-shot";
-import { HomeSmoothScroll } from "./smooth-scroll";
 import { Testimonials } from "./testimonials";
 
 export default function HomeShell() {
@@ -33,29 +32,27 @@ export default function HomeShell() {
         <ThemeToggle />
       </div>
 
-      <HomeSmoothScroll>
-        <main className="relative flex w-full flex-col items-stretch" id="main-content">
-          {/* Hero 区不再占满首屏，让下方 ProductShot 露出约一半（Notion 风格）
+      <main className="relative flex w-full flex-col items-stretch" id="main-content">
+        {/* Hero 区不再占满首屏，让下方 ProductShot 露出约一半（Notion 风格）
               Hero no longer fills the viewport; lets ProductShot peek up like Notion's hero. */}
-          <div className="mx-auto flex w-full max-w-[96rem] flex-col items-center px-5 pt-16 sm:px-8 sm:pt-20 lg:pt-24">
-            <Hero onResumeFiltering={onResumeFiltering} onWorkbench={onWorkbench} />
-          </div>
-          <ProductShot />
-          {/* <TrustStrip /> */}
-          <FeatureBlocks />
-          <CapabilityGrid />
-          <Personas />
-          <Testimonials />
-          <ProcessTabs />
-          <Faq />
-          {/* <CtaSection
+        <div className="mx-auto flex w-full max-w-[96rem] flex-col items-center px-5 pt-16 sm:px-8 sm:pt-20 lg:pt-24">
+          <Hero onResumeFiltering={onResumeFiltering} onWorkbench={onWorkbench} />
+        </div>
+        <ProductShot />
+        {/* <TrustStrip /> */}
+        <FeatureBlocks />
+        <CapabilityGrid />
+        <Personas />
+        <Testimonials />
+        <ProcessTabs />
+        <Faq />
+        {/* <CtaSection
             isPending={isPending}
             onResumeFiltering={onResumeFiltering}
             onWorkbench={onWorkbench}
           /> */}
-          <HomeFooter />
-        </main>
-      </HomeSmoothScroll>
+        <HomeFooter />
+      </main>
     </>
   );
 }

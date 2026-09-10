@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines -- Parser stages and their outcome transaction remain one workflow. */
 import { createHash } from "node:crypto";
+import { isResumeStructuredSourceFileNameCompatible } from "@arc/db-schema/resume-parser-schema";
 import { and, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -117,6 +118,7 @@ type ItemRow = Awaited<ReturnType<typeof claimNextPendingItem>>;
 type BatchRow = typeof resumeUploadBatch.$inferSelect;
 type ParsedResume = Awaited<ReturnType<typeof parseResumeBytesToProfile>>;
 interface ProcessItemOptions {
+  retryParseFailure?: boolean;
   bypassCache?: boolean;
   maxFileSizeBytes?: number | null;
   onStep?: (step: string) => Promise<void>;
@@ -149,7 +151,9 @@ async function resolveResumeProfile(
     logStep("cache.lookup.start", { itemId: item.id });
     const cached = await findAttachmentByStorageKey(item.storageKey);
     const fromCache =
-      cached?.parsedStructured && isResumeParseCacheSourceCompatible(cached.parsedTextSource)
+      cached?.parsedStructured &&
+      isResumeParseCacheSourceCompatible(cached.parsedTextSource) &&
+      isResumeStructuredSourceFileNameCompatible(cached.parsedStructured, item.originalFileName)
         ? projectAttachmentToResumeProfile(cached.parsedStructured)
         : null;
     if (fromCache) {
@@ -687,6 +691,10 @@ async function processClaimedItem(
     if (options.throwOnError) {
       throw error;
     }
+    if (options.retryParseFailure) {
+      await releaseBatchItemForRetry(batchRow.id, item.id);
+      throw error;
+    }
     outcome.errorDetails = serializeErrorDetails(error);
     outcome.errorMessage = truncate(describeError(error, "简历解析失败。"));
     logStep("item.process.error", {
@@ -842,7 +850,7 @@ export async function processHistoricalBatchItem(
 
 export async function processBatchItem(
   itemId: string,
-  options: { bypassCache?: boolean } = {},
+  options: { bypassCache?: boolean; retryParseFailure?: boolean } = {},
 ): Promise<ProcessNextResult | null> {
   const startedAt = Date.now();
   logStep("job.claim.start", { bypassCache: Boolean(options.bypassCache), itemId });

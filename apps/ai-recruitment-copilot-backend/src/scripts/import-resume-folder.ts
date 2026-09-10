@@ -774,12 +774,16 @@ async function main(): Promise<void> {
 
     if (options.mode === "local") {
       localWorker = activeQueueApi.createResumeParseWorker(
-        async ({ batchId, bypassCache, itemId }) => {
+        async ({ batchId, bypassCache, itemId }, context) => {
           const startedAt = Date.now();
           try {
             const { runBulkResumeUploadWorkflow } =
               await import("@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow");
-            await runBulkResumeUploadWorkflow({ bypassCache, itemId });
+            await runBulkResumeUploadWorkflow({
+              bypassCache,
+              itemId,
+              retryParseFailure: context.hasAttemptsRemaining,
+            });
             if (localParseProgress.current) {
               const queueRemaining = await activeQueueApi.getResumeParseQueueOpenCount({
                 queueName: RESUME_PARSE_LOCAL_QUEUE_NAME,

@@ -337,6 +337,7 @@ ${autoJdContext}
       suggest_job_description: createSuggestJobDescriptionTool({
         orgId,
         resumes: bakedResumes,
+        userId: input.userId,
       }),
     },
   });

@@ -61,23 +61,35 @@ export function SidebarTabs() {
       onValueChange={handleChange}
       value={activeTab ?? (canAccessAgent ? "agent" : "studio")}
     >
-      <TabsList className="w-full dark:bg-sidebar/60  select-none">
+      <TabsList className="w-full select-none bg-sidebar-accent dark:bg-black/15">
         <TabsTrigger
           // Keep clickable: without page:chat, handleChange uses the Studio entry.
           // Do not set data-disabled (tabs.tsx uses it for pointer-events:none).
           aria-disabled={!canAccessAgent}
           className={canAccessAgent ? undefined : "opacity-64"}
-          onFocus={() => void preloadTab("agent")}
-          onPointerEnter={() => void preloadTab("agent")}
-          onTouchStart={() => void preloadTab("agent")}
+          onFocus={() => {
+            void preloadTab("agent");
+          }}
+          onPointerEnter={() => {
+            void preloadTab("agent");
+          }}
+          onTouchStart={() => {
+            void preloadTab("agent");
+          }}
           value="agent"
         >
           Agent
         </TabsTrigger>
         <TabsTrigger
-          onFocus={() => void preloadTab("studio")}
-          onPointerEnter={() => void preloadTab("studio")}
-          onTouchStart={() => void preloadTab("studio")}
+          onFocus={() => {
+            void preloadTab("studio");
+          }}
+          onPointerEnter={() => {
+            void preloadTab("studio");
+          }}
+          onTouchStart={() => {
+            void preloadTab("studio");
+          }}
           value="studio"
         >
           Studio

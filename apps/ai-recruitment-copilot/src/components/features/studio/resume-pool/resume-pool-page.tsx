@@ -11,14 +11,13 @@ import type { ResumePoolScope } from "@arc/db-schema/schema";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
 import type { PaginatedResumePoolResult, ResumePoolListRecord } from "@arc/shared/resume-pool";
 
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDataGridState } from "@/components/data-grid";
 import { Toolbar } from "@/components/data-grid/parts/toolbar";
 import { ResumeCandidateTitleWithCopyableId } from "@/components/features/resume/copyable-resume-record-id";
 import { ResumeDuplicateMatchesDialog } from "@/components/features/resume/resume-dedup-overlay";
 import { toDedupSourceFromPoolRecord } from "@/components/features/resume/resume-dedup-source";
-import { getPreviewableResumeDocumentKind } from "@/components/features/resume/resume-document-preview-button";
 import { PageHeader } from "@/components/features/studio/page-header";
 import { StudioScrollToTopButton } from "@/components/features/studio/studio-scroll-to-top-button";
 import { BulkUploadProgressDialog } from "@/components/features/studio/resumes/bulk-upload-progress-dialog";
@@ -80,10 +79,7 @@ import {
   ResumePoolToolbarActions,
 } from "@/components/features/studio/resume-pool/resume-pool-list";
 
-const ResumeDocumentPreviewDialog = lazy(async () => {
-  const mod = await import("@/components/features/resume/resume-document-preview-dialog");
-  return { default: mod.ResumeDocumentPreviewDialog };
-});
+import { ResumeDocumentPreviewModal } from "@/components/features/resume/resume-document-preview-modal";
 
 export interface ResumePoolSearch {
   id?: string;
@@ -757,24 +753,11 @@ export function ResumePoolPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {previewRecord
-        ? (() => {
-            const previewKind = getPreviewableResumeDocumentKind({
-              fileName: previewRecord.resumeFileName,
-            });
-            return previewKind ? (
-              <Suspense fallback={null}>
-                <ResumeDocumentPreviewDialog
-                  filename={previewRecord.resumeFileName ?? undefined}
-                  kind={previewKind}
-                  onOpenChange={(open) => !open && setPreviewRecord(null)}
-                  open={previewRecord !== null}
-                  url={`/api/w/${slug}/studio/resume-pool/${previewRecord.id}/resume`}
-                />
-              </Suspense>
-            ) : null;
-          })()
-        : null}
+      <ResumeDocumentPreviewModal
+        fileName={previewRecord?.resumeFileName}
+        onClose={() => setPreviewRecord(null)}
+        url={previewRecord ? `/api/w/${slug}/studio/resume-pool/${previewRecord.id}/resume` : null}
+      />
       <StudioScrollToTopButton />
     </>
   );

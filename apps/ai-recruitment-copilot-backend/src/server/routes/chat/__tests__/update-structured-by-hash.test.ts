@@ -2,7 +2,10 @@
 // Unit tests for updateStructuredByHash — backfill, multi-row spread, idempotency, hash isolation.
 
 import type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
-import { updateStructuredByHash } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat-attachments";
+import {
+  updateStructuredByHash,
+  updateParseResultByHash,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat-attachments";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 interface DbRow {
@@ -53,11 +56,22 @@ vi.mock("drizzle-orm", () => ({
   ne: (col: { name: string }, value: unknown) => ({
     matches: (row: DbRow) => row[col.name] !== value,
   }),
+  or: (...conds: WhereCondition[]) => ({
+    matches: (row: DbRow) => conds.some((condition) => condition.matches(row)),
+  }),
+  sql: (parts: TemplateStringsArray, col: { name: string }, fileName: string) => {
+    expect(parts.join("?")).toBe("?->>'sourceFileName' IS DISTINCT FROM ?");
+    return {
+      matches: (row: DbRow) =>
+        (row[col.name] as ResumeParserStructured | null)?.sourceFileName !== fileName,
+    };
+  },
 }));
 
 vi.mock("@arc/db-schema/schema", () => ({
   chatAttachment: {
     contentHash: { name: "contentHash" },
+    filename: { name: "filename" },
     parsedStructured: { name: "parsedStructured" },
   },
 }));
@@ -102,6 +116,43 @@ function insertFakeRow(
 describe("updateStructuredByHash", () => {
   beforeEach(() => {
     rows.length = 0;
+  });
+
+  it("replaces nonempty cache with missing or mismatched source filename", async () => {
+    insertFakeRow("same", "key", { ...VALID_STRUCTURED });
+    insertFakeRow("same", "key", { ...VALID_STRUCTURED, sourceFileName: "other.pdf" });
+    for (const row of rows) {
+      row.filename = "resume.pdf";
+    }
+    const replacement = { ...VALID_STRUCTURED, name: "新结果", sourceFileName: "resume.pdf" };
+    await updateStructuredByHash("same", replacement);
+    expect(rows.map((row) => row.parsedStructured)).toEqual([replacement, replacement]);
+    await updateStructuredByHash("same", { ...replacement, name: "并发迟到结果" });
+    expect(rows.map((row) => row.parsedStructured?.name)).toEqual(["新结果", "新结果"]);
+  });
+
+  it("does not copy filename-specific structured results into another filename", async () => {
+    insertFakeRow("same", "key", null);
+    insertFakeRow("same", "key", null);
+    rows[0].filename = "resume.pdf";
+    rows[1].filename = "other.pdf";
+    await updateStructuredByHash("same", { ...VALID_STRUCTURED, sourceFileName: "resume.pdf" });
+    expect(rows[0].parsedStructured?.sourceFileName).toBe("resume.pdf");
+    expect(rows[1].parsedStructured).toBeNull();
+  });
+
+  it("keeps other filenames intact when persisting a full parse", async () => {
+    insertFakeRow("same", "key", null);
+    insertFakeRow("same", "key", { ...VALID_STRUCTURED, sourceFileName: "other.pdf" });
+    rows[0].filename = "resume.pdf";
+    rows[1].filename = "other.pdf";
+    await updateParseResultByHash({
+      contentHash: "same",
+      parsedStatus: "ready",
+      parsedStructured: { ...VALID_STRUCTURED, sourceFileName: "resume.pdf" },
+    });
+    expect(rows[0].parsedStructured?.sourceFileName).toBe("resume.pdf");
+    expect(rows[1].parsedStructured?.sourceFileName).toBe("other.pdf");
   });
 
   it("backfills a row that had parsedStructured = null", async () => {

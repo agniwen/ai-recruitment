@@ -2,7 +2,7 @@
 
 import { IconEye } from "@tabler/icons-react";
 import type { ReactElement } from "react";
-import { Suspense, lazy, useState } from "react";
+import { useState } from "react";
 import { PdfPreviewButton } from "@/components/features/pdf/pdf-preview-button";
 import type { ResumeDocumentPreviewKind } from "@/components/features/resume/resume-document-preview-dialog";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { getResumeDocumentKind } from "@arc/shared/resume-documents";
 import { cn } from "@arc/shared/utils";
 
-const ResumeDocumentPreviewDialog = lazy(async () => {
-  const mod = await import("@/components/features/resume/resume-document-preview-dialog");
-  return { default: mod.ResumeDocumentPreviewDialog };
-});
+import { ResumeDocumentPreviewModal } from "@/components/features/resume/resume-document-preview-modal";
 
 export type PreviewableResumeDocumentKind = ResumeDocumentPreviewKind;
 export const UNSUPPORTED_RESUME_DOCUMENT_PREVIEW_TOOLTIP =
@@ -100,17 +97,12 @@ export function ResumeDocumentPreviewButton({
         <IconEye className="size-3.5" />
         {label}
       </Button>
-      {open && !disabled ? (
-        <Suspense fallback={null}>
-          <ResumeDocumentPreviewDialog
-            filename={filename ?? undefined}
-            kind={kind}
-            onOpenChange={setOpen}
-            open={open}
-            url={url}
-          />
-        </Suspense>
-      ) : null}
+      <ResumeDocumentPreviewModal
+        fileName={filename}
+        kind={kind}
+        onClose={() => setOpen(false)}
+        url={open && !disabled ? url : null}
+      />
     </>
   );
 }

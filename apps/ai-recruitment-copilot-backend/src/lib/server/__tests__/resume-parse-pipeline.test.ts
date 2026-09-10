@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   convertLegacyOfficeToOoxml: vi.fn(),
+  extractPdfTextPages: vi.fn(),
   generateStructuredWithMastraAgent: vi.fn(),
   processPdfPagesWithMeta: vi.fn(),
   qwenVlOcr: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("../office-conversion", () => ({
 }));
 
 vi.mock("../pdf-rasterize", () => ({
+  extractPdfTextPages: mocks.extractPdfTextPages,
   processPdfPagesWithMeta: mocks.processPdfPagesWithMeta,
 }));
 
@@ -615,7 +617,7 @@ describe("generateResumeStructured", () => {
     expect(mocks.generateStructuredWithMastraAgent).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: mocks.resumeStructuredAgent,
-        maxOutputTokens: 16_384,
+        maxOutputTokens: 32_768,
         schema: expect.any(Object),
         temperature: 0,
       }),
@@ -665,7 +667,7 @@ describe("parseResumeFast provider selection", () => {
 
     expect(result).toEqual({
       pageCount: 2,
-      structured: STRUCTURED_RESUME,
+      structured: { ...STRUCTURED_RESUME, sourceFileName: "resume.docx" },
       text: JSON.stringify(STRUCTURED_RESUME),
       textSource: "aliyun-docmining",
     });
@@ -693,7 +695,7 @@ describe("parseResumeFast provider selection", () => {
       mediaType: "application/pdf",
     });
 
-    expect(result.structured).toEqual(STRUCTURED_RESUME);
+    expect(result.structured).toEqual({ ...STRUCTURED_RESUME, sourceFileName: "resume.pdf" });
     expect(mocks.runAliyunResumeExtraction).toHaveBeenCalledTimes(2);
   });
 
@@ -724,4 +726,68 @@ describe("parseResumeFast provider selection", () => {
       expect.objectContaining({ fileName: expectedFileName }),
     );
   });
+});
+
+describe("resume parser input enrichment", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    pdfPageCount = 1;
+    pdfPages = [Buffer.from("page-1")];
+    mocks.processPdfPagesWithMeta.mockImplementation(runMockPdfPageProcessor);
+    mocks.qwenVlOcr.mockResolvedValue("示例公司 前端工程师");
+  });
+
+  it("supplements OCR omissions with dated PDF text and uses higher resolution", async () => {
+    mocks.extractPdfTextPages.mockResolvedValue({
+      pageCount: 1,
+      pages: ["示例公司\n2022-01 至 2024-08\n前端工程师"],
+    });
+    const result = await parseResumeOcrOnly(new Uint8Array([1]));
+    expect(result.text).toContain("2022-01 至 2024-08");
+    expect(result.text).toContain("PDF 文本层补充信息");
+    expect(mocks.processPdfPagesWithMeta.mock.calls[0]?.[1]).toMatchObject({
+      maxPages: 6,
+      scale: 4,
+    });
+  });
+
+  it("keeps successful OCR when the PDF text layer cannot be read", async () => {
+    mocks.extractPdfTextPages.mockRejectedValue(new Error("no text layer"));
+    const result = await parseResumeOcrOnly(new Uint8Array([1]));
+    expect(result.text).toContain("示例公司 前端工程师");
+  });
+
+  it("uses filename context and preserves sparse output while deduplicating skills", async () => {
+    mocks.generateStructuredWithMastraAgent.mockResolvedValue({
+      ...STRUCTURED_RESUME,
+      skills: [" React ", "react", "TypeScript"],
+    });
+    const result = await generateResumeStructured("候选人简历", { fileName: "张三-前端.pdf" });
+    expect(result).toMatchObject({
+      skills: ["React", "TypeScript"],
+      sourceFileName: "张三-前端.pdf",
+    });
+    expect(mocks.generateStructuredWithMastraAgent.mock.calls[0]?.[0]).toMatchObject({
+      fallbackToTextGeneration: true,
+      maxOutputTokens: 32_768,
+      retryOnInvalid: true,
+      retryOnTransient: true,
+    });
+    expect(mocks.generateStructuredWithMastraAgent.mock.calls[0]?.[0].prompt).toContain(
+      "张三-前端.pdf",
+    );
+  });
+});
+
+it("preserves date context from the PDF supplement when OCR exceeds the model budget", async () => {
+  mocks.generateStructuredWithMastraAgent.mockResolvedValue(STRUCTURED_RESUME);
+  const heading =
+    "[PDF 文本层补充信息：仅补足 OCR 可能遗漏的可见文字；如有冲突，以前面的 OCR 正文为准]";
+  await generateResumeStructured(
+    `${"简历正文".repeat(5000)}\n\n${heading}\n${"普通文本\n".repeat(3000)}示例公司\n2022-01 至 2024-08`,
+  );
+  const prompt = mocks.generateStructuredWithMastraAgent.mock.lastCall?.[0].prompt;
+  expect(prompt).toContain("2022-01 至 2024-08");
+  expect(prompt).toContain("示例公司");
+  expect(prompt).toContain("[...OCR content truncated...]");
 });

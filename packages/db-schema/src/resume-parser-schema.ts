@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resumeScoringFactsSchema } from "./resume-scoring-facts";
 
 // Normalize recoverable model output locally so one malformed field does not
 // discard the rest of a resume. Unknown facts stay null rather than being guessed.
@@ -56,7 +57,7 @@ const educationExperienceSchema = z.object({
   summary: resumeText,
 });
 
-export const structuredSchema = z.object({
+const structuredObjectSchema = z.object({
   age: resumeNumber,
   degree: resumeText,
   education: resumeText,
@@ -71,7 +72,12 @@ export const structuredSchema = z.object({
   phone: resumeText,
   projectExperiences: resumeList(projectExperienceSchema),
   schools: resumeList(z.string()),
+  scoringFacts: resumeScoringFactsSchema.optional(),
   skills: resumeList(z.string()),
+  sourceFileName: z.preprocess(
+    (value) => (typeof value === "string" ? value : undefined),
+    z.string().optional(),
+  ),
   targetRoles: resumeList(z.string()),
   timelineSummary: z.preprocess(
     (value) => (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}),
@@ -81,4 +87,74 @@ export const structuredSchema = z.object({
   workYears: resumeNumber,
 });
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function remapFactIndexes(experiences: unknown, facts: unknown, schema: z.ZodType): unknown {
+  const source = Array.isArray(experiences) ? experiences : [experiences];
+  const indexes = new Map<number, number>();
+  for (const [index, experience] of source.entries()) {
+    if (schema.safeParse(experience).success) {
+      indexes.set(index, indexes.size);
+    }
+  }
+  const entries = Array.isArray(facts) ? facts : [facts];
+  return entries.flatMap((fact) => {
+    if (!isRecord(fact)) {
+      return [];
+    }
+    const index =
+      typeof fact.sourceIndex === "string" && /^\d+$/.test(fact.sourceIndex.trim())
+        ? Number(fact.sourceIndex)
+        : fact.sourceIndex;
+    const sourceIndex = typeof index === "number" ? indexes.get(index) : undefined;
+    return sourceIndex === undefined ? [] : [{ ...fact, sourceIndex }];
+  });
+}
+
+// Dropping malformed experiences must not move another company's evidence onto a surviving row.
+function normalizeFactIndexes(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.scoringFacts)) {
+    return value;
+  }
+  return {
+    ...value,
+    scoringFacts: {
+      ...value.scoringFacts,
+      employmentEpisodes: remapFactIndexes(
+        value.workExperiences,
+        value.scoringFacts.employmentEpisodes,
+        workExperienceSchema,
+      ),
+      projects: remapFactIndexes(
+        value.projectExperiences,
+        value.scoringFacts.projects,
+        projectExperienceSchema,
+      ),
+    },
+  };
+}
+
+export const resumeParserFieldNames = Object.keys(structuredObjectSchema.shape);
+
+export const structuredSchema = z.preprocess(normalizeFactIndexes, structuredObjectSchema);
+export const resumeParserGenerationSchema = z.preprocess(
+  normalizeFactIndexes,
+  structuredObjectSchema.omit({ sourceFileName: true }),
+);
+
 export type ResumeParserStructured = z.infer<typeof structuredSchema>;
+
+export function normalizeResumeStructuredSourceFileName(fileName: string): string {
+  return fileName.slice(0, 255);
+}
+
+export function isResumeStructuredSourceFileNameCompatible(
+  structured: unknown,
+  fileName: string,
+): boolean {
+  const parsed = structuredSchema.safeParse(structured);
+  const normalized = normalizeResumeStructuredSourceFileName(fileName);
+  return Boolean(normalized) && parsed.success && parsed.data.sourceFileName === normalized;
+}

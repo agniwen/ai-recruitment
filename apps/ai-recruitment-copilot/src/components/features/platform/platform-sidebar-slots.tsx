@@ -10,22 +10,14 @@ import {
   IconRadio,
   IconRobot,
   IconServer,
-  IconSearch,
   IconUsers,
 } from "@tabler/icons-react";
-import { useKeyboardShortcutLabel } from "@mastra/playground-ui/hooks/use-keyboard-shortcut-label";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { addMastraStudioBase } from "@/components/features/mastra-studio/router/studio-route-path";
-import { useNavigationCommand } from "@/components/features/mastra-studio/upstream/lib/command";
-import type { NavIcon } from "@/components/features/mastra-studio/upstream/lib/nav/nav-items";
-import { bottomNav, mainNav } from "@/components/features/mastra-studio/upstream/lib/nav/nav-items";
 import {
   SidebarBodyPortalContent,
   SidebarFooterPortalContent,
-  SidebarHeaderPortalContent,
 } from "@/components/layout/app-sidebar/portals";
 import { SidebarUserSection } from "@/components/layout/sidebar-user-section";
-import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -35,11 +27,10 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { PlatformSidebarTabs, resolvePlatformSidebarTab } from "./platform-sidebar-tabs";
 
 export interface NavItem {
   path: string;
-  icon: NavIcon;
+  icon: typeof IconBuilding;
   title: string;
   activePaths?: string[];
 }
@@ -115,94 +106,26 @@ const manageNavSections: NavSection[] = [
   },
 ];
 
-const mastraNavSections: NavSection[] = [
-  ...mainNav.map((section) => ({
-    id: `mastra-${section.title}`,
-    items: section.items.flatMap((item) =>
-      item.hidden
-        ? []
-        : [
-            {
-              activePaths: item.activePaths?.map(addMastraStudioBase),
-              icon: item.Icon,
-              path: addMastraStudioBase(item.url),
-              title: item.name,
-            },
-          ],
-    ),
-    title: section.title,
-  })),
-  {
-    id: "mastra-bottom",
-    items: bottomNav.flatMap((item) =>
-      item.hidden
-        ? []
-        : [
-            {
-              activePaths: item.activePaths?.map(addMastraStudioBase),
-              icon: item.Icon,
-              path: addMastraStudioBase(item.url),
-              title: item.name,
-            },
-          ],
-    ),
-  },
-];
-
 function matchesNavItem(pathname: string, item: NavItem): boolean {
   const matches = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
   return matches(item.path) || item.activePaths?.some(matches) === true;
 }
 
 export function resolvePlatformSidebarNavItem(pathname: string): NavItem | undefined {
-  const sections =
-    resolvePlatformSidebarTab(pathname) === "mastra" ? mastraNavSections : manageNavSections;
+  const sections = manageNavSections;
   return sections
     .flatMap((section) => section.items)
     .find((item) => matchesNavItem(pathname, item));
 }
 
-function MastraSidebarSearch() {
-  const { setOpen } = useNavigationCommand({ enableShortcut: false });
-  const commandShortcutLabel = useKeyboardShortcutLabel("K");
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          aria-label="搜索并导航"
-          className="cursor-default select-none transition-[width,height,padding,background-color,border-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
-          onClick={() => setOpen(true)}
-          size="default"
-          tooltip="搜索"
-          // Expanded: outline “search field” look. Collapsed: plain icon like other nav items.
-          variant={collapsed ? "default" : "outline"}
-        >
-          <IconSearch />
-          <span className="group-data-[collapsible=icon]:hidden">搜索</span>
-          <Kbd className="ml-auto group-data-[collapsible=icon]:hidden">{commandShortcutLabel}</Kbd>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    </SidebarMenu>
-  );
-}
-
 export function PlatformSidebarSlots() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { state } = useSidebar();
-  const activeTab = resolvePlatformSidebarTab(pathname);
-  const navSections = activeTab === "mastra" ? mastraNavSections : manageNavSections;
+  const navSections = manageNavSections;
   const activeNavItem = resolvePlatformSidebarNavItem(pathname);
 
   return (
     <>
-      <SidebarHeaderPortalContent>
-        <PlatformSidebarTabs />
-        {activeTab === "mastra" ? <MastraSidebarSearch /> : null}
-      </SidebarHeaderPortalContent>
-
       <SidebarBodyPortalContent>
         {navSections.map((section) => (
           <SidebarGroup key={section.id}>

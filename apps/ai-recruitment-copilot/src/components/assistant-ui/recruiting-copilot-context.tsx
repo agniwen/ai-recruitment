@@ -18,10 +18,7 @@ import type { StudioPersonDetailTab } from "@/components/features/studio/studio-
 import { authClient } from "@/lib/client/auth-client";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 
-const ResumeDocumentPreviewDialog = lazy(async () => {
-  const mod = await import("@/components/features/resume/resume-document-preview-dialog");
-  return { default: mod.ResumeDocumentPreviewDialog };
-});
+import { ResumeDocumentPreviewDialog } from "@/components/features/resume/resume-document-preview-dialog";
 
 const ResumePoolDetailDialog = lazy(async () => {
   const mod = await import("@/components/features/studio/resume-pool/resume-pool-details");
@@ -272,15 +269,13 @@ export function RecruitingCopilotContextProvider({
         </Suspense>
       ) : null}
       {previewRecord && previewKind ? (
-        <Suspense fallback={null}>
-          <ResumeDocumentPreviewDialog
-            filename={previewRecord.resumeFileName ?? undefined}
-            kind={previewKind}
-            onOpenChange={(open) => !open && setPreviewRecord(null)}
-            open={previewRecord !== null}
-            url={`/api/w/${slug}/studio/resumes/${previewRecord.id}/resume`}
-          />
-        </Suspense>
+        <ResumeDocumentPreviewDialog
+          filename={previewRecord.resumeFileName ?? undefined}
+          kind={previewKind}
+          onOpenChange={(open) => !open && setPreviewRecord(null)}
+          open={previewRecord !== null}
+          url={`/api/w/${slug}/studio/resumes/${previewRecord.id}/resume`}
+        />
       ) : null}
     </RecruitingCopilotContext.Provider>
   );

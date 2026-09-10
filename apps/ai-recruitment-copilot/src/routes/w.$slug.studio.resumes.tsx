@@ -8,11 +8,10 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import { formatDocumentTitle } from "@/lib/start/document-title";
-import { loadStudioResumesState } from "@/lib/start/studio/resumes.functions";
 import type { StudioResumesState } from "@/lib/start/studio/resumes.functions";
 
 import { ResumeLibraryPage } from "@/components/features/studio/resumes/resume-library-page";
-import { coerceSearchParams } from "@/components/features/studio/resumes/resume-library-page-model";
+import { coerceSearchParams } from "@/components/features/studio/resumes/resume-library-search";
 function StudioResumesRoute() {
   const state = useLoaderData({
     from: "/w/$slug/studio/resumes",
@@ -35,6 +34,7 @@ export const Route = createFileRoute("/w/$slug/studio/resumes")({
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
   loader: async (loaderContext) => {
     const { params } = loaderContext as unknown as { params: { slug: string } };
+    const { loadStudioResumesState } = await import("@/lib/start/studio/resumes.functions");
     const state = (await loadStudioResumesState({
       data: { slug: params.slug },
     })) as StudioResumesState;

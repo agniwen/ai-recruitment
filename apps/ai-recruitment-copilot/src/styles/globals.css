@@ -3,8 +3,7 @@
  * package controls retain their spacing. Host components still follow Mastra
  * components, and host utilities stay last so responsive host classes win.
  */
-@layer mastra-studio-properties, mastra-studio-theme, mastra-studio-base,
-  properties, theme, base, mastra-studio-components, components, mastra-studio-utilities, utilities;
+@layer properties, theme, base, components, utilities;
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -81,6 +80,18 @@
 }
 
 :root {
+  /* Shared popup timing, matching ai-interview's surface transitions. */
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: ease-out;
+  --scale-large: 0.96;
+  --scale-medium: 0.97;
+  --scale-small: 0.98;
+  --scale-tiny: 0.99;
+
   --radius: 0.875rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.28 0.04 254);
@@ -129,9 +140,10 @@
   --card-foreground: oklch(0.97 0.006 254);
   --popover: oklch(0.215 0.018 254);
   --popover-foreground: oklch(0.97 0.006 254);
-  /* Dark brand palette echoes the homepage MeshGradient without tinting neutral surfaces. */
-  --primary: #c4b5fd;
-  --primary-foreground: #241d3f;
+  /* 暗色主色沿用亮色的 hue 254 蓝，只降彩度、提明度以适配深色底。
+     Dark brand color stays in the light-mode hue-254 blue family. */
+  --primary: oklch(0.72 0.095 254);
+  --primary-foreground: oklch(0.22 0.025 254);
   --secondary: oklch(0.255 0.02 254);
   --secondary-foreground: oklch(0.97 0.006 254);
   --muted: oklch(0.255 0.02 254);
@@ -141,24 +153,24 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: #a78bfa;
-  --chart-1: #c4b5fd;
-  --chart-2: #e0eaff;
-  --chart-3: #f0abfc;
-  --chart-4: #fbcfe8;
-  --chart-5: #a5b4fc;
+  --ring: oklch(0.65 0.09 254);
+  --chart-1: oklch(0.62 0.1 254);
+  --chart-2: oklch(0.75 0.08 254);
+  --chart-3: oklch(0.45 0.09 254);
+  --chart-4: oklch(0.85 0.05 254);
+  --chart-5: oklch(0.55 0.06 254);
   --calendar-ai-interview: var(--color-emerald-500);
   --calendar-ai-interview-foreground: var(--color-emerald-300);
   --calendar-human-interview: var(--color-sky-500);
   --calendar-human-interview-foreground: var(--color-sky-300);
   --sidebar: #0e151e;
   --sidebar-foreground: oklch(0.97 0.006 254);
-  --sidebar-primary: #c4b5fd;
-  --sidebar-primary-foreground: #241d3f;
+  --sidebar-primary: oklch(0.62 0.1 254);
+  --sidebar-primary-foreground: oklch(0.97 0.006 254);
   --sidebar-accent: oklch(0.255 0.02 254);
   --sidebar-accent-foreground: oklch(0.97 0.006 254);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #a78bfa;
+  --sidebar-ring: oklch(0.65 0.09 254);
 }
 
 @layer base {
@@ -367,6 +379,11 @@
       opacity, color, background-color, border-color, outline-color, fill, stroke !important;
   }
 
+  .coss-overlay-motion {
+    transition: none !important;
+    animation: none !important;
+  }
+
   .ai-text-shimmer {
     animation: none !important;
     background-position: 0% center;
@@ -421,4 +438,52 @@
     0 2px 8px -2px rgb(0 0 0 / 0.08),
     0 1px 2px -1px rgb(0 0 0 / 0.04);
   white-space: pre-line;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .home-product-shot-scroll {
+      animation: home-product-shot-scroll-scale linear both;
+      animation-range: entry 50% exit 100%;
+      animation-timeline: view();
+      transform-origin: 50% 0;
+    }
+  }
+  @keyframes home-product-shot-scroll-scale {
+    to {
+      transform: scale(0.9);
+    }
+  }
+}
+
+@layer base {
+  .aui-composer-input {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 18%, transparent) transparent;
+  }
+
+  .aui-composer-input::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .aui-composer-input::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .aui-composer-input::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--muted-foreground) 18%, transparent);
+    background-clip: content-box;
+  }
+
+  .aui-composer-input::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--muted-foreground) 32%, transparent);
+    background-clip: content-box;
+  }
+
+  .aui-composer-input::-webkit-scrollbar-thumb:active {
+    background: color-mix(in oklab, var(--muted-foreground) 48%, transparent);
+    background-clip: content-box;
+  }
 }

@@ -12,6 +12,7 @@ import {
   DataGrid,
   dateColumn,
   estimateActionsColumnSize,
+  ActionsColumnHeader,
   useDataGridState,
 } from "@/components/data-grid";
 import { Badge } from "@/components/ui/badge";
@@ -215,7 +216,7 @@ function DeleteCachePopover({
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
         render={
-          <Button className="h-8 pl-2.5 pr-0 text-xs" size="sm" type="button" variant="text">
+          <Button className="h-8 px-2.5 text-xs" size="sm" type="button" variant="text">
             删除
           </Button>
         }
@@ -412,7 +413,7 @@ export function ResumeParseCacheGrid() {
         ),
         key: "actions",
         size: ACTION_COLUMN_SIZE,
-        title: () => <div className="text-right">操作</div>,
+        title: () => <ActionsColumnHeader>操作</ActionsColumnHeader>,
       }),
     ],
     [deleteCache, deletingId],

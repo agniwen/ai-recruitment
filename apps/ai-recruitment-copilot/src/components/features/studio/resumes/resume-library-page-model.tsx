@@ -1,4 +1,5 @@
-import { normalizeListTextSearchParam } from "@arc/shared/list-text-filters";
+import { coerceSearchParams } from "./resume-library-search";
+import type { SearchParamsRecord } from "./resume-library-search";
 import type { ReactVirtualizer, VirtualItem } from "@tanstack/react-virtual";
 import { useElementScrollRestoration, useRouter } from "@tanstack/react-router";
 import { parseDataGridSearchParams } from "@/components/data-grid/query-contract";
@@ -10,7 +11,6 @@ import type { ResumeLibraryListRecord } from "@arc/shared/studio-resumes";
 import { pipelineStageValues } from "@arc/db-schema/studio-interviews";
 
 import {
-  lazy,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -23,10 +23,10 @@ import { toast } from "sonner";
 import { STUDIO_MAIN_SCROLL_RESTORATION_ID } from "@/components/features/studio/studio-scroll-restoration";
 import { copyTextToClipboard, toAbsoluteUrl } from "@/lib/client/clipboard";
 
-export const ResumeDocumentPreviewDialog = lazy(async () => {
-  const mod = await import("@/components/features/resume/resume-document-preview-dialog");
-  return { default: mod.ResumeDocumentPreviewDialog };
-});
+export { coerceSearchParams } from "./resume-library-search";
+export type { SearchParamsPrimitive, SearchParamsRecord } from "./resume-library-search";
+
+export { ResumeDocumentPreviewDialog } from "@/components/features/resume/resume-document-preview-dialog";
 
 export interface ResumeFilters extends Record<string, string> {
   activity: string;
@@ -405,41 +405,10 @@ export interface ResumeLibraryGridState {
   sorting: { desc: boolean; id: string }[];
 }
 
-export type SearchParamsPrimitive = boolean | number | string;
-export type SearchParamsRecord = Record<
-  string,
-  SearchParamsPrimitive | SearchParamsPrimitive[] | undefined
->;
-
 export interface UseResumeLibrarySearchStateOptions {
   onRefresh: () => void;
   search: SearchParamsRecord;
   slug: string;
-}
-
-export function coerceSearchParams(search: Record<string, unknown>): SearchParamsRecord {
-  const out: SearchParamsRecord = {};
-  for (const [key, value] of Object.entries(search)) {
-    if (key === "textFilters") {
-      out[key] = normalizeListTextSearchParam(value);
-      continue;
-    }
-    if (typeof value === "string") {
-      out[key] = value;
-      continue;
-    }
-    if (typeof value === "number" || typeof value === "boolean") {
-      out[key] = value;
-      continue;
-    }
-    if (Array.isArray(value)) {
-      out[key] = value.filter(
-        (item): item is boolean | number | string =>
-          typeof item === "string" || typeof item === "number" || typeof item === "boolean",
-      );
-    }
-  }
-  return out;
 }
 
 export function parseResumeQuery(searchParams: SearchParamsRecord): ResumeLibraryQueryState {

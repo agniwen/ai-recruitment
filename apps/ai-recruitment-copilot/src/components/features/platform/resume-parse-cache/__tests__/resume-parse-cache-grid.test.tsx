@@ -155,10 +155,12 @@ describe("ResumeParseCacheGrid", () => {
     const actionsHeader = [...document.querySelectorAll("th")].find(
       (header) => header.textContent?.trim() === "操作",
     );
-    expect(actionsHeader?.style.width).toBe("100px");
-    expect(actionsHeader?.style.minWidth).toBe("100px");
-    expect(actionsHeader?.style.maxWidth).toBe("100px");
-    expect(findButton("删除")?.classList.contains("pr-0")).toBe(true);
+    expect(actionsHeader?.style.width).toBe("122px");
+    expect(actionsHeader?.style.minWidth).toBe("122px");
+    expect(actionsHeader?.style.maxWidth).toBe("122px");
+    expect(findButton("删除")?.classList.contains("pr-0")).toBe(false);
+    expect(findButton("删除")?.classList.contains("px-2.5")).toBe(true);
+    expect(actionsHeader?.querySelector(".text-right")?.classList.contains("px-2.5")).toBe(true);
 
     await act(async () => {
       findButton("查看")?.click();
@@ -167,7 +169,9 @@ describe("ResumeParseCacheGrid", () => {
     });
 
     expect(document.body.textContent).toContain("解析缓存 JSON");
-    expect(document.body.textContent).toContain('"parsedStructured"');
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain('"parsedStructured"');
+    });
     expect(document.body.textContent).toContain('"name": "张三"');
 
     await act(async () => {

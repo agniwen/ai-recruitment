@@ -133,3 +133,36 @@ export async function rasterizePdf(
   const result = await rasterizePdfWithMeta(bytes, options);
   return result.pages;
 }
+
+export interface PdfTextPagesResult {
+  pageCount: number;
+  pages: string[];
+}
+
+export async function extractPdfTextPages(
+  bytes: Uint8Array,
+  maxPages = 6,
+): Promise<PdfTextPagesResult> {
+  const mupdf = await loadMupdf();
+  const doc = mupdf.Document.openDocument(bytes, "application/pdf");
+  try {
+    const pageCount = doc.countPages();
+    const pages: string[] = [];
+    for (let index = 0; index < Math.min(pageCount, maxPages); index += 1) {
+      const page = doc.loadPage(index);
+      try {
+        const structuredText = page.toStructuredText();
+        try {
+          pages.push(structuredText.asText());
+        } finally {
+          structuredText.destroy();
+        }
+      } finally {
+        page.destroy();
+      }
+    }
+    return { pageCount, pages };
+  } finally {
+    doc.destroy();
+  }
+}

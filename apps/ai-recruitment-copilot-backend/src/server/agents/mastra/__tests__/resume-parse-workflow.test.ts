@@ -141,6 +141,9 @@ describe("runResumeParseWorkflow", () => {
     expect(mocks.parseResumeDocument).toHaveBeenCalledWith(
       expect.objectContaining({ onProgress: expect.any(Function) }),
     );
+    expect(mocks.generateResumeStructured).toHaveBeenCalledWith(expect.any(String), {
+      fileName: "resume.pdf",
+    });
     expect(events).toEqual([
       {
         renderedPages: 1,

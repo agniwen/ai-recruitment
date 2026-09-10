@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import * as mupdf from "mupdf";
 import { describe, expect, it } from "vitest";
-import { processPdfPagesWithMeta } from "../pdf-rasterize";
+import { extractPdfTextPages, processPdfPagesWithMeta } from "../pdf-rasterize";
 
 function createPdf(pageCount: number): Buffer {
   const document = new mupdf.PDFDocument();
@@ -47,4 +47,36 @@ describe("processPdfPagesWithMeta", () => {
     expect(result.renderedSizes).toHaveLength(6);
     expect(result.results).toEqual(["page-1", "page-2", "page-3", "page-4", "page-5", "page-6"]);
   });
+});
+
+it("extracts real PDF text in page order and respects the page limit", async () => {
+  const document = new mupdf.PDFDocument();
+  const font = new mupdf.Font("Helvetica");
+  let bytes: Buffer;
+  try {
+    const fontObject = document.addSimpleFont(font);
+    for (const text of ["Candidate 2022-01", "Project 2024-08", "Not selected"]) {
+      const page = document.addPage(
+        [0, 0, 320, 200],
+        0,
+        { Font: { F1: fontObject } },
+        `BT /F1 12 Tf 20 150 Td (${text}) Tj ET`,
+      );
+      document.insertPage(-1, page);
+    }
+    const buffer = document.saveToBuffer();
+    try {
+      bytes = Buffer.from(buffer.asUint8Array());
+    } finally {
+      buffer.destroy();
+    }
+  } finally {
+    font.destroy();
+    document.destroy();
+  }
+  const result = await extractPdfTextPages(bytes, 2);
+  expect(result.pageCount).toBe(3);
+  expect(result.pages).toHaveLength(2);
+  expect(result.pages[0]).toContain("Candidate 2022-01");
+  expect(result.pages[1]).toContain("Project 2024-08");
 });

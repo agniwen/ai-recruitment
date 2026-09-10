@@ -5,11 +5,6 @@ import babel from "@rolldown/plugin-babel";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
-import type { Plugin } from "vite";
-import {
-  isolateMastraPlaygroundCss,
-  isMastraPlaygroundStylesheet,
-} from "./src/components/features/mastra-studio/css/isolate-playground-css";
 
 const requireFromQueuePackage = createRequire(
   new URL("../../packages/resume-parse-queue/package.json", import.meta.url),
@@ -19,18 +14,6 @@ const tslibEsmEntry = requireFromBullmq.resolve("tslib/tslib.es6.mjs");
 const bullmqDependencyPathPattern =
   /[/\\]node_modules[/\\](?:\.pnpm[/\\])?bullmq@|[/\\]node_modules[/\\]bullmq[/\\]/;
 const DEV_BUILD_TIME = "1970-01-01T00:00:00.000Z";
-const mastraStudioCssIsolation = (): Plugin => ({
-  enforce: "pre",
-  name: "arc-mastra-studio-css-isolation",
-  transform(code, id) {
-    if (!isMastraPlaygroundStylesheet(id)) {
-      return null;
-    }
-
-    return { code: isolateMastraPlaygroundCss(code), map: null };
-  },
-});
-
 export default defineConfig(({ command }) => {
   const buildTime = command === "serve" ? DEV_BUILD_TIME : new Date().toISOString();
 
@@ -80,7 +63,6 @@ export default defineConfig(({ command }) => {
       ],
     },
     plugins: [
-      mastraStudioCssIsolation(),
       {
         enforce: "pre",
         name: "arc-bullmq-tslib-esm",
@@ -114,11 +96,6 @@ export default defineConfig(({ command }) => {
           routeFileIgnorePattern: "(__tests__|__test__|\\.test\\.|\\.spec\\.)",
           routesDirectory: "routes",
         },
-        server: {
-          build: {
-            inlineCss: true,
-          },
-        },
         srcDirectory: "src",
       }),
       viteReact(),
@@ -126,6 +103,7 @@ export default defineConfig(({ command }) => {
         presets: [reactCompilerPreset()],
       }),
       nitro({
+        compressPublicAssets: { brotli: true, gzip: true },
         routeRules: {
           "/**": {
             headers: {
@@ -156,10 +134,11 @@ export default defineConfig(({ command }) => {
       strictPort: true,
     },
     ssr: {
-      // Playground UI subpath exports import package-owned CSS. Keep the package
-      // in Vite's SSR graph so dev SSR transforms those imports instead of
-      // handing them to Node's native ESM loader.
-      noExternal: [/^@mastra\/playground-ui(?:\/|$)/],
+      optimizeDeps: {
+        // Flatten React Start's transitive export-star chain for the SSR module
+        // runner. The server entry is loaded dynamically for the same HMR cycle.
+        include: ["@tanstack/react-start"],
+      },
     },
   };
 });

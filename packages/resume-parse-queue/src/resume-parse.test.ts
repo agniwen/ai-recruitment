@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   RESUME_PARSE_LOCAL_QUEUE_NAME,
+  RESUME_PARSE_HISTORICAL_QUEUE_NAME,
   RESUME_PARSE_QUEUE_NAME,
   buildResumeParseJobId,
   buildResumeParseQueuePrefix,
@@ -31,7 +32,7 @@ describe("resume parse queue configuration", () => {
 
   it("uses retry defaults when environment values are absent", () => {
     expect(defaultResumeParseJobOptions({})).toMatchObject({
-      attempts: 3,
+      attempts: 2,
       backoff: {
         delay: 30_000,
         type: "exponential",
@@ -39,8 +40,8 @@ describe("resume parse queue configuration", () => {
     });
   });
 
-  it("defaults resume parsing concurrency to 50", () => {
-    expect(resolveResumeParseWorkerConcurrency({})).toBe(50);
+  it("defaults resume parsing concurrency to 9", () => {
+    expect(resolveResumeParseWorkerConcurrency({})).toBe(9);
     expect(resolveResumeParseWorkerConcurrency({ RESUME_PARSE_WORKER_CONCURRENCY: "20" })).toBe(20);
   });
 
@@ -108,5 +109,11 @@ describe("resume parse queue configuration", () => {
     expect(shouldRemoveCancelledResumeParseJob("active")).toBe(false);
     expect(shouldRemoveCancelledResumeParseJob("completed")).toBe(false);
     expect(shouldRemoveCancelledResumeParseJob("failed")).toBe(false);
+  });
+});
+
+describe("historical parse isolation", () => {
+  it("retains three attempts for historical imports", () => {
+    expect(defaultResumeParseJobOptions({}, RESUME_PARSE_HISTORICAL_QUEUE_NAME).attempts).toBe(3);
   });
 });

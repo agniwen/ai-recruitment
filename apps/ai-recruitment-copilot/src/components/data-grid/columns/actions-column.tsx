@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@arc/shared/utils";
+import type { ReactNode } from "react";
 import type { DataGridFeatures } from "../table-features";
 
 export interface ActionInline<TData> {
@@ -50,12 +50,12 @@ export interface ActionsColumnOptions<TData> {
 const ACTION_CELL_HORIZONTAL_PADDING = 20;
 /** Button `px-2.5` → 10px × 2. */
 const ACTION_BUTTON_HORIZONTAL_PADDING = 20;
-/** Menu trigger uses `pl-2.5 pr-0`. */
-const ACTION_MENU_TRIGGER_HORIZONTAL_PADDING = 10;
 /** Flex gap between action buttons (`gap-0.5`). */
 const ACTION_BUTTON_GAP = 2;
-/** Right-aligned final control uses no trailing button padding. */
-const ACTION_BUTTON_TRAILING_PADDING = 10;
+/** Extra header inset matching the action buttons' horizontal padding (`px-2.5`). */
+const ACTION_HEADER_EXTRA_HORIZONTAL_PADDING = 20;
+/** Small visual buffer so action controls and focus outlines are not cramped. */
+const ACTION_COLUMN_WIDTH_BUFFER = 12;
 const MIN_ACTION_COLUMN_SIZE = 44;
 const HEADER_LABEL = "操作";
 
@@ -88,19 +88,23 @@ export function estimateActionsColumnSize(opts: {
     inlineWidth += estimateActionLabelWidth(label) + ACTION_BUTTON_HORIZONTAL_PADDING;
   }
   const menuWidth = hasMenu
-    ? estimateActionLabelWidth("更多") + ACTION_MENU_TRIGGER_HORIZONTAL_PADDING
+    ? estimateActionLabelWidth("更多") + ACTION_BUTTON_HORIZONTAL_PADDING
     : 0;
   const gapWidth = Math.max(actionCount - 1, 0) * ACTION_BUTTON_GAP;
-  const removedTrailingPadding =
-    inlineLabels.length > 0 && !hasMenu ? ACTION_BUTTON_TRAILING_PADDING : 0;
   const contentWidth = Math.ceil(
-    inlineWidth + menuWidth + gapWidth + ACTION_CELL_HORIZONTAL_PADDING - removedTrailingPadding,
+    inlineWidth + menuWidth + gapWidth + ACTION_CELL_HORIZONTAL_PADDING,
   );
   const headerWidth = Math.ceil(
-    estimateActionLabelWidth(headerLabel) + ACTION_CELL_HORIZONTAL_PADDING,
+    estimateActionLabelWidth(headerLabel) +
+      ACTION_CELL_HORIZONTAL_PADDING +
+      ACTION_HEADER_EXTRA_HORIZONTAL_PADDING,
   );
 
-  return Math.max(MIN_ACTION_COLUMN_SIZE, contentWidth, headerWidth);
+  return Math.max(MIN_ACTION_COLUMN_SIZE, contentWidth, headerWidth) + ACTION_COLUMN_WIDTH_BUFFER;
+}
+
+export function ActionsColumnHeader({ children }: { children: ReactNode }) {
+  return <div className="px-2.5 text-right">{children}</div>;
 }
 
 export function actionsColumn<TData extends RowData>(
@@ -126,15 +130,13 @@ export function actionsColumn<TData extends RowData>(
 
       return (
         <div className="flex items-center justify-end gap-0.5">
-          {visibleInline.map((action, index) => {
+          {visibleInline.map((action) => {
             const disabled = action.disabled?.(record) ?? false;
             const reason = disabled ? (action.disabledReason?.(record) ?? null) : null;
-            const isTrailingControl =
-              index === visibleInline.length - 1 && visibleMenu.length === 0;
             return (
               <Button
                 aria-label={action.label}
-                className={cn("h-8 px-2.5 text-xs", isTrailingControl && "pr-0")}
+                className="h-8 px-2.5 text-xs"
                 disabled={disabled}
                 key={action.label}
                 onClick={() => void action.onClick(record)}
@@ -152,7 +154,7 @@ export function actionsColumn<TData extends RowData>(
                 render={
                   <Button
                     aria-label="更多操作"
-                    className="h-8 pl-2.5 pr-0 text-xs"
+                    className="h-8 px-2.5 text-xs"
                     size="sm"
                     title="更多操作"
                     variant="text"
@@ -190,7 +192,7 @@ export function actionsColumn<TData extends RowData>(
       );
     },
     enableSorting: false,
-    header: () => <div className="text-right">{headerLabel}</div>,
+    header: () => <ActionsColumnHeader>{headerLabel}</ActionsColumnHeader>,
     id: opts.id ?? "actions",
     // Lock width so the last action column stays content-sized instead of absorbing leftover table width.
     maxSize: size,

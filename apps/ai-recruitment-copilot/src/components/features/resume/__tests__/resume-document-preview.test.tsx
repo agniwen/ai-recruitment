@@ -220,13 +220,13 @@ describe("resume document preview", () => {
     });
   });
 
-  it("keeps DOCX and XLSX viewer download actions out of resume preview modals", () => {
+  it("keeps DOCX and XLSX viewer download actions out of resume preview modals", async () => {
     stubDesktopViewport();
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
 
-    act(() => {
+    await act(async () => {
       root.render(
         <previewDialogModule.ResumeDocumentPreviewDialog
           filename="resume.docx"
@@ -236,8 +236,9 @@ describe("resume document preview", () => {
           url="/api/w/new/studio/resume-pool/r1/resume"
         />,
       );
+      await vi.dynamicImportSettled();
     });
-    act(() => {
+    await act(async () => {
       root.render(
         <previewDialogModule.ResumeDocumentPreviewDialog
           filename="resume.xlsx"
@@ -247,6 +248,7 @@ describe("resume document preview", () => {
           url="/api/w/new/studio/resume-pool/r2/resume"
         />,
       );
+      await vi.dynamicImportSettled();
     });
 
     expect(viewerMocks.docx).toHaveBeenCalledWith(

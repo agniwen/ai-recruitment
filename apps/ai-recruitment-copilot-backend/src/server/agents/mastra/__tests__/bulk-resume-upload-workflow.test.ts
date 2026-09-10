@@ -26,6 +26,7 @@ describe("runBulkResumeUploadWorkflow", () => {
 
     expect(mocks.processBatchItem).toHaveBeenCalledWith("item-1", {
       bypassCache: undefined,
+      retryParseFailure: undefined,
     });
     expect(result).toEqual({
       batch: { id: "batch-1" },
@@ -41,6 +42,18 @@ describe("runBulkResumeUploadWorkflow", () => {
 
     expect(mocks.processBatchItem).toHaveBeenCalledWith("item-2", {
       bypassCache: true,
+      retryParseFailure: undefined,
     });
+  });
+});
+
+it("propagates the retry policy and rejects recoverable parse failures", async () => {
+  mocks.processBatchItem.mockRejectedValueOnce(new Error("parse timeout"));
+  await expect(
+    runBulkResumeUploadWorkflow({ itemId: "retry-item", retryParseFailure: true }),
+  ).rejects.toThrow("parse timeout");
+  expect(mocks.processBatchItem).toHaveBeenLastCalledWith("retry-item", {
+    bypassCache: undefined,
+    retryParseFailure: true,
   });
 });

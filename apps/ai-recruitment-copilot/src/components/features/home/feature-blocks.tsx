@@ -4,7 +4,6 @@
 
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
-import { ScrollSmoother } from "gsap/ScrollSmoother";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useCallback, useRef } from "react";
 import { ChatScreen, InterviewScreen, JobsScreen } from "@/components/features/home/screens";
@@ -13,7 +12,7 @@ import { cn } from "@arc/shared/utils";
 import { CenterCarousel } from "./center-carousel";
 import { Eyebrow, Section } from "./section";
 
-gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollSmoother);
+gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 interface Block {
   bullets: string[];
@@ -288,12 +287,7 @@ export function FeatureBlocks() {
   const labelRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const triggerRef = useRef<ScrollTrigger | null>(null);
 
-  // 点击进度条标签：跳转到该场景的中点位置。
-  // 优先用 ScrollSmoother.scrollTo —— 它会原生跟 smoother 的 lerp 协调，避免再起一个
-  // 跟 smoother 抢 scroll 控制权的并行 tween。降级回 window.scrollTo 兼容 reduced-motion。
-  // Click on progress bar label: jump to that scene's settled mid-point.
-  // Use ScrollSmoother.scrollTo when available — it coordinates with the smoother's lerp
-  // natively. Falls back to window.scrollTo when smoother is disabled (reduced-motion).
+  // 点击进度条标签，使用原生滚动跳转到对应场景。
   const handleSeek = useCallback((sceneIndex: number) => {
     const trigger = triggerRef.current;
     if (!trigger) {
@@ -302,12 +296,7 @@ export function FeatureBlocks() {
     const targetProgress = SCENE_TARGET_PROGRESS[sceneIndex] ?? 0;
     const targetScroll = trigger.start + targetProgress * (trigger.end - trigger.start);
 
-    const smoother = ScrollSmoother.get();
-    if (smoother) {
-      smoother.scrollTo(targetScroll, true);
-    } else {
-      window.scrollTo({ behavior: "smooth", top: targetScroll });
-    }
+    window.scrollTo({ behavior: "smooth", top: targetScroll });
   }, []);
 
   useGSAP(
@@ -321,19 +310,7 @@ export function FeatureBlocks() {
         return;
       }
 
-      // ScrollSmoother + ScrollTrigger 是同源整合，**不要**手动 scrollerProxy 也不要传
-      // scroller —— 那是给第三方 smooth scroller（Locomotive、Smooth Scrollbar 等）用的。
-      // ScrollTrigger 也会在 viewport resize 时自动 refresh，所以**不要**自己挂 resize
-      // listener。pinType 在 ScrollSmoother active 时默认 "transform"，**不要**手动强制。
-      // 任何形式的手动 refresh / refresh(true) 链都会跟 ScrollSmoother 打架，造成 pin
-      // 跟 smoother 失同步的视觉漂移。
-      // ScrollSmoother + ScrollTrigger are first-party — don't add scrollerProxy and don't
-      // pass `scroller`; those are for third-party smooth scrollers (Locomotive, Smooth
-      // Scrollbar, etc). ScrollTrigger also auto-refreshes on viewport resize, so don't
-      // attach manual resize listeners. pinType defaults to "transform" when ScrollSmoother
-      // is active, no need to force it. Any manual refresh chain fights the smoother and
-      // causes visible pin/scroll desync.
-
+      // ScrollTrigger uses native page scrolling and refreshes on viewport resize.
       const mm = gsap.matchMedia();
 
       mm.add("(min-width: 1024px)", () => {
@@ -441,8 +418,6 @@ export function FeatureBlocks() {
             },
             pin: true,
             pinSpacing: true,
-            // ScrollSmoother active 时 ScrollTrigger 会自动选 pinType: "transform"，无需手动指定。
-            // ScrollTrigger picks pinType: "transform" automatically when ScrollSmoother is active.
             scrub: 0.4,
             start: "top top",
             trigger: sectionRef.current,

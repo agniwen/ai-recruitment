@@ -1,3 +1,4 @@
+import { isResumeStructuredSourceFileNameCompatible } from "@arc/db-schema/resume-parser-schema";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
   generateResumeStructured,
@@ -33,7 +34,9 @@ export const attachmentsRouter = factory
 
     const cacheCompatible = isResumeParseCacheSourceCompatible(attachment.parsedTextSource);
     let resumeProfile =
-      cacheCompatible && attachment.parsedStructured
+      cacheCompatible &&
+      attachment.parsedStructured &&
+      isResumeStructuredSourceFileNameCompatible(attachment.parsedStructured, attachment.filename)
         ? projectAttachmentToResumeProfile(attachment.parsedStructured)
         : null;
     if (
@@ -42,7 +45,9 @@ export const attachmentsRouter = factory
       attachment.parsedTextSource !== "aliyun-docmining" &&
       attachment.parsedText?.trim()
     ) {
-      const structured = await generateResumeStructured(attachment.parsedText);
+      const structured = await generateResumeStructured(attachment.parsedText, {
+        fileName: attachment.filename,
+      });
       if (attachment.contentHash) {
         await updateStructuredByHash(attachment.contentHash, structured);
       }

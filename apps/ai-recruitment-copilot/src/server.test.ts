@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const startFetch = vi.fn(() => Promise.resolve(new Response("start")));
 const honoFetch = vi.fn(() => Promise.resolve(new Response("hono")));
@@ -12,11 +12,9 @@ const pingDatabase = vi.fn(() => Promise.resolve());
 const getResumeParseQueueStats = vi.fn(() => Promise.resolve({ waiting: 0 }));
 const isResumeParseQueueConfigured = vi.fn(() => false);
 
-vi.mock("@tanstack/react-start/server-entry", () => ({
-  createServerEntry: (entry: unknown) => entry,
-  default: {
-    fetch: startFetch,
-  },
+vi.mock("@tanstack/react-start/server", () => ({
+  createStartHandler: () => startFetch,
+  defaultStreamHandler: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/app", () => ({
@@ -32,6 +30,10 @@ vi.mock("@arc/resume-parse-queue/resume-parse", () => ({
 vi.mock("./lib/server/og-image", () => ({
   createOgImageResponse,
 }));
+
+beforeEach(() => {
+  vi.stubEnv("QWEN_OCR_MODEL", "qwen-test-model");
+});
 
 afterEach(() => {
   vi.clearAllMocks();

@@ -907,16 +907,31 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
         <aside
           className={cn(
             "min-h-0 min-w-0 max-w-full overflow-hidden",
-            canUseTimelineRailScroll ? "xl:h-full" : "",
+            canUseTimelineRailScroll
+              ? "xl:h-full"
+              : "xl:sticky xl:top-[calc(var(--header-height)+1rem)] xl:self-start",
           )}
         >
-          <CandidateTimeline
-            className={canUseTimelineRailScroll ? "xl:h-full" : undefined}
-            data={candidateTimeline}
-            density="rail"
-            isLoading={isTimelineLoading}
-            scrollMode={canUseTimelineRailScroll ? "internal" : "page"}
-          />
+          {canUseTimelineRailScroll ? (
+            <CandidateTimeline
+              className="xl:h-full"
+              data={candidateTimeline}
+              density="rail"
+              isLoading={isTimelineLoading}
+              scrollMode="internal"
+            />
+          ) : (
+            <ScrollArea className="max-h-[70vh]" scrollFade>
+              <div className="pr-2">
+                <CandidateTimeline
+                  data={candidateTimeline}
+                  density="rail"
+                  isLoading={isTimelineLoading}
+                  scrollMode="page"
+                />
+              </div>
+            </ScrollArea>
+          )}
         </aside>
       ) : null}
     </div>

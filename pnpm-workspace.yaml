@@ -97,9 +97,3 @@ minimumReleaseAgeExclude:
   - ai@6.0.219
   - "@tanstack/react-table@9.0.0"
   - "@tanstack/table-core@9.0.0"
-
-# Web-only package patch. Worker Docker `pnpm deploy` only installs a subset of
-# workspace packages, so this patch is unused there — allow rather than fail CI.
-allowUnusedPatches: true
-patchedDependencies:
-  "@mastra/playground-ui@40.0.1": patches/@mastra__playground-ui@40.0.1.patch

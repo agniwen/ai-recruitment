@@ -51,7 +51,6 @@
     "@mastra/core": "^1.50.1",
     "@mastra/editor": "0.13.6",
     "@mastra/evals": "^1.5.0",
-    "@mastra/hono": "^1.5.2",
     "@mastra/mcp": "^1.13.1",
     "@mastra/memory": "^1.22.2",
     "@mastra/observability": "^1.16.0",

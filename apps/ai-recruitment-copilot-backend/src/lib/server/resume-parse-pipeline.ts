@@ -10,7 +10,10 @@ import {
 import { getResumeStructuredModelEndpoint } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import type { AttachmentTextSource } from "@arc/db-schema/db-enums";
 import type { ResumeParserStructured } from "@arc/db-schema/resume-parser-schema";
-import { structuredSchema } from "@arc/db-schema/resume-parser-schema";
+import {
+  normalizeResumeStructuredSourceFileName,
+  resumeParserGenerationSchema,
+} from "@arc/db-schema/resume-parser-schema";
 import { getResumeDocumentKind } from "@arc/shared/resume-documents";
 import { convertLegacyOfficeToOoxml } from "./office-conversion";
 import {
@@ -25,7 +28,8 @@ import {
   readOfficeXmlAttribute as readAttribute,
   readOfficeZipText as readZipText,
 } from "./office-xml";
-import { processPdfPagesWithMeta } from "./pdf-rasterize";
+import { extractPdfTextPages, processPdfPagesWithMeta } from "./pdf-rasterize";
+import { RESUME_STRUCTURED_INSTRUCTIONS } from "./resume-structured-instructions";
 import { getQwenOcrEndpointConfig, isQwenOcrConfigured, qwenVlOcr } from "./qwen-ocr";
 import { parseResumeWithAliyun } from "./resume-parse-aliyun";
 import { getResumeParseProvider } from "./resume-parse-provider";
@@ -34,75 +38,19 @@ const STRUCTURED_TEXT_MAX_CHARS = 16_000;
 const DEV_OCR_LOG_PREFIX = "[resume-ocr]";
 const DEFAULT_OCR_ATTEMPTS = 3;
 const DEFAULT_OCR_PAGE_CONCURRENCY = 4;
+const DEFAULT_OCR_RENDER_SCALE = 4;
 const DEFAULT_OCR_RETRY_DELAY_MS = 1000;
 const OFFICE_TEXT_MAX_CHARS = 80_000;
 const XLSX_MAX_SHEETS = 8;
 const XLSX_MAX_ROWS_PER_SHEET = 200;
 const OCR_PAGE_TEXT_PREVIEW_MAX_CHARS = 300;
 
-export const RESUME_STRUCTURED_INSTRUCTIONS = `你是一名简历解析助手。给你一段简历文本，请严格按照下方 JSON 结构输出结构化候选人档案。
+const PDF_TEXT_SUPPLEMENT_MAX_CHARS = 4000;
+const PDF_TEXT_SUPPLEMENT_HEADING =
+  "[PDF 文本层补充信息：仅补足 OCR 可能遗漏的可见文字；如有冲突，以前面的 OCR 正文为准]";
+const RESUME_DATE_LINE_PATTERN = /(?<!\d)(?:19|20)\d{2}(?!\d)/;
 
-## 输出 JSON 结构（字段名与类型必须严格匹配）
-
-{
-  "name": string | null,
-  "age": number | null,
-  "gender": string | null,
-  "email": string | null,
-  "phone": string | null,
-  "schools": string[],
-  "degree": string | null,
-  "major": string | null,
-  "graduationYear": string | null,
-  "education": string | null,
-  "educationExperiences": [
-    { "school": string | null, "degree": string | null, "major": string | null, "period": string | null, "graduationYear": string | null, "educationLevel": string | null, "summary": string | null }
-  ],
-  "targetRoles": string[],
-  "workYears": number | null,
-  "skills": string[],
-  "personalStrengths": string[],
-  "workExperiences": [
-    { "company": string | null, "role": string | null, "period": string | null, "summary": string | null }
-  ],
-  "projectExperiences": [
-    { "name": string | null, "role": string | null, "period": string | null, "summary": string | null, "techStack": string[] }
-  ],
-  "links": string[],
-  "timelineSummary": {
-    "currentStatus": string | null,
-    "dateRanges": string[],
-    "estimatedExperienceYears": number | null,
-    "riskSignals": string[]
-  }
-}
-
-## 输出约束
-- 只输出 JSON 本身，不要任何额外解释文字，不要使用 Markdown 代码块。
-- 无法从简历中确认的字段返回 null 或空数组，禁止编造。
-- personalStrengths 必须有简历依据。
-- skills 是候选人掌握技能的全集，必须汇总简历中所有有依据的技能来源：技能/专业技能栏、项目经历、工作经历、项目 techStack、职责描述、工具平台、框架语言、数据库、中间件、云服务、设计/办公/协作工具等；不要因为数量多而截断 skills。
-- links / schools / targetRoles / personalStrengths 去重且最多 6 项。
-- educationExperiences 按简历原文顺序输出所有教育经历；每段尽量提取 school / degree / major / period / graduationYear / educationLevel / summary。
-- 如果教育经历只有学校名，也要输出一条记录，其余无法确认字段为 null。
-- schools 仍输出去重学校名列表，用于摘要兼容；顶层 degree / major / graduationYear / education 表示最高学历或最主要学历。
-- skills 字段必须使用业内通用规范名（保留通行大小写），不要写候选人简历里的别名 / 缩写 / 版本号 / .js 后缀：
-    · "Vue 3" / "Vue.js" / "VueJS" / "vue" → "Vue"
-    · "React.js" / "ReactJS" / "react" → "React"
-    · "TS" → "TypeScript"
-    · "JS" → "JavaScript"
-    · "Node" / "NodeJS" / "node.js" → "Node.js"
-    · "K8s" / "kubernetes" → "Kubernetes"
-    · "Tailwind" / "TailwindCSS" → "Tailwind CSS"
-    · "PG" / "Postgres" / "postgresql" → "PostgreSQL"
-    · 当原文里出现品牌组合名时不要省略空格："ClaudeCode" → "Claude Code"。
-    · 当某项无法判断业内规范名时，保留原文并 trim，不要瞎改。
-- workExperiences / projectExperiences 按简历原文顺序排列；summary 保留关键职责、成果或内容，不扩写。
-- projectExperiences 的每一项必须包含 techStack 字段（string[]），即使为空也要写 []。
-- timelineSummary.dateRanges 保留原文时间表达。
-- timelineSummary.riskSignals 仅在出现明确异常（时间重叠、6 个月以上空档、连续两段 8 个月内的短经历、未来时间段等）时填入，否则为空数组。
-- timelineSummary.estimatedExperienceYears 为数字，不足一年用小数；无法推断时为 null。
-- age 仅在简历明确给出时填数字，不要根据毕业年份推测。`;
+export { RESUME_STRUCTURED_INSTRUCTIONS } from "./resume-structured-instructions";
 
 export type ResumeTextSource = Exclude<AttachmentTextSource, "pdf-parse">;
 export {
@@ -154,9 +102,43 @@ export type ResumeParseProgressEvent =
       type: "ocr.completed";
     };
 
+function prioritizePdfTextSupplement(supplement: string): string {
+  const [heading = PDF_TEXT_SUPPLEMENT_HEADING, ...bodyLines] = supplement.split("\n");
+  const dateIndexes = bodyLines.flatMap((line, index) =>
+    RESUME_DATE_LINE_PATTERN.test(line) ? [index] : [],
+  );
+  if (dateIndexes.length === 0) {
+    return supplement.slice(0, PDF_TEXT_SUPPLEMENT_MAX_CHARS);
+  }
+
+  const contextIndexes = new Set<number>();
+  for (const index of dateIndexes) {
+    contextIndexes.add(Math.max(0, index - 2));
+    contextIndexes.add(Math.max(0, index - 1));
+    contextIndexes.add(index);
+  }
+  const criticalDates = dateIndexes.map((index) => bodyLines[index]?.slice(0, 240)).join("\n");
+  const dateContexts = [...contextIndexes]
+    .toSorted((left, right) => left - right)
+    .map((index) => bodyLines[index]?.slice(0, 320))
+    .join("\n");
+  const remaining = bodyLines.filter((_, index) => !contextIndexes.has(index)).join("\n");
+  return `${heading}\n[优先保留的日期字段]\n${criticalDates}\n[日期字段上下文]\n${dateContexts}\n[其他补充]\n${remaining}`.slice(
+    0,
+    PDF_TEXT_SUPPLEMENT_MAX_CHARS,
+  );
+}
+
 function clipForStructured(text: string): string {
   if (text.length <= STRUCTURED_TEXT_MAX_CHARS) {
     return text;
+  }
+  const supplementStart = text.indexOf(`\n\n${PDF_TEXT_SUPPLEMENT_HEADING}`);
+  if (supplementStart !== -1) {
+    const ocrText = text.slice(0, supplementStart);
+    const supplement = prioritizePdfTextSupplement(text.slice(supplementStart + 2));
+    const suffix = `\n\n[...OCR content truncated...]\n\n${supplement}`;
+    return `${ocrText.slice(0, STRUCTURED_TEXT_MAX_CHARS - suffix.length)}${suffix}`;
   }
   return `${text.slice(0, STRUCTURED_TEXT_MAX_CHARS)}\n\n[...content truncated...]`;
 }
@@ -178,6 +160,73 @@ function normalizeExtractedText(text: string): string {
       .filter(Boolean)
       .join("\n"),
   );
+}
+
+function compactTextForCoverage(text: string): string {
+  return text
+    .normalize("NFKC")
+    .toLocaleLowerCase("en-US")
+    .replaceAll(/[\s\p{P}\p{S}]+/gu, "");
+}
+
+function isLikelyDecorativePdfText(line: string): boolean {
+  const compact = line.replaceAll(/\s+/g, "");
+  return (
+    compact.length >= 32 &&
+    /^[A-Za-z0-9_~-]+$/.test(compact) &&
+    /[a-z]/.test(compact) &&
+    /[A-Z]/.test(compact) &&
+    /\d/.test(compact)
+  );
+}
+
+// Restores text-layer lines missed by OCR, while filtering decorative artifacts and retaining context around dates.
+// 补回 OCR 遗漏的文本层内容，同时过滤装饰性乱码并保留日期上下文。
+function buildPdfTextSupplement(ocrPages: string[], textPages: string[]): string | null {
+  const pageBlocks: string[] = [];
+  for (const [pageIndex, pageText] of textPages.entries()) {
+    const compactOcrPage = compactTextForCoverage(ocrPages[pageIndex] ?? "");
+    const lines = pageText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => compactTextForCoverage(line).length >= 4)
+      .filter((line) => !isLikelyDecorativePdfText(line));
+    const missingIndexes = lines.flatMap((line, index) =>
+      compactOcrPage.includes(compactTextForCoverage(line)) ? [] : [index],
+    );
+    if (missingIndexes.length === 0) {
+      continue;
+    }
+    const selectedIndexes = new Set(missingIndexes);
+    for (const index of missingIndexes) {
+      if (!RESUME_DATE_LINE_PATTERN.test(lines[index] ?? "")) {
+        continue;
+      }
+      selectedIndexes.add(Math.max(0, index - 1));
+      selectedIndexes.add(Math.max(0, index - 2));
+    }
+    const supplementalLines = [...selectedIndexes]
+      .toSorted((left, right) => left - right)
+      .map((index) => lines[index])
+      .filter(Boolean);
+    pageBlocks.push(`[第 ${pageIndex + 1} 页]\n${supplementalLines.join("\n")}`);
+  }
+  return pageBlocks.length > 0
+    ? `${PDF_TEXT_SUPPLEMENT_HEADING}\n${pageBlocks.join("\n\n")}`
+    : null;
+}
+
+// Rejects coordinate dumps that look non-empty but are unusable as resume text.
+// 拒绝“非空但不可读”的坐标转储，避免其被误当作有效简历文本。
+function validateOcrTextQuality(text: string): void {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const coordinateLines = lines.filter((line) => /^\d+(?:,\d+){4,}$/u.test(line)).length;
+  if (coordinateLines >= 10 && coordinateLines / lines.length >= 0.6) {
+    throw new Error("OCR output is a coordinate dump instead of readable resume text.");
+  }
 }
 
 function emitResumeParseProgress(
@@ -234,6 +283,17 @@ function devOcrLog(message: string, data?: Record<string, unknown>): void {
 function ocrEndpointLog(message: string, data?: Record<string, unknown>): void {
   // eslint-disable-next-line no-console
   console.info(DEV_OCR_LOG_PREFIX, message, data ?? "");
+}
+
+async function extractPdfTextPagesBestEffort(bytes: Uint8Array) {
+  try {
+    return await extractPdfTextPages(bytes, 6);
+  } catch (error) {
+    devOcrLog("PDF text layer unavailable", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
 }
 
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
@@ -581,7 +641,31 @@ async function extractImageText(input: ResumeDocumentInput): Promise<ParsedResum
   return { pageCount: 1, text, textSource: "qwen-ocr" };
 }
 
-export async function generateResumeStructured(text: string): Promise<ResumeParserStructured> {
+function dedupeResumeSkills(skills: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const skill of skills) {
+    const display = skill.trim().replaceAll(/\s+/g, " ");
+    const normalized = display.toLocaleLowerCase("en-US");
+    if (!display || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    unique.push(display);
+  }
+  return unique;
+}
+
+export async function generateResumeStructured(
+  text: string,
+  options: { fileName?: string } = {},
+): Promise<ResumeParserStructured> {
+  const fileName = options.fileName
+    ? normalizeResumeStructuredSourceFileName(options.fileName)
+    : undefined;
+  const fileContext = fileName
+    ? `\n\n简历文件信息：\n- 简历文件名：${JSON.stringify(fileName)}\n- 文件名可能包含候选人姓名，可作为 name 字段的辅助线索；若与简历正文冲突，以正文事实为准。文件名中的岗位、薪资、平台标签不得直接当作候选人事实。`
+    : "";
   const startedAt = nowMs();
   const structuredEndpoint = getResumeStructuredModelEndpoint();
   ocrEndpointLog("structured start", {
@@ -593,14 +677,14 @@ export async function generateResumeStructured(text: string): Promise<ResumePars
   try {
     const output = await generateStructuredWithMastraAgent({
       agent: resumeStructuredAgent,
-      // 中文简历每字约 1 token，加上 projectExperiences/workExperiences 等结构开销，
-      // 项目/经历较多的简历输出会很长，给到 16384 留足余量避免 summary 中途截断。
-      // Chinese resumes use ~1 token per character; with verbose project / work
-      // experience summaries the output can be very long, so allow 16384 to leave
-      // headroom and avoid truncating mid-string.
-      maxOutputTokens: 16_384,
-      prompt: `${RESUME_STRUCTURED_INSTRUCTIONS}\n\n简历文本：\n${clipForStructured(text)}`,
-      schema: structuredSchema,
+      fallbackToTextGeneration: true,
+      // Reserve enough output for long resumes and their scoring evidence.
+      maxOutputTokens: 32_768,
+      prompt: `${RESUME_STRUCTURED_INSTRUCTIONS}${fileContext}\n\n简历文本：\n${clipForStructured(text)}`,
+      retryOnInvalid: true,
+      retryOnTransient: true,
+      schema: resumeParserGenerationSchema,
+      strictJson: true,
       temperature: 0,
     });
     devOcrLog("structured completed", {
@@ -609,7 +693,8 @@ export async function generateResumeStructured(text: string): Promise<ResumePars
       model: structuredEndpoint.model,
       outputChars: JSON.stringify(output).length,
     });
-    return output;
+    const normalized = { ...output, skills: dedupeResumeSkills(output.skills) };
+    return fileName ? { ...normalized, sourceFileName: fileName } : normalized;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // eslint-disable-next-line no-console
@@ -642,8 +727,9 @@ export async function parseResumeOcrOnly(
     bytes: bytes.byteLength,
     maxPages: 6,
     model: ocrEndpoint.model,
-    scale: 2,
+    scale: DEFAULT_OCR_RENDER_SCALE,
   });
+  const textLayerPromise = extractPdfTextPagesBestEffort(bytes);
   const ocrStartedAt = nowMs();
   const pageConcurrency = parsePositiveInteger(
     process.env.RESUME_PARSE_OCR_PAGE_CONCURRENCY,
@@ -669,7 +755,7 @@ export async function parseResumeOcrOnly(
           type: "document.pages.ready",
         });
       },
-      scale: 2,
+      scale: DEFAULT_OCR_RENDER_SCALE,
     },
     async (png, index) => {
       const pageStartedAt = nowMs();
@@ -700,7 +786,11 @@ export async function parseResumeOcrOnly(
     throw new Error("Rasterization produced no pages; PDF may be empty or unreadable.");
   }
 
-  const text = ocrTexts.filter((chunk) => chunk.trim().length > 0).join("\n\n");
+  const ocrText = ocrTexts.filter((chunk) => chunk.trim().length > 0).join("\n\n");
+  validateOcrTextQuality(ocrText);
+  const textLayer = await textLayerPromise;
+  const supplement = textLayer ? buildPdfTextSupplement(ocrTexts, textLayer.pages) : null;
+  const text = supplement ? `${ocrText}\n\n${supplement}` : ocrText;
   devOcrLog("ocr completed", {
     duration: formatDuration(ocrStartedAt),
     outputChars: text.length,
@@ -780,12 +870,23 @@ export function extractResumeDocumentText(input: ResumeDocumentInput): Promise<P
   }
 }
 
-export function parseResumeDocument(input: ResumeDocumentInput): Promise<ParsedResumeDocument> {
+export async function parseResumeDocument(
+  input: ResumeDocumentInput,
+): Promise<ParsedResumeDocument> {
   if (!getResumeDocumentKind(input)) {
     throw new Error("仅支持上传 PDF、DOC、DOCX、HTML、PPT、PPTX、XLS、XLSX、JPG、PNG 简历。");
   }
   if (getResumeParseProvider() === "aliyun-docmining") {
-    return parseResumeWithAliyun(input);
+    const parsed = await parseResumeWithAliyun(input);
+    return {
+      ...parsed,
+      structured: {
+        ...parsed.structured,
+        ...(input.fileName
+          ? { sourceFileName: normalizeResumeStructuredSourceFileName(input.fileName) }
+          : {}),
+      },
+    };
   }
   return extractResumeDocumentText(input);
 }
@@ -822,7 +923,9 @@ export async function parseResumeFast(
     inputChars: parsed.text.length,
     pageCount: parsed.pageCount,
   });
-  const structured = await generateResumeStructured(parsed.text);
+  const structured = await generateResumeStructured(parsed.text, {
+    fileName: documentInput.fileName,
+  });
   devOcrLog("full parse completed", {
     duration: formatDuration(startedAt),
     outputChars: parsed.text.length,

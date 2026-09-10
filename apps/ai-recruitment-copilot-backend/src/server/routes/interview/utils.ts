@@ -280,7 +280,9 @@ export async function storeInterviewResume(
     }
     if (existing?.parsedText && existing.parsedText.trim().length > 0) {
       try {
-        const structured = await generateResumeStructured(existing.parsedText);
+        const structured = await generateResumeStructured(existing.parsedText, {
+          fileName: file.name,
+        });
         await updateStructuredByHash(contentHash, structured);
         await copyCachedAttachmentForRequester({
           contentHash,

@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
-import { IconRefresh, IconX } from "@tabler/icons-react";
+import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -12,7 +12,6 @@ import {
   RecruitingThread,
   RecruitingToolRenderers,
 } from "@/components/assistant-ui/recruiting-thread";
-import { Button } from "@/components/ui/button";
 import {
   fetchConversation,
   patchConversation,
@@ -37,46 +36,10 @@ function getConversationTitleFromText(text: string) {
   return title || NEW_CHAT_TITLE;
 }
 
-function ChatErrorBar({
-  error,
-  historyErrorMessage,
-  onClearError,
-  onRetry,
-}: {
-  error: Error | undefined;
-  historyErrorMessage: string | null;
-  onClearError: () => void;
-  onRetry: () => void;
-}) {
-  if (!error && !historyErrorMessage) {
-    return null;
-  }
-  return (
-    <div className="border-t px-4 py-2">
-      <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-destructive text-sm">
-        <span className="min-w-0 flex-1">
-          {historyErrorMessage ?? "请求失败，这一步没有完成。"}
-        </span>
-        {error ? (
-          <>
-            <Button onClick={onRetry} size="sm" type="button" variant="outline">
-              <IconRefresh className="size-3.5" />
-              重试
-            </Button>
-            <Button
-              aria-label="关闭错误"
-              onClick={onClearError}
-              size="icon"
-              type="button"
-              variant="ghost"
-            >
-              <IconX className="size-3.5" />
-            </Button>
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
+const CHAT_ERROR_TOAST_ID = "recruiting-chat-error";
+
+function showChatError(message: string) {
+  toast.error(message, { id: CHAT_ERROR_TOAST_ID });
 }
 
 export default function ChatWorkspace({ initialSessionId }: { initialSessionId: string | null }) {
@@ -87,7 +50,6 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isHistoryReady, setIsHistoryReady] = useState(false);
   const [shouldNormalizeSessionPath, setShouldNormalizeSessionPath] = useState(false);
-  const [historyErrorMessage, setHistoryErrorMessage] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
 
   const submitDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,8 +71,16 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
     boundChat ? { chat: boundChat, experimental_throttle: 50 } : { experimental_throttle: 50 },
   );
   const runtime = useAISDKRuntime(chatHelpers, { joinStrategy: "none" });
-  const { clearError, error, messages, regenerate, setMessages, status } = chatHelpers;
+  const { clearError, error, setMessages, status } = chatHelpers;
   const isStreaming = status === "submitted" || status === "streaming";
+
+  useEffect(() => {
+    if (!error) {
+      return;
+    }
+    showChatError("请求失败，这一步没有完成，请稍后重试。");
+    clearError();
+  }, [clearError, error]);
 
   useEffect(() => {
     if (!boundChat) {
@@ -154,7 +124,7 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
         setSessionTitle({ sessionId: id, title: normalizedTitle });
         notifyConversationsChanged();
       } catch {
-        setHistoryErrorMessage("会话已创建，但标题保存失败。");
+        showChatError("会话已创建，但标题保存失败。");
       }
     },
     [setSessionTitle, slug],
@@ -199,10 +169,10 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
       setIsCreatingConversation(true);
       await runAsyncAction({
         cleanup: () => setIsCreatingConversation(false),
-        onError: () => setHistoryErrorMessage("聊天记录保存失败，请稍后重试。"),
+        onError: () => showChatError("聊天记录保存失败，请稍后重试。"),
         operation: async () => {
           const conversationId = await ensureConversation({ withGeneratingTitle: true });
-          setHistoryErrorMessage(null);
+
           await getOrCreateChat(conversationId, slug).sendMessage({ text });
           void (async () => {
             try {
@@ -233,7 +203,7 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
         if (signal?.aborted) {
           return false;
         }
-        setHistoryErrorMessage("无法加载聊天记录，请稍后重试。");
+        showChatError("无法加载聊天记录，请稍后重试。");
         return false;
       }
       if (signal?.aborted) {
@@ -245,7 +215,7 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
         } else {
           setShouldNormalizeSessionPath(true);
         }
-        setHistoryErrorMessage("未找到对应的会话记录，已回到新对话。");
+        showChatError("未找到对应的会话记录，已回到新对话。");
         return false;
       }
       if (shouldSyncUrl) {
@@ -256,7 +226,7 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
       }
       setSessionTitle({ sessionId: id, title: getVisibleConversationTitle(conversation) });
       setActiveConversationId(id);
-      setHistoryErrorMessage(null);
+
       return true;
     },
     [setSessionTitle, slug, updateSessionInUrl],
@@ -265,7 +235,6 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
   const resetToNewConversation = useCallback(() => {
     setSessionTitle(null);
     setActiveConversationId(null);
-    setHistoryErrorMessage(null);
   }, [setSessionTitle]);
 
   const startNewConversation = useCallback(() => {
@@ -284,7 +253,7 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
         },
         onError: () => {
           if (!controller.signal.aborted) {
-            setHistoryErrorMessage("加载历史聊天失败，请稍后重试。");
+            showChatError("加载历史聊天失败，请稍后重试。");
           }
         },
         operation: async () => {
@@ -324,16 +293,6 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
     return () => window.clearTimeout(timer);
   }, [activeConversationId, shouldNormalizeSessionPath, updateSessionInUrl]);
 
-  const retryLastReply = useCallback(() => {
-    const lastMessage = messages.at(-1);
-    clearError();
-    if (lastMessage?.role === "assistant") {
-      void regenerate({ messageId: lastMessage.id });
-      return;
-    }
-    void regenerate();
-  }, [clearError, messages, regenerate]);
-
   if (!isHistoryReady && !initialSessionId) {
     return <ChatPageSkeleton />;
   }
@@ -359,12 +318,6 @@ export default function ChatWorkspace({ initialSessionId }: { initialSessionId: 
             />
           )}
         </RecruitingCopilotContextProvider>
-        <ChatErrorBar
-          error={error}
-          historyErrorMessage={historyErrorMessage}
-          onClearError={clearError}
-          onRetry={retryLastReply}
-        />
       </AssistantRuntimeProvider>
     </div>
   );

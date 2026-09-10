@@ -125,7 +125,9 @@ export function createResumeParseWorkflow(deps: ResumeParseWorkflowDeps) {
   const structureResumeStep = createStep({
     execute: async ({ inputData }) => ({
       ...inputData,
-      structured: inputData.structured ?? (await deps.structureText(inputData.text)),
+      structured:
+        inputData.structured ??
+        (await deps.structureText(inputData.text, { fileName: inputData.fileName })),
     }),
     id: "structure-resume",
     inputSchema: resumeParseDocumentOutputSchema,
@@ -172,9 +174,9 @@ function createProgressResumeParseWorkflow(
         ...documentInput,
         onProgress,
       }),
-    structureText: async (text) => {
+    structureText: async (text, options) => {
       onProgress({ type: "structure.started" });
-      const structured = await generateResumeStructured(text);
+      const structured = await generateResumeStructured(text, options);
       onProgress({
         preview: buildResumePreview(structured),
         type: "structure.completed",

@@ -3,21 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { ProductShot } from "./product-shot";
 
-vi.mock("@gsap/react", () => ({
-  useGSAP: () => {},
-}));
-
-vi.mock("gsap", () => ({
-  gsap: {
-    registerPlugin: () => {},
-  },
-}));
-
-vi.mock("gsap/ScrollTrigger", () => ({
-  ScrollTrigger: {},
-}));
-
-vi.mock("@/components/features/home/screens", () => ({
+vi.mock("@/components/features/home/screens/resumes-screen", () => ({
   ResumesScreen: () => <div data-testid="home-product-mock-frame" />,
 }));
 

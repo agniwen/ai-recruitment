@@ -6,7 +6,11 @@ import * as React from "react";
 import { Drawer as DrawerPrimitive } from "vaul";
 
 import { ButtonSizeProvider } from "@/components/ui/button";
-import { cossModalSurfaceClass } from "@/components/ui/coss-style";
+import {
+  cossModalMotionClass,
+  cossModalOverlayMotionClass,
+  cossModalSurfaceClass,
+} from "@/components/ui/coss-style";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@arc/shared/utils";
 
@@ -94,9 +98,8 @@ function DialogModal({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop
           className={cn(
-            "fixed inset-0 z-50 backdrop-blur bg-background/60 duration-200",
-            "data-closed:animate-out data-closed:fade-out-0",
-            "data-open:animate-in data-open:fade-in-0",
+            "fixed inset-0 z-50 backdrop-blur bg-background/60",
+            cossModalOverlayMotionClass,
           )}
         />
         <DialogPrimitive.Popup
@@ -112,10 +115,8 @@ function DialogModal({
             // so position:fixed descendants (popovers) escape the visual frame even though
             // their containing block is still this transformed Content.
             "fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
-            "w-full max-w-[calc(100%-2rem)] outline-none duration-200",
-            "data-open:animate-in data-closed:animate-out",
-            "data-closed:fade-out-0 data-open:fade-in-0",
-            "data-closed:zoom-out-95 data-open:zoom-in-95",
+            "w-full max-w-[calc(100%-2rem)] outline-none",
+            cossModalMotionClass,
             SIZE_CLASS[size],
           )}
         >

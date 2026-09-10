@@ -9,13 +9,7 @@ const testPathMarkers = [
   `${join("src", "components", "__tests__")}`,
   `${join("src", "routes", "__test__")}`,
 ];
-const vendoredMastraSourceMarker = join(
-  "src",
-  "components",
-  "features",
-  "mastra-studio",
-  "upstream",
-);
+const vendoredMastraSourceMarker = join("src", "components", "features", "upstream");
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir)

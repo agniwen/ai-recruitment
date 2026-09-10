@@ -18,6 +18,7 @@ interface RouteMeta {
 }
 
 const DEFAULT_META: RouteMeta = { title: "候选人管理" };
+const CANDIDATE_DETAIL_PATH = /\/studio\/resumes\/[^/]+\/?$/;
 
 export function resolveRouteMeta(pathname: string): RouteMeta {
   const navItem = resolveStudioSidebarNavItem(pathname);
@@ -32,7 +33,9 @@ export function SiteHeader() {
 
   return (
     <SidebarInsetHeader
-      activeMenuIcon={ActiveMenuIcon ? <ActiveMenuIcon /> : undefined}
+      activeMenuIcon={
+        ActiveMenuIcon && !CANDIDATE_DETAIL_PATH.test(pathname) ? <ActiveMenuIcon /> : undefined
+      }
       actions={
         <>
           <WorkspaceSwitcher />

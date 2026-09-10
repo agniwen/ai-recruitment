@@ -36,6 +36,7 @@ export async function parseResumeWithAliyun(input: {
         result.content,
         structuredSchema,
         "aliyun-resume-extraction",
+        { strict: true },
       );
       return {
         pageCount: result.pageCount ?? 1,
