@@ -17,9 +17,12 @@ describe("simple Mastra generators", () => {
       }),
     ).resolves.toBe("标题");
 
-    expect(generate).toHaveBeenCalledWith("生成标题", {
-      modelSettings: { temperature: 0.2 },
-    });
+    expect(generate).toHaveBeenCalledWith(
+      "生成标题",
+      expect.objectContaining({
+        modelSettings: { temperature: 0.2 },
+      }),
+    );
   });
 
   it("generates structured output with the original Zod schema", async () => {
@@ -35,10 +38,13 @@ describe("simple Mastra generators", () => {
       }),
     ).resolves.toEqual({ title: "前端工程师" });
 
-    expect(generate).toHaveBeenCalledWith("生成结构化对象", {
-      modelSettings: { temperature: 0.3 },
-      structuredOutput: { schema },
-    });
+    expect(generate).toHaveBeenCalledWith(
+      "生成结构化对象",
+      expect.objectContaining({
+        modelSettings: { temperature: 0.3 },
+        structuredOutput: { schema },
+      }),
+    );
   });
 
   it("recovers a valid structured object from fenced model text", async () => {
@@ -94,6 +100,25 @@ describe("simple Mastra generators", () => {
     ).resolves.toEqual({ title: "前端工程师" });
 
     expect(generate).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    { object: { title: 123 }, text: '{"title":123}' },
+    { error: new Error("provider validation failed"), text: '{"title":' },
+  ])("retains the rejected model response with the validation error", async (result) => {
+    const generate = vi.fn().mockResolvedValue(result);
+    await expect(
+      generateStructuredWithMastraAgent({
+        agent: { generate },
+        prompt: "解析简历",
+        schema: z.object({ title: z.string() }),
+      }),
+    ).rejects.toMatchObject({
+      modelResponse: {
+        text: result.text,
+        ...("object" in result ? { objectJson: JSON.stringify(result.object) } : {}),
+      },
+    });
   });
 
   it("throws the first schema validation message", async () => {

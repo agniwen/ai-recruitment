@@ -1,3 +1,4 @@
+import { serializeErrorDetails } from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -59,6 +60,28 @@ describe("runResumeParseWorkflow", () => {
       delete process.env.RESUME_PARSE_PROVIDER;
     } else {
       process.env.RESUME_PARSE_PROVIDER = originalProvider;
+    }
+  });
+
+  it("preserves model response diagnostics through a failed workflow", async () => {
+    mocks.sha256HexOfBytes.mockResolvedValue("test-hash");
+    mocks.parseResumeDocument.mockResolvedValue({
+      pageCount: 1,
+      text: "简历",
+      textSource: "qwen-ocr",
+    });
+    const cause = Object.assign(new Error("schema invalid"), {
+      modelResponse: { objectJson: '{"age":"unknown"}', text: '{"age":"unknown"}' },
+    });
+    mocks.generateResumeStructured.mockRejectedValue(
+      new Error("structured extraction failed", { cause }),
+    );
+    try {
+      await runResumeParseWorkflow({ bytes: new Uint8Array([1]), fileName: "resume.pdf" });
+      expect.fail("expected parse failure");
+    } catch (error) {
+      expect(JSON.stringify(serializeErrorDetails(error))).toContain("modelResponse");
+      expect(JSON.stringify(serializeErrorDetails(error))).toContain("unknown");
     }
   });
 

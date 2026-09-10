@@ -1,4 +1,5 @@
 interface SafeErrorEntry {
+  modelResponse?: { text?: string; objectJson?: string };
   code?: string;
   message?: string;
   name?: string;
@@ -54,17 +55,41 @@ export function describeError(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function modelResponseDetails(record: Record<string, unknown>): SafeErrorEntry["modelResponse"] {
+  const response =
+    typeof record.modelResponse === "object" && record.modelResponse !== null
+      ? (record.modelResponse as Record<string, unknown>)
+      : {};
+  const details =
+    typeof record.details === "object" && record.details !== null
+      ? (record.details as Record<string, unknown>)
+      : {};
+  // Preserve output verbatim; never copy provider request bodies or headers.
+  const textValue = response.text ?? record.text;
+  const objectValue = response.objectJson ?? details.value;
+  const text = typeof textValue === "string" ? textValue : undefined;
+  const objectJson = typeof objectValue === "string" ? objectValue : undefined;
+  return text === undefined && objectJson === undefined
+    ? undefined
+    : {
+        ...(text === undefined ? {} : { text }),
+        ...(objectJson === undefined ? {} : { objectJson }),
+      };
+}
+
 function safeErrorEntry(value: unknown): SafeErrorEntry {
   if (typeof value !== "object" || value === null) {
     return { message: String(value).slice(0, MAX_ERROR_MESSAGE_LENGTH) };
   }
   const record = value as Record<string, unknown>;
+  const modelResponse = modelResponseDetails(record);
   const code = nonEmptyString(record.code);
   const message = nonEmptyString(record.message);
   const name = nonEmptyString(record.name);
   const stack = nonEmptyString(record.stack);
   const status = typeof record.status === "number" ? record.status : undefined;
   return {
+    ...(modelResponse ? { modelResponse } : {}),
     ...(code ? { code } : {}),
     ...(message ? { message: message.slice(0, MAX_ERROR_MESSAGE_LENGTH) } : {}),
     ...(name ? { name } : {}),

@@ -290,6 +290,12 @@ export async function generateStructuredWithMastraAgent<TSchema extends z.ZodTyp
         }
       }
     }
+    lastError = Object.assign(new Error(lastError.message, { cause: lastError }), {
+      modelResponse: {
+        text: result.text,
+        ...(result.object === undefined ? {} : { objectJson: JSON.stringify(result.object) }),
+      },
+    });
     if (attempt + 1 < maxAttempts) {
       attemptPrompt = `${prompt}\n\n上一次结构化输出无效：${lastError.message}\n请严格按照原字段和类型重新输出完整的 JSON 对象，不要输出 Markdown 或解释。`;
     }

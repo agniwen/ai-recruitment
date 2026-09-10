@@ -14,6 +14,26 @@ describe("error reporting", () => {
     ).toBe("DashScope rate limit exceeded");
   });
 
+  it("retains full model responses in nested errors without request credentials", () => {
+    const text = `{"name":${"候选人".repeat(3000)}`;
+    const error = new Error("解析失败", {
+      cause: Object.assign(new Error("invalid object"), {
+        request: { headers: { authorization: "secret" } },
+        text,
+      }),
+    });
+    const details = serializeErrorDetails(error);
+    expect(details).toMatchObject({ chain: [{}, { modelResponse: { text } }] });
+    expect(JSON.stringify(details)).not.toContain("secret");
+  });
+
+  it("retains the invalid value supplied by Mastra validation errors", () => {
+    const error = { details: { value: '{"age":"unknown"}' }, message: "schema invalid" };
+    expect(serializeErrorDetails(error)).toMatchObject({
+      chain: [{ modelResponse: { objectJson: '{"age":"unknown"}' } }],
+    });
+  });
+
   it("records a bounded, safe cause chain", () => {
     const cause = Object.assign(new Error("upstream timed out"), {
       code: "ETIMEDOUT",

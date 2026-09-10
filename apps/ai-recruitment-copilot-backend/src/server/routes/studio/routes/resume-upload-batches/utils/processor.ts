@@ -2,11 +2,15 @@
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { describeError } from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
+import {
+  describeError,
+  serializeErrorDetails,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
 import {
   resumePoolItem,
   resumeUploadBatch,
   resumeUploadBatchItem,
+  resumeUploadBatchItemAttempt,
   studioInterview,
 } from "@arc/db-schema/schema";
 import type { ProcessNextResult } from "@arc/shared/bulk-resume-upload";
@@ -521,6 +525,7 @@ async function writeOutcome(
   item: NonNullable<ItemRow>,
   batchId: string,
   outcome: {
+    errorDetails?: ReturnType<typeof serializeErrorDetails> | null;
     errorMessage: string | null;
     succeededPoolItemId: string | null;
     succeededRecordId: string | null;
@@ -558,6 +563,20 @@ async function writeOutcome(
             updatedAt: now,
           })
           .where(eq(resumePoolItem.id, item.poolItemId));
+      }
+      // Historical imports record their attempts in the outer worker (throwOnError).
+      // Ordinary uploads also retain diagnostic responses across retries.
+      if (outcome.errorDetails) {
+        await tx.insert(resumeUploadBatchItemAttempt).values({
+          attemptNumber: item.attemptCount,
+          endedAt: now,
+          errorDetails: outcome.errorDetails,
+          errorMessage: outcome.errorMessage,
+          id: crypto.randomUUID(),
+          itemId: item.id,
+          startedAt: item.startedAt ?? now,
+          status: "failed",
+        });
       }
       await tx
         .update(resumeUploadBatchItem)
@@ -637,12 +656,14 @@ async function processClaimedItem(
   });
   let outcome: {
     autoMatchJobDescription: boolean;
+    errorDetails?: ReturnType<typeof serializeErrorDetails> | null;
     errorMessage: string | null;
     jobDescriptionId: string | null;
     succeededPoolItemId: string | null;
     succeededRecordId: string | null;
   } = {
     autoMatchJobDescription: false,
+    errorDetails: null,
     errorMessage: null,
     jobDescriptionId: null,
     succeededPoolItemId: null,
@@ -666,6 +687,7 @@ async function processClaimedItem(
     if (options.throwOnError) {
       throw error;
     }
+    outcome.errorDetails = serializeErrorDetails(error);
     outcome.errorMessage = truncate(describeError(error, "简历解析失败。"));
     logStep("item.process.error", {
       batchId: batchRow.id,
