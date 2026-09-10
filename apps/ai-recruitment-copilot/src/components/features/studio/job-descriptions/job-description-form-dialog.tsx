@@ -1,11 +1,12 @@
-/* oxlint-disable complexity, max-lines -- root form coordinates validation and extracted subforms. */
 "use client";
 
+import { rpcFetch } from "@/lib/client/api/rpc-fetch";
+import type { JobDescriptionLinkedTemplates } from "./job-description-linked-resources";
+/* oxlint-disable complexity, max-lines -- root form coordinates validation and extracted subforms. */
+
 import { IconLoader2 } from "@tabler/icons-react";
-import type { CandidateFormTemplateListRecord } from "@arc/db-schema/candidate-forms";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
-import type { InterviewQuestionTemplateListRecord } from "@arc/db-schema/interview-question-templates";
 import { jobDescriptionFormSchema } from "@arc/shared/job-descriptions";
 import type { JobDescriptionFormValues, JobDescriptionRecord } from "@arc/shared/job-descriptions";
 import type { ResumeScreeningPolicy } from "@arc/shared/resume-screening";
@@ -228,54 +229,16 @@ export function JobDescriptionFormDialog({
     return createJobDescriptionFormValues();
   }, [initialDraft, interviewers, record]);
 
-  const { data: linkedForms = [], isLoading: isFormsLoading } = useQuery({
+  const linkedTemplates = useQuery({
     enabled: open && isEdit && !!record?.id,
-    queryFn: async () => {
-      const response = await rpc.api.w[":slug"].studio.forms.$get({
-        param: { slug },
-        query: {
-          jobDescriptionId: record?.id ?? "",
-          page: "1",
-          pageSize: "100",
-          sortBy: "createdAt",
-          sortOrder: "desc",
-        },
-      });
-      const payload = (await response.json()) as {
-        records?: CandidateFormTemplateListRecord[];
-        error?: string;
-      } | null;
-      if (!response.ok || !payload?.records) {
-        throw new Error(payload?.error ?? "加载关联表单题失败");
-      }
-      return payload.records;
-    },
-    queryKey: ["job-description-linked-forms", slug, record?.id],
-  });
-
-  const { data: linkedInterviewQuestions = [], isLoading: isInterviewQuestionsLoading } = useQuery({
-    enabled: open && isEdit && !!record?.id,
-    queryFn: async () => {
-      const response = await rpc.api.w[":slug"].studio["interview-questions"].$get({
-        param: { slug },
-        query: {
-          jobDescriptionId: record?.id ?? "",
-          page: "1",
-          pageSize: "100",
-          sortBy: "createdAt",
-          sortOrder: "desc",
-        },
-      });
-      const payload = (await response.json()) as {
-        records?: InterviewQuestionTemplateListRecord[];
-        error?: string;
-      } | null;
-      if (!response.ok || !payload?.records) {
-        throw new Error(payload?.error ?? "加载关联沟通题失败");
-      }
-      return payload.records;
-    },
-    queryKey: ["job-description-linked-interview-questions", slug, record?.id],
+    queryFn: () =>
+      rpcFetch<JobDescriptionLinkedTemplates>(
+        rpc.api.w[":slug"].studio["job-descriptions"][":id"]["linked-templates"].$get({
+          param: { id: record?.id ?? "", slug },
+        }),
+        "加载岗位关联题目失败",
+      ),
+    queryKey: ["job-description-linked-templates", slug, record?.id],
   });
 
   const form = useForm({
@@ -1467,10 +1430,11 @@ export function JobDescriptionFormDialog({
               <TabsContent value="interview-questions">
                 {/* oxlint-disable-next-line no-use-before-define */}
                 <LinkedInterviewQuestionTemplatesList
-                  isLoading={isInterviewQuestionsLoading}
+                  isLoading={linkedTemplates.isLoading}
+                  error={linkedTemplates.error}
                   jobDescriptionId={record?.id ?? ""}
                   readOnly={readOnly}
-                  templates={linkedInterviewQuestions}
+                  templates={linkedTemplates.data?.interviewQuestions ?? []}
                 />
               </TabsContent>
             ) : null}
@@ -1478,10 +1442,11 @@ export function JobDescriptionFormDialog({
               <TabsContent value="forms">
                 {/* oxlint-disable-next-line no-use-before-define */}
                 <LinkedFormsList
-                  isLoading={isFormsLoading}
+                  isLoading={linkedTemplates.isLoading}
+                  error={linkedTemplates.error}
                   jobDescriptionId={record?.id ?? ""}
                   readOnly={readOnly}
-                  templates={linkedForms}
+                  templates={linkedTemplates.data?.forms ?? []}
                 />
               </TabsContent>
             ) : null}

@@ -105,7 +105,7 @@ describe("SidebarTabs", () => {
 
     expect(routerMocks.preloadRoute).toHaveBeenCalledWith({
       params: { slug: "acme" },
-      to: "/w/$slug/studio/resumes",
+      to: "/w/$slug/studio",
     });
 
     act(() => studioTab?.click());
@@ -113,7 +113,7 @@ describe("SidebarTabs", () => {
     expect(routerMocks.navigate).toHaveBeenCalledOnce();
     expect(routerMocks.navigate).toHaveBeenCalledWith({
       params: { slug: "acme" },
-      to: "/w/$slug/studio/resumes",
+      to: "/w/$slug/studio",
     });
   });
 
@@ -161,11 +161,11 @@ describe("SidebarTabs", () => {
 
     expect(routerMocks.navigate).toHaveBeenCalledWith({
       params: { slug: "acme" },
-      to: "/w/$slug/studio/resumes",
+      to: "/w/$slug/studio",
     });
   });
 
-  it("redirects Agent tab clicks to Studio resumes without page:chat", async () => {
+  it("uses the permission-aware Studio entry without page:chat", async () => {
     permissionMocks.canAccessAgent = false;
     routerMocks.pathname = "/w/acme/studio/resumes";
     const { root } = await renderInAct(<SidebarTabs />);
@@ -176,7 +176,7 @@ describe("SidebarTabs", () => {
 
     expect(routerMocks.navigate).toHaveBeenCalledWith({
       params: { slug: "acme" },
-      to: "/w/$slug/studio/resumes",
+      to: "/w/$slug/studio",
     });
     expect(routerMocks.preloadRoute).not.toHaveBeenCalled();
   });

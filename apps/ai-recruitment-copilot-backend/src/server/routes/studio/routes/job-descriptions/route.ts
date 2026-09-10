@@ -1,3 +1,5 @@
+import { jobDescriptionReferenceOptionsRouter } from "./routes/reference-options/route";
+import { jobDescriptionLinkedTemplatesRouter } from "./routes/linked-templates/route";
 import { resolveJobDescriptionResumeSource } from "./resume-source";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { zValidator } from "@hono/zod-validator";
@@ -238,6 +240,8 @@ const recommendationBodySchema = z.object({
 
 export const jobDescriptionsRouter = factory
   .createApp()
+  .route("/reference-options", jobDescriptionReferenceOptionsRouter)
+  .route("/:id/linked-templates", jobDescriptionLinkedTemplatesRouter)
   .post(
     "/ai-generate",
     requirePermission("jd", "update"),

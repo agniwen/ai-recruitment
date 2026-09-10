@@ -1,7 +1,7 @@
 import type { WorkspacePermissionStatements } from "@arc/shared/permission-statements";
 import { hasPermissionInStatements } from "@arc/shared/permission-statements";
 import type { StudioPagePermissionAction } from "@/lib/start/auth-session-types";
-import { STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
+import { canAccessStudioPage, STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
 
 type PreferredWorkspaceArea = "agent" | "chat" | "studio";
 
@@ -21,7 +21,7 @@ export function findFirstAllowedStudioPath(
   permissions: WorkspacePermissionStatements,
 ): string | null {
   for (const item of STUDIO_PAGE_PATHS) {
-    if (canAccessPage(permissions, item.action)) {
+    if (canAccessStudioPage(permissions, item.action)) {
       return item.path;
     }
   }

@@ -1,3 +1,4 @@
+import { departmentReferenceOptionsRouter } from "./routes/reference-options/route";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
@@ -58,6 +59,7 @@ async function validateDepartmentHiringUnit({
 
 export const departmentsRouter = factory
   .createApp()
+  .route("/reference-options", departmentReferenceOptionsRouter)
   .get(
     "/",
     requirePermission("department", "read"),

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { resumeSource } from "@arc/db-schema/schema";
 import { resolveHiringUnitAccessScope } from "../../utils/hiring-unit-scope";
@@ -46,4 +46,25 @@ export async function resolveJobDescriptionResumeSource({
     };
   }
   return { error: null, resumeSourceId: source.id, sourceSheet: source.name };
+}
+
+/** Form options follow the same source scope enforced when saving a job. */
+export async function listSelectableResumeSources(input: {
+  organizationId: string;
+  actorUserId: string;
+}) {
+  const scope = await resolveHiringUnitAccessScope(input);
+  if (!scope.canAccessAll && !scope.resumeSourceIds?.length) {
+    return [];
+  }
+  return db
+    .select({ id: resumeSource.id, name: resumeSource.name })
+    .from(resumeSource)
+    .where(
+      and(
+        eq(resumeSource.organizationId, input.organizationId),
+        scope.canAccessAll ? undefined : inArray(resumeSource.id, scope.resumeSourceIds ?? []),
+      ),
+    )
+    .orderBy(asc(resumeSource.name));
 }

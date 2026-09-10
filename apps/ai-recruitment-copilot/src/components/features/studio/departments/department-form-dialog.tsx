@@ -1,5 +1,7 @@
 "use client";
 
+import { rpcFetch } from "@/lib/client/api/rpc-fetch";
+
 import type { DepartmentFormValues, DepartmentRecord } from "@arc/shared/departments";
 import { departmentFormSchema } from "@arc/shared/departments";
 import { useQuery } from "@tanstack/react-query";
@@ -58,19 +60,13 @@ export function DepartmentFormDialog({
   const { data: hiringUnits = [] } = useQuery({
     enabled: open,
     queryFn: async () => {
-      const response = await rpc.api.w[":slug"].studio["hiring-units"].all.$get({
-        param: { slug },
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { records: { id: string; name: string }[] }
-        | { error?: string; message?: string }
-        | null;
-      if (!response.ok || !payload || !("records" in payload)) {
-        throw new Error("加载用人组织失败");
-      }
+      const payload = await rpcFetch<{ records: { id: string; name: string }[] }>(
+        rpc.api.w[":slug"].studio.departments["reference-options"].$get({ param: { slug } }),
+        "加载用人组织失败",
+      );
       return payload.records;
     },
-    queryKey: ["hiring-units", slug, "all"],
+    queryKey: ["department-hiring-unit-options", slug],
     refetchOnWindowFocus: false,
   });
 

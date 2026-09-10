@@ -32,11 +32,13 @@ export function JobDescriptionSourceSelect({
   const [creating, setCreating] = useState(false);
   const sources = useQuery({
     queryFn: () =>
-      rpcFetch<{ records: ResumeSourceRecord[] }>(
-        rpc.api.w[":slug"].studio["resume-sources"].$get({ param: { slug } }),
+      rpcFetch<{ records: Pick<ResumeSourceRecord, "id" | "name">[] }>(
+        rpc.api.w[":slug"].studio["job-descriptions"]["reference-options"].$get({
+          param: { slug },
+        }),
         "加载部门/中心（来源）失败",
       ),
-    queryKey: ["resume-sources", slug],
+    queryKey: ["job-description-source-options", slug],
   });
   const records = sources.data?.records ?? [];
   const selected = records.find((source) =>
@@ -81,6 +83,9 @@ export function JobDescriptionSourceSelect({
           onOpenChange={setCreating}
           onSaved={(saved) => {
             onChange(saved.name, saved.id);
+            void queryClient.invalidateQueries({
+              queryKey: ["job-description-source-options", slug],
+            });
             void queryClient.invalidateQueries({ queryKey: ["resume-sources", slug] });
           }}
           open={creating}

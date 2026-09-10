@@ -23,8 +23,9 @@ import { useHasPermission } from "@/hooks/use-has-permission";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { ListAccessDenied } from "@/components/data-grid/list-load-error";
 
-export function ResumeSourceManagementPage() {
+function ResumeSourceManagementContent() {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const canCreate = useHasPermission("hiringUnit", "create");
@@ -155,42 +156,36 @@ export function ResumeSourceManagementPage() {
   ];
   return (
     <>
-      <div className="mx-auto w-full max-w-[96rem] space-y-6">
-        <PageHeader
-          title="部门/中心（来源）"
-          description="按“部门/中心（来源） → 用人组织 → 部门”组织招聘范围。ODC 在部门/中心（来源）统一设置，覆盖下属组织和部门，并按序列、服务单位筛选。"
-        />
-        <DataGrid<ResumeSourceRecord>
-          columns={columns}
-          data={rows}
-          loading={sources.isLoading}
-          error={sources.error}
-          getRowId={(row) => row.id}
-          total={rows.length}
-          totalPages={1}
-          filterValues={{ search }}
-          filters={[{ key: "search", placeholder: "搜索部门/中心（来源）", type: "search" }]}
-          onFilterChange={(_, value) => setSearch(value)}
-          onRefresh={() => void sources.refetch()}
-          onRetry={() => void sources.refetch()}
-          refetching={sources.isRefetching}
-          empty={
-            <div className="p-10 text-center text-muted-foreground">
-              {search
-                ? "没有匹配的部门/中心（来源）"
-                : "还没有部门/中心（来源）。新建后，请在用人组织中选择所属来源。"}
-            </div>
-          }
-          toolbarRight={
-            canCreate ? (
-              <Button onClick={crud.openCreate}>
-                <IconPlus className="size-4" />
-                新建部门/中心（来源）
-              </Button>
-            ) : null
-          }
-        />
-      </div>
+      <DataGrid<ResumeSourceRecord>
+        columns={columns}
+        data={rows}
+        loading={sources.isLoading}
+        error={sources.error}
+        getRowId={(row) => row.id}
+        total={rows.length}
+        totalPages={1}
+        filterValues={{ search }}
+        filters={[{ key: "search", placeholder: "搜索部门/中心（来源）", type: "search" }]}
+        onFilterChange={(_, value) => setSearch(value)}
+        onRefresh={() => void sources.refetch()}
+        onRetry={() => void sources.refetch()}
+        refetching={sources.isRefetching}
+        empty={
+          <div className="p-10 text-center text-muted-foreground">
+            {search
+              ? "没有匹配的部门/中心（来源）"
+              : "还没有部门/中心（来源）。新建后，请在用人组织中选择所属来源。"}
+          </div>
+        }
+        toolbarRight={
+          canCreate ? (
+            <Button onClick={crud.openCreate}>
+              <IconPlus className="size-4" />
+              新建部门/中心（来源）
+            </Button>
+          ) : null
+        }
+      />
       {(crud.editingRecord ? canUpdate : canCreate) ? (
         <ResumeSourceFormDialog
           open={crud.formDialogOpen}
@@ -238,5 +233,19 @@ export function ResumeSourceManagementPage() {
         onConfirm={crud.handleDelete}
       />
     </>
+  );
+}
+
+export function ResumeSourceManagementPage() {
+  const canViewPage = useHasPermission("page", "hiringUnits");
+  const canRead = useHasPermission("hiringUnit", "read");
+  return (
+    <div className="mx-auto w-full max-w-[96rem] space-y-6">
+      <PageHeader
+        title="部门/中心（来源）"
+        description="按“部门/中心（来源） → 用人组织 → 部门”组织招聘范围。ODC 在部门/中心（来源）统一设置，覆盖下属组织和部门，并按序列、服务单位筛选。"
+      />
+      {canViewPage && canRead ? <ResumeSourceManagementContent /> : <ListAccessDenied />}
+    </div>
   );
 }

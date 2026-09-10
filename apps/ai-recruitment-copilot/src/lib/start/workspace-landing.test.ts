@@ -2,10 +2,32 @@ import { describe, expect, it } from "vitest";
 import { resolveWorkspaceLandingHref } from "@/lib/start/workspace-landing";
 
 describe("resolveWorkspaceLandingHref", () => {
+  it("does not land an ODC without candidate read access on the candidate page", () => {
+    expect(
+      resolveWorkspaceLandingHref({
+        permissions: {
+          department: ["read"],
+          interviewer: ["read"],
+          jd: ["read", "create", "update", "delete"],
+          page: [
+            "hiringUnits",
+            "me",
+            "jobDescriptions",
+            "departments",
+            "calendar",
+            "aiReview",
+            "resumes",
+          ],
+        },
+        slug: "work",
+      }),
+    ).toBe("/w/work/studio/calendar");
+  });
+
   it("keeps the fork-specific hiring unit page in the Studio fallback order", () => {
     expect(
       resolveWorkspaceLandingHref({
-        permissions: { page: ["hiringUnits"] },
+        permissions: { hiringUnit: ["read"], page: ["hiringUnits"] },
         slug: "acme",
       }),
     ).toBe("/w/acme/studio/hiring-units");
@@ -31,7 +53,7 @@ describe("resolveWorkspaceLandingHref", () => {
   it("falls back to studio resumes when agent is preferred but page:chat is missing", () => {
     expect(
       resolveWorkspaceLandingHref({
-        permissions: { page: ["resumes"] },
+        permissions: { page: ["resumes"], resumeLibrary: ["read"] },
         preferredArea: "agent",
         slug: "acme",
       }),

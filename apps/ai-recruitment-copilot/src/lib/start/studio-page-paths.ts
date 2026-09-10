@@ -1,4 +1,40 @@
 import type { StudioPagePermissionAction } from "@/lib/start/auth-session-types";
+import { hasPermissionInStatements } from "@arc/shared/permission-statements";
+import type {
+  PermissionResource,
+  WorkspacePermissionStatements,
+} from "@arc/shared/permission-statements";
+
+// Data permissions required by each page's primary read endpoint.
+const STUDIO_PAGE_READ_RESOURCES: Partial<Record<StudioPagePermissionAction, PermissionResource>> =
+  {
+    aiReview: "aiReview",
+    departments: "department",
+    forms: "candidateForm",
+    globalConfig: "globalConfig",
+    hiringUnits: "hiringUnit",
+    interviewQuestions: "questionTemplate",
+    interviewers: "interviewer",
+    interviews: "interview",
+    jobDescriptions: "jd",
+    resumePool: "resumePool",
+    resumes: "resumeLibrary",
+  };
+
+export function canAccessStudioPage(
+  permissions: WorkspacePermissionStatements,
+  action: StudioPagePermissionAction,
+): boolean {
+  if (!hasPermissionInStatements(permissions, "page", action)) {
+    return false;
+  }
+  // This page lists managed mailboxes; personal mailbox read access is insufficient.
+  if (action === "mailIngestAccounts") {
+    return hasPermissionInStatements(permissions, "mailIngestAccount", "manage");
+  }
+  const resource = STUDIO_PAGE_READ_RESOURCES[action];
+  return !resource || hasPermissionInStatements(permissions, resource, "read");
+}
 
 /**
  * Ordered Studio pages used for default landing redirects and path→action mapping.

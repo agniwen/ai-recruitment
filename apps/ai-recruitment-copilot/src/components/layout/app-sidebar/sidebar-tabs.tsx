@@ -10,7 +10,7 @@ import type { SidebarTabValue } from "./sidebar-slot-transition";
 function getSidebarTabTarget(tab: SidebarTabValue, slug: string) {
   return tab === "agent"
     ? ({ params: { slug }, to: "/w/$slug/agent" } as const)
-    : ({ params: { slug }, to: "/w/$slug/studio/resumes" } as const);
+    : ({ params: { slug }, to: "/w/$slug/studio" } as const);
 }
 
 export function SidebarTabs() {
@@ -25,8 +25,8 @@ export function SidebarTabs() {
   const handleChange = (value: string) => {
     const nextTab = value as SidebarTabValue;
     if (nextTab === "agent" && !canAccessAgent) {
-      // No Agent page permission → land on Studio 简历库 instead of dead-ending.
-      void navigate({ params: { slug }, to: "/w/$slug/studio/resumes" });
+      // Let the Studio entry resolve a page this member can access.
+      void navigate({ params: { slug }, to: "/w/$slug/studio" });
       return;
     }
     const target = getSidebarTabTarget(nextTab, slug);
@@ -63,7 +63,7 @@ export function SidebarTabs() {
     >
       <TabsList className="w-full dark:bg-sidebar/60  select-none">
         <TabsTrigger
-          // Keep clickable: without page:chat, handleChange redirects to Studio 简历库.
+          // Keep clickable: without page:chat, handleChange uses the Studio entry.
           // Do not set data-disabled (tabs.tsx uses it for pointer-events:none).
           aria-disabled={!canAccessAgent}
           className={canAccessAgent ? undefined : "opacity-64"}

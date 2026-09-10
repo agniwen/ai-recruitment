@@ -21,6 +21,7 @@ import type {
   WorkspaceResource,
 } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { hasPermissionInStatements } from "@arc/shared/permission-statements";
+import { canAccessStudioPage } from "./studio-page-paths";
 import { computeWorkspacePermissionSnapshot } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-permission-snapshot";
 
 export function workspaceAccessHasPermission<R extends WorkspaceResource>({
@@ -305,7 +306,7 @@ export async function resolveFirstAllowedStudioPagePath(
   }
 
   for (const item of pagePaths) {
-    if (hasPermissionInStatements(state.permissions, "page", item.action)) {
+    if (canAccessStudioPage(state.permissions, item.action)) {
       return item.path;
     }
   }

@@ -31,8 +31,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useHasPermission } from "@/hooks/use-has-permission";
-import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
+import {
+  useWorkspaceMemberRole,
+  useWorkspacePermissions,
+  useWorkspaceSlug,
+} from "@/lib/client/workspace-context";
+import { canAccessStudioPage } from "@/lib/start/studio-page-paths";
 import type { statement } from "@arc/shared/permissions";
 
 export interface NavItem {
@@ -40,7 +44,7 @@ export interface NavItem {
   path: string;
   icon: typeof BotIcon;
   title: string;
-  /** 仅当 page action 通过 useHasPermission 时显示。 */
+  /** 页面权限及其业务查看权限均满足时显示。 */
   action: (typeof statement)["page"][number];
   adminOnly?: boolean;
   resource: "page";
@@ -231,8 +235,8 @@ export function resolveStudioSidebarNavItem(pathname: string): NavItem | undefin
 }
 
 function SidebarNavItem({ item, active, href }: { item: NavItem; active: boolean; href: string }) {
-  // Hook must be called unconditionally
-  const allowed = useHasPermission(item.resource, item.action);
+  const permissions = useWorkspacePermissions();
+  const allowed = canAccessStudioPage(permissions, item.action);
   const memberRole = useWorkspaceMemberRole();
 
   if (!allowed || (item.adminOnly && memberRole !== "owner" && memberRole !== "admin")) {

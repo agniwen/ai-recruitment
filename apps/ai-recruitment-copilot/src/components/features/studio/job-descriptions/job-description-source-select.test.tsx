@@ -6,11 +6,22 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JobDescriptionSourceSelect } from "./job-description-source-select";
 
-const mocks = vi.hoisted(() => ({ canCreate: true, get: vi.fn() }));
+const mocks = vi.hoisted(() => ({ canCreate: true, get: vi.fn(), managementGet: vi.fn() }));
 vi.mock("@/hooks/use-has-permission", () => ({ useHasPermission: () => mocks.canCreate }));
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "alpha" }));
 vi.mock("@/lib/client/rpc", () => ({
-  rpc: { api: { w: { ":slug": { studio: { "resume-sources": { $get: mocks.get } } } } } },
+  rpc: {
+    api: {
+      w: {
+        ":slug": {
+          studio: {
+            "job-descriptions": { "reference-options": { $get: mocks.get } },
+            "resume-sources": { $get: mocks.managementGet },
+          },
+        },
+      },
+    },
+  },
 }));
 vi.mock("@/lib/client/api/rpc-fetch", () => ({ rpcFetch: (request: unknown) => request }));
 vi.mock("@/components/ui/searchable-select", () => ({
@@ -65,6 +76,7 @@ vi.mock("../resume-sources/resume-source-form-dialog", () => ({
 const roots: ReturnType<typeof createRoot>[] = [];
 beforeEach(() => {
   mocks.canCreate = true;
+  mocks.managementGet.mockRejectedValue(new Error("Forbidden"));
   mocks.get.mockResolvedValue({ records: [{ id: "source-1", name: "已维护来源" }] });
 });
 afterEach(() => {
@@ -111,6 +123,16 @@ function choose(select: HTMLSelectElement, value: string) {
   });
 }
 describe("job description source selection", () => {
+  it("allows selecting an existing source without source management permissions", async () => {
+    mocks.canCreate = false;
+    const { select, onChange } = await render();
+    expect(select.disabled).toBe(false);
+    expect(mocks.managementGet).not.toHaveBeenCalled();
+    choose(select, "source-1");
+    expect(onChange).toHaveBeenCalledWith("已维护来源", "source-1");
+    expect(select.textContent).not.toContain("新建部门/中心（来源）");
+  });
+
   it("loads workspace sources and submits their names, with clearing supported", async () => {
     const { select, onChange } = await render();
     expect(mocks.get).toHaveBeenCalledWith({ param: { slug: "alpha" } });
@@ -134,7 +156,9 @@ describe("job description source selection", () => {
       await delay(10);
     });
     expect(onChange).toHaveBeenCalledWith("新来源", "source-new");
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["resume-sources", "alpha"] });
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["job-description-source-options", "alpha"],
+    });
   });
   it("hides creation without source permissions and disables read-only selection", async () => {
     mocks.canCreate = false;

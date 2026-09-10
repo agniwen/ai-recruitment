@@ -1,26 +1,44 @@
 "use client";
 
+import { useHasPermission } from "@/hooks/use-has-permission";
+import { ListLoadError } from "@/components/data-grid/list-load-error";
+
 import { IconClipboardList, IconExternalLink, IconListCheck } from "@tabler/icons-react";
-import type { CandidateFormTemplateListRecord } from "@arc/db-schema/candidate-forms";
-import type { InterviewQuestionTemplateListRecord } from "@arc/db-schema/interview-question-templates";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
+interface LinkedTemplateSummary {
+  id: string;
+  title: string;
+  description: string | null;
+  questionCount: number;
+}
+export interface JobDescriptionLinkedTemplates {
+  forms: LinkedTemplateSummary[];
+  interviewQuestions: LinkedTemplateSummary[];
+}
+
 export function LinkedFormsList({
   isLoading,
+  error,
   jobDescriptionId,
   readOnly = false,
   templates,
 }: {
   isLoading: boolean;
+  error?: unknown;
   jobDescriptionId: string;
   readOnly?: boolean;
-  templates: CandidateFormTemplateListRecord[];
+  templates: LinkedTemplateSummary[];
 }) {
   const slug = useWorkspaceSlug();
+  const canViewPage = useHasPermission("page", "forms");
+  const canRead = useHasPermission("candidateForm", "read");
+  const canOpen = canViewPage && canRead;
+  const TemplateContainer = canOpen ? "a" : "div";
   const newTemplateHref = `/w/${slug}/studio/forms?jobDescriptionId=${encodeURIComponent(jobDescriptionId)}`;
 
   return (
@@ -32,7 +50,7 @@ export function LinkedFormsList({
             候选人进入面试前需要填写下列表单题；全局表单题在「AI面试-面前通用题」菜单中维护。
           </p>
         </div>
-        {readOnly ? null : (
+        {readOnly || !canOpen ? null : (
           <Button
             nativeButton={false}
             render={
@@ -47,6 +65,7 @@ export function LinkedFormsList({
         )}
       </div>
 
+      {error ? <ListLoadError error={error} /> : null}
       {isLoading ? (
         <Card className="gap-0 rounded-xl border-dashed py-0">
           <CardContent className="bg-muted/20 px-4 py-6 text-center text-muted-foreground text-sm">
@@ -54,21 +73,21 @@ export function LinkedFormsList({
           </CardContent>
         </Card>
       ) : null}
-      {!isLoading && templates.length === 0 ? (
+      {!error && !isLoading && templates.length === 0 ? (
         <Card className="gap-0 rounded-xl border-dashed py-0">
           <CardContent className="bg-muted/20 px-4 py-6 text-center text-muted-foreground text-sm">
             暂无该岗位专属的表单题。
           </CardContent>
         </Card>
       ) : null}
-      {!isLoading && templates.length > 0 ? (
+      {!error && !isLoading && templates.length > 0 ? (
         <div className="flex flex-col gap-2">
           {templates.map((template) => (
             <Card className="gap-0 rounded-xl py-0" key={template.id}>
               <CardContent className="p-0">
-                <a
+                <TemplateContainer
                   className="flex items-start justify-between gap-3 bg-muted/20 p-3 transition-colors hover:bg-muted/40"
-                  href={`/w/${slug}/studio/forms?templateId=${template.id}`}
+                  href={canOpen ? `/w/${slug}/studio/forms?templateId=${template.id}` : undefined}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -82,12 +101,12 @@ export function LinkedFormsList({
                         </p>
                       ) : null}
                       <p className="mt-1 text-muted-foreground text-xs">
-                        {template.questionCount} 题 · {template.submissionCount} 份答复
+                        {template.questionCount} 题
                       </p>
                     </div>
                   </div>
                   <Badge variant="outline">岗位专属</Badge>
-                </a>
+                </TemplateContainer>
               </CardContent>
             </Card>
           ))}
@@ -99,16 +118,22 @@ export function LinkedFormsList({
 
 export function LinkedInterviewQuestionTemplatesList({
   isLoading,
+  error,
   jobDescriptionId,
   readOnly = false,
   templates,
 }: {
   isLoading: boolean;
+  error?: unknown;
   jobDescriptionId: string;
   readOnly?: boolean;
-  templates: InterviewQuestionTemplateListRecord[];
+  templates: LinkedTemplateSummary[];
 }) {
   const slug = useWorkspaceSlug();
+  const canViewPage = useHasPermission("page", "interviewQuestions");
+  const canRead = useHasPermission("questionTemplate", "read");
+  const canOpen = canViewPage && canRead;
+  const TemplateContainer = canOpen ? "a" : "div";
   const newTemplateHref = `/w/${slug}/studio/interview-questions?jobDescriptionId=${encodeURIComponent(jobDescriptionId)}`;
 
   return (
@@ -121,7 +146,7 @@ export function LinkedInterviewQuestionTemplatesList({
             面试-沟通通用题」菜单中维护。
           </p>
         </div>
-        {readOnly ? null : (
+        {readOnly || !canOpen ? null : (
           <Button
             nativeButton={false}
             render={
@@ -136,6 +161,7 @@ export function LinkedInterviewQuestionTemplatesList({
         )}
       </div>
 
+      {error ? <ListLoadError error={error} /> : null}
       {isLoading ? (
         <Card className="gap-0 rounded-xl border-dashed py-0">
           <CardContent className="bg-muted/20 px-4 py-6 text-center text-muted-foreground text-sm">
@@ -143,21 +169,25 @@ export function LinkedInterviewQuestionTemplatesList({
           </CardContent>
         </Card>
       ) : null}
-      {!isLoading && templates.length === 0 ? (
+      {!error && !isLoading && templates.length === 0 ? (
         <Card className="gap-0 rounded-xl border-dashed py-0">
           <CardContent className="bg-muted/20 px-4 py-6 text-center text-muted-foreground text-sm">
             暂无该岗位专属的沟通题。
           </CardContent>
         </Card>
       ) : null}
-      {!isLoading && templates.length > 0 ? (
+      {!error && !isLoading && templates.length > 0 ? (
         <div className="flex flex-col gap-2">
           {templates.map((template) => (
             <Card className="gap-0 rounded-xl py-0" key={template.id}>
               <CardContent className="p-0">
-                <a
+                <TemplateContainer
                   className="flex items-start justify-between gap-3 bg-muted/20 p-3 transition-colors hover:bg-muted/40"
-                  href={`/w/${slug}/studio/interview-questions?templateId=${template.id}`}
+                  href={
+                    canOpen
+                      ? `/w/${slug}/studio/interview-questions?templateId=${template.id}`
+                      : undefined
+                  }
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -171,12 +201,12 @@ export function LinkedInterviewQuestionTemplatesList({
                         </p>
                       ) : null}
                       <p className="mt-1 text-muted-foreground text-xs">
-                        {template.questionCount} 题 · {template.bindingCount} 个面试已绑定
+                        {template.questionCount} 题
                       </p>
                     </div>
                   </div>
                   <Badge variant="outline">岗位专属</Badge>
-                </a>
+                </TemplateContainer>
               </CardContent>
             </Card>
           ))}
