@@ -7,6 +7,8 @@ import {
   IconListCheck as ListChecksIcon,
   IconServer as ServerIcon,
 } from "@tabler/icons-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -486,6 +488,7 @@ export function QueueJobDetailDialog({
 
 export function QueuesGrid() {
   const queryClient = useQueryClient();
+  const [clearing, setClearing] = useState(false);
   const [detailJob, setDetailJob] = useState<QueueJobRecord | null>(null);
   const overviewQuery = useQuery({
     queryFn: () =>
@@ -560,6 +563,27 @@ export function QueuesGrid() {
   function refreshAll() {
     grid.invalidate();
     void queryClient.invalidateQueries({ queryKey: ["platform-queues"] });
+  }
+
+  async function clearQueue() {
+    if (clearing) {
+      return;
+    }
+    setClearing(true);
+    try {
+      const result = await rpcFetch<{ removed: number }>(
+        rpc.api.platform.queues[":queueName"].jobs.$delete({
+          param: { queueName: selectedQueueName },
+        }),
+        "清空队列失败",
+      );
+      toast.success(`已移除 ${result.removed} 个排队任务`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "清空队列失败");
+    } finally {
+      setClearing(false);
+      refreshAll();
+    }
   }
 
   const columns = useMemo(
@@ -749,6 +773,18 @@ export function QueuesGrid() {
         ]}
         getRowId={(record) => record.id}
         onRefresh={refreshAll}
+        toolbarRight={
+          isResumeParseQueue ? (
+            <Button
+              disabled={clearing || !selectedQueue?.redis}
+              onClick={() => void clearQueue()}
+              variant="destructive"
+              title="移除简历解析队列中所有尚未开始的任务，正在处理的任务继续完成"
+            >
+              {clearing ? "清空中…" : "清空队列"}
+            </Button>
+          ) : null
+        }
       />
 
       <QueueJobDetailDialog job={detailJob} onOpenChange={(open) => !open && setDetailJob(null)} />

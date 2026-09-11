@@ -3,9 +3,12 @@ import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { platformRouter } from "../route";
 
 const queueMocks = vi.hoisted(() => ({
+  clear: vi.fn(),
   getResumeParseQueueOverview: vi.fn(),
   listResumeParseQueueJobs: vi.fn(),
 }));
+
+vi.mock("../queue-clear", () => ({ clearPendingParseJobs: queueMocks.clear }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({ db: {} }));
 
@@ -57,6 +60,31 @@ const app = factory
   .route("/platform", platformRouter);
 
 describe("platform queue routes", () => {
+  it("clears the parse queue for admins", async () => {
+    queueMocks.clear.mockResolvedValue({ removed: 12 });
+    const response = await app.request("/platform/queues/resume-parse/jobs", { method: "DELETE" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ removed: 12 });
+  });
+  it("rejects unsupported queues", async () => {
+    const response = await app.request("/platform/queues/unknown/jobs", { method: "DELETE" });
+    expect(response.status).toBe(404);
+    expect(queueMocks.clear).not.toHaveBeenCalled();
+  });
+  it("rejects non-admin queue clearing", async () => {
+    const memberApp = factory
+      .createApp()
+      .use(async (c, next) => {
+        c.set("user", { id: "member", role: "user" } as never);
+        await next();
+      })
+      .route("/platform", platformRouter);
+    const response = await memberApp.request("/platform/queues/resume-parse/jobs", {
+      method: "DELETE",
+    });
+    expect(response.status).toBe(403);
+    expect(queueMocks.clear).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     queueMocks.listResumeParseQueueJobs.mockResolvedValue({

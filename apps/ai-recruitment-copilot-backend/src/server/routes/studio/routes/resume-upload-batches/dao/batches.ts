@@ -261,12 +261,14 @@ export async function reconcileBatchProgress(batchId: string): Promise<void> {
     const succeededCount = byStatus.get("succeeded") ?? 0;
     const failedCount = byStatus.get("failed") ?? 0;
     const skippedCount = byStatus.get("duplicate_skipped") ?? 0;
+    const cancelledCount = byStatus.get("cancelled") ?? 0;
     const processedCount = succeededCount + failedCount + skippedCount;
     const now = new Date();
     const shouldComplete =
       batch.status !== "completed" &&
       batch.status !== "cancelled" &&
-      processedCount === batch.totalCount;
+      processedCount + cancelledCount === batch.totalCount;
+    const terminalStatus = cancelledCount > 0 ? "cancelled" : "completed";
     await tx
       .update(resumeUploadBatch)
       .set({
@@ -274,7 +276,7 @@ export async function reconcileBatchProgress(batchId: string): Promise<void> {
         failedCount,
         processedCount,
         skippedCount,
-        status: shouldComplete ? "completed" : batch.status,
+        status: shouldComplete ? terminalStatus : batch.status,
         succeededCount,
         updatedAt: now,
       })

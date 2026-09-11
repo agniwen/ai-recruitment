@@ -1,3 +1,4 @@
+import { clearPendingParseJobs } from "./queue-clear";
 import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
 import { buildListTextFilterWhere } from "@arc/ai-recruitment-copilot-backend/lib/server/db/list-text-filters";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
@@ -565,6 +566,13 @@ async function listResumeReviewGenerationQueueJobsWithDetails(
 
 const platformQueues = factory
   .createApp()
+  .delete("/queues/:queueName/jobs", async (c) => {
+    if (c.req.param("queueName") !== RESUME_PARSE_QUEUE_NAME) {
+      return c.json({ error: "不支持清空此队列" }, 404);
+    }
+    const result = await clearPendingParseJobs();
+    return c.json(result, 200);
+  })
   .get("/queues", async (c) => {
     const records = await Promise.all([
       getResumeParseQueueOverview(),

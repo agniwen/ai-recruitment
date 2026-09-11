@@ -245,6 +245,15 @@ describe("QueuesGrid", () => {
     expect(document.body.textContent).toContain("简历解析");
     expect(document.body.textContent).toContain("AI分析");
     expect(document.body.textContent).toContain("Nolan.jpeg");
+    const toolbar = container.querySelector('[data-slot="data-grid-toolbar-actions"]');
+    const labels = [...(toolbar?.querySelectorAll("button") ?? [])].map(
+      (button) => button.textContent,
+    );
+    expect(labels.indexOf("清空队列")).toBe(labels.indexOf("刷新") + 1);
+    const clearButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "清空队列",
+    );
+    expect(clearButton?.disabled).toBe(true);
     expect(document.body.textContent).toContain("上传任务状态");
     expect(document.body.textContent).toContain("解析状态");
     expect(document.body.textContent).toContain("解析中");
