@@ -99,11 +99,14 @@ export function buildWorkspaceMemberTreeRows(
   directManagerByUserId: ReadonlyMap<string, string | null>,
   collapsedUserIds: ReadonlySet<string>,
 ): MemberRow[] {
+  const sortedRows = rows.toSorted(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
   const memberByUserId = new Map(rows.map((row) => [row.userId, row]));
   const childrenByManagerUserId = new Map<string, MemberRow[]>();
   const roots: MemberRow[] = [];
 
-  for (const row of rows) {
+  for (const row of sortedRows) {
     const directManagerUserId = directManagerByUserId.get(row.userId);
     if (
       !directManagerUserId ||
@@ -152,7 +155,7 @@ export function buildWorkspaceMemberTreeRows(
   }
   // A persisted cycle should be impossible, but keeping remaining rows visible makes the UI
   // resilient to legacy or manually edited data.
-  for (const row of rows) {
+  for (const row of sortedRows) {
     appendMember(row, 0);
   }
   return result;

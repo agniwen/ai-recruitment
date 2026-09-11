@@ -1,3 +1,4 @@
+import { pageJobsByCreatedAt } from "./job-created-order";
 import { Queue, Worker } from "bullmq";
 import type { JobsOptions, JobState, JobType } from "bullmq";
 import { z } from "zod";
@@ -351,8 +352,11 @@ export async function listResumeReviewGenerationQueueJobs({
 
   const total = getCountTotal(counts, state);
   const start = (normalizedPage - 1) * normalizedPageSize;
-  const end = start + normalizedPageSize - 1;
-  const jobs = await q.getJobs(stateToJobTypes(state), start, end, false);
+  const jobs = pageJobsByCreatedAt(
+    await q.getJobs(stateToJobTypes(state), 0, -1, false),
+    start,
+    normalizedPageSize,
+  );
   const serializedJobs = await Promise.all(jobs.map((job) => serializeJob(job)));
   const records = serializedJobs.filter(
     (job): job is ResumeReviewGenerationQueueJobRecord => job !== null,

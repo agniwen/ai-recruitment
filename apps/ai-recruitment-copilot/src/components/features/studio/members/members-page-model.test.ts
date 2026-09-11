@@ -74,6 +74,26 @@ describe("buildWorkspaceMemberTreeRows", () => {
     ]);
   });
 
+  it("sorts roots and direct reports by joining time descending while preserving hierarchy", () => {
+    const olderManager = { ...manager, createdAt: "2026-08-01T00:00:00Z" };
+    const newerRoot = { ...orphan, createdAt: "2026-09-01T00:00:00Z" };
+    const olderReport = { ...report, createdAt: "2026-08-02T00:00:00Z" };
+    const newerReport = {
+      ...report,
+      createdAt: new Date("2026-09-02T00:00:00Z"),
+      id: "new-report",
+      userId: "new-report",
+    };
+    const reportingLines = new Map([...directManagers, ["new-report", "manager"]]);
+    expect(
+      buildWorkspaceMemberTreeRows(
+        [olderManager, olderReport, newerReport, newerRoot],
+        reportingLines,
+        new Set(),
+      ).map((row) => row.userId),
+    ).toEqual(["orphan", "manager", "new-report", "report"]);
+  });
+
   it("removes collapsed descendants without dropping other members", () => {
     expect(
       buildWorkspaceMemberTreeRows(

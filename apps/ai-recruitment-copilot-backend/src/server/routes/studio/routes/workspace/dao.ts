@@ -268,7 +268,12 @@ export async function listRecruitingGroupBoard(
       )
       .leftJoin(user, eq(user.id, recruitingGroupMember.userId))
       .where(eq(recruitingGroup.organizationId, organizationId))
-      .orderBy(desc(recruitingGroup.isDefault), asc(recruitingGroup.createdAt), asc(user.name)),
+      .orderBy(
+        desc(recruitingGroup.createdAt),
+        desc(recruitingGroup.id),
+        desc(recruitingGroupMember.createdAt),
+        desc(recruitingGroupMember.id),
+      ),
     db
       .select({
         email: user.email,
@@ -294,7 +299,7 @@ export async function listRecruitingGroupBoard(
           ),
         ),
       )
-      .orderBy(asc(user.name)),
+      .orderBy(desc(member.createdAt), desc(member.id)),
     db
       .select({
         groupId: recruitingGroupResumeSource.groupId,
