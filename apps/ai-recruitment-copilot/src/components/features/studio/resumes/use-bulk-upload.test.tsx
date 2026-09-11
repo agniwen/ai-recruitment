@@ -137,7 +137,7 @@ describe("useBulkUpload", () => {
     const { root } = renderHookHarness({ onRecordsChanged });
     await flushPromises();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(15_000);
     });
 
     expect(onRecordsChanged).toHaveBeenCalledTimes(1);
@@ -180,12 +180,16 @@ describe("useBulkUpload", () => {
     const { root } = renderHookHarness({ onRecordsChanged: vi.fn() });
     await flushPromises();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(14_999);
+    });
+    expect(apiMocks.getBulkResumeBatchDetail).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
     });
     expect(apiMocks.getBulkResumeBatchDetail).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(4500);
+      await vi.advanceTimersByTimeAsync(45_000);
     });
     expect(apiMocks.getBulkResumeBatchDetail).toHaveBeenCalledTimes(1);
   });

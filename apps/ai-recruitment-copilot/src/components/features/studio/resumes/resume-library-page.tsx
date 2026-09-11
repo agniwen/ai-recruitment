@@ -170,7 +170,7 @@ export function ResumeLibraryPage() {
       (query.state.data ?? []).some(
         (batch) => batch.status === "pending" || batch.status === "running",
       )
-        ? 10_000
+        ? 15_000
         : false,
   });
   const libraryBatches = useMemo(

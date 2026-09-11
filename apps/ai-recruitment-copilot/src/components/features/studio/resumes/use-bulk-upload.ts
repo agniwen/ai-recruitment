@@ -36,7 +36,7 @@ export interface BulkUploadState {
 type StartConfig = Omit<CreateBulkResumeBatchInput, "files">;
 
 const LIST_INVALIDATE_THROTTLE_MS = 600;
-const POLL_INTERVAL_MS = 1500;
+const POLL_INTERVAL_MS = 15_000;
 
 interface UseBulkUploadOptions {
   onBatchQueued?: (detail: BulkResumeBatchDetailDto) => void;
