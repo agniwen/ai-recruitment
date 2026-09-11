@@ -15,7 +15,7 @@ function asProviderSettings(value: unknown): ProviderJsonObject {
 
 export interface DisabledThinkingProviderOptions {
   [providerId: string]: ProviderJsonObject;
-  alibaba: { enableThinking: false };
+  alibaba: { enable_thinking: false };
   google: {
     thinkingConfig: { includeThoughts: false; thinkingBudget: 0 };
   };
@@ -23,7 +23,7 @@ export interface DisabledThinkingProviderOptions {
 }
 
 export const DISABLED_THINKING_PROVIDER_OPTIONS: DisabledThinkingProviderOptions = {
-  alibaba: { enableThinking: false },
+  alibaba: { enable_thinking: false },
   google: {
     thinkingConfig: { includeThoughts: false, thinkingBudget: 0 },
   },
@@ -40,7 +40,7 @@ export function withModelThinkingDisabled(
     ...options,
     alibaba: {
       ...asProviderSettings(options.alibaba),
-      enableThinking: false,
+      enable_thinking: false,
     },
     google: {
       ...google,

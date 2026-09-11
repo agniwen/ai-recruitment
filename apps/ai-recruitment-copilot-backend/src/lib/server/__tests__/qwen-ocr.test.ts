@@ -35,7 +35,7 @@ describe("qwenVlOcr", () => {
     await expect(qwenVlOcr(Buffer.from("page"))).resolves.toBe("逐页 OCR 文本");
 
     expect(mocks.chatCompletionsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "qwen-vl-ocr-latest" }),
+      expect.objectContaining({ enable_thinking: false, model: "qwen-vl-ocr-latest" }),
     );
   });
 
@@ -48,7 +48,7 @@ describe("qwenVlOcr", () => {
 
     await expect(qwenVlOcr(Buffer.from("page"))).resolves.toBe("兼容模型 OCR 文本");
     expect(mocks.chatCompletionsCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "qwen3-vl-flash" }),
+      expect.objectContaining({ enable_thinking: false, model: "qwen3-vl-flash" }),
     );
   });
 

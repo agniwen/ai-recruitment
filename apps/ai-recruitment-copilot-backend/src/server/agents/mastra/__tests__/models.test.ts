@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_CHAT_MODEL,
+  usesTextJsonStructuredOutput,
   describeMastraModelEndpoint,
   getMastraModelConfig,
   getAlibabaCodingPlanApiKey,
@@ -10,6 +11,17 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 
 describe("Mastra model configuration", () => {
+  it("selects text JSON only for the upstream Flash compatibility model", () => {
+    expect(usesTextJsonStructuredOutput("alibaba-coding-plan/deepseek-v4-flash-0731")).toBe(true);
+    expect(
+      usesTextJsonStructuredOutput({
+        modelId: "deepseek-v4-flash-0731",
+        providerId: "alibaba",
+        url: "https://example.test/v1",
+      }),
+    ).toBe(true);
+    expect(usesTextJsonStructuredOutput("alibaba/qwen-plus")).toBe(false);
+  });
   it("uses Alibaba Coding Plan model ids directly when already qualified", () => {
     expect(toAlibabaCodingPlanModelId("alibaba-coding-plan/qwen3.7-plus")).toBe(
       "alibaba-coding-plan/qwen3.7-plus",

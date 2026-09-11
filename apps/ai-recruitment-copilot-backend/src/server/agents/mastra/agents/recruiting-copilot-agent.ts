@@ -1,7 +1,10 @@
 import { Agent } from "@mastra/core/agent";
 import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
-import { mastraModels } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
+import {
+  mastraModels,
+  withThinkingDisabled,
+} from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import { createRecruitingCopilotTools } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/tools/recruiting-copilot";
 import type { ChatContextBindings } from "@arc/db-schema/chat-context-bindings";
 import { EMPTY_CHAT_CONTEXT_BINDINGS } from "@arc/db-schema/chat-context-bindings";
@@ -29,7 +32,7 @@ export function createRecruitingCopilotAgent({
     id: "recruiting-copilot-agent",
     instructions: buildRecruitingCopilotInstructions(focus),
     maxRetries: 1,
-    model: mastraModels.fastModel,
+    model: withThinkingDisabled(mastraModels.fastModel),
     name: "RecruitingCopilotAgent",
     tools: createRecruitingCopilotTools({
       authorize,

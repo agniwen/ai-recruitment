@@ -1,3 +1,5 @@
+import type { ModelWithRetries } from "@mastra/core/agent";
+import { DISABLED_THINKING_PROVIDER_OPTIONS } from "@arc/shared/model-thinking";
 import type { MastraModelConfig as CoreMastraModelConfig } from "@mastra/core/llm";
 import {
   sanitizeApiUrl,
@@ -223,4 +225,21 @@ export function getResumeStructuredModelEndpoint(
   };
 }
 
+/** Match the upstream compatibility path for models that generate JSON as text. */
+export function usesTextJsonStructuredOutput(model: CoreMastraModelConfig): boolean {
+  const modelId = describeMastraModelEndpoint(model).model.split("/").at(-1);
+  return modelId === "deepseek-v4-flash-0731";
+}
+
 export const mastraModels = getMastraModelConfig();
+
+// Keep direct Agent calls and Studio runs consistent with the workflow helpers.
+export function withThinkingDisabled(model: CoreMastraModelConfig): ModelWithRetries[] {
+  // The native Alibaba adapter maps enableThinking to enable_thinking; the
+  // OpenAI-compatible adapter forwards enable_thinking verbatim.
+  const providerOptions =
+    typeof model === "string" && model.startsWith(ALIBABA_CODING_PLAN_PREFIX)
+      ? { ...DISABLED_THINKING_PROVIDER_OPTIONS, alibaba: { enableThinking: false } }
+      : DISABLED_THINKING_PROVIDER_OPTIONS;
+  return [{ model, modelSettings: { reasoning: "none" }, providerOptions }];
+}

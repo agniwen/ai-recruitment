@@ -1,9 +1,11 @@
 import { Agent } from "@mastra/core/agent";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   configureAlibabaCodingPlanApiKey,
   DISABLED_THINKING_PROVIDER_OPTIONS,
   mastraModels,
+  usesTextJsonStructuredOutput,
+  withThinkingDisabled,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import type { DisabledThinkingProviderOptions } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/models";
 import { parseJsonOutput } from "@arc/ai-recruitment-copilot-backend/server/agents/json-output";
@@ -44,7 +46,7 @@ export const titleAgent = new Agent({
   id: "title-agent",
   instructions: "你是会话标题助手。根据用户第一条消息生成简洁、准确的中文标题。",
   maxRetries: 1,
-  model: mastraModels.fastModel,
+  model: withThinkingDisabled(mastraModels.fastModel),
   name: "TitleAgent",
 });
 
@@ -52,7 +54,7 @@ export const jobDescriptionDraftAgent = new Agent({
   id: "job-description-draft-agent",
   instructions: "你是 HR 岗位配置助手，负责生成岗位描述和 AI 面试 Prompt。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "JobDescriptionDraftAgent",
 });
 
@@ -60,7 +62,7 @@ export const interviewQuestionAgent = new Agent({
   id: "interview-question-agent",
   instructions: "你是技术面试出题助手，负责根据岗位、简历和 HR 指令生成结构化面试题。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "InterviewQuestionAgent",
 });
 
@@ -68,7 +70,7 @@ export const formQuestionAgent = new Agent({
   id: "form-question-agent",
   instructions: "你是 HR 面试表单设计助手，负责生成结构化候选人表单题目。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "FormQuestionAgent",
 });
 
@@ -76,7 +78,7 @@ export const resumeStructuredAgent = new Agent({
   id: "resume-structured-agent",
   instructions: "你是简历解析助手，负责把简历原文抽取成严格的候选人结构化档案。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "ResumeStructuredAgent",
 });
 
@@ -84,7 +86,7 @@ export const jobDescriptionMatchAgent = new Agent({
   id: "job-description-match-agent",
   instructions: "你是招聘匹配助手，负责从候选岗位中选择与候选人结构化简历最匹配的一项。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "JobDescriptionMatchAgent",
 });
 
@@ -92,7 +94,7 @@ export const resumeHardFilterAgent = new Agent({
   id: "resume-hard-filter-agent",
   instructions: "你是招聘门槛提取助手，负责从 JD 中抽取结构化硬性要求。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "ResumeHardFilterAgent",
 });
 
@@ -100,7 +102,7 @@ export const resumeScreeningPolicyDraftAgent = new Agent({
   id: "resume-screening-policy-draft-agent",
   instructions: "你是招聘筛选规则草稿助手，负责从 JD 中提取可由 HR 确认的简历筛选规则。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "ResumeScreeningPolicyDraftAgent",
 });
 
@@ -108,7 +110,7 @@ export const resumeScreeningEvidenceAgent = new Agent({
   id: "resume-screening-evidence-agent",
   instructions: "你是简历筛选证据助手，只根据已确认的岗位筛选规则判断简历证据。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "ResumeScreeningEvidenceAgent",
 });
 
@@ -116,7 +118,7 @@ export const resumeReviewQualitativeAgent = new Agent({
   id: "resume-review-qualitative-agent",
   instructions: "你是招聘评估助手，负责生成简历与岗位匹配的结构化定性评价。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "ResumeReviewQualitativeAgent",
 });
 
@@ -124,7 +126,7 @@ export const resumeReviewScoringAgent = new Agent({
   id: "resume-review-scoring-agent",
   instructions: "你是招聘评分助手，负责生成简历与岗位匹配的六维度结构化评分。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "ResumeReviewScoringAgent",
 });
 
@@ -132,7 +134,7 @@ export const resumeReviewMarkdownAgent = new Agent({
   id: "resume-review-markdown-agent",
   instructions: "你是招聘评估撰写助手，负责生成可直接写入简历评价编辑器的 Markdown 文案。",
   maxRetries: 1,
-  model: mastraModels.fastModel,
+  model: withThinkingDisabled(mastraModels.fastModel),
   name: "ResumeReviewMarkdownAgent",
 });
 
@@ -140,7 +142,7 @@ export const interviewReportSummaryAgent = new Agent({
   id: "interview-report-summary-agent",
   instructions: "你是面试报告撰写助手，负责根据面试 transcript 生成摘要。",
   maxRetries: 1,
-  model: mastraModels.fastModel,
+  model: withThinkingDisabled(mastraModels.fastModel),
   name: "InterviewReportSummaryAgent",
 });
 
@@ -148,7 +150,7 @@ export const interviewKeyInformationAgent = new Agent({
   id: "interview-key-information-agent",
   instructions: "你是面试重点信息提取助手，只提取候选人对话中的关键技能证据、量化信息和风险。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "InterviewKeyInformationAgent",
 });
 
@@ -156,7 +158,7 @@ export const interviewReportEvaluationAgent = new Agent({
   id: "interview-report-evaluation-agent",
   instructions: "你是专业面试评估专家，负责根据面试 transcript 和题目生成结构化评价。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "InterviewReportEvaluationAgent",
 });
 
@@ -164,7 +166,7 @@ export const resumeEducationBackfillAgent = new Agent({
   id: "resume-education-backfill-agent",
   instructions: "你是简历教育经历解析助手，只提取教育经历并输出结构化字段。",
   maxRetries: 1,
-  model: mastraModels.structuredModel,
+  model: withThinkingDisabled(mastraModels.structuredModel),
   name: "ResumeEducationBackfillAgent",
 });
 
@@ -313,40 +315,55 @@ async function generateTextJsonWithRetry<TSchema extends z.ZodType>(
   schema: TSchema,
   {
     maxOutputTokens,
+    retryOnInvalid,
     retryOnTransient,
     strictJson,
     temperature,
   }: {
     maxOutputTokens?: number;
+    retryOnInvalid?: boolean;
     retryOnTransient?: boolean;
     strictJson: boolean;
     temperature?: number;
   },
 ): Promise<z.infer<TSchema>> {
+  const outputSchema = z.toJSONSchema(schema, { io: "input", unrepresentable: "any" });
+  const fallbackPrompt = `${prompt}\n\n输出必须符合以下 JSON Schema（包括字段类型、必填字段和固定值）：\n${JSON.stringify(outputSchema)}\n\n请只输出一个完整的 JSON 对象，不要输出 Markdown、分析或解释。`;
+  let attemptPrompt = fallbackPrompt;
   let lastError = new Error("AI 生成的 JSON 内容无效。");
-  const fallbackPrompt = `${prompt}\n\n请只输出一个完整的 JSON 对象，不要输出 Markdown、分析或解释。`;
-  for (let attempt = 0; attempt < (retryOnTransient ? 2 : 1); attempt += 1) {
-    let result: MastraGenerateResult | undefined;
+  const maxAttempts = retryOnInvalid || retryOnTransient ? 2 : 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    let result: MastraGenerateResult;
     try {
-      result = await agent.generate(fallbackPrompt, {
+      result = await agent.generate(attemptPrompt, {
         modelSettings: buildModelSettings({ maxOutputTokens, temperature }),
         providerOptions: DISABLED_THINKING_PROVIDER_OPTIONS,
       });
       if (result.error) {
         throw result.error;
       }
+    } catch (error) {
+      const cause = error instanceof Error ? error : new Error(String(error));
+      if (retryOnTransient && attempt + 1 < maxAttempts && isTransientGenerationError(cause)) {
+        continue;
+      }
+      throw cause;
+    }
+    try {
       return parseGeneratedObject(result, schema, strictJson);
     } catch (error) {
       const cause = error instanceof Error ? error : new Error(String(error));
       lastError = withModelResponse(cause, result);
-      if (!(retryOnTransient && attempt === 0 && isTransientGenerationError(cause))) {
+      if (!retryOnInvalid || attempt + 1 >= maxAttempts) {
         throw lastError;
       }
+      attemptPrompt = `${fallbackPrompt}\n\n上一次结构化输出无效：${lastError.message}\n请严格按照原字段和类型重新输出完整的 JSON 对象，不要输出 Markdown 或解释。`;
     }
   }
   throw lastError;
 }
 
+// oxlint-disable-next-line complexity -- Native structured output and the Flash text-JSON path share retry and fallback handling.
 export async function generateStructuredWithMastraAgent<TSchema extends z.ZodType>({
   agent,
   fallbackToTextGeneration,
@@ -357,6 +374,7 @@ export async function generateStructuredWithMastraAgent<TSchema extends z.ZodTyp
   schema,
   strictJson = false,
   temperature,
+  textGenerationFirst = usesTextJsonStructuredOutput(mastraModels.structuredModel),
 }: {
   agent: MastraGeneratorLike;
   fallbackToTextGeneration?: boolean;
@@ -367,7 +385,17 @@ export async function generateStructuredWithMastraAgent<TSchema extends z.ZodTyp
   schema: TSchema;
   strictJson?: boolean;
   temperature?: number;
+  textGenerationFirst?: boolean;
 }): Promise<z.infer<TSchema>> {
+  if (textGenerationFirst) {
+    return generateTextJsonWithRetry(agent, prompt, schema, {
+      maxOutputTokens,
+      retryOnInvalid,
+      retryOnTransient,
+      strictJson,
+      temperature,
+    });
+  }
   let attemptPrompt = prompt;
   let lastError = new Error("AI 生成的结构化内容校验失败。");
   const maxAttempts = retryOnInvalid || retryOnTransient ? 2 : 1;
