@@ -135,3 +135,17 @@ it("records approval activity and its notification user even without an explanat
     { label: "通知人员", value: "ODC甲" },
   ]);
 });
+
+it("describes rejected approval without implying a stage change", () => {
+  expect(
+    auditDescription(
+      {
+        approvalDecision: "rejected",
+        fromStage: "ai_review",
+        reason: "经历不匹配",
+        toStage: "ai_review",
+      },
+      "candidate_transition",
+    ),
+  ).toBe("AI 评价审核未通过。审批说明：经历不匹配");
+});

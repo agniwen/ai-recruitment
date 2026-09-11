@@ -72,6 +72,15 @@ export function AiReviewPage() {
       title: "AI 评价状态",
     }),
     customColumn<ResumeLibraryListRecord>({
+      cell: (record) => (
+        <Badge variant={record.aiReviewApprovalStatus === "rejected" ? "danger" : "warning"}>
+          {record.aiReviewApprovalStatus === "rejected" ? "未通过" : "待审批"}
+        </Badge>
+      ),
+      key: "aiReviewApprovalStatus",
+      title: "审批状态",
+    }),
+    customColumn<ResumeLibraryListRecord>({
       cell: (record) => record.resumeReviewBaseScore ?? "—",
       key: "resumeReviewBaseScore",
       title: "AI 评分",

@@ -112,6 +112,11 @@ function jobDescriptionChangeLabel(
 // oxlint-disable-next-line complexity -- Audit copy stays centralized by action.
 export function auditDescription(detail: Record<string, unknown>, action: string): string | null {
   if (action === "candidate_transition") {
+    if (detail.approvalDecision === "rejected") {
+      return typeof detail.reason === "string" && detail.reason.trim()
+        ? `AI 评价审核未通过。审批说明：${detail.reason}`
+        : "AI 评价审核未通过。";
+    }
     const automaticClosure = readAutomaticCandidateClosureAuditDetail(detail);
     if (automaticClosure) {
       return automaticClosure.reason;

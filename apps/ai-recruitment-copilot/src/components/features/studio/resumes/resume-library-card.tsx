@@ -524,7 +524,11 @@ function ResumeLibraryCardComponent({
                     评估人：{formatResumeCardContact(record.resumeEvaluatorName, "未评估")}
                   </ResumeCardMetaItem>
                   <ResumeCardMetaItem icon={<IconBuilding className="size-3.5" />} label="用人组织">
-                    用人组织：{formatResumeCardContact(record.hiringUnitName, "未分配用人组织")}
+                    用人组织：
+                    {formatResumeCardContact(
+                      record.jobDescriptionHiringUnitName || record.hiringUnitName,
+                      "未分配用人组织",
+                    )}
                   </ResumeCardMetaItem>
                   <ResumeCardMetaItem
                     className="sm:col-span-2 md:col-span-1"

@@ -152,7 +152,8 @@ function createResumeEditFormValues(
     hiringUnitId: detail.hiringUnitId,
     hrResumeAssessment: detail.hrResumeAssessment ?? "",
     jobDescriptionId: detail.jobDescriptionId ?? "",
-    notes: detail.notes ?? "",
+    // 简历评价在此弹窗中不编辑、不提交，历史长文本不应参与表单校验。
+    notes: "",
     recommendationText: detail.recommendationText ?? "",
     resumeEvaluationStatus: detail.resumeEvaluationStatus ?? "unreviewed",
     targetRole: detail.targetRole ?? "",

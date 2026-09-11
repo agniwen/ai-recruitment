@@ -480,6 +480,10 @@ export const studioInterview = pgTable(
   "studio_interview",
   {
     actualOnboardedAt: timestamp("actual_onboarded_at", { withTimezone: true }),
+    aiReviewApprovalStatus: text("ai_review_approval_status")
+      .$type<"pending" | "approved" | "rejected">()
+      .notNull()
+      .default("pending"),
     candidateEmail: text("candidate_email"),
     // 候选人期望（薪资 / 现 base / 最早入职日 / 备注），单行 JSONB；
     // 在 offer 阶段录入，便于 dialog prefill。结构见 candidateExpectationsMetaSchema。

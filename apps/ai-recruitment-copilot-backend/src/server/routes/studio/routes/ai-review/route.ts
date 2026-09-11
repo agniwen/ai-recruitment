@@ -1,3 +1,4 @@
+import { aiReviewRejectRouter } from "./routes/reject/route";
 import { aiReviewNotificationRecipientsRouter } from "./routes/notification-recipients/route";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -16,6 +17,7 @@ const querySchema = z.object({
 
 export const aiReviewRouter = factory
   .createApp()
+  .route("/:id/reject", aiReviewRejectRouter)
   .route("/:id/notification-recipients", aiReviewNotificationRecipientsRouter)
   .use("*", requirePermission("page", "aiReview"), requirePermission("aiReview", "read"))
   .get("/", zValidator("query", querySchema, jsonValidatorError("查询参数无效。")), async (c) => {

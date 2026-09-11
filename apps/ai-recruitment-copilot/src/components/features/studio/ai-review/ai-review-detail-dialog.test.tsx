@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
   get: vi.fn(),
   recipients: vi.fn(),
+  reject: vi.fn(),
   success: vi.fn(),
 }));
 vi.mock("@/lib/client/rpc", () => ({
@@ -25,6 +26,7 @@ vi.mock("@/lib/client/rpc", () => ({
                 $get: mocks.get,
                 approve: { $post: mocks.approve },
                 "notification-recipients": { $get: mocks.recipients },
+                reject: { $post: mocks.reject },
               },
             },
           },
@@ -289,4 +291,28 @@ describe("AI approval detail", () => {
     expect(onApproved).not.toHaveBeenCalled();
     expect(document.querySelector("textarea")?.value).toBe("  已核实项目经验  ");
   });
+});
+
+it("rejects without a notification recipient and keeps the detail open", async () => {
+  mocks.get.mockResolvedValue(ready);
+  mocks.reject.mockResolvedValue({ ok: true });
+  const { host, onApproved } = await render();
+  act(() => {
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "审批不通过")
+      ?.click();
+  });
+  await act(async () => {
+    await delay(0);
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "确认审批不通过")
+      ?.click();
+  });
+  expect(mocks.reject).toHaveBeenCalledWith({
+    json: { approvalNote: "" },
+    param: { id: "candidate-a", slug: "workspace-a" },
+  });
+  expect(mocks.approve).not.toHaveBeenCalled();
+  expect(onApproved).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("候选人甲 · AI 分析审批");
 });

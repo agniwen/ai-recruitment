@@ -310,6 +310,29 @@ describe("StudioPersonEditDialog", () => {
     apiMocks.fetchSelectableHiringUnits.mockResolvedValue([{ id: "hu-1", name: "华东事业部" }]);
   });
 
+  it("saves valid candidate details when the hidden existing review exceeds the notes limit", async () => {
+    apiMocks.fetchStudioResume.mockResolvedValue(makeDetail({ notes: "历史简历评价".repeat(500) }));
+    apiMocks.apiFetch.mockResolvedValue(makeDetail());
+    const { queryClient, root } = renderDialog();
+    try {
+      await vi.waitFor(() => {
+        expect(document.querySelector<HTMLInputElement>("#candidateName")?.value).toBe("邓超");
+      });
+      await act(async () => {
+        document
+          .querySelector("#resume-edit-form")
+          ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        await Promise.resolve();
+      });
+      expect(apiMocks.apiFetch).toHaveBeenCalledOnce();
+      const [[, init]] = apiMocks.apiFetch.mock.calls;
+      expect(init.body.has("notes")).toBe(false);
+    } finally {
+      act(() => root.unmount());
+      queryClient.clear();
+    }
+  });
+
   it("opens candidate profile editing inline from interview edit mode", async () => {
     apiMocks.fetchStudioInterviewRound.mockResolvedValue(makeRoundDetail());
     const onEditResumeRecord = vi.fn();

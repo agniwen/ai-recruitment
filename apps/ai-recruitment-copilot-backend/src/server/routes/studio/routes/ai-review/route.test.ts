@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   detail: vi.fn(),
   list: vi.fn(),
   recipients: vi.fn(),
+  reject: vi.fn(),
   transition: vi.fn(),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
@@ -34,6 +35,8 @@ vi.mock("../interviews/dao/ai-review-approval", () => ({
 vi.mock("../interviews/utils/candidate-stage-transition", () => ({
   transitionCandidateStage: mocks.transition,
 }));
+
+vi.mock("./routes/reject/dao", () => ({ rejectCandidateAiReview: mocks.reject }));
 
 function request(
   path: string,
@@ -217,5 +220,39 @@ describe("AI approval notification recipients", () => {
     const response = await request("/candidate-a/notification-recipients");
     expect(response.status).toBe(404);
     expect(mocks.recipients).not.toHaveBeenCalled();
+  });
+});
+
+describe("AI review rejection API", () => {
+  it("allows approvers without approval-page access and does not advance the candidate", async () => {
+    mocks.reject.mockResolvedValue({ kind: "ok" });
+    const response = await request("/candidate-a/reject", {
+      body: { approvalNote: "  不匹配  " },
+      method: "POST",
+      page: false,
+      read: false,
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.reject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvalNote: "不匹配",
+        candidateId: "candidate-a",
+        organizationId: "org-a",
+      }),
+    );
+    expect(mocks.transition).not.toHaveBeenCalled();
+  });
+  it("requires approval permission", async () => {
+    const response = await request("/candidate-a/reject", { approve: false, method: "POST" });
+    expect(response.status).toBe(403);
+    expect(mocks.reject).not.toHaveBeenCalled();
+  });
+  it("validates approval notes", async () => {
+    const response = await request("/candidate-a/reject", {
+      body: { approvalNote: "字".repeat(2001) },
+      method: "POST",
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.reject).not.toHaveBeenCalled();
   });
 });

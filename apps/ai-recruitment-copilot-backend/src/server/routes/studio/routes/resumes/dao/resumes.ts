@@ -338,6 +338,7 @@ function buildWhere(organizationId: string, filters?: ResumeQueryFilters) {
 }
 
 const SELECTED_COLUMNS = {
+  aiReviewApprovalStatus: studioInterview.aiReviewApprovalStatus,
   candidateEmail: studioInterview.candidateEmail,
   candidateExpectationsMeta: studioInterview.candidateExpectationsMeta,
   candidateName: studioInterview.candidateName,
@@ -360,6 +361,16 @@ const SELECTED_COLUMNS = {
   id: studioInterview.id,
   jobDescriptionAiInterviewDisabled: jobDescription.aiInterviewDisabled,
   jobDescriptionDepartmentName: department.name,
+  // 岗位用人组织遵循岗位详情规则：手动岗位可回退部门，Google 同步保留显式空值。
+  jobDescriptionHiringUnitName: sql<string | null>`(
+    select ${hiringUnit.name} from ${hiringUnit}
+    where ${hiringUnit.organizationId} = ${studioInterview.organizationId}
+      and ${hiringUnit.id} = case
+        when ${jobDescription.creationSource} = 'manual'
+          then coalesce(${jobDescription.hiringUnitId}, ${department.hiringUnitId})
+        else ${jobDescription.hiringUnitId}
+      end
+  )`.as("job_description_hiring_unit_name"),
   jobDescriptionId: studioInterview.jobDescriptionId,
   jobDescriptionName: jobDescription.name,
   jobDescriptionResumeScreeningPolicyHash: jobDescription.resumeScreeningPolicyHash,
@@ -454,6 +465,7 @@ const SELECTED_COLUMNS = {
 // 列表只取卡片、筛选结果和轻量操作实际需要的字段；评价详情、错误信息及阶段元数据
 // 由详情接口按需读取，避免每一页重复传输大块 JSON。
 const LIST_SELECTED_COLUMNS = {
+  aiReviewApprovalStatus: SELECTED_COLUMNS.aiReviewApprovalStatus,
   candidateEmail: SELECTED_COLUMNS.candidateEmail,
   candidateName: SELECTED_COLUMNS.candidateName,
   candidatePhone: SELECTED_COLUMNS.candidatePhone,
@@ -472,6 +484,7 @@ const LIST_SELECTED_COLUMNS = {
   id: SELECTED_COLUMNS.id,
   jobDescriptionAiInterviewDisabled: SELECTED_COLUMNS.jobDescriptionAiInterviewDisabled,
   jobDescriptionDepartmentName: SELECTED_COLUMNS.jobDescriptionDepartmentName,
+  jobDescriptionHiringUnitName: SELECTED_COLUMNS.jobDescriptionHiringUnitName,
   jobDescriptionId: SELECTED_COLUMNS.jobDescriptionId,
   jobDescriptionName: SELECTED_COLUMNS.jobDescriptionName,
   jobDescriptionResumeScreeningPolicyHash: SELECTED_COLUMNS.jobDescriptionResumeScreeningPolicyHash,
@@ -977,6 +990,7 @@ function toRecord(
     resumeScreeningResult.policyHash !== row.jobDescriptionResumeScreeningPolicyHash,
   );
   return {
+    aiReviewApprovalStatus: row.aiReviewApprovalStatus,
     candidateEmail: row.candidateEmail,
     candidateName: row.candidateName,
     candidatePhone: row.candidatePhone,
@@ -999,6 +1013,7 @@ function toRecord(
     id: row.id,
     jobDescriptionAiInterviewDisabled: row.jobDescriptionAiInterviewDisabled ?? false,
     jobDescriptionDepartmentName: row.jobDescriptionDepartmentName,
+    jobDescriptionHiringUnitName: row.jobDescriptionHiringUnitName,
     jobDescriptionId: row.jobDescriptionId,
     jobDescriptionInterviewers: resolvedPeople.jobDescriptionInterviewers,
     jobDescriptionName: row.jobDescriptionName,

@@ -142,6 +142,7 @@ export const EMPTY_RESUME_PROFILE_SNAPSHOT: ResumeLibraryProfileSnapshot = {
  * the resume library view stays focused on candidate + resume metadata.
  */
 export interface ResumeLibraryListRecord {
+  aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
   id: string;
   candidateName: string;
   candidateEmail: string | null;
@@ -153,6 +154,7 @@ export interface ResumeLibraryListRecord {
   hrResumeAssessmentUpdatedBy: string | null;
   jobDescriptionId: string | null;
   jobDescriptionDepartmentName: string | null;
+  jobDescriptionHiringUnitName?: string | null;
   jobDescriptionName: string | null;
   // 当前关联岗位是否禁止候选人发起 AI 面试。
   jobDescriptionAiInterviewDisabled: boolean;
@@ -354,7 +356,14 @@ function describeOffer(p: OfferProgress | null): Description {
  * Reduce (pipelineStage, outcome, stageProgress) to a single display string +
  * tone for the resume library "面试进度" cell, detail panel, and elsewhere.
  */
+function describeAiReviewApproval(status: ResumeLibraryListRecord["aiReviewApprovalStatus"]) {
+  return status === "rejected"
+    ? ({ label: "AI 评价审核 · 未通过", tone: "danger" } as const)
+    : ({ label: "AI 评价审核 · 待审批", tone: "warning" } as const);
+}
+
 export function describeResumeProgress(record: {
+  aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
   closedReason?: string | null;
   pipelineStage: PipelineStage;
   outcome: CandidateOutcome;
@@ -416,7 +425,7 @@ export function describeResumeProgress(record: {
 
   switch (pipelineStage) {
     case "ai_review": {
-      return { label: "AI 评价审核 · 待审批", tone: "warning" };
+      return describeAiReviewApproval(record.aiReviewApprovalStatus);
     }
     case "screening": {
       return { label: "简历筛选 · 待处理", tone: "outline" };

@@ -210,6 +210,16 @@ describe("resume evaluation status", () => {
 });
 
 describe("describeResumeProgress", () => {
+  it("shows rejected AI approval without closing the candidate", () => {
+    expect(
+      describeResumeProgress({
+        aiReviewApprovalStatus: "rejected",
+        outcome: "in_pipeline",
+        pipelineStage: "ai_review",
+        stageProgress: EMPTY,
+      }),
+    ).toEqual({ label: "AI 评价审核 · 未通过", tone: "danger" });
+  });
   it("shows the hired-elsewhere reason for automatically archived candidates", () => {
     expect(
       describeResumeProgress({

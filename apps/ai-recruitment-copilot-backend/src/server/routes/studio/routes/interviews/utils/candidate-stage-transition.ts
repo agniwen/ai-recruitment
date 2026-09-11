@@ -302,6 +302,10 @@ export async function transitionCandidateStage(command: {
       .set({
         ...transition.patch,
         ...onboardingFactPatch,
+        ...(approvalRecipient ? { aiReviewApprovalStatus: "approved" as const } : {}),
+        ...(isReactivating && command.input.pipelineStage === "ai_review"
+          ? { aiReviewApprovalStatus: "pending" as const }
+          : {}),
       })
       .where(eq(studioInterview.id, command.candidateId));
     const automaticallyClosedCandidates = isHired

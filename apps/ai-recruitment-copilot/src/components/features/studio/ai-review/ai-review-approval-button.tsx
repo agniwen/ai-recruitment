@@ -1,3 +1,4 @@
+import { AiReviewRejectionButton } from "./ai-review-rejection-button";
 import { useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,7 @@ export function AiReviewApprovalButton({
   }
   return (
     <>
+      <AiReviewRejectionButton recordId={recordId} disabled={disabled || pending} />
       <Button
         size="sm"
         disabled={disabled || pending}

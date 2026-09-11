@@ -51,6 +51,7 @@ vi.mock(
 );
 
 function createTransaction(existing: {
+  aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
   candidateName?: string;
   closedMeta: null | { previousStage: "ai_review" };
   jobDescriptionAiInterviewDisabled?: boolean;
@@ -174,6 +175,7 @@ describe("transitionCandidateStage", () => {
     "approves without a note and audits the selected ODC recipient (%j)",
     async (approvalNote) => {
       const { tx, insertedValues, updatedWhere } = createTransaction({
+        aiReviewApprovalStatus: "rejected",
         closedMeta: null,
         jobDescriptionId: "jd-a",
         outcome: "in_pipeline",
@@ -192,6 +194,9 @@ describe("transitionCandidateStage", () => {
       });
       expect(result.kind).toBe("ok");
       expect(updatedWhere).toHaveBeenCalledOnce();
+      expect(tx.update.mock.results[0]?.value.set).toHaveBeenCalledWith(
+        expect.objectContaining({ aiReviewApprovalStatus: "approved", pipelineStage: "screening" }),
+      );
       expect(mocks.recipients).toHaveBeenCalledWith(
         { candidateId: "candidate-a", organizationId: "org-a" },
         tx,
