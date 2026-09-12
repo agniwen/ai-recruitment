@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { canDeleteResumeRecord } from "@arc/shared/studio-resumes";
 import type { ResumeLibraryListRecord } from "@arc/shared/studio-resumes";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import { formatResumeCandidateTitle } from "@/components/features/resume/resume-record-display-id";
 import type { ToolbarFilterConfig } from "@/components/data-grid";
@@ -19,11 +19,7 @@ import { ListLoadError } from "@/components/data-grid/list-load-error";
 
 import {
   formatResumeLibraryJobDescriptionLabel,
-  resumeLibraryScrollRestoreSnapshot,
-  setResumeLibraryScrollRestoreSnapshot,
   useResumeLibraryCardHeight,
-  useResumeLibraryInitialScrollRestore,
-  useResumeLibraryResizeScrollRestore,
   useResumeLibraryScrollElement,
 } from "./resume-library-page-model";
 import type { ResumeLibraryGridState } from "./resume-library-page-model";
@@ -114,12 +110,9 @@ export function ResumeLibraryCardList({
 }: ResumeLibraryCardListProps) {
   const listRootRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const [initialRestoreSnapshot] = useState(() => resumeLibraryScrollRestoreSnapshot.current);
-  const restoreSnapshotRef = useRef(initialRestoreSnapshot);
   const scrollElement = useResumeLibraryScrollElement(listRootRef);
   const cardHeight = useResumeLibraryCardHeight();
   const { setRowSelection } = grid;
-  const initialScrollRestore = useResumeLibraryInitialScrollRestore(initialRestoreSnapshot);
   const getVirtualItemKey = useCallback(
     (index: number) => records[index]?.id ?? `resume-placeholder-${index}`,
     [records],
@@ -129,8 +122,6 @@ export function ResumeLibraryCardList({
     estimateSize: () => cardHeight,
     getItemKey: getVirtualItemKey,
     getScrollElement: () => scrollElement,
-    initialMeasurementsCache: initialScrollRestore.initialMeasurementsCache,
-    initialOffset: initialScrollRestore.initialOffset,
     overscan: 6,
   });
   useEffect(() => {
@@ -167,26 +158,6 @@ export function ResumeLibraryCardList({
     ? "所选记录包含解析中的简历，暂不能删除"
     : undefined;
   const canShowFloatingActionBar = canDeleteResumeLibrary && selectedIds.length > 0;
-  const handleOpenDetail = useCallback(
-    (record: ResumeLibraryListRecord, tab?: ResumeDetailDefaultTab) => {
-      const rowElement = listRootRef.current?.querySelector<HTMLElement>(
-        `[data-resume-record-id="${record.id}"]`,
-      );
-      if (scrollElement && rowElement) {
-        setResumeLibraryScrollRestoreSnapshot({
-          measurements: virtualizer.takeSnapshot(),
-          recordId: record.id,
-          recordTopInScrollElement:
-            rowElement.getBoundingClientRect().top - scrollElement.getBoundingClientRect().top,
-          scrollOffset: scrollElement.scrollTop,
-          viewportWidth: scrollElement.clientWidth,
-        });
-      }
-      onOpenDetail(record, tab);
-    },
-    [onOpenDetail, scrollElement, virtualizer],
-  );
-
   useEffect(() => {
     const node = loadMoreRef.current;
     if (!node || !hasNextPage || typeof IntersectionObserver === "undefined") {
@@ -203,14 +174,6 @@ export function ResumeLibraryCardList({
     observer.observe(node);
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, scrollElement]);
-
-  useResumeLibraryResizeScrollRestore({
-    listRootRef,
-    records,
-    restoreSnapshotRef,
-    scrollElement,
-    virtualizer,
-  });
 
   let loadMoreStatusText = "已显示全部简历";
   if (hasNextPage) {
@@ -268,7 +231,7 @@ export function ResumeLibraryCardList({
                   onEdit={onEdit}
                   onForceReparse={onForceReparse}
                   onLaunchInterview={onLaunchInterview}
-                  onOpenDetail={handleOpenDetail}
+                  onOpenDetail={onOpenDetail}
                   onPreviewResume={onPreviewResume}
                   onRetryParse={onRetryParse}
                   onSelectChange={handleSelectionChange}
@@ -335,7 +298,7 @@ export function ResumeLibraryCardList({
           onViewItem={(id) => {
             const record = records.find((item) => item.id === id);
             if (record) {
-              handleOpenDetail(record);
+              onOpenDetail(record);
             }
           }}
           selectedCount={selectedIds.length}

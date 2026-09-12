@@ -758,18 +758,24 @@ export function ResumeLibraryPage() {
           onOpenBatchList={() => setBatchListOpen(true)}
           onOpenDetail={(record, tab = "overview") => {
             void router.navigate({
+              mask: {
+                params: { recordId: record.id, slug },
+                search: { ...routeSearch, tab: tab === "overview" ? undefined : tab },
+                to: "/w/$slug/studio/resumes/$recordId",
+                unmaskOnReload: true,
+              },
               params: { recordId: record.id, slug },
-              resetScroll: true,
+              resetScroll: false,
               search: {
                 ...routeSearch,
                 tab: tab === "overview" ? undefined : tab,
               },
-              state: (prev: Record<string, unknown>) => ({
+              state: (prev) => ({
                 ...prev,
                 fromRecruiterResumeList: true,
               }),
-              to: "/w/$slug/studio/resumes/$recordId",
-            } as never);
+              to: "/w/$slug/studio/resumes/overlay/$recordId",
+            });
           }}
           onOpenUploadEntry={() => setUploadEntryOpen(true)}
           onPreviewResume={setPreviewRecord}

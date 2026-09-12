@@ -20,34 +20,23 @@ describe("TanStack Start studio resumes migration", () => {
     expect(routeTree).toContain("'/w/$slug/studio/resumes/$recordId'");
   });
 
-  it("restores the recruiter resume list after closing a workspace detail page", () => {
-    const detailSource = readSource("routes/w.$slug.studio.resumes.$recordId.tsx");
+  it("keeps the candidate list mounted behind the masked detail route without scroll snapshots", () => {
+    const routeSource = readSource("routes/w.$slug.studio.resumes.tsx");
     const listSource =
       readSource("components/features/studio/resumes/resume-library-page-list.tsx") +
-      readSource("components/features/studio/resumes/resume-library-page.tsx") +
       readSource("components/features/studio/resumes/resume-library-page-model.tsx");
-    const studioShellSource = readSource("routes/w.$slug.studio.tsx");
-
-    expect(detailSource).toContain("locationState.fromRecruiterResumeList");
-    expect(detailSource).toContain("router.history.canGoBack()");
-    expect(detailSource).toContain("router.history.back();");
-    expect(listSource).toContain("useElementScrollRestoration");
-    expect(listSource).toContain("STUDIO_MAIN_SCROLL_RESTORATION_ID");
-    expect(listSource).toContain("useResumeLibraryInitialScrollRestore");
-    expect(listSource).toContain("initialMeasurementsCache: canUseInitialMeasurements");
-    expect(listSource).toContain("measurements: virtualizer.takeSnapshot()");
-    expect(listSource).toContain("useResumeLibraryResizeScrollRestore({");
-    expect(listSource).toContain('virtualizer.scrollToIndex(recordIndex, { align: "start" })');
-    expect(listSource).toContain(
-      "virtualizer.scrollToOffset(scrollElement.scrollTop + correction)",
-    );
-    expect(listSource).toContain("fromRecruiterResumeList: true");
-    expect(studioShellSource).toContain("STUDIO_MAIN_SCROLL_RESTORATION_ID");
-    expect(studioShellSource).toContain("scrollRestorationId={STUDIO_MAIN_SCROLL_RESTORATION_ID}");
+    expect(routeSource).toContain("isListRoute || isOverlayRoute");
+    expect(routeSource).toContain("inert={isOverlayRoute ? true : undefined}");
+    expect(readSource("routeTree.gen.ts")).toContain("'/w/$slug/studio/resumes/overlay/$recordId'");
+    expect(listSource).not.toContain("ScrollRestoreSnapshot");
+    expect(listSource).not.toContain("useElementScrollRestoration");
+    expect(listSource).not.toContain("takeSnapshot");
   });
 
   it("uses the candidate name in the recruiter resume detail document title", () => {
-    const source = readSource("routes/w.$slug.studio.resumes.$recordId.tsx");
+    const source =
+      readSource("components/features/studio/resumes/recruiter-resume-detail-page.tsx") +
+      readSource("routes/w.$slug.studio.resumes.$recordId.tsx");
 
     expect(source).toContain("function getRecruiterResumeDocumentTitle(");
     expect(source).toMatch(

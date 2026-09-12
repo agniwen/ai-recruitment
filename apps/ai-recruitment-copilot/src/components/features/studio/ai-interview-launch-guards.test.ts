@@ -7,7 +7,7 @@ function readSource(relativePath: string) {
 
 const actionBarSource = readSource("./pipeline-stage-action-bar.tsx");
 const detailControllerSource = readSource("./studio-person-detail-controller.tsx");
-const detailPageSource = readSource("../../../routes/w.$slug.studio.resumes.$recordId.tsx");
+const detailPageSource = readSource("./resumes/recruiter-resume-detail-page.tsx");
 const jobDescriptionsPageSource = readSource(
   "./job-descriptions/job-description-management-page.tsx",
 );

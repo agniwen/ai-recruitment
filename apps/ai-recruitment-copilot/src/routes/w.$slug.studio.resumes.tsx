@@ -4,7 +4,6 @@ import {
   notFound,
   redirect,
   useLoaderData,
-  useParams,
   useRouterState,
 } from "@tanstack/react-router";
 import { formatDocumentTitle } from "@/lib/start/document-title";
@@ -16,18 +15,30 @@ function StudioResumesRoute() {
   const state = useLoaderData({
     from: "/w/$slug/studio/resumes",
   }) as unknown as StudioResumesState;
-  const { slug } = useParams({ from: "/w/$slug/studio/resumes" });
-  const pathname = useRouterState({ select: (routerState) => routerState.location.pathname });
+  const activeRouteId = useRouterState({
+    select: (routerState) => routerState.matches.at(-1)?.routeId,
+  });
+  const isListRoute = activeRouteId === "/w/$slug/studio/resumes";
+  const isOverlayRoute = activeRouteId === "/w/$slug/studio/resumes/overlay/$recordId";
 
   if (state.status !== "ready") {
     return null;
   }
 
-  if (pathname !== `/w/${slug}/studio/resumes`) {
-    return <Outlet />;
-  }
-
-  return <ResumeLibraryPage />;
+  return (
+    <>
+      {isListRoute || isOverlayRoute ? (
+        <div
+          className="contents"
+          aria-hidden={isOverlayRoute ? true : undefined}
+          inert={isOverlayRoute ? true : undefined}
+        >
+          <ResumeLibraryPage />
+        </div>
+      ) : null}
+      {isListRoute ? null : <Outlet />}
+    </>
+  );
 }
 
 export const Route = createFileRoute("/w/$slug/studio/resumes")({

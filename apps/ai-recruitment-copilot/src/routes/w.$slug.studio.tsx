@@ -1,3 +1,7 @@
+import {
+  StudioContentOverlayProvider,
+  StudioContentOverlayTarget,
+} from "@/components/features/studio/studio-content-route-overlay";
 import type { ReactNode } from "react";
 import { Outlet, createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { PendingOutlet } from "@/components/layout/pending-outlet";
@@ -27,18 +31,21 @@ async function findFirstAllowedStudioPath(slug: string) {
 function StudioLayout({ children }: { children: ReactNode }) {
   return (
     <StudioHeaderProvider>
-      <SidebarInset className="h-dvh overflow-hidden md:h-[calc(100dvh-1.5rem)] border border-border">
-        <ScrollArea
-          className="@container/main min-h-0 flex-1 bg-background"
-          scrollRestorationId={STUDIO_MAIN_SCROLL_RESTORATION_ID}
-          scrollbars="never"
-        >
-          <SiteHeader />
-          <PendingOutlet className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
-            {children}
-          </PendingOutlet>
-        </ScrollArea>
-      </SidebarInset>
+      <StudioContentOverlayProvider>
+        <SidebarInset className="h-dvh overflow-hidden md:h-[calc(100dvh-1.5rem)] border border-border">
+          <ScrollArea
+            className="@container/main min-h-0 flex-1 bg-background [&_[data-overlayscrollbars-viewport]]:z-auto!"
+            scrollRestorationId={STUDIO_MAIN_SCROLL_RESTORATION_ID}
+            scrollbars="never"
+          >
+            <SiteHeader />
+            <PendingOutlet className="flex flex-col gap-4 px-4 py-4 md:gap-6 md:px-6 md:py-6">
+              {children}
+            </PendingOutlet>
+          </ScrollArea>
+          <StudioContentOverlayTarget className="pointer-events-none absolute inset-0 z-10" />
+        </SidebarInset>
+      </StudioContentOverlayProvider>
     </StudioHeaderProvider>
   );
 }

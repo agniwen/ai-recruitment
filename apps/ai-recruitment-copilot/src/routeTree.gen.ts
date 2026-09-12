@@ -75,6 +75,7 @@ import { Route as WSlugStudioResumesRouteImport } from './routes/w.$slug.studio.
 import { Route as WSlugStudioInterviewsRoundIdRouteImport } from './routes/w.$slug.studio.interviews.$roundId'
 import { Route as WSlugStudioMailIngestAccountsIdRouteImport } from './routes/w.$slug.studio.mail-ingest-accounts.$id'
 import { Route as WSlugStudioResumesRecordIdRouteImport } from './routes/w.$slug.studio.resumes.$recordId'
+import { Route as WSlugStudioResumesOverlayRecordIdRouteImport } from './routes/w.$slug.studio.resumes.overlay.$recordId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -420,6 +421,12 @@ const WSlugStudioResumesRecordIdRoute =
     path: '/$recordId',
     getParentRoute: () => WSlugStudioResumesRoute,
   } as any)
+const WSlugStudioResumesOverlayRecordIdRoute =
+  WSlugStudioResumesOverlayRecordIdRouteImport.update({
+    id: '/overlay/$recordId',
+    path: '/overlay/$recordId',
+    getParentRoute: () => WSlugStudioResumesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -488,6 +495,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
   '/w/$slug/studio/mail-ingest-accounts/$id': typeof WSlugStudioMailIngestAccountsIdRoute
   '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
+  '/w/$slug/studio/resumes/overlay/$recordId': typeof WSlugStudioResumesOverlayRecordIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -553,6 +561,7 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
   '/w/$slug/studio/mail-ingest-accounts/$id': typeof WSlugStudioMailIngestAccountsIdRoute
   '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
+  '/w/$slug/studio/resumes/overlay/$recordId': typeof WSlugStudioResumesOverlayRecordIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -622,6 +631,7 @@ export interface FileRoutesById {
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
   '/w/$slug/studio/mail-ingest-accounts/$id': typeof WSlugStudioMailIngestAccountsIdRoute
   '/w/$slug/studio/resumes/$recordId': typeof WSlugStudioResumesRecordIdRoute
+  '/w/$slug/studio/resumes/overlay/$recordId': typeof WSlugStudioResumesOverlayRecordIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -692,6 +702,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/interviews/$roundId'
     | '/w/$slug/studio/mail-ingest-accounts/$id'
     | '/w/$slug/studio/resumes/$recordId'
+    | '/w/$slug/studio/resumes/overlay/$recordId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -757,6 +768,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/interviews/$roundId'
     | '/w/$slug/studio/mail-ingest-accounts/$id'
     | '/w/$slug/studio/resumes/$recordId'
+    | '/w/$slug/studio/resumes/overlay/$recordId'
   id:
     | '__root__'
     | '/'
@@ -825,6 +837,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/interviews/$roundId'
     | '/w/$slug/studio/mail-ingest-accounts/$id'
     | '/w/$slug/studio/resumes/$recordId'
+    | '/w/$slug/studio/resumes/overlay/$recordId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1311,6 +1324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugStudioResumesRecordIdRouteImport
       parentRoute: typeof WSlugStudioResumesRoute
     }
+    '/w/$slug/studio/resumes/overlay/$recordId': {
+      id: '/w/$slug/studio/resumes/overlay/$recordId'
+      path: '/overlay/$recordId'
+      fullPath: '/w/$slug/studio/resumes/overlay/$recordId'
+      preLoaderRoute: typeof WSlugStudioResumesOverlayRecordIdRouteImport
+      parentRoute: typeof WSlugStudioResumesRoute
+    }
   }
 }
 
@@ -1456,10 +1476,13 @@ const WSlugStudioMailIngestAccountsRouteWithChildren =
 
 interface WSlugStudioResumesRouteChildren {
   WSlugStudioResumesRecordIdRoute: typeof WSlugStudioResumesRecordIdRoute
+  WSlugStudioResumesOverlayRecordIdRoute: typeof WSlugStudioResumesOverlayRecordIdRoute
 }
 
 const WSlugStudioResumesRouteChildren: WSlugStudioResumesRouteChildren = {
   WSlugStudioResumesRecordIdRoute: WSlugStudioResumesRecordIdRoute,
+  WSlugStudioResumesOverlayRecordIdRoute:
+    WSlugStudioResumesOverlayRecordIdRoute,
 }
 
 const WSlugStudioResumesRouteWithChildren =
