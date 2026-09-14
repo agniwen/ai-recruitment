@@ -111,9 +111,16 @@ describe("Studio sidebar page visibility", () => {
       "/w/work/studio/me",
     ]);
   });
-  it("shows every menu when its page and operation permissions are granted", async () => {
-    expect(await links()).toEqual(
-      expect.arrayContaining(STUDIO_PAGE_PATHS.map(({ path }) => `/w/work/studio${path}`)),
+  it("shows enabled menus but keeps temporarily hidden pages out even with full permissions", async () => {
+    const visibleLinks = await links();
+    expect(visibleLinks).not.toContain("/w/work/studio/resume-pool");
+    expect(visibleLinks).not.toContain("/w/work/studio/dashboard");
+    expect(visibleLinks).toEqual(
+      expect.arrayContaining(
+        STUDIO_PAGE_PATHS.filter(
+          ({ action }) => action !== "resumePool" && action !== "dashboard",
+        ).map(({ path }) => `/w/work/studio${path}`),
+      ),
     );
   });
   it("updates visible menus when the workspace permission snapshot changes", async () => {

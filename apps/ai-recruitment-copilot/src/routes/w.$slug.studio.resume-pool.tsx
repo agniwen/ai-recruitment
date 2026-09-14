@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { RESUME_POOL_PAGE_ENABLED } from "@arc/shared/permissions";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { ResumePoolPage } from "@/components/features/studio/resume-pool/resume-pool-page";
 import type { ResumePoolSearch } from "@/components/features/studio/resume-pool/resume-pool-page";
@@ -10,6 +11,12 @@ import { ResumePoolPageSkeleton } from "@/components/features/studio/studio-page
 import { formatDocumentTitle } from "@/lib/start/document-title";
 
 export const Route = createFileRoute("/w/$slug/studio/resume-pool")({
+  // 暂时隐藏页面，保留实现；恢复时开启 RESUME_POOL_PAGE_ENABLED。
+  beforeLoad: () => {
+    if (!RESUME_POOL_PAGE_ENABLED) {
+      throw notFound();
+    }
+  },
   validateSearch: (search: Record<string, unknown>): ResumePoolSearch => {
     const value = (key: string) => (typeof search[key] === "string" ? search[key] : undefined);
     return {
