@@ -116,6 +116,7 @@ function elapsed(startedAt: number): number {
 
 type ItemRow = Awaited<ReturnType<typeof claimNextPendingItem>>;
 type BatchRow = typeof resumeUploadBatch.$inferSelect;
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type ParsedResume = Awaited<ReturnType<typeof parseResumeBytesToProfile>>;
 interface ProcessItemOptions {
   retryParseFailure?: boolean;
@@ -246,57 +247,63 @@ async function resolveResumeProfile(
   };
 }
 
-async function upsertParsedResumeRecord({
-  item,
-  jobDescriptionId,
-  organizationId,
-  recruitmentSource,
-  recruitmentSourceDetail,
-  resumeProfile,
-  resumeText,
-  userId,
-  userRole,
-}: {
-  item: NonNullable<ItemRow>;
-  jobDescriptionId: string | null;
-  organizationId: string;
-  recruitmentSource: BatchRow["recruitmentSource"];
-  recruitmentSourceDetail: BatchRow["recruitmentSourceDetail"];
-  resumeProfile: ParsedResume["resumeProfile"];
-  resumeText: string | null;
-  userId: string;
-  userRole?: string | null;
-}): Promise<string> {
+async function upsertParsedResumeRecord(
+  {
+    item,
+    jobDescriptionId,
+    organizationId,
+    recruitmentSource,
+    recruitmentSourceDetail,
+    resumeProfile,
+    resumeText,
+    userId,
+    userRole,
+  }: {
+    item: NonNullable<ItemRow>;
+    jobDescriptionId: string | null;
+    organizationId: string;
+    recruitmentSource: BatchRow["recruitmentSource"];
+    recruitmentSourceDetail: BatchRow["recruitmentSourceDetail"];
+    resumeProfile: ParsedResume["resumeProfile"];
+    resumeText: string | null;
+    userId: string;
+    userRole?: string | null;
+  },
+  tx: Tx,
+): Promise<string> {
   const startedAt = Date.now();
   logStep("record.upsert.start", {
     hasPlaceholder: Boolean(item.resumeRecordId),
     itemId: item.id,
   });
   if (!item.resumeRecordId) {
-    const recordId = await createResumeRecordFromStorage({
-      candidateEmail: null,
-      candidateName: null,
-      candidatePhone: null,
-      contentHash: item.contentHash,
-      jobDescriptionId,
-      notes: null,
-      organizationId,
-      recruitmentSource,
-      recruitmentSourceDetail,
-      resumeFileName: item.originalFileName,
-      resumeProfile,
-      resumeReview: null,
-      resumeReviewError: null,
-      resumeReviewStatus: "idle",
-      resumeScreeningError: null,
-      resumeScreeningResult: null,
-      resumeScreeningStatus: "idle",
-      resumeText,
-      storageKey: item.storageKey,
-      targetRole: null,
-      userId,
-      userRole,
-    });
+    const recordId = await createResumeRecordFromStorage(
+      {
+        candidateEmail: null,
+        candidateName: null,
+        candidatePhone: null,
+        contentHash: item.contentHash,
+        jobDescriptionId,
+        notes: null,
+        organizationId,
+        recruitmentSource,
+        recruitmentSourceDetail,
+        resumeFileName: item.originalFileName,
+        resumeProfile,
+        resumeReview: null,
+        resumeReviewError: null,
+        resumeReviewStatus: "idle",
+        resumeScreeningError: null,
+        resumeScreeningResult: null,
+        resumeScreeningStatus: "idle",
+        resumeText,
+        storageKey: item.storageKey,
+        targetRole: null,
+        userId,
+        userRole,
+      },
+      tx,
+    );
     logStep("record.upsert.done", {
       durationMs: elapsed(startedAt),
       itemId: item.id,
@@ -321,37 +328,35 @@ async function upsertParsedResumeRecord({
           resumeScreeningResult: null,
           resumeScreeningStatus: "idle" as const,
         };
-  await db.transaction(async (tx) => {
-    await tx
-      .update(studioInterview)
-      .set({
-        candidateEmail: resumeProfile?.email ?? null,
-        candidateName: resumeProfile?.name || item.originalFileName,
-        candidatePhone: resumeProfile?.phone ?? null,
-        jobDescriptionId,
-        notes: null,
-        recruitmentSource,
-        recruitmentSourceDetail,
-        resumeContentHash: item.contentHash,
-        resumeFileName: item.originalFileName,
-        resumeParseError: null,
-        resumeParseStatus: "ready",
-        resumeParsedAt: now,
-        resumeProfile,
-        resumeStorageKey: item.storageKey,
-        resumeText,
-        targetRole: resumeProfile?.targetRoles?.[0] ?? null,
-        updatedAt: now,
-        ...assessmentReset,
-      })
-      .where(
-        and(eq(studioInterview.id, recordId), eq(studioInterview.organizationId, organizationId)),
-      );
-    await syncResumeSkills(tx, {
-      interviewId: recordId,
-      organizationId,
-      skills: resumeProfile?.skills,
-    });
+  await tx
+    .update(studioInterview)
+    .set({
+      candidateEmail: resumeProfile?.email ?? null,
+      candidateName: resumeProfile?.name || item.originalFileName,
+      candidatePhone: resumeProfile?.phone ?? null,
+      jobDescriptionId,
+      notes: null,
+      recruitmentSource,
+      recruitmentSourceDetail,
+      resumeContentHash: item.contentHash,
+      resumeFileName: item.originalFileName,
+      resumeParseError: null,
+      resumeParseStatus: "ready",
+      resumeParsedAt: now,
+      resumeProfile,
+      resumeStorageKey: item.storageKey,
+      resumeText,
+      targetRole: resumeProfile?.targetRoles?.[0] ?? null,
+      updatedAt: now,
+      ...assessmentReset,
+    })
+    .where(
+      and(eq(studioInterview.id, recordId), eq(studioInterview.organizationId, organizationId)),
+    );
+  await syncResumeSkills(tx, {
+    interviewId: recordId,
+    organizationId,
+    skills: resumeProfile?.skills,
   });
   logStep("record.upsert.done", {
     durationMs: elapsed(startedAt),
@@ -447,21 +452,42 @@ async function fetchAndParse(
     };
   }
 
-  const succeededRecordId = await upsertParsedResumeRecord({
-    item: resolvedItem,
-    jobDescriptionId,
-    organizationId,
-    recruitmentSource: batchRow.recruitmentSource,
-    recruitmentSourceDetail: batchRow.recruitmentSourceDetail,
-    resumeProfile,
-    resumeText,
-    userId,
-    userRole: batchRow.createdByRole,
+  // 两边复用同一解析结果，并在同一事务中提交基础资料、技能和解析事件。
+  const succeededRecordId = await db.transaction(async (tx) => {
+    const recordId = await upsertParsedResumeRecord(
+      {
+        item: resolvedItem,
+        jobDescriptionId,
+        organizationId,
+        recruitmentSource: batchRow.recruitmentSource,
+        recruitmentSourceDetail: batchRow.recruitmentSourceDetail,
+        resumeProfile,
+        resumeText,
+        userId,
+        userRole: batchRow.createdByRole,
+      },
+      tx,
+    );
+    if (item.poolItemId) {
+      await markResumePoolItemParsed(
+        {
+          actorId: userId,
+          jobDescriptionId,
+          organizationId,
+          poolItemId: item.poolItemId,
+          resumeParseStatus: "ready",
+          resumeProfile,
+          resumeText,
+        },
+        tx,
+      );
+    }
+    return recordId;
   });
   return {
     autoMatchJobDescription,
     jobDescriptionId,
-    succeededPoolItemId: null,
+    succeededPoolItemId: item.poolItemId,
     succeededRecordId,
   };
 }
@@ -496,6 +522,15 @@ async function enqueueParsedResumeEnrichment(input: {
         sourceId: input.succeededRecordId,
         sourceType: "studio_interview",
       }),
+      ...(input.succeededPoolItemId
+        ? [
+            enqueueResumeSemanticIndexJobBestEffort({
+              organizationId: input.organizationId,
+              sourceId: input.succeededPoolItemId,
+              sourceType: "resume_pool_item",
+            }),
+          ]
+        : []),
     ]);
     return;
   }

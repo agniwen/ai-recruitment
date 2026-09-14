@@ -275,19 +275,20 @@ export async function createResumePoolItem(input: CreateResumePoolItemInput): Pr
 
 export async function markResumePoolItemParsed(
   input: MarkResumePoolItemParsedInput,
+  tx?: Tx,
 ): Promise<void> {
-  const [row] = await db
-    .select()
-    .from(resumePoolItem)
-    .where(eq(resumePoolItem.id, input.poolItemId))
-    .limit(1);
-  if (!row) {
-    return;
-  }
-  const now = new Date();
-  const resumeParseStatus = input.resumeParseStatus ?? "ready";
-  await db.transaction(async (tx) => {
-    await tx
+  const write = async (executor: Tx) => {
+    const [row] = await executor
+      .select()
+      .from(resumePoolItem)
+      .where(eq(resumePoolItem.id, input.poolItemId))
+      .limit(1);
+    if (!row) {
+      return;
+    }
+    const now = new Date();
+    const resumeParseStatus = input.resumeParseStatus ?? "ready";
+    await executor
       .update(resumePoolItem)
       .set({
         candidateEmail: input.resumeProfile?.email ?? row.candidateEmail,
@@ -308,13 +309,14 @@ export async function markResumePoolItemParsed(
         updatedAt: now,
       })
       .where(eq(resumePoolItem.id, input.poolItemId));
-    await writeResumePoolEvent(tx, {
+    await writeResumePoolEvent(executor, {
       actorId: input.actorId,
       organizationId: input.organizationId,
       poolItemId: input.poolItemId,
       type: "parsed",
     });
-  });
+  };
+  await (tx ? write(tx) : db.transaction(write));
 }
 
 export async function markResumePoolItemSemanticIndexed(

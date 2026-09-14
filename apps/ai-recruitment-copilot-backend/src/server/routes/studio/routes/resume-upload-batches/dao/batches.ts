@@ -109,7 +109,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
   const batchId = input.batchId ?? crypto.randomUUID();
   const now = new Date();
   const target = input.target ?? "resume_library";
-  const scope = input.resumePoolScope ?? "private";
+  const scope = target === "resume_library" ? "private" : (input.resumePoolScope ?? "private");
   await db.transaction(async (tx) => {
     await tx.insert(resumeUploadBatch).values({
       createdAt: now,
@@ -133,7 +133,8 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
       file: f,
       itemId: crypto.randomUUID(),
       orderIndex: i,
-      poolItemId: target === "resume_pool" ? crypto.randomUUID() : null,
+      // 候选人上传同时保留上传人的私有池副本；固定 ID 供解析重试复用。
+      poolItemId: crypto.randomUUID(),
       recordId: target === "resume_library" ? crypto.randomUUID() : null,
     }));
     const placeholderRows = rows.filter(

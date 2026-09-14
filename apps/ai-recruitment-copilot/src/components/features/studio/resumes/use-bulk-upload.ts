@@ -71,6 +71,7 @@ export function useBulkUpload({ onBatchQueued, onRecordsChanged }: UseBulkUpload
     }
     lastInvalidateRef.current = now;
     void qc.invalidateQueries({ queryKey: ["studio-resumes"] });
+    void qc.invalidateQueries({ queryKey: ["resume-pool"] });
   }, [qc]);
 
   const pollLoop = useCallback(
@@ -99,6 +100,7 @@ export function useBulkUpload({ onBatchQueued, onRecordsChanged }: UseBulkUpload
             void qc.invalidateQueries({ queryKey: ["active-bulk-batches", slug] });
             void qc.invalidateQueries({ queryKey: ["bulk-resume-batches", slug] });
             void qc.invalidateQueries({ queryKey: ["studio-resumes"] });
+            void qc.invalidateQueries({ queryKey: ["resume-pool"] });
             onRecordsChanged?.();
             return;
           }
@@ -193,6 +195,7 @@ export function useBulkUpload({ onBatchQueued, onRecordsChanged }: UseBulkUpload
         void qc.invalidateQueries({ queryKey: ["active-bulk-batches", slug] });
         void qc.invalidateQueries({ queryKey: ["bulk-resume-batches", slug] });
         void qc.invalidateQueries({ queryKey: ["studio-resumes"] });
+        void qc.invalidateQueries({ queryKey: ["resume-pool"] });
         onBatchQueued?.(detail);
         void pollLoop(detail.batch.id);
       } catch (error) {
@@ -256,6 +259,7 @@ export function useBulkUpload({ onBatchQueued, onRecordsChanged }: UseBulkUpload
     void qc.invalidateQueries({ queryKey: ["active-bulk-batches", slug] });
     void qc.invalidateQueries({ queryKey: ["bulk-resume-batches", slug] });
     void qc.invalidateQueries({ queryKey: ["studio-resumes"] });
+    void qc.invalidateQueries({ queryKey: ["resume-pool"] });
   }, [slug, state.detail, qc]);
 
   const abort = useCallback(() => {
