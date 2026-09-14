@@ -51,7 +51,7 @@ describe("AI approval candidate visibility", () => {
     expect(query.sql).toContain('"studio_interview"."pipeline_stage" =');
     expect(query.sql).not.toContain("created_by");
     expect(query.sql).not.toContain("resume_source");
-    expect(query.params).toEqual(["workspace-a", "ai_review"]);
+    expect(query.params.slice(0, 2)).toEqual(["workspace-a", "ai_review"]);
     expect(mocks.authorizer).toHaveBeenCalledWith({
       memberRole: "ai-reviewer",
       organizationId: "workspace-a",
@@ -69,7 +69,12 @@ describe("AI approval candidate visibility", () => {
     const query = await visibilityQuery();
     expect(query.sql).toContain('"studio_interview"."created_by" in');
     expect(query.sql).toContain(" or ");
-    expect(query.params).toEqual(["reviewer", "subordinate", "workspace-a", "ai_review"]);
+    expect(query.params.slice(0, 4)).toEqual([
+      "reviewer",
+      "subordinate",
+      "workspace-a",
+      "ai_review",
+    ]);
   });
 
   it("removes cross-group pending visibility when approval permission is revoked", async () => {
@@ -91,4 +96,15 @@ describe("AI approval candidate visibility", () => {
       expect(mocks.authorizer).not.toHaveBeenCalled();
     },
   );
+});
+
+// An inherited admin report may grant recruiting.kind=all to a non-admin.
+it("still restricts approved records when an ODC inherits unrestricted recruiting visibility", async () => {
+  mocks.authorize.mockResolvedValue(false);
+  mocks.recruiting.mockResolvedValue({ kind: "all" });
+  const query = await visibilityQuery();
+  expect(query.sql).toContain('"organization_role"."is_odc"');
+  expect(query.sql).toContain('"studio_interview"."ai_review_assigned_odc_user_id" =');
+  expect(query.sql).toContain('"studio_interview"."ai_review_approval_status" <>');
+  expect(query.params).toContain("reviewer");
 });

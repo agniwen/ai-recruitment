@@ -484,6 +484,10 @@ export const studioInterview = pgTable(
       .$type<"pending" | "approved" | "rejected">()
       .notNull()
       .default("pending"),
+    // 审批通过时指定的 ODC；审批后其他 ODC 不再通过来源或招聘组共享此候选人。
+    aiReviewAssignedOdcUserId: text("ai_review_assigned_odc_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
     candidateEmail: text("candidate_email"),
     // 候选人期望（薪资 / 现 base / 最早入职日 / 备注），单行 JSONB；
     // 在 offer 阶段录入，便于 dialog prefill。结构见 candidateExpectationsMetaSchema。

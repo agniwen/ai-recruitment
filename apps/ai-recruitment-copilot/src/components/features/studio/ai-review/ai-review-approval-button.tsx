@@ -98,10 +98,10 @@ export function AiReviewApprovalButton({
       >
         <FieldGroup>
           <p className="text-sm text-muted-foreground">
-            审批通过后进入简历筛选，并向通知人员发送 Telegram 消息。
+            审批通过后进入简历筛选，并向指定 ODC 发送 Telegram 消息。其他 ODC 将无法查看此候选人。
           </p>
           <Field>
-            <FieldLabel htmlFor={`${id}-recipient`}>推送给ODC，简历评估</FieldLabel>
+            <FieldLabel htmlFor={`${id}-recipient`}>指定 ODC（简历评估）</FieldLabel>
             <SearchableSelect
               id={`${id}-recipient`}
               required

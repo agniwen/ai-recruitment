@@ -47,7 +47,7 @@ const metrics: ResumeLibraryMetrics = {
 };
 
 describe("ResumeLibraryMetricsSection", () => {
-  it("lets the page own one initial query boundary while charts stay client-only", () => {
+  it("keeps query loading inside the list while charts stay client-only", () => {
     const pageSource = readFileSync(
       path.join(import.meta.dirname, "resume-library-page.tsx"),
       "utf-8",
@@ -61,8 +61,8 @@ describe("ResumeLibraryMetricsSection", () => {
       "utf-8",
     );
 
-    expect(pageSource).toContain("const isInitialPageLoading = resumeLibraryListQuery.isPending;");
-    expect(pageSource).toContain("return <RecruitingPageSkeleton />");
+    expect(pageSource).not.toContain("RecruitingPageSkeleton");
+    expect(pageSource).toContain("isInitialLoading={resumeLibraryListQuery.isLoading}");
     expect(routeSource).not.toContain("pendingComponent:");
     expect(sectionSource).not.toContain("useSuspenseQuery");
     expect(sectionSource).toContain("ClientOnly");

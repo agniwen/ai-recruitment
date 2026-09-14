@@ -302,9 +302,14 @@ export async function transitionCandidateStage(command: {
       .set({
         ...transition.patch,
         ...onboardingFactPatch,
-        ...(approvalRecipient ? { aiReviewApprovalStatus: "approved" as const } : {}),
+        ...(approvalRecipient
+          ? {
+              aiReviewApprovalStatus: "approved" as const,
+              aiReviewAssignedOdcUserId: approvalRecipient.userId,
+            }
+          : {}),
         ...(isReactivating && command.input.pipelineStage === "ai_review"
-          ? { aiReviewApprovalStatus: "pending" as const }
+          ? { aiReviewApprovalStatus: "pending" as const, aiReviewAssignedOdcUserId: null }
           : {}),
       })
       .where(eq(studioInterview.id, command.candidateId));

@@ -1,5 +1,5 @@
 import type { SQL } from "drizzle-orm";
-import { and, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { createRequestWorkspaceAuthorizer } from "./workspace-access-policy";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
@@ -20,6 +20,7 @@ import {
 } from "@arc/db-schema/schema";
 
 export interface ResumeVisibilityScope {
+  actor?: { organizationId: string; userId: string };
   aiReviewOrganizationId?: string;
   odc: OdcAccessScope;
   odcActor?: { organizationId: string; userId: string };
@@ -52,6 +53,7 @@ export async function resolveResumeVisibilityScope({
     authorize({ action: "approve", resource: "aiReview" }),
   ]);
   return {
+    actor: { organizationId, userId },
     ...(canApproveAiReview ? { aiReviewOrganizationId: organizationId } : {}),
     odc,
     odcActor:
@@ -123,6 +125,40 @@ function buildCurrentOdcVisibilityCondition(actor: {
   );
 }
 
+// Apply after the union so recruiting groups/reporting lines cannot bypass the
+// recipient restriction. Recheck the role, including ODCs without source bindings.
+function buildOdcApprovalRestriction(actor?: {
+  organizationId: string;
+  userId: string;
+}): SQL | undefined {
+  if (!actor) {
+    return;
+  }
+  const isOdc = exists(
+    db
+      .select({ value: sql`1` })
+      .from(member)
+      .innerJoin(
+        organizationRole,
+        and(
+          eq(organizationRole.organizationId, member.organizationId),
+          eq(organizationRole.role, member.role),
+          eq(organizationRole.isOdc, true),
+        ),
+      )
+      .where(and(eq(member.organizationId, actor.organizationId), eq(member.userId, actor.userId))),
+  );
+  return or(
+    not(isOdc),
+    eq(studioInterview.pipelineStage, "ai_review"),
+    ne(studioInterview.aiReviewApprovalStatus, "approved"),
+    and(
+      eq(studioInterview.organizationId, actor.organizationId),
+      eq(studioInterview.aiReviewAssignedOdcUserId, actor.userId),
+    ),
+  );
+}
+
 export function buildResumeVisibilityCondition(
   scope: CompatibleResumeVisibilityScope | undefined,
 ): SQL | undefined {
@@ -130,8 +166,10 @@ export function buildResumeVisibilityCondition(
     return;
   }
   const normalized = normalizeScope(scope);
+  const actor = normalized.actor ?? normalized.odcActor;
+  const approvalRestriction = buildOdcApprovalRestriction(actor);
   if (normalized.recruiting.kind === "all") {
-    return;
+    return approvalRestriction;
   }
 
   const recruitingCondition =
@@ -190,5 +228,5 @@ export function buildResumeVisibilityCondition(
   ) {
     return sql`false`;
   }
-  return or(recruitingCondition, odcCondition, aiReviewCondition);
+  return and(or(recruitingCondition, odcCondition, aiReviewCondition), approvalRestriction);
 }

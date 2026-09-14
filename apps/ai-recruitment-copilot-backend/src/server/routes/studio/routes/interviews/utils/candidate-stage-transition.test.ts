@@ -195,7 +195,11 @@ describe("transitionCandidateStage", () => {
       expect(result.kind).toBe("ok");
       expect(updatedWhere).toHaveBeenCalledOnce();
       expect(tx.update.mock.results[0]?.value.set).toHaveBeenCalledWith(
-        expect.objectContaining({ aiReviewApprovalStatus: "approved", pipelineStage: "screening" }),
+        expect.objectContaining({
+          aiReviewApprovalStatus: "approved",
+          aiReviewAssignedOdcUserId: "notify-a",
+          pipelineStage: "screening",
+        }),
       );
       expect(mocks.recipients).toHaveBeenCalledWith(
         { candidateId: "candidate-a", organizationId: "org-a" },
@@ -296,6 +300,32 @@ describe("transitionCandidateStage", () => {
       expect(updatedWhere).not.toHaveBeenCalled();
     },
   );
+
+  it("clears the designated ODC when reactivated into AI review", async () => {
+    const { tx } = createTransaction({
+      aiReviewApprovalStatus: "approved",
+      closedMeta: null,
+      jobDescriptionId: "jd-a",
+      outcome: "archived",
+      pipelineStage: "closed",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    const result = await transitionCandidateStage({
+      authorize: vi.fn().mockResolvedValue(true),
+      candidateId: "candidate-a",
+      input: { pipelineStage: "ai_review", reactivationReason: "重新评价" },
+      operatorId: "user-a",
+      organizationId: "org-a",
+      provenance: { kind: "manual" },
+    });
+    expect(result.kind).toBe("ok");
+    expect(tx.update.mock.results[0]?.value.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiReviewApprovalStatus: "pending",
+        aiReviewAssignedOdcUserId: null,
+      }),
+    );
+  });
 
   it("rejects approval while the AI evaluation is processing", async () => {
     const { tx, updatedWhere } = createTransaction({

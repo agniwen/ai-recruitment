@@ -72,7 +72,6 @@ import {
 import { LaunchInterviewDialog } from "@/components/features/studio/resumes/launch-interview-dialog";
 import { TransitionCandidateDialog } from "@/components/features/studio/resumes/transition-candidate-dialog";
 // import { ResumeLibraryMetricsSection } from "@/components/features/studio/resumes/resume-library-metrics-section";
-import { RecruitingPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
 // import { Button } from "@/components/ui/button";
 // import { resumeMetricsScopeAtom } from "@/lib/client/atoms/resume-metrics-scope";
 
@@ -602,11 +601,6 @@ export function ResumeLibraryPage() {
         invalidateAll();
       },
     });
-  }
-
-  const isInitialPageLoading = resumeLibraryListQuery.isPending;
-  if (isInitialPageLoading) {
-    return <RecruitingPageSkeleton />;
   }
 
   const resumeLibraryEmptyState = grid.filters.stage ? (
