@@ -70,6 +70,11 @@ export interface BulkResumeUploadFileDescriptor {
 export const createBulkResumeBatchSchema = z
   .object({
     dedupPolicy: z.enum(["skip", "create"]),
+    destinations: z
+      .array(z.object({ hiringUnitId: z.string().min(1), jobDescriptionId: z.string().min(1) }))
+      .min(1)
+      .max(50)
+      .optional(),
     files: z
       .array(
         z.object({
@@ -89,6 +94,30 @@ export const createBulkResumeBatchSchema = z
     target: z.enum(["resume_library", "resume_pool"]).default("resume_library"),
   })
   .superRefine((value, ctx) => {
+    if (
+      value.target === "resume_library" &&
+      (value.jdMode !== "bind" || (!value.destinations?.length && !value.jobDescriptionId))
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "候选人管理必须绑定岗位",
+        path: ["jobDescriptionId"],
+      });
+    }
+    if (
+      value.destinations &&
+      (value.target !== "resume_library" ||
+        value.jdMode !== "bind" ||
+        new Set(value.destinations.map((row) => row.hiringUnitId)).size !==
+          value.destinations.length)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "入库组织不能重复，且仅支持候选人绑定岗位上传",
+        path: ["destinations"],
+      });
+    }
+
     if (!value.recruitmentSource) {
       ctx.addIssue({
         code: "custom",

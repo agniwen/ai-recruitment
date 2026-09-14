@@ -1,3 +1,5 @@
+import { resumePoolBatchImportRouter } from "./routes/import/route";
+import { loadResumePoolImportOptions } from "./routes/import/options";
 import { retryFailedResumePoolItems } from "./utils/retry-failed";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
@@ -172,6 +174,13 @@ export const resumePoolRouter = factory
       visibilityScope,
     });
     return c.json({ records }, 200);
+  })
+  .get("/import-options", requirePermission("resumePool", "import"), async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    return c.json(await loadResumePoolImportOptions(activeOrg.id, user.id), 200);
   })
   .get("/:id", requirePermission("resumePool", "read"), async (c) => {
     const { activeOrg, user } = c.var;
@@ -487,6 +496,7 @@ export const resumePoolRouter = factory
       return c.json({ error: error instanceof Error ? error.message : "推送失败。" }, 400);
     }
   })
+  .route("/:id/import", resumePoolBatchImportRouter)
   .post(
     "/:id/import",
     // 仅 resumePool:import：允许「不能在候选人管理新建、但可从简历池入库」的角色。

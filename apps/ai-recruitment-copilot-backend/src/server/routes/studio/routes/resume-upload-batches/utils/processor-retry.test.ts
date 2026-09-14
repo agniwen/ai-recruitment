@@ -7,18 +7,22 @@ const mocks = vi.hoisted(() => ({
   enqueueIndex: vi.fn(),
   enqueuePoolReview: vi.fn(),
   enqueueReview: vi.fn(),
+  fileLock: vi.fn(),
   getObjectStream: vi.fn(),
   loadDetail: vi.fn(),
+  loadJob: vi.fn(),
   markPoolParsed: vi.fn(),
   parse: vi.fn(),
   release: vi.fn(),
+  select: vi.fn(),
   set: vi.fn(),
   syncSkills: vi.fn(),
   transaction: vi.fn(),
   values: vi.fn(),
 }));
+vi.mock("./with-file-parse-lock", () => ({ withFileParseLock: mocks.fileLock }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
-  db: { transaction: mocks.transaction },
+  db: { select: mocks.select, transaction: mocks.transaction },
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   getObjectStream: mocks.getObjectStream,
@@ -59,7 +63,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/chat/dao/chat-attachm
 }));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao",
-  () => ({ loadJobDescriptionById: vi.fn(() => ({})) }),
+  () => ({ loadJobDescriptionById: mocks.loadJob }),
 );
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-pool/dao", () => ({
   createResumePoolItem: mocks.createPool,
@@ -103,6 +107,8 @@ describe("ordinary parse failure lifecycle", () => {
   };
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.loadJob.mockResolvedValue({});
+    mocks.fileLock.mockImplementation((_batch, _key, run) => run(() => {}));
     mocks.claim.mockResolvedValue({
       attemptCount: 1,
       batchId: "batch",
@@ -124,6 +130,54 @@ describe("ordinary parse failure lifecycle", () => {
     mocks.loadDetail.mockResolvedValue({ batch, items: [{ id: "item", status: "failed" }] });
     mocks.cancelled.mockResolvedValue(false);
     mocks.getObjectStream.mockRejectedValue(new Error("parse timeout"));
+  });
+  it("reuses the parsed sibling for another JD and evaluates only that destination", async () => {
+    const multiBatch = { ...batch, jdMode: "bind", jobDescriptionId: null };
+    const resumeProfile = { name: "候选人", skills: ["TypeScript"] };
+    mocks.select.mockReturnValue({
+      from: () => ({
+        innerJoin: () => ({
+          where: () => ({
+            limit: () => [{ contentHash: "hash", resumeProfile, resumeText: "shared text" }],
+          }),
+        }),
+        where: () => ({ limit: () => [{ jobDescriptionId: "jd-two" }] }),
+      }),
+    });
+    mocks.transaction.mockImplementation((run) =>
+      run({
+        insert: () => ({ values: mocks.values }),
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({
+              where: () => ({
+                limit: () => [{ contentHash: "hash", resumeProfile, resumeText: "shared text" }],
+              }),
+            }),
+            where: () => ({ limit: () => [multiBatch] }),
+          }),
+        }),
+        update: () => ({ set: mocks.set }),
+      }),
+    );
+    mocks.enqueueIndex.mockResolvedValue(true);
+    mocks.enqueueReview.mockResolvedValue(true);
+    mocks.markPoolParsed.mockReturnValue(Promise.resolve());
+    await processBatchItem("item");
+    expect(mocks.fileLock).toHaveBeenCalledWith("batch", "file", expect.any(Function));
+    expect(mocks.parse).not.toHaveBeenCalled();
+    expect(mocks.getObjectStream).not.toHaveBeenCalled();
+    expect(mocks.loadJob).toHaveBeenCalledWith("org", "jd-two", { actorUserId: "user" });
+    expect(mocks.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobDescriptionId: "jd-two",
+        resumeProfile,
+        resumeText: "shared text",
+      }),
+    );
+    expect(mocks.enqueueReview).toHaveBeenCalledWith(
+      expect.objectContaining({ jobDescriptionId: "jd-two", resumeRecordId: "record" }),
+    );
   });
   it("reuses one parse result for the candidate and its private copy across a retry", async () => {
     const resumeProfile = { name: "候选人", skills: ["TypeScript"], targetRoles: ["工程师"] };

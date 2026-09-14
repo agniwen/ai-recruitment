@@ -81,6 +81,7 @@ export interface CreateBatchInput {
   jdMode: "bind" | "auto" | "none";
   jobDescriptionId: string | null;
   dedupPolicy: "skip" | "create";
+  destinations?: { hiringUnitId: string; jobDescriptionId: string | null }[];
   referralTargetRole?: string | null;
   recruitmentSource?: ResumeRecruitmentSource | null;
   recruitmentSourceDetail?: string | null;
@@ -118,7 +119,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
       dedupPolicy: input.dedupPolicy,
       id: batchId,
       jdMode: input.jdMode,
-      jobDescriptionId: input.jobDescriptionId,
+      jobDescriptionId: input.destinations ? null : input.jobDescriptionId,
       organizationId: input.organizationId,
       recruitmentSource: input.recruitmentSource ?? null,
       recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
@@ -126,32 +127,41 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
       sourceChannel: input.sourceChannel === "historical_import" ? "historical_import" : null,
       status: "pending",
       target,
-      totalCount: input.files.length,
+      totalCount: input.files.length * (input.destinations?.length ?? 1),
       updatedAt: now,
     });
-    const rows = input.files.map((f, i) => ({
-      file: f,
-      itemId: crypto.randomUUID(),
-      orderIndex: i,
-      // 候选人上传同时保留上传人的私有池副本；固定 ID 供解析重试复用。
-      poolItemId: crypto.randomUUID(),
-      recordId: target === "resume_library" ? crypto.randomUUID() : null,
-    }));
+    const destinations = input.destinations ?? [
+      {
+        hiringUnitId: null,
+        jobDescriptionId: input.jdMode === "bind" ? input.jobDescriptionId : null,
+      },
+    ];
+    const rows = input.files.flatMap((file, fileIndex) =>
+      destinations.map((destination, destinationIndex) => ({
+        destination,
+        file,
+        itemId: crypto.randomUUID(),
+        orderIndex: fileIndex * destinations.length + destinationIndex,
+        poolItemId: crypto.randomUUID(),
+        recordId: target === "resume_library" ? crypto.randomUUID() : null,
+      })),
+    );
     const placeholderRows = rows.filter(
       (row): row is typeof row & { recordId: string } => row.recordId !== null,
     );
     if (placeholderRows.length > 0) {
       await tx.insert(studioInterview).values(
-        placeholderRows.map(({ file, recordId }) => ({
+        placeholderRows.map(({ destination, file, recordId }) => ({
           candidateEmail: null,
           candidateName: candidateNameFromFileName(file.originalFileName),
           candidatePhone: null,
           createdAt: now,
           createdBy: input.userId,
           createdByRole: input.userRole ?? null,
+          hiringUnitId: destination.hiringUnitId,
           id: recordId,
           interviewQuestions: [],
-          jobDescriptionId: input.jdMode === "bind" ? input.jobDescriptionId : null,
+          jobDescriptionId: destination.jobDescriptionId,
           notes: null,
           organizationId: input.organizationId,
           pipelineStage: "ai_review" as const,
@@ -175,14 +185,14 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
     );
     if (poolRows.length > 0) {
       await tx.insert(resumePoolItem).values(
-        poolRows.map(({ file, poolItemId }) => ({
+        poolRows.map(({ destination, file, poolItemId }) => ({
           candidateEmail: null,
           candidateName: candidateNameFromFileName(file.originalFileName),
           candidatePhone: null,
           createdAt: now,
           createdBy: input.userId,
           id: poolItemId,
-          jobDescriptionId: input.jdMode === "bind" ? input.jobDescriptionId : null,
+          jobDescriptionId: destination.jobDescriptionId,
           notes: null,
           organizationId: input.organizationId,
           publishedAt: scope === "public" ? now : null,

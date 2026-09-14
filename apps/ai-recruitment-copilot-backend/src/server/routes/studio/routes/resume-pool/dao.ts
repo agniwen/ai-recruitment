@@ -364,7 +364,7 @@ function isPublicPoolItemInOrganization(row: PoolRow, organizationId: string): b
   return row.scope === "public" && row.organizationId === organizationId;
 }
 
-async function loadAccessiblePoolItem(input: {
+export async function loadAccessiblePoolItem(input: {
   organizationId: string;
   poolItemId: string;
   userId: string;

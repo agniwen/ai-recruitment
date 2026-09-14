@@ -33,6 +33,20 @@ vi.mock("@/components/ui/searchable-select", () => ({
   ),
 }));
 
+vi.mock("@/components/ui/searchable-multi-select", () => ({
+  SearchableMultiSelect: ({
+    id,
+    onChange,
+  }: {
+    id?: string;
+    onChange: (value: string[]) => void;
+  }) => (
+    <button data-testid={id} onClick={() => onChange(["hiring-unit-1"])} type="button">
+      选择用人组织
+    </button>
+  ),
+}));
+
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
@@ -42,7 +56,13 @@ vi.mock("@/lib/client/workspace-context", () => ({
 }));
 
 vi.mock("@/lib/client/api", () => ({
-  importResumePoolItem: importResumePoolItemMock,
+  batchImportResumePoolItem: importResumePoolItemMock,
+  fetchResumePoolImportOptions: () =>
+    Promise.resolve({
+      departments: [],
+      hiringUnits: [{ id: "hiring-unit-1", name: "研发一部" }],
+      jobDescriptions: jobDescriptionsMock,
+    }),
   isApiError: () => false,
 }));
 
@@ -109,6 +129,11 @@ describe("ImportResumePoolDialog", () => {
       defaultOptions: { queries: { retry: false } },
     });
 
+    queryClient.setQueryData(["resume-pool", "test-workspace", "import-options"], {
+      departments: [],
+      hiringUnits: [{ id: "hiring-unit-1", name: "研发一部" }],
+      jobDescriptions: jobDescriptionsMock,
+    });
     await act(async () => {
       root.render(
         <QueryClientProvider client={queryClient}>
@@ -126,6 +151,14 @@ describe("ImportResumePoolDialog", () => {
       await Promise.resolve();
     });
 
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(
+        document.querySelector<HTMLTextAreaElement>("#resume-pool-import-recommendation")?.value,
+      ).toContain("应聘岗位：前端工程师");
+    });
     const recommendationInput = document.querySelector<HTMLTextAreaElement>(
       "#resume-pool-import-recommendation",
     );
@@ -142,7 +175,7 @@ describe("ImportResumePoolDialog", () => {
 
   it("confirms and requests a new import for an imported resume", async () => {
     importResumePoolItemMock.mockResolvedValue({
-      resumeRecordId: "resume-record-2",
+      records: [{ jobDescriptionId: null, resumeRecordId: "resume-record-2" }],
       status: "imported",
     });
     listHiringUnitsMock.mockResolvedValue(
@@ -155,6 +188,11 @@ describe("ImportResumePoolDialog", () => {
       defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
     });
 
+    queryClient.setQueryData(["resume-pool", "test-workspace", "import-options"], {
+      departments: [],
+      hiringUnits: [{ id: "hiring-unit-1", name: "研发一部" }],
+      jobDescriptions: jobDescriptionsMock,
+    });
     await act(async () => {
       root.render(
         <QueryClientProvider client={queryClient}>
@@ -182,6 +220,11 @@ describe("ImportResumePoolDialog", () => {
         recommendationInput.dispatchEvent(new Event("input", { bubbles: true }));
       }
       await Promise.resolve();
+    });
+    queryClient.setQueryData(["resume-pool", "test-workspace", "import-options"], {
+      departments: [],
+      hiringUnits: [{ id: "hiring-unit-1", name: "研发一部" }],
+      jobDescriptions: jobDescriptionsMock,
     });
     await act(async () => {
       root.render(
@@ -233,11 +276,17 @@ describe("ImportResumePoolDialog", () => {
 
     expect(importResumePoolItemMock).toHaveBeenCalledWith("test-workspace", "pool-item-1", {
       dedupPolicy: "force",
-      hiringUnitId: "hiring-unit-1",
-      jobDescriptionId: null,
+      destinations: [
+        {
+          departmentId: null,
+          hiringUnitId: "hiring-unit-1",
+          jobDescriptionId: null,
+          serviceUnit: null,
+        },
+      ],
       jobDescriptionMode: "none",
       recommendationText: "自定义推荐理由",
-      reimport: true,
+      requestId: expect.any(String),
     });
 
     act(() => {

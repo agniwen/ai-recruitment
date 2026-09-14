@@ -1,5 +1,12 @@
 "use client";
 
+import { ResumePoolImportDestinations } from "./resume-pool-import-destinations";
+import {
+  EMPTY_IMPORT_OPTIONS,
+  importJobNameOptions,
+  resolveImportDestination,
+} from "./resume-pool-import-selection";
+
 import { IconDatabase, IconExternalLink, IconLoader2 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
@@ -7,11 +14,12 @@ import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
 import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import type {
+  ResumePoolImportDestination,
   ResumePoolImportDuplicateResult,
   ResumePoolListRecord,
 } from "@arc/shared/resume-pool";
 
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getMemberInitials } from "@/components/data-grid/cells/member-cell";
 import { TimeDisplay } from "@/components/features/display/time-display";
@@ -34,17 +42,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { importResumePoolItem, isApiError } from "@/lib/client/api";
-import { useWorkspaceSlug } from "@/lib/client/workspace-context";
-import { rpc } from "@/lib/client/rpc";
-
 import {
-  buildJdOptions,
-  getCandidateTitle,
-  normalizeScope,
-  toResumeDedupMatches,
-  useJobDescriptions,
-} from "./resume-pool-page-model";
+  batchImportResumePoolItem,
+  fetchResumePoolImportOptions,
+  isApiError,
+} from "@/lib/client/api";
+import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+
+import { getCandidateTitle, normalizeScope, toResumeDedupMatches } from "./resume-pool-page-model";
 import { buildResumePoolRecommendationTemplate } from "./resume-pool-recommendation-template";
 
 const StudioPersonDetailDialog = lazy(async () => {
@@ -246,32 +251,19 @@ export function ImportResumePoolDialog({
   onImported: () => void;
 }) {
   const slug = useWorkspaceSlug();
-  const { data: jobDescriptions = [] } = useJobDescriptions(slug);
-  const { data: hiringUnits = [] } = useQuery({
+  const importOptionsQuery = useQuery({
     enabled: item !== null,
-    queryFn: async () => {
-      const response = await rpc.api.w[":slug"].studio["hiring-units"].selectable.$get({
-        param: { slug },
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { records: { id: string; name: string }[] }
-        | { error?: string; message?: string }
-        | null;
-      if (!response.ok || !payload || !("records" in payload)) {
-        throw new Error("加载可选用人组织失败");
-      }
-      return payload.records;
-    },
-    queryKey: ["hiring-units", slug, "selectable"],
+    queryFn: () => fetchResumePoolImportOptions(slug),
+    queryKey: ["resume-pool", slug, "import-options"],
     refetchOnWindowFocus: false,
   });
-  const hiringUnitOptions = useMemo(
-    () => hiringUnits.map((unit) => ({ label: unit.name, value: unit.id })),
-    [hiringUnits],
-  );
+  const options = importOptionsQuery.data ?? EMPTY_IMPORT_OPTIONS;
+  const { jobDescriptions } = options;
   const [mode, setMode] = useState<"none" | "bind">("none");
-  const [hiringUnitId, setHiringUnitId] = useState("");
-  const [jobDescriptionId, setJobDescriptionId] = useState("");
+  const [jobName, setJobName] = useState("");
+  const [destinations, setDestinations] = useState<ResumePoolImportDestination[]>([]);
+  const requestIdRef = useRef(crypto.randomUUID());
+  const submissionFingerprintRef = useRef("");
   const [recommendationText, setRecommendationText] = useState("");
   const [duplicates, setDuplicates] = useState<ResumePoolImportDuplicateResult | null>(null);
   const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
@@ -282,8 +274,9 @@ export function ImportResumePoolDialog({
   useEffect(() => {
     if (!item) {
       setMode("none");
-      setHiringUnitId("");
-      setJobDescriptionId("");
+      setDestinations([]);
+      setJobName("");
+      requestIdRef.current = crypto.randomUUID();
       setRecommendationText("");
       setDuplicates(null);
       setDetailRecordId(null);
@@ -291,11 +284,18 @@ export function ImportResumePoolDialog({
       recommendationEditedRef.current = false;
       return;
     }
+    if (!importOptionsQuery.data) {
+      return;
+    }
     const sourceJobDescription = jobDescriptions.find((jd) => jd.id === item.jobDescriptionId);
     const canUseSourceJd =
       item.scope === "private" && item.jobDescriptionId && sourceJobDescription;
-    setMode(canUseSourceJd ? "bind" : "none");
-    setJobDescriptionId(canUseSourceJd ? (item.jobDescriptionId ?? "") : "");
+    if (recommendationItemIdRef.current !== item.id) {
+      setMode(canUseSourceJd ? "bind" : "none");
+      setJobName(canUseSourceJd ? sourceJobDescription.name.trim() : "");
+      setDestinations([]);
+      requestIdRef.current = crypto.randomUUID();
+    }
     if (recommendationItemIdRef.current !== item.id) {
       setRecommendationText(buildInitialRecommendationText(item, sourceJobDescription));
       recommendationItemIdRef.current = item.id;
@@ -304,23 +304,29 @@ export function ImportResumePoolDialog({
       setRecommendationText(buildInitialRecommendationText(item, sourceJobDescription));
     }
     setDuplicates(null);
-  }, [item, jobDescriptions]);
+  }, [item, jobDescriptions, importOptionsQuery.data]);
 
   const mutation = useMutation({
     mutationFn: async (dedupPolicy: "check" | "force") => {
       if (!item) {
         throw new Error("请选择要入库的简历");
       }
-      if (!hiringUnitId) {
+      if (destinations.length === 0) {
         throw new Error("请选择入库组织");
       }
-      return await importResumePoolItem(slug, item.id, {
+      const fingerprint = JSON.stringify({ destinations, mode, recommendationText });
+      if (submissionFingerprintRef.current !== fingerprint) {
+        requestIdRef.current = crypto.randomUUID();
+        submissionFingerprintRef.current = fingerprint;
+      }
+      return await batchImportResumePoolItem(slug, item.id, {
         dedupPolicy,
-        hiringUnitId,
-        jobDescriptionId: mode === "bind" ? jobDescriptionId : null,
+        destinations: destinations.map((row) =>
+          resolveImportDestination(options, mode === "bind" ? jobName : "", row),
+        ),
         jobDescriptionMode: mode,
         recommendationText,
-        reimport: isReimport,
+        requestId: requestIdRef.current,
       });
     },
     onError: (error) => {
@@ -338,14 +344,19 @@ export function ImportResumePoolDialog({
         setDuplicates(result);
         return;
       }
-      toast.success(isReimport ? "已再次入库到候选人管理" : "已入库到候选人管理");
+      toast.success(`已入库到候选人管理，共 ${result.records.length} 条记录`);
       onImported();
       onOpenChange(false);
     },
   });
 
-  const bindInvalid = mode === "bind" && !jobDescriptionId;
-  const hiringUnitInvalid = !hiringUnitId;
+  const bindInvalid =
+    mode === "bind" &&
+    (!jobName ||
+      destinations.some(
+        (row) => !resolveImportDestination(options, jobName, row).jobDescriptionId,
+      ));
+  const hiringUnitInvalid = destinations.length === 0;
   const { isPending } = mutation;
   const recruitmentSource = describePoolItemRecruitmentSource(item);
   let dialogDescription: string | undefined;
@@ -363,7 +374,13 @@ export function ImportResumePoolDialog({
               取消
             </Button>
             <Button
-              disabled={isPending || bindInvalid || hiringUnitInvalid}
+              disabled={
+                isPending ||
+                bindInvalid ||
+                hiringUnitInvalid ||
+                importOptionsQuery.isPending ||
+                importOptionsQuery.isError
+              }
               onClick={() => mutation.mutate(isReimport ? "force" : "check")}
             >
               {isPending ? (
@@ -372,6 +389,7 @@ export function ImportResumePoolDialog({
                 <IconDatabase className="size-4" />
               )}
               {isReimport ? "确认再次入库" : "确认入库"}
+              {destinations.length ? `（${destinations.length} 个组织）` : ""}
             </Button>
           </>
         }
@@ -394,7 +412,13 @@ export function ImportResumePoolDialog({
               <RadioGroup
                 className="grid grid-cols-2 gap-2"
                 disabled={isPending}
-                onValueChange={(value) => setMode(value === "bind" ? "bind" : "none")}
+                onValueChange={(value) => {
+                  setMode(value === "bind" ? "bind" : "none");
+                  setJobName("");
+                  setDestinations((rows) =>
+                    rows.map((row) => ({ ...row, jobDescriptionId: null })),
+                  );
+                }}
                 value={mode}
               >
                 <FieldLabel className="w-full rounded-md border p-3">
@@ -416,30 +440,40 @@ export function ImportResumePoolDialog({
                   disabled={isPending}
                   id="resume-pool-import-jd"
                   invalid={bindInvalid}
-                  onChange={(next) => setJobDescriptionId(next ?? "")}
-                  options={buildJdOptions(jobDescriptions)}
+                  onChange={(next) => {
+                    setJobName(next ?? "");
+                    setDestinations((rows) =>
+                      rows.map((row) =>
+                        resolveImportDestination(options, next ?? "", {
+                          ...row,
+                          jobDescriptionId: null,
+                        }),
+                      ),
+                    );
+                  }}
+                  options={importJobNameOptions(options, destinations)}
                   placeholder="请选择在招岗位"
                   searchPlaceholder="搜索岗位..."
-                  value={jobDescriptionId || null}
+                  value={jobName || null}
                 />
               </FieldContent>
             </Field>
           ) : null}
-          <Field data-invalid={hiringUnitInvalid ? true : undefined}>
-            <FieldLabel htmlFor="resume-pool-import-hiring-unit">入库组织</FieldLabel>
-            <FieldContent>
-              <SearchableSelect
-                disabled={isPending}
-                id="resume-pool-import-hiring-unit"
-                invalid={hiringUnitInvalid}
-                onChange={(next) => setHiringUnitId(next ?? "")}
-                options={hiringUnitOptions}
-                placeholder="请选择入库组织"
-                searchPlaceholder="搜索用人组织..."
-                value={hiringUnitId || null}
-              />
-            </FieldContent>
-          </Field>
+          {importOptionsQuery.isError ? (
+            <div role="alert" className="text-sm text-destructive">
+              入库选项加载失败。
+              <Button variant="link" onClick={() => void importOptionsQuery.refetch()}>
+                重试
+              </Button>
+            </div>
+          ) : null}
+          <ResumePoolImportDestinations
+            options={options}
+            jobName={mode === "bind" ? jobName : ""}
+            destinations={destinations}
+            onChange={setDestinations}
+            disabled={isPending || importOptionsQuery.isPending}
+          />
           <Field>
             <FieldLabel>简历来源</FieldLabel>
             <FieldContent>
@@ -476,7 +510,7 @@ export function ImportResumePoolDialog({
             <AlertDialogTitle>候选人管理中可能已有相同候选人</AlertDialogTitle>
             <AlertDialogDescription>
               系统会基于工作经历、项目经历、技能和岗位画像的语义相似度判断风险。
-              请根据判断依据确认是否为同一候选人。确认后会继续创建一条新的候选人管理记录。
+              请根据判断依据确认是否为同一候选人。确认后将按所选组织及对应岗位分别创建候选人管理记录。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ResumeDedupMatchList matches={toResumeDedupMatches(duplicates)} />

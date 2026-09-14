@@ -1,3 +1,4 @@
+import { withFileParseLock } from "./with-file-parse-lock";
 /* oxlint-disable max-lines -- Parser stages and their outcome transaction remain one workflow. */
 import { createHash } from "node:crypto";
 import { isResumeStructuredSourceFileNameCompatible } from "@arc/db-schema/resume-parser-schema";
@@ -366,14 +367,43 @@ async function upsertParsedResumeRecord(
   return recordId;
 }
 
-// S3 から PDF を取得してパースし、閲覧可能な基本レコードまで永続化する。
-// Fetch and parse the PDF, then persist the base record needed for immediate viewing.
+async function loadParsedSibling(
+  item: NonNullable<ItemRow>,
+  reuseSibling: boolean,
+  bypassCache?: boolean,
+) {
+  const [parsedSibling] =
+    reuseSibling && !bypassCache
+      ? await db
+          .select({
+            contentHash: studioInterview.resumeContentHash,
+            resumeProfile: studioInterview.resumeProfile,
+            resumeText: studioInterview.resumeText,
+          })
+          .from(resumeUploadBatchItem)
+          .innerJoin(studioInterview, eq(studioInterview.id, resumeUploadBatchItem.resumeRecordId))
+          .where(
+            and(
+              eq(resumeUploadBatchItem.batchId, item.batchId),
+              eq(resumeUploadBatchItem.storageKey, item.storageKey),
+              eq(studioInterview.organizationId, item.organizationId),
+              eq(studioInterview.resumeParseStatus, "ready"),
+            ),
+          )
+          .limit(1)
+      : [];
+  return parsedSibling?.resumeProfile
+    ? { ...parsedSibling, resumeProfile: parsedSibling.resumeProfile }
+    : null;
+}
+
 async function fetchAndParse(
   item: NonNullable<ItemRow>,
   batchRow: BatchRow,
   organizationId: string,
   userId: string,
   options: ProcessItemOptions = {},
+  assertParseLockOwned?: () => void,
 ): Promise<{
   autoMatchJobDescription: boolean;
   jobDescriptionId: string | null;
@@ -393,19 +423,36 @@ async function fetchAndParse(
     batchRow.sourceChannel === "historical_import"
       ? { ...options, maxFileSizeBytes: null }
       : options;
-  const { contentHash, resumeProfile, resumeText } = await resolveResumeProfile(item, parseOptions);
+  const { contentHash, resumeProfile, resumeText } =
+    (await loadParsedSibling(item, Boolean(assertParseLockOwned), options.bypassCache)) ??
+    (await resolveResumeProfile(item, parseOptions));
   const resolvedItem = item.contentHash ? item : { ...item, contentHash };
   await assertBatchItemNotCancelled(batchRow.id, item.id);
 
   const autoMatchJobDescription = batchRow.jdMode === "auto";
   let jobDescriptionId: string | null = null;
-  if (batchRow.jdMode === "bind" && batchRow.jobDescriptionId) {
-    const boundJobDescription = await loadJobDescriptionById(
-      organizationId,
-      batchRow.jobDescriptionId,
-      { actorUserId: userId },
-    );
-    jobDescriptionId = boundJobDescription ? batchRow.jobDescriptionId : null;
+  if (batchRow.jdMode === "bind") {
+    let boundId = batchRow.jobDescriptionId;
+    if (!boundId && item.resumeRecordId) {
+      const [record] = await db
+        .select({ jobDescriptionId: studioInterview.jobDescriptionId })
+        .from(studioInterview)
+        .where(
+          and(
+            eq(studioInterview.id, item.resumeRecordId),
+            eq(studioInterview.organizationId, organizationId),
+          ),
+        )
+        .limit(1);
+      boundId = record?.jobDescriptionId ?? null;
+    }
+    const boundJobDescription = boundId
+      ? await loadJobDescriptionById(organizationId, boundId, { actorUserId: userId })
+      : null;
+    if (!boundJobDescription) {
+      throw new Error("绑定的岗位不存在或无权访问，请重新选择岗位。");
+    }
+    jobDescriptionId = boundId;
   }
 
   if (batchRow.target === "resume_pool") {
@@ -453,7 +500,7 @@ async function fetchAndParse(
   }
 
   // 两边复用同一解析结果，并在同一事务中提交基础资料、技能和解析事件。
-  const succeededRecordId = await db.transaction(async (tx) => {
+  const persist = async (tx: Tx) => {
     const recordId = await upsertParsedResumeRecord(
       {
         item: resolvedItem,
@@ -483,7 +530,9 @@ async function fetchAndParse(
       );
     }
     return recordId;
-  });
+  };
+  assertParseLockOwned?.();
+  const succeededRecordId = await db.transaction(persist);
   return {
     autoMatchJobDescription,
     jobDescriptionId,
@@ -710,13 +759,21 @@ async function processClaimedItem(
   };
 
   try {
-    const result = await fetchAndParse(
-      item,
-      batchRow,
-      batchRow.organizationId,
-      batchRow.createdBy,
-      options,
-    );
+    const parse = (assertOwned?: () => void) =>
+      fetchAndParse(
+        item,
+        batchRow,
+        batchRow.organizationId,
+        batchRow.createdBy,
+        options,
+        assertOwned,
+      );
+    const result =
+      batchRow.target === "resume_library" &&
+      batchRow.jdMode === "bind" &&
+      !batchRow.jobDescriptionId
+        ? await withFileParseLock(batchRow.id, item.storageKey, parse)
+        : await parse();
     await assertBatchItemNotCancelled(batchRow.id, item.id);
     outcome = { ...outcome, ...result };
   } catch (error) {

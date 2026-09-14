@@ -2,18 +2,28 @@
 
 import { IconFileText as FileTextIcon, IconX as XIcon } from "@tabler/icons-react";
 import { useState } from "react";
-import { JobDescriptionSelectField } from "@/components/features/studio/interviews/job-description-select-field";
+import { useQuery } from "@tanstack/react-query";
+import type { ResumePoolImportDestination } from "@arc/shared/resume-pool";
+import { ResumePoolImportDestinations } from "../resume-pool/resume-pool-import-destinations";
+import {
+  EMPTY_IMPORT_OPTIONS,
+  importJobNameOptions,
+  resolveImportDestination,
+} from "../resume-pool/resume-pool-import-selection";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { getCandidateImportOptions } from "@/lib/client/api/endpoints/bulk-resume-upload";
+import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { ResumeUploadBatchDedupPolicy, ResumeUploadBatchJdMode } from "@arc/db-schema/schema";
 import { resumeRecruitmentSourceNeedsDetail } from "@arc/shared/bulk-resume-upload";
 import type { ResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import { ResumeRecruitmentSourceFields } from "./resume-recruitment-source-fields";
 
 export interface BulkUploadConfirmConfig {
+  destinations: { hiringUnitId: string; jobDescriptionId: string }[];
   jdMode: ResumeUploadBatchJdMode;
   jobDescriptionId: string | null;
   dedupPolicy: ResumeUploadBatchDedupPolicy;
@@ -48,8 +58,18 @@ export function BulkUploadConfirmDialog({
   onRemoveFile,
   open,
 }: Props) {
-  const [jdMode, setJdMode] = useState<ResumeUploadBatchJdMode>("auto");
-  const [jobDescriptionId, setJobDescriptionId] = useState("");
+  const slug = useWorkspaceSlug();
+  const optionsQuery = useQuery({
+    enabled: open,
+    queryFn: () => getCandidateImportOptions(slug),
+    queryKey: ["candidate-import-options", slug],
+  });
+  const options = optionsQuery.data ?? EMPTY_IMPORT_OPTIONS;
+  const [jobName, setJobName] = useState("");
+  const [destinations, setDestinations] = useState<ResumePoolImportDestination[]>([]);
+  const resolvedDestinations = destinations.map((row) =>
+    resolveImportDestination(options, jobName, row),
+  );
   const [recruitmentSource, setRecruitmentSource] = useState<ResumeRecruitmentSource | "">("");
   const [recruitmentSourceDetail, setRecruitmentSourceDetail] = useState("");
 
@@ -58,7 +78,11 @@ export function BulkUploadConfirmDialog({
     files.length > 0 &&
     recruitmentSource.length > 0 &&
     (!sourceNeedsDetail || recruitmentSourceDetail.trim().length > 0) &&
-    (jdMode !== "bind" || jobDescriptionId.length > 0);
+    !optionsQuery.isPending &&
+    !optionsQuery.isError &&
+    jobName.length > 0 &&
+    resolvedDestinations.length > 0 &&
+    resolvedDestinations.every((row) => row.jobDescriptionId);
 
   function handleStart() {
     if (!canStart) {
@@ -66,8 +90,13 @@ export function BulkUploadConfirmDialog({
     }
     onConfirmed(files, {
       dedupPolicy: "skip",
-      jdMode,
-      jobDescriptionId: jdMode === "bind" ? jobDescriptionId : null,
+      destinations: resolvedDestinations.flatMap((row) =>
+        row.jobDescriptionId
+          ? [{ hiringUnitId: row.hiringUnitId, jobDescriptionId: row.jobDescriptionId }]
+          : [],
+      ),
+      jdMode: "bind",
+      jobDescriptionId: null,
       recruitmentSource: recruitmentSource as ResumeRecruitmentSource,
       recruitmentSourceDetail: sourceNeedsDetail ? recruitmentSourceDetail.trim() : null,
     });
@@ -75,14 +104,14 @@ export function BulkUploadConfirmDialog({
 
   return (
     <Modal
-      description={`将一次性上传 ${files.length} 份 PDF，开始后逐份解析并入库；可随时关闭页面，下次回来继续。`}
+      description={`上传 ${files.length} 份简历，每份按所选组织对应的岗位分别创建记录。部门和服务单位由岗位自动带出。`}
       footer={
         <div className="flex justify-end gap-2">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
             取消
           </Button>
           <Button disabled={!canStart} onClick={handleStart} type="button">
-            开始上传 ({files.length})
+            开始上传（{files.length} 份 / {files.length * destinations.length} 条记录）
           </Button>
         </div>
       }
@@ -135,34 +164,41 @@ export function BulkUploadConfirmDialog({
           source={recruitmentSource}
         />
 
-        {/* JD 关联模式 / Job description binding mode */}
-        <div>
-          <Label className="mb-2 block text-sm">岗位关联</Label>
-          <RadioGroup onValueChange={(v) => setJdMode(v as ResumeUploadBatchJdMode)} value={jdMode}>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem id="jdMode-bind" value="bind" />
-              <Label className="font-normal" htmlFor="jdMode-bind">
-                绑定到某个岗位（所有简历都关联此岗位）
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem id="jdMode-auto" value="auto" />
-              <Label className="font-normal" htmlFor="jdMode-auto">
-                自动匹配岗位（每份简历由 AI 选最合适的在招岗位，耗时更长）
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem id="jdMode-none" value="none" />
-              <Label className="font-normal" htmlFor="jdMode-none">
-                不绑定岗位
-              </Label>
-            </div>
-          </RadioGroup>
-          {jdMode === "bind" ? (
-            <div className="mt-3">
-              <JobDescriptionSelectField onChange={setJobDescriptionId} value={jobDescriptionId} />
+        <div className="space-y-3">
+          <Label htmlFor="candidate-import-job">在招岗位（必选）</Label>
+          <SearchableSelect
+            id="candidate-import-job"
+            value={jobName || null}
+            options={importJobNameOptions(options, resolvedDestinations)}
+            placeholder="请选择在招岗位"
+            disabled={optionsQuery.isPending}
+            onChange={(value) => {
+              setJobName(value ?? "");
+              setDestinations((rows) =>
+                rows.map((row) =>
+                  resolveImportDestination(options, value ?? "", {
+                    ...row,
+                    jobDescriptionId: null,
+                  }),
+                ),
+              );
+            }}
+          />
+          {optionsQuery.isError ? (
+            <div role="alert">
+              岗位和组织加载失败。
+              <Button variant="link" onClick={() => void optionsQuery.refetch()}>
+                重试
+              </Button>
             </div>
           ) : null}
+          <ResumePoolImportDestinations
+            options={options}
+            jobName={jobName}
+            destinations={resolvedDestinations}
+            onChange={setDestinations}
+            disabled={optionsQuery.isPending || optionsQuery.isError}
+          />
         </div>
 
         {/* 查重说明 / Deduplication note */}

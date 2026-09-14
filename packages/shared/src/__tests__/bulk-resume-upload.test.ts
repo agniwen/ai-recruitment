@@ -14,8 +14,8 @@ const baseInput = {
       storageKey: "resumes/resume.pdf",
     },
   ],
-  jdMode: "none" as const,
-  jobDescriptionId: null,
+  jdMode: "bind" as const,
+  jobDescriptionId: "jd",
   recruitmentSource: "boss" as const,
   recruitmentSourceDetail: null,
   target: "resume_library" as const,
@@ -53,5 +53,49 @@ describe("describeResumeRecruitmentSource", () => {
   it("formats referral and custom source details for recommendation templates", () => {
     expect(describeResumeRecruitmentSource("referral", "李推荐")).toBe("内推（李推荐）");
     expect(describeResumeRecruitmentSource("other", "线下活动")).toBe("线下活动");
+  });
+});
+
+describe("candidate upload destinations", () => {
+  it.each(["auto", "none"])("rejects candidate mode %s", (jdMode) => {
+    expect(
+      createBulkResumeBatchSchema.safeParse({ ...baseInput, jdMode, jobDescriptionId: null })
+        .success,
+    ).toBe(false);
+  });
+  it("requires a concrete JD and rejects repeated organizations", () => {
+    expect(
+      createBulkResumeBatchSchema.safeParse({ ...baseInput, jobDescriptionId: null }).success,
+    ).toBe(false);
+    expect(
+      createBulkResumeBatchSchema.safeParse({
+        ...baseInput,
+        destinations: [
+          { hiringUnitId: "one", jobDescriptionId: "a" },
+          { hiringUnitId: "one", jobDescriptionId: "b" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+  it("accepts multiple concrete destinations and preserves unbound pool uploads", () => {
+    expect(
+      createBulkResumeBatchSchema.safeParse({
+        ...baseInput,
+        destinations: [
+          { hiringUnitId: "one", jobDescriptionId: "a" },
+          { hiringUnitId: "two", jobDescriptionId: "b" },
+        ],
+        jobDescriptionId: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      createBulkResumeBatchSchema.safeParse({
+        ...baseInput,
+        jdMode: "none",
+        jobDescriptionId: null,
+        resumePoolScope: "private",
+        target: "resume_pool",
+      }).success,
+    ).toBe(true);
   });
 });

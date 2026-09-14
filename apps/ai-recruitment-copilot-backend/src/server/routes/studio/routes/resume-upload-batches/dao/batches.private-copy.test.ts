@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resumePoolItem, resumeUploadBatchItem, studioInterview } from "@arc/db-schema/schema";
+import {
+  resumePoolItem,
+  resumeUploadBatch,
+  resumeUploadBatchItem,
+  studioInterview,
+} from "@arc/db-schema/schema";
 import { insertBatchWithItems } from "./batches";
 
 const mocks = vi.hoisted(() => ({ rows: new Map<unknown, Record<string, unknown>[]>() }));
@@ -67,4 +72,35 @@ describe("candidate upload private pool copy", () => {
     expect(mocks.rows.get(resumePoolItem)).toHaveLength(2);
     expect(mocks.rows.get(resumePoolItem)?.[0].scope).toBe("public");
   });
+});
+
+it("creates one item per file and concrete JD with the correct hiring organization", async () => {
+  await insertBatchWithItems({
+    ...input,
+    destinations: [
+      { hiringUnitId: "one", jobDescriptionId: "jd-one" },
+      { hiringUnitId: "two", jobDescriptionId: "jd-two" },
+    ],
+    jdMode: "bind",
+  });
+  expect(mocks.rows.get(resumeUploadBatch)?.[0]).toMatchObject({
+    jdMode: "bind",
+    jobDescriptionId: null,
+    totalCount: 4,
+  });
+  const records = mocks.rows.get(studioInterview) ?? [];
+  expect(records).toHaveLength(4);
+  expect(records.map((row) => [row.hiringUnitId, row.jobDescriptionId])).toEqual([
+    ["one", "jd-one"],
+    ["two", "jd-two"],
+    ["one", "jd-one"],
+    ["two", "jd-two"],
+  ]);
+  expect(mocks.rows.get(resumeUploadBatchItem)?.map((row) => row.orderIndex)).toEqual([0, 1, 2, 3]);
+  expect(mocks.rows.get(resumePoolItem)?.map((row) => row.jobDescriptionId)).toEqual([
+    "jd-one",
+    "jd-two",
+    "jd-one",
+    "jd-two",
+  ]);
 });

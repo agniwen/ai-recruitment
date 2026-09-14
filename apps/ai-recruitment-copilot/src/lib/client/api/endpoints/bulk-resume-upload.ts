@@ -1,3 +1,4 @@
+import type { ResumePoolImportOptions } from "@arc/shared/resume-pool";
 /**
  * 批量上传简历 API。映射到 `/api/w/:slug/studio/resume-upload-batches/*`。
  * 单文件上传走 apiFetch + FormData（hc 不支持 multipart）；其余 JSON 端点走 rpc + rpcFetch。
@@ -187,5 +188,12 @@ export function deleteBulkResumeBatch(
       param: { id: batchId, slug },
     }),
     "删除批次失败",
+  );
+}
+
+export function getCandidateImportOptions(slug: string): Promise<ResumePoolImportOptions> {
+  return rpcFetch<ResumePoolImportOptions>(
+    rpc.api.w[":slug"].studio["resume-upload-batches"]["import-options"].$get({ param: { slug } }),
+    "加载岗位和组织失败",
   );
 }

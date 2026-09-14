@@ -1,4 +1,7 @@
 import type {
+  ResumePoolImportOptions,
+  ResumePoolBatchImportInput,
+  ResumePoolBatchImportResult,
   PaginatedResumePoolResult,
   ResumePoolDetail,
   ResumePoolImportInput,
@@ -148,5 +151,26 @@ export function retryFailedResumePoolItems(slug: string, scope: ResumePoolScope)
       param: { slug },
     }),
     "批量重试失败",
+  );
+}
+
+export function fetchResumePoolImportOptions(slug: string) {
+  return rpcFetch<ResumePoolImportOptions>(
+    rpc.api.w[":slug"].studio["resume-pool"]["import-options"].$get({ param: { slug } }),
+    "加载入库选项失败",
+  );
+}
+
+export function batchImportResumePoolItem(
+  slug: string,
+  id: string,
+  input: ResumePoolBatchImportInput,
+) {
+  return rpcFetch<ResumePoolBatchImportResult>(
+    rpc.api.w[":slug"].studio["resume-pool"][":id"].import.batch.$post({
+      json: input,
+      param: { id, slug },
+    }),
+    "批量入库失败",
   );
 }

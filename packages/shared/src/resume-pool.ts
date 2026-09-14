@@ -1,3 +1,4 @@
+import type { JobDescriptionListRecord } from "./job-descriptions";
 import { z } from "zod";
 import type { ResumeParseStatus } from "@arc/db-schema/studio-interviews";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
@@ -161,3 +162,57 @@ export const resumePoolScopeMeta: Record<ResumePoolScope, { label: string }> = {
   private: { label: "私有简历池" },
   public: { label: "公共简历池" },
 };
+
+export const resumePoolImportDestinationSchema = z.object({
+  departmentId: z.string().trim().min(1).nullable().default(null),
+  hiringUnitId: z.string().trim().min(1),
+  jobDescriptionId: z.string().trim().min(1).nullable().default(null),
+  serviceUnit: z.string().trim().max(200).nullable().default(null),
+});
+
+export const resumePoolBatchImportSchema = z
+  .object({
+    dedupPolicy: z.enum(["check", "force"]).default("check"),
+    destinations: z
+      .array(resumePoolImportDestinationSchema)
+      .min(1, "请选择入库组织")
+      .max(50)
+      .refine(
+        (rows) => new Set(rows.map((row) => row.hiringUnitId)).size === rows.length,
+        "入库组织不能重复",
+      ),
+    jobDescriptionMode: z.enum(["none", "bind"]),
+    recommendationText: z.string().trim().max(2000).default(""),
+    requestId: z.uuid(),
+  })
+  .superRefine((value, ctx) => {
+    for (const [index, destination] of value.destinations.entries()) {
+      if (value.jobDescriptionMode === "bind" && !destination.jobDescriptionId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "请选择各组织对应的岗位去向",
+          path: ["destinations", index, "jobDescriptionId"],
+        });
+      }
+      if (value.jobDescriptionMode === "none" && destination.jobDescriptionId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "不绑定岗位时不能指定岗位",
+          path: ["destinations", index, "jobDescriptionId"],
+        });
+      }
+    }
+  });
+export type ResumePoolImportDestination = z.infer<typeof resumePoolImportDestinationSchema>;
+export type ResumePoolBatchImportInput = z.infer<typeof resumePoolBatchImportSchema>;
+export interface ResumePoolImportOptions {
+  departments: { id: string; name: string; hiringUnitId: string | null }[];
+  hiringUnits: { id: string; name: string }[];
+  jobDescriptions: JobDescriptionListRecord[];
+}
+export type ResumePoolBatchImportResult =
+  | ResumePoolImportDuplicateResult
+  | {
+      status: "imported";
+      records: { resumeRecordId: string; jobDescriptionId: string | null }[];
+    };

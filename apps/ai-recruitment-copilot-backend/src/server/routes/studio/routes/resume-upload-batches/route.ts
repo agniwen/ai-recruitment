@@ -1,3 +1,5 @@
+import { loadResumePoolImportOptions } from "../resume-pool/routes/import/options";
+import { validateBatchDestinations } from "./utils/validate-destinations";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -21,7 +23,6 @@ import {
   reviveRetriableFailures,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/dao/batches";
 import { processNextItem } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor";
-import { loadJobDescriptionById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { uploadTaskInboxRouter } from "./routes/inbox/route";
 import { createBatchInputSchema } from "./schema";
 
@@ -57,6 +58,13 @@ async function removeCancelledQueueJobsBestEffort(
 export const resumeUploadBatchesRouter = factory
   .createApp()
   .route("/inbox", uploadTaskInboxRouter)
+  .get("/import-options", requirePermission("resumeUploadBatch", "create"), async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    return c.json(await loadResumePoolImportOptions(activeOrg.id, user.id), 200);
+  })
   .post("/uploads", requirePermission("resumeUploadBatch", "create"), async (c) => {
     const { activeOrg, user } = c.var;
     if (!activeOrg || !user) {
@@ -127,16 +135,11 @@ export const resumeUploadBatchesRouter = factory
       if (input.target === "resume_pool" && !input.resumePoolScope) {
         return c.json({ error: "简历池上传必须选择归属范围。" }, 400);
       }
-      if (input.jdMode === "bind") {
-        if (!input.jobDescriptionId) {
-          return c.json({ error: "绑定模式必须选择岗位。" }, 400);
-        }
-        const jd = await loadJobDescriptionById(activeOrg.id, input.jobDescriptionId, {
-          actorUserId: user.id,
-        });
-        if (!jd) {
-          return c.json({ error: "选择的岗位不存在。" }, 400);
-        }
+      let destinations;
+      try {
+        destinations = await validateBatchDestinations(input, activeOrg.id, user.id);
+      } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : "岗位去向无效。" }, 400);
       }
 
       // 校验每个 storageKey 都在 chat_attachment 表里（由 /uploads 写入）。
@@ -160,6 +163,7 @@ export const resumeUploadBatchesRouter = factory
 
       const batchId = await insertBatchWithItems({
         dedupPolicy: input.dedupPolicy,
+        destinations,
         files: input.files,
         jdMode: input.jdMode,
         jobDescriptionId: input.jobDescriptionId ?? null,
