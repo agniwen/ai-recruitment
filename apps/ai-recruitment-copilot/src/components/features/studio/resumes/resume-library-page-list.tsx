@@ -32,8 +32,6 @@ interface ResumeLibraryCardListProps {
   canRetryResumeParse: boolean;
   canUpdateResumeLibrary: boolean;
   canUploadResumeLibrary: boolean;
-  currentMemberRole: string;
-  currentUserId: string | null;
   empty: ReactNode;
   error: unknown;
   fetchNextPage: () => Promise<unknown>;
@@ -75,8 +73,6 @@ export function ResumeLibraryCardList({
   canRetryResumeParse,
   canUpdateResumeLibrary,
   canUploadResumeLibrary,
-  currentMemberRole,
-  currentUserId,
   empty,
   error,
   fetchNextPage,
@@ -224,8 +220,6 @@ export function ResumeLibraryCardList({
                   canForceReparse={canForceReparse}
                   canRetryResumeParse={canRetryResumeParse && !retriedRecordIds.has(record.id)}
                   canUpdateResumeLibrary={canUpdateResumeLibrary}
-                  currentMemberRole={currentMemberRole}
-                  currentUserId={currentUserId}
                   onCopyDetailLink={onCopyDetailLink}
                   onDelete={onDelete}
                   onEdit={onEdit}

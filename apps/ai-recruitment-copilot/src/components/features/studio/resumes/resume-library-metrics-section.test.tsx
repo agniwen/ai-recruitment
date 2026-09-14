@@ -61,7 +61,7 @@ describe("ResumeLibraryMetricsSection", () => {
       "utf-8",
     );
 
-    expect(pageSource).toContain("resumeLibraryListQuery.isPending && metricsQuery.isPending");
+    expect(pageSource).toContain("const isInitialPageLoading = resumeLibraryListQuery.isPending;");
     expect(pageSource).toContain("return <RecruitingPageSkeleton />");
     expect(routeSource).not.toContain("pendingComponent:");
     expect(sectionSource).not.toContain("useSuspenseQuery");

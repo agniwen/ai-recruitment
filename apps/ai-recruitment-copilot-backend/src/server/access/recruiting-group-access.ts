@@ -75,8 +75,11 @@ export function statementsFromRecruitingGroupRoles(
 
   const result: WorkspacePermissionStatements = {};
   for (const resource of RECRUITING_GROUP_RESOURCES) {
-    const actions = statement[resource].filter((action) =>
-      recruitingGroupAllows({ action, groupRoles }),
+    // 查看推荐由工作区角色单独授予，不随招聘组的通用操作权限自动开放。
+    const actions = statement[resource].filter(
+      (action) =>
+        !(resource === "jd" && action === "viewRecommendations") &&
+        recruitingGroupAllows({ action, groupRoles }),
     );
     if (actions.length > 0) {
       (result as Record<string, string[]>)[resource] = [...actions];

@@ -1,4 +1,5 @@
 import { hasPermissionInStatements } from "@arc/shared/permission-statements";
+import { RECRUITING_DASHBOARD_ENABLED } from "@arc/shared/permissions";
 import type {
   StudioPagePermissionAction,
   WorkspaceAccessState,
@@ -13,7 +14,10 @@ export async function resolveAuthorizedStudioPageAccessFromRequest(
   if (access.status !== "ready") {
     return access;
   }
-  if (!hasPermissionInStatements(access.permissions, "page", action)) {
+  if (
+    (action === "dashboard" && !RECRUITING_DASHBOARD_ENABLED) ||
+    !hasPermissionInStatements(access.permissions, "page", action)
+  ) {
     return { status: "not_found" };
   }
   return access;

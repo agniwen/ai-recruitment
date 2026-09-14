@@ -509,9 +509,8 @@ export const jobDescriptionsRouter = factory
   })
   .post(
     "/:id/recommendations",
+    requirePermission("jd", "viewRecommendations"),
     requirePermission("jd", "read"),
-    requirePermission("resumeLibrary", "read"),
-    requirePermission("resumePool", "read"),
     zValidator("json", recommendationBodySchema, jsonValidatorError("请求参数无效。")),
     async (c) => {
       const { activeOrg } = c.var;

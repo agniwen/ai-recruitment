@@ -1,4 +1,5 @@
 import {
+  RECRUITING_DASHBOARD_ENABLED,
   STUDIO_PAGE_PERMISSION_ACTIONS,
   STUDIO_PAGE_PERMISSION_LABELS,
 } from "@arc/shared/permissions";
@@ -29,7 +30,9 @@ export const WORKSPACE_PERMISSION_GROUPS = [
     description: "控制左侧导航页面是否可见。",
     resources: [
       {
-        actions: STUDIO_PAGE_PERMISSION_ACTIONS,
+        actions: STUDIO_PAGE_PERMISSION_ACTIONS.filter(
+          (action) => action !== "dashboard" || RECRUITING_DASHBOARD_ENABLED,
+        ),
         key: "page",
         label: "页面浏览",
       },
@@ -102,7 +105,7 @@ export const WORKSPACE_PERMISSION_GROUPS = [
         label: "禁用评估",
       },
       {
-        actions: ["create", "read", "update", "delete"] as const,
+        actions: ["create", "read", "update", "delete", "viewRecommendations"] as const,
         key: "jd",
         label: "在招岗位",
       },
@@ -194,6 +197,7 @@ export const PERMISSION_ACTION_LABELS: Record<string, string> = {
 const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
   "candidateClose:create": "允许",
   "disableResumeEvaluation:create": "启用",
+  "jd:viewRecommendations": "查看推荐",
   "resumePool:create": "上传",
   "resumePool:retryFailed": "一键重试失败",
 };
@@ -221,7 +225,7 @@ const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
   interviews:
     "控制是否能在侧边栏看到并访问「AI面试管理」页面；用于查看候选人的 AI 面试轮次、进度和面试报告。列表、详情、报告、录音、轮次和操作仍受「AI 面试」相关权限控制。面试日程 hovercard 的「查看面试」也依赖该权限。",
   jobDescriptions:
-    "控制是否能在侧边栏看到并访问「在招岗位」页面；用于管理招聘岗位、JD、任职要求及关联信息。岗位列表、详情和增删改仍受「在招岗位」相关权限控制，推荐候选人还需要「候选人管理」和「简历池」查看权限。",
+    "控制是否能在侧边栏看到并访问「在招岗位」页面；用于管理招聘岗位、JD、任职要求及关联信息。岗位列表、详情和增删改仍受「在招岗位」相关权限控制，推荐候选人还需要在招岗位的「查看推荐」权限。",
   mailIngestAccounts:
     "控制是否能在侧边栏看到并访问「简历邮箱采集」页面；用于连接招聘邮箱，自动收取并解析邮件中的简历。邮箱解析入库后的查看/导入仍受「候选人管理」相关权限控制。",
   me: "控制是否能访问「个人中心」页面；用于管理个人资料、个人活动和所属工作区。页面里的工作区成员资料调整仍受「成员管理」相关权限控制。",
@@ -306,8 +310,10 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
   jd: {
     create: "允许在「在招岗位」页面新增岗位。",
     delete: "允许删除在招岗位。",
-    read: "允许加载岗位列表、全部岗位选项、岗位详情、岗位唯一编码生成和推荐链接；推荐候选人接口还同时需要「候选人管理」和「简历池」查看权限。",
+    read: "允许加载岗位列表、全部岗位选项、岗位详情、岗位唯一编码生成和推荐链接；推荐候选人接口还需要「查看推荐」权限。",
     update: "允许编辑岗位描述、招聘要求、关联配置和发布状态。",
+    viewRecommendations:
+      "允许使用在招岗位更多菜单中的「查看推荐」；需要在招岗位的查看权限，无需候选人管理或简历池的查看权限。拥有者和管理员默认拥有。",
   },
   mailIngestAccount: {
     create: "允许在「简历邮箱采集」页面新增监听邮箱账号。",
@@ -342,7 +348,7 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
     create:
       "允许在「候选人管理」页面直接上传或新建候选人记录。不包含从简历池入库；从简历池入库请单独勾选「简历池 · 导入」。",
     delete: "允许删除和批量删除「候选人管理」记录。",
-    read: "允许加载「候选人管理」列表、详情、时间线、AI 面试轮次、简历文件/预览、技能建议和去重检查；在招岗位里的推荐候选人接口也需要该权限（同时需要「简历池」查看权限）。",
+    read: "允许加载「候选人管理」列表、详情、时间线、AI 面试轮次、简历文件/预览、技能建议和去重检查。",
     update: "允许编辑「候选人管理」候选人资料、替换/解析简历，并从候选人管理发起 AI 面试。",
   },
   resumePool: {
@@ -351,7 +357,7 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
     import:
       "允许从「简历池」将简历入库到候选人管理。与「候选人管理 · 新增」相互独立：仅有导入权限时不能在候选人管理直接新建，仅有新增权限时也不能从简历池入库。",
     publish: "允许把自己的私有简历发布到本工作区共享的公共简历池。",
-    read: "允许加载「简历池」列表、详情、简历文件和预览；在招岗位里的推荐候选人接口也需要该权限（同时需要「候选人管理」查看权限）。",
+    read: "允许加载「简历池」列表、详情、简历文件和预览。",
     retryFailed:
       "允许将当前简历池中有数据权限查看的全部解析失败简历重新加入解析队列，包含已重试过的失败记录；同时需要简历池查看权限。管理员默认拥有。",
   },

@@ -58,9 +58,7 @@ type ResumeLibraryCardActionsProps = Pick<
   | "onTransition"
   | "record"
   | "retrying"
-> & {
-  canCopyLink: boolean;
-};
+>;
 
 function TextActionButton({
   children,
@@ -145,7 +143,6 @@ function PreviewAction({
 
 function MoreMenu({
   canClose,
-  canCopyLink,
   canDelete,
   canForceReparse,
   canPreviewFromMenu,
@@ -162,7 +159,6 @@ function MoreMenu({
   "onCopyDetailLink" | "onDelete" | "onForceReparse" | "onPreviewResume" | "onTransition" | "record"
 > & {
   canClose: boolean;
-  canCopyLink: boolean;
   canDelete: boolean;
   canForceReparse: boolean;
   canPreviewFromMenu: boolean;
@@ -190,9 +186,7 @@ function MoreMenu({
           <DropdownMenuLabel>更多操作</DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {canCopyLink ? (
-          <DropdownMenuItem onClick={() => onCopyDetailLink(record)}>复制详情链接</DropdownMenuItem>
-        ) : null}
+        <DropdownMenuItem onClick={() => onCopyDetailLink(record)}>复制详情链接</DropdownMenuItem>
         {canPreviewFromMenu ? (
           <DropdownMenuItem onClick={() => onPreviewResume(record)}>查看简历</DropdownMenuItem>
         ) : null}
@@ -230,7 +224,6 @@ function MoreMenu({
 // oxlint-disable-next-line complexity -- Card actions reflect permissions and the record's parse, review, and import states.
 export function ResumeLibraryCardActions({
   canCloseCandidate,
-  canCopyLink,
   canCreateInterview,
   canDeleteResumeLibrary,
   canForceReparse,
@@ -311,7 +304,6 @@ export function ResumeLibraryCardActions({
         ) : null}
         <MoreMenu
           canClose={canClose}
-          canCopyLink={canCopyLink}
           canDelete={canDelete}
           canForceReparse={showForceReparseInMenu}
           canPreviewFromMenu={canPreviewFromMenu}

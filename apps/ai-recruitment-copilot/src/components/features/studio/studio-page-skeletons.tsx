@@ -134,6 +134,7 @@ function SummarySkeleton({ count = 3 }: { count?: number }) {
   );
 }
 
+/* 顶部图表暂时隐藏；重新开放时恢复此骨架组件及两个页面的调用。
 function ChartGridSkeleton() {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -162,6 +163,7 @@ function ChartGridSkeleton() {
     </div>
   );
 }
+*/
 
 function RecruitingListSkeleton() {
   return (
@@ -209,7 +211,8 @@ export function RecruitingPageSkeleton() {
   return (
     <PageShell label="候选人管理">
       <HeaderSkeleton />
-      <ChartGridSkeleton />
+      {/* 顶部三个图表暂时隐藏，重新开放时恢复骨架屏。 */}
+      {/* <ChartGridSkeleton /> */}
       <ToolbarSkeleton filterCount={4} />
       <RecruitingListSkeleton />
     </PageShell>
@@ -250,7 +253,8 @@ export function JobDescriptionsPageSkeleton() {
   return (
     <PageShell label="在招岗位">
       <HeaderSkeleton />
-      <ChartGridSkeleton />
+      {/* 顶部三个图表暂时隐藏，重新开放时恢复骨架屏。 */}
+      {/* <ChartGridSkeleton /> */}
       <ToolbarSkeleton filterCount={3} />
       <TableSkeleton />
     </PageShell>

@@ -219,22 +219,6 @@ function formatResumeCardHumanInterviewers(record: ResumeLibraryListRecord) {
   return record.humanInterviewers.map((item) => item.name).join("、");
 }
 
-function canCopyResumeDetailLink({
-  currentMemberRole,
-  currentUserId,
-  record,
-}: {
-  currentMemberRole: string;
-  currentUserId: string | null;
-  record: ResumeLibraryListRecord;
-}) {
-  return (
-    currentMemberRole === "owner" ||
-    currentMemberRole === "admin" ||
-    (Boolean(currentUserId) && record.createdBy === currentUserId)
-  );
-}
-
 function duplicateMatchBadge(record: ResumeLibraryListRecord, onClick?: () => void) {
   if (!record.duplicateMatch) {
     return null;
@@ -348,8 +332,6 @@ function ResumeLibraryCardComponent({
   canForceReparse,
   canRetryResumeParse,
   canUpdateResumeLibrary,
-  currentMemberRole,
-  currentUserId,
   onCopyDetailLink,
   onDelete,
   onEdit,
@@ -371,7 +353,6 @@ function ResumeLibraryCardComponent({
   const profileSnapshot = record.resumeProfileSnapshot;
   const skills = record.resumeSkills;
   const summary = record.resumeSummary;
-  const canCopyLink = canCopyResumeDetailLink({ currentMemberRole, currentUserId, record });
   const { jobDescriptionId } = record;
   const reviewCard = describeResumeLibraryReviewCard({
     baseScore: record.resumeReviewBaseScore,
@@ -590,7 +571,6 @@ function ResumeLibraryCardComponent({
 
         <ResumeLibraryCardActions
           canCloseCandidate={canCloseCandidate}
-          canCopyLink={canCopyLink}
           canCreateInterview={canCreateInterview}
           canDeleteResumeLibrary={canDeleteResumeLibrary}
           canForceReparse={canForceReparse}

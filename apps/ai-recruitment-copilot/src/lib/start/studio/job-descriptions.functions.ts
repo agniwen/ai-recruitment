@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import type { HiringUnitRecord } from "@arc/shared/hiring-units";
-import type { JobDescriptionMetrics } from "@arc/shared/job-descriptions";
+// 暂停在招岗位图表，恢复时同步恢复 metrics 类型和服务端加载。
+// import type { JobDescriptionMetrics } from "@arc/shared/job-descriptions";
 import { slugInputSchema } from "@/lib/start/server-fn-validators";
 import { loadStudioJobDescriptionsData } from "./job-descriptions.server";
 import { resolveAuthorizedStudioPageAccessFromRequest } from "./page-access.server";
@@ -14,7 +15,7 @@ export type StudioJobDescriptionsState =
       departments: DepartmentRecord[];
       hiringUnits: HiringUnitRecord[];
       interviewers: InterviewerListRecord[];
-      metrics: JobDescriptionMetrics;
+      // metrics: JobDescriptionMetrics;
       recruitmentStatuses: string[];
       sourceSheets: string[];
       status: "ready";

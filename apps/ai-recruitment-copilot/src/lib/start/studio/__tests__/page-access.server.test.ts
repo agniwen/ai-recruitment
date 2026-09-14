@@ -1,6 +1,7 @@
 import type { WorkspaceAccessState } from "@/lib/start/auth-session-types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveAuthorizedStudioPageAccessFromRequest } from "../page-access.server";
+import { canAccessStudioPage } from "../../studio-page-paths";
 
 const mocks = vi.hoisted(() => ({
   resolveAccess: vi.fn(),
@@ -28,13 +29,28 @@ describe("resolveAuthorizedStudioPageAccessFromRequest", () => {
   });
 
   it("returns the workspace access snapshot when the page is allowed", async () => {
-    const access = readyAccess(["dashboard"]);
+    const access = readyAccess(["odcAnalysis"]);
     mocks.resolveAccess.mockResolvedValue(access);
 
-    await expect(resolveAuthorizedStudioPageAccessFromRequest("acme", "dashboard")).resolves.toBe(
+    await expect(resolveAuthorizedStudioPageAccessFromRequest("acme", "odcAnalysis")).resolves.toBe(
       access,
     );
   });
+
+  it.each(["owner", "admin", "member"] as const)(
+    "hides the dashboard from navigation and direct access for %s even with permission",
+    async (role) => {
+      const access = readyAccess(["dashboard", "odcAnalysis"]);
+      access.member.role = role;
+      mocks.resolveAccess.mockResolvedValue(access);
+
+      expect(canAccessStudioPage(access.permissions, "dashboard")).toBe(false);
+      expect(canAccessStudioPage(access.permissions, "odcAnalysis")).toBe(true);
+      await expect(
+        resolveAuthorizedStudioPageAccessFromRequest("acme", "dashboard"),
+      ).resolves.toEqual({ status: "not_found" });
+    },
+  );
 
   it("hides the page when the workspace member lacks its page permission", async () => {
     mocks.resolveAccess.mockResolvedValue(readyAccess([]));

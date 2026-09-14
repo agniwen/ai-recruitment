@@ -20,7 +20,8 @@ function StudioJobDescriptionsRoute() {
       departments={state.departments}
       hiringUnits={state.hiringUnits}
       interviewers={state.interviewers}
-      metrics={state.metrics}
+      // 暂停顶部图表；恢复统计加载后重新传入 metrics。
+      // metrics={state.metrics}
       recruitmentStatuses={state.recruitmentStatuses}
       sourceSheets={state.sourceSheets}
     />

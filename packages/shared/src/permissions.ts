@@ -11,6 +11,10 @@
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements, memberAc } from "better-auth/plugins/organization/access";
 
+// 招聘看板暂时下线：菜单、页面访问和权限项共用此开关。
+// 日后重新开放时改为 true；保留页面实现与 page:dashboard 权限，避免丢失已有角色配置。
+export const RECRUITING_DASHBOARD_ENABLED = false;
+
 export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "resumes",
   "resumePool",
@@ -95,7 +99,7 @@ export const statement = {
   humanInterview: ["create", "read", "update", "delete"],
   interview: ["create", "read", "update", "delete"],
   interviewer: ["create", "read", "update", "delete"],
-  jd: ["create", "read", "update", "delete"],
+  jd: ["create", "read", "update", "delete", "viewRecommendations"],
   mailIngestAccount: ["create", "read", "update", "delete", "manage"],
   offer: ["create", "read", "update", "delete"],
   page: STUDIO_PAGE_PERMISSION_ACTIONS,

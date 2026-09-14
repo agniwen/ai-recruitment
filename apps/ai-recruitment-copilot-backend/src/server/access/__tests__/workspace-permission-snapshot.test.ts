@@ -30,6 +30,30 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-group-acce
 });
 
 describe("computeWorkspacePermissionSnapshot", () => {
+  it.each(["hr", "recruitingLead", "recruitingSupervisor"])(
+    "does not implicitly grant recommendations to a member with group role %s",
+    async (role) => {
+      mocks.listGroupRoles.mockResolvedValue([role]);
+      const snapshot = await computeWorkspacePermissionSnapshot({
+        memberRole: "member",
+        organizationId: "org",
+        userId: "u",
+      });
+      expect(snapshot.statements.jd).toContain("read");
+      expect(snapshot.statements.jd).not.toContain("viewRecommendations");
+    },
+  );
+  it("allows custom roles to opt into job recommendations", async () => {
+    mocks.selectDynamicRole.mockResolvedValue([
+      { permission: JSON.stringify({ jd: ["read", "viewRecommendations"] }) },
+    ]);
+    const snapshot = await computeWorkspacePermissionSnapshot({
+      memberRole: "custom-recruiter",
+      organizationId: "org",
+      userId: "u",
+    });
+    expect(snapshot.statements.jd).toEqual(["read", "viewRecommendations"]);
+  });
   it("reserves pre-registration access for administrators even if a custom role contains it", async () => {
     mocks.selectDynamicRole.mockResolvedValue([
       { permission: JSON.stringify({ page: ["resumes", "preRegistrations"] }) },

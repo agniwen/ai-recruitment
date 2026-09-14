@@ -19,6 +19,7 @@ import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { PageHeader } from "../page-header";
+import { copyResumeDetailLink } from "../resumes/resume-library-page-model";
 import { AiReviewDetailDialog } from "./ai-review-detail-dialog";
 
 export function AiReviewPage() {
@@ -93,6 +94,12 @@ export function AiReviewPage() {
           onClick: (record) => setSelected({ id: record.id, tab: "overview" }),
         },
         { label: "AI 评价", onClick: (record) => setSelected({ id: record.id, tab: "ai-review" }) },
+        {
+          label: "复制详情链接",
+          onClick: (record) => {
+            void copyResumeDetailLink(slug, record);
+          },
+        },
       ],
     }),
   ];

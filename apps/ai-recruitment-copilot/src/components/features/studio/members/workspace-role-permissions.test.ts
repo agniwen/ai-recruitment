@@ -19,6 +19,14 @@ const permissionsSectionSource = readFileSync(
 );
 
 describe("workspace role permission helpers", () => {
+  it("exposes viewing recommendations under job permissions", () => {
+    expect(
+      buildPermissionItems().find((item) => item.key === "jd:viewRecommendations"),
+    ).toMatchObject({
+      actionLabel: "查看推荐",
+      resourceLabel: "在招岗位",
+    });
+  });
   it("exposes AI approval as a separate role permission for all resume sources", () => {
     const approval = buildPermissionItems().find((item) => item.key === "aiReview:approve");
     expect(approval).toMatchObject({ actionLabel: "审批", resource: "aiReview" });
@@ -129,6 +137,7 @@ describe("workspace role permission helpers", () => {
     expect(items.map((item) => item.key)).toContain("page:permissions");
     expect(items.map((item) => item.key)).toContain("page:dataExport");
     expect(items.map((item) => item.key)).toContain("page:odcAnalysis");
+    expect(items.map((item) => item.key)).not.toContain("page:dashboard");
     expect(items.map((item) => item.key)).toContain("dataExport:export");
     expect(items.map((item) => item.key)).toContain("resumeLibrary:read");
     expect(items.map((item) => item.key)).toContain("resumePool:import");
@@ -205,19 +214,15 @@ describe("workspace role permission helpers", () => {
     expect(resumePoolPage?.description).toContain("数据接口仍受「简历池」业务权限控制");
     expect(resumePoolPage?.description).toContain("404");
     expect(resumeLibraryRead?.description).toContain("「候选人管理」列表、详情、时间线");
-    expect(resumeLibraryRead?.description).toContain("推荐候选人接口");
+    expect(resumeLibraryRead?.description).not.toContain("推荐候选人接口");
     expect(resumeLibraryCreate?.description).toContain("不包含从简历池入库");
     expect(resumeLibraryCreate?.description).toContain("简历池 · 导入");
     expect(resumePoolImport?.description).toContain("相互独立");
     expect(resumePoolImport?.description).toContain("仅有导入权限时不能在候选人管理直接新建");
     expect(resumePoolRead?.description).toContain("「简历池」列表、详情、简历文件");
-    expect(resumePoolRead?.description).toContain("推荐候选人接口");
-    expect(jobDescriptionPage?.description).toContain(
-      "推荐候选人还需要「候选人管理」和「简历池」查看权限",
-    );
-    expect(jdRead?.description).toContain(
-      "推荐候选人接口还同时需要「候选人管理」和「简历池」查看权限",
-    );
+    expect(resumePoolRead?.description).not.toContain("推荐候选人接口");
+    expect(jobDescriptionPage?.description).toContain("推荐候选人还需要在招岗位的「查看推荐」权限");
+    expect(jdRead?.description).toContain("推荐候选人接口还需要「查看推荐」权限");
     expect(dataExportPage?.description).toContain("侧边栏不展示入口");
     expect(dataExportPage?.description).toContain("404");
     expect(dataExportAction?.description).toContain("XLSX");

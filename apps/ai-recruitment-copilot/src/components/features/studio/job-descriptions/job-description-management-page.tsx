@@ -1,6 +1,6 @@
 import { listTextQuery } from "@arc/shared/list-text-filters";
 import { useQueryClient } from "@tanstack/react-query";
-import { ClientOnly, useRouter } from "@tanstack/react-router";
+import { useRouter } from "@tanstack/react-router";
 import type { DepartmentRecord } from "@arc/shared/departments";
 import type { InterviewerListRecord } from "@arc/shared/interviewers";
 import { PageHeader } from "@/components/features/studio/page-header";
@@ -9,12 +9,12 @@ import { useEntityCrud } from "@/components/features/studio/use-entity-crud";
 import type {
   JobDescriptionFormValues,
   JobDescriptionListRecord,
-  JobDescriptionMetrics,
+  // JobDescriptionMetrics,
   JobDescriptionRecord,
 } from "@arc/shared/job-descriptions";
 import type { PaginatedJobDescriptionResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
-import { JobDescriptionCharts } from "@/components/features/studio/job-descriptions/job-description-charts";
+// import { JobDescriptionCharts } from "@/components/features/studio/job-descriptions/job-description-charts";
 import { ScopedResumesModal } from "@/components/features/studio/scoped-resumes-modal";
 import {
   IconFileText as FileTextIcon,
@@ -25,7 +25,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
-import { Skeleton } from "@/components/ui/skeleton";
+// import { Skeleton } from "@/components/ui/skeleton";
 import {
   actionsColumn,
   customColumn,
@@ -87,14 +87,14 @@ export function JobDescriptionManagementPage({
   departments,
   hiringUnits,
   interviewers,
-  metrics,
+  // metrics,
   recruitmentStatuses,
   sourceSheets,
 }: {
   departments: DepartmentRecord[];
   hiringUnits: { id: string; name: string }[];
   interviewers: InterviewerListRecord[];
-  metrics: JobDescriptionMetrics;
+  // metrics: JobDescriptionMetrics;
   recruitmentStatuses: string[];
   sourceSheets: string[];
 }) {
@@ -117,6 +117,8 @@ export function JobDescriptionManagementPage({
   const canUpdateJobDescription = useHasPermission("jd", "update");
   const canDeleteJobDescription = useHasPermission("jd", "delete");
   const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
+  const hasViewRecommendationsPermission = useHasPermission("jd", "viewRecommendations");
+  const canViewRecommendations = hasViewRecommendationsPermission && canReadJobDescription;
   const canSyncGoogleSheet = isWorkspaceAdministratorRole(memberRole);
 
   const fetchJobDescriptions = useCallback(
@@ -580,11 +582,11 @@ export function JobDescriptionManagementPage({
         ],
         menu: [
           {
-            label: "推荐",
+            label: "查看推荐",
             onClick: (r) => {
               setRecommendationScope({ id: r.id, name: r.name });
             },
-            show: () => canReadResumeLibrary,
+            show: () => canViewRecommendations,
           },
           {
             label: "删除",
@@ -601,7 +603,13 @@ export function JobDescriptionManagementPage({
       }),
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [canDeleteJobDescription, canReadJobDescription, canReadResumeLibrary, canUpdateJobDescription],
+    [
+      canDeleteJobDescription,
+      canReadJobDescription,
+      canReadResumeLibrary,
+      canUpdateJobDescription,
+      canViewRecommendations,
+    ],
   );
 
   const filtersConfig = useMemo(
@@ -631,10 +639,12 @@ export function JobDescriptionManagementPage({
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader description="管理招聘岗位、JD、任职要求及关联信息。" title="在招岗位" />
 
+        {/* 暂停顶部三个图表；恢复时同步恢复 ClientOnly/图表导入、metrics 属性和服务端统计加载。
         <ClientOnly fallback={<Skeleton className="h-80 w-full" />}>
           <JobDescriptionCharts metrics={metrics} />
         </ClientOnly>
 
+        */}
         <DataGrid<JobDescriptionListRecord>
           {...grid.bind}
           columnPinning={{
@@ -767,7 +777,7 @@ export function JobDescriptionManagementPage({
             setRecommendationScope(null);
           }
         }}
-        open={canReadResumeLibrary && recommendationScope !== null}
+        open={canViewRecommendations && recommendationScope !== null}
       />
     </>
   );

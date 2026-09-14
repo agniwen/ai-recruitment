@@ -1,14 +1,15 @@
 /* oxlint-disable complexity max-lines -- page controller coordinates grid queries and dialogs. */
-import { IconRefresh, IconUsers } from "@tabler/icons-react";
+// 暂停图表时移除 IconRefresh；恢复下方图表操作按钮时一并恢复导入。
+import { IconUsers } from "@tabler/icons-react";
 import {
-  keepPreviousData,
+  // keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { useRouter, useSearch } from "@tanstack/react-router";
-import { useAtom } from "jotai";
+// import { useAtom } from "jotai";
 import { buildInfiniteDataGridQueryKey } from "@/components/data-grid/query-contract";
 import { parseCsvParam } from "@arc/shared/csv";
 import {
@@ -48,7 +49,7 @@ import {
   bulkDeleteStudioResumes,
   deleteStudioResume,
   fetchStudioResumeDuplicateMatches,
-  fetchStudioResumeMetrics,
+  // fetchStudioResumeMetrics,
   fetchStudioResumeSkillSuggestions,
   fetchStudioResumes,
   forceStudioResumeReparse,
@@ -58,10 +59,9 @@ import {
 import { fetchSelectableHiringUnits } from "@/lib/client/api/endpoints/hiring-units";
 import { rpc } from "@/lib/client/rpc";
 import { runAsyncAction } from "@/lib/client/async-control";
-import { authClient } from "@/lib/client/auth-client";
 import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useHasPermission } from "@/hooks/use-has-permission";
-import { studioResumeKeys } from "@/lib/client/api/query-keys";
+// import { studioResumeKeys } from "@/lib/client/api/query-keys";
 import { StudioPersonDetailDialog } from "@/components/features/studio/studio-person-detail-dialog";
 import { StudioPersonEditDialog } from "@/components/features/studio/studio-person-edit-dialog";
 import { StudioScrollToTopButton } from "@/components/features/studio/studio-scroll-to-top-button";
@@ -71,10 +71,10 @@ import {
 } from "@/components/features/studio/resumes/resume-upload-entry-dialog";
 import { LaunchInterviewDialog } from "@/components/features/studio/resumes/launch-interview-dialog";
 import { TransitionCandidateDialog } from "@/components/features/studio/resumes/transition-candidate-dialog";
-import { ResumeLibraryMetricsSection } from "@/components/features/studio/resumes/resume-library-metrics-section";
+// import { ResumeLibraryMetricsSection } from "@/components/features/studio/resumes/resume-library-metrics-section";
 import { RecruitingPageSkeleton } from "@/components/features/studio/studio-page-skeletons";
-import { Button } from "@/components/ui/button";
-import { resumeMetricsScopeAtom } from "@/lib/client/atoms/resume-metrics-scope";
+// import { Button } from "@/components/ui/button";
+// import { resumeMetricsScopeAtom } from "@/lib/client/atoms/resume-metrics-scope";
 
 import {
   PIPELINE_STAGE_TAB_DESCRIPTIONS,
@@ -97,8 +97,6 @@ export function ResumeLibraryPage() {
   const router = useRouter();
   const routeSearch = useSearch({ from: "/w/$slug/studio/resumes" });
   const queryClient = useQueryClient();
-  const { data: session } = authClient.useSession();
-  const currentUserId = session?.user?.id ?? null;
   const canCreateInterview = useHasPermission("interview", "create");
   const canCreateResumeLibrary = useHasPermission("resumeLibrary", "create");
   const canUpdateResumeLibrary = useHasPermission("resumeLibrary", "update");
@@ -343,17 +341,18 @@ export function ResumeLibraryPage() {
     }),
     staleTime: 30_000,
   });
-  const [metricsScope, setMetricsScope] = useAtom(resumeMetricsScopeAtom);
-  const metricsQuery = useQuery({
-    placeholderData: keepPreviousData,
-    queryFn: () => fetchStudioResumeMetrics(slug, metricsScope),
-    queryKey: studioResumeKeys.metrics(slug, metricsScope),
-  });
-  const metricsSwitching =
-    metricsQuery.isFetching && (metricsQuery.isPlaceholderData || Boolean(metricsQuery.data));
-  // Only remount charts when scope flips (or while the previous-scope placeholder
-  // is showing). Do not include dataUpdatedAt — manual refresh should update in place.
-  const metricsChartKey = metricsQuery.isPlaceholderData ? `pending:${metricsScope}` : metricsScope;
+  // 暂停候选人管理顶部三个图表；重新开放时恢复此查询、导入、标题操作和图表入口。
+  // const [metricsScope, setMetricsScope] = useAtom(resumeMetricsScopeAtom);
+  // const metricsQuery = useQuery({
+  // placeholderData: keepPreviousData,
+  // queryFn: () => fetchStudioResumeMetrics(slug, metricsScope),
+  // queryKey: studioResumeKeys.metrics(slug, metricsScope),
+  // });
+  // const metricsSwitching =
+  // metricsQuery.isFetching && (metricsQuery.isPlaceholderData || Boolean(metricsQuery.data));
+  // // Only remount charts when scope flips (or while the previous-scope placeholder
+  // // is showing). Do not include dataUpdatedAt — manual refresh should update in place.
+  // const metricsChartKey = metricsQuery.isPlaceholderData ? `pending:${metricsScope}` : metricsScope;
   const retryParseMutation = useMutation({
     mutationFn: (record: ResumeLibraryListRecord) => retryStudioResumeParse(slug, record.id),
     onError: (error) => toast.error(error instanceof Error ? error.message : "重新解析简历失败"),
@@ -605,7 +604,7 @@ export function ResumeLibraryPage() {
     });
   }
 
-  const isInitialPageLoading = resumeLibraryListQuery.isPending && metricsQuery.isPending;
+  const isInitialPageLoading = resumeLibraryListQuery.isPending;
   if (isInitialPageLoading) {
     return <RecruitingPageSkeleton />;
   }
@@ -648,6 +647,7 @@ export function ResumeLibraryPage() {
     <>
       <div className="mx-auto w-full max-w-[96rem] space-y-6">
         <PageHeader
+          /* 暂停图表维度切换和刷新；重新开放时恢复。
           actionRender={
             <div className="flex items-center gap-0.5">
               <Button
@@ -679,10 +679,12 @@ export function ResumeLibraryPage() {
               </Button>
             </div>
           }
+          */
           className="items-end sm:items-end"
           description="管理已正式入库候选人的筛选、面试、Offer及结案进度。"
           title="候选人管理"
         />
+        {/* 暂停顶部三个图表，保留实现供日后恢复。
         <ResumeLibraryMetricsSection
           chartKey={metricsChartKey}
           error={metricsQuery.error}
@@ -690,6 +692,7 @@ export function ResumeLibraryPage() {
           metrics={metricsQuery.data}
           onRetry={() => metricsQuery.refetch()}
         />
+        */}
         <Tabs
           onValueChange={(value) => {
             setRowSelection({});
@@ -730,8 +733,6 @@ export function ResumeLibraryPage() {
           canRetryResumeParse={canRetryResumeParse}
           canUpdateResumeLibrary={canUpdateResumeLibrary}
           canUploadResumeLibrary={canUploadResumeLibrary}
-          currentMemberRole={currentMemberRole}
-          currentUserId={currentUserId}
           empty={resumeLibraryEmptyState}
           error={resumeLibraryListQuery.error}
           fetchNextPage={resumeLibraryListQuery.fetchNextPage}

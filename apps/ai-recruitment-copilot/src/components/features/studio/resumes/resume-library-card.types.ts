@@ -9,8 +9,6 @@ export interface ResumeLibraryCardProps {
   canForceReparse: boolean;
   canRetryResumeParse: boolean;
   canUpdateResumeLibrary: boolean;
-  currentMemberRole: string;
-  currentUserId: string | null;
   onCopyDetailLink: (record: ResumeLibraryListRecord) => void;
   onDelete: (record: ResumeLibraryListRecord) => void;
   onEdit: (record: ResumeLibraryListRecord) => void;

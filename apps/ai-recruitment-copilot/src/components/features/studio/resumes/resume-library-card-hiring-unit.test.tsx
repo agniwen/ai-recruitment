@@ -81,9 +81,7 @@ describe("candidate card hiring unit", () => {
         updatedAt: "2026-09-11T00:00:00Z",
       };
       const markup = renderToStaticMarkup(
-        <ResumeLibraryCard
-          {...({ currentMemberRole: "admin", record } as ResumeLibraryCardProps)}
-        />,
+        <ResumeLibraryCard {...({ record } as ResumeLibraryCardProps)} />,
       );
       expect(markup).toContain(`用人组织：${expected}`);
       if (jobDescriptionHiringUnitName) {

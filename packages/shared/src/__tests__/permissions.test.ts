@@ -11,6 +11,12 @@ import {
 } from "@arc/shared/permissions";
 
 describe("permissions matrix", () => {
+  it("grants viewing job recommendations only to administrators by default", () => {
+    expect(statement.jd).toContain("viewRecommendations");
+    expect(roles.admin.statements.jd).toContain("viewRecommendations");
+    expect(roles.owner.statements.jd).toContain("viewRecommendations");
+    expect(roles.member.statements.jd).not.toContain("viewRecommendations");
+  });
   it("grants bulk failed parse retries to administrators but not ordinary members by default", () => {
     expect(statement.resumePool).toContain("retryFailed");
     expect(roles.admin.statements.resumePool).toContain("retryFailed");

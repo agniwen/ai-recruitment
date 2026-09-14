@@ -21,4 +21,13 @@ describe("job description new field persistence", () => {
   it("accepts recommendation requests up to the shared 50-row cap", () => {
     expect(routeSource).toContain("JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT");
   });
+
+  it("requires the dedicated recommendation permission before reading candidate data", () => {
+    const recommendationRoute = routeSource.slice(routeSource.indexOf('"/:id/recommendations"'));
+    const guards = recommendationRoute.slice(0, recommendationRoute.indexOf('zValidator("json"'));
+    expect(guards).toContain('requirePermission("jd", "viewRecommendations")');
+    expect(guards).toContain('requirePermission("jd", "read")');
+    expect(guards).not.toContain('requirePermission("resumeLibrary", "read")');
+    expect(guards).not.toContain('requirePermission("resumePool", "read")');
+  });
 });

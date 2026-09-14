@@ -1,4 +1,5 @@
 import type { StudioPagePermissionAction } from "@/lib/start/auth-session-types";
+import { RECRUITING_DASHBOARD_ENABLED } from "@arc/shared/permissions";
 import { hasPermissionInStatements } from "@arc/shared/permission-statements";
 import type {
   PermissionResource,
@@ -25,6 +26,9 @@ export function canAccessStudioPage(
   permissions: WorkspacePermissionStatements,
   action: StudioPagePermissionAction,
 ): boolean {
+  if (action === "dashboard" && !RECRUITING_DASHBOARD_ENABLED) {
+    return false;
+  }
   if (!hasPermissionInStatements(permissions, "page", action)) {
     return false;
   }

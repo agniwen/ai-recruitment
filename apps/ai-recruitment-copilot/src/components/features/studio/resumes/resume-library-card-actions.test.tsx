@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe("ResumeLibraryCardActions", () => {
-  it("hides the AI interview action for candidates bound to an AI-disabled job", () => {
+  it("allows copying a visible candidate without mutation permissions and hides disabled AI interviews", async () => {
     const record = {
       hasInterviewRounds: false,
       hasResumeFile: false,
@@ -31,18 +31,18 @@ describe("ResumeLibraryCardActions", () => {
     document.body.append(host);
     const root = createRoot(host);
     mountedRoots.push({ host, root });
+    const onCopyDetailLink = vi.fn();
 
     act(() => {
       root.render(
         <ResumeLibraryCardActions
           canCloseCandidate={false}
-          canCopyLink={false}
-          canCreateInterview
+          canCreateInterview={false}
           canDeleteResumeLibrary={false}
           canForceReparse={false}
           canRetryResumeParse={false}
           canUpdateResumeLibrary={false}
-          onCopyDetailLink={vi.fn()}
+          onCopyDetailLink={onCopyDetailLink}
           onDelete={vi.fn()}
           onEdit={vi.fn()}
           onForceReparse={vi.fn()}
@@ -57,6 +57,15 @@ describe("ResumeLibraryCardActions", () => {
     });
 
     expect(host.textContent).not.toContain("AI面");
+    await act(() => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="更多"]')?.click();
+    });
+    const copyItem = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "复制详情链接",
+    );
+    expect(copyItem).toBeDefined();
+    await act(() => copyItem?.click());
+    expect(onCopyDetailLink).toHaveBeenCalledWith(record);
   });
 
   it.each([
@@ -94,7 +103,6 @@ describe("ResumeLibraryCardActions", () => {
       root.render(
         <ResumeLibraryCardActions
           canCloseCandidate={false}
-          canCopyLink={false}
           canCreateInterview
           canDeleteResumeLibrary={false}
           canForceReparse={false}

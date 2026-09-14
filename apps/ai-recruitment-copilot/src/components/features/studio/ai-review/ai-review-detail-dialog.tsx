@@ -129,7 +129,7 @@ export function AiReviewDetailDialog({
               : "审批需具备角色中的 AI 分析审批权限。"}
           </p>
           <div className="flex shrink-0 gap-2">
-            <Button variant="outline" disabled={approval.isPending} onClick={onClose}>
+            <Button size="sm" variant="outline" disabled={approval.isPending} onClick={onClose}>
               关闭
             </Button>
             {detail?.canApproveAiReview && !detailQuery.isError ? (

@@ -40,7 +40,8 @@ describe("Studio page skeletons", () => {
     const profile = renderToStaticMarkup(<ProfilePageSkeleton />);
     const permissions = renderToStaticMarkup(<PermissionsPageSkeleton />);
 
-    expect(recruiting).toContain("lg:grid-cols-3");
+    expect(recruiting).not.toContain("lg:grid-cols-3");
+    expect(renderToStaticMarkup(<JobDescriptionsPageSkeleton />)).not.toContain("lg:grid-cols-3");
     expect(recruiting).toContain("h-[702px] w-full");
     expect(resumePool).toContain("lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4");
     expect(dashboard).toContain("grid-cols-2 gap-4 xl:grid-cols-4");
