@@ -9,6 +9,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { describe, expect, it, vi } from "vitest";
+import type { WorkspacePermissionStatements } from "@arc/shared/permission-statements";
 import { enableReactActEnvironment, renderInAct, unmountInAct } from "@/test-utils/react-act";
 import { Route as StudioRoute } from "@/routes/w.$slug.studio";
 import { loadStudioResumesStateFromRequest } from "@/lib/start/studio/resumes-state.server";
@@ -35,6 +36,44 @@ vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "work
 enableReactActEnvironment();
 
 describe("Studio permission denial navigation", () => {
+  it.each([
+    { allowed: false, label: "page only", permissions: { page: ["resumePool"] } },
+    { allowed: false, label: "read only", permissions: { resumePool: ["read"] } },
+    {
+      allowed: true,
+      label: "page and read",
+      permissions: { page: ["resumePool"], resumePool: ["read"] },
+    },
+  ] satisfies { label: string; permissions: WorkspacePermissionStatements; allowed: boolean }[])(
+    "checks resume pool direct navigation with $label permissions",
+    async ({ permissions, allowed }) => {
+      const root = createRootRoute();
+      const workspace = createRoute({
+        getParentRoute: () => root,
+        loader: () => ({ permissions, status: "ready" }),
+        path: "/w/$slug",
+      });
+      const studio = createRoute({
+        getParentRoute: () => workspace,
+        loader: (context) => {
+          const { loader } = StudioRoute.options;
+          if (typeof loader === "function") {
+            return loader(context as never);
+          }
+        },
+        path: "studio",
+      });
+      const pool = createRoute({ getParentRoute: () => studio, path: "resume-pool" });
+      const router = createRouter({
+        history: createMemoryHistory({ initialEntries: ["/w/work/studio/resume-pool"] }),
+        routeTree: root.addChildren([workspace.addChildren([studio.addChildren([pool])])]),
+      });
+      await router.load();
+      const studioMatch = router.state.matches.find((match) => match.routeId === studio.id);
+      expect(studioMatch?.status).toBe(allowed ? "success" : "notFound");
+    },
+  );
+
   it.each(["page", "resource"])(
     "keeps workspace navigation when candidate %s access is denied",
     async (denied) => {

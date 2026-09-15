@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as RecruitingGroupAccessModule from "../recruiting-group-access";
 import { computeWorkspacePermissionSnapshot } from "../workspace-permission-snapshot";
+import { createRequestWorkspaceAuthorizer } from "../workspace-access-policy";
+import { statement } from "@arc/shared/permissions";
 
 const mocks = vi.hoisted(() => ({
   listGroupRoles: vi.fn(),
@@ -30,6 +32,53 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-group-acce
 });
 
 describe("computeWorkspacePermissionSnapshot", () => {
+  it.each([
+    { groupRoles: [] },
+    { groupRoles: ["viewer"] },
+    { groupRoles: ["hr"] },
+    { groupRoles: ["recruitingLead"] },
+    { groupRoles: ["recruitingSupervisor"] },
+  ])(
+    "does not grant the resume pool to ordinary members with groups $groupRoles",
+    async ({ groupRoles }) => {
+      mocks.listGroupRoles.mockResolvedValue(groupRoles);
+      const snapshot = await computeWorkspacePermissionSnapshot({
+        memberRole: "member",
+        organizationId: "org",
+        userId: "u",
+      });
+      expect(snapshot.statements.page).not.toContain("resumePool");
+      expect(snapshot.statements.resumePool ?? []).toHaveLength(0);
+      const authorize = createRequestWorkspaceAuthorizer({
+        memberRole: "member",
+        organizationId: "org",
+        userId: "u",
+      });
+      for (const action of statement.resumePool) {
+        await expect(authorize({ action, resource: "resumePool" })).resolves.toBe(false);
+      }
+    },
+  );
+  it.each([true, false])(
+    "requires explicit resume pool grants for custom roles: %s",
+    async (granted) => {
+      mocks.selectDynamicRole.mockResolvedValue([
+        {
+          permission: JSON.stringify(
+            granted ? { page: ["resumePool"], resumePool: ["read"] } : { page: ["me"] },
+          ),
+        },
+      ]);
+      const snapshot = await computeWorkspacePermissionSnapshot({
+        memberRole: "custom-recruiter",
+        organizationId: "org",
+        userId: "u",
+      });
+      expect(snapshot.statements.resumePool ?? []).toEqual(granted ? ["read"] : []);
+      expect(snapshot.statements.page?.includes("resumePool")).toBe(granted);
+      expect(mocks.listGroupRoles).not.toHaveBeenCalled();
+    },
+  );
   it.each(["hr", "recruitingLead", "recruitingSupervisor"])(
     "does not implicitly grant recommendations to a member with group role %s",
     async (role) => {
@@ -147,9 +196,7 @@ describe("computeWorkspacePermissionSnapshot", () => {
       userId: "user-a",
     });
 
-    expect(snapshot.statements.resumePool).toEqual(
-      expect.arrayContaining(["create", "read", "publish", "import", "delete"]),
-    );
+    expect(snapshot.statements.resumePool ?? []).toHaveLength(0);
     expect(snapshot.statements.interview).toEqual(
       expect.arrayContaining(["create", "read", "update", "delete"]),
     );

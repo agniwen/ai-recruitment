@@ -9,7 +9,8 @@ type WorkspaceResource = keyof typeof statement;
 /**
  * Business resources gated by recruiting-group membership when the workspace
  * role is `member`. Department and hiring-unit permissions intentionally stay
- * workspace-role based in this fork.
+ * workspace-role based in this fork. Resume pool access also requires an explicit
+ * workspace-role grant and is never inherited from recruiting groups.
  */
 export const RECRUITING_GROUP_RESOURCES = new Set<WorkspaceResource>([
   "candidateForm",
@@ -18,7 +19,6 @@ export const RECRUITING_GROUP_RESOURCES = new Set<WorkspaceResource>([
   "interviewer",
   "jd",
   "resumeLibrary",
-  "resumePool",
   "resumeUploadBatch",
   "questionTemplate",
 ]);
