@@ -111,15 +111,15 @@ describe("Studio sidebar page visibility", () => {
       "/w/work/studio/me",
     ]);
   });
-  it("shows enabled menus but keeps temporarily hidden pages out even with full permissions", async () => {
+  it("shows the resume pool with permissions while keeping the dashboard hidden", async () => {
     const visibleLinks = await links();
-    expect(visibleLinks).not.toContain("/w/work/studio/resume-pool");
+    expect(visibleLinks).toContain("/w/work/studio/resume-pool");
     expect(visibleLinks).not.toContain("/w/work/studio/dashboard");
     expect(visibleLinks).toEqual(
       expect.arrayContaining(
-        STUDIO_PAGE_PATHS.filter(
-          ({ action }) => action !== "resumePool" && action !== "dashboard",
-        ).map(({ path }) => `/w/work/studio${path}`),
+        STUDIO_PAGE_PATHS.filter(({ action }) => action !== "dashboard").map(
+          ({ path }) => `/w/work/studio${path}`,
+        ),
       ),
     );
   });

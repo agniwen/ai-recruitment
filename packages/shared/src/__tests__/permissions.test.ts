@@ -21,7 +21,8 @@ describe("permissions matrix", () => {
     expect(statement.resumePool).toContain("retryFailed");
     expect(roles.admin.statements.resumePool).toContain("retryFailed");
     expect(roles.owner.statements.resumePool).toContain("retryFailed");
-    expect(roles.member.statements.resumePool).not.toContain("retryFailed");
+    expect(roles.member.statements.resumePool).toHaveLength(0);
+    expect(roles.member.statements.page).not.toContain("resumePool");
   });
   it.each(["admin", "owner"] as const)("grants %s every catalog permission", (role) => {
     expect(roles[role].statements).toEqual(statement);
@@ -176,14 +177,7 @@ describe("permissions matrix", () => {
         ]),
       );
       expect(roles.member.statements.page).toEqual(
-        expect.arrayContaining([
-          "chat",
-          "resumes",
-          "resumePool",
-          "interviews",
-          "hiringUnits",
-          "members",
-        ]),
+        expect.arrayContaining(["chat", "resumes", "interviews", "hiringUnits", "members"]),
       );
     });
   });
@@ -244,9 +238,9 @@ describe("permission matrix cross-cut", () => {
     // resume library / pool / upload batches split
     ["member", "resumeLibrary", "read", true],
     ["member", "resumeLibrary", "update", true],
-    ["member", "resumePool", "read", true],
-    ["member", "resumePool", "publish", true],
-    ["member", "resumePool", "import", true],
+    ["member", "resumePool", "read", false],
+    ["member", "resumePool", "publish", false],
+    ["member", "resumePool", "import", false],
     ["member", "resumeUploadBatch", "process", true],
     ["member", "resumeUploadBatch", "cancel", true],
     ["admin", "mailIngestAccount", "manage", true],

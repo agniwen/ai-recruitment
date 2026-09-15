@@ -53,6 +53,7 @@ export function createJobDescriptionListFilters({
     {
       emptyMessage: "没有匹配的招聘状态",
       key: "recruitmentStatus",
+      label: "招聘状态",
       options: recruitmentStatuses.map((status) => ({ label: status, value: status })),
       placeholder: "全部招聘状态",
       searchPlaceholder: "搜索招聘状态…",
@@ -61,6 +62,7 @@ export function createJobDescriptionListFilters({
     },
     {
       key: "googleSheetStatus",
+      label: "Google 文档状态",
       options: [
         { label: "文档中存在", value: "active" },
         { label: "文档中已删除", value: "deleted" },
@@ -72,6 +74,7 @@ export function createJobDescriptionListFilters({
     {
       emptyMessage: "没有匹配的编制组织",
       key: "hiringUnitId",
+      label: "编制组织",
       options: hiringUnits.map((hiringUnit) => ({
         label: hiringUnit.name,
         value: hiringUnit.id,
@@ -84,6 +87,7 @@ export function createJobDescriptionListFilters({
     {
       emptyMessage: "没有匹配的部门",
       key: "departmentId",
+      label: "部门",
       options: departments.map((department) => ({
         label: department.name,
         value: department.id,
@@ -96,6 +100,7 @@ export function createJobDescriptionListFilters({
     {
       emptyMessage: "没有匹配的 AI面试官",
       key: "interviewerId",
+      label: "AI面试官",
       options: interviewers.map((interviewer) => ({
         description: interviewer.departmentName ?? "未知部门",
         label: interviewer.name,

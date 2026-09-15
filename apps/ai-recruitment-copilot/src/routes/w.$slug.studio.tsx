@@ -12,7 +12,7 @@ import { STUDIO_MAIN_SCROLL_RESTORATION_ID } from "@/components/features/studio/
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { documentTitleMeta } from "@/lib/start/document-title";
-import { STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
+import { canAccessStudioPage, STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
 import { hasPermissionInStatements } from "@arc/shared/permission-statements";
 
 function findStudioPageByPath(pathname: string, slug: string) {
@@ -86,7 +86,9 @@ export const Route = createFileRoute("/w/$slug/studio")({
     if (
       !state ||
       state.status !== "ready" ||
-      !hasPermissionInStatements(state.permissions, "page", requestedPage.action)
+      !hasPermissionInStatements(state.permissions, "page", requestedPage.action) ||
+      (requestedPage.action === "resumePool" &&
+        !canAccessStudioPage(state.permissions, "resumePool"))
     ) {
       throw notFound();
     }

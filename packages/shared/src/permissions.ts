@@ -15,10 +15,6 @@ import { defaultStatements, memberAc } from "better-auth/plugins/organization/ac
 // 日后重新开放时改为 true；保留页面实现与 page:dashboard 权限，避免丢失已有角色配置。
 export const RECRUITING_DASHBOARD_ENABLED = false;
 
-// 简历池页面暂时隐藏：侧边栏、默认落地页及新旧页面路由共用此开关。
-// 日后恢复时改为 true；保留页面、权限配置及后台入库/私有池副本逻辑。
-export const RESUME_POOL_PAGE_ENABLED = false;
-
 export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "resumes",
   "resumePool",
@@ -70,7 +66,6 @@ export const STUDIO_PAGE_PERMISSION_LABELS = {
 
 const memberStudioPagePermissions = [
   "resumes",
-  "resumePool",
   "interviews",
   "calendar",
   "dataExport",
@@ -145,7 +140,8 @@ const recruitingMemberStatements = {
   questionTemplate: ["create", "read", "update", "delete"],
   // member can evaluate by default; does not hold disableResumeEvaluation.
   resumeLibrary: ["create", "read", "update", "delete"],
-  resumePool: ["create", "read", "publish", "import", "delete"],
+  // 简历池只向管理员和显式授权的自定义工作区角色开放。
+  resumePool: [],
   resumeUploadBatch: ["create", "read", "process", "cancel", "delete"],
 } as const;
 
