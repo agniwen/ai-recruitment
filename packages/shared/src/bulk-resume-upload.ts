@@ -13,6 +13,7 @@ export { resumeRecruitmentSources } from "@arc/db-schema/resume-recruitment-sour
 export type { ResumeRecruitmentSource } from "@arc/db-schema/resume-recruitment-source";
 
 export const MAX_BULK_BATCH_SIZE = 100;
+export const MAX_BULK_DESTINATIONS = 50;
 export const MAX_RESUME_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 export const DEFAULT_RESUME_PARSE_STALE_PROCESSING_SECONDS = 15 * 60;
 
@@ -73,7 +74,7 @@ export const createBulkResumeBatchSchema = z
     destinations: z
       .array(z.object({ hiringUnitId: z.string().min(1), jobDescriptionId: z.string().min(1) }))
       .min(1)
-      .max(50)
+      .max(MAX_BULK_DESTINATIONS)
       .optional(),
     files: z
       .array(
@@ -108,12 +109,13 @@ export const createBulkResumeBatchSchema = z
       value.destinations &&
       (value.target !== "resume_library" ||
         value.jdMode !== "bind" ||
-        new Set(value.destinations.map((row) => row.hiringUnitId)).size !==
-          value.destinations.length)
+        new Set(
+          value.destinations.map((row) => JSON.stringify([row.hiringUnitId, row.jobDescriptionId])),
+        ).size !== value.destinations.length)
     ) {
       ctx.addIssue({
         code: "custom",
-        message: "入库组织不能重复，且仅支持候选人绑定岗位上传",
+        message: "具体岗位去向不能重复，且仅支持候选人绑定岗位上传",
         path: ["destinations"],
       });
     }

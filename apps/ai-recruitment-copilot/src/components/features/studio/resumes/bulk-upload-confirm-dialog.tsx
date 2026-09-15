@@ -7,8 +7,9 @@ import type { ResumePoolImportDestination } from "@arc/shared/resume-pool";
 import { ResumePoolImportDestinations } from "../resume-pool/resume-pool-import-destinations";
 import {
   EMPTY_IMPORT_OPTIONS,
+  emptyImportDestination,
   importJobNameOptions,
-  resolveImportDestination,
+  resolveImportDestinations,
 } from "../resume-pool/resume-pool-import-selection";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { getCandidateImportOptions } from "@/lib/client/api/endpoints/bulk-resume-upload";
@@ -18,7 +19,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
 import type { ResumeUploadBatchDedupPolicy, ResumeUploadBatchJdMode } from "@arc/db-schema/schema";
-import { resumeRecruitmentSourceNeedsDetail } from "@arc/shared/bulk-resume-upload";
+import {
+  MAX_BULK_DESTINATIONS,
+  resumeRecruitmentSourceNeedsDetail,
+} from "@arc/shared/bulk-resume-upload";
 import type { ResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import { ResumeRecruitmentSourceFields } from "./resume-recruitment-source-fields";
 
@@ -67,9 +71,10 @@ export function BulkUploadConfirmDialog({
   const options = optionsQuery.data ?? EMPTY_IMPORT_OPTIONS;
   const [jobName, setJobName] = useState("");
   const [destinations, setDestinations] = useState<ResumePoolImportDestination[]>([]);
-  const resolvedDestinations = destinations.map((row) =>
-    resolveImportDestination(options, jobName, row),
-  );
+  const resolvedDestinations = resolveImportDestinations(options, jobName, destinations);
+  const selectedDestinationCount = resolvedDestinations.filter(
+    (row) => row.jobDescriptionId,
+  ).length;
   const [recruitmentSource, setRecruitmentSource] = useState<ResumeRecruitmentSource | "">("");
   const [recruitmentSourceDetail, setRecruitmentSourceDetail] = useState("");
 
@@ -82,6 +87,7 @@ export function BulkUploadConfirmDialog({
     !optionsQuery.isError &&
     jobName.length > 0 &&
     resolvedDestinations.length > 0 &&
+    selectedDestinationCount <= MAX_BULK_DESTINATIONS &&
     resolvedDestinations.every((row) => row.jobDescriptionId);
 
   function handleStart() {
@@ -104,14 +110,14 @@ export function BulkUploadConfirmDialog({
 
   return (
     <Modal
-      description={`上传 ${files.length} 份简历，每份按所选组织对应的岗位分别创建记录。部门和服务单位由岗位自动带出。`}
+      description={`上传 ${files.length} 份简历，每份按选中的具体岗位去向分别创建记录。部门和服务单位由岗位自动带出。`}
       footer={
         <div className="flex justify-end gap-2">
           <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
             取消
           </Button>
           <Button disabled={!canStart} onClick={handleStart} type="button">
-            开始上传（{files.length} 份 / {files.length * destinations.length} 条记录）
+            开始上传（{files.length} 份 / {files.length * selectedDestinationCount} 条记录）
           </Button>
         </div>
       }
@@ -175,12 +181,7 @@ export function BulkUploadConfirmDialog({
             onChange={(value) => {
               setJobName(value ?? "");
               setDestinations((rows) =>
-                rows.map((row) =>
-                  resolveImportDestination(options, value ?? "", {
-                    ...row,
-                    jobDescriptionId: null,
-                  }),
-                ),
+                [...new Set(rows.map((row) => row.hiringUnitId))].map(emptyImportDestination),
               );
             }}
           />
@@ -193,12 +194,18 @@ export function BulkUploadConfirmDialog({
             </div>
           ) : null}
           <ResumePoolImportDestinations
+            multipleJobs
             options={options}
             jobName={jobName}
             destinations={resolvedDestinations}
             onChange={setDestinations}
             disabled={optionsQuery.isPending || optionsQuery.isError}
           />
+          {selectedDestinationCount > MAX_BULK_DESTINATIONS ? (
+            <p role="alert" className="text-sm text-destructive">
+              每次最多选择 {MAX_BULK_DESTINATIONS} 个具体岗位去向，请减少选择。
+            </p>
+          ) : null}
         </div>
 
         {/* 查重说明 / Deduplication note */}

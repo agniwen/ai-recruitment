@@ -4,6 +4,7 @@ import {
   importJobNameOptions,
   matchingImportJobs,
   resolveImportDestination,
+  resolveImportDestinations,
 } from "./resume-pool-import-selection";
 
 const options = {
@@ -57,5 +58,31 @@ describe("import destination selection", () => {
       jobDescriptionId: null,
       serviceUnit: null,
     });
+  });
+  it("preserves multiple selected jobs with their own department and service", () => {
+    const rows = resolveImportDestinations(options, "前端", [
+      { ...emptyImportDestination("one"), jobDescriptionId: "a" },
+      { ...emptyImportDestination("one"), jobDescriptionId: "c" },
+      emptyImportDestination("two"),
+    ]);
+    expect(rows).toEqual([
+      { departmentId: "d1", hiringUnitId: "one", jobDescriptionId: "a", serviceUnit: "平台" },
+      { departmentId: "d3", hiringUnitId: "one", jobDescriptionId: "c", serviceUnit: "应用" },
+      { departmentId: "d2", hiringUnitId: "two", jobDescriptionId: "b", serviceUnit: "应用" },
+    ]);
+    expect(importJobNameOptions(options, rows)).toEqual([{ label: "前端", value: "前端" }]);
+  });
+  it("removes stale selections without duplicating an automatic single match", () => {
+    const rows = [
+      { ...emptyImportDestination("one"), jobDescriptionId: "a" },
+      { ...emptyImportDestination("one"), jobDescriptionId: "c" },
+    ];
+    expect(resolveImportDestinations(options, "后端", rows)).toEqual([
+      { departmentId: "d1", hiringUnitId: "one", jobDescriptionId: "d", serviceUnit: "平台" },
+    ]);
+    expect(resolveImportDestinations(options, "", rows)).toEqual([emptyImportDestination("one")]);
+    expect(resolveImportDestinations(options, "前端", [emptyImportDestination("one")])).toEqual([
+      emptyImportDestination("one"),
+    ]);
   });
 });

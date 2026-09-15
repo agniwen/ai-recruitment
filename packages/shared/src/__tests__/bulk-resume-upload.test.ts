@@ -63,7 +63,7 @@ describe("candidate upload destinations", () => {
         .success,
     ).toBe(false);
   });
-  it("requires a concrete JD and rejects repeated organizations", () => {
+  it("requires a concrete JD and rejects repeated concrete destinations", () => {
     expect(
       createBulkResumeBatchSchema.safeParse({ ...baseInput, jobDescriptionId: null }).success,
     ).toBe(false);
@@ -72,10 +72,24 @@ describe("candidate upload destinations", () => {
         ...baseInput,
         destinations: [
           { hiringUnitId: "one", jobDescriptionId: "a" },
-          { hiringUnitId: "one", jobDescriptionId: "b" },
+          { hiringUnitId: "one", jobDescriptionId: "a" },
         ],
       }).success,
     ).toBe(false);
+  });
+  it("accepts different jobs in the same organization", () => {
+    expect(
+      createBulkResumeBatchSchema.safeParse({
+        ...baseInput,
+        destinations: [
+          { hiringUnitId: "tech", jobDescriptionId: "REQ-001081" },
+          { hiringUnitId: "tech", jobDescriptionId: "REQ-000940" },
+          { hiringUnitId: "operations-a", jobDescriptionId: "REQ-001027" },
+          { hiringUnitId: "operations-b", jobDescriptionId: "REQ-000200" },
+        ],
+        jobDescriptionId: null,
+      }).success,
+    ).toBe(true);
   });
   it("accepts multiple concrete destinations and preserves unbound pool uploads", () => {
     expect(

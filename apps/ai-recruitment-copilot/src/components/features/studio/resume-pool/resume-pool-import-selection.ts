@@ -59,3 +59,27 @@ export function resolveImportDestination(
 export function emptyImportDestination(hiringUnitId: string): ResumePoolImportDestination {
   return { departmentId: null, hiringUnitId, jobDescriptionId: null, serviceUnit: null };
 }
+
+// A selected organization keeps one empty row until its concrete jobs are chosen.
+export function resolveImportDestinations(
+  options: { jobDescriptions: ImportSelectionJob[] },
+  name: string,
+  destinations: ResumePoolImportDestination[],
+): ResumePoolImportDestination[] {
+  return [...new Set(destinations.map((row) => row.hiringUnitId))].flatMap((hiringUnitId) => {
+    const empty = emptyImportDestination(hiringUnitId);
+    const selectedIds = new Set(
+      destinations
+        .filter((row) => row.hiringUnitId === hiringUnitId)
+        .map((row) => row.jobDescriptionId),
+    );
+    const selectedJobs = name
+      ? matchingImportJobs(options, name, empty).filter((job) => selectedIds.has(job.id))
+      : [];
+    return selectedJobs.length > 0
+      ? selectedJobs.map((job) =>
+          resolveImportDestination(options, name, { ...empty, jobDescriptionId: job.id }),
+        )
+      : [resolveImportDestination(options, name, empty)];
+  });
+}

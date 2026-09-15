@@ -104,3 +104,40 @@ it("creates one item per file and concrete JD with the correct hiring organizati
     "jd-two",
   ]);
 });
+
+it.each([1, 2])(
+  "expands %i files into four distinct candidate flows per file",
+  async (fileCount) => {
+    const destinations = [
+      { hiringUnitId: "tech", jobDescriptionId: "REQ-001081" },
+      { hiringUnitId: "tech", jobDescriptionId: "REQ-000940" },
+      { hiringUnitId: "operations-a", jobDescriptionId: "REQ-001027" },
+      { hiringUnitId: "operations-b", jobDescriptionId: "REQ-000200" },
+    ];
+    await insertBatchWithItems({
+      ...input,
+      destinations,
+      files: input.files.slice(0, fileCount),
+      jdMode: "bind",
+    });
+    const records = mocks.rows.get(studioInterview) ?? [];
+    const items = mocks.rows.get(resumeUploadBatchItem) ?? [];
+    expect(mocks.rows.get(resumeUploadBatch)?.[0].totalCount).toBe(fileCount * 4);
+    expect(new Set(records.map((row) => row.id)).size).toBe(fileCount * 4);
+    expect(records).toEqual(
+      input.files.slice(0, fileCount).flatMap((file) =>
+        destinations.map((destination) =>
+          expect.objectContaining({
+            ...destination,
+            pipelineStage: "ai_review",
+            resumeStorageKey: file.storageKey,
+          }),
+        ),
+      ),
+    );
+    expect(items.map((item) => item.resumeRecordId)).toEqual(records.map((record) => record.id));
+    expect(mocks.rows.get(resumePoolItem)?.map((copy) => copy.jobDescriptionId)).toEqual(
+      records.map((record) => record.jobDescriptionId),
+    );
+  },
+);
