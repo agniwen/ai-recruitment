@@ -119,6 +119,7 @@ async def test_ready_candidate_runs_the_required_question_task_group(monkeypatch
         return FakeGroup()
 
     async def fake_wrap_up(_tool, **_kwargs):
+        captured["wrap_up"] = _kwargs
         return None
 
     monkeypatch.setattr(
@@ -141,6 +142,7 @@ async def test_ready_candidate_runs_the_required_question_task_group(monkeypatch
     await a.on_enter()
 
     assert [question.id for question in captured["questions"]] == ["question-1"]
+    assert captured["wrap_up"] == {"ask_closing_question": True}
     assert session.calls == []
 
 
@@ -241,13 +243,15 @@ async def test_declined_candidate_uses_wrap_up_without_another_question(monkeypa
     assert session.calls == []
 
 
-def test_default_timeline_reminds_at_30_and_hard_cuts_at_36():
+def test_default_timeline_closes_at_24_hours_with_one_minute_grace():
     a = InterviewAgent(_ctx())
 
-    assert INTERVIEW_SOFT_WRAP_SECONDS == 30 * 60
-    assert INTERVIEW_FINAL_WRAP_SECONDS == 33 * 60
-    assert a.time_limit_seconds == 35 * 60
-    assert INTERVIEW_TIME_LIMIT_SECONDS + INTERVIEW_HARD_GRACE_SECONDS == 36 * 60
+    assert INTERVIEW_SOFT_WRAP_SECONDS == 24 * 60 * 60 - 5 * 60
+    assert INTERVIEW_FINAL_WRAP_SECONDS == 24 * 60 * 60 - 2 * 60
+    assert a.time_limit_seconds == 24 * 60 * 60
+    assert (
+        INTERVIEW_TIME_LIMIT_SECONDS + INTERVIEW_HARD_GRACE_SECONDS == 24 * 60 * 60 + 60
+    )
 
 
 @pytest.mark.asyncio

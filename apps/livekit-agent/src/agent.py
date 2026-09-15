@@ -893,7 +893,7 @@ async def my_agent(ctx: JobContext) -> None:
         return asyncio.create_task(_runner())
 
     async def _close_at_time_limit() -> None:
-        logger.info("interview reached the 35-minute close boundary")
+        logger.info("interview reached the %s-second close boundary", CLOSE_SECONDS)
         state.completion_status = "success"
         state.business_close_reason = "time_limit"
         interview_agent.stop_question_workflow("time_limit")
@@ -912,7 +912,10 @@ async def my_agent(ctx: JobContext) -> None:
     )
 
     async def _end_current_question() -> None:
-        logger.info("ending the current question at the 21-minute boundary")
+        logger.info(
+            "ending the current question at the %s-second boundary",
+            INTERVIEW_FINAL_WRAP_SECONDS,
+        )
         state.business_close_reason = state.business_close_reason or "time_limit"
         interview_agent.stop_question_workflow("time_limit")
 
@@ -923,7 +926,9 @@ async def my_agent(ctx: JobContext) -> None:
     )
 
     async def _kill_stuck_session() -> None:
-        logger.error("interview reached the 36-minute stuck-session kill boundary")
+        logger.error(
+            "interview reached the %s-second stuck-session kill boundary", KILL_SECONDS
+        )
         state.completion_status = "failed"
         state.business_close_reason = "system_shutdown"
         interview_agent.stop_question_workflow("system_shutdown")

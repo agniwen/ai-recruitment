@@ -41,10 +41,10 @@ class InterviewWorkflowStoppedError(Exception):
 
 # 调试开关: 设置 INTERVIEW_DEBUG_FAST=1 时把整套计时压到 1 分钟级别, 用来在本地
 # 快速跑完 "soft wrap -> final wrap -> time limit -> hard cutoff" 完整流程, 不
-# 必真等 25 分钟. 生产环境保持默认即可.
+# 必真等完整面试时限. 生产环境保持默认即可.
 # Debug switch: setting INTERVIEW_DEBUG_FAST=1 compresses the whole timeline to
 # ~1 minute so local dev can exercise the full soft-wrap -> final-wrap -> time-
-# limit -> hard-cutoff path without waiting 25 minutes. Production stays on the
+# limit -> hard-cutoff path without waiting the full interview duration. Production stays on the
 # default schedule.
 _DEBUG_FAST = os.environ.get("INTERVIEW_DEBUG_FAST", "").lower() in (
     "1",
@@ -54,11 +54,10 @@ _DEBUG_FAST = os.environ.get("INTERVIEW_DEBUG_FAST", "").lower() in (
 )
 
 if _DEBUG_FAST:
-    # 数值挑选: 与生产 30/33/35/1min 同形比例, 同时保证
+    # 调试数值保证
     # 相邻两阶段之间留出至少 10s 间隙, 给 _force_wind_down / _enforce_time_limit
     # 的 wait_for_playout 有播放窗口. 硬切总时长 = 45 + 15 = 60s.
-    # Values chosen to keep the same shape as the prod 30/33/35/1min timeline
-    # while leaving ≥10s between adjacent phases so the playout windows for
+    # Debug values leave ≥10s between adjacent phases so the playout windows for
     # _force_wind_down / _enforce_time_limit don't overlap. Total hard cutoff
     # lands at 45 + 15 = 60s.
     INTERVIEW_SOFT_WRAP_SECONDS = 20
@@ -74,11 +73,11 @@ if _DEBUG_FAST:
         INTERVIEW_TIME_LIMIT_SECONDS + INTERVIEW_HARD_GRACE_SECONDS,
     )
 else:
-    # 30:00 soft reminder / stop new questions; 33:00 finish current;
-    # 35:00 force goodbye; kill boundary is +1 min in agent.py (KILL_SECONDS).
-    INTERVIEW_SOFT_WRAP_SECONDS = 30 * 60
-    INTERVIEW_FINAL_WRAP_SECONDS = 33 * 60
-    INTERVIEW_TIME_LIMIT_SECONDS = 35 * 60
+    # 23:55:00 soft reminder / stop new questions; 23:58:00 finish current;
+    # 24:00:00 force goodbye; kill boundary is +1 min in agent.py (KILL_SECONDS).
+    INTERVIEW_SOFT_WRAP_SECONDS = 24 * 60 * 60 - 5 * 60
+    INTERVIEW_FINAL_WRAP_SECONDS = 24 * 60 * 60 - 2 * 60
+    INTERVIEW_TIME_LIMIT_SECONDS = 24 * 60 * 60
     # Hard cutoff is enforced in agent.py; allow 1 min after the time limit so
     # the fixed goodbye cue can finish playout before the stuck-session kill.
     INTERVIEW_HARD_GRACE_SECONDS = 60
@@ -309,7 +308,7 @@ class InterviewAgent(Agent):
     @function_tool()
     async def enter_wrap_up(self) -> str | None:
         """系统计时提示出现"已进入收尾时间"后调用; 你会被转入收尾流程, 由其向候选人提出本场最后一个收尾问题并结束面试. 在还未达到收尾时间或主流程仍在进行时, 不要调用此工具."""
-        # 软门: 16 分钟前的误触直接驳回, 防止模型在 hint 出现前就抢跑进入收尾.
+        # 软门: 收尾阈值前 30 秒之前的误触直接驳回, 防止模型提前进入收尾.
         # Soft gate: reject premature invocations so the LLM cannot skip ahead
         # into wrap-up before the soft-wrap hint actually fires.
         if self.elapsed_seconds() < INTERVIEW_SOFT_WRAP_SECONDS - 30:
