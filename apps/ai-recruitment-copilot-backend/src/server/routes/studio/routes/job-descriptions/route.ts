@@ -1,3 +1,4 @@
+import { loadJobDescriptionForReader } from "./utils/read-detail";
 import { jobDescriptionReferenceOptionsRouter } from "./routes/reference-options/route";
 import { jobDescriptionLinkedTemplatesRouter } from "./routes/linked-templates/route";
 import { resolveJobDescriptionResumeSource } from "./resume-source";
@@ -493,14 +494,17 @@ export const jobDescriptionsRouter = factory
       return c.json({ error: "当前分钟岗位唯一编码已用尽，请稍后重试。" }, 409);
     },
   )
-  .get("/:id", requirePermission("jd", "read"), async (c) => {
+  .get("/:id", async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const record = await loadJobDescriptionById(activeOrg.id, id, {
-      actorUserId: c.var.user?.id,
+    const record = await loadJobDescriptionForReader({
+      jobDescriptionId: id,
+      memberRole: c.var.member?.role,
+      organizationId: activeOrg.id,
+      userId: c.var.user?.id,
     });
     if (!record) {
       return c.json({ error: "在招岗位不存在。" }, 404);

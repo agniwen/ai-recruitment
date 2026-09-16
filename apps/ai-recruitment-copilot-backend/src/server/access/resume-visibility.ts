@@ -151,10 +151,16 @@ function buildOdcApprovalRestriction(actor?: {
   return or(
     not(isOdc),
     eq(studioInterview.pipelineStage, "ai_review"),
-    ne(studioInterview.aiReviewApprovalStatus, "approved"),
     and(
-      eq(studioInterview.organizationId, actor.organizationId),
-      eq(studioInterview.aiReviewAssignedOdcUserId, actor.userId),
+      // 审核阶段之外，创建人/招聘组授权不能绕过 ODC 当前负责的来源。
+      buildCurrentOdcVisibilityCondition(actor),
+      or(
+        ne(studioInterview.aiReviewApprovalStatus, "approved"),
+        and(
+          eq(studioInterview.organizationId, actor.organizationId),
+          eq(studioInterview.aiReviewAssignedOdcUserId, actor.userId),
+        ),
+      ),
     ),
   );
 }

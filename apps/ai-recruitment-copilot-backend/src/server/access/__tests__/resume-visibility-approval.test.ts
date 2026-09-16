@@ -50,7 +50,7 @@ describe("AI approval candidate visibility", () => {
     expect(query.sql).toContain('"studio_interview"."organization_id" =');
     expect(query.sql).toContain('"studio_interview"."pipeline_stage" =');
     expect(query.sql).not.toContain("created_by");
-    expect(query.sql).not.toContain("resume_source");
+    expect(query.sql).toContain("resume_source");
     expect(query.params.slice(0, 2)).toEqual(["workspace-a", "ai_review"]);
     expect(mocks.authorizer).toHaveBeenCalledWith({
       memberRole: "ai-reviewer",

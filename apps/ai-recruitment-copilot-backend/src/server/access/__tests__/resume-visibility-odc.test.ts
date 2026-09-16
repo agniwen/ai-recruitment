@@ -21,21 +21,25 @@ describe.skipIf(!process.env.DATABASE_URL)("ODC approval recipient visibility", 
       INSERT INTO organization_role VALUES ('org', 'odc', true), ('org', 'recruiter', false);
       INSERT INTO member VALUES ('a', 'org', 'a', 'odc'), ('b', 'org', 'b', 'odc'), ('r', 'org', 'r', 'recruiter');
       INSERT INTO resume_source_odc_member VALUES ('org', 'a', 'source', NULL, NULL), ('org', 'b', 'source', NULL, NULL);
-      INSERT INTO job_description VALUES ('jd', 'org', 'source', NULL, NULL);
+      INSERT INTO job_description VALUES ('jd', 'org', 'source', NULL, NULL), ('outside-jd', 'org', 'other-source', NULL, NULL);
       INSERT INTO studio_interview VALUES
         ('assigned-a', 'org', 'jd', 'b', 'screening', 'approved', 'a'),
         ('later-stage', 'org', 'jd', 'b', 'human_interview', 'approved', 'a'),
         ('missing-recipient', 'org', 'jd', 'b', 'screening', 'approved', NULL),
-        ('pending', 'org', 'jd', 'b', 'ai_review', 'pending', NULL);
+        ('pending', 'org', 'jd', 'b', 'ai_review', 'pending', NULL),
+        ('outside-offer', 'org', 'outside-jd', 'b', 'offer', 'pending', NULL),
+        ('outside-assigned', 'org', 'outside-jd', 'b', 'screening', 'approved', 'b'),
+        ('outside-review', 'org', 'outside-jd', 'r', 'ai_review', 'pending', NULL);
     `);
   });
   afterAll(async () => {
     await client.end();
   });
 
-  async function visible(userId: string, all = false) {
+  async function visible(userId: string, all = false, approve = false) {
     const condition = buildResumeVisibilityCondition({
       actor: { organizationId: "org", userId },
+      ...(approve ? { aiReviewOrganizationId: "org" } : {}),
       odc: { departmentIds: [], hiringUnitIds: [], resumeSourceIds: ["source"] },
       odcActor: { organizationId: "org", userId },
       recruiting: all ? { kind: "all" } : { kind: "restricted", userIds: ["b"] },
@@ -58,13 +62,18 @@ describe.skipIf(!process.env.DATABASE_URL)("ODC approval recipient visibility", 
     expect(await visible("b")).toEqual(["pending"]);
   });
   it("does not let inherited unrestricted recruiting access bypass assignment", async () => {
-    expect(await visible("b", true)).toEqual(["pending"]);
+    expect(await visible("b", true)).toEqual(["outside-review", "pending"]);
+  });
+  it("allows cross-source review for approvers but never a cross-source offer or assignment", async () => {
+    expect(await visible("b", false, true)).toEqual(["outside-review", "pending"]);
   });
   it("preserves normal recruiting visibility for non-ODC roles", async () => {
     expect(await visible("r")).toEqual([
       "assigned-a",
       "later-stage",
       "missing-recipient",
+      "outside-assigned",
+      "outside-offer",
       "pending",
     ]);
   });
