@@ -786,10 +786,10 @@ export function useStudioPersonDetailController({
         hasJobDescription={Boolean(resumeRecord?.jobDescriptionId)}
         missingJobAction={missingJobAction}
         resumeEvaluationPassed={canProgressResumeRecordToInterview}
-        onAdvance={async (target, approvalNote, notificationUserId) => {
+        onAdvance={async (target, approvalNote, notificationUserIds) => {
           const error = await advancePipelineStage({
             approvalNote,
-            notificationUserId,
+            notificationUserIds,
             queryClient,
             recordId: record.id,
             slug,
@@ -797,7 +797,7 @@ export function useStudioPersonDetailController({
           });
           if (error) {
             toast.error(error);
-            if (notificationUserId || approvalNote) {
+            if (notificationUserIds || approvalNote) {
               throw new Error(error);
             }
             return;

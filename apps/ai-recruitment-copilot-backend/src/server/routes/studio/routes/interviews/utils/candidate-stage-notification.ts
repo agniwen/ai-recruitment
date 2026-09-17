@@ -80,7 +80,7 @@ export function buildCandidateDetailUrl(
 }
 
 interface CandidateStageChangeInput {
-  aiReviewNotificationChatId?: string;
+  aiReviewNotificationChatIds?: string[];
   candidateId: string;
   fromOutcome: CandidateOutcome;
   fromStage: PipelineStage;
@@ -168,8 +168,8 @@ async function sendCandidateStageChange(input: CandidateStageChangeInput): Promi
   }
 
   let recipientIds: string[];
-  if (input.aiReviewNotificationChatId) {
-    recipientIds = [input.aiReviewNotificationChatId];
+  if (input.aiReviewNotificationChatIds) {
+    recipientIds = [...new Set(input.aiReviewNotificationChatIds)];
   } else {
     const resumeContactRecipient = await findResumeContactRecipient(
       input.organizationId,
@@ -190,7 +190,7 @@ async function sendCandidateStageChange(input: CandidateStageChangeInput): Promi
     detailUrl: buildCandidateDetailUrl(
       input.candidateId,
       candidate.organizationSlug,
-      Boolean(input.aiReviewNotificationChatId),
+      Boolean(input.aiReviewNotificationChatIds),
     ),
     fromOutcome: input.fromOutcome,
     fromStage: input.fromStage,

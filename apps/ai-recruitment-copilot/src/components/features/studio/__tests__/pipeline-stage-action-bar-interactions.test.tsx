@@ -42,30 +42,29 @@ vi.mock("@/lib/client/rpc", () => ({
     },
   },
 }));
-vi.mock("@/components/ui/searchable-select", () => ({
-  SearchableSelect: ({
+vi.mock("@/components/ui/searchable-multi-select", () => ({
+  SearchableMultiSelect: ({
     id,
     value,
     onChange,
     options,
     disabled,
-    required,
   }: {
     id: string;
-    value: string | null;
-    onChange: (value: string | null) => void;
+    value: string[];
+    onChange: (value: string[]) => void;
     options: { value: string; label: string; disabled?: boolean }[];
     disabled?: boolean;
-    required?: boolean;
   }) => (
     <select
       id={id}
-      value={value ?? ""}
+      value={value}
       disabled={disabled}
-      required={required}
-      onChange={(event) => onChange(event.target.value || null)}
+      multiple
+      onChange={(event) =>
+        onChange([...event.target.selectedOptions].map((option) => option.value))
+      }
     >
-      <option value="">请选择通知人员</option>
       {options.map((option) => (
         <option key={option.value} value={option.value} disabled={option.disabled}>
           {option.label}
@@ -224,7 +223,7 @@ describe("PipelineStageActionBar interactions", () => {
       confirm.click();
       await Promise.resolve();
     });
-    expect(onAdvance).toHaveBeenCalledWith("screening", "已核实项目经验", "notify-a");
+    expect(onAdvance).toHaveBeenCalledWith("screening", "已核实项目经验", ["notify-a"]);
   });
   it("disables approval until the AI review is ready", () => {
     const host = renderActionBar({

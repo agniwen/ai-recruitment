@@ -1,4 +1,5 @@
 /* oxlint-disable complexity -- collection router coordinates validation, persistence, and access policy. */
+import { humanInterviewMeetingsRouter } from "./routes/human-interview-meetings/route";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -91,6 +92,7 @@ function loadVisibilityScope(
 
 export const studioInterviewCollectionRouter = factory
   .createApp()
+  .route("/human-interview-meetings", humanInterviewMeetingsRouter)
   .post("/", requirePermission("interview", "create"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {

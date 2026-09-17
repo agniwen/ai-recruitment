@@ -86,6 +86,8 @@ export async function postTelegramDirectMessage(
   message: AdapterPostableMessage,
 ): Promise<void> {
   const bot = getTelegramBot();
+  // Proactive notifications may run before this process receives any webhook.
+  await bot.initialize();
   const threadId = await bot.getAdapter("telegram").openDM(chatId);
   await bot.thread(threadId).post(message);
 }

@@ -130,58 +130,67 @@ describe("resolveCandidateStageNotificationRecipientIds", () => {
 });
 
 describe("AI approval Telegram delivery", () => {
-  it("sends only to the selected bound chat with the standalone resume-review detail link", async () => {
-    vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://recruit.example.com/");
-    const query = {
-      from: vi.fn().mockReturnThis(),
-      innerJoin: vi.fn().mockReturnThis(),
-      leftJoin: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue([
-        {
-          candidateName: "候选人甲",
-          departmentName: "研发部",
-          hiringUnitName: "中心甲",
-          jobDescriptionName: "工程师",
-          organizationName: "招聘主体",
-          organizationSlug: "work",
-          resumeContact: "@contact",
-          telegram: "@uploader",
-          telegramBoundUsername: "uploader",
-          telegramChatId: "uploader-chat",
-        },
-      ]),
-      where: vi.fn().mockReturnThis(),
-    };
-    mocks.select.mockReturnValue(query);
-    try {
-      await notifyCandidateStageChange({
-        aiReviewNotificationChatId: "10001",
-        candidateId: "d95914df-8243-415b-bff3-fb477e5a3577",
-        fromOutcome: "in_pipeline",
-        fromStage: "ai_review",
-        organizationId: "org-a",
-        toOutcome: "in_pipeline",
-        toStage: "screening",
-      });
-      expect(mocks.post).toHaveBeenCalledOnce();
-      expect(mocks.post).toHaveBeenCalledWith(
-        "10001",
-        expect.objectContaining({
-          children: expect.arrayContaining([
-            expect.objectContaining({
-              children: [
-                expect.objectContaining({
-                  url: "https://recruit.example.com/resume-review/work/d95914df-8243-415b-bff3-fb477e5a3577",
-                }),
-              ],
-              type: "actions",
-            }),
-          ]),
-        }),
-      );
-      expect(mocks.select).toHaveBeenCalledOnce();
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
+  it.each([false, true])(
+    "notifies all selected chats once with the same review link (one fails: %s)",
+    async (failFirst) => {
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      if (failFirst) {
+        mocks.post.mockRejectedValueOnce(new Error("Telegram delivery failed"));
+      }
+      vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://recruit.example.com/");
+      const query = {
+        from: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        leftJoin: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([
+          {
+            candidateName: "候选人甲",
+            departmentName: "研发部",
+            hiringUnitName: "中心甲",
+            jobDescriptionName: "工程师",
+            organizationName: "招聘主体",
+            organizationSlug: "work",
+            resumeContact: "@contact",
+            telegram: "@uploader",
+            telegramBoundUsername: "uploader",
+            telegramChatId: "uploader-chat",
+          },
+        ]),
+        where: vi.fn().mockReturnThis(),
+      };
+      mocks.select.mockReturnValue(query);
+      try {
+        await notifyCandidateStageChange({
+          aiReviewNotificationChatIds: ["10001", "10002", "10001"],
+          candidateId: "d95914df-8243-415b-bff3-fb477e5a3577",
+          fromOutcome: "in_pipeline",
+          fromStage: "ai_review",
+          organizationId: "org-a",
+          toOutcome: "in_pipeline",
+          toStage: "screening",
+        });
+        expect(mocks.post).toHaveBeenCalledTimes(2);
+        expect(mocks.post).toHaveBeenNthCalledWith(2, "10002", mocks.post.mock.calls[0]?.[1]);
+        expect(mocks.post).toHaveBeenCalledWith(
+          "10001",
+          expect.objectContaining({
+            children: expect.arrayContaining([
+              expect.objectContaining({
+                children: [
+                  expect.objectContaining({
+                    url: "https://recruit.example.com/resume-review/work/d95914df-8243-415b-bff3-fb477e5a3577",
+                  }),
+                ],
+                type: "actions",
+              }),
+            ]),
+          }),
+        );
+        expect(mocks.select).toHaveBeenCalledOnce();
+      } finally {
+        vi.unstubAllEnvs();
+        log.mockRestore();
+      }
+    },
+  );
 });

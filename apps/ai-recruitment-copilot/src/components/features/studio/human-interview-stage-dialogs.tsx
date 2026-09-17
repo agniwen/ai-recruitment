@@ -32,6 +32,7 @@ import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { Textarea } from "@/components/ui/textarea";
 import { addOneHourToDateTimeLocalInputValue } from "./human-interview-stage-utils";
 import { useWorkspaceInterviewerMembers } from "./use-workspace-interviewer-members";
+import { useHumanInterviewScheduleConfirmation } from "./use-human-interview-schedule-confirmation";
 
 const EMPTY_INTERVIEWER_IDS: string[] = [];
 
@@ -62,6 +63,7 @@ export function ScheduleRoundDialog({
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const { data: members = [] } = useWorkspaceInterviewerMembers(open);
+  const { confirmSchedule, conflictDialog } = useHumanInterviewScheduleConfirmation();
   const [label, setLabel] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [validUntil, setValidUntil] = useState("");
@@ -103,6 +105,16 @@ export function ScheduleRoundDialog({
       if (!scheduledAtIso) {
         throw new Error("请填写面试时间");
       }
+      const validUntilIso = dateTimeLocalInputToISOString(validUntil);
+      if (
+        !(await confirmSchedule({
+          interviewerIds,
+          scheduledAt: scheduledAtIso,
+          validUntil: validUntilIso,
+        }))
+      ) {
+        return null;
+      }
       const round = await createHumanInterviewRound(slug, candidateId, {
         format: "online",
         interviewerIds,
@@ -112,7 +124,6 @@ export function ScheduleRoundDialog({
         notes: notes.trim() || null,
         scheduledAt: scheduledAtIso,
       });
-      const validUntilIso = dateTimeLocalInputToISOString(validUntil);
       await createHumanInterviewMeeting(slug, {
         interviewerIds,
         notes: notes.trim() || null,
@@ -124,7 +135,10 @@ export function ScheduleRoundDialog({
       return round;
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "创建失败"),
-    onSuccess: () => {
+    onSuccess: (round) => {
+      if (!round) {
+        return;
+      }
       toast.success("已安排线上真人复面");
       void invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug });
       onScheduled();
@@ -138,7 +152,14 @@ export function ScheduleRoundDialog({
   }));
 
   return (
-    <Dialog onOpenChange={handleOpenChange} open={open}>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!mutation.isPending) {
+          handleOpenChange(next);
+        }
+      }}
+      open={open}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>安排真人复面</DialogTitle>
@@ -147,7 +168,7 @@ export function ScheduleRoundDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <fieldset className="space-y-4 py-2" disabled={mutation.isPending}>
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="round-label">
               轮次标签
@@ -207,7 +228,7 @@ export function ScheduleRoundDialog({
               value={notes}
             />
           </div>
-        </div>
+        </fieldset>
 
         <DialogFooter>
           <Button
@@ -225,6 +246,7 @@ export function ScheduleRoundDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {conflictDialog}
     </Dialog>
   );
 }

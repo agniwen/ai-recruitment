@@ -1,18 +1,4 @@
-import {
-  and,
-  asc,
-  count,
-  eq,
-  gt,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import {
@@ -38,8 +24,11 @@ import type {
   HumanInterviewRoundStatus,
 } from "@arc/db-schema/studio-interviews";
 import { buildAiCalendarEvents } from "./events";
-
-const DEFAULT_INTERVIEW_DURATION_MS = 60 * 60 * 1000;
+import {
+  calendarTimestamp,
+  humanStartAt,
+  humanEndAt,
+} from "../interviews/dao/human-interview-time-range";
 
 function serializeDate(value: Date | null): string | null {
   return value?.toISOString() ?? null;
@@ -70,13 +59,6 @@ interface ListStudioCalendarEventsInput {
   visibilityScope: RecruitingVisibilityScope;
 }
 
-function resolveEndAt(startAt: Date, endedAt: Date | null): Date {
-  if (endedAt && endedAt > startAt) {
-    return endedAt;
-  }
-  return new Date(startAt.getTime() + DEFAULT_INTERVIEW_DURATION_MS);
-}
-
 function eventIdFor(row: { meetingId: string | null; roundId: string }) {
   return row.meetingId ?? row.roundId;
 }
@@ -100,12 +82,14 @@ export async function listStudioCalendarEvents({
   if (visibilityScope.kind === "none") {
     return [];
   }
+  const rangeStart = sql`${start.toISOString()}::timestamptz`;
+  const rangeEnd = sql`${end.toISOString()}::timestamptz`;
 
   const [candidateRows, aiRows, aiConversationRows] = await Promise.all([
     db
       .select({
         candidateName: studioInterview.candidateName,
-        endedAt: studioHumanInterviewMeeting.endedAt,
+        endAt: humanEndAt,
         format: studioHumanInterviewRound.format,
         interviewRecordId: studioInterview.id,
         location: studioHumanInterviewRound.location,
@@ -116,8 +100,7 @@ export async function listStudioCalendarEvents({
         roundId: studioHumanInterviewRound.id,
         roundLabel: studioHumanInterviewRound.label,
         roundStatus: studioHumanInterviewRound.status,
-        scheduledAt: studioHumanInterviewRound.scheduledAt,
-        startedAt: studioHumanInterviewMeeting.startedAt,
+        startAt: humanStartAt,
       })
       .from(studioHumanInterviewRound)
       .leftJoin(
@@ -140,8 +123,8 @@ export async function listStudioCalendarEvents({
             isNull(studioHumanInterviewMeeting.status),
             ne(studioHumanInterviewMeeting.status, "cancelled"),
           ),
-          gte(studioHumanInterviewRound.scheduledAt, start),
-          lt(studioHumanInterviewRound.scheduledAt, end),
+          gt(humanEndAt, rangeStart),
+          lt(humanStartAt, rangeEnd),
           visibilityScope.kind === "restricted"
             ? inArray(studioInterview.createdBy, visibilityScope.userIds)
             : undefined,
@@ -166,8 +149,8 @@ export async function listStudioCalendarEvents({
       .where(
         and(
           eq(studioInterviewSchedule.organizationId, organizationId),
-          gte(studioInterviewSchedule.scheduledAt, start),
-          lt(studioInterviewSchedule.scheduledAt, end),
+          gt(calendarTimestamp(studioInterviewSchedule.scheduledEndAt), rangeStart),
+          lt(calendarTimestamp(studioInterviewSchedule.scheduledAt), rangeEnd),
           visibilityScope.kind === "restricted"
             ? inArray(studioInterview.createdBy, visibilityScope.userIds)
             : undefined,
@@ -197,8 +180,8 @@ export async function listStudioCalendarEvents({
           eq(studioInterview.organizationId, organizationId),
           isNotNull(interviewConversation.startedAt),
           isNotNull(interviewConversation.endedAt),
-          gt(interviewConversation.endedAt, start),
-          lt(interviewConversation.startedAt, end),
+          gt(calendarTimestamp(interviewConversation.endedAt), rangeStart),
+          lt(calendarTimestamp(interviewConversation.startedAt), rangeEnd),
           visibilityScope.kind === "restricted"
             ? inArray(studioInterview.createdBy, visibilityScope.userIds)
             : undefined,
@@ -267,20 +250,19 @@ export async function listStudioCalendarEvents({
   const events = new Map<string, StudioCalendarEvent>();
   for (const row of candidateRows) {
     const eventId = eventIdFor(row);
-    if (!row.scheduledAt || events.has(eventId)) {
+    if (!row.startAt || events.has(eventId)) {
       continue;
     }
-    const startAt = row.startedAt ?? row.scheduledAt;
     events.set(eventId, {
       candidates: candidatesByEvent.get(eventId) ?? [],
-      endAt: resolveEndAt(startAt, row.endedAt).toISOString(),
+      endAt: row.endAt.toISOString(),
       format: row.format,
       id: eventId,
       interviewers: interviewersByEvent.get(eventId) ?? [],
       kind: "human",
       location: row.location,
       meetingUrl: row.meetingUrl,
-      startAt: startAt.toISOString(),
+      startAt: row.startAt.toISOString(),
       status: resolveEventStatus(row.meetingStatus, row.roundStatus),
       title: row.meetingTitle ?? row.roundLabel,
     });

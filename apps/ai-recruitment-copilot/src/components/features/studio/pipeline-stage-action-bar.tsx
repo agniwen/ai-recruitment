@@ -75,7 +75,7 @@ export interface PipelineStageActionBarProps {
   onAdvance: (
     target: PipelineStage,
     approvalNote?: string,
-    notificationUserId?: string,
+    notificationUserIds?: string[],
   ) => void | Promise<void>;
   // 查看当前阶段对应内容；不对应独立 tab 时由上层回到概览。
   // View content for the current stage; parent falls back to overview when no stage tab exists.
@@ -136,7 +136,7 @@ export function PipelineStageActionBar({
   async function handleAdvance(
     target: PipelineStage,
     approvalNote?: string,
-    notificationUserId?: string,
+    notificationUserIds?: string[],
   ) {
     if (isBusy) {
       return;
@@ -144,8 +144,8 @@ export function PipelineStageActionBar({
     setIsAdvancing(true);
     await withCleanup(
       () =>
-        approvalNote || notificationUserId
-          ? onAdvance(target, approvalNote, notificationUserId)
+        approvalNote || notificationUserIds
+          ? onAdvance(target, approvalNote, notificationUserIds)
           : onAdvance(target),
       () => setIsAdvancing(false),
     );
@@ -461,7 +461,7 @@ function getStageActions(props: {
   onAdvance: (
     target: PipelineStage,
     approvalNote?: string,
-    notificationUserId?: string,
+    notificationUserIds?: string[],
   ) => void | Promise<void>;
   onRequestReactivate: () => void;
 }): { left: ReactNode[]; right: ReactNode[] } {
@@ -519,8 +519,8 @@ function getStageActions(props: {
             recordId={props.recordId}
             key="approve-ai-review"
             disabled={isBusy || !aiReviewReady || !hasJobDescription}
-            onConfirm={async (note, notificationUserId) => {
-              await onAdvance("screening", note, notificationUserId);
+            onConfirm={async (note, notificationUserIds) => {
+              await onAdvance("screening", note, notificationUserIds);
             }}
             label={aiReviewReady ? "审批通过，进入简历筛选" : "等待 AI 评价生成"}
           />
@@ -710,7 +710,7 @@ function HumanInterviewAdvanceButton({
   onAdvance: (
     target: PipelineStage,
     approvalNote?: string,
-    notificationUserId?: string,
+    notificationUserIds?: string[],
   ) => void | Promise<void>;
   variant?: ComponentProps<typeof Button>["variant"];
 }) {
@@ -762,7 +762,7 @@ function OfferAdvanceButton({
   onAdvance: (
     target: PipelineStage,
     approvalNote?: string,
-    notificationUserId?: string,
+    notificationUserIds?: string[],
   ) => void | Promise<void>;
 }) {
   const targetStage: PipelineStage = "offer";

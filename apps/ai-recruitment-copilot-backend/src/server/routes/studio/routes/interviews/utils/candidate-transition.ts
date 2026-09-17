@@ -21,7 +21,7 @@ export interface CandidateTransitionInput {
   outcome?: CandidateOutcome;
   pipelineStage: PipelineStage;
   approvalNote?: string;
-  notificationUserId?: string;
+  notificationUserIds?: string[];
   reactivationReason?: string;
 }
 

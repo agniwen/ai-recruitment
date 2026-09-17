@@ -42,7 +42,7 @@ export function AiReviewDetailDialog({
       ["queued", "processing"].includes(query.state.data?.resumeReviewStatus ?? "") ? 5000 : false,
   });
   const approval = useMutation({
-    mutationFn: (input: { approvalNote: string; notificationUserId: string }) =>
+    mutationFn: (input: { approvalNote: string; notificationUserIds: string[] }) =>
       rpcFetch(
         rpc.api.w[":slug"].studio["ai-review"][":id"].approve.$post({
           json: input,
@@ -136,8 +136,8 @@ export function AiReviewDetailDialog({
               <AiReviewApprovalButton
                 recordId={recordId}
                 disabled={approval.isPending || detail.resumeReviewStatus !== "ready"}
-                onConfirm={(approvalNote, notificationUserId) =>
-                  approval.mutateAsync({ approvalNote, notificationUserId })
+                onConfirm={(approvalNote, notificationUserIds) =>
+                  approval.mutateAsync({ approvalNote, notificationUserIds })
                 }
               />
             ) : null}
