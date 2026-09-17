@@ -399,7 +399,7 @@ export const studioInterviewsRouter = factory
   // Candidate expectations PATCH; partial merge semantics.
   .patch(
     "/:id/candidate-expectations",
-    requirePermission("interview", "update"),
+    requirePermission("offer", "update"),
     zValidator(
       "json",
       candidateExpectationsMetaSchema.partial(),
