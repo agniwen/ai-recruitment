@@ -17,6 +17,7 @@ import {
   member,
   organizationRole,
   studioInterview,
+  studioInterviewOdcAssignment,
 } from "@arc/db-schema/schema";
 
 export interface ResumeVisibilityScope {
@@ -158,7 +159,20 @@ function buildOdcApprovalRestriction(actor?: {
         ne(studioInterview.aiReviewApprovalStatus, "approved"),
         and(
           eq(studioInterview.organizationId, actor.organizationId),
-          eq(studioInterview.aiReviewAssignedOdcUserId, actor.userId),
+          or(
+            eq(studioInterview.aiReviewAssignedOdcUserId, actor.userId),
+            exists(
+              db
+                .select({ value: sql`1` })
+                .from(studioInterviewOdcAssignment)
+                .where(
+                  and(
+                    eq(studioInterviewOdcAssignment.interviewRecordId, studioInterview.id),
+                    eq(studioInterviewOdcAssignment.userId, actor.userId),
+                  ),
+                ),
+            ),
+          ),
         ),
       ),
     ),

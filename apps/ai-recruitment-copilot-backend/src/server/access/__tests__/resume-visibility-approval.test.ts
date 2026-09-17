@@ -104,6 +104,7 @@ it("still restricts approved records when an ODC inherits unrestricted recruitin
   mocks.recruiting.mockResolvedValue({ kind: "all" });
   const query = await visibilityQuery();
   expect(query.sql).toContain('"organization_role"."is_odc"');
+  expect(query.sql).toContain('"studio_interview_odc_assignment"."user_id" =');
   expect(query.sql).toContain('"studio_interview"."ai_review_assigned_odc_user_id" =');
   expect(query.sql).toContain('"studio_interview"."ai_review_approval_status" <>');
   expect(query.params).toContain("reviewer");

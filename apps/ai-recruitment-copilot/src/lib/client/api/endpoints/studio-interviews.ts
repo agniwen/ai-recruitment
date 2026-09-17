@@ -14,6 +14,10 @@
  */
 
 import type { CandidateFormSubmissionWithSnapshot } from "@arc/db-schema/candidate-forms";
+import type {
+  HumanInterviewConflict,
+  HumanInterviewConflictInput,
+} from "@arc/shared/human-interview-conflicts";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import type { StudioInterviewConversationReport } from "@arc/db-schema/interview-session";
 import type {
@@ -346,7 +350,7 @@ export interface TransitionInterviewInput {
   // Partial closedMeta; previousStage is server-controlled.
   closedMeta?: Omit<Partial<ClosedMeta>, "previousStage">;
   approvalNote?: string;
-  notificationUserId?: string;
+  notificationUserIds?: string[];
   reactivationReason?: string;
 }
 
@@ -383,6 +387,19 @@ export function updateCandidateExpectations(
 }
 
 // ── 真人复面 client wrappers ──
+
+export function checkHumanInterviewConflicts(
+  slug: string,
+  input: HumanInterviewConflictInput,
+): Promise<{ conflicts: HumanInterviewConflict[] }> {
+  return rpcFetch<{ conflicts: HumanInterviewConflict[] }>(
+    rpc.api.w[":slug"].studio.interviews["human-interview-meetings"].conflicts.$post({
+      json: input,
+      param: { slug },
+    }),
+    "检查面试官日程失败，请重试",
+  );
+}
 
 export function listHumanInterviewMeetings(
   slug: string,

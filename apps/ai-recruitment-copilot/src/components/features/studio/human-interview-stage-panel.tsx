@@ -37,6 +37,7 @@ import {
 } from "./human-interview-stage-dialogs";
 import { EndMeetingDialog, MeetingLinksDialog } from "./human-interview-stage-meetings";
 import { RoundCard } from "./human-interview-stage-rounds";
+import { useHumanInterviewScheduleConfirmation } from "./use-human-interview-schedule-confirmation";
 
 const EMPTY_INTERVIEWER_IDS: string[] = [];
 
@@ -109,6 +110,7 @@ export function HumanInterviewStagePanel({
 }: PanelProps) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
+  const { confirmSchedule, conflictDialog } = useHumanInterviewScheduleConfirmation();
   // Keep human-interview live while the tab is open: poll every 30s, and use
   // TanStack Query's built-in window-focus refetch (global default is off).
   const humanInterviewQueryOptions = {
@@ -142,17 +144,25 @@ export function HumanInterviewStagePanel({
     },
   });
   const createMeetingMutation = useMutation({
-    mutationFn: (round: HumanInterviewRoundRecord) =>
-      createHumanInterviewMeeting(slug, {
+    mutationFn: async (round: HumanInterviewRoundRecord) => {
+      const input = {
         interviewerIds: round.interviewers.map((interviewer) => interviewer.id),
         notes: round.notes,
         roundIds: [round.id],
         scheduledAt: round.scheduledAt,
         title: round.label,
         validUntil: null,
-      }),
+      };
+      if (!(await confirmSchedule({ ...input, excludeRoundIds: [round.id] }))) {
+        return null;
+      }
+      return createHumanInterviewMeeting(slug, input);
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "创建视频会议失败"),
-    onSuccess: () => {
+    onSuccess: (meeting) => {
+      if (!meeting) {
+        return;
+      }
       toast.success("已创建视频会议");
       invalidateRounds();
     },
@@ -198,7 +208,7 @@ export function HumanInterviewStagePanel({
               canCreate={canCreate}
               canDelete={canDelete}
               canUpdate={canUpdate}
-              disabled={disabled}
+              disabled={disabled || createMeetingMutation.isPending}
               key={round.id}
               meeting={meeting}
               onCancel={() => dispatchDialog({ target: round, type: "cancelTargetChanged" })}
@@ -229,6 +239,7 @@ export function HumanInterviewStagePanel({
       {disabled || !canCreate ? null : (
         <div className="flex justify-end w-full">
           <Button
+            disabled={createMeetingMutation.isPending}
             onClick={() => dispatchDialog({ open: true, type: "scheduleOpenChanged" })}
             size="lg"
             className="w-full"
@@ -275,6 +286,7 @@ export function HumanInterviewStagePanel({
         onConfirm={(meeting) => endMeetingMutation.mutateAsync(meeting.id)}
         onOpenChange={(open) => !open && dispatchDialog({ target: null, type: "endTargetChanged" })}
       />
+      {conflictDialog}
     </div>
   );
 }

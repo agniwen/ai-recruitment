@@ -65,7 +65,9 @@ export const aiReviewRouter = factory
       "json",
       z.object({
         approvalNote: z.string().trim().max(2000, "审批说明不能超过 2000 字").optional(),
-        notificationUserId: z.string().trim().min(1, "请选择通知人员").max(200),
+        notificationUserIds: z
+          .array(z.string().trim().min(1).max(200))
+          .min(1, "请至少选择一位 ODC"),
       }),
       jsonValidatorError("请选择通知人员并检查审批说明。"),
     ),

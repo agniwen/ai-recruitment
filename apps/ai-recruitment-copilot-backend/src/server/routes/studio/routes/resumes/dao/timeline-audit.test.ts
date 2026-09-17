@@ -149,3 +149,16 @@ it("describes rejected approval without implying a stage change", () => {
     ),
   ).toBe("AI 评价审核未通过。审批说明：经历不匹配");
 });
+
+it("shows all selected ODC names in approval activity", () => {
+  expect(
+    auditMetadata(
+      {
+        fromStage: "ai_review",
+        notificationUserNames: ["ODC甲", "ODC乙"],
+        toStage: "screening",
+      },
+      "candidate_transition",
+    ),
+  ).toEqual([{ label: "通知人员", value: "ODC甲、ODC乙" }]);
+});

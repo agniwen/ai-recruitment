@@ -484,7 +484,7 @@ export const studioInterview = pgTable(
       .$type<"pending" | "approved" | "rejected">()
       .notNull()
       .default("pending"),
-    // 审批通过时指定的 ODC；审批后其他 ODC 不再通过来源或招聘组共享此候选人。
+    // 共存期保留给旧版本；新版同时读取此字段与 studioInterviewOdcAssignment。
     aiReviewAssignedOdcUserId: text("ai_review_assigned_odc_user_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -654,6 +654,23 @@ export const studioInterview = pgTable(
     index("studio_interview_skills_normalized_idx")
       .using("gin", table.skillsNormalized)
       .concurrently(),
+  ],
+);
+
+// AI 分析审批时指定的 ODC；一个候选人可以同时指派给多位 ODC。
+export const studioInterviewOdcAssignment = pgTable(
+  "studio_interview_odc_assignment",
+  {
+    interviewRecordId: text("interview_record_id")
+      .notNull()
+      .references(() => studioInterview.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.interviewRecordId, table.userId] }),
+    index("studio_interview_odc_assignment_user_idx").on(table.userId),
   ],
 );
 

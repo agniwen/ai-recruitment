@@ -62,7 +62,10 @@ function request(
     body:
       options.method === "POST"
         ? JSON.stringify(
-            options.body ?? { approvalNote: "  已核实项目经验  ", notificationUserId: "notify-a" },
+            options.body ?? {
+              approvalNote: "  已核实项目经验  ",
+              notificationUserIds: ["notify-a"],
+            },
           )
         : undefined,
     headers: {
@@ -93,8 +96,11 @@ beforeEach(() => {
 describe("AI analysis approval API", () => {
   it.each([
     {},
-    { notificationUserId: " " },
-    { approvalNote: "字".repeat(2001), notificationUserId: "notify-a" },
+    { notificationUserIds: [] },
+    { notificationUserIds: ["notify-a", " "] },
+    { notificationUserIds: "notify-a" },
+    { notificationUserIds: [" "] },
+    { approvalNote: "字".repeat(2001), notificationUserIds: ["notify-a"] },
   ])("rejects missing recipients or oversized explanations", async (body) => {
     const response = await request("/candidate-a/approve", { body, method: "POST" });
     expect(response.status).toBe(400);
@@ -152,14 +158,14 @@ describe("AI analysis approval API", () => {
   });
   it.each([undefined, "", "   "])("allows an optional explanation (%j)", async (approvalNote) => {
     const response = await request("/candidate-a/approve", {
-      body: { approvalNote, notificationUserId: "notify-a" },
+      body: { approvalNote, notificationUserIds: ["notify-a"] },
       method: "POST",
     });
     expect(response.status).toBe(200);
     expect(mocks.transition).toHaveBeenCalledWith(
       expect.objectContaining({
         input: expect.objectContaining({
-          notificationUserId: "notify-a",
+          notificationUserIds: ["notify-a"],
           pipelineStage: "screening",
         }),
       }),
@@ -175,7 +181,7 @@ describe("AI analysis approval API", () => {
         candidateId: "candidate-a",
         input: {
           approvalNote: "已核实项目经验",
-          notificationUserId: "notify-a",
+          notificationUserIds: ["notify-a"],
           pipelineStage: "screening",
         },
         operatorId: "odc-a",

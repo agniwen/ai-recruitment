@@ -38,30 +38,29 @@ vi.mock("@/lib/client/rpc", () => ({
 vi.mock("@/lib/client/api/rpc-fetch", () => ({ rpcFetch: (request: Promise<unknown>) => request }));
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "workspace-a" }));
 vi.mock("sonner", () => ({ toast: { error: mocks.error, success: mocks.success } }));
-vi.mock("@/components/ui/searchable-select", () => ({
-  SearchableSelect: ({
+vi.mock("@/components/ui/searchable-multi-select", () => ({
+  SearchableMultiSelect: ({
     id,
     value,
     onChange,
     options,
     disabled,
-    required,
   }: {
     id: string;
-    value: string | null;
-    onChange: (value: string | null) => void;
+    value: string[];
+    onChange: (value: string[]) => void;
     options: { value: string; label: string; disabled?: boolean }[];
     disabled?: boolean;
-    required?: boolean;
   }) => (
     <select
       id={id}
-      value={value ?? ""}
+      value={value}
       disabled={disabled}
-      required={required}
-      onChange={(event) => onChange(event.target.value || null)}
+      multiple
+      onChange={(event) =>
+        onChange([...event.target.selectedOptions].map((option) => option.value))
+      }
     >
-      <option value="">请选择通知人员</option>
       {options.map((option) => (
         <option key={option.value} value={option.value} disabled={option.disabled}>
           {option.label}
@@ -154,7 +153,7 @@ function approvalButton() {
     (button) => button.textContent === "审批通过",
   );
 }
-async function confirmApproval(note = "  已核实项目经验  ") {
+async function confirmApproval(note = "  已核实项目经验  ", userIds = ["notify-a"]) {
   act(() => approvalButton()?.click());
   expect(mocks.approve).not.toHaveBeenCalled();
   const confirm = [...document.querySelectorAll("button")].find(
@@ -175,7 +174,9 @@ async function confirmApproval(note = "  已核实项目经验  ") {
     if (!select) {
       throw new Error("Missing notification user selector");
     }
-    select.value = "notify-a";
+    for (const option of select.options) {
+      option.selected = userIds.includes(option.value);
+    }
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
   expect(confirm.disabled).toBe(false);
@@ -249,7 +250,7 @@ describe("AI approval detail", () => {
     const { onApproved } = await render();
     await confirmApproval();
     expect(mocks.approve).toHaveBeenCalledWith({
-      json: { approvalNote: "已核实项目经验", notificationUserId: "notify-a" },
+      json: { approvalNote: "已核实项目经验", notificationUserIds: ["notify-a"] },
       param: { id: "candidate-a", slug: "workspace-a" },
     });
     expect(onApproved).toHaveBeenCalledOnce();
@@ -258,7 +259,21 @@ describe("AI approval detail", () => {
     await render();
     await confirmApproval("");
     expect(mocks.approve).toHaveBeenCalledWith({
-      json: { approvalNote: "", notificationUserId: "notify-a" },
+      json: { approvalNote: "", notificationUserIds: ["notify-a"] },
+      param: { id: "candidate-a", slug: "workspace-a" },
+    });
+  });
+  it("submits all selected ODCs together", async () => {
+    mocks.recipients.mockResolvedValue({
+      recipients: [
+        { email: "a@example.com", name: "ODC甲", telegramBound: true, userId: "notify-a" },
+        { email: "b@example.com", name: "ODC乙", telegramBound: true, userId: "notify-b" },
+      ],
+    });
+    await render();
+    await confirmApproval("多人评估", ["notify-a", "notify-b"]);
+    expect(mocks.approve).toHaveBeenCalledWith({
+      json: { approvalNote: "多人评估", notificationUserIds: ["notify-a", "notify-b"] },
       param: { id: "candidate-a", slug: "workspace-a" },
     });
   });

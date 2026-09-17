@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { Textarea } from "@/components/ui/textarea";
 import { rpc } from "@/lib/client/rpc";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
@@ -18,14 +18,14 @@ export function AiReviewApprovalButton({
 }: {
   recordId: string;
   disabled?: boolean;
-  onConfirm: (approvalNote: string, notificationUserId: string) => Promise<unknown>;
+  onConfirm: (approvalNote: string, notificationUserIds: string[]) => Promise<unknown>;
   label?: string;
 }) {
   const id = useId();
   const slug = useWorkspaceSlug();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
-  const [notificationUserId, setNotificationUserId] = useState<string | null>(null);
+  const [notificationUserIds, setNotificationUserIds] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const recipientsQuery = useQuery({
     enabled: open,
@@ -42,23 +42,25 @@ export function AiReviewApprovalButton({
     queryKey: ["ai-review-approvals", slug, "notification-recipients", recordId],
   });
   const recipients = recipientsQuery.data?.recipients ?? [];
-  const selectedRecipient = recipients.find(
-    (recipient) => recipient.userId === notificationUserId && recipient.telegramBound,
-  );
+  const validSelection =
+    notificationUserIds.length > 0 &&
+    notificationUserIds.every((userId) =>
+      recipients.some((recipient) => recipient.userId === userId && recipient.telegramBound),
+    );
   const canSubmit =
     !pending &&
     !disabled &&
     !recipientsQuery.isFetching &&
     !recipientsQuery.isError &&
-    Boolean(selectedRecipient);
+    validSelection;
 
   async function submit() {
-    if (!canSubmit || !selectedRecipient) {
+    if (!canSubmit) {
       return;
     }
     setPending(true);
     try {
-      await onConfirm(note.trim(), selectedRecipient.userId);
+      await onConfirm(note.trim(), notificationUserIds);
       setOpen(false);
     } catch {
       // The caller displays the request error; retain the inputs for retry.
@@ -74,7 +76,7 @@ export function AiReviewApprovalButton({
         disabled={disabled || pending}
         onClick={() => {
           setNote("");
-          setNotificationUserId(null);
+          setNotificationUserIds([]);
           setOpen(true);
         }}
       >
@@ -98,16 +100,16 @@ export function AiReviewApprovalButton({
       >
         <FieldGroup>
           <p className="text-sm text-muted-foreground">
-            审批通过后进入简历筛选，并向指定 ODC 发送 Telegram 消息。其他 ODC 将无法查看此候选人。
+            审批通过后进入简历筛选，所选 ODC 均可在招聘列表查看此候选人，并分别收到 Telegram
+            评估链接。
           </p>
           <Field>
-            <FieldLabel htmlFor={`${id}-recipient`}>指定 ODC（简历评估）</FieldLabel>
-            <SearchableSelect
+            <FieldLabel htmlFor={`${id}-recipient`}>指定 ODC（简历评估，可多选）</FieldLabel>
+            <SearchableMultiSelect
               id={`${id}-recipient`}
-              required
               disabled={pending || recipientsQuery.isPending || recipientsQuery.isError}
-              value={notificationUserId}
-              onChange={setNotificationUserId}
+              value={notificationUserIds}
+              onChange={setNotificationUserIds}
               options={recipients.map((recipient) => ({
                 description: recipient.telegramBound
                   ? recipient.email
@@ -116,11 +118,11 @@ export function AiReviewApprovalButton({
                 label: recipient.name,
                 value: recipient.userId,
               }))}
-              placeholder={recipientsQuery.isPending ? "加载通知人员..." : "请选择通知人员"}
+              placeholder={recipientsQuery.isPending ? "加载通知人员..." : "请选择 ODC，可多选"}
               emptyMessage="暂无可选的 ODC 用户"
             />
             <FieldDescription>
-              仅可选择该候选人关联来源下、已绑定 Telegram 的 ODC 用户。
+              至少选择一位该候选人关联来源下、已绑定 Telegram 的 ODC 用户。
             </FieldDescription>
             {recipientsQuery.isError ? (
               <div role="alert" className="flex items-center gap-2 text-sm text-destructive">

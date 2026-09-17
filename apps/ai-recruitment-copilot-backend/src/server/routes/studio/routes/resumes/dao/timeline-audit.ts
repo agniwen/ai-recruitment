@@ -63,6 +63,14 @@ export function auditMetadata(
       ...(similarityScore ? [{ label: "相似度", value: similarityScore }] : []),
     ];
   }
+  if (action === "candidate_transition" && Array.isArray(detail.notificationUserNames)) {
+    const names = detail.notificationUserNames.filter(
+      (name): name is string => typeof name === "string" && Boolean(name.trim()),
+    );
+    if (names.length > 0) {
+      return [{ label: "通知人员", value: names.map((name) => name.trim()).join("、") }];
+    }
+  }
   if (
     action === "candidate_transition" &&
     detail.fromStage === "ai_review" &&

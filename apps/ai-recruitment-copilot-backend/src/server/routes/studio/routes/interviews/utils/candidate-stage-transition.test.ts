@@ -65,25 +65,22 @@ function createTransaction(existing: {
   const insertedValues = vi.fn(async (_value: unknown) => {});
   const updatedWhere = vi.fn(async (_value: unknown) => {});
   const tx = {
+    delete: vi.fn(() => ({ where: vi.fn().mockResolvedValue(null) })),
     execute: vi.fn(() => Promise.resolve()),
     insert: vi.fn(() => ({ values: insertedValues })),
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        leftJoin: vi.fn(() => ({
-          where: vi.fn(() => ({
-            for: vi.fn(() => ({
-              limit: vi.fn().mockResolvedValue([
-                {
-                  candidateName: "候选人甲",
-                  resumeSourcePoolItemId: null,
-                  resumeSourceType: "direct_upload",
-                  ...existing,
-                },
-              ]),
-            })),
-          })),
-        })),
-      })),
+      for: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([
+        {
+          candidateName: "候选人甲",
+          resumeSourcePoolItemId: null,
+          resumeSourceType: "direct_upload",
+          ...existing,
+        },
+      ]),
+      where: vi.fn().mockReturnThis(),
     })),
     update: vi.fn(() => ({
       set: vi.fn(() => ({ where: updatedWhere })),
@@ -95,7 +92,10 @@ function createTransaction(existing: {
 describe("transitionCandidateStage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.recipients.mockResolvedValue([{ chatId: "10001", name: "ODC甲", userId: "notify-a" }]);
+    mocks.recipients.mockResolvedValue([
+      { chatId: "10001", name: "ODC甲", userId: "notify-a" },
+      { chatId: "10002", name: "ODC乙", userId: "notify-b" },
+    ]);
     mocks.autoCloseRelatedCandidatesAfterHire.mockResolvedValue([]);
     mocks.notifyCandidateStageChange.mockImplementation(() => Promise.resolve());
     mocks.refreshDirectUploadDuplicateMatchesBeforeHire.mockImplementation(() => Promise.resolve());
@@ -116,7 +116,7 @@ describe("transitionCandidateStage", () => {
       const result = await transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
-        input: { approvalNote, notificationUserId: "notify-a", pipelineStage: "screening" },
+        input: { approvalNote, notificationUserIds: ["notify-a"], pipelineStage: "screening" },
         operatorId: "odc-user",
         organizationId: "org-a",
         provenance: { kind: "manual" },
@@ -143,7 +143,7 @@ describe("transitionCandidateStage", () => {
       candidateId: "candidate-a",
       input: {
         approvalNote: "  已核实项目经验  ",
-        notificationUserId: "notify-a",
+        notificationUserIds: ["notify-a"],
         pipelineStage: "screening",
       },
       operatorId: "odc-user",
@@ -156,7 +156,7 @@ describe("transitionCandidateStage", () => {
       tx,
     );
     expect(updatedWhere).toHaveBeenCalledTimes(allowed ? 1 : 0);
-    expect(insertedValues).toHaveBeenCalledTimes(allowed ? 1 : 0);
+    expect(insertedValues).toHaveBeenCalledTimes(allowed ? 2 : 0);
     if (allowed) {
       expect(insertedValues).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -172,7 +172,7 @@ describe("transitionCandidateStage", () => {
   });
 
   it.each([undefined, "", "   "])(
-    "approves without a note and audits the selected ODC recipient (%j)",
+    "assigns and notifies each selected ODC once with an optional note (%j)",
     async (approvalNote) => {
       const { tx, insertedValues, updatedWhere } = createTransaction({
         aiReviewApprovalStatus: "rejected",
@@ -184,39 +184,40 @@ describe("transitionCandidateStage", () => {
       });
       mocks.transaction.mockImplementation(async (callback) => await callback(tx));
       mocks.canApproveAiReview.mockResolvedValue(true);
+      const userIds = ["notify-a", "notify-b", "notify-a"];
       const result = await transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
-        input: { approvalNote, notificationUserId: "notify-a", pipelineStage: "screening" },
+        input: { approvalNote, notificationUserIds: userIds, pipelineStage: "screening" },
         operatorId: "approver-a",
         organizationId: "org-a",
         provenance: { kind: "manual" },
       });
       expect(result.kind).toBe("ok");
       expect(updatedWhere).toHaveBeenCalledOnce();
+      expect(insertedValues).toHaveBeenCalledWith([
+        { interviewRecordId: "candidate-a", userId: "notify-a" },
+        { interviewRecordId: "candidate-a", userId: "notify-b" },
+      ]);
       expect(tx.update.mock.results[0]?.value.set).toHaveBeenCalledWith(
         expect.objectContaining({
           aiReviewApprovalStatus: "approved",
-          aiReviewAssignedOdcUserId: "notify-a",
+          aiReviewAssignedOdcUserId: null,
           pipelineStage: "screening",
         }),
-      );
-      expect(mocks.recipients).toHaveBeenCalledWith(
-        { candidateId: "candidate-a", organizationId: "org-a" },
-        tx,
       );
       expect(insertedValues).toHaveBeenCalledWith(
         expect.objectContaining({
           detail: expect.objectContaining({
-            notificationUserId: "notify-a",
-            notificationUserName: "ODC甲",
+            notificationUserIds: ["notify-a", "notify-b"],
+            notificationUserNames: ["ODC甲", "ODC乙"],
             reason: null,
           }),
         }),
       );
       expect(mocks.notifyCandidateStageChange).toHaveBeenCalledWith(
         expect.objectContaining({
-          aiReviewNotificationChatId: "10001",
+          aiReviewNotificationChatIds: ["10001", "10002"],
           fromStage: "ai_review",
           toStage: "screening",
         }),
@@ -224,9 +225,9 @@ describe("transitionCandidateStage", () => {
     },
   );
 
-  it.each([undefined, "", "other-user"])(
+  it.each([undefined, [], [""], ["other-user"], ["notify-a", "other-user"]])(
     "rejects missing or out-of-scope notification users (%j)",
-    async (notificationUserId) => {
+    async (notificationUserIds) => {
       const { tx, insertedValues, updatedWhere } = createTransaction({
         closedMeta: null,
         jobDescriptionId: "jd-a",
@@ -239,7 +240,7 @@ describe("transitionCandidateStage", () => {
       const result = await transitionCandidateStage({
         authorize: vi.fn().mockResolvedValue(true),
         candidateId: "candidate-a",
-        input: { notificationUserId, pipelineStage: "screening" },
+        input: { notificationUserIds, pipelineStage: "screening" },
         operatorId: "approver-a",
         organizationId: "org-a",
         provenance: { kind: "manual" },
@@ -261,11 +262,14 @@ describe("transitionCandidateStage", () => {
     });
     mocks.transaction.mockImplementation(async (callback) => await callback(tx));
     mocks.canApproveAiReview.mockResolvedValue(true);
-    mocks.recipients.mockResolvedValue([{ chatId: null, name: "ODC甲", userId: "notify-a" }]);
+    mocks.recipients.mockResolvedValue([
+      { chatId: "10001", name: "ODC甲", userId: "notify-a" },
+      { chatId: null, name: "ODC乙", userId: "notify-b" },
+    ]);
     const result = await transitionCandidateStage({
       authorize: vi.fn().mockResolvedValue(true),
       candidateId: "candidate-a",
-      input: { notificationUserId: "notify-a", pipelineStage: "screening" },
+      input: { notificationUserIds: ["notify-a", "notify-b"], pipelineStage: "screening" },
       operatorId: "approver-a",
       organizationId: "org-a",
       provenance: { kind: "manual" },
@@ -319,6 +323,8 @@ describe("transitionCandidateStage", () => {
       provenance: { kind: "manual" },
     });
     expect(result.kind).toBe("ok");
+    expect(tx.delete).toHaveBeenCalledOnce();
+    expect(tx.delete.mock.results[0]?.value.where).toHaveBeenCalledOnce();
     expect(tx.update.mock.results[0]?.value.set).toHaveBeenCalledWith(
       expect.objectContaining({
         aiReviewApprovalStatus: "pending",
@@ -342,7 +348,7 @@ describe("transitionCandidateStage", () => {
       candidateId: "candidate-a",
       input: {
         approvalNote: "  已核实项目经验  ",
-        notificationUserId: "notify-a",
+        notificationUserIds: ["notify-a"],
         pipelineStage: "screening",
       },
       operatorId: "odc-user",
@@ -695,7 +701,7 @@ describe("transitionCandidateStage", () => {
         candidateId: "candidate-a",
         input: {
           approvalNote: "  已核实项目经验  ",
-          notificationUserId: "notify-a",
+          notificationUserIds: ["notify-a"],
           pipelineStage: "screening",
         },
         operatorId: "user-a",

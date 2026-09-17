@@ -58,7 +58,7 @@ const transitionInputSchema = z
     closedMeta: closedMetaSchema.omit({ previousStage: true }).partial().optional(),
     // @deprecated 旧字段，HR 端逐步迁移到 closedMeta.internalNotes；保留以兼容。
     closedReason: z.string().trim().max(500, "结案原因不能超过 500 字").optional().nullable(),
-    notificationUserId: z.string().trim().min(1).max(200).optional(),
+    notificationUserIds: z.array(z.string().trim().min(1).max(200)).min(1).optional(),
     outcome: candidateOutcomeSchema.optional(),
     pipelineStage: pipelineStageSchema,
     reactivationReason: z.string().trim().max(500, "重新激活原因不能超过 500 字").optional(),

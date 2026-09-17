@@ -144,7 +144,7 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(source).toContain("owns mutations");
     expect(source).toContain("const [isAdvancing, setIsAdvancing] = useState(false);");
     expect(source).toContain("await withCleanup(");
-    expect(source).toContain("onAdvance(target, approvalNote, notificationUserId)");
+    expect(source).toContain("onAdvance(target, approvalNote, notificationUserIds)");
     expect(source).toContain("() => setIsAdvancing(false)");
     expect(source).toContain("void onAdvance(targetStage);");
     expect(source).toContain("disabled={isBusy}");
