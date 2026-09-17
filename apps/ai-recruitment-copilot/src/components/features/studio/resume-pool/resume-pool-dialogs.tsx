@@ -416,7 +416,16 @@ export function ImportResumePoolDialog({
                   setMode(value === "bind" ? "bind" : "none");
                   setJobName("");
                   setDestinations((rows) =>
-                    rows.map((row) => ({ ...row, jobDescriptionId: null })),
+                    rows
+                      .filter(
+                        (row) =>
+                          value === "bind" ||
+                          options.hiringUnits.some(
+                            (unit) =>
+                              unit.id === row.hiringUnitId && unit.canImportWithoutJob !== false,
+                          ),
+                      )
+                      .map((row) => ({ ...row, jobDescriptionId: null })),
                   );
                 }}
                 value={mode}
@@ -468,6 +477,7 @@ export function ImportResumePoolDialog({
             </div>
           ) : null}
           <ResumePoolImportDestinations
+            bindJob={mode === "bind"}
             options={options}
             jobName={mode === "bind" ? jobName : ""}
             destinations={destinations}

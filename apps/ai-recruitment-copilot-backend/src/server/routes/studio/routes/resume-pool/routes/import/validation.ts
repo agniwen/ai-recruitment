@@ -32,10 +32,17 @@ export function validateImportDestinations(
 ) {
   const jobNames = new Set<string>();
   return input.destinations.map((destination) => {
-    if (!options.hiringUnits.some((unit) => unit.id === destination.hiringUnitId)) {
+    const unit = options.hiringUnits.find((row) => row.id === destination.hiringUnitId);
+    if (!unit) {
       throw new Error("所选入库组织不在当前负责范围内。");
     }
     if (!destination.jobDescriptionId) {
+      if (input.jobDescriptionMode === "bind") {
+        throw new Error("请选择各组织对应的岗位去向。");
+      }
+      if (unit.canImportWithoutJob === false) {
+        throw new Error("所选入库组织需要绑定有权限的具体岗位。");
+      }
       return validateUnboundDestination(destination, options);
     }
     const job = options.jobDescriptions.find((row) => row.id === destination.jobDescriptionId);

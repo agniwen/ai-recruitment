@@ -9,11 +9,27 @@ import {
   user,
 } from "@arc/db-schema/schema";
 import { resolveTelegramRecipientId } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
+import {
+  hasPermissionInStatements,
+  normalizePermissionStatements,
+} from "@arc/shared/permission-statements";
 
 type Executor = Pick<typeof db, "select">;
 
+function hasCandidateManagementPermission(permission: string): boolean {
+  try {
+    return hasPermissionInStatements(
+      normalizePermissionStatements(JSON.parse(permission) as unknown),
+      "page",
+      "resumes",
+    );
+  } catch {
+    return false;
+  }
+}
+
 // Match the same source, role, job-series and service-unit boundaries used by
-// resume visibility, so a notified ODC member can open the candidate's review.
+// resume visibility, and require candidate-management page access on the ODC role.
 export async function listAiReviewNotificationRecipients(
   input: { candidateId: string; organizationId: string },
   executor: Executor = db,
@@ -22,6 +38,7 @@ export async function listAiReviewNotificationRecipients(
     .select({
       email: user.email,
       name: user.name,
+      rolePermission: organizationRole.permission,
       telegram: user.telegram,
       telegramBoundUsername: user.telegramBoundUsername,
       telegramChatId: user.telegramChatId,
@@ -75,17 +92,19 @@ export async function listAiReviewNotificationRecipients(
     )
     .orderBy(asc(user.name), asc(user.id));
 
-  return rows.map((row) => {
-    const recipientId = resolveTelegramRecipientId({
-      boundUsername: row.telegramBoundUsername,
-      chatId: row.telegramChatId,
-      profileTelegram: row.telegram,
+  return rows
+    .filter((row) => hasCandidateManagementPermission(row.rolePermission))
+    .map((row) => {
+      const recipientId = resolveTelegramRecipientId({
+        boundUsername: row.telegramBoundUsername,
+        chatId: row.telegramChatId,
+        profileTelegram: row.telegram,
+      });
+      return {
+        chatId: row.telegramChatId && recipientId === row.telegramChatId ? recipientId : null,
+        email: row.email,
+        name: row.name,
+        userId: row.userId,
+      };
     });
-    return {
-      chatId: row.telegramChatId && recipientId === row.telegramChatId ? recipientId : null,
-      email: row.email,
-      name: row.name,
-      userId: row.userId,
-    };
-  });
 }

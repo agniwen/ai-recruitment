@@ -25,6 +25,7 @@ import {
   departmentOdcMember,
   hiringUnit,
   hiringUnitOdcMember,
+  resumeSource,
   member,
   user,
 } from "@arc/db-schema/schema";
@@ -230,23 +231,30 @@ export async function listSelectableHiringUnits({
   organizationId: string;
 }): Promise<HiringUnitRecord[]> {
   const scope = await resolveHiringUnitAccessScope({ actorUserId, organizationId });
-  if (scope.canAccessAll) {
-    return listAllHiringUnits(organizationId);
-  }
-  if (scope.hiringUnitIds.length === 0) {
+  if (!scope.canAccessAll && scope.hiringUnitIds.length === 0) {
     return [];
   }
   const rows = await db
-    .select()
+    .select({ resumeSourceName: resumeSource.name, unit: hiringUnit })
     .from(hiringUnit)
+    .leftJoin(
+      resumeSource,
+      and(
+        eq(resumeSource.id, hiringUnit.resumeSourceId),
+        eq(resumeSource.organizationId, hiringUnit.organizationId),
+      ),
+    )
     .where(
       and(
         eq(hiringUnit.organizationId, organizationId),
-        inArray(hiringUnit.id, scope.hiringUnitIds),
+        scope.canAccessAll ? undefined : inArray(hiringUnit.id, scope.hiringUnitIds),
       ),
     )
-    .orderBy(asc(hiringUnit.name));
-  return rows.map((row) => serializeHiringUnit(row));
+    .orderBy(asc(hiringUnit.name), asc(resumeSource.name), asc(hiringUnit.id));
+  return rows.map((row) => ({
+    ...serializeHiringUnit(row.unit),
+    resumeSourceName: row.resumeSourceName,
+  }));
 }
 
 export async function loadHiringUnitById(
