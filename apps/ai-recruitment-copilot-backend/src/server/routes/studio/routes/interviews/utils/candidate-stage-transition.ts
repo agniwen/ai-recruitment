@@ -198,7 +198,7 @@ export async function transitionCandidateStage(command: {
         if (!recipient) {
           return {
             kind: "invalid",
-            message: "通知人员必须是候选人关联来源下的 ODC 用户。",
+            message: "通知人员必须是候选人关联来源下、拥有候选人管理权限的 ODC 用户。",
           } as const;
         }
         if (!recipient.chatId) {

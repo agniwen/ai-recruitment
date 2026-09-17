@@ -15,6 +15,7 @@ export function ResumePoolImportDestinations({
   onChange,
   disabled,
   multipleJobs = false,
+  bindJob = true,
 }: {
   options: ResumePoolImportOptions;
   jobName: string;
@@ -22,14 +23,16 @@ export function ResumePoolImportDestinations({
   onChange: (rows: ResumePoolImportDestination[]) => void;
   disabled: boolean;
   multipleJobs?: boolean;
+  bindJob?: boolean;
 }) {
   const hiringUnitIds = [...new Set(destinations.map((row) => row.hiringUnitId))];
   const units = options.hiringUnits.filter(
     (unit) =>
-      !jobName ||
-      options.jobDescriptions.some(
-        (job) => job.hiringUnitId === unit.id && job.name.trim() === jobName,
-      ),
+      (bindJob || unit.canImportWithoutJob !== false) &&
+      (!jobName ||
+        options.jobDescriptions.some(
+          (job) => job.hiringUnitId === unit.id && job.name.trim() === jobName,
+        )),
   );
   const unitOptions = units.map((unit) => {
     const departmentNames = jobName

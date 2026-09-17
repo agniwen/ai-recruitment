@@ -207,7 +207,7 @@ export type ResumePoolImportDestination = z.infer<typeof resumePoolImportDestina
 export type ResumePoolBatchImportInput = z.infer<typeof resumePoolBatchImportSchema>;
 export interface ResumePoolImportOptions {
   departments: { id: string; name: string; hiringUnitId: string | null }[];
-  hiringUnits: { id: string; name: string }[];
+  hiringUnits: { id: string; name: string; canImportWithoutJob?: boolean }[];
   jobDescriptions: JobDescriptionListRecord[];
 }
 export type ResumePoolBatchImportResult =

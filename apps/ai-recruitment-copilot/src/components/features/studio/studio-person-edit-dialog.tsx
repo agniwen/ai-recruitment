@@ -221,7 +221,12 @@ function ResumeEditBody({
     refetchOnWindowFocus: false,
   });
   const hiringUnitOptions = useMemo(
-    () => (hiringUnitsQuery.data ?? []).map((unit) => ({ label: unit.name, value: unit.id })),
+    () =>
+      (hiringUnitsQuery.data ?? []).map((unit) => ({
+        description: unit.resumeSourceName ? `中心：${unit.resumeSourceName}` : "未关联中心",
+        label: unit.name,
+        value: unit.id,
+      })),
     [hiringUnitsQuery.data],
   );
   const formDefaultValues = useMemo(() => createResumeEditFormValues(query.data), [query.data]);
@@ -364,9 +369,17 @@ function ResumeEditBody({
                       placeholder={
                         hiringUnitsQuery.isLoading ? "加载用人组织..." : "请选择用人组织"
                       }
-                      searchPlaceholder="搜索用人组织..."
+                      searchPlaceholder="搜索用人组织或中心..."
                       value={field.state.value ?? null}
                     />
+                    {field.state.value ? (
+                      <p className="text-muted-foreground text-xs" aria-live="polite">
+                        {
+                          hiringUnitOptions.find((unit) => unit.value === field.state.value)
+                            ?.description
+                        }
+                      </p>
+                    ) : null}
                     <FieldError errors={message ? [{ message }] : undefined} />
                   </FieldContent>
                 </Field>

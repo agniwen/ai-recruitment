@@ -122,7 +122,7 @@ export function AiReviewApprovalButton({
               emptyMessage="暂无可选的 ODC 用户"
             />
             <FieldDescription>
-              至少选择一位该候选人关联来源下、已绑定 Telegram 的 ODC 用户。
+              至少选择一位该候选人关联来源下、拥有候选人管理权限且已绑定 Telegram 的 ODC 用户。
             </FieldDescription>
             {recipientsQuery.isError ? (
               <div role="alert" className="flex items-center gap-2 text-sm text-destructive">
@@ -135,7 +135,8 @@ export function AiReviewApprovalButton({
             {recipientsQuery.isSuccess &&
             !recipients.some((recipient) => recipient.telegramBound) ? (
               <FieldDescription>
-                暂无可通知人员，请先配置来源的 ODC 用户并完成 Telegram 绑定。
+                暂无可通知人员，请确认来源的 ODC 用户角色已勾选候选人管理权限，并完成 Telegram
+                绑定。
               </FieldDescription>
             ) : null}
           </Field>

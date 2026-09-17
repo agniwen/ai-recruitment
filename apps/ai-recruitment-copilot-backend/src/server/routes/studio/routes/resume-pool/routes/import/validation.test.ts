@@ -91,3 +91,68 @@ describe("batch import destinations", () => {
     ).toThrow("部门");
   });
 });
+
+describe("job-derived organization access", () => {
+  const restricted = {
+    ...options,
+    hiringUnits: options.hiringUnits.map((unit) => ({ ...unit, canImportWithoutJob: false })),
+  };
+  it("accepts authorized jobs in their actual organizations", () => {
+    expect(
+      validateImportDestinations(resumePoolBatchImportSchema.parse(base), restricted),
+    ).toHaveLength(2);
+  });
+  it("rejects unbound import into a job-derived organization", () => {
+    expect(() =>
+      validateImportDestinations(
+        resumePoolBatchImportSchema.parse({
+          ...base,
+          destinations: [{ hiringUnitId: "one" }],
+          jobDescriptionMode: "none",
+        }),
+        restricted,
+      ),
+    ).toThrow("需要绑定");
+  });
+  it("does not authorize other jobs sharing the same organization or name", () => {
+    expect(() =>
+      validateImportDestinations(
+        resumePoolBatchImportSchema.parse({
+          ...base,
+          destinations: [{ hiringUnitId: "one", jobDescriptionId: "unauthorized" }],
+        }),
+        restricted,
+      ),
+    ).toThrow("不匹配");
+  });
+  it("preserves multiple concrete destinations in one organization for bulk uploads", () => {
+    const sameUnit = {
+      ...restricted,
+      jobDescriptions: [
+        options.jobDescriptions[0],
+        {
+          ...options.jobDescriptions[0],
+          id: "another",
+          serviceUnit: "另一个服务单位",
+        },
+      ],
+    };
+    expect(
+      validateImportDestinations(
+        {
+          destinations: [
+            { departmentId: null, hiringUnitId: "one", jobDescriptionId: "a", serviceUnit: null },
+            {
+              departmentId: null,
+              hiringUnitId: "one",
+              jobDescriptionId: "another",
+              serviceUnit: null,
+            },
+          ],
+          jobDescriptionMode: "bind",
+        },
+        sameUnit,
+      ).map((row) => row.serviceUnit),
+    ).toEqual(["平台", "另一个服务单位"]);
+  });
+});

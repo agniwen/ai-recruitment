@@ -13,6 +13,7 @@ export type HiringUnitFormValues = z.infer<typeof hiringUnitFormSchema>;
 export type HiringUnitUpdateValues = z.infer<typeof hiringUnitUpdateSchema>;
 
 export interface HiringUnitRecord {
+  resumeSourceName?: string | null;
   resumeSourceId?: string | null;
   id: string;
   name: string;

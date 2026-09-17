@@ -9,36 +9,45 @@ export async function loadResumePoolImportOptions(
   organizationId: string,
   actorUserId: string,
 ): Promise<ResumePoolImportOptions> {
-  const scope = await resolveHiringUnitAccessScope({ actorUserId, organizationId });
+  const [scope, jobs] = await Promise.all([
+    resolveHiringUnitAccessScope({ actorUserId, organizationId }),
+    listAllJobDescriptions(organizationId, { actorUserId }),
+  ]);
+  const accessibleUnitIds = [
+    ...new Set([
+      ...scope.hiringUnitIds,
+      ...jobs.flatMap((job) => (job.hiringUnitId ? [job.hiringUnitId] : [])),
+    ]),
+  ];
   const units = await db
     .select({ id: hiringUnit.id, name: hiringUnit.name })
     .from(hiringUnit)
     .where(
       and(
         eq(hiringUnit.organizationId, organizationId),
-        scope.canAccessAll ? undefined : inArray(hiringUnit.id, scope.hiringUnitIds),
+        scope.canAccessAll ? undefined : inArray(hiringUnit.id, accessibleUnitIds),
       ),
     )
     .orderBy(hiringUnit.name);
-  const [departments, jobs] = await Promise.all([
-    db
-      .select({ hiringUnitId: department.hiringUnitId, id: department.id, name: department.name })
-      .from(department)
-      .where(
-        and(
-          eq(department.organizationId, organizationId),
-          inArray(
-            department.hiringUnitId,
-            units.map((unit) => unit.id),
-          ),
+  const departments = await db
+    .select({ hiringUnitId: department.hiringUnitId, id: department.id, name: department.name })
+    .from(department)
+    .where(
+      and(
+        eq(department.organizationId, organizationId),
+        inArray(
+          department.hiringUnitId,
+          units.map((unit) => unit.id),
         ),
-      )
-      .orderBy(department.name),
-    listAllJobDescriptions(organizationId, { actorUserId }),
-  ]);
+      ),
+    )
+    .orderBy(department.name);
   return {
     departments,
-    hiringUnits: units,
+    hiringUnits: units.map((unit) => ({
+      ...unit,
+      canImportWithoutJob: scope.canAccessAll || scope.hiringUnitIds.includes(unit.id),
+    })),
     jobDescriptions: jobs.filter((job) => units.some((unit) => unit.id === job.hiringUnitId)),
   };
 }
