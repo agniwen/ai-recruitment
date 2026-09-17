@@ -26,10 +26,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { ResumeJobUnitFields } from "./resumes/resume-job-unit-fields";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -220,15 +220,6 @@ function ResumeEditBody({
     queryKey: ["hiring-units", slug, "selectable"],
     refetchOnWindowFocus: false,
   });
-  const hiringUnitOptions = useMemo(
-    () =>
-      (hiringUnitsQuery.data ?? []).map((unit) => ({
-        description: unit.resumeSourceName ? `中心：${unit.resumeSourceName}` : "未关联中心",
-        label: unit.name,
-        value: unit.id,
-      })),
-    [hiringUnitsQuery.data],
-  );
   const formDefaultValues = useMemo(() => createResumeEditFormValues(query.data), [query.data]);
 
   const form = useForm({
@@ -292,6 +283,7 @@ function ResumeEditBody({
   }, [formDefaultValues, query.data]);
 
   const isSubmitting = useStore(form.store, (s) => s.isSubmitting);
+  const selectedJobDescriptionId = useStore(form.store, (s) => s.values.jobDescriptionId);
   const selectedHiringUnitId = useStore(form.store, (s) => s.values.hiringUnitId);
   const queryFormKey = query.data ? `${query.data.id}:${query.data.updatedAt}` : null;
   const isFormHydrated = queryFormKey !== null && hydratedFormKey === queryFormKey;
@@ -299,7 +291,7 @@ function ResumeEditBody({
     ? getResumeActionLockedReason(query.data.resumeParseStatus)
     : null;
   const isResumeLocked = lockedReason !== null;
-  const hiringUnitInvalid = !selectedHiringUnitId;
+  const hiringUnitInvalid = !selectedHiringUnitId || !selectedJobDescriptionId;
 
   return (
     <Modal
@@ -346,45 +338,32 @@ function ResumeEditBody({
               </CardContent>
             </Card>
           ) : null}
-          <form.Field name="hiringUnitId">
-            {(field) => {
-              const message = getFormErrorMessage(field.state.meta.errors[0]);
-              const fieldDisabled = isSubmitting || isResumeLocked || hiringUnitsQuery.isLoading;
-              return (
-                <Field data-invalid={message ? true : undefined}>
-                  <FieldLabel htmlFor="resume-edit-hiring-unit">
-                    用人组织
-                    <span aria-hidden className="ml-1 text-destructive">
-                      *
-                    </span>
-                  </FieldLabel>
-                  <FieldContent>
-                    <SearchableSelect
-                      disabled={fieldDisabled}
-                      emptyMessage="暂无可选用人组织"
-                      id="resume-edit-hiring-unit"
-                      invalid={Boolean(message)}
-                      onChange={(next) => field.handleChange(next)}
-                      options={hiringUnitOptions}
-                      placeholder={
-                        hiringUnitsQuery.isLoading ? "加载用人组织..." : "请选择用人组织"
-                      }
-                      searchPlaceholder="搜索用人组织或中心..."
-                      value={field.state.value ?? null}
-                    />
-                    {field.state.value ? (
-                      <p className="text-muted-foreground text-xs" aria-live="polite">
-                        {
-                          hiringUnitOptions.find((unit) => unit.value === field.state.value)
-                            ?.description
-                        }
-                      </p>
-                    ) : null}
-                    <FieldError errors={message ? [{ message }] : undefined} />
-                  </FieldContent>
-                </Field>
-              );
-            }}
+          <form.Field name="jobDescriptionId">
+            {(field) => (
+              <ResumeJobUnitFields
+                currentJobName={query.data?.jobDescriptionName ?? null}
+                currentUnitName={query.data?.hiringUnitName ?? null}
+                disabled={
+                  isSubmitting ||
+                  isResumeLocked ||
+                  hiringUnitsQuery.isLoading ||
+                  hiringUnitsQuery.isError
+                }
+                error={getFormErrorMessage(field.state.meta.errors[0]) ?? undefined}
+                hideAiInterviewDisabled={
+                  query.data?.pipelineStage !== "screening" &&
+                  query.data?.pipelineStage !== "ai_review"
+                }
+                hiringUnitId={selectedHiringUnitId}
+                jobDescriptionId={field.state.value}
+                key={queryFormKey}
+                onChange={(unitId, jobId) => {
+                  form.setFieldValue("hiringUnitId", unitId);
+                  field.handleChange(jobId);
+                }}
+                units={hiringUnitsQuery.data ?? []}
+              />
+            )}
           </form.Field>
           <CandidateFormFields
             candidateNamePlaceholder="请输入候选人姓名"
@@ -398,6 +377,7 @@ function ResumeEditBody({
             }}
             requireCandidateName
             resumeFile={null}
+            showJobDescription={false}
             showResumeEvaluationStatus
             showResumeFile={false}
             showSystemNotes={false}
