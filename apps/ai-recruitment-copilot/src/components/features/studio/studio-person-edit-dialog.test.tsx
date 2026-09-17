@@ -39,16 +39,14 @@ vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
 
-vi.mock("@/components/features/studio/interviews/job-description-select-field", () => ({
-  JobDescriptionSelectField: ({
-    hideAiInterviewDisabled,
-  }: {
-    hideAiInterviewDisabled?: boolean;
-  }) => (
+vi.mock("./resumes/resume-job-unit-fields", () => ({
+  ResumeJobUnitFields: ({ hideAiInterviewDisabled }: { hideAiInterviewDisabled?: boolean }) => (
     <div
       data-hide-ai-interview-disabled={String(Boolean(hideAiInterviewDisabled))}
       data-testid="job-description-select"
-    />
+    >
+      用人组织
+    </div>
   ),
 }));
 

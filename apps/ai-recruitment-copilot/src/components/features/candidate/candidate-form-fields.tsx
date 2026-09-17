@@ -106,6 +106,7 @@ export interface CandidateFormFieldsProps {
   showSystemNotes?: boolean;
   /** false 时只显示简历文件字段；用于新建弹窗解析完成前的初始状态。 */
   showDetails?: boolean;
+  showJobDescription?: boolean;
   /** 编辑简历时显示评估状态；上传新简历时不显示。 */
   showResumeEvaluationStatus?: boolean;
   /**
@@ -267,6 +268,7 @@ export function CandidateFormFields({
   showResumeFile = true,
   showSystemNotes = true,
   showDetails = true,
+  showJobDescription = true,
   showResumeEvaluationStatus = false,
   requireResumeFile = false,
   resumeFileMaxFiles = 1,
@@ -333,7 +335,7 @@ export function CandidateFormFields({
         </Field>
       ) : null}
 
-      {showDetails ? (
+      {showDetails && showJobDescription ? (
         <form.Field name="jobDescriptionId">
           {(field) => {
             const errors = toFieldErrors(field.state.meta.errors);
