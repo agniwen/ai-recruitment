@@ -84,6 +84,13 @@ export function canCompleteHumanInterviewRound(
   return disabled !== true && round.status === "pending" && meeting?.status === "ended";
 }
 
+export function canEditHumanInterviewEvaluation(
+  round: HumanInterviewRoundRecord,
+  disabled?: boolean,
+): boolean {
+  return disabled !== true && round.status === "completed";
+}
+
 export function canRescheduleHumanInterviewRound(
   round: HumanInterviewRoundRecord,
   meeting: HumanInterviewMeetingRecord | null,

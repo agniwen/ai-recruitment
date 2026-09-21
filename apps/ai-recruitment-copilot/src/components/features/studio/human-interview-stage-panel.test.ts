@@ -4,7 +4,10 @@ import type {
   HumanInterviewRoundRecord,
 } from "@arc/shared/studio-pipeline-stages";
 import { describe, expect, it } from "vitest";
-import { canCompleteHumanInterviewRound } from "./human-interview-stage-utils";
+import {
+  canCompleteHumanInterviewRound,
+  canEditHumanInterviewEvaluation,
+} from "./human-interview-stage-utils";
 
 const dialogSource = readFileSync(
   new URL("human-interview-stage-dialogs.tsx", import.meta.url),
@@ -20,10 +23,45 @@ describe("human interview editing gates", () => {
 
   it("validates and trims feedback before submitting completion", () => {
     const validation = dialogSource.indexOf('throw new Error("请填写面试评价")');
-    const submission = dialogSource.indexOf("return completeHumanInterviewRound(");
+    const submission = dialogSource.indexOf(": completeHumanInterviewRound(");
     expect(validation).toBeGreaterThan(0);
     expect(submission).toBeGreaterThan(validation);
     expect(dialogSource).toContain("feedback: trimmedFeedback");
+  });
+
+  it("allows completed evaluations to be edited while writes are enabled", () => {
+    expect(
+      canEditHumanInterviewEvaluation({ status: "completed" } as HumanInterviewRoundRecord),
+    ).toBe(true);
+    expect(
+      canEditHumanInterviewEvaluation({ status: "completed" } as HumanInterviewRoundRecord, true),
+    ).toBe(false);
+    expect(
+      canEditHumanInterviewEvaluation({ status: "pending" } as HumanInterviewRoundRecord),
+    ).toBe(false);
+    expect(dialogSource).toContain("patchHumanInterviewRound(slug, candidateId, round.id, input)");
+  });
+
+  it("updates the round cache and waits for candidate aggregates before closing", () => {
+    const updateCache = dialogSource.indexOf(
+      "queryClient.setQueryData<HumanInterviewRoundRecord[]>",
+    );
+    const refreshCandidate = dialogSource.indexOf(
+      "await invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug })",
+    );
+    const closeDialog = dialogSource.indexOf("handleOpenChange(false)", refreshCandidate);
+
+    expect(updateCache).toBeGreaterThan(0);
+    expect(refreshCandidate).toBeGreaterThan(updateCache);
+    expect(closeDialog).toBeGreaterThan(refreshCandidate);
+  });
+
+  it("prompts candidate close only when the result changes to fail", () => {
+    expect(dialogSource).toContain('updatedRound.outcome === "fail"');
+    expect(dialogSource).toContain('(round?.status !== "completed" || round.outcome !== "fail")');
+    expect(dialogSource.indexOf("onRejected?.()")).toBeGreaterThan(
+      dialogSource.indexOf("handleOpenChange(false)"),
+    );
   });
 
   it.each([

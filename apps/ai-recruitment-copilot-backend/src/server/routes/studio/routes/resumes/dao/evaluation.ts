@@ -50,7 +50,11 @@ export function pickLatestPassEvaluationTimeSlots(
 }
 
 export type ResumeEvaluationMutationResult =
-  | { status: "updated"; currentStatus: ResumeEvaluationStatus | null }
+  | {
+      status: "updated";
+      currentStatus: ResumeEvaluationStatus | null;
+      previousStatus?: ResumeEvaluationStatus | null;
+    }
   | { status: "unchanged"; currentStatus: ResumeEvaluationStatus | null }
   | { status: "already_passed"; currentStatus: "pass" }
   | { status: "not_found" }
@@ -148,7 +152,7 @@ async function insertEvaluationAudit(
 
 export async function submitResumeEvaluation(input: {
   availableTimeSlots?: ResumeEvaluationAvailableTimeSlot[];
-  departmentName: string;
+  departmentName?: string | null;
   id: string;
   operatorId: string | null;
   operatorRole?: string | null;
@@ -212,7 +216,11 @@ export async function submitResumeEvaluation(input: {
       toStatus: input.status,
     });
 
-    return { currentStatus: input.status, status: "updated" };
+    return {
+      currentStatus: input.status,
+      previousStatus: existing.resumeEvaluationStatus,
+      status: "updated",
+    };
   });
 }
 
@@ -346,7 +354,11 @@ export async function updateResumeEvaluationStatusInTransaction(
     toStatus: input.status,
   });
 
-  return { currentStatus: input.status, status: "updated" };
+  return {
+    currentStatus: input.status,
+    previousStatus: existing.resumeEvaluationStatus,
+    status: "updated",
+  };
 }
 
 export async function updateResumeEvaluationStatus(

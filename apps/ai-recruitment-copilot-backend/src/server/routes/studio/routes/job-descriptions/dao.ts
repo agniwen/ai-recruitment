@@ -79,6 +79,11 @@ export type JobDescriptionPaginationParams = PaginationParams<SortColumn>;
 
 export type PaginatedJobDescriptionResult = PaginatedResult<JobDescriptionListRecord>;
 
+type FilteredJobDescriptionOptions = JobDescriptionListFilterInput & {
+  actorUserId?: string | null;
+  resumeSourceId?: string;
+};
+
 function parseResumeScreeningPolicy(value: unknown) {
   const parsedPolicy = resumeScreeningPolicySchema.safeParse(value);
   return parsedPolicy.success ? parsedPolicy.data : createDefaultResumeScreeningPolicy();
@@ -603,10 +608,7 @@ export function parseJobDescriptionPagination(
 
 export async function queryPaginatedJobDescriptions(
   organizationId: string,
-  filters?: JobDescriptionListFilterInput & {
-    actorUserId?: string | null;
-    resumeSourceId?: string;
-  },
+  filters?: FilteredJobDescriptionOptions,
   pagination?: Record<string, unknown>,
 ): Promise<PaginatedJobDescriptionResult> {
   const {
@@ -696,6 +698,68 @@ export async function queryPaginatedJobDescriptions(
     total,
     totalPages: calcTotalPages(total, pageSize),
   };
+}
+
+export async function queryAllJobDescriptions(
+  organizationId: string,
+  filters?: FilteredJobDescriptionOptions,
+  sorting?: Partial<Pick<JobDescriptionPaginationParams, "sortBy" | "sortOrder">>,
+): Promise<JobDescriptionListRecord[]> {
+  const {
+    code,
+    dateField,
+    dateFrom,
+    dateTo,
+    departmentIds,
+    googleSheetStatuses,
+    hiringUnitIds,
+    interviewerIds,
+    recruitmentStatuses,
+    search,
+    sourceSheet,
+    textFilters,
+  } = parseJobDescriptionListFilters(filters);
+  const jdIdsForInterviewers = await resolveJdIdsForInterviewers(organizationId, interviewerIds);
+  const scopeCondition = and(
+    await resolveJobDescriptionHiringUnitScopeCondition({
+      actorUserId: filters?.actorUserId,
+      organizationId,
+    }),
+    filters?.resumeSourceId ? eq(jobDescription.resumeSourceId, filters.resumeSourceId) : undefined,
+  );
+  const rows = await listJobDescriptionRows({
+    code,
+    dateField,
+    dateFrom,
+    dateTo,
+    departmentIds,
+    googleSheetStatuses,
+    hiringUnitIds,
+    interviewerIds,
+    jdIdsForInterviewers,
+    organizationId,
+    recruitmentStatuses,
+    scopeCondition,
+    search,
+    sortBy: sorting?.sortBy,
+    sortOrder: sorting?.sortOrder,
+    sourceSheet,
+    textFilters,
+  });
+  const ids = rows.map((row) => row.id);
+  const [humanInterviewerIdsMap, interviewersMap, resumeCountsMap] = await Promise.all([
+    loadHumanInterviewerIdsForJobDescriptions(ids),
+    loadInterviewersForJobDescriptions(ids),
+    loadResumeCountsForJobDescriptions(ids),
+  ]);
+  return rows.map((row) =>
+    toJobDescriptionListRecord(
+      row,
+      interviewersMap.get(row.id) ?? [],
+      humanInterviewerIdsMap.get(row.id) ?? [],
+      resumeCountsMap.get(row.id) ?? 0,
+    ),
+  );
 }
 
 export function listJobDescriptions(

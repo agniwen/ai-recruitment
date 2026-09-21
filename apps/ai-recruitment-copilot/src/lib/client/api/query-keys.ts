@@ -10,7 +10,7 @@ export const humanInterviewKeys = {
     ["human-interview-meetings", slug, candidateId] as const,
   rounds: (slug: string, candidateId: string) =>
     ["human-interview-rounds", slug, candidateId] as const,
-  studioResumes: () => ["studio-resumes"] as const,
+  studioResumes: (slug: string) => ["studio-resumes", slug] as const,
 };
 
 export const studioCalendarKeys = {
@@ -51,6 +51,6 @@ export async function invalidateHumanInterviewCandidateQueries(
     queryClient.invalidateQueries({
       queryKey: humanInterviewKeys.meetings(slug, candidateId),
     }),
-    queryClient.invalidateQueries({ queryKey: humanInterviewKeys.studioResumes() }),
+    queryClient.invalidateQueries({ queryKey: humanInterviewKeys.studioResumes(slug) }),
   ]);
 }

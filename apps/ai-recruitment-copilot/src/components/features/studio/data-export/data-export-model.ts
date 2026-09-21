@@ -1,7 +1,11 @@
 export const DATA_EXPORT_LIMIT = 1000;
 export const DATA_EXPORT_PAGE_SIZE = 10;
 
-export type DataExportSource = "candidates" | "resumePool" | "talentRecommendations";
+export type DataExportSource =
+  | "candidates"
+  | "jobDescriptions"
+  | "resumePool"
+  | "talentRecommendations";
 export type DataExportRange = "all" | "current";
 
 export interface DataExportColumn<T> {
@@ -21,7 +25,10 @@ export function normalizeExportColumnIds(
   return normalized.length > 0 ? normalized : [...defaultIds];
 }
 
-export function takeExportRows<T>(rows: readonly T[], limit = DATA_EXPORT_LIMIT) {
+export function takeExportRows<T>(rows: readonly T[], limit: number | null = DATA_EXPORT_LIMIT) {
+  if (limit === null) {
+    return { rows: [...rows], truncated: false };
+  }
   return {
     rows: rows.slice(0, limit),
     truncated: rows.length > limit,

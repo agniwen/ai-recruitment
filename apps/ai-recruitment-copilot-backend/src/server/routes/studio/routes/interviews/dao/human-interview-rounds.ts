@@ -4,6 +4,7 @@
 // Human-interview round DAO. Each mutation runs in a single transaction so the
 // round row and its interviewer junction stay consistent. Route handlers do
 // auth + zod validation, then call into these helpers.
+/* oxlint-disable max-lines -- round scheduling, evaluation, and cancellation share transactional helpers */
 
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
@@ -22,6 +23,7 @@ import type {
   HumanInterviewRoundOutcome,
 } from "@arc/db-schema/studio-interviews";
 import type { HumanInterviewRoundRecord } from "@arc/shared/studio-pipeline-stages";
+import { recordCandidateActivityInTransaction } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
 import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
 
 export type { HumanInterviewRoundRecord };
@@ -35,6 +37,10 @@ export const COMPLETED_HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE =
   "请先填写已完成真人面试轮次的面试评价。";
 export const HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE =
   "请先完成所有真人面试轮次，并补全每轮面试评价。";
+export const HUMAN_INTERVIEW_FAILED_FOR_OFFER_MESSAGE =
+  "存在未通过的真人面试轮次，不能进入 Offer。";
+export const HUMAN_INTERVIEW_INCONCLUSIVE_FOR_OFFER_MESSAGE =
+  "存在待定的真人面试结果，请修改评价或继续安排下一轮。";
 
 type HumanInterviewRoundEditInput = Partial<HumanInterviewRoundInput> & {
   validUntil?: string | null;
@@ -139,6 +145,8 @@ export async function listHumanInterviewRounds(
 
 export interface HumanInterviewRoundReadiness {
   completedRoundsMissingFeedback: { id: string; label: string }[];
+  failedRounds: { id: string; label: string }[];
+  inconclusiveRounds: { id: string; label: string }[];
   pendingRounds: { id: string; label: string }[];
   totalRounds: number;
 }
@@ -153,6 +161,7 @@ export async function loadHumanInterviewRoundReadiness(
       feedback: studioHumanInterviewRound.feedback,
       id: studioHumanInterviewRound.id,
       label: studioHumanInterviewRound.label,
+      outcome: studioHumanInterviewRound.outcome,
       status: studioHumanInterviewRound.status,
     })
     .from(studioHumanInterviewRound)
@@ -167,6 +176,12 @@ export async function loadHumanInterviewRoundReadiness(
   return {
     completedRoundsMissingFeedback: rounds
       .filter((round) => round.status === "completed" && !round.feedback?.trim())
+      .map((round) => ({ id: round.id, label: round.label })),
+    failedRounds: rounds
+      .filter((round) => round.status === "completed" && round.outcome === "fail")
+      .map((round) => ({ id: round.id, label: round.label })),
+    inconclusiveRounds: rounds
+      .filter((round) => round.status === "completed" && round.outcome === "inconclusive")
       .map((round) => ({ id: round.id, label: round.label })),
     pendingRounds: rounds
       .filter((round) => round.status === "pending")
@@ -187,11 +202,22 @@ export async function assertCompletedHumanInterviewRoundsHaveFeedback(
 
 export function getHumanInterviewOfferReadinessError({
   completedRoundsMissingFeedback,
+  failedRounds,
+  inconclusiveRounds,
   pendingRounds,
   totalRounds,
 }: HumanInterviewRoundReadiness): string | null {
-  if (totalRounds === 0 || pendingRounds.length > 0 || completedRoundsMissingFeedback.length > 0) {
+  if (totalRounds === 0 || pendingRounds.length > 0) {
     return HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE;
+  }
+  if (completedRoundsMissingFeedback.length > 0) {
+    return COMPLETED_HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE;
+  }
+  if (failedRounds.length > 0) {
+    return HUMAN_INTERVIEW_FAILED_FOR_OFFER_MESSAGE;
+  }
+  if (inconclusiveRounds.length > 0) {
+    return HUMAN_INTERVIEW_INCONCLUSIVE_FOR_OFFER_MESSAGE;
   }
   return null;
 }
@@ -316,6 +342,8 @@ export async function createHumanInterviewRound({
 // Editable fields depend on status. pending = anything; completed = feedback +
 // score only; cancelled = nothing.
 export interface EditRoundOptions {
+  actorId?: string | null;
+  actorRole?: string | null;
   roundId: string;
   organizationId: string;
   input: HumanInterviewRoundEditInput;
@@ -476,7 +504,10 @@ async function syncLinkedScheduledMeetingInterviewers({
   );
 }
 
+// oxlint-disable-next-line complexity -- pending and completed rounds have intentionally separate edit policies.
 export async function editHumanInterviewRound({
+  actorId = null,
+  actorRole = null,
   roundId,
   organizationId,
   input,
@@ -494,6 +525,7 @@ export async function editHumanInterviewRound({
   // 防止两个 HR 同时编辑同一轮次时 (input ?? existing) merge 互相覆盖。
   // Transaction + FOR UPDATE: serialize read → validate → merge → write so
   // concurrent HR edits can't lose each other's writes.
+  // oxlint-disable-next-line complexity -- the transaction enforces distinct pending/completed policies atomically.
   await db.transaction(async (tx) => {
     const [existing] = await tx
       .select()
@@ -512,19 +544,70 @@ export async function editHumanInterviewRound({
     if (existing.status === "cancelled") {
       throw new EditRoundError("已取消的轮次无法编辑", 400);
     }
+    const [candidate] = await tx
+      .select({ pipelineStage: studioInterview.pipelineStage })
+      .from(studioInterview)
+      .where(
+        and(
+          eq(studioInterview.id, existing.interviewRecordId),
+          eq(studioInterview.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    if (candidate?.pipelineStage !== "human_interview") {
+      throw new EditRoundError("只有真人复面阶段可以修改面试轮次", 400);
+    }
 
     if (existing.status === "completed") {
       const feedback = normalizeRequiredFeedback(input.feedback ?? existing.feedback);
-      // completed：只允许修订 feedback / score。
-      // completed → feedback + score only.
+      const outcome = input.outcome ?? existing.outcome;
+      const score = input.score === undefined ? existing.score : input.score;
+      if (!outcome) {
+        throw new EditRoundError("请填写面试结果", 400);
+      }
+      const evaluationChanged =
+        feedback !== existing.feedback || outcome !== existing.outcome || score !== existing.score;
+      if (!evaluationChanged) {
+        return;
+      }
+      const [originalEvaluator] = existing.completedBy
+        ? await tx
+            .select({ name: user.name })
+            .from(user)
+            .where(eq(user.id, existing.completedBy))
+            .limit(1)
+        : [];
+      // completed：允许修订完整评价，不改写完成时间与完成人。
+      // completed → evaluation fields only; preserve completion metadata.
       await tx
         .update(studioHumanInterviewRound)
         .set({
           feedback,
-          score: input.score ?? existing.score,
+          outcome,
+          score,
           updatedAt: now,
         })
         .where(eq(studioHumanInterviewRound.id, roundId));
+      await recordCandidateActivityInTransaction(tx, {
+        action: "human_interview_evaluation_updated",
+        detail: {
+          feedbackChanged: feedback !== existing.feedback,
+          fromFeedback: existing.feedback,
+          fromOutcome: existing.outcome,
+          fromScore: existing.score,
+          originalEvaluatorId: existing.completedBy,
+          originalEvaluatorName: originalEvaluator?.name ?? null,
+          roundId: existing.id,
+          roundLabel: existing.label,
+          toFeedback: feedback,
+          toOutcome: outcome,
+          toScore: score,
+        },
+        interviewRecordId: existing.interviewRecordId,
+        operatorId: actorId,
+        operatorRole: actorRole,
+        organizationId,
+      });
       return;
     }
 

@@ -1,4 +1,5 @@
 "use client";
+/* oxlint-disable max-lines -- the action bar keeps all stage-specific controls in one switch */
 
 import { AiReviewApprovalButton } from "./ai-review/ai-review-approval-button";
 
@@ -62,6 +63,7 @@ export interface PipelineStageActionBarProps {
   // 已完成真人复面是否都填写了评价。
   // Whether every completed human interview round has feedback.
   humanInterviewFeedbackComplete?: boolean;
+  humanInterviewAllPassed?: boolean;
   aiRoundReset?: {
     isResetting: boolean;
     onReset: () => void;
@@ -80,6 +82,8 @@ export interface PipelineStageActionBarProps {
   // 查看当前阶段对应内容；不对应独立 tab 时由上层回到概览。
   // View content for the current stage; parent falls back to overview when no stage tab exists.
   onViewCurrentStage: () => void;
+  /** AI 评价审批不通过后衔接结案；无结案权限时不传。 */
+  onAiReviewRejected?: () => void;
   // 打开「标记结案」dialog。
   // Open the close dialog.
   onRequestClose: () => void;
@@ -123,9 +127,11 @@ export function PipelineStageActionBar({
   resumeEvaluationPassed = true,
   humanInterviewDone,
   humanInterviewFeedbackComplete,
+  humanInterviewAllPassed,
   aiRoundReset,
   aiRoundInterviewLink,
   onAdvance,
+  onAiReviewRejected,
   onRequestClose,
   onRequestReactivate,
   onViewCurrentStage,
@@ -158,11 +164,13 @@ export function PipelineStageActionBar({
     canCreateHumanInterview,
     canCreateOffer,
     hasJobDescription,
+    humanInterviewAllPassed,
     humanInterviewDone,
     humanInterviewFeedbackComplete,
     isAdvancing,
     isBusy,
     onAdvance: handleAdvance,
+    onAiReviewRejected,
     onRequestReactivate,
     pipelineStage,
     recordId,
@@ -444,6 +452,7 @@ interface StageButton {
   side: "left" | "right";
 }
 
+// oxlint-disable-next-line complexity -- each pipeline stage owns a small, explicit action branch.
 function getStageActions(props: {
   recordId: string;
   aiInterviewDisabled: boolean;
@@ -455,6 +464,7 @@ function getStageActions(props: {
   hasJobDescription: boolean;
   resumeEvaluationPassed: boolean;
   humanInterviewFeedbackComplete?: boolean;
+  humanInterviewAllPassed?: boolean;
   humanInterviewDone?: boolean;
   isAdvancing: boolean;
   isBusy: boolean;
@@ -463,6 +473,7 @@ function getStageActions(props: {
     approvalNote?: string,
     notificationUserIds?: string[],
   ) => void | Promise<void>;
+  onAiReviewRejected?: () => void;
   onRequestReactivate: () => void;
 }): { left: ReactNode[]; right: ReactNode[] } {
   const {
@@ -475,10 +486,12 @@ function getStageActions(props: {
     hasJobDescription,
     resumeEvaluationPassed,
     humanInterviewFeedbackComplete,
+    humanInterviewAllPassed,
     humanInterviewDone,
     isAdvancing,
     isBusy,
     onAdvance,
+    onAiReviewRejected,
     onRequestReactivate,
   } = props;
 
@@ -504,7 +517,9 @@ function getStageActions(props: {
 
   const buttons: StageButton[] = [];
   const pipelineSnapshot = {
-    humanInterviewReadyForOffer: Boolean(humanInterviewDone && humanInterviewFeedbackComplete),
+    humanInterviewReadyForOffer: Boolean(
+      humanInterviewDone && humanInterviewFeedbackComplete && humanInterviewAllPassed,
+    ),
     stage: pipelineStage,
   };
   const hasEvent = (event: CandidatePipelineEvent) =>
@@ -519,6 +534,7 @@ function getStageActions(props: {
             recordId={props.recordId}
             key="approve-ai-review"
             disabled={isBusy || !aiReviewReady || !hasJobDescription}
+            onRejected={onAiReviewRejected}
             onConfirm={async (note, notificationUserIds) => {
               await onAdvance("screening", note, notificationUserIds);
             }}
@@ -610,6 +626,7 @@ function getStageActions(props: {
         const disabledReason = resolveOfferAdvanceDisabledReason(
           humanInterviewDone,
           humanInterviewFeedbackComplete,
+          humanInterviewAllPassed,
           hasEvent({ type: "ADVANCE_TO_OFFER" }),
         );
         buttons.push({
@@ -690,11 +707,19 @@ function resolveHumanInterviewAdvanceDisabledReason(
 function resolveOfferAdvanceDisabledReason(
   humanInterviewDone: boolean | undefined,
   humanInterviewFeedbackComplete: boolean | undefined,
+  humanInterviewAllPassed: boolean | undefined,
   canAdvanceToOffer: boolean,
 ): string | null {
-  return humanInterviewDone && humanInterviewFeedbackComplete && canAdvanceToOffer
-    ? null
-    : "请先完成所有真人面试轮次，并补全每轮面试评价";
+  if (!humanInterviewDone) {
+    return "请先完成所有真人面试轮次";
+  }
+  if (!humanInterviewFeedbackComplete) {
+    return "请先补全每轮真人面试评价";
+  }
+  if (!humanInterviewAllPassed) {
+    return "存在未通过或待定的真人面试结果，不能进入 Offer";
+  }
+  return canAdvanceToOffer ? null : "当前状态不能进入 Offer";
 }
 
 function HumanInterviewAdvanceButton({

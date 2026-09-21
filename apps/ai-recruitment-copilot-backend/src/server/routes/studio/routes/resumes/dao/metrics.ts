@@ -293,6 +293,7 @@ async function loadDashboardActivity(organizationId: string) {
       where: and(
         eq(studioOfferDraft.organizationId, organizationId),
         isNotNull(studioOfferDraft.sentAt),
+        ne(studioOfferDraft.status, "deleted"),
         gte(studioOfferDraft.sentAt, since),
       ),
     }),
@@ -381,7 +382,12 @@ async function loadActionItems(organizationId: string): Promise<DashboardActionI
       ),
     })
     .from(studioOfferDraft)
-    .where(eq(studioOfferDraft.organizationId, organizationId));
+    .where(
+      and(
+        eq(studioOfferDraft.organizationId, organizationId),
+        ne(studioOfferDraft.status, "deleted"),
+      ),
+    );
 
   const [notificationRow] = await db
     .select({
@@ -499,7 +505,12 @@ async function loadOfferStatuses(organizationId: string) {
       status: studioOfferDraft.status,
     })
     .from(studioOfferDraft)
-    .where(eq(studioOfferDraft.organizationId, organizationId))
+    .where(
+      and(
+        eq(studioOfferDraft.organizationId, organizationId),
+        ne(studioOfferDraft.status, "deleted"),
+      ),
+    )
     .groupBy(studioOfferDraft.status);
   return rows.map((row) => ({ count: row.count, status: row.status }));
 }

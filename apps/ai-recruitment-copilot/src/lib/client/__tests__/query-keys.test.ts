@@ -27,7 +27,7 @@ describe("humanInterviewKeys", () => {
       "acme",
       "candidate_1",
     ]);
-    expect(humanInterviewKeys.studioResumes()).toEqual(["studio-resumes"]);
+    expect(humanInterviewKeys.studioResumes("acme")).toEqual(["studio-resumes", "acme"]);
   });
 
   it("invalidates rounds, meetings, and resume-library aggregates together", async () => {
@@ -46,7 +46,7 @@ describe("humanInterviewKeys", () => {
       queryKey: ["human-interview-meetings", "acme", "candidate_1"],
     });
     expect(invalidateQueries).toHaveBeenNthCalledWith(3, {
-      queryKey: ["studio-resumes"],
+      queryKey: ["studio-resumes", "acme"],
     });
   });
 });

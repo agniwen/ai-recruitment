@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- candidate transition coverage keeps the full stage matrix in one suite */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { transitionCandidateStage } from "./candidate-stage-transition";
 
@@ -388,6 +389,8 @@ describe("transitionCandidateStage", () => {
     mocks.transaction.mockImplementation(async (callback) => await callback(tx));
     mocks.loadReadiness.mockResolvedValue({
       completedRoundsMissingFeedback: 0,
+      failedRounds: 0,
+      inconclusiveRounds: 0,
       pendingRounds: 0,
       totalRounds: 1,
     });
@@ -647,6 +650,8 @@ describe("transitionCandidateStage", () => {
     mocks.transaction.mockImplementation(async (callback) => await callback(tx));
     mocks.loadReadiness.mockResolvedValue({
       completedRoundsMissingFeedback: 0,
+      failedRounds: 0,
+      inconclusiveRounds: 0,
       pendingRounds: 0,
       totalRounds: 1,
     });

@@ -44,7 +44,7 @@ export function DataExportDialog<T>({
   defaultColumnIds: readonly string[];
   fileName: string;
   getAllRows: () => Promise<readonly T[]>;
-  limit?: number;
+  limit?: number | null;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   sheetName: string;
@@ -104,13 +104,19 @@ export function DataExportDialog<T>({
     }
   }
 
-  const allCount = Math.min(total, limit);
+  const allCount = limit === null ? total : Math.min(total, limit);
   const rememberedColumnsHint = "已记住本次列选择，下次打开导出时会自动恢复。";
   let description = rememberedColumnsHint;
   if (step === "range") {
-    description = `每次最多导出 ${limit} 行，导出内容将生成 XLSX 文件。`;
+    description =
+      limit === null
+        ? "导出内容将生成 XLSX 文件。"
+        : `每次最多导出 ${limit} 行，导出内容将生成 XLSX 文件。`;
   } else if (!showRange) {
-    description = `每次最多导出 ${limit} 行。${rememberedColumnsHint}`;
+    description =
+      limit === null
+        ? `导出符合当前筛选条件的全部数据。${rememberedColumnsHint}`
+        : `每次最多导出 ${limit} 行。${rememberedColumnsHint}`;
   }
 
   return (
@@ -144,7 +150,7 @@ export function DataExportDialog<T>({
                     <span>导出全部筛选结果</span>
                     <FieldDescription>
                       导出符合当前筛选的 {allCount} 行
-                      {total > limit ? `（共 ${total} 行，已按上限截取）` : ""}。
+                      {limit !== null && total > limit ? `（共 ${total} 行，已按上限截取）` : ""}。
                     </FieldDescription>
                   </div>
                 </Field>

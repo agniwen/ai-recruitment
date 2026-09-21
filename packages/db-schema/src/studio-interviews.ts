@@ -317,7 +317,9 @@ export type HumanInterviewMeetingInput = z.infer<typeof humanInterviewMeetingInp
 // Offer 状态机：
 //   draft → sent → (accepted / declined / expired)
 //   任意时刻可被新版本 supersede（旧版状态变 superseded，新版从 draft 开始）
-// Offer state machine; any draft can be superseded when a new version is issued.
+//   任意状态可逻辑删除为 deleted；deleted 默认不参与业务查询。
+// Offer state machine; any draft can be superseded when a new version is issued,
+// and any state can be logically deleted into the hidden `deleted` tombstone state.
 export const offerDraftStatusValues = [
   "draft",
   "sent",
@@ -325,6 +327,7 @@ export const offerDraftStatusValues = [
   "declined",
   "expired",
   "superseded",
+  "deleted",
 ] as const;
 export const offerDraftStatusSchema = z.enum(offerDraftStatusValues);
 export type OfferDraftStatus = z.infer<typeof offerDraftStatusSchema>;
@@ -335,11 +338,21 @@ export const offerDraftStatusMeta: Record<
 > = {
   accepted: { label: "已接受", tone: "success" },
   declined: { label: "已拒绝", tone: "outline" },
+  deleted: { label: "已删除", tone: "outline" },
   draft: { label: "草稿", tone: "outline" },
   expired: { label: "已过期", tone: "outline" },
   sent: { label: "已发送", tone: "info" },
   superseded: { label: "已被新版替代", tone: "outline" },
 };
+
+const unknownOfferDraftStatusMeta = {
+  label: "未知状态",
+  tone: "outline",
+} as const;
+
+export function getOfferDraftStatusMeta(status: string) {
+  return offerDraftStatusMeta[status as OfferDraftStatus] ?? unknownOfferDraftStatusMeta;
+}
 
 // Offer 输入 schema：薪资以「元」为单位（integer），currency 默认 CNY。
 // Salary stored as integer "元" (CNY cents not used early-stage; CNY is dominant).

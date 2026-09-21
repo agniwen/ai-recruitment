@@ -164,22 +164,28 @@ export const studioInterviewHumanRouter = factory
       const input = c.req.valid("json");
       try {
         const updated = await editHumanInterviewRound({
+          actorId: c.var.user?.id ?? null,
+          actorRole: c.var.member?.role ?? null,
           input,
           organizationId: activeOrg.id,
           roundId,
         });
-        await recordCandidateActivity({
-          action: "human_interview_round_updated",
-          detail: {
-            roundId: updated.id,
-            roundLabel: updated.label,
-            scheduledAt: updated.scheduledAt,
-          },
-          interviewRecordId: updated.interviewRecordId,
-          operatorId: c.var.user?.id ?? null,
-          operatorRole: c.var.member?.role ?? null,
-          organizationId: activeOrg.id,
-        });
+        if (updated.status !== "completed") {
+          await recordCandidateActivity({
+            action: "human_interview_round_updated",
+            detail: {
+              outcome: updated.outcome,
+              roundId: updated.id,
+              roundLabel: updated.label,
+              scheduledAt: updated.scheduledAt,
+              score: updated.score,
+            },
+            interviewRecordId: updated.interviewRecordId,
+            operatorId: c.var.user?.id ?? null,
+            operatorRole: c.var.member?.role ?? null,
+            organizationId: activeOrg.id,
+          });
+        }
         invalidateStudioInterviewCaches(activeOrg.id);
         return c.json(updated, 200);
       } catch (error) {

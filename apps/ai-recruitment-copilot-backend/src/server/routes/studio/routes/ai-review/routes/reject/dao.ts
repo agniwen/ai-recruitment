@@ -42,7 +42,7 @@ export async function rejectCandidateAiReview(input: {
       return { kind: "invalid", message: "请等待 AI 评价生成完成后再审批。" } as const;
     }
     if (record.aiReviewApprovalStatus === "rejected") {
-      return { kind: "ok" } as const;
+      return { changed: false, kind: "ok" } as const;
     }
     const now = new Date();
     await tx
@@ -67,7 +67,7 @@ export async function rejectCandidateAiReview(input: {
       organizationId: input.organizationId,
       source: "manual",
     });
-    return { kind: "ok" } as const;
+    return { changed: true, kind: "ok" } as const;
   });
   if (result.kind === "ok") {
     invalidateStudioInterviewCaches(input.organizationId);

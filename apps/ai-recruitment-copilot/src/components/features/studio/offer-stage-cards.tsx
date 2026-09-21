@@ -1,6 +1,6 @@
 "use client";
 
-import { IconBan, IconCircleCheck, IconMail, IconPencil } from "@tabler/icons-react";
+import { IconBan, IconCircleCheck, IconMail, IconPencil, IconTrash } from "@tabler/icons-react";
 /* oxlint-disable no-use-before-define -- helper components defined below export component for top-down readability */
 // Offer 阶段的详情面板内容：
 //   - 顶部：候选人期望（薪资 / 现 base / 期望入职日）—— 可编辑，partial merge
@@ -16,10 +16,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { offerDraftStatusMeta } from "@arc/db-schema/studio-interviews";
+import { getOfferDraftStatusMeta } from "@arc/db-schema/studio-interviews";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import {
   cancelOfferDraft,
+  deleteOfferDraft,
   fetchStudioResume,
   patchOfferDraft,
   updateCandidateExpectations,
@@ -41,6 +42,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { EntityDeleteDialog } from "./entity-delete-dialog";
 import {
   OfferDraftFormFields,
   buildOfferDraftPayload,
@@ -242,6 +244,7 @@ export function OfferCard({
   onRespond,
   onSaved,
   onCancelled,
+  onDeleted,
 }: {
   draft: OfferDraftRecord;
   canDelete: boolean;
@@ -251,10 +254,12 @@ export function OfferCard({
   onRespond: () => void;
   onSaved: () => void;
   onCancelled: () => void;
+  onDeleted: () => void;
 }) {
   const slug = useWorkspaceSlug();
-  const meta = offerDraftStatusMeta[draft.status];
+  const meta = getOfferDraftStatusMeta(draft.status);
   const [editing, setEditing] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [form, setForm] = useState<OfferFormState>(() => offerFormStateFromDraft(draft));
   const setFormField = createOfferFormFieldSetter(setForm);
 
@@ -279,6 +284,15 @@ export function OfferCard({
       toast.success("已更新草稿");
       setEditing(false);
       onSaved();
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteOfferDraft(slug, candidateId, draft.id),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "删除失败"),
+    onSuccess: () => {
+      toast.success("已删除 Offer");
+      setDeleteConfirmOpen(false);
+      onDeleted();
     },
   });
 
@@ -347,11 +361,21 @@ export function OfferCard({
                 cancelMutation={cancelMutation}
                 draft={draft}
                 onEdit={() => setEditing(true)}
+                onDelete={() => setDeleteConfirmOpen(true)}
                 onRespond={onRespond}
               />
             </div>
           )}
         </div>
+        <EntityDeleteDialog
+          confirmDisabled={deleteMutation.isPending}
+          confirmLabel={deleteMutation.isPending ? "删除中…" : "删除"}
+          description={`删除后，Offer v${draft.version} 将不再显示，但历史记录仍会保留。`}
+          onClose={() => setDeleteConfirmOpen(false)}
+          onConfirm={() => deleteMutation.mutate()}
+          record={deleteConfirmOpen ? draft : null}
+          title="删除这条 Offer？"
+        />
       </CardContent>
     </Card>
   );
@@ -362,6 +386,7 @@ function OfferCardActions({
   canDelete,
   canUpdate,
   onEdit,
+  onDelete,
   onRespond,
   cancelMutation,
 }: {
@@ -369,20 +394,29 @@ function OfferCardActions({
   canDelete: boolean;
   canUpdate: boolean;
   onEdit: () => void;
+  onDelete: () => void;
   onRespond: () => void;
   cancelMutation: { mutate: () => void; isPending: boolean };
 }) {
   if (draft.status === "draft") {
-    if (!canUpdate) {
+    if (!(canUpdate || canDelete)) {
       return null;
     }
     // Send is intentionally hidden for now — drafts stay editable until a later send path ships.
     return (
       <div className="flex flex-wrap justify-end gap-2">
-        <Button onClick={onEdit} size="sm" variant="ghost">
-          <IconPencil className="size-4" />
-          编辑
-        </Button>
+        {canDelete ? (
+          <Button onClick={onDelete} size="sm" variant="ghost">
+            <IconTrash className="size-4" />
+            删除
+          </Button>
+        ) : null}
+        {canUpdate ? (
+          <Button onClick={onEdit} size="sm" variant="ghost">
+            <IconPencil className="size-4" />
+            编辑
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -400,6 +434,12 @@ function OfferCardActions({
           </Button>
         ) : null}
         {canDelete ? (
+          <Button onClick={onDelete} size="sm" variant="ghost">
+            <IconTrash className="size-4" />
+            删除
+          </Button>
+        ) : null}
+        {canDelete ? (
           <Button
             disabled={cancelMutation.isPending}
             onClick={() => cancelMutation.mutate()}
@@ -413,7 +453,14 @@ function OfferCardActions({
       </div>
     );
   }
-  return null;
+  return canDelete ? (
+    <div className="flex flex-wrap justify-end gap-2">
+      <Button onClick={onDelete} size="sm" variant="ghost">
+        <IconTrash className="size-4" />
+        删除
+      </Button>
+    </div>
+  ) : null;
 }
 
 function OfferDraftReadonlyFields({ draft }: { draft: OfferDraftRecord }) {

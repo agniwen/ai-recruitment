@@ -128,6 +128,7 @@ async function render(initialTab: "overview" | "ai-review" = "overview") {
   });
   clients.push(client);
   const onApproved = vi.fn();
+  const onRejected = vi.fn();
   act(() => {
     root.render(
       <QueryClientProvider client={client}>
@@ -136,6 +137,7 @@ async function render(initialTab: "overview" | "ai-review" = "overview") {
           initialTab={initialTab}
           onClose={vi.fn()}
           onApproved={onApproved}
+          onRejected={onRejected}
         />
       </QueryClientProvider>,
     );
@@ -146,7 +148,7 @@ async function render(initialTab: "overview" | "ai-review" = "overview") {
     });
     expect(host.textContent).toContain("候选人甲 · AI 分析审批");
   });
-  return { host, onApproved };
+  return { host, onApproved, onRejected };
 }
 function approvalButton() {
   return [...document.querySelectorAll("button")].find(
@@ -308,10 +310,10 @@ describe("AI approval detail", () => {
   });
 });
 
-it("rejects without a notification recipient and keeps the detail open", async () => {
+it("rejects without a notification recipient and requests the archived close flow", async () => {
   mocks.get.mockResolvedValue(ready);
   mocks.reject.mockResolvedValue({ ok: true });
-  const { host, onApproved } = await render();
+  const { host, onApproved, onRejected } = await render();
   act(() => {
     [...host.querySelectorAll("button")]
       .find((button) => button.textContent === "审批不通过")
@@ -329,5 +331,9 @@ it("rejects without a notification recipient and keeps the detail open", async (
   });
   expect(mocks.approve).not.toHaveBeenCalled();
   expect(onApproved).not.toHaveBeenCalled();
+  expect(onRejected).toHaveBeenCalledWith({
+    candidateName: "候选人甲",
+    id: "candidate-a",
+  });
   expect(host.textContent).toContain("候选人甲 · AI 分析审批");
 });

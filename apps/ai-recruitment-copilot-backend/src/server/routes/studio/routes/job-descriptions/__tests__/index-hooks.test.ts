@@ -142,6 +142,70 @@ beforeEach(async () => {
 afterEach(cleanup);
 
 describe("job-descriptions route index hooks", () => {
+  it("GET /export returns every job matching the filters without pagination", async () => {
+    await db.insert(jobDescription).values([
+      {
+        allowCrossDepartmentInterviewers: true,
+        createdAt: NOW,
+        createdBy: USER_ID,
+        departmentId: DEPARTMENT_ID,
+        id: "index_hooks_export_frontend",
+        name: "前端工程师",
+        organizationId: ORG_ID,
+        prompt: "负责前端开发。",
+        recruitmentStatus: "招聘中",
+        resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
+        resumeScreeningPolicyVersion: 1,
+        updatedAt: NOW,
+      },
+      {
+        allowCrossDepartmentInterviewers: true,
+        createdAt: NOW,
+        createdBy: USER_ID,
+        departmentId: DEPARTMENT_ID,
+        id: "index_hooks_export_backend",
+        name: "后端工程师",
+        organizationId: ORG_ID,
+        prompt: "负责后端开发。",
+        recruitmentStatus: "招聘中",
+        resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
+        resumeScreeningPolicyVersion: 1,
+        updatedAt: NOW,
+      },
+      {
+        allowCrossDepartmentInterviewers: true,
+        createdAt: NOW,
+        createdBy: USER_ID,
+        departmentId: DEPARTMENT_ID,
+        id: "index_hooks_export_closed",
+        name: "测试岗位",
+        organizationId: ORG_ID,
+        prompt: "负责测试。",
+        recruitmentStatus: "已关闭",
+        resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
+        resumeScreeningPolicyVersion: 1,
+        updatedAt: NOW,
+      },
+    ]);
+
+    const response = await client["job-descriptions"].export.$get({
+      query: {
+        recruitmentStatus: "招聘中",
+        sortBy: "name",
+        sortOrder: "asc",
+      },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    if (!("records" in body)) {
+      throw new Error("expected exported job description records");
+    }
+    expect(body.records.map((record) => record.name)).toHaveLength(2);
+    expect(body.records.map((record) => record.name)).toEqual(
+      expect.arrayContaining(["后端工程师", "前端工程师"]),
+    );
+  });
+
   it("POST / enqueues a JD index job with the new record id and active org", async () => {
     const res = await client["job-descriptions"].$post({ json: jobDescriptionPayload() });
     expect(res.status).toBe(201);

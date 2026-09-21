@@ -12,8 +12,12 @@ import {
   completeHumanInterviewRound,
   createHumanInterviewMeeting,
   createHumanInterviewRound,
+  patchHumanInterviewRound,
 } from "@/lib/client/api";
-import { invalidateHumanInterviewCandidateQueries } from "@/lib/client/api/query-keys";
+import {
+  humanInterviewKeys,
+  invalidateHumanInterviewCandidateQueries,
+} from "@/lib/client/api/query-keys";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DateTimePicker } from "@/components/date-time-picker";
 import { Button } from "@/components/ui/button";
@@ -31,6 +35,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { Textarea } from "@/components/ui/textarea";
 import { addOneHourToDateTimeLocalInputValue } from "./human-interview-stage-utils";
+import { HumanInterviewTimeZonePreview } from "./human-interview-time-zone-preview";
 import { useWorkspaceInterviewerMembers } from "./use-workspace-interviewer-members";
 import { useHumanInterviewScheduleConfirmation } from "./use-human-interview-schedule-confirmation";
 
@@ -145,7 +150,6 @@ export function ScheduleRoundDialog({
       handleOpenChange(false);
     },
   });
-
   const memberOptions = members.map((m) => ({
     label: m.name,
     value: m.id,
@@ -192,13 +196,18 @@ export function ScheduleRoundDialog({
               required
               value={scheduledAt}
             />
+            <p className="text-muted-foreground text-xs">
+              以中国标准时间（UTC+8）设置；选择后可在下方查看其他地区。
+            </p>
+            <HumanInterviewTimeZonePreview label="面试时间换算" value={scheduledAt} />
           </div>
 
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="valid-until">
-              有效时间至
+              有效时间至（中国标准时间）
             </Label>
             <DateTimePicker id="valid-until" onValueChange={setValidUntil} value={validUntil} />
+            <HumanInterviewTimeZonePreview label="有效时间换算" value={validUntil} />
           </div>
 
           <div className="grid gap-1.5">
@@ -258,20 +267,29 @@ interface CompleteDialogProps {
   round: HumanInterviewRoundRecord | null;
   candidateId: string;
   onOpenChange: (open: boolean) => void;
-  onCompleted: () => void;
+  onRejected?: () => void;
 }
 
 export function CompleteRoundDialog({
   round,
   candidateId,
   onOpenChange,
-  onCompleted,
+  onRejected,
 }: CompleteDialogProps) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const [outcome, setOutcome] = useState<HumanInterviewRoundOutcome>("pass");
   const [score, setScore] = useState("");
   const [feedback, setFeedback] = useState("");
+
+  useEffect(() => {
+    if (!round) {
+      return;
+    }
+    setOutcome(round.outcome ?? "pass");
+    setScore(round.score === null ? "" : String(round.score));
+    setFeedback(round.feedback ?? "");
+  }, [round]);
 
   function handleOpenChange(next: boolean) {
     if (!next) {
@@ -298,28 +316,51 @@ export function CompleteRoundDialog({
       if (!trimmedFeedback) {
         throw new Error("请填写面试评价");
       }
-      return completeHumanInterviewRound(slug, candidateId, round.id, {
+      const input = {
         feedback: trimmedFeedback,
         outcome,
         score: parsedScore,
-      });
+      };
+      return round.status === "completed"
+        ? patchHumanInterviewRound(slug, candidateId, round.id, input)
+        : completeHumanInterviewRound(slug, candidateId, round.id, input);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "面试评价失败"),
-    onSuccess: () => {
-      toast.success("已面试评价");
-      void invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug });
-      onCompleted();
+    onSuccess: async (updatedRound) => {
+      const becameRejected =
+        updatedRound.outcome === "fail" &&
+        (round?.status !== "completed" || round.outcome !== "fail");
+      queryClient.setQueryData<HumanInterviewRoundRecord[]>(
+        humanInterviewKeys.rounds(slug, candidateId),
+        (current) =>
+          current?.map((item) => (item.id === updatedRound.id ? updatedRound : item)) ?? current,
+      );
+      await invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug });
+      toast.success(round?.status === "completed" ? "评价已更新" : "已面试评价");
       handleOpenChange(false);
+      if (becameRejected) {
+        onRejected?.();
+      }
     },
   });
+  let submitLabel = "确认完成";
+  if (mutation.isPending) {
+    submitLabel = "保存中…";
+  } else if (round?.status === "completed") {
+    submitLabel = "保存修改";
+  }
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={round !== null}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>面试评价：{round?.label}</DialogTitle>
+          <DialogTitle>
+            {round?.status === "completed" ? "编辑评价" : "面试评价"}：{round?.label}
+          </DialogTitle>
           <DialogDescription>
-            录入面试结果。完成后会自动结束该轮次下的会议，且只能修改评分和反馈。
+            {round?.status === "completed"
+              ? "修改面试结果、评分和反馈。保存后系统会重新判断是否可以进入 Offer。"
+              : "录入面试结果。完成后会自动结束该轮次下的会议。"}
           </DialogDescription>
         </DialogHeader>
 
@@ -384,7 +425,7 @@ export function CompleteRoundDialog({
             取消
           </Button>
           <Button disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "保存中…" : "确认完成"}
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
