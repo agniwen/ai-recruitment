@@ -15,7 +15,7 @@ import { barY, defineChart, group } from "@tanstack/charts";
 import { scaleBand, scaleLinear } from "d3-scale";
 import { StudioSummaryCards } from "@/components/features/studio/studio-summary-cards";
 import type { ResumeLibraryMetrics } from "@arc/shared/studio-resumes";
-import { offerDraftStatusMeta } from "@arc/db-schema/studio-interviews";
+import { getOfferDraftStatusMeta } from "@arc/db-schema/studio-interviews";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Chart, ChartContainer, chartColor, chartTooltip } from "@/components/ui/chart";
@@ -466,17 +466,15 @@ function OfferStatusCard({ metrics }: { metrics: RecruitingDashboardMetrics }) {
   const data = useMemo(
     () =>
       metrics.offerStatuses.map((row, index) => {
+        const statusMeta = getOfferDraftStatusMeta(row.status);
         let fill = "var(--chart-2)";
         if (index % 2 === 0) {
-          fill =
-            offerDraftStatusMeta[row.status].tone === "success"
-              ? "var(--chart-5)"
-              : "var(--chart-4)";
+          fill = statusMeta.tone === "success" ? "var(--chart-5)" : "var(--chart-4)";
         }
         return {
           fill,
           key: row.status,
-          label: offerDraftStatusMeta[row.status].label,
+          label: statusMeta.label,
           value: row.count,
         };
       }),

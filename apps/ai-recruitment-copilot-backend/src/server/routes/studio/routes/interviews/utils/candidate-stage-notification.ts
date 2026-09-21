@@ -89,7 +89,7 @@ interface CandidateStageChangeInput {
   toStage: PipelineStage;
 }
 
-interface TelegramRecipientProfile {
+export interface TelegramRecipientProfile {
   telegram: string | null;
   telegramBoundUsername: string | null;
   telegramChatId: string | null;
@@ -136,6 +136,21 @@ async function findResumeContactRecipient(
   return matches.length === 1 ? (matches[0] ?? null) : null;
 }
 
+export async function resolveCandidateRecruitingNotificationRecipientIds(input: {
+  creator: TelegramRecipientProfile;
+  organizationId: string;
+  resumeContact: string | null;
+}): Promise<string[]> {
+  const resumeContactRecipient = await findResumeContactRecipient(
+    input.organizationId,
+    input.resumeContact,
+  );
+  return resolveCandidateStageNotificationRecipientIds([
+    input.creator,
+    ...(resumeContactRecipient ? [resumeContactRecipient] : []),
+  ]);
+}
+
 async function sendCandidateStageChange(input: CandidateStageChangeInput): Promise<void> {
   const [candidate] = await db
     .select({
@@ -167,19 +182,13 @@ async function sendCandidateStageChange(input: CandidateStageChangeInput): Promi
     return;
   }
 
-  let recipientIds: string[];
-  if (input.aiReviewNotificationChatIds) {
-    recipientIds = [...new Set(input.aiReviewNotificationChatIds)];
-  } else {
-    const resumeContactRecipient = await findResumeContactRecipient(
-      input.organizationId,
-      candidate.resumeContact,
-    );
-    recipientIds = resolveCandidateStageNotificationRecipientIds([
-      candidate,
-      ...(resumeContactRecipient ? [resumeContactRecipient] : []),
-    ]);
-  }
+  const recipientIds = input.aiReviewNotificationChatIds
+    ? [...new Set(input.aiReviewNotificationChatIds)]
+    : await resolveCandidateRecruitingNotificationRecipientIds({
+        creator: candidate,
+        organizationId: input.organizationId,
+        resumeContact: candidate.resumeContact,
+      });
   if (recipientIds.length === 0) {
     return;
   }

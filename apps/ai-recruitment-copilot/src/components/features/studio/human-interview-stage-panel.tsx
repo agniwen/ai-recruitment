@@ -50,6 +50,7 @@ interface PanelProps {
   // closed 状态时所有写按钮禁用（页面上层已隐藏，这里再兜一手）。
   // All writes disabled when candidate is closed (defense in depth).
   disabled?: boolean;
+  onRejected?: () => void;
   resumeJobDescriptionHumanInterviewerIds?: string[];
 }
 
@@ -106,6 +107,7 @@ export function HumanInterviewStagePanel({
   canDelete = true,
   canUpdate = true,
   disabled,
+  onRejected,
   resumeJobDescriptionHumanInterviewerIds = EMPTY_INTERVIEWER_IDS,
 }: PanelProps) {
   const slug = useWorkspaceSlug();
@@ -260,7 +262,7 @@ export function HumanInterviewStagePanel({
       />
       <CompleteRoundDialog
         candidateId={candidateId}
-        onCompleted={invalidateRounds}
+        onRejected={onRejected}
         onOpenChange={(open) =>
           !open && dispatchDialog({ target: null, type: "completeTargetChanged" })
         }

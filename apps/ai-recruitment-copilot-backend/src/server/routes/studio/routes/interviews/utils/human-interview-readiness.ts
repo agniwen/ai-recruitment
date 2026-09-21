@@ -5,9 +5,15 @@ export const COMPLETED_HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE =
   "请先填写已完成真人面试轮次的面试评价。";
 export const HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE =
   "请先完成所有真人面试轮次，并补全每轮面试评价。";
+export const HUMAN_INTERVIEW_FAILED_FOR_OFFER_MESSAGE =
+  "存在未通过的真人面试轮次，不能进入 Offer。";
+export const HUMAN_INTERVIEW_INCONCLUSIVE_FOR_OFFER_MESSAGE =
+  "存在待定的真人面试结果，请修改评价或继续安排下一轮。";
 
 export interface HumanInterviewRoundReadiness {
   completedRoundsMissingFeedback: number;
+  failedRounds: number;
+  inconclusiveRounds: number;
   pendingRounds: number;
   totalRounds: number;
 }
@@ -21,9 +27,17 @@ export const humanInterviewFeedbackSchema = z
 export function getHumanInterviewOfferReadinessError(
   readiness: HumanInterviewRoundReadiness,
 ): string | null {
-  return readiness.totalRounds > 0 &&
-    readiness.pendingRounds === 0 &&
-    readiness.completedRoundsMissingFeedback === 0
-    ? null
-    : HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE;
+  if (readiness.totalRounds === 0 || readiness.pendingRounds > 0) {
+    return HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE;
+  }
+  if (readiness.completedRoundsMissingFeedback > 0) {
+    return COMPLETED_HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE;
+  }
+  if (readiness.failedRounds > 0) {
+    return HUMAN_INTERVIEW_FAILED_FOR_OFFER_MESSAGE;
+  }
+  if (readiness.inconclusiveRounds > 0) {
+    return HUMAN_INTERVIEW_INCONCLUSIVE_FOR_OFFER_MESSAGE;
+  }
+  return null;
 }

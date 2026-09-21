@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   loadResumeDetailForAuthenticatedReviewer: vi.fn(),
   loadResumeLibraryMetrics: vi.fn(),
   notifyAiReviewPending: vi.fn(),
+  notifyEvaluationRejection: vi.fn(),
   permissionChecks: [] as [string, string][],
   queryPaginatedResumeRecords: vi.fn(),
   recordCandidateActivityInTransaction: vi.fn(),
@@ -49,6 +50,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../utils/ai-review-notification", () => ({
   notifyAiReviewPending: mocks.notifyAiReviewPending,
+}));
+vi.mock("../utils/evaluation-notification", () => ({
+  notifyEvaluationRejection: mocks.notifyEvaluationRejection,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
@@ -282,7 +286,7 @@ function makeApp() {
     .use("*", async (c, next) => {
       c.set("activeOrg", { id: ORGANIZATION_ID } as never);
       c.set("member", { role: "owner" } as never);
-      c.set("user", { id: USER_ID } as never);
+      c.set("user", { id: USER_ID, name: "评审人" } as never);
       await next();
     })
     .route("/resumes", resumeLibraryRouter);
@@ -730,7 +734,11 @@ describe("resumeLibraryRouter behavior", () => {
   it("exposes workspace review data and records a reviewer evaluation", async () => {
     mocks.loadResumeDetailForAuthenticatedReviewer
       .mockResolvedValueOnce({ id: RECORD_ID, jobDescriptionId: "jd-old" })
-      .mockResolvedValueOnce({ id: RECORD_ID, jobDescriptionId: "jd-old" })
+      .mockResolvedValueOnce({
+        id: RECORD_ID,
+        jobDescriptionDepartmentName: "研发部",
+        jobDescriptionId: "jd-old",
+      })
       .mockResolvedValueOnce({ id: RECORD_ID, resumeEvaluationStatus: "pass" });
     mocks.submitResumeEvaluation.mockResolvedValue({ status: "updated" });
 
@@ -740,7 +748,6 @@ describe("resumeLibraryRouter behavior", () => {
         availableTimeSlots: [
           { endAt: "2026-07-12T11:00:00.000Z", startAt: "2026-07-12T10:00:00.000Z" },
         ],
-        departmentName: "研发部",
         reason: "符合岗位要求",
         status: "pass",
       }),
@@ -775,7 +782,6 @@ describe("resumeLibraryRouter behavior", () => {
         availableTimeSlots: [
           { endAt: "2026-07-12T11:00:00.000Z", startAt: "2026-07-12T10:00:00.000Z" },
         ],
-        departmentName: "研发部",
         reason: "符合岗位要求",
         status: "pass",
       }),
@@ -788,6 +794,60 @@ describe("resumeLibraryRouter behavior", () => {
       error: "请先关联在招岗位后再评估。",
     });
     expect(mocks.submitResumeEvaluation).not.toHaveBeenCalled();
+  });
+
+  it("notifies the initiator when a pending resume evaluation is rejected", async () => {
+    mocks.loadResumeDetailForAuthenticatedReviewer
+      .mockResolvedValueOnce({
+        id: RECORD_ID,
+        jobDescriptionDepartmentName: "研发部",
+        jobDescriptionId: "jd-old",
+      })
+      .mockResolvedValueOnce({ id: RECORD_ID, resumeEvaluationStatus: "fail" });
+    mocks.submitResumeEvaluation.mockResolvedValue({
+      currentStatus: "fail",
+      previousStatus: null,
+      status: "updated",
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/review/evaluation`, {
+      body: JSON.stringify({ reason: "经验不匹配", status: "fail" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.notifyEvaluationRejection).toHaveBeenCalledWith({
+      candidateId: RECORD_ID,
+      kind: "resume_evaluation",
+      operatorName: "评审人",
+      organizationId: ORGANIZATION_ID,
+      reason: "经验不匹配",
+    });
+  });
+
+  it("does not notify again when an existing failed evaluation is edited", async () => {
+    mocks.loadResumeDetailForAuthenticatedReviewer
+      .mockResolvedValueOnce({
+        id: RECORD_ID,
+        jobDescriptionDepartmentName: "研发部",
+        jobDescriptionId: "jd-old",
+      })
+      .mockResolvedValueOnce({ id: RECORD_ID, resumeEvaluationStatus: "fail" });
+    mocks.submitResumeEvaluation.mockResolvedValue({
+      currentStatus: "fail",
+      previousStatus: "fail",
+      status: "updated",
+    });
+
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/review/evaluation`, {
+      body: JSON.stringify({ reason: "补充说明", status: "fail" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.notifyEvaluationRejection).not.toHaveBeenCalled();
   });
 
   it("rejects another reviewer after an evaluation has passed", async () => {
@@ -803,7 +863,6 @@ describe("resumeLibraryRouter behavior", () => {
 
     const response = await makeApp().request(`/resumes/${RECORD_ID}/review/evaluation`, {
       body: JSON.stringify({
-        departmentName: "研发部",
         reason: "尝试再次评价",
         status: "fail",
       }),

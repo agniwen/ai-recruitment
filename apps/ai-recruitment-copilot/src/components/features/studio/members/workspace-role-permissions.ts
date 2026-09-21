@@ -331,7 +331,7 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
   },
   offer: {
     create: "允许将候选人推进到 Offer，并新建 Offer 草稿。",
-    delete: "允许撤回已创建或已发送的 Offer。",
+    delete: "允许撤回已创建或已发送的 Offer，或将 Offer 版本标记为已删除。",
     read: "允许查看 Offer 阶段页签和 Offer 版本记录。",
     update: "允许编辑 Offer 草稿、发送 Offer，并记录候选人响应。",
   },

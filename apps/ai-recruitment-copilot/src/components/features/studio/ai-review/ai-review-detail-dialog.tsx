@@ -19,11 +19,13 @@ export function AiReviewDetailDialog({
   initialTab,
   onClose,
   onApproved,
+  onRejected,
 }: {
   recordId: string;
   initialTab: "overview" | "ai-review";
   onClose: () => void;
   onApproved: () => void;
+  onRejected?: (candidate: { id: string; candidateName: string | null }) => void;
 }) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
@@ -136,6 +138,9 @@ export function AiReviewDetailDialog({
               <AiReviewApprovalButton
                 recordId={recordId}
                 disabled={approval.isPending || detail.resumeReviewStatus !== "ready"}
+                onRejected={() =>
+                  onRejected?.({ candidateName: detail.candidateName, id: recordId })
+                }
                 onConfirm={(approvalNote, notificationUserIds) =>
                   approval.mutateAsync({ approvalNote, notificationUserIds })
                 }

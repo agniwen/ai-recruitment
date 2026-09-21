@@ -4,12 +4,14 @@
 //   3. respond=accepted 后不再允许编辑，cancel 把 sent → expired
 //
 // Integration tests for human-interview + offer subtable DAOs.
+/* oxlint-disable max-lines -- end-to-end subtable lifecycle coverage is intentionally kept together */
 
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   member,
+  interviewAuditLog,
   organization,
   studioHumanInterviewMeeting,
   studioHumanInterviewMeetingInterviewer,
@@ -38,6 +40,7 @@ import {
 import {
   cancelOfferDraft,
   createOfferDraft,
+  deleteOfferDraft,
   editOfferDraft,
   listOfferDrafts,
   maybeAdvanceToOffer,
@@ -97,13 +100,31 @@ beforeAll(async () => {
     name: "Pipeline Subtables Org",
     slug: "test-pipeline-subtables",
   });
-  await db.insert(member).values({
-    createdAt: NOW,
-    id: "m_pipeline_hr",
-    organizationId: ORG,
-    role: "owner",
-    userId: HR_USER,
-  });
+  await db.insert(member).values([
+    {
+      createdAt: NOW,
+      id: "m_pipeline_hr",
+      organizationId: ORG,
+      role: "owner",
+      userId: HR_USER,
+    },
+    {
+      createdAt: NOW,
+      id: "m_pipeline_int_a",
+      isInterviewer: true,
+      organizationId: ORG,
+      role: "member",
+      userId: INTERVIEWER_A,
+    },
+    {
+      createdAt: NOW,
+      id: "m_pipeline_int_b",
+      isInterviewer: true,
+      organizationId: ORG,
+      role: "member",
+      userId: INTERVIEWER_B,
+    },
+  ]);
   await db.insert(studioInterview).values([
     {
       candidateName: "复面测试",
@@ -222,12 +243,15 @@ describe("human interview rounds DAO", () => {
 
   it("completeHumanInterviewRound 写 outcome + score + feedback；非 pending 拒绝", async () => {
     await clearSubtables();
+    await resetCandidateStage("human_interview");
     const round = await createHumanInterviewRound({
       input: { format: "phone", interviewerIds: [INTERVIEWER_A], label: "电话面" },
       interviewRecordId: RECORD_ID,
       organizationId: ORG,
     });
     const completed = await completeHumanInterviewRound({
+      actorId: HR_USER,
+      actorRole: "owner",
       feedback: "技术扎实",
       organizationId: ORG,
       outcome: "pass",
@@ -238,6 +262,36 @@ describe("human interview rounds DAO", () => {
     expect(completed.outcome).toBe("pass");
     expect(completed.score).toBe(88);
     expect(completed.completedAt).not.toBeNull();
+
+    const edited = await editHumanInterviewRound({
+      actorId: INTERVIEWER_A,
+      actorRole: "member",
+      input: { feedback: "复核后通过", outcome: "fail", score: 72 },
+      organizationId: ORG,
+      roundId: round.id,
+    });
+    expect(edited.outcome).toBe("fail");
+    expect(edited.feedback).toBe("复核后通过");
+    expect(edited.score).toBe(72);
+
+    const [evaluationAudit] = await db
+      .select()
+      .from(interviewAuditLog)
+      .where(eq(interviewAuditLog.action, "human_interview_evaluation_updated"));
+    expect(evaluationAudit?.operatorId).toBe(INTERVIEWER_A);
+    expect(evaluationAudit?.detail).toMatchObject({
+      feedbackChanged: true,
+      fromFeedback: "技术扎实",
+      fromOutcome: "pass",
+      fromScore: 88,
+      originalEvaluatorId: HR_USER,
+      originalEvaluatorName: "HR pipeline",
+      roundId: round.id,
+      roundLabel: "电话面",
+      toFeedback: "复核后通过",
+      toOutcome: "fail",
+      toScore: 72,
+    });
 
     // 已完成轮次再次 complete 应被拒。
     await expect(
@@ -697,6 +751,36 @@ describe("offer drafts DAO", () => {
     expect(row?.pipelineStage).toBe("human_interview");
   });
 
+  it.each(["fail", "inconclusive"] as const)(
+    "maybeAdvanceToOffer 在真人复面结果为 %s 时不会推进",
+    async (outcome) => {
+      await clearSubtables();
+      await resetCandidateStage("human_interview");
+      const round = await createHumanInterviewRound({
+        input: { format: "online", interviewerIds: [INTERVIEWER_A], label: "终面" },
+        interviewRecordId: RECORD_ID,
+        organizationId: ORG,
+      });
+      await db
+        .update(studioHumanInterviewRound)
+        .set({ completedAt: new Date(), feedback: "评价完整", outcome, status: "completed" })
+        .where(eq(studioHumanInterviewRound.id, round.id));
+      await createOfferDraft({
+        input: { baseSalary: 30_000, position: "测试岗" },
+        interviewRecordId: RECORD_ID,
+        organizationId: ORG,
+      });
+
+      await maybeAdvanceToOffer(RECORD_ID, ORG);
+
+      const [row] = await db
+        .select({ pipelineStage: studioInterview.pipelineStage })
+        .from(studioInterview)
+        .where(eq(studioInterview.id, RECORD_ID));
+      expect(row?.pipelineStage).toBe("human_interview");
+    },
+  );
+
   it("editOfferDraft 仅 draft 时允许；sent 后只能用 respond/cancel", async () => {
     await clearSubtables();
     const draft = await createOfferDraft({
@@ -773,5 +857,50 @@ describe("offer drafts DAO", () => {
     expect(cancelled.status).toBe("expired");
 
     await expect(cancelOfferDraft(draft.id, ORG)).rejects.toBeInstanceOf(OfferDraftError);
+  });
+
+  it("deleteOfferDraft 标记 deleted 后列表隐藏，并保留版本号递增", async () => {
+    await clearSubtables();
+    const v1 = await createOfferDraft({
+      input: { baseSalary: 30_000, position: "软删除测试岗" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+
+    const deleted = await deleteOfferDraft(v1.id, ORG);
+
+    await expect(listOfferDrafts(RECORD_ID, ORG)).resolves.toEqual([]);
+    expect(deleted.previousStatus).toBe("draft");
+    expect(deleted.draft.status).toBe("deleted");
+
+    const v2 = await createOfferDraft({
+      input: { baseSalary: 31_000, position: "软删除测试岗" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+    expect(v2.version).toBe(2);
+  });
+
+  it("deleteOfferDraft 允许删除 superseded 历史版本", async () => {
+    await clearSubtables();
+    const v1 = await createOfferDraft({
+      input: { baseSalary: 30_000, position: "历史版本测试岗" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+      sendImmediately: true,
+    });
+    const v2 = await createOfferDraft({
+      input: { baseSalary: 31_000, position: "历史版本测试岗" },
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+
+    const deleted = await deleteOfferDraft(v1.id, ORG);
+
+    expect(deleted.previousStatus).toBe("superseded");
+    expect(deleted.draft.status).toBe("deleted");
+    await expect(listOfferDrafts(RECORD_ID, ORG)).resolves.toEqual([
+      expect.objectContaining({ id: v2.id, status: "draft" }),
+    ]);
   });
 });

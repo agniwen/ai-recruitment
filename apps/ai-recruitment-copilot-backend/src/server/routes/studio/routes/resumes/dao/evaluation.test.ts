@@ -173,7 +173,11 @@ describe("submitResumeEvaluation", () => {
       status: "fail",
     });
 
-    expect(result).toEqual({ currentStatus: "fail", status: "updated" });
+    expect(result).toEqual({
+      currentStatus: "fail",
+      previousStatus: "fail",
+      status: "updated",
+    });
     expect(updatePatches).toEqual([expect.objectContaining({ resumeEvaluationStatus: "fail" })]);
     expect(auditRows).toContainEqual(
       expect.objectContaining({
@@ -205,7 +209,11 @@ describe("submitResumeEvaluation", () => {
       status: "pass",
     });
 
-    expect(result).toEqual({ currentStatus: "pass", status: "updated" });
+    expect(result).toEqual({
+      currentStatus: "pass",
+      previousStatus: "fail",
+      status: "updated",
+    });
     expect(updatePatches).toEqual([expect.objectContaining({ resumeEvaluationStatus: "pass" })]);
     expect(auditRows).toContainEqual(
       expect.objectContaining({

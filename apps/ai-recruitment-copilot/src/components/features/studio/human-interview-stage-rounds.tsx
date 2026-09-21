@@ -37,12 +37,14 @@ import {
   canCancelHumanInterviewRound,
   canCompleteHumanInterviewRound,
   canEndHumanInterviewMeeting,
+  canEditHumanInterviewEvaluation,
   canOpenMeetingLinks,
   canRescheduleHumanInterviewRound,
   describeRoundSummaryStatus,
   hasRoundDetails,
   toDateTimeLocalInputValue,
 } from "./human-interview-stage-utils";
+import { HumanInterviewTimeZonePreview } from "./human-interview-time-zone-preview";
 
 export function RoundCard({
   round,
@@ -81,6 +83,7 @@ export function RoundCard({
     Boolean(round.scheduledAt);
   const canCancelRound = canDelete && canCancelHumanInterviewRound(round, meeting, disabled);
   const canCompleteRound = canUpdate && canCompleteHumanInterviewRound(round, meeting, disabled);
+  const canEditEvaluation = canUpdate && canEditHumanInterviewEvaluation(round, disabled);
 
   return (
     <Card className="gap-0 rounded-lg py-0">
@@ -135,6 +138,7 @@ export function RoundCard({
           canCompleteRound={canCompleteRound}
           canCreateMeeting={canCreateMeeting}
           canEndMeeting={canUpdate && canEndHumanInterviewMeeting(meeting, disabled)}
+          canEditEvaluation={canEditEvaluation}
           canOpenLinks={canOpenMeetingLinks(meeting)}
           meeting={meeting}
           onCancel={onCancel}
@@ -220,6 +224,9 @@ function RoundScheduledAtControl({
   if (editing) {
     return (
       <form className="inline-flex min-h-7 flex-wrap items-center gap-1.5" onSubmit={handleSubmit}>
+        <span className="w-full text-muted-foreground text-xs">
+          面试时间和有效时间按中国标准时间（UTC+8）设置。
+        </span>
         <Label className="sr-only" htmlFor={inputId}>
           面试时间
         </Label>
@@ -229,6 +236,11 @@ function RoundScheduledAtControl({
           id={inputId}
           onValueChange={handleScheduledAtChange}
           required
+          value={scheduledAt}
+        />
+        <HumanInterviewTimeZonePreview
+          className="w-full"
+          label="面试时间换算"
           value={scheduledAt}
         />
         <Label className="sr-only" htmlFor={validUntilInputId}>
@@ -241,6 +253,7 @@ function RoundScheduledAtControl({
           onValueChange={setValidUntil}
           value={validUntil}
         />
+        <HumanInterviewTimeZonePreview className="w-full" label="有效时间换算" value={validUntil} />
         <Button
           aria-label="保存面试时间"
           className="h-7 w-7 p-0"
@@ -308,6 +321,7 @@ function RoundCardActions({
   canEndMeeting,
   canCancelRound,
   canCompleteRound,
+  canEditEvaluation,
   onComplete,
   onCancel,
   onCreateMeeting,
@@ -320,6 +334,7 @@ function RoundCardActions({
   canEndMeeting: boolean;
   canCancelRound: boolean;
   canCompleteRound: boolean;
+  canEditEvaluation: boolean;
   onComplete: () => void;
   onCancel: () => void;
   onCreateMeeting: () => void;
@@ -327,7 +342,12 @@ function RoundCardActions({
   onOpenLinks: (meeting: HumanInterviewMeetingRecord) => void;
 }) {
   const hasActions =
-    canCreateMeeting || canOpenLinks || canEndMeeting || canCancelRound || canCompleteRound;
+    canCreateMeeting ||
+    canOpenLinks ||
+    canEndMeeting ||
+    canCancelRound ||
+    canCompleteRound ||
+    canEditEvaluation;
   if (!hasActions) {
     return null;
   }
@@ -368,6 +388,12 @@ function RoundCardActions({
         <Button onClick={onComplete} size="sm" variant="outline">
           <IconCircleCheck className="size-4" />
           面试评价
+        </Button>
+      ) : null}
+      {canEditEvaluation ? (
+        <Button onClick={onComplete} size="sm" variant="outline">
+          <IconPencil className="size-4" />
+          编辑评价
         </Button>
       ) : null}
       {canCancelRound ? (

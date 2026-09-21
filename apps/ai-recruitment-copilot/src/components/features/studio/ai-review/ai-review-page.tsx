@@ -21,17 +21,23 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { PageHeader } from "../page-header";
 import { JobDescriptionHoverCard } from "../job-descriptions/job-description-hover-card";
 import { copyResumeDetailLink } from "../resumes/resume-library-page-model";
+import { TransitionCandidateDialog } from "../resumes/transition-candidate-dialog";
 import { AiReviewDetailDialog } from "./ai-review-detail-dialog";
 
 export function AiReviewPage() {
   const slug = useWorkspaceSlug();
   const canRead = useHasPermission("aiReview", "read");
+  const canCloseCandidate = useHasPermission("candidateClose", "create");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<{ id: string; tab: "overview" | "ai-review" } | null>(
     null,
   );
+  const [transitionTarget, setTransitionTarget] = useState<{
+    id: string;
+    candidateName: string | null;
+  } | null>(null);
   const query = useQuery({
     enabled: canRead,
     queryFn: ({ signal }) =>
@@ -178,8 +184,24 @@ export function AiReviewPage() {
             setSelected(null);
             setPage(1);
           }}
+          onRejected={
+            canCloseCandidate
+              ? (candidate) => {
+                  setSelected(null);
+                  setTransitionTarget(candidate);
+                }
+              : undefined
+          }
         />
       ) : null}
+      <TransitionCandidateDialog
+        candidate={transitionTarget}
+        initialOutcome="archived"
+        mode="close"
+        onCompleted={() => void query.refetch()}
+        onOpenChange={(open) => !open && setTransitionTarget(null)}
+        open={transitionTarget !== null}
+      />
     </div>
   );
 }

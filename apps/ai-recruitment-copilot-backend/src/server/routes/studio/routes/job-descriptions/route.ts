@@ -39,6 +39,7 @@ import {
   enqueueJobDescriptionIndexJobBestEffort,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/jd-semantic/enqueue";
 import { googleSheetSyncRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/routes/google-sheet-sync/route";
+import { jobDescriptionExportRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/routes/export/route";
 import { generateJobDescriptionFromPrompt } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/ai-job-description-generate";
 import { generateResumeScreeningPolicyFromJobDescription } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/resume-screening-policy-generate";
 import {
@@ -241,6 +242,7 @@ const recommendationBodySchema = z.object({
 
 export const jobDescriptionsRouter = factory
   .createApp()
+  .route("/export", jobDescriptionExportRouter)
   .route("/reference-options", jobDescriptionReferenceOptionsRouter)
   .route("/:id/linked-templates", jobDescriptionLinkedTemplatesRouter)
   .post(

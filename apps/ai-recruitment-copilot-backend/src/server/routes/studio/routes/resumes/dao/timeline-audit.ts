@@ -1,4 +1,9 @@
-import { candidateOutcomeMeta, pipelineStageMeta } from "@arc/db-schema/studio-interviews";
+import {
+  candidateOutcomeMeta,
+  getOfferDraftStatusMeta,
+  humanInterviewRoundOutcomeMeta,
+  pipelineStageMeta,
+} from "@arc/db-schema/studio-interviews";
 import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";
 import type {
   CandidateTimelineEventMeta,
@@ -46,6 +51,50 @@ function candidateInformationValue(detail: Record<string, unknown>, key: string,
   return fallback;
 }
 
+function formatAuditChange(from: unknown, to: unknown, emptyLabel = "未填写") {
+  const fromText = from === null || from === undefined || from === "" ? emptyLabel : String(from);
+  const toText = to === null || to === undefined || to === "" ? emptyLabel : String(to);
+  return fromText === toText ? `${toText}（未变）` : `${fromText} → ${toText}`;
+}
+
+function humanInterviewEvaluationMetadata(
+  detail: Record<string, unknown>,
+): CandidateTimelineEventMeta[] {
+  const fromOutcome =
+    typeof detail.fromOutcome === "string" &&
+    Object.hasOwn(humanInterviewRoundOutcomeMeta, detail.fromOutcome)
+      ? humanInterviewRoundOutcomeMeta[
+          detail.fromOutcome as keyof typeof humanInterviewRoundOutcomeMeta
+        ].label
+      : "未填写";
+  const toOutcome =
+    typeof detail.toOutcome === "string" &&
+    Object.hasOwn(humanInterviewRoundOutcomeMeta, detail.toOutcome)
+      ? humanInterviewRoundOutcomeMeta[
+          detail.toOutcome as keyof typeof humanInterviewRoundOutcomeMeta
+        ].label
+      : "未填写";
+  const feedbackChanged = detail.feedbackChanged === true;
+  return [
+    {
+      label: "原评价人",
+      value:
+        typeof detail.originalEvaluatorName === "string" && detail.originalEvaluatorName.trim()
+          ? detail.originalEvaluatorName.trim()
+          : "未知",
+    },
+    { label: "面试结果", value: formatAuditChange(fromOutcome, toOutcome) },
+    { label: "评分", value: formatAuditChange(detail.fromScore, detail.toScore) },
+    { label: "评价内容", value: feedbackChanged ? "已修改" : "未修改" },
+    ...(feedbackChanged
+      ? [
+          { label: "修改前评价", value: String(detail.fromFeedback ?? "未填写") },
+          { label: "修改后评价", value: String(detail.toFeedback ?? "未填写") },
+        ]
+      : []),
+  ];
+}
+
 export function auditMetadata(
   detail: Record<string, unknown>,
   action: string,
@@ -70,6 +119,9 @@ export function auditMetadata(
     if (names.length > 0) {
       return [{ label: "通知人员", value: names.map((name) => name.trim()).join("、") }];
     }
+  }
+  if (action === "human_interview_evaluation_updated") {
+    return humanInterviewEvaluationMetadata(detail);
   }
   if (
     action === "candidate_transition" &&
@@ -214,6 +266,10 @@ export function auditDescription(detail: Record<string, unknown>, action: string
       return `取消真人复面：${label}${reason}`;
     }
   }
+  if (action === "human_interview_evaluation_updated") {
+    const label = typeof detail.roundLabel === "string" ? detail.roundLabel : "真人复面";
+    return label;
+  }
   if (action.startsWith("offer_draft_")) {
     const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
     if (action === "offer_draft_created") {
@@ -233,6 +289,22 @@ export function auditDescription(detail: Record<string, unknown>, action: string
     if (action === "offer_draft_cancelled") {
       return `撤回 Offer${version}`;
     }
+    if (action === "offer_draft_deleted") {
+      const previousStatus =
+        typeof detail.previousStatus === "string" ? detail.previousStatus : null;
+      const previousLabel = previousStatus ? getOfferDraftStatusMeta(previousStatus).label : null;
+      return previousLabel
+        ? `删除 Offer${version}，删除前状态：${previousLabel}`
+        : `删除 Offer${version}`;
+    }
+    if (action === "offer_draft_restored") {
+      const restoredStatus =
+        typeof detail.restoredStatus === "string" ? detail.restoredStatus : null;
+      const restoredLabel = restoredStatus ? getOfferDraftStatusMeta(restoredStatus).label : null;
+      return restoredLabel
+        ? `恢复 Offer${version}，恢复为：${restoredLabel}`
+        : `恢复 Offer${version}`;
+    }
   }
   if (action === "context_snapshot_refresh") {
     return "刷新 AI 面试上下文";
@@ -246,6 +318,7 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
     ai_interview_launched: "发起 AI 面试",
     candidate_information_updated: "候选人信息已更新",
     context_snapshot_refresh: "上下文已刷新",
+    human_interview_evaluation_updated: "面试评价已修改",
     human_interview_round_cancelled: "真人复面取消",
     human_interview_round_completed: "真人复面完成",
     human_interview_round_created: "创建真人复面",
@@ -254,7 +327,9 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
     job_description_changed: "关联岗位已变更",
     offer_draft_cancelled: "Offer 已撤回",
     offer_draft_created: "创建 Offer",
+    offer_draft_deleted: "Offer 已删除",
     offer_draft_responded: "候选人回复 Offer",
+    offer_draft_restored: "Offer 已恢复",
     offer_draft_sent: "Offer 已发送",
     offer_draft_updated: "更新 Offer",
     resume_evaluation_reset_for_job_change: "简历评估已重置",
@@ -302,6 +377,7 @@ export function auditTone(action: string): CandidateTimelineEventTone {
     action === "resume_evaluation_submitted" ||
     action === "resume_evaluation_updated" ||
     action === "job_description_changed" ||
+    action === "human_interview_evaluation_updated" ||
     action.startsWith("human_interview_round_") ||
     action.startsWith("offer_draft_") ||
     action === "context_snapshot_refresh"

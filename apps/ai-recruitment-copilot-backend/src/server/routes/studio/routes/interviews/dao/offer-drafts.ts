@@ -91,6 +91,7 @@ export async function listOfferDrafts(
       and(
         eq(studioOfferDraft.interviewRecordId, interviewRecordId),
         eq(studioOfferDraft.organizationId, organizationId),
+        ne(studioOfferDraft.status, "deleted"),
       ),
     )
     .orderBy(desc(studioOfferDraft.version));
@@ -107,7 +108,11 @@ export async function loadDraftById(
     .select()
     .from(studioOfferDraft)
     .where(
-      and(eq(studioOfferDraft.id, draftId), eq(studioOfferDraft.organizationId, organizationId)),
+      and(
+        eq(studioOfferDraft.id, draftId),
+        eq(studioOfferDraft.organizationId, organizationId),
+        ne(studioOfferDraft.status, "deleted"),
+      ),
     )
     .limit(1);
   return row ? toRecord(row) : null;
@@ -228,7 +233,11 @@ export async function editOfferDraft({
       .select()
       .from(studioOfferDraft)
       .where(
-        and(eq(studioOfferDraft.id, draftId), eq(studioOfferDraft.organizationId, organizationId)),
+        and(
+          eq(studioOfferDraft.id, draftId),
+          eq(studioOfferDraft.organizationId, organizationId),
+          ne(studioOfferDraft.status, "deleted"),
+        ),
       )
       .for("update")
       .limit(1);
@@ -363,7 +372,11 @@ export async function cancelOfferDraft(
       .select()
       .from(studioOfferDraft)
       .where(
-        and(eq(studioOfferDraft.id, draftId), eq(studioOfferDraft.organizationId, organizationId)),
+        and(
+          eq(studioOfferDraft.id, draftId),
+          eq(studioOfferDraft.organizationId, organizationId),
+          ne(studioOfferDraft.status, "deleted"),
+        ),
       )
       .for("update")
       .limit(1);
@@ -468,6 +481,41 @@ export async function cancelOfferDraft(
   return updated;
 }
 
+// Logically delete one Offer version by moving it into the hidden `deleted`
+// state. The row stays in storage and version numbers are never reused.
+export async function deleteOfferDraft(
+  draftId: string,
+  organizationId: string,
+): Promise<{ draft: OfferDraftRecord; previousStatus: OfferDraftStatus }> {
+  return await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(studioOfferDraft)
+      .where(
+        and(
+          eq(studioOfferDraft.id, draftId),
+          eq(studioOfferDraft.organizationId, organizationId),
+          ne(studioOfferDraft.status, "deleted"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!existing) {
+      throw new OfferDraftError("Offer 不存在", 404);
+    }
+
+    const [deleted] = await tx
+      .update(studioOfferDraft)
+      .set({ status: "deleted", updatedAt: new Date() })
+      .where(eq(studioOfferDraft.id, draftId))
+      .returning();
+    if (!deleted) {
+      throw new Error("删除后查询失败");
+    }
+    return { draft: toRecord(deleted), previousStatus: existing.status };
+  });
+}
+
 // 创建 Offer 时自动推进候选人 pipelineStage 到 offer。
 // 仅在创建第一版（同候选人下没有任何 draft 行时之前的状态）触发，
 // 避免每次新版都跳一次。守卫不从 closed / offer 推（offer 不动 / closed 阻拦）。
@@ -485,6 +533,7 @@ export async function maybeAdvanceToOffer(
       and(
         eq(studioOfferDraft.interviewRecordId, interviewRecordId),
         eq(studioOfferDraft.organizationId, organizationId),
+        ne(studioOfferDraft.status, "deleted"),
       ),
     )
     .limit(2);

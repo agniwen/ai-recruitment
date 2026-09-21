@@ -1,4 +1,3 @@
-import { listTextQuery } from "@arc/shared/list-text-filters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import type { DepartmentRecord } from "@arc/shared/departments";
@@ -56,21 +55,15 @@ import { JobDescriptionLongTextHoverCard } from "@/components/features/studio/jo
 import { jobDescriptionSourceColumn } from "@/components/features/studio/job-descriptions/job-description-source-column";
 import { createJobDescriptionListFilters } from "@/components/features/studio/job-descriptions/job-description-list-filters";
 import { useHasPermission } from "@/hooks/use-has-permission";
+import { DataExportDialog } from "@/components/features/studio/data-export/data-export-dialog";
+import {
+  jobDescriptionDefaultExportColumnIds,
+  jobDescriptionExportColumns,
+} from "@/components/features/studio/job-descriptions/job-description-export";
+import { buildJobDescriptionQuery } from "@/components/features/studio/job-descriptions/job-description-list-query";
+import type { JobDescriptionFilters } from "@/components/features/studio/job-descriptions/job-description-list-query";
 
 const salaryAmountFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 });
-
-interface JobDescriptionFilters extends Record<string, string> {
-  code: string;
-  dateField: string;
-  dateFrom: string;
-  dateTo: string;
-  departmentId: string;
-  googleSheetStatus: string;
-  hiringUnitId: string;
-  interviewerId: string;
-  recruitmentStatus: string;
-  sourceSheet: string;
-}
 
 function formatSalaryRange(record: JobDescriptionListRecord): string | null {
   if (
@@ -112,10 +105,12 @@ export function JobDescriptionManagementPage({
   const [createDraft, setCreateDraft] = useState<JobDescriptionFormValues | null>(null);
   const [createDraftSessionId, setCreateDraftSessionId] = useState(0);
   const [aiCreateOpen, setAiCreateOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const canReadJobDescription = useHasPermission("jd", "read");
   const canCreateJobDescription = useHasPermission("jd", "create");
   const canUpdateJobDescription = useHasPermission("jd", "update");
   const canDeleteJobDescription = useHasPermission("jd", "delete");
+  const canExportJobDescription = useHasPermission("dataExport", "export");
   const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
   const hasViewRecommendationsPermission = useHasPermission("jd", "viewRecommendations");
   const canViewRecommendations = hasViewRecommendationsPermission && canReadJobDescription;
@@ -135,35 +130,10 @@ export function JobDescriptionManagementPage({
         rpc.api.w[":slug"].studio["job-descriptions"].$get(
           {
             param: { slug },
-            query: {
-              ...listTextQuery(params),
-              page: String(params.page),
-              pageSize: String(params.pageSize),
-              ...(params.search ? { search: params.search } : {}),
-              ...(params.filters.code ? { code: params.filters.code } : {}),
-              dateField:
-                params.filters.dateField === "expectedOnboardDate"
-                  ? "expectedOnboardDate"
-                  : "requestedDate",
-              ...(params.filters.dateFrom ? { dateFrom: params.filters.dateFrom } : {}),
-              ...(params.filters.dateTo ? { dateTo: params.filters.dateTo } : {}),
-              ...(params.filters.sourceSheet ? { sourceSheet: params.filters.sourceSheet } : {}),
-              // 多选过滤：CSV 形式，例如 "a,b,c"。空串表示不筛选。
-              // / Multi-select filters serialize to CSV; empty string means "no filter".
-              ...(params.filters.departmentId ? { departmentId: params.filters.departmentId } : {}),
-              ...(params.filters.googleSheetStatus
-                ? { googleSheetStatus: params.filters.googleSheetStatus }
-                : {}),
-              ...(params.filters.hiringUnitId ? { hiringUnitId: params.filters.hiringUnitId } : {}),
-              ...(params.filters.interviewerId
-                ? { interviewerId: params.filters.interviewerId }
-                : {}),
-              ...(params.filters.recruitmentStatus
-                ? { recruitmentStatus: params.filters.recruitmentStatus }
-                : {}),
-              sortBy: params.sortBy ?? "createdAt",
-              sortOrder: params.sortOrder ?? "desc",
-            },
+            query: buildJobDescriptionQuery(params, {
+              page: params.page,
+              pageSize: params.pageSize,
+            }),
           },
           { init: { signal: params.signal } },
         ),
@@ -203,6 +173,27 @@ export function JobDescriptionManagementPage({
     queryFn: fetchJobDescriptions,
     queryKeyBase: ["job-descriptions", slug],
   });
+
+  const [activeSort] = grid.sorting;
+  let activeSortOrder: "asc" | "desc" | undefined;
+  if (activeSort) {
+    activeSortOrder = activeSort.desc ? "desc" : "asc";
+  }
+  const getAllFilteredJobDescriptions = useCallback(async () => {
+    const result = await rpcFetch<{ records: JobDescriptionListRecord[] }>(
+      rpc.api.w[":slug"].studio["job-descriptions"].export.$get({
+        param: { slug },
+        query: buildJobDescriptionQuery({
+          filters: grid.filters,
+          search: grid.deferredSearch,
+          sortBy: activeSort?.id,
+          sortOrder: activeSortOrder,
+        }),
+      }),
+      "导出在招岗位失败",
+    );
+    return result.records;
+  }, [activeSort?.id, activeSortOrder, grid.deferredSearch, grid.filters, slug]);
 
   const missingRefs = departments.length === 0;
 
@@ -710,18 +701,36 @@ export function JobDescriptionManagementPage({
           toolbarRight={
             <JobDescriptionToolbarActions
               canCreate={canCreateJobDescription}
+              canExport={canExportJobDescription && canReadJobDescription}
               canSync={canSyncGoogleSheet}
+              exportDisabled={grid.bind.total === 0 || grid.bind.loading || grid.bind.refetching}
               missingDepartment={missingRefs}
               onAiCreate={() => setAiCreateOpen(true)}
               onCreate={() => {
                 setCreateDraft(null);
                 crud.openCreate();
               }}
+              onExport={() => setExportOpen(true)}
               onSynced={invalidateJobDescriptionData}
             />
           }
         />
       </div>
+
+      <DataExportDialog
+        columns={jobDescriptionExportColumns}
+        currentRows={grid.bind.data}
+        defaultColumnIds={jobDescriptionDefaultExportColumnIds}
+        fileName={`在招岗位-${new Date().toISOString().slice(0, 10)}`}
+        getAllRows={getAllFilteredJobDescriptions}
+        limit={null}
+        onOpenChange={setExportOpen}
+        open={exportOpen}
+        sheetName="在招岗位"
+        showRange={false}
+        source="jobDescriptions"
+        total={grid.bind.total}
+      />
 
       {canCreateJobDescription ? (
         <JobDescriptionAiCreateDialog

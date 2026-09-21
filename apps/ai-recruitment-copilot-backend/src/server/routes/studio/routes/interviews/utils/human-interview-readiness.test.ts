@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   HUMAN_INTERVIEW_FEEDBACK_REQUIRED_MESSAGE,
-  HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE,
+  HUMAN_INTERVIEW_FAILED_FOR_OFFER_MESSAGE,
+  HUMAN_INTERVIEW_INCONCLUSIVE_FOR_OFFER_MESSAGE,
   getHumanInterviewOfferReadinessError,
   humanInterviewFeedbackSchema,
 } from "./human-interview-readiness";
@@ -24,32 +25,62 @@ describe("getHumanInterviewOfferReadinessError", () => {
   it.each([
     {
       completedRoundsMissingFeedback: 0,
+      failedRounds: 0,
+      inconclusiveRounds: 0,
       pendingRounds: 0,
       totalRounds: 0,
     },
     {
       completedRoundsMissingFeedback: 0,
+      failedRounds: 0,
+      inconclusiveRounds: 0,
       pendingRounds: 1,
       totalRounds: 2,
     },
     {
       completedRoundsMissingFeedback: 1,
+      failedRounds: 0,
+      inconclusiveRounds: 0,
       pendingRounds: 0,
       totalRounds: 2,
     },
   ])("blocks an offer when readiness is %o", (readiness) => {
-    expect(getHumanInterviewOfferReadinessError(readiness)).toBe(
-      HUMAN_INTERVIEW_READY_FOR_OFFER_REQUIRED_MESSAGE,
-    );
+    expect(getHumanInterviewOfferReadinessError(readiness)).not.toBeNull();
   });
 
   it("allows an offer after every round is completed with feedback", () => {
     expect(
       getHumanInterviewOfferReadinessError({
         completedRoundsMissingFeedback: 0,
+        failedRounds: 0,
+        inconclusiveRounds: 0,
         pendingRounds: 0,
         totalRounds: 2,
       }),
     ).toBeNull();
+  });
+
+  it("blocks an offer after a failed round", () => {
+    expect(
+      getHumanInterviewOfferReadinessError({
+        completedRoundsMissingFeedback: 0,
+        failedRounds: 1,
+        inconclusiveRounds: 0,
+        pendingRounds: 0,
+        totalRounds: 1,
+      }),
+    ).toBe(HUMAN_INTERVIEW_FAILED_FOR_OFFER_MESSAGE);
+  });
+
+  it("blocks an offer after an inconclusive round", () => {
+    expect(
+      getHumanInterviewOfferReadinessError({
+        completedRoundsMissingFeedback: 0,
+        failedRounds: 0,
+        inconclusiveRounds: 1,
+        pendingRounds: 0,
+        totalRounds: 1,
+      }),
+    ).toBe(HUMAN_INTERVIEW_INCONCLUSIVE_FOR_OFFER_MESSAGE);
   });
 });

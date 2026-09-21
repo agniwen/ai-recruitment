@@ -12,9 +12,11 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 export function AiReviewRejectionButton({
   recordId,
   disabled,
+  onRejected,
 }: {
   recordId: string;
   disabled?: boolean;
+  onRejected?: () => void;
 }) {
   const id = useId();
   const slug = useWorkspaceSlug();
@@ -41,6 +43,7 @@ export function AiReviewRejectionButton({
         queryClient.invalidateQueries({ queryKey: ["ai-review-approvals", slug] }),
         queryClient.invalidateQueries({ queryKey: ["studio-resumes"] }),
       ]);
+      onRejected?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "审批失败");
     } finally {

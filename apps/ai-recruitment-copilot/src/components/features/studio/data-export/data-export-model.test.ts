@@ -37,4 +37,12 @@ describe("data export model", () => {
     expect(result.rows).toHaveLength(10);
     expect(result.truncated).toBe(true);
   });
+
+  it("keeps every row when the caller explicitly disables the limit", () => {
+    const rows = Array.from({ length: DATA_EXPORT_LIMIT + 25 }, (_, index) => index);
+    const result = takeExportRows(rows, null);
+
+    expect(result.rows).toHaveLength(DATA_EXPORT_LIMIT + 25);
+    expect(result.truncated).toBe(false);
+  });
 });

@@ -114,6 +114,7 @@ export function OfferStagePanel({
             draft={draft}
             key={draft.id}
             onCancelled={invalidateDrafts}
+            onDeleted={invalidateDrafts}
             onRespond={() => setRespondTarget(draft)}
             onSaved={invalidateDrafts}
           />

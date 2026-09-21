@@ -28,6 +28,8 @@ import {
   queryPaginatedResumeRecords,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import { submitResumeEvaluation } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
+import type { ResumeEvaluationMutationResult } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/evaluation";
+import { notifyEvaluationRejection } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/utils/evaluation-notification";
 import { loadCandidateTimeline } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/timeline";
 import { listOrgSkillSuggestions } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills";
 import { studioInterviewQuestionClientSchema } from "@arc/db-schema/studio-interviews";
@@ -90,6 +92,31 @@ async function reassessResumeRecordInBackground(input: {
       resumeRecordId: input.resumeRecordId,
     });
   }
+}
+
+async function notifyFailedResumeEvaluationIfNeeded(input: {
+  candidateId: string;
+  evaluationStatus: "fail" | "pass";
+  mutationResult: ResumeEvaluationMutationResult;
+  operatorName: string | null;
+  organizationId: string;
+  reason: string;
+}) {
+  if (
+    input.mutationResult.status !== "updated" ||
+    input.mutationResult.previousStatus !== null ||
+    input.evaluationStatus !== "fail" ||
+    !input.operatorName
+  ) {
+    return;
+  }
+  await notifyEvaluationRejection({
+    candidateId: input.candidateId,
+    kind: "resume_evaluation",
+    operatorName: input.operatorName,
+    organizationId: input.organizationId,
+    reason: input.reason,
+  });
 }
 
 export const resumeLibraryReadRouter = factory
@@ -536,7 +563,7 @@ export const resumeLibraryReadRouter = factory
       const input = c.req.valid("json");
       const result = await submitResumeEvaluation({
         availableTimeSlots: input.availableTimeSlots ?? [],
-        departmentName: input.departmentName,
+        departmentName: existing.jobDescriptionDepartmentName,
         id,
         operatorId: c.var.user?.id ?? null,
         operatorRole: c.var.member?.role ?? null,
@@ -554,6 +581,14 @@ export const resumeLibraryReadRouter = factory
         return c.json({ error: "记录不存在。" }, 404);
       }
       invalidateStudioInterviewCaches(activeOrg.id);
+      await notifyFailedResumeEvaluationIfNeeded({
+        candidateId: id,
+        evaluationStatus: input.status,
+        mutationResult: result,
+        operatorName: c.var.user?.name ?? null,
+        organizationId: activeOrg.id,
+        reason: input.reason,
+      });
       const detail = await loadResumeDetailForAuthenticatedReviewer(id, activeOrg.id);
       return c.json(detail, 200);
     },

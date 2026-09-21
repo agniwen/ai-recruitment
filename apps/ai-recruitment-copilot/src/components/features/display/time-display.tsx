@@ -2,8 +2,9 @@
 
 import { IconCalendar as CalendarIcon } from "@tabler/icons-react";
 import { useMemo } from "react";
+import { DISPLAY_TIME_ZONES } from "@arc/shared/display-time-zones";
 import { cn } from "@arc/shared/utils";
-import { formatDate } from "@arc/shared/utils/time";
+import { formatDate, formatDateInTimeZone } from "@arc/shared/utils/time";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -45,7 +46,10 @@ export function formatTimeDisplayTooltipRows(value: TimeValue) {
     return [];
   }
 
-  return [{ label: "中国时区", text: formatDate(date) }];
+  return DISPLAY_TIME_ZONES.map(({ label, timeZone }) => ({
+    label,
+    text: formatDateInTimeZone(date, timeZone),
+  }));
 }
 
 export function TimeDisplay({
@@ -107,7 +111,7 @@ export function TimeDisplay({
   return (
     <Tooltip>
       <TooltipTrigger render={content} />
-      <TooltipContent className="min-w-48 px-3 py-2" side="top">
+      <TooltipContent className="min-w-72 px-3 py-2" side="top">
         <div className="grid gap-1">
           {tooltipRows.map((row) => (
             <div className="grid grid-cols-[auto_1fr] gap-3" key={row.label}>

@@ -1481,11 +1481,13 @@ export const studioHumanInterviewRoundInterviewer = pgTable(
 );
 
 // Offer 草稿（多版本）。version 在同一候选人内单调递增；新版本发出时旧版置 superseded。
-// status 状态机：draft → sent → (accepted/declined/expired)；任意态都可被 superseded。
+// status 状态机：draft → sent → (accepted/declined/expired)；任意态都可被 superseded
+// 或逻辑删除为 deleted（deleted 默认不参与业务查询）。
 // 候选人议价记在 candidateCounter（自由文本，描述本版回复内容）。
 //
 // Versioned offer drafts. Version is monotonically increasing per candidate;
-// new versions supersede earlier ones. Status: draft → sent → terminal.
+// new versions supersede earlier ones. Status: draft → sent → terminal; any
+// state may move to the hidden `deleted` tombstone state.
 // Candidate counter-offers recorded as free text on the draft they respond to.
 export const studioOfferDraft = pgTable(
   "studio_offer_draft",

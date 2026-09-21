@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
+import { notifyEvaluationRejection } from "../../../resumes/utils/evaluation-notification";
 import { rejectCandidateAiReview } from "./dao";
 
 export const aiReviewRejectRouter = factory
@@ -40,6 +41,15 @@ export const aiReviewRejectRouter = factory
       }
       if (result.kind === "invalid") {
         return c.json({ error: result.message }, 409);
+      }
+      if (result.changed) {
+        await notifyEvaluationRejection({
+          candidateId,
+          kind: "ai_review",
+          operatorName: user.name,
+          organizationId: activeOrg.id,
+          reason: c.req.valid("json").approvalNote,
+        });
       }
       return c.json({ ok: true }, 200);
     },

@@ -14,11 +14,13 @@ export function AiReviewApprovalButton({
   recordId,
   disabled,
   onConfirm,
+  onRejected,
   label = "审批通过",
 }: {
   recordId: string;
   disabled?: boolean;
   onConfirm: (approvalNote: string, notificationUserIds: string[]) => Promise<unknown>;
+  onRejected?: () => void;
   label?: string;
 }) {
   const id = useId();
@@ -70,7 +72,11 @@ export function AiReviewApprovalButton({
   }
   return (
     <>
-      <AiReviewRejectionButton recordId={recordId} disabled={disabled || pending} />
+      <AiReviewRejectionButton
+        recordId={recordId}
+        disabled={disabled || pending}
+        onRejected={onRejected}
+      />
       <Button
         size="sm"
         disabled={disabled || pending}

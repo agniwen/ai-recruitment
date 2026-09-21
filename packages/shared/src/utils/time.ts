@@ -57,6 +57,21 @@ export function toDate(value: string | number | Date | null | undefined): Date |
 }
 
 /**
+ * Format a date in a requested IANA timezone. Invalid values return an em dash.
+ */
+export function formatDateInTimeZone(
+  value: string | number | Date | null | undefined,
+  timeZone: string,
+  format: string = DEFAULT_DATE_TIME_FORMAT,
+): string {
+  const date = toDate(value);
+  if (!date) {
+    return "—";
+  }
+  return dayjs(date).tz(timeZone).format(format);
+}
+
+/**
  * 友好格式化日期：默认 `YY/MM/DD HH:mm`。
  * Format a date in a friendly way; defaults to `YY/MM/DD HH:mm`.
  */
@@ -64,11 +79,7 @@ export function formatDate(
   value: string | number | Date | null | undefined,
   format: string = DEFAULT_DATE_TIME_FORMAT,
 ): string {
-  const date = toDate(value);
-  if (!date) {
-    return "—";
-  }
-  return dayjs(date).tz(DISPLAY_TIME_ZONE).format(format);
+  return formatDateInTimeZone(value, DISPLAY_TIME_ZONE, format);
 }
 
 /**

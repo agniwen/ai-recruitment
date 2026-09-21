@@ -161,6 +161,11 @@ afterEach(() => {
 describe("human interview scheduling conflict confirmation", () => {
   it("checks the full time range before creating the round or meeting", async () => {
     await renderDialog();
+    expect(document.body.textContent).toContain("以中国标准时间（UTC+8）设置");
+    expect(document.body.textContent).toContain("有效时间至（中国标准时间）");
+    expect(document.body.textContent).toContain("面试时间换算");
+    expect(document.body.textContent).toContain("有效时间换算");
+    expect(document.body.textContent).toContain("悬停查看其他地区");
     await click("保存");
     expect(mocks.check).toHaveBeenCalledWith("world", {
       interviewerIds: ["001"],

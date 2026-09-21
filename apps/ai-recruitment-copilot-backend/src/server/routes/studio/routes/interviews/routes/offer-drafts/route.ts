@@ -13,6 +13,7 @@ import {
 import {
   cancelOfferDraft,
   createOfferDraft,
+  deleteOfferDraft,
   editOfferDraft,
   listOfferDrafts,
   maybeAdvanceToOffer,
@@ -226,6 +227,36 @@ export const offerDraftsRouter = factory
       }
     },
   )
+  .delete("/:draftId", requirePermission("offer", "delete"), async (c) => {
+    const { activeOrg } = c.var;
+    if (!activeOrg) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const draftId = c.req.param("draftId");
+    try {
+      const { draft: deleted, previousStatus } = await deleteOfferDraft(draftId, activeOrg.id);
+      await recordCandidateActivity({
+        action: "offer_draft_deleted",
+        detail: {
+          draftId: deleted.id,
+          position: deleted.position,
+          previousStatus,
+          version: deleted.version,
+        },
+        interviewRecordId: deleted.interviewRecordId,
+        operatorId: c.var.user?.id ?? null,
+        operatorRole: c.var.member?.role ?? null,
+        organizationId: activeOrg.id,
+      });
+      invalidateStudioInterviewCaches(activeOrg.id);
+      return c.json({ success: true }, 200);
+    } catch (error) {
+      if (error instanceof OfferDraftError) {
+        return c.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
+  })
   .post("/:draftId/cancel", requirePermission("offer", "delete"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {

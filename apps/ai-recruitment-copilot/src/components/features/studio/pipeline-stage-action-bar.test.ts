@@ -84,6 +84,13 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(source).not.toContain("getCandidatePipelineEvents");
   });
 
+  it("connects failed evaluations to the archived close flow", () => {
+    expect(source).toContain("onAiReviewRejected?: () => void;");
+    expect(source).toContain("onRejected={onAiReviewRejected}");
+    expect(controllerSource).toContain('status === "fail" && canCloseCandidate');
+    expect(controllerSource).toContain('initialOutcome: "archived"');
+  });
+
   it("requires a bound job before arranging human interview", () => {
     expect(source).toContain("hasJobDescription = true");
     expect(source).toContain("resolveHumanInterviewAdvanceDisabledReason");
@@ -128,13 +135,14 @@ describe("PipelineStageActionBar floating actions", () => {
     expect(source).not.toContain("退回真人复面");
   });
 
-  it("requires completed human interview feedback before advancing to offer", () => {
+  it("requires completed, reviewed, and passed human interviews before advancing to offer", () => {
     expect(source).toContain("humanInterviewFeedbackComplete?: boolean;");
+    expect(source).toContain("humanInterviewAllPassed?: boolean;");
     expect(source).toContain("resolveOfferAdvanceDisabledReason");
     expect(source).toContain("OfferAdvanceButton");
     expect(source).toContain("aria-disabled={locked}");
     expect(source).toContain("disabled={isBusy}");
-    expect(source).toContain("请先完成所有真人面试轮次，并补全每轮面试评价");
+    expect(source).toContain("存在未通过或待定的真人面试结果，不能进入 Offer");
     expect(source).toContain("<TooltipTrigger render={button} />");
     expect(source).toContain("humanInterviewFeedbackComplete");
   });

@@ -755,6 +755,12 @@ export function useStudioPersonDetailController({
           resumeRecord?.stageProgress.humanInterview &&
           resumeRecord.stageProgress.humanInterview.completedRoundsMissingFeedback === 0,
         )}
+        humanInterviewAllPassed={Boolean(
+          resumeRecord?.stageProgress.humanInterview &&
+          resumeRecord.stageProgress.humanInterview.totalRounds > 0 &&
+          resumeRecord.stageProgress.humanInterview.passedRounds ===
+            resumeRecord.stageProgress.humanInterview.totalRounds,
+        )}
         aiRoundInterviewLink={
           layoutMode === "page" &&
           actionBarPipelineStage === "ai_interview" &&
@@ -822,6 +828,16 @@ export function useStudioPersonDetailController({
           }
           onUpdated?.();
         }}
+        onAiReviewRejected={
+          canCloseCandidate
+            ? () =>
+                onRequestClose?.({
+                  candidateName: record.candidateName,
+                  id: record.id,
+                  initialOutcome: "archived",
+                })
+            : undefined
+        }
         onRequestClose={() =>
           onRequestClose?.({ candidateName: record.candidateName, id: record.id })
         }
@@ -846,7 +862,16 @@ export function useStudioPersonDetailController({
       <ResumeEvaluationDialog
         decision={evaluationDecision}
         onDecisionChange={setEvaluationDecision}
-        onSubmitted={() => onUpdated?.()}
+        onSubmitted={(_, status) => {
+          onUpdated?.();
+          if (status === "fail" && canCloseCandidate) {
+            onRequestClose?.({
+              candidateName: record.candidateName,
+              id: record.id,
+              initialOutcome: "archived",
+            });
+          }
+        }}
         recordId={record.id}
       />
     ) : null;

@@ -370,6 +370,7 @@ async function loadOfferMetrics(
             sql`, `,
           )})`,
           isNotNull(studioOfferDraft.sentAt),
+          ne(studioOfferDraft.status, "deleted"),
         ),
       ),
     db
@@ -391,6 +392,7 @@ async function loadOfferMetrics(
             sql`, `,
           )})`,
           ne(studioOfferDraft.status, "superseded"),
+          ne(studioOfferDraft.status, "deleted"),
         ),
       )
       .orderBy(asc(studioOfferDraft.interviewRecordId), desc(studioOfferDraft.version)),

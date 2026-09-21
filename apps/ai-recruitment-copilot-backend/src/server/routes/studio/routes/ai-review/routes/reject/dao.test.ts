@@ -49,7 +49,7 @@ it("persists only the approval substatus and audits the unchanged stage", async 
     pipelineStage: "ai_review",
     resumeReviewStatus: "ready",
   });
-  expect(await rejectCandidateAiReview(input)).toEqual({ kind: "ok" });
+  expect(await rejectCandidateAiReview(input)).toEqual({ changed: true, kind: "ok" });
   expect(set).toHaveBeenCalledWith({
     aiReviewApprovalStatus: "rejected",
     updatedAt: expect.any(Date),
@@ -94,7 +94,7 @@ it("does not duplicate a rejection audit on retry", async () => {
     pipelineStage: "ai_review",
     resumeReviewStatus: "ready",
   });
-  expect(await rejectCandidateAiReview(input)).toEqual({ kind: "ok" });
+  expect(await rejectCandidateAiReview(input)).toEqual({ changed: false, kind: "ok" });
   expect(set).not.toHaveBeenCalled();
   expect(values).not.toHaveBeenCalled();
 });

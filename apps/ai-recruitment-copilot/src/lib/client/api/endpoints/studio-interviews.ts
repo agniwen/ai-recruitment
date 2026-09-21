@@ -526,8 +526,8 @@ export function createHumanInterviewRound(
 }
 
 /**
- * 编辑真人复面轮次。pending 可改全部字段；completed 仅可改 feedback / score。
- * Edit a round; pending allows everything, completed only feedback + score.
+ * 编辑真人复面轮次。pending 可改排期字段；completed 可改完整评价。
+ * Edit a round; pending allows scheduling fields, completed allows evaluation fields.
  */
 export function patchHumanInterviewRound(
   slug: string,
@@ -686,6 +686,23 @@ export function cancelOfferDraft(
       param: { draftId, id: candidateId, slug },
     }),
     "撤回 Offer 失败",
+  );
+}
+
+/**
+ * 将一条 Offer 版本标记为 deleted；服务端保留记录，业务查询不再返回。
+ * Mark one Offer version as deleted; retain the row but hide it from business reads.
+ */
+export async function deleteOfferDraft(
+  slug: string,
+  candidateId: string,
+  draftId: string,
+): Promise<void> {
+  await rpcFetch<{ success: boolean }>(
+    rpc.api.w[":slug"].studio.interviews[":id"]["offer-drafts"][":draftId"].$delete({
+      param: { draftId, id: candidateId, slug },
+    }),
+    "删除 Offer 失败",
   );
 }
 

@@ -4,6 +4,7 @@ import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 const mocks = vi.hoisted(() => ({
   cancelOfferDraft: vi.fn(),
   createOfferDraft: vi.fn(),
+  deleteOfferDraft: vi.fn(),
   editOfferDraft: vi.fn(),
   getHumanInterviewOfferReadinessError: vi.fn(),
   invalidateStudioInterviewCaches: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock(
     },
     cancelOfferDraft: mocks.cancelOfferDraft,
     createOfferDraft: mocks.createOfferDraft,
+    deleteOfferDraft: mocks.deleteOfferDraft,
     editOfferDraft: mocks.editOfferDraft,
     listOfferDrafts: mocks.listOfferDrafts,
     maybeAdvanceToOffer: mocks.maybeAdvanceToOffer,
@@ -90,6 +92,8 @@ describe("offerDraftsRouter", () => {
     mocks.getHumanInterviewOfferReadinessError.mockReturnValue(null);
     mocks.loadHumanInterviewRoundReadiness.mockResolvedValue({
       completedRoundsMissingFeedback: 0,
+      failedRounds: 0,
+      inconclusiveRounds: 0,
       pendingRounds: 0,
       totalRounds: 1,
     });
@@ -102,6 +106,7 @@ describe("offerDraftsRouter", () => {
       ["offer", "update"],
       ["offer", "update"],
       ["offer", "update"],
+      ["offer", "delete"],
       ["offer", "delete"],
     ]);
   });
@@ -140,6 +145,7 @@ describe("offerDraftsRouter", () => {
     };
     mocks.limit.mockResolvedValue([{ id: RECORD_ID, pipelineStage: "human_interview" }]);
     mocks.createOfferDraft.mockResolvedValue(offer);
+    mocks.deleteOfferDraft.mockResolvedValue({ draft: offer, previousStatus: "draft" });
     mocks.editOfferDraft.mockResolvedValue(offer);
     mocks.sendOfferDraft.mockResolvedValue(offer);
     mocks.respondOfferDraft.mockResolvedValue(offer);
@@ -163,18 +169,26 @@ describe("offerDraftsRouter", () => {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       }),
+      await app.request(`/${RECORD_ID}/offer-drafts/${offer.id}`, { method: "DELETE" }),
       await app.request(`/${RECORD_ID}/offer-drafts/${offer.id}/cancel`, { method: "POST" }),
     ];
 
-    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200, 200]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200, 200, 200, 200]);
     expect(mocks.maybeAdvanceToOffer).toHaveBeenCalledWith(RECORD_ID, ORG_ID);
     expect(mocks.recordCandidateActivity.mock.calls.map(([input]) => input.action)).toEqual([
       "offer_draft_created",
       "offer_draft_updated",
       "offer_draft_sent",
       "offer_draft_responded",
+      "offer_draft_deleted",
       "offer_draft_cancelled",
     ]);
-    expect(mocks.invalidateStudioInterviewCaches).toHaveBeenCalledTimes(5);
+    expect(mocks.recordCandidateActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "offer_draft_deleted",
+        detail: expect.objectContaining({ previousStatus: "draft" }),
+      }),
+    );
+    expect(mocks.invalidateStudioInterviewCaches).toHaveBeenCalledTimes(6);
   });
 });

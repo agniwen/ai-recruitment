@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { serializeDate } from "@arc/ai-recruitment-copilot-backend/lib/server/db/serialize";
 import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
@@ -22,8 +22,8 @@ import {
 } from "@arc/db-schema/schema";
 import {
   candidateOutcomeMeta,
+  getOfferDraftStatusMeta,
   humanInterviewRoundOutcomeMeta,
-  offerDraftStatusMeta,
   pipelineStageMeta,
   scheduleEntryStatusMeta,
 } from "@arc/db-schema/studio-interviews";
@@ -207,6 +207,7 @@ function loadTimelineRows(interviewRecordId: string, organizationId: string) {
         and(
           eq(studioOfferDraft.interviewRecordId, interviewRecordId),
           eq(studioOfferDraft.organizationId, organizationId),
+          ne(studioOfferDraft.status, "deleted"),
         ),
       ),
     db
@@ -609,7 +610,7 @@ export async function loadCandidateTimeline(
   }
 
   for (const draft of offerDrafts) {
-    const statusMeta = offerDraftStatusMeta[draft.status];
+    const statusMeta = getOfferDraftStatusMeta(draft.status);
     const hasCreatedAudit = hasOperatorAuditedAction(
       operatorAuditedActionKeys,
       "offer_draft_created",

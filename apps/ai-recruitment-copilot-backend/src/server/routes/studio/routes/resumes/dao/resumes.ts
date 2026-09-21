@@ -280,6 +280,7 @@ export function buildOdcActivityCondition(
       FROM studio_offer_draft AS activity_offer
       WHERE activity_offer.interview_record_id = ${studioInterview.id}
         AND activity_offer.sent_at IS NOT NULL
+        AND activity_offer.status <> 'deleted'
     )`;
     return and(
       sql`${firstSentAt} IS NOT NULL`,
@@ -298,6 +299,7 @@ export function buildOdcActivityCondition(
           FROM studio_offer_draft AS activity_latest
           WHERE activity_latest.interview_record_id = ${studioInterview.id}
             AND activity_latest.status <> 'superseded'
+            AND activity_latest.status <> 'deleted'
         )
         ${start ? sql`AND activity_offer.joining_date >= ${start}` : sql``}
         ${end ? sql`AND activity_offer.joining_date < ${end}` : sql``}
@@ -716,7 +718,12 @@ async function loadResumeDerivedFields(
         version: studioOfferDraft.version,
       })
       .from(studioOfferDraft)
-      .where(inArray(studioOfferDraft.interviewRecordId, ids))
+      .where(
+        and(
+          inArray(studioOfferDraft.interviewRecordId, ids),
+          ne(studioOfferDraft.status, "deleted"),
+        ),
+      )
       .orderBy(asc(studioOfferDraft.interviewRecordId), asc(studioOfferDraft.version)),
     db
       .select({

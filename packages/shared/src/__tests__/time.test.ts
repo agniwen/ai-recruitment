@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   diffSeconds,
   formatDate,
+  formatDateInTimeZone,
   formatDateOnly,
   formatRelativeTime,
   toDate,
@@ -70,6 +71,30 @@ describe("formatDate", () => {
 
   it("respects a custom dayjs format string in China time", () => {
     expect(formatDate("2026-04-27T16:00:00Z", "YYYY-MM-DD")).toBe("2026-04-28");
+  });
+});
+
+describe("formatDateInTimeZone", () => {
+  it("formats the same instant in a requested IANA timezone", () => {
+    expect(formatDateInTimeZone("2026-06-02T09:30:00.000Z", "Europe/London")).toBe(
+      "26/06/02 10:30",
+    );
+    expect(formatDateInTimeZone("2026-06-02T09:30:00.000Z", "America/Los_Angeles")).toBe(
+      "26/06/02 02:30",
+    );
+  });
+
+  it("applies daylight-saving rules for the date being formatted", () => {
+    expect(formatDateInTimeZone("2026-12-02T09:30:00.000Z", "Europe/London")).toBe(
+      "26/12/02 09:30",
+    );
+    expect(formatDateInTimeZone("2026-12-02T09:30:00.000Z", "America/Los_Angeles")).toBe(
+      "26/12/02 01:30",
+    );
+  });
+
+  it("returns an em dash for invalid input", () => {
+    expect(formatDateInTimeZone("not-a-date", "Asia/Tokyo")).toBe("—");
   });
 });
 

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   canApprove: vi.fn(),
   detail: vi.fn(),
   list: vi.fn(),
+  notifyEvaluationRejection: vi.fn(),
   recipients: vi.fn(),
   reject: vi.fn(),
   transition: vi.fn(),
@@ -37,6 +38,9 @@ vi.mock("../interviews/utils/candidate-stage-transition", () => ({
 }));
 
 vi.mock("./routes/reject/dao", () => ({ rejectCandidateAiReview: mocks.reject }));
+vi.mock("../resumes/utils/evaluation-notification", () => ({
+  notifyEvaluationRejection: mocks.notifyEvaluationRejection,
+}));
 
 function request(
   path: string,
@@ -49,11 +53,15 @@ function request(
   } = {},
 ) {
   const app = new Hono<{
-    Variables: { activeOrg: { id: string }; user: { id: string }; member: { role: string } };
+    Variables: {
+      activeOrg: { id: string };
+      user: { id: string; name: string };
+      member: { role: string };
+    };
   }>()
     .use("*", async (c, next) => {
       c.set("activeOrg", { id: "org-a" });
-      c.set("user", { id: "odc-a" });
+      c.set("user", { id: "odc-a", name: "ODC甲" });
       c.set("member", { role: "odc" });
       await next();
     })
@@ -231,7 +239,7 @@ describe("AI approval notification recipients", () => {
 
 describe("AI review rejection API", () => {
   it("allows approvers without approval-page access and does not advance the candidate", async () => {
-    mocks.reject.mockResolvedValue({ kind: "ok" });
+    mocks.reject.mockResolvedValue({ changed: true, kind: "ok" });
     const response = await request("/candidate-a/reject", {
       body: { approvalNote: "  不匹配  " },
       method: "POST",
@@ -247,6 +255,22 @@ describe("AI review rejection API", () => {
       }),
     );
     expect(mocks.transition).not.toHaveBeenCalled();
+    expect(mocks.notifyEvaluationRejection).toHaveBeenCalledWith({
+      candidateId: "candidate-a",
+      kind: "ai_review",
+      operatorName: "ODC甲",
+      organizationId: "org-a",
+      reason: "不匹配",
+    });
+  });
+  it("does not notify again when the rejection was already recorded", async () => {
+    mocks.reject.mockResolvedValue({ changed: false, kind: "ok" });
+    const response = await request("/candidate-a/reject", {
+      body: { approvalNote: "重复提交" },
+      method: "POST",
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.notifyEvaluationRejection).not.toHaveBeenCalled();
   });
   it("requires approval permission", async () => {
     const response = await request("/candidate-a/reject", { approve: false, method: "POST" });

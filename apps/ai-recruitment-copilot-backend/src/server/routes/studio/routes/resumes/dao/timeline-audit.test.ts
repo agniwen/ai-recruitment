@@ -36,6 +36,66 @@ describe("resume evaluation audit timeline", () => {
   });
 });
 
+describe("human interview evaluation audit timeline", () => {
+  it("renders the original evaluator and the complete before/after evaluation", () => {
+    const detail = {
+      feedbackChanged: true,
+      fromFeedback: "技术扎实",
+      fromOutcome: "pass",
+      fromScore: 88,
+      originalEvaluatorName: "luke01",
+      roundLabel: "技术终面",
+      toFeedback: "关键能力仍需验证",
+      toOutcome: "fail",
+      toScore: 72,
+    };
+
+    expect(auditTitle("human_interview_evaluation_updated", detail)).toBe("面试评价已修改");
+    expect(auditDescription(detail, "human_interview_evaluation_updated")).toBe("技术终面");
+    expect(auditTone("human_interview_evaluation_updated")).toBe("info");
+    expect(auditMetadata(detail, "human_interview_evaluation_updated")).toEqual([
+      { label: "原评价人", value: "luke01" },
+      { label: "面试结果", value: "通过 → 未通过" },
+      { label: "评分", value: "88 → 72" },
+      { label: "评价内容", value: "已修改" },
+      { label: "修改前评价", value: "技术扎实" },
+      { label: "修改后评价", value: "关键能力仍需验证" },
+    ]);
+  });
+});
+
+describe("offer deletion audit timeline", () => {
+  it("keeps the deleted version and its previous status in candidate activity", () => {
+    const detail = { previousStatus: "superseded", version: 2 };
+
+    expect(auditTitle("offer_draft_deleted", detail)).toBe("Offer 已删除");
+    expect(auditDescription(detail, "offer_draft_deleted")).toBe(
+      "删除 Offer v2，删除前状态：已被新版替代",
+    );
+    expect(auditTone("offer_draft_deleted")).toBe("info");
+  });
+});
+
+describe("offer restoration audit timeline", () => {
+  it("shows the restored version and status in candidate activity", () => {
+    const detail = { restoredStatus: "superseded", version: 1 };
+
+    expect(auditTitle("offer_draft_restored", detail)).toBe("Offer 已恢复");
+    expect(auditDescription(detail, "offer_draft_restored")).toBe(
+      "恢复 Offer v1，恢复为：已被新版替代",
+    );
+    expect(auditTone("offer_draft_restored")).toBe("info");
+  });
+
+  it("does not crash when a mixed-version deployment reads an unknown status", () => {
+    const detail = { restoredStatus: "future_status", version: 1 };
+
+    expect(auditDescription(detail, "offer_draft_restored")).toBe(
+      "恢复 Offer v1，恢复为：未知状态",
+    );
+  });
+});
+
 describe("candidate information audit timeline", () => {
   it("renders the latest displayed candidate information as structured metadata", () => {
     const detail = {

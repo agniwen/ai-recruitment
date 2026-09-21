@@ -857,16 +857,27 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
               <HumanInterviewStagePanel
                 canCreate={
                   canCreateHumanInterview &&
+                  record.pipelineStage === "human_interview" &&
                   canProgressResumeToInterview({
                     jobDescriptionId: resumeRecord?.jobDescriptionId,
                     status: resumeRecord?.resumeEvaluationStatus,
                   })
                 }
-                canDelete={canDeleteHumanInterview}
-                canUpdate={canUpdateHumanInterview}
+                canDelete={canDeleteHumanInterview && record.pipelineStage === "human_interview"}
+                canUpdate={canUpdateHumanInterview && record.pipelineStage === "human_interview"}
                 candidateId={record.id}
                 candidateName={record.candidateName}
                 disabled={record.pipelineStage === "closed"}
+                onRejected={
+                  canCloseCandidate
+                    ? () =>
+                        onRequestClose?.({
+                          candidateName: record.candidateName,
+                          id: record.id,
+                          initialOutcome: "archived",
+                        })
+                    : undefined
+                }
                 resumeJobDescriptionHumanInterviewerIds={
                   resumeRecord?.jobDescriptionHumanInterviewerIds
                 }
