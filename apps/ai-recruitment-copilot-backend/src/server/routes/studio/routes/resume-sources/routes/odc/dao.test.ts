@@ -15,6 +15,13 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
           insert: () => ({
             values: mocks.values,
           }),
+          select: () => ({
+            from: () => ({
+              where: () => ({
+                orderBy: () => ({ for: () => Promise.resolve([{ odcScopeMode: "selected" }]) }),
+              }),
+            }),
+          }),
           update: mocks.update,
         });
       } catch (error) {

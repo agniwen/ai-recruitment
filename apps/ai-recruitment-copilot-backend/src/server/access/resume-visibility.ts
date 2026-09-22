@@ -1,5 +1,5 @@
 import type { SQL } from "drizzle-orm";
-import { and, eq, exists, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, not, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { createRequestWorkspaceAuthorizer } from "./workspace-access-policy";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
@@ -109,17 +109,22 @@ function buildCurrentOdcVisibilityCondition(actor: {
       )
       .where(
         and(
-          eq(jobDescription.resumeSourceId, resumeSourceOdcMember.resumeSourceId),
           eq(member.organizationId, actor.organizationId),
           eq(member.userId, actor.userId),
           eq(member.organizationId, studioInterview.organizationId),
           or(
-            isNull(resumeSourceOdcMember.jobSeries),
-            eq(resumeSourceOdcMember.jobSeries, jobDescription.jobSeries),
-          ),
-          or(
-            isNull(resumeSourceOdcMember.serviceUnit),
-            eq(resumeSourceOdcMember.serviceUnit, jobDescription.serviceUnit),
+            and(eq(member.odcScopeMode, "all"), sql`${jobDescription.resumeSourceId} is not null`),
+            and(
+              eq(jobDescription.resumeSourceId, resumeSourceOdcMember.resumeSourceId),
+              or(
+                isNull(resumeSourceOdcMember.jobSeries),
+                eq(resumeSourceOdcMember.jobSeries, jobDescription.jobSeries),
+              ),
+              or(
+                isNull(resumeSourceOdcMember.serviceUnit),
+                eq(resumeSourceOdcMember.serviceUnit, jobDescription.serviceUnit),
+              ),
+            ),
           ),
         ),
       ),
@@ -128,10 +133,10 @@ function buildCurrentOdcVisibilityCondition(actor: {
 
 // Apply after the union so recruiting groups/reporting lines cannot bypass the
 // recipient restriction. Recheck the role, including ODCs without source bindings.
-function buildOdcApprovalRestriction(actor?: {
-  organizationId: string;
-  userId: string;
-}): SQL | undefined {
+function buildOdcApprovalRestriction(
+  actor: { organizationId: string; userId: string } | undefined,
+  aiReviewOrganizationId?: string,
+): SQL | undefined {
   if (!actor) {
     return;
   }
@@ -151,28 +156,30 @@ function buildOdcApprovalRestriction(actor?: {
   );
   return or(
     not(isOdc),
-    eq(studioInterview.pipelineStage, "ai_review"),
+    aiReviewOrganizationId
+      ? and(
+          eq(studioInterview.organizationId, aiReviewOrganizationId),
+          eq(studioInterview.pipelineStage, "ai_review"),
+        )
+      : undefined,
     and(
-      // 审核阶段之外，创建人/招聘组授权不能绕过 ODC 当前负责的来源。
+      // Ordinary ODCs enter the candidate visibility scope only after the
+      // business reviewer approves the recommendation and assigns them.
       buildCurrentOdcVisibilityCondition(actor),
+      eq(studioInterview.aiReviewApprovalStatus, "approved"),
+      eq(studioInterview.organizationId, actor.organizationId),
       or(
-        ne(studioInterview.aiReviewApprovalStatus, "approved"),
-        and(
-          eq(studioInterview.organizationId, actor.organizationId),
-          or(
-            eq(studioInterview.aiReviewAssignedOdcUserId, actor.userId),
-            exists(
-              db
-                .select({ value: sql`1` })
-                .from(studioInterviewOdcAssignment)
-                .where(
-                  and(
-                    eq(studioInterviewOdcAssignment.interviewRecordId, studioInterview.id),
-                    eq(studioInterviewOdcAssignment.userId, actor.userId),
-                  ),
-                ),
+        eq(studioInterview.aiReviewAssignedOdcUserId, actor.userId),
+        exists(
+          db
+            .select({ value: sql`1` })
+            .from(studioInterviewOdcAssignment)
+            .where(
+              and(
+                eq(studioInterviewOdcAssignment.interviewRecordId, studioInterview.id),
+                eq(studioInterviewOdcAssignment.userId, actor.userId),
+              ),
             ),
-          ),
         ),
       ),
     ),
@@ -187,7 +194,7 @@ export function buildResumeVisibilityCondition(
   }
   const normalized = normalizeScope(scope);
   const actor = normalized.actor ?? normalized.odcActor;
-  const approvalRestriction = buildOdcApprovalRestriction(actor);
+  const approvalRestriction = buildOdcApprovalRestriction(actor, normalized.aiReviewOrganizationId);
   if (normalized.recruiting.kind === "all") {
     return approvalRestriction;
   }

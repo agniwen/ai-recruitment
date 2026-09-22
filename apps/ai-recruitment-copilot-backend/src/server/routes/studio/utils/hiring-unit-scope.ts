@@ -7,6 +7,7 @@ import {
   resumeSourceOdcMember,
   jobDescription,
   member,
+  resumeSource,
   organizationRole,
   recruitingGroupResumeSource,
   recruitingGroupMember,
@@ -60,7 +61,7 @@ export async function resolveOdcAccessScope({
   }
 
   const [workspaceMember] = await db
-    .select({ id: member.id, isOdc: organizationRole.isOdc })
+    .select({ id: member.id, isOdc: organizationRole.isOdc, odcScopeMode: member.odcScopeMode })
     .from(member)
     .leftJoin(
       organizationRole,
@@ -73,6 +74,25 @@ export async function resolveOdcAccessScope({
     .limit(1);
   if (!workspaceMember?.isOdc) {
     return EMPTY_ODC_ACCESS_SCOPE;
+  }
+
+  if (workspaceMember.odcScopeMode === "all") {
+    const rows = await db
+      .select({ id: hiringUnit.id, sourceId: resumeSource.id })
+      .from(resumeSource)
+      .leftJoin(
+        hiringUnit,
+        and(
+          eq(hiringUnit.resumeSourceId, resumeSource.id),
+          eq(hiringUnit.organizationId, resumeSource.organizationId),
+        ),
+      )
+      .where(eq(resumeSource.organizationId, organizationId));
+    return {
+      departmentIds: [],
+      hiringUnitIds: [...new Set(rows.flatMap((row) => (row.id ? [row.id] : [])))],
+      resumeSourceIds: [...new Set(rows.map((row) => row.sourceId))],
+    };
   }
 
   const hiringUnitRows = await db

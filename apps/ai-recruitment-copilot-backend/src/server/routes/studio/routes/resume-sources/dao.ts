@@ -1,4 +1,5 @@
 import { and, asc, count, eq } from "drizzle-orm";
+import { listAllSourceOdcMembers } from "./routes/odc/all-scope";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   department,
@@ -21,7 +22,7 @@ export async function loadResumeSourceById(id: string, organizationId: string) {
 }
 
 export async function listResumeSources(organizationId: string): Promise<ResumeSourceRecord[]> {
-  const [sources, units, assignments, departments, jobs] = await Promise.all([
+  const [sources, units, assignments, departments, jobs, allMembers] = await Promise.all([
     db
       .select()
       .from(resumeSource)
@@ -47,7 +48,12 @@ export async function listResumeSources(organizationId: string): Promise<ResumeS
       .from(resumeSourceOdcMember)
       .innerJoin(member, eq(member.id, resumeSourceOdcMember.memberId))
       .innerJoin(user, eq(user.id, member.userId))
-      .where(eq(resumeSourceOdcMember.organizationId, organizationId))
+      .where(
+        and(
+          eq(resumeSourceOdcMember.organizationId, organizationId),
+          eq(member.odcScopeMode, "selected"),
+        ),
+      )
       .orderBy(asc(user.name)),
     db
       .select({ count: count(), sourceId: hiringUnit.resumeSourceId })
@@ -66,6 +72,7 @@ export async function listResumeSources(organizationId: string): Promise<ResumeS
       .from(jobDescription)
       .where(eq(jobDescription.organizationId, organizationId))
       .groupBy(jobDescription.resumeSourceId),
+    listAllSourceOdcMembers(organizationId),
   ]);
   const counts = new Map(units.map((unit) => [unit.sourceId, unit.count]));
   const departmentCounts = new Map(departments.map((row) => [row.sourceId, row.count]));
@@ -82,7 +89,14 @@ export async function listResumeSources(organizationId: string): Promise<ResumeS
     departmentCount: departmentCounts.get(source.id) ?? 0,
     hiringUnitCount: counts.get(source.id) ?? 0,
     jobDescriptionCount: jobCounts.get(source.id) ?? 0,
-    odcMembers: members.get(source.id) ?? [],
+    odcMembers: [
+      ...(members.get(source.id) ?? []),
+      ...allMembers.map(({ createdAt: _createdAt, ...row }) => ({
+        ...row,
+        jobSeries: null,
+        serviceUnit: null,
+      })),
+    ],
     updatedAt: source.updatedAt.toISOString(),
   }));
 }

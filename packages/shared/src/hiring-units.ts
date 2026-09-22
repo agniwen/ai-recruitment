@@ -37,6 +37,7 @@ export const odcJobSeriesValues = ["直属", "派驻"] as const;
 export type OdcJobSeries = (typeof odcJobSeriesValues)[number];
 
 export interface OdcAssignmentSummary extends OdcMemberSummary {
+  odcScopeMode?: "all" | "selected";
   canApproveAiReview?: boolean;
   jobSeries: OdcJobSeries | null;
   serviceUnit: string | null;

@@ -18,7 +18,7 @@ export function OdcAvatarGroup({ members }: { members: OdcAssignmentSummary[] })
         <Avatar
           key={member.memberId}
           size="sm"
-          title={`${member.name} · ${member.email} · ${member.jobSeries ?? "不限序列"} · ${member.serviceUnit ?? "不限服务单位"}`}
+          title={`${member.name} · ${member.email} · ${member.odcScopeMode === "all" ? "全部部门/中心 · " : ""}${member.jobSeries ?? "不限序列"} · ${member.serviceUnit ?? "不限服务单位"}`}
         >
           {member.image ? <AvatarImage alt={member.name} src={member.image} /> : null}
           <AvatarFallback>{member.name.trim().slice(0, 2) || "ODC"}</AvatarFallback>

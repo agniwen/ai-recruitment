@@ -122,7 +122,7 @@ describe("hiring unit management list", () => {
 
     expect(source).toContain("<SearchableMultiSelect");
     expect(source).toContain("serializeOdcAssignmentDrafts(assignments)");
-    expect(source).toContain("target?.odcMembers.map");
+    expect(source).toContain('member.odcScopeMode !== "all"');
     expect(scopeFieldsSource).toContain("不限序列");
     expect(scopeFieldsSource).toContain("直属");
     expect(scopeFieldsSource).toContain("派驻");

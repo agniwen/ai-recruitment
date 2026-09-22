@@ -22,7 +22,6 @@ export function HumanInterviewTimeZonePreview({
     <div className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs", className)}>
       <span className="text-muted-foreground">{label}</span>
       <TimeDisplay as="span" className="text-foreground" value={instant} />
-      <span className="text-muted-foreground">悬停查看其他地区</span>
     </div>
   );
 }

@@ -33,6 +33,7 @@ import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useModalPagination } from "@/lib/client/use-modal-pagination";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { invalidateOdcScopeQueries } from "./members/member-odc-scope-query";
 
 const DEFAULT_PAGE_SIZE = 10;
 const QUERY_KEY_PREFIX = "odc-management" as const;
@@ -89,6 +90,7 @@ export function OdcManagementModal({
   });
 
   async function invalidateAssignments() {
+    await invalidateOdcScopeQueries(queryClient, slug);
     await queryClient.invalidateQueries({
       queryKey: [QUERY_KEY_PREFIX, slug, target?.rowType, target?.id],
     });
@@ -160,6 +162,24 @@ export function OdcManagementModal({
         title: "ODC 人员",
       }),
       customColumn<OdcManagedAssignment>({
+        cell: (record) =>
+          record.odcScopeMode === "all" ? (
+            <div className="flex flex-col gap-1">
+              <Badge variant="secondary">全部部门/中心</Badge>
+              <a
+                className="text-sm underline"
+                href={`/w/${encodeURIComponent(slug)}/studio/members`}
+              >
+                前往成员管理调整
+              </a>
+            </div>
+          ) : (
+            <span>指定部门/中心</span>
+          ),
+        key: "odcScopeMode",
+        title: "负责范围",
+      }),
+      customColumn<OdcManagedAssignment>({
         cell: (record) => <Badge variant="outline">{record.jobSeries ?? "不限"}</Badge>,
         key: "jobSeries",
         title: "序列",
@@ -183,18 +203,20 @@ export function OdcManagementModal({
                 serviceUnit: record.serviceUnit ?? "",
               });
             },
+            show: (record) => record.odcScopeMode !== "all",
           },
         ],
         menu: [
           {
             label: "删除",
             onClick: setDeleteTarget,
+            show: (record) => record.odcScopeMode !== "all",
             variant: "destructive",
           },
         ],
       }),
     ],
-    [],
+    [slug],
   );
 
   const data = listQuery.data ?? {

@@ -71,5 +71,26 @@ describe("buildResumeVisibilityCondition", () => {
     expect(query.sql).toContain(
       '"resume_source_odc_member"."service_unit" = "job_description"."service_unit"',
     );
+    expect(query.sql).toContain('"studio_interview"."ai_review_approval_status" =');
+    expect(query.sql).toContain('"studio_interview_odc_assignment"."user_id" =');
+    expect(query.params).toContain("approved");
+    expect(query.params).not.toContain("ai_review");
+  });
+
+  it("keeps explicit AI review approvers able to read the workspace review stage", () => {
+    const condition = buildResumeVisibilityCondition({
+      actor: { organizationId: "organization-1", userId: "user-1" },
+      aiReviewOrganizationId: "organization-1",
+      odc: { departmentIds: [], hiringUnitIds: [] },
+      recruiting: { kind: "none" },
+    });
+    if (!condition) {
+      throw new Error("Expected an AI review approver visibility condition");
+    }
+
+    const query = new PgDialect().sqlToQuery(condition);
+    expect(query.sql).toContain('"studio_interview"."pipeline_stage" =');
+    expect(query.params).toContain("ai_review");
+    expect(query.params).toContain("organization-1");
   });
 });

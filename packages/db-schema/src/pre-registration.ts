@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const odcScopeModeSchema = z.enum(["all", "selected"]);
+export type OdcScopeMode = z.infer<typeof odcScopeModeSchema>;
+
 export const preRegistrationOdcAssignmentsSchema = z
   .array(
     z.object({
@@ -21,3 +24,9 @@ export const preRegistrationOdcAssignmentsSchema = z
 export type PreRegistrationOdcAssignment = z.infer<
   typeof preRegistrationOdcAssignmentsSchema
 >[number];
+
+export const memberOdcScopeInputSchema = z.object({
+  odcAssignments: preRegistrationOdcAssignmentsSchema,
+  odcScopeMode: odcScopeModeSchema,
+});
+export type MemberOdcScopeInput = z.infer<typeof memberOdcScopeInputSchema>;

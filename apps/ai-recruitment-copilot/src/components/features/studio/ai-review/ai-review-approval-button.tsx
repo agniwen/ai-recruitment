@@ -33,7 +33,15 @@ export function AiReviewApprovalButton({
     enabled: open,
     queryFn: ({ signal }) =>
       rpcFetch<{
-        recipients: { userId: string; name: string; email: string; telegramBound: boolean }[];
+        recipients: {
+          userId: string;
+          name: string;
+          email: string;
+          resumeSourceNames: string[];
+          departmentNames?: string[];
+          recommendationRank?: number;
+          telegramBound: boolean;
+        }[];
       }>(
         rpc.api.w[":slug"].studio["ai-review"][":id"]["notification-recipients"].$get(
           { param: { id: recordId, slug } },
@@ -116,14 +124,26 @@ export function AiReviewApprovalButton({
               disabled={pending || recipientsQuery.isPending || recipientsQuery.isError}
               value={notificationUserIds}
               onChange={setNotificationUserIds}
-              options={recipients.map((recipient) => ({
-                description: recipient.telegramBound
+              options={recipients.map((recipient) => {
+                const sourceNames = recipient.resumeSourceNames.join("、");
+                let recommendation = "";
+                if (recipient.recommendationRank === 0) {
+                  recommendation = "（匹配候选人部门，推荐）";
+                }
+                if (recipient.recommendationRank === 1) {
+                  recommendation = "（全中心负责）";
+                }
+                const email = recipient.telegramBound
                   ? recipient.email
-                  : `${recipient.email} · 未绑定 Telegram`,
-                disabled: !recipient.telegramBound,
-                label: recipient.name,
-                value: recipient.userId,
-              }))}
+                  : `${recipient.email} · 未绑定 Telegram`;
+                return {
+                  description: `负责中心：${sourceNames || "未配置"} · 负责部门：${recipient.departmentNames?.join("、") || "未配置"}${recommendation} · ${email}`,
+                  disabled: !recipient.telegramBound,
+                  label: recipient.name,
+                  searchValue: `${recipient.name} ${recipient.email} ${sourceNames} ${recipient.departmentNames?.join(" ") || ""}`,
+                  value: recipient.userId,
+                };
+              })}
               placeholder={recipientsQuery.isPending ? "加载通知人员..." : "请选择 ODC，可多选"}
               emptyMessage="暂无可选的 ODC 用户"
             />
