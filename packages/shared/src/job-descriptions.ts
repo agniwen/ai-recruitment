@@ -187,6 +187,19 @@ export const jobDescriptionBaseSchema = z
   .superRefine((value, ctx) => {
     validateWorkSchedule(value, ctx);
     validateSalaryRange(value, ctx);
+    if (
+      value.headcount !== null &&
+      value.headcount !== undefined &&
+      value.onboardedCount !== null &&
+      value.onboardedCount !== undefined &&
+      value.headcount < value.onboardedCount
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "HC 不能小于已到岗人数，请先核对招聘编制",
+        path: ["headcount"],
+      });
+    }
   });
 
 export const jobDescriptionFormSchema = jobDescriptionBaseSchema;

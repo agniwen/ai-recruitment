@@ -6,6 +6,7 @@ import {
   DEFAULT_GOOGLE_SHEET_RESUME_SOURCE_NAME,
   hasGoogleSheetJobChanges,
   parseGoogleSheetJobRows,
+  resolveGoogleSheetStaffingValues,
 } from "./google-sheets-sync";
 
 const HEADERS = [
@@ -225,6 +226,33 @@ describe("parseGoogleSheetJobRows", () => {
     expect(result.records[0]).toMatchObject({
       departmentName: "平台组",
       departmentSpecified: true,
+    });
+  });
+});
+
+describe("resolveGoogleSheetStaffingValues", () => {
+  it("preserves the system onboarded count for an existing job and derives its gap", () => {
+    expect(
+      resolveGoogleSheetStaffingValues({
+        existing: { headcount: 3, onboardedCount: 2 },
+        sheetValues: { headcount: 5, onboardedCount: 0 },
+      }),
+    ).toEqual({
+      gapCount: 3,
+      headcountBelowOnboarded: false,
+      onboardedCount: undefined,
+    });
+  });
+
+  it("uses the sheet onboarded count as the baseline for a new job", () => {
+    expect(
+      resolveGoogleSheetStaffingValues({
+        sheetValues: { headcount: 3, onboardedCount: 1 },
+      }),
+    ).toEqual({
+      gapCount: 2,
+      headcountBelowOnboarded: false,
+      onboardedCount: 1,
     });
   });
 });

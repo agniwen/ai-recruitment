@@ -5,6 +5,7 @@ import { transitionCandidateStage } from "./candidate-stage-transition";
 // oxlint-disable promise/prefer-await-to-callbacks -- the fake transaction must execute Drizzle's callback.
 
 const mocks = vi.hoisted(() => ({
+  adjustJobDescriptionOnboardedCount: vi.fn(),
   autoCloseRelatedCandidatesAfterHire: vi.fn(),
   canApproveAiReview: vi.fn(),
   getReadinessError: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   notifyCandidateStageChange: vi.fn(),
   recipients: vi.fn(),
   refreshDirectUploadDuplicateMatchesBeforeHire: vi.fn(),
+  safeUpdateTag: vi.fn(),
   transaction: vi.fn(),
 }));
 
@@ -22,7 +24,15 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
   invalidateStudioInterviewCaches: mocks.invalidateCaches,
+  safeUpdateTag: mocks.safeUpdateTag,
 }));
+
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/job-description-audit",
+  () => ({
+    adjustJobDescriptionOnboardedCount: mocks.adjustJobDescriptionOnboardedCount,
+  }),
+);
 
 vi.mock("../../ai-review/dao", () => ({ listAiReviewNotificationRecipients: mocks.recipients }));
 
@@ -54,10 +64,10 @@ vi.mock(
 function createTransaction(existing: {
   aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
   candidateName?: string;
-  closedMeta: null | { previousStage: "ai_review" };
+  closedMeta: null | { previousStage: "ai_review" | "human_interview" };
   jobDescriptionAiInterviewDisabled?: boolean;
   jobDescriptionId: string | null;
-  outcome: "archived" | "in_pipeline";
+  outcome: "archived" | "hired" | "in_pipeline";
   pipelineStage: "ai_review" | "closed" | "human_interview" | "screening";
   resumeReviewStatus?: "ready" | "processing";
   resumeSourcePoolItemId?: string | null;
@@ -98,6 +108,7 @@ describe("transitionCandidateStage", () => {
       { chatId: "10002", name: "ODC乙", userId: "notify-b" },
     ]);
     mocks.autoCloseRelatedCandidatesAfterHire.mockResolvedValue([]);
+    mocks.adjustJobDescriptionOnboardedCount.mockImplementation(async () => {});
     mocks.notifyCandidateStageChange.mockImplementation(() => Promise.resolve());
     mocks.refreshDirectUploadDuplicateMatchesBeforeHire.mockImplementation(() => Promise.resolve());
   });
@@ -572,6 +583,16 @@ describe("transitionCandidateStage", () => {
       candidateId: "candidate-a",
       organizationId: "org-a",
     });
+    expect(mocks.adjustJobDescriptionOnboardedCount).toHaveBeenCalledWith(tx, {
+      candidateId: "candidate-a",
+      delta: 1,
+      jobDescriptionId: "jd-a",
+      now: expect.any(Date),
+      operatorId: "user-a",
+      operatorRole: "odc",
+      organizationId: "org-a",
+    });
+    expect(mocks.safeUpdateTag).toHaveBeenCalledWith("job-descriptions:org-a");
     expect(insertedValues).toHaveBeenCalledWith(
       expect.objectContaining({
         detail: expect.objectContaining({
@@ -585,6 +606,40 @@ describe("transitionCandidateStage", () => {
     expect(mocks.notifyCandidateStageChange).toHaveBeenCalledWith(
       expect.objectContaining({ candidateId: "candidate-a", organizationId: "org-a" }),
     );
+  });
+
+  it("decrements the linked job onboarded count when a hired candidate is reactivated", async () => {
+    const { tx } = createTransaction({
+      candidateName: "候选人甲",
+      closedMeta: { previousStage: "human_interview" },
+      jobDescriptionId: "jd-a",
+      outcome: "hired",
+      pipelineStage: "closed",
+    });
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+
+    await expect(
+      transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: { pipelineStage: "screening", reactivationReason: "重新推进" },
+        operatorId: "user-a",
+        operatorRole: "odc",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      }),
+    ).resolves.toEqual({ kind: "ok" });
+
+    expect(mocks.adjustJobDescriptionOnboardedCount).toHaveBeenCalledWith(tx, {
+      candidateId: "candidate-a",
+      delta: -1,
+      jobDescriptionId: "jd-a",
+      now: expect.any(Date),
+      operatorId: "user-a",
+      operatorRole: "odc",
+      organizationId: "org-a",
+    });
+    expect(mocks.safeUpdateTag).toHaveBeenCalledWith("job-descriptions:org-a");
   });
 
   it("rejects hiring a related candidate that was already automatically closed", async () => {

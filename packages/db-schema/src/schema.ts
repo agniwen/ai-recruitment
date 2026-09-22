@@ -1200,6 +1200,36 @@ export const jobDescription = pgTable(
   ],
 );
 
+/**
+ * Append-only audit trail for mutable job-description data.
+ * jobDescriptionId and candidateId intentionally stay as plain identifiers so
+ * the history survives deletion of the referenced business records.
+ */
+export const jobDescriptionAuditLog = pgTable(
+  "job_description_audit_log",
+  {
+    action: text("action").notNull(),
+    candidateId: text("candidate_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    detail: jsonb("detail").$type<Record<string, unknown>>().notNull().default({}),
+    id: text("id").primaryKey(),
+    jobCode: text("job_code"),
+    jobDescriptionId: text("job_description_id").notNull(),
+    jobName: text("job_name").notNull(),
+    operatorId: text("operator_id").references(() => user.id, { onDelete: "set null" }),
+    operatorRole: text("operator_role"),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+  },
+  (table) => [
+    index("job_description_audit_log_job_created_idx").on(table.jobDescriptionId, table.createdAt),
+    index("job_description_audit_log_org_created_idx").on(table.organizationId, table.createdAt),
+    index("job_description_audit_log_candidate_idx").on(table.candidateId),
+  ],
+);
+
 export const jobDescriptionGoogleSheetSyncRun = pgTable(
   "job_description_google_sheet_sync_run",
   {

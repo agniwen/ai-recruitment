@@ -165,6 +165,46 @@ afterEach(() => {
 });
 
 describe("human interview scheduling conflict confirmation", () => {
+  it("separates the progress summary and available times into a responsive row", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const client = new QueryClient({
+      defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+    });
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <HumanInterviewStagePanel
+            availableTimeSlots={[
+              {
+                endAt: "2026-09-25T00:00:00Z",
+                startAt: "2026-09-22T00:00:00Z",
+              },
+            ]}
+            candidateId="candidate"
+            candidateName="测试候选人"
+          />
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+
+    const title = [...document.querySelectorAll("h3")].find(
+      (heading) => heading.textContent === "真人复面进度",
+    );
+    const header = title?.parentElement?.parentElement;
+    expect(header?.classList.contains("sm:justify-between")).toBe(true);
+    expect(header?.children).toHaveLength(2);
+    const availableTimes = header?.children.item(1);
+    expect(availableTimes?.textContent).toContain("候选人可预约时间");
+    expect(availableTimes?.classList.contains("text-sm")).toBe(true);
+    expect(availableTimes?.classList.contains("text-muted-foreground")).toBe(true);
+    expect(availableTimes?.querySelector(".text-foreground")).toBeNull();
+  });
+
   it("checks the full time range before creating the round or meeting", async () => {
     await renderDialog();
     expect(document.body.textContent).toContain("以中国标准时间（UTC+8）设置。");

@@ -33,7 +33,6 @@ describe("formatTimeDisplayTooltipRows", () => {
   it("formats the configured global timezones including DST-aware regions", () => {
     expect(formatTimeDisplayTooltipRows("2026-06-02T09:30:00.000Z")).toEqual([
       { label: "中国标准时间", text: "26/06/02 17:30" },
-      { label: "新加坡时间", text: "26/06/02 17:30" },
       { label: "英国时间", text: "26/06/02 10:30" },
       { label: "日本时间", text: "26/06/02 18:30" },
       { label: "美国太平洋时间（洛杉矶）", text: "26/06/02 02:30" },

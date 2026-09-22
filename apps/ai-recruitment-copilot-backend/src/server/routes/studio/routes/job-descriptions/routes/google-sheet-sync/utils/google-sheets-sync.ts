@@ -13,6 +13,11 @@ import type {
   JobDescriptionPriority,
 } from "@arc/shared/job-descriptions";
 import { computeResumeScreeningPolicyHash } from "@arc/shared/resume-screening";
+import {
+  buildJobDescriptionAuditChanges,
+  recordJobDescriptionAudit,
+  resolveJobDescriptionStaffing,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/job-description-audit";
 
 const HEADERS = {
   code: "岗位唯一编码",
@@ -501,6 +506,23 @@ export function hasGoogleSheetJobChanges(
   );
 }
 
+export function resolveGoogleSheetStaffingValues(input: {
+  existing?: { headcount: number | null; onboardedCount: number | null };
+  sheetValues: Pick<GoogleSheetJobValues, "headcount" | "onboardedCount">;
+}) {
+  const staffing = resolveJobDescriptionStaffing({
+    headcount: input.sheetValues.headcount ?? input.existing?.headcount ?? null,
+    onboardedCount: input.existing
+      ? input.existing.onboardedCount
+      : (input.sheetValues.onboardedCount ?? null),
+  });
+  return {
+    gapCount: staffing.gapCount,
+    headcountBelowOnboarded: staffing.headcountBelowOnboarded,
+    onboardedCount: input.existing ? undefined : input.sheetValues.onboardedCount,
+  };
+}
+
 function definedJobValues(values: GoogleSheetJobValues) {
   return Object.fromEntries(
     Object.entries(values).filter(([, value]) => value !== undefined),
@@ -562,7 +584,8 @@ export async function syncGoogleSheetJobDescriptions({
           workLocation: jobDescription.workLocation,
         })
         .from(jobDescription)
-        .where(eq(jobDescription.organizationId, organizationId));
+        .where(eq(jobDescription.organizationId, organizationId))
+        .for("update");
       const jobsByCode = new Map(
         existingJobs.flatMap((row) => (row.code ? [[row.code, row] as const] : [])),
       );
@@ -587,13 +610,22 @@ export async function syncGoogleSheetJobDescriptions({
         // - present in sheet → googleSheetDeleted=false, hiringUnitId=sheet 编制组织
         // - missing from sheet → google_sheets jobs get googleSheetDeleted=true (below)
         // - empty sheet 部门 preserves the existing department only within the same parent
+        const sheetValues = buildGoogleSheetJobValues(
+          record,
+          departmentIdForWrite,
+          hiringUnitIdForWrite,
+          resumeSourceId,
+        );
+        const staffing = resolveGoogleSheetStaffingValues({
+          existing,
+          sheetValues,
+        });
         const mappedValues = {
-          ...buildGoogleSheetJobValues(
-            record,
-            departmentIdForWrite,
-            hiringUnitIdForWrite,
-            resumeSourceId,
-          ),
+          ...sheetValues,
+          gapCount: staffing.gapCount,
+          // Existing jobs use candidate transitions as the source of truth for
+          // onboarded facts. The sheet only supplies the import baseline.
+          onboardedCount: existing ? undefined : sheetValues.onboardedCount,
           sourceSheet: sourceName,
         };
         if (existing) {
@@ -612,6 +644,21 @@ export async function syncGoogleSheetJobDescriptions({
                 eq(jobDescription.organizationId, organizationId),
               ),
             );
+          const nextValues = { ...updateValues, googleSheetDeleted: false };
+          await recordJobDescriptionAudit(tx, {
+            action: "updated",
+            changes: buildJobDescriptionAuditChanges(existing, nextValues),
+            createdAt: now,
+            detail: { headcountBelowOnboarded: staffing.headcountBelowOnboarded },
+            jobCode: existing.code,
+            jobDescriptionId: existing.id,
+            jobName: String(nextValues.name ?? existing.name),
+            operatorId: actorUserId ?? null,
+            operatorRole: actorRole,
+            organizationId,
+            source: "google_sheets",
+          });
+          Object.assign(existing, nextValues);
           existing.googleSheetDeleted = false;
           existing.hiringUnitId = hiringUnitIdForWrite;
           existing.resumeSourceId = resumeSourceId;

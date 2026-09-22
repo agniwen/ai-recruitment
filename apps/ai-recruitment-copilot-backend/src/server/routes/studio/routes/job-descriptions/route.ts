@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- this mount-local router keeps the complete job-description CRUD boundary together. */
 import { loadJobDescriptionForReader } from "./utils/read-detail";
 import { jobDescriptionReferenceOptionsRouter } from "./routes/reference-options/route";
 import { jobDescriptionLinkedTemplatesRouter } from "./routes/linked-templates/route";
@@ -48,6 +49,11 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/job-description-code";
 import { recommendCandidatesForJobDescription } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/recommendations";
 import { getGlobalConfig } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/global-config/dao";
+import {
+  buildJobDescriptionAuditChanges,
+  recordJobDescriptionAudit,
+  resolveJobDescriptionStaffing,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/job-description-audit";
 
 const generateJobDescriptionBodySchema = z.object({
   departmentName: z.string().trim().max(120).optional(),
@@ -135,6 +141,10 @@ function isJobCodeConflict(error: unknown): boolean {
   );
 }
 
+class HeadcountBelowOnboardedError extends Error {
+  override name = "HeadcountBelowOnboardedError";
+}
+
 function buildManualJobDescriptionRecord(args: {
   code: string;
   input: z.infer<typeof jobDescriptionFormSchema>;
@@ -155,6 +165,10 @@ function buildManualJobDescriptionRecord(args: {
     createdByRole,
     resumeScreeningPolicyHash,
   } = args;
+  const staffing = resolveJobDescriptionStaffing({
+    headcount: input.headcount ?? null,
+    onboardedCount: input.onboardedCount ?? null,
+  });
   return {
     aiInterviewDisabled: input.aiInterviewDisabled,
     allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
@@ -170,7 +184,7 @@ function buildManualJobDescriptionRecord(args: {
     feishuChatBoundAt: null,
     feishuChatBoundBy: null,
     feishuChatId: null,
-    gapCount: input.gapCount ?? null,
+    gapCount: staffing.gapCount,
     googleSheetDeleted: null,
     headcount: input.headcount ?? null,
     hiringUnitId: departmentHiringUnitId,
@@ -396,6 +410,13 @@ export const jobDescriptionsRouter = factory
         return c.json({ message: "Unauthorized" }, 401);
       }
       const input = c.req.valid("json");
+      const staffing = resolveJobDescriptionStaffing({
+        headcount: input.headcount ?? null,
+        onboardedCount: input.onboardedCount ?? null,
+      });
+      if (staffing.headcountBelowOnboarded) {
+        return c.json({ error: "HC 不能小于已到岗人数，请先核对招聘编制。" }, 400);
+      }
       const source = await resolveJobDescriptionResumeSource({
         actorUserId: c.var.user?.id,
         organizationId: activeOrg.id,
@@ -616,14 +637,13 @@ export const jobDescriptionsRouter = factory
         existing.creationSource === "google_sheets"
           ? existing.hiringUnitId
           : departmentHiringUnitId;
-      const updateValues = {
+      const baseUpdateValues = {
         aiInterviewDisabled: input.aiInterviewDisabled,
         allowCrossDepartmentInterviewers: input.allowCrossDepartmentInterviewers,
         controlCategory: nullableText(input.controlCategory),
         departmentId: input.departmentId,
         description: input.description?.trim() || null,
         expectedOnboardDate: nullableText(input.expectedOnboardDate),
-        gapCount: input.gapCount ?? null,
         headcount: input.headcount ?? null,
         hiringUnitId: nextHiringUnitId,
         ...(!existing.code && input.code ? { code: input.code } : {}),
@@ -632,7 +652,6 @@ export const jobDescriptionsRouter = factory
         name: input.name.trim(),
         notes: nullableText(input.notes),
         offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,
-        onboardedCount: input.onboardedCount ?? null,
         priority: input.priority,
         prompt: input.prompt.trim(),
         recruitmentStatus: nullableText(input.recruitmentStatus),
@@ -660,10 +679,35 @@ export const jobDescriptionsRouter = factory
       };
       try {
         await db.transaction(async (tx) => {
-          await tx
+          const [lockedJob] = await tx
+            .select()
+            .from(jobDescription)
+            .where(and(eq(jobDescription.id, id), eq(jobDescription.organizationId, activeOrg.id)))
+            .for("update")
+            .limit(1);
+          if (!lockedJob) {
+            throw new Error("在招岗位在更新事务中不存在。");
+          }
+          const lockedStaffing = resolveJobDescriptionStaffing({
+            headcount: input.headcount ?? null,
+            onboardedCount: lockedJob.onboardedCount,
+          });
+          if (lockedStaffing.headcountBelowOnboarded) {
+            throw new HeadcountBelowOnboardedError();
+          }
+          const updateValues = {
+            ...baseUpdateValues,
+            gapCount: lockedStaffing.gapCount,
+            onboardedCount: lockedJob.onboardedCount,
+          };
+          const [updatedJob] = await tx
             .update(jobDescription)
             .set(updateValues)
-            .where(and(eq(jobDescription.id, id), eq(jobDescription.organizationId, activeOrg.id)));
+            .where(and(eq(jobDescription.id, id), eq(jobDescription.organizationId, activeOrg.id)))
+            .returning();
+          if (!updatedJob) {
+            throw new Error("在招岗位更新失败。");
+          }
 
           // Replace junction links atomically.
           await tx
@@ -690,8 +734,35 @@ export const jobDescriptionsRouter = factory
               })),
             );
           }
+          const auditedFields = Object.keys(updateValues).filter((field) => field !== "updatedAt");
+          const changes = {
+            ...buildJobDescriptionAuditChanges(lockedJob, updatedJob, auditedFields),
+            ...buildJobDescriptionAuditChanges(
+              {
+                humanInterviewerIds: existing.humanInterviewerIds,
+                interviewerIds: existing.interviewerIds,
+              },
+              { humanInterviewerIds, interviewerIds },
+            ),
+          };
+          await recordJobDescriptionAudit(tx, {
+            action: "updated",
+            changes,
+            createdAt: now,
+            detail: { headcountBelowOnboarded: false },
+            jobCode: updatedJob.code,
+            jobDescriptionId: updatedJob.id,
+            jobName: updatedJob.name,
+            operatorId: c.var.user?.id ?? null,
+            operatorRole: c.var.member?.role ?? null,
+            organizationId: activeOrg.id,
+            source: "manual",
+          });
         });
       } catch (updateError) {
+        if (updateError instanceof HeadcountBelowOnboardedError) {
+          return c.json({ error: "HC 不能小于已到岗人数，请先核对招聘编制。" }, 409);
+        }
         if (isJobCodeConflict(updateError)) {
           return c.json({ error: "岗位唯一编码已被占用，请重新生成。" }, 409);
         }
