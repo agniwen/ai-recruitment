@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { humanInterviewRoundOutcomeMeta } from "@arc/db-schema/studio-interviews";
 import type { HumanInterviewRoundOutcome } from "@arc/db-schema/studio-interviews";
 import type { HumanInterviewRoundRecord } from "@arc/shared/studio-pipeline-stages";
+import type { ResumeAvailableTimeSlot } from "@arc/shared/studio-resumes";
 import { dateTimeLocalInputToISOString } from "@/lib/client/datetime-local";
 import {
   cancelHumanInterviewRound,
@@ -35,17 +36,20 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
 import { Textarea } from "@/components/ui/textarea";
 import { addOneHourToDateTimeLocalInputValue } from "./human-interview-stage-utils";
+import { HumanInterviewAvailableTimeSlots } from "./human-interview-available-time-slots";
 import { HumanInterviewTimeZonePreview } from "./human-interview-time-zone-preview";
 import { useWorkspaceInterviewerMembers } from "./use-workspace-interviewer-members";
 import { useHumanInterviewScheduleConfirmation } from "./use-human-interview-schedule-confirmation";
 
 const EMPTY_INTERVIEWER_IDS: string[] = [];
+const EMPTY_AVAILABLE_TIME_SLOTS: ResumeAvailableTimeSlot[] = [];
 
 interface ScheduleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   candidateId: string;
   existingCount: number;
+  availableTimeSlots?: ResumeAvailableTimeSlot[];
   defaultInterviewerIds?: string[];
   onScheduled: () => void;
 }
@@ -62,6 +66,7 @@ export function ScheduleRoundDialog({
   onOpenChange,
   candidateId,
   existingCount,
+  availableTimeSlots = EMPTY_AVAILABLE_TIME_SLOTS,
   defaultInterviewerIds = EMPTY_INTERVIEWER_IDS,
   onScheduled,
 }: ScheduleDialogProps) {
@@ -173,6 +178,11 @@ export function ScheduleRoundDialog({
         </DialogHeader>
 
         <fieldset className="space-y-4 py-2" disabled={mutation.isPending}>
+          <HumanInterviewAvailableTimeSlots
+            slots={availableTimeSlots}
+            title="候选人可接受的预约时间"
+          />
+
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="round-label">
               轮次标签
@@ -196,9 +206,7 @@ export function ScheduleRoundDialog({
               required
               value={scheduledAt}
             />
-            <p className="text-muted-foreground text-xs">
-              以中国标准时间（UTC+8）设置；选择后可在下方查看其他地区。
-            </p>
+            <p className="text-muted-foreground text-xs">以中国标准时间（UTC+8）设置。</p>
             <HumanInterviewTimeZonePreview label="面试时间换算" value={scheduledAt} />
           </div>
 

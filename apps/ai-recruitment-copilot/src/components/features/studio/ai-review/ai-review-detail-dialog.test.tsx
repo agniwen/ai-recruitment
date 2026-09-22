@@ -49,7 +49,7 @@ vi.mock("@/components/ui/searchable-multi-select", () => ({
     id: string;
     value: string[];
     onChange: (value: string[]) => void;
-    options: { value: string; label: string; disabled?: boolean }[];
+    options: { value: string; label: string; description?: string; disabled?: boolean }[];
     disabled?: boolean;
   }) => (
     <select
@@ -63,7 +63,7 @@ vi.mock("@/components/ui/searchable-multi-select", () => ({
     >
       {options.map((option) => (
         <option key={option.value} value={option.value} disabled={option.disabled}>
-          {option.label}
+          {option.label} {option.description}
         </option>
       ))}
     </select>
@@ -202,7 +202,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.recipients.mockResolvedValue({
     recipients: [
-      { email: "odc@example.com", name: "ODC甲", telegramBound: true, userId: "notify-a" },
+      {
+        email: "odc@example.com",
+        name: "ODC甲",
+        resumeSourceNames: ["运营中心", "研发中心"],
+        telegramBound: true,
+        userId: "notify-a",
+      },
     ],
   });
   mocks.get.mockResolvedValue(ready);
@@ -257,6 +263,16 @@ describe("AI approval detail", () => {
     });
     expect(onApproved).toHaveBeenCalledOnce();
   });
+  it("shows every responsible center for each selectable ODC", async () => {
+    await render();
+    act(() => approvalButton()?.click());
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await delay(0);
+      });
+      expect(document.body.textContent).toContain("负责中心：运营中心、研发中心");
+    });
+  });
   it("submits a selected notification user with an empty optional note", async () => {
     await render();
     await confirmApproval("");
@@ -268,8 +284,20 @@ describe("AI approval detail", () => {
   it("submits all selected ODCs together", async () => {
     mocks.recipients.mockResolvedValue({
       recipients: [
-        { email: "a@example.com", name: "ODC甲", telegramBound: true, userId: "notify-a" },
-        { email: "b@example.com", name: "ODC乙", telegramBound: true, userId: "notify-b" },
+        {
+          email: "a@example.com",
+          name: "ODC甲",
+          resumeSourceNames: ["运营中心"],
+          telegramBound: true,
+          userId: "notify-a",
+        },
+        {
+          email: "b@example.com",
+          name: "ODC乙",
+          resumeSourceNames: ["研发中心"],
+          telegramBound: true,
+          userId: "notify-b",
+        },
       ],
     });
     await render();
@@ -282,7 +310,13 @@ describe("AI approval detail", () => {
   it("cannot approve when no bound ODC user is available", async () => {
     mocks.recipients.mockResolvedValue({
       recipients: [
-        { email: "other@example.com", name: "ODC乙", telegramBound: false, userId: "unbound" },
+        {
+          email: "other@example.com",
+          name: "ODC乙",
+          resumeSourceNames: ["研发中心"],
+          telegramBound: false,
+          userId: "unbound",
+        },
       ],
     });
     await render();

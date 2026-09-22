@@ -855,6 +855,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
           shouldShowHumanInterviewTab(tabVisibilityRecord, canReadHumanInterview) ? (
             <TabsContent value="human-interview">
               <HumanInterviewStagePanel
+                availableTimeSlots={resumeRecord?.availableTimeSlots ?? []}
                 canCreate={
                   canCreateHumanInterview &&
                   record.pipelineStage === "human_interview" &&

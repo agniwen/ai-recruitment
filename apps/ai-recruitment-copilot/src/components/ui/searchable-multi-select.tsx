@@ -171,7 +171,10 @@ export function SearchableMultiSelect({
                 <div className="flex min-w-0 flex-col leading-tight">
                   <span className="truncate">{option.label}</span>
                   {option.description ? (
-                    <span className="truncate text-muted-foreground text-xs">
+                    <span
+                      className="whitespace-normal break-words text-muted-foreground text-xs"
+                      title={option.description}
+                    >
                       {option.description}
                     </span>
                   ) : null}

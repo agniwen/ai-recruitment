@@ -10,6 +10,7 @@ function recipient(rolePermission: string, userId = "odc") {
   return {
     email: `${userId}@example.com`,
     name: userId,
+    resumeSourceNames: ["运营中心", "研发中心"],
     rolePermission,
     telegram: "@test_odc",
     telegramBoundUsername: "test_odc",
@@ -23,6 +24,7 @@ beforeEach(() => {
   const query = {
     from: vi.fn().mockReturnThis(),
     innerJoin: vi.fn().mockReturnThis(),
+    leftJoin: vi.fn().mockReturnThis(),
     orderBy: mocks.rows,
     where: vi.fn().mockReturnThis(),
   };
@@ -30,6 +32,31 @@ beforeEach(() => {
 });
 
 describe("AI review ODC recipient candidate-management permission", () => {
+  it("ranks department matches first without hiding other departments", async () => {
+    mocks.rows.mockResolvedValue([
+      {
+        ...recipient('{"page":["resumes"]}', "other"),
+        departmentNames: ["其他部门"],
+        recommendationRank: 2,
+      },
+      {
+        ...recipient('{"page":["resumes"]}', "exact"),
+        departmentNames: ["研发"],
+        recommendationRank: 0,
+      },
+      {
+        ...recipient('{"page":["resumes"]}', "all"),
+        departmentNames: ["全部部门"],
+        recommendationRank: 1,
+      },
+    ]);
+    const result = await listAiReviewNotificationRecipients({
+      candidateId: "candidate",
+      organizationId: "org",
+    });
+    expect(result.map((r) => r.userId)).toEqual(["exact", "all", "other"]);
+    expect(result[0].departmentNames).toEqual(["研发"]);
+  });
   it("keeps only ODC query results whose role grants page:resumes", async () => {
     mocks.rows.mockResolvedValue([
       recipient('{"page":["resumes","me"]}', "allowed"),
@@ -39,7 +66,13 @@ describe("AI review ODC recipient candidate-management permission", () => {
     expect(
       await listAiReviewNotificationRecipients({ candidateId: "candidate", organizationId: "org" }),
     ).toEqual([
-      { chatId: "12345", email: "allowed@example.com", name: "allowed", userId: "allowed" },
+      {
+        chatId: "12345",
+        email: "allowed@example.com",
+        name: "allowed",
+        resumeSourceNames: ["运营中心", "研发中心"],
+        userId: "allowed",
+      },
     ]);
   });
 
@@ -60,13 +93,22 @@ describe("AI review ODC recipient candidate-management permission", () => {
     mocks.rows.mockResolvedValue([{ ...recipient('{"page":["resumes"]}'), telegramChatId: null }]);
     expect(
       await listAiReviewNotificationRecipients({ candidateId: "candidate", organizationId: "org" }),
-    ).toEqual([{ chatId: null, email: "odc@example.com", name: "odc", userId: "odc" }]);
+    ).toEqual([
+      {
+        chatId: null,
+        email: "odc@example.com",
+        name: "odc",
+        resumeSourceNames: ["运营中心", "研发中心"],
+        userId: "odc",
+      },
+    ]);
   });
 
   it("rechecks role permissions using the provided approval transaction", async () => {
     const transactionQuery = {
       from: vi.fn().mockReturnThis(),
       innerJoin: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
       orderBy: vi.fn().mockResolvedValue([recipient('{"page":["me"]}')]),
       where: vi.fn().mockReturnThis(),
     };

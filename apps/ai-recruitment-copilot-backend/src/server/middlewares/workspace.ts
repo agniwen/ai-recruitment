@@ -16,6 +16,7 @@ const ACTIVE_MEMBER_COLUMNS = {
   id: true,
   inviteLinkId: true,
   isInterviewer: true,
+  odcScopeMode: true,
   organizationId: true,
   role: true,
   userId: true,

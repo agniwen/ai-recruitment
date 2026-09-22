@@ -8,7 +8,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SearchableMultiSelectProps } from "@/components/ui/searchable-multi-select";
 import { PreRegistrationEditorDialog } from "./studio-pre-registrations-grid";
 
-const mocks = vi.hoisted(() => ({ patch: vi.fn(), post: vi.fn(), sources: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  patch: vi.fn(),
+  post: vi.fn(),
+  scopes: vi.fn(),
+}));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "alpha" }));
 vi.mock("@/lib/client/api/rpc-fetch", () => ({ rpcFetch: (request: unknown) => request }));
@@ -21,8 +25,8 @@ vi.mock("@/lib/client/rpc", () => ({
             "pre-registrations": {
               $post: mocks.post,
               ":id": { $patch: mocks.patch },
-              "resume-source-options": { $get: mocks.sources },
             },
+            workspace: { members: { "odc-scopes": { $get: mocks.scopes } } },
           },
         },
       },
@@ -101,6 +105,7 @@ const record: NonNullable<ComponentProps<typeof PreRegistrationEditorDialog>["re
   email: "odc@example.com",
   id: "entry",
   odcAssignments: [{ jobSeries: "直属", resumeSourceId: "source-a", serviceUnit: "悦达" }],
+  odcScopeMode: "selected",
   recruitingGroupNames: [],
   recruitingRole: "hr",
   registeredUserId: null,
@@ -109,9 +114,20 @@ const record: NonNullable<ComponentProps<typeof PreRegistrationEditorDialog>["re
   workspaceRole: "custom-odc",
   workspaceSlug: "alpha",
 };
-async function render(entry: typeof record | null) {
-  mocks.sources.mockResolvedValue({
-    records: [
+async function render(entry: typeof record | null, existing = false) {
+  mocks.scopes.mockResolvedValue({
+    records: existing
+      ? [
+          {
+            email: record.email,
+            isOdc: true,
+            memberId: "m",
+            odcAssignments: [],
+            odcScopeMode: "all",
+          },
+        ]
+      : [],
+    sources: [
       { id: "source-a", name: "来源 A" },
       { id: "source-b", name: "来源 B" },
     ],
@@ -172,13 +188,43 @@ async function submit() {
   });
 }
 describe("pre-registration ODC fields", () => {
+  it("submits all sources without expanding the source list", async () => {
+    await render(record);
+    const select = [...document.querySelectorAll("select")].find((element) =>
+      [...element.options].some((option) => option.value === "selected"),
+    );
+    if (!select) {
+      throw new Error("Missing scope mode");
+    }
+    act(() => {
+      select.value = "all";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(document.querySelector("select[multiple]")).toBeNull();
+    await submit();
+    expect(mocks.patch).toHaveBeenCalledWith(
+      expect.objectContaining({ json: expect.objectContaining({ odcScopeMode: "all" }) }),
+    );
+  });
+  it("shows the live member scope read-only and links to member management", async () => {
+    await render(record, true);
+    expect(document.querySelector("select[multiple]")).toBeNull();
+    expect(document.body.textContent).toContain("全部部门/中心（包含以后新增）");
+    expect(document.querySelector('a[href="/w/alpha/studio/members"]')).not.toBeNull();
+    await submit();
+    expect(mocks.patch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ odcAssignments: [], odcScopeMode: "selected" }),
+      }),
+    );
+  });
   it("shows source options only when the selected role is marked ODC", async () => {
     await render(null);
     expect(document.querySelector("select[multiple]")).toBeNull();
-    expect(mocks.sources).not.toHaveBeenCalled();
     await chooseRole("custom-odc");
     expect(document.querySelector("select[multiple]")).not.toBeNull();
-    expect(mocks.sources).toHaveBeenCalledWith({ param: { slug: "alpha" } });
+    expect(mocks.scopes).toHaveBeenCalledWith({ param: { slug: "alpha" } });
+    expect(document.querySelector("select[multiple]")?.textContent).toContain("来源 A");
     await chooseRole("member");
     expect(document.querySelector("select[multiple]")).toBeNull();
   });

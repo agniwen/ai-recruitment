@@ -211,6 +211,14 @@ const navGroups: NavGroup[] = [
         title: "预录入信息",
       },
       {
+        action: "odcResponsibilities",
+        adminOnly: true,
+        icon: UserCogIcon,
+        path: "/studio/odc-responsibilities",
+        resource: "page",
+        title: "ODC 负责范围",
+      },
+      {
         action: "permissions",
         icon: ShieldCheckIcon,
         path: "/studio/permissions",

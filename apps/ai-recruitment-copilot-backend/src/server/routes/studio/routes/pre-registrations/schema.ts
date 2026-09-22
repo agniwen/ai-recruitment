@@ -1,4 +1,7 @@
-import { preRegistrationOdcAssignmentsSchema } from "@arc/db-schema/pre-registration";
+import {
+  odcScopeModeSchema,
+  preRegistrationOdcAssignmentsSchema,
+} from "@arc/db-schema/pre-registration";
 import { z } from "zod";
 
 export const preRegistrationRecruitingRoleSchema = z.enum([
@@ -13,6 +16,7 @@ export const studioPreRegistrationInputSchema = z
     displayName: z.string().trim().min(1, "请输入花名。").max(100),
     email: z.string().trim().email("请输入有效邮箱。"),
     odcAssignments: preRegistrationOdcAssignmentsSchema.default([]),
+    odcScopeMode: odcScopeModeSchema.default("selected"),
     recruitingGroupNames: z.array(z.string().trim().min(1).max(80)).max(20),
     recruitingRole: preRegistrationRecruitingRoleSchema,
     telegram: z.string().trim().min(1, "请输入 TG 号。").max(120),

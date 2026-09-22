@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { memberOdcScopeRouter } from "./routes/odc-scope/route";
+import { listMemberOdcScopes } from "./routes/odc-scope/dao";
 import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import { manageWorkspaceMember } from "./role-management";
 import { zValidator } from "@hono/zod-validator";
@@ -15,6 +17,13 @@ import { listOdcMemberCandidates } from "../../../hiring-units/odc-assignment";
 
 export const membersRouter = factory
   .createApp()
+  .get("/odc-scopes", async (c) => {
+    if (!c.var.activeOrg || !isWorkspaceAdministratorRole(c.var.member?.role)) {
+      return c.json({ error: "只有工作区管理员可以查看 ODC 负责范围。" }, 403);
+    }
+    return c.json(await listMemberOdcScopes(c.var.activeOrg.id), 200);
+  })
+  .route("/:memberId/odc-scope", memberOdcScopeRouter)
   .patch(
     "/:memberId/role",
     requirePermission("member", "update"),

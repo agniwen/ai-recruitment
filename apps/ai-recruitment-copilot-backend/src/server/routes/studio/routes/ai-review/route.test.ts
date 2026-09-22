@@ -89,7 +89,13 @@ function request(
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.recipients.mockResolvedValue([
-    { chatId: "10001", email: "odc@example.com", name: "ODC甲", userId: "notify-a" },
+    {
+      chatId: "10001",
+      email: "odc@example.com",
+      name: "ODC甲",
+      resumeSourceNames: ["运营中心", "研发中心"],
+      userId: "notify-a",
+    },
   ]);
   mocks.list.mockResolvedValue({ records: [], total: 0 });
   mocks.detail.mockResolvedValue({
@@ -225,7 +231,13 @@ describe("AI approval notification recipients", () => {
     });
     expect(await response.json()).toEqual({
       recipients: [
-        { email: "odc@example.com", name: "ODC甲", telegramBound: true, userId: "notify-a" },
+        {
+          email: "odc@example.com",
+          name: "ODC甲",
+          resumeSourceNames: ["运营中心", "研发中心"],
+          telegramBound: true,
+          userId: "notify-a",
+        },
       ],
     });
   });

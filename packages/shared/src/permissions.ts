@@ -36,6 +36,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "mailIngestAccounts",
   "permissions",
   "preRegistrations",
+  "odcResponsibilities",
   "globalConfig",
 ] as const;
 
@@ -58,6 +59,7 @@ export const STUDIO_PAGE_PERMISSION_LABELS = {
   me: "个人中心",
   members: "成员与招聘组",
   odcAnalysis: "ODC分析",
+  odcResponsibilities: "ODC 负责范围",
   permissions: "角色与权限",
   preRegistrations: "预录入信息",
   resumePool: "简历池",

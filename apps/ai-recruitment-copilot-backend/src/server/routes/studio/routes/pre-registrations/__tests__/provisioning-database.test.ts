@@ -17,7 +17,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => {
       values: (values: unknown) => ({
         onConflictDoNothing: () => {
           mocks.inserts.push({ conflict: "nothing", table, values });
-          return Promise.resolve();
+          return { returning: () => Promise.resolve([]) };
         },
       }),
     }),

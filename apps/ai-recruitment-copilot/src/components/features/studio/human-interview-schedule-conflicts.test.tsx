@@ -120,6 +120,12 @@ async function renderDialog() {
       <QueryClientProvider client={queryClient}>
         <ScheduleRoundDialog
           open
+          availableTimeSlots={[
+            {
+              endAt: "2026-09-19T09:00:00Z",
+              startAt: "2026-09-19T01:00:00Z",
+            },
+          ]}
           candidateId="candidate"
           existingCount={0}
           defaultInterviewerIds={defaultInterviewerIds}
@@ -161,11 +167,12 @@ afterEach(() => {
 describe("human interview scheduling conflict confirmation", () => {
   it("checks the full time range before creating the round or meeting", async () => {
     await renderDialog();
-    expect(document.body.textContent).toContain("以中国标准时间（UTC+8）设置");
+    expect(document.body.textContent).toContain("以中国标准时间（UTC+8）设置。");
     expect(document.body.textContent).toContain("有效时间至（中国标准时间）");
     expect(document.body.textContent).toContain("面试时间换算");
     expect(document.body.textContent).toContain("有效时间换算");
-    expect(document.body.textContent).toContain("悬停查看其他地区");
+    expect(document.body.textContent).toContain("候选人可接受的预约时间");
+    expect(document.body.textContent).toContain("安排面试时优先参考以下时间段");
     await click("保存");
     expect(mocks.check).toHaveBeenCalledWith("world", {
       interviewerIds: ["001"],

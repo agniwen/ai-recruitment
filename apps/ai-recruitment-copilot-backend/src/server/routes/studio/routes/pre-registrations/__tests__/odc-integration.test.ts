@@ -75,7 +75,7 @@ describe.skipIf(!testSchema)("pre-registration ODC persistence in an isolated sc
     await closeDatabase();
   }, 30_000);
 
-  it("stores multiple scopes, provisions without recruiting groups and reconciles edits", async () => {
+  it("stores initial scopes but preserves member-owned scopes on pre-registration edits", async () => {
     const payload = input("odc@example.com");
     const created = await createStudioPreRegistration("alpha", payload);
     if (typeof created === "string") {
@@ -108,10 +108,10 @@ describe.skipIf(!testSchema)("pre-registration ODC persistence in an isolated sc
     await updateStudioPreRegistration("alpha", created.id, edited);
     expect(await assignments(registered.id)).toEqual([
       { jobSeries: null, resumeSourceId: "manual", serviceUnit: null },
-      { jobSeries: null, resumeSourceId: "source-b", serviceUnit: null },
+      ...payload.odcAssignments,
     ]);
     await provisionPreRegisteredUser({ email: payload.email, userId: "odc-user" });
-    expect(await assignments(registered.id)).toHaveLength(2);
+    expect(await assignments(registered.id)).toHaveLength(3);
     await updateStudioPreRegistration("alpha", created.id, {
       ...edited,
       odcAssignments: [],
@@ -119,6 +119,7 @@ describe.skipIf(!testSchema)("pre-registration ODC persistence in an isolated sc
     });
     expect(await assignments(registered.id)).toEqual([
       { jobSeries: null, resumeSourceId: "manual", serviceUnit: null },
+      ...payload.odcAssignments,
     ]);
   }, 120_000);
 

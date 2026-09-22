@@ -99,6 +99,9 @@ import {
 import { useWorkspaceMemberInterviewerControl } from "@/components/features/studio/members/member-interviewer-control";
 import { useWorkspaceMemberDirectManagerControl } from "@/components/features/studio/members/member-direct-manager-control";
 import { MemberBulkDirectManagerDialog } from "@/components/features/studio/members/member-bulk-direct-manager-dialog";
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
+import { useMemberOdcScopeControl } from "./member-odc-scope-control";
+import { MemberOdcScopeEditor } from "./member-odc-scope-dialog";
 
 export function MembersManagementPage() {
   const slug = useWorkspaceSlug();
@@ -129,6 +132,10 @@ export function MembersManagementPage() {
   const [newGroupName, setNewGroupName] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [editProfileMember, setEditProfileMember] = useState<MemberRow | null>(null);
+  const [editOdcMember, setEditOdcMember] = useState<MemberRow | null>(null);
+  const canManageOdcScope = isWorkspaceAdministratorRole(workspaceMemberRole);
+  const odcScopes = useMemberOdcScopeControl(canManageOdcScope);
+  const odcByMember = odcScopes.byMember;
 
   // 「最近活跃」按 userId 索引：服务端取 COALESCE(MAX(session.updatedAt),
   // user.lastActiveAt)——前者给当前活跃 session 5 分钟级的滚动更新，后者
@@ -548,6 +555,7 @@ export function MembersManagementPage() {
       );
       await refetch();
       toast.success("工作区角色已更新");
+      await odcScopes.refetch();
       if (row.userId === session?.user?.id || role === "owner") {
         window.location.reload();
       }
@@ -682,6 +690,7 @@ export function MembersManagementPage() {
         title: "工作区角色",
       }),
       ...(directManagerColumn ? [directManagerColumn] : []),
+      ...odcScopes.columns,
       ...(telegramColumn ? [telegramColumn] : []),
       interviewerColumn,
       customColumn<MemberRow>({
@@ -708,7 +717,9 @@ export function MembersManagementPage() {
       actionsColumn<MemberRow>({
         menu: buildMemberActionMenu({
           canDelete,
+          canEditOdcScope: (row) => canManageOdcScope && odcByMember.get(row.id)?.isOdc === true,
           canUpdate: canUpdate && memberProfilesReady,
+          onEditOdcScope: setEditOdcMember,
           onEditProfile: setEditProfileMember,
           onRemove: removeMember,
         }),
@@ -729,6 +740,9 @@ export function MembersManagementPage() {
       pending,
       session?.user?.id,
       telegramColumn,
+      canManageOdcScope,
+      odcByMember,
+      odcScopes.columns,
     ],
   );
 
@@ -757,6 +771,7 @@ export function MembersManagementPage() {
         onOpenChange={(open) => !open && setEditProfileMember(null)}
         onUpdated={() => Promise.all([refetch(), refetchMemberProfiles()])}
       />
+      <MemberOdcScopeEditor member={editOdcMember} onClose={() => setEditOdcMember(null)} />
 
       <Tabs className="space-y-4" onValueChange={handleTabChange} value={activeTab}>
         <TabsList className="grid w-full grid-cols-2 sm:w-fit">

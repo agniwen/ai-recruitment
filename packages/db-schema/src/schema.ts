@@ -270,6 +270,7 @@ export const member = pgTable(
       onDelete: "set null",
     }),
     isInterviewer: boolean("is_interviewer").default(false).notNull(),
+    odcScopeMode: text("odc_scope_mode").$type<"all" | "selected">().default("selected").notNull(),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -280,6 +281,7 @@ export const member = pgTable(
   },
   (table) => [
     uniqueIndex("member_user_org_uq").on(table.userId, table.organizationId),
+    check("member_odc_scope_mode_check", sql`${table.odcScopeMode} IN ('all', 'selected')`),
     uniqueIndex("member_organization_id_id_uq").on(table.organizationId, table.id),
     index("member_organization_idx").on(table.organizationId),
   ],
@@ -344,6 +346,7 @@ export const platformPreRegistration = pgTable(
       .$type<PreRegistrationOdcAssignment[]>()
       .default([])
       .notNull(),
+    odcScopeMode: text("odc_scope_mode").$type<"all" | "selected">().default("selected").notNull(),
     recruitingGroupNames: text("recruiting_group_names").array().notNull(),
     recruitingRole: text("recruiting_role").notNull(),
     telegram: text("telegram").notNull(),
@@ -362,6 +365,10 @@ export const platformPreRegistration = pgTable(
     uniqueIndex("platform_pre_registration_workspace_email_uq").on(
       table.workspaceSlug,
       sql`lower(${table.email})`,
+    ),
+    check(
+      "pre_registration_odc_scope_mode_check",
+      sql`${table.odcScopeMode} IN ('all', 'selected')`,
     ),
     index("platform_pre_registration_manager_email_idx").on(
       table.workspaceSlug,
@@ -946,6 +953,44 @@ export const department = pgTable(
     index("department_organization_idx").on(table.organizationId),
     index("department_hiring_unit_idx").on(table.organizationId, table.hiringUnitId),
     uniqueIndex("department_organization_id_id_uq").on(table.organizationId, table.id),
+  ],
+);
+
+// Recommendation metadata only; candidate access still requires explicit approval/assignment.
+export const odcDepartmentResponsibility = pgTable(
+  "odc_department_responsibility",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // An explicit NULL row means all departments; no rows means unconfigured.
+    departmentId: text("department_id"),
+    id: text("id").primaryKey(),
+    memberId: text("member_id").notNull(),
+    organizationId: text("organization_id").notNull(),
+    resumeSourceId: text("resume_source_id").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.resumeSourceId, table.memberId],
+      foreignColumns: [resumeSourceOdcMember.resumeSourceId, resumeSourceOdcMember.memberId],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.memberId],
+      foreignColumns: [member.organizationId, member.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.resumeSourceId],
+      foreignColumns: [resumeSource.organizationId, resumeSource.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.departmentId],
+      foreignColumns: [department.organizationId, department.id],
+    }).onDelete("cascade"),
+    uniqueIndex("odc_department_responsibility_uq").on(
+      table.organizationId,
+      table.memberId,
+      table.resumeSourceId,
+      sql`coalesce(${table.departmentId}, '')`,
+    ),
   ],
 );
 

@@ -14,10 +14,7 @@ import {
   buildProspectiveManagerRelationships,
   hasPreRegistrationManagerCycle,
 } from "./provisioning";
-import {
-  applyPreRegistrationOdcAssignments,
-  validatePreRegistrationOdcAssignments,
-} from "./odc-assignments";
+import { validatePreRegistrationOdcAssignments } from "./odc-assignments";
 import type { StudioPreRegistrationInput } from "./schema";
 
 const directManagerPreRegistration = alias(
@@ -113,6 +110,7 @@ export async function queryPaginatedStudioPreRegistrations(
         email: platformPreRegistration.email,
         id: platformPreRegistration.id,
         odcAssignments: platformPreRegistration.odcAssignments,
+        odcScopeMode: platformPreRegistration.odcScopeMode,
         recruitingGroupNames: platformPreRegistration.recruitingGroupNames,
         recruitingRole: platformPreRegistration.recruitingRole,
         registeredUserId: user.id,
@@ -333,6 +331,7 @@ export function createStudioPreRegistration(
       organizationId,
       input.workspaceRole,
       input.odcAssignments,
+      input.odcScopeMode,
     );
     if (odcError) {
       return odcError;
@@ -371,6 +370,7 @@ export function updateStudioPreRegistration(
       organizationId,
       input.workspaceRole,
       input.odcAssignments,
+      input.odcScopeMode,
     );
     if (odcError) {
       return odcError;
@@ -434,20 +434,6 @@ export function updateStudioPreRegistration(
             sql`lower(${platformPreRegistration.directManagerEmail}) = ${existing.email.toLowerCase()}`,
           ),
         );
-    }
-    const [registeredUser] = await tx
-      .select({ id: user.id })
-      .from(user)
-      .where(sql`lower(${user.email}) = ${input.email.toLowerCase()}`)
-      .limit(1);
-    if (registeredUser) {
-      await applyPreRegistrationOdcAssignments({
-        assignments: input.odcAssignments,
-        organizationId,
-        previousAssignments: emailChanged ? [] : existing.odcAssignments,
-        tx,
-        userId: registeredUser.id,
-      });
     }
     return changed[0] ?? "not_found";
   });

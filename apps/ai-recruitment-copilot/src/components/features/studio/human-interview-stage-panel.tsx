@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useReducer } from "react";
 import { toast } from "sonner";
+import type { ResumeAvailableTimeSlot } from "@arc/shared/studio-resumes";
 import type {
   HumanInterviewMeetingRecord,
   HumanInterviewRoundRecord,
@@ -35,13 +36,16 @@ import {
   CompleteRoundDialog,
   ScheduleRoundDialog,
 } from "./human-interview-stage-dialogs";
+import { HumanInterviewAvailableTimeSlotsInline } from "./human-interview-available-time-slots";
 import { EndMeetingDialog, MeetingLinksDialog } from "./human-interview-stage-meetings";
 import { RoundCard } from "./human-interview-stage-rounds";
 import { useHumanInterviewScheduleConfirmation } from "./use-human-interview-schedule-confirmation";
 
 const EMPTY_INTERVIEWER_IDS: string[] = [];
+const EMPTY_AVAILABLE_TIME_SLOTS: ResumeAvailableTimeSlot[] = [];
 
 interface PanelProps {
+  availableTimeSlots?: ResumeAvailableTimeSlot[];
   candidateId: string;
   candidateName: string;
   canCreate?: boolean;
@@ -101,6 +105,7 @@ function dialogReducer(state: DialogState, action: DialogAction): DialogState {
 }
 
 export function HumanInterviewStagePanel({
+  availableTimeSlots = EMPTY_AVAILABLE_TIME_SLOTS,
   candidateId,
   candidateName,
   canCreate = true,
@@ -231,9 +236,10 @@ export function HumanInterviewStagePanel({
     <div className="space-y-4">
       <div>
         <h3 className="font-medium text-sm">真人复面进度</h3>
-        <p className="text-muted-foreground text-xs">
-          管理 {candidateName} 的真人复面：安排时间 / 录入面试官 / 标记结果。
-        </p>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted-foreground text-xs">
+          <span>管理 {candidateName} 的真人复面：安排时间 / 录入面试官 / 标记结果。</span>
+          <HumanInterviewAvailableTimeSlotsInline slots={availableTimeSlots} />
+        </div>
       </div>
 
       {roundsContent}
@@ -253,6 +259,7 @@ export function HumanInterviewStagePanel({
       )}
 
       <ScheduleRoundDialog
+        availableTimeSlots={availableTimeSlots}
         candidateId={candidateId}
         defaultInterviewerIds={resumeJobDescriptionHumanInterviewerIds}
         existingCount={rounds.length}

@@ -1,7 +1,10 @@
 "use client";
 
-import type { PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
-import { PreRegistrationOdcFields } from "./pre-registration-odc-fields";
+import type { OdcScopeMode, PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
+import {
+  PreRegistrationOdcConfiguration,
+  usePreRegistrationOdcConfiguration,
+} from "./pre-registration-odc-configuration";
 import { IconClipboardList, IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -66,6 +69,7 @@ interface StudioPreRegistrationRecord {
   email: string;
   id: string;
   odcAssignments: PreRegistrationOdcAssignment[];
+  odcScopeMode: OdcScopeMode;
   recruitingGroupNames: string[];
   recruitingRole: RecruitingRole;
   registeredUserId: string | null;
@@ -94,6 +98,7 @@ interface EditorForm {
   displayName: string;
   email: string;
   odcAssignments: PreRegistrationOdcAssignment[];
+  odcScopeMode: OdcScopeMode;
   recruitingGroupNames: string;
   recruitingRole: RecruitingRole;
   telegram: string;
@@ -105,11 +110,25 @@ const EMPTY_FORM: EditorForm = {
   displayName: "",
   email: "",
   odcAssignments: [],
+  odcScopeMode: "selected",
   recruitingGroupNames: "",
   recruitingRole: "hr",
   telegram: "",
   workspaceRole: "member",
 };
+
+function odcRegistrationInput(form: EditorForm, editable: boolean) {
+  if (!editable) {
+    return { odcAssignments: [], odcScopeMode: "selected" as const };
+  }
+  return {
+    odcAssignments: form.odcAssignments.map((assignment) => ({
+      ...assignment,
+      serviceUnit: assignment.serviceUnit?.trim() || null,
+    })),
+    odcScopeMode: form.odcScopeMode,
+  };
+}
 
 const ROLE_LABELS: Record<RecruitingRole, string> = {
   hr: "招聘专员",
@@ -133,6 +152,7 @@ function toEditorForm(record: StudioPreRegistrationRecord | null): EditorForm {
     displayName: record.displayName,
     email: record.email,
     odcAssignments: record.odcAssignments ?? [],
+    odcScopeMode: record.odcScopeMode ?? "selected",
     recruitingGroupNames: record.recruitingGroupNames.join("，"),
     recruitingRole: record.recruitingRole,
     telegram: record.telegram,
@@ -181,40 +201,21 @@ export function PreRegistrationEditorDialog({
     [form.email, managerOptions],
   );
   const isOdc = roleOptions.find((option) => option.value === form.workspaceRole)?.isOdc === true;
-  const sourcesQuery = useQuery({
-    enabled: open && isOdc,
-    queryFn: () =>
-      rpcFetch<{ records: { id: string; name: string }[] }>(
-        rpc.api.w[":slug"].studio["pre-registrations"]["resume-source-options"].$get({
-          param: { slug },
-        }),
-        "加载部门/中心（来源）失败",
-      ),
-    queryKey: ["pre-registration-resume-source-options", slug],
-  });
+  const odcConfiguration = usePreRegistrationOdcConfiguration(open, form.email, isOdc, form);
   const groupNames = parseGroupNames(form.recruitingGroupNames);
   const canSubmit =
     form.displayName.trim().length > 0 &&
     form.email.trim().length > 0 &&
     form.telegram.trim().length > 0 &&
     roleOptions.some((option) => option.value === form.workspaceRole) &&
-    (!isOdc ||
-      (sourcesQuery.isSuccess &&
-        form.odcAssignments.every((assignment) =>
-          sourcesQuery.data.records.some((source) => source.id === assignment.resumeSourceId),
-        )));
+    odcConfiguration.valid;
   const mutation = useMutation({
     mutationFn: () => {
       const json = {
         directManagerEmail: form.directManagerEmail,
         displayName: form.displayName,
         email: form.email,
-        odcAssignments: isOdc
-          ? form.odcAssignments.map((assignment) => ({
-              ...assignment,
-              serviceUnit: assignment.serviceUnit?.trim() || null,
-            }))
-          : [],
+        ...odcRegistrationInput(form, odcConfiguration.editable),
         recruitingGroupNames: groupNames,
         recruitingRole: form.recruitingRole,
         telegram: form.telegram,
@@ -338,6 +339,9 @@ export function PreRegistrationEditorDialog({
                       odcAssignments: roleOptions.find((option) => option.value === value)?.isOdc
                         ? current.odcAssignments
                         : [],
+                      odcScopeMode: roleOptions.find((option) => option.value === value)?.isOdc
+                        ? current.odcScopeMode
+                        : "selected",
                       workspaceRole: value,
                     }));
                   }
@@ -363,18 +367,12 @@ export function PreRegistrationEditorDialog({
                 首次加入工作区时自动设置；已有成员的工作区角色保持不变。
               </FieldDescription>
             </Field>
-            {isOdc ? (
-              <PreRegistrationOdcFields
-                assignments={form.odcAssignments}
-                sources={sourcesQuery.data?.records ?? []}
-                disabled={mutation.isPending}
-                loading={sourcesQuery.isPending}
-                failed={sourcesQuery.isError}
-                onChange={(odcAssignments) =>
-                  setForm((current) => ({ ...current, odcAssignments }))
-                }
-              />
-            ) : null}
+            <PreRegistrationOdcConfiguration
+              configuration={odcConfiguration}
+              value={form}
+              disabled={mutation.isPending}
+              onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+            />
             <Field data-disabled={mutation.isPending}>
               <FieldLabel htmlFor="pre-registration-role">招聘角色</FieldLabel>
               <Select

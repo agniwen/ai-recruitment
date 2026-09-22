@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidateOdcScopeQueries } from "./members/member-odc-scope-query";
 import { toast } from "sonner";
 import type { OdcAssignmentSummary } from "@arc/shared/hiring-units";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,7 @@ export function OdcAssignmentDialog({
   target,
 }: OdcAssignmentDialogProps) {
   const slug = useWorkspaceSlug();
+  const queryClient = useQueryClient();
   const [assignments, setAssignments] = useState<OdcAssignmentDraft[]>([]);
   const [saving, setSaving] = useState(false);
   const candidatesQuery = useOdcCandidates(open);
@@ -51,22 +54,32 @@ export function OdcAssignmentDialog({
   useEffect(() => {
     if (open) {
       setAssignments(
-        target?.odcMembers.map((member) => ({
-          canApproveAiReview: member.canApproveAiReview ?? false,
-          jobSeries: member.jobSeries,
-          memberId: member.memberId,
-          serviceUnit: member.serviceUnit ?? "",
-        })) ?? [],
+        target?.odcMembers
+          .filter((member) => member.odcScopeMode !== "all")
+          .map((member) => ({
+            canApproveAiReview: member.canApproveAiReview ?? false,
+            jobSeries: member.jobSeries,
+            memberId: member.memberId,
+            serviceUnit: member.serviceUnit ?? "",
+          })) ?? [],
       );
     }
   }, [open, target]);
 
   const options = useMemo(() => {
-    const candidates = candidatesQuery.data ?? [];
+    const candidates = (candidatesQuery.data ?? []).filter(
+      (candidate) =>
+        !target?.odcMembers.some(
+          (row) => row.memberId === candidate.memberId && row.odcScopeMode === "all",
+        ),
+    );
     const next: SearchableSelectOption[] = candidates.map((candidate) =>
       toOdcCandidateOption(candidate),
     );
     for (const current of target?.odcMembers ?? []) {
+      if (current.odcScopeMode === "all") {
+        continue;
+      }
       if (!candidates.some((candidate) => candidate.memberId === current.memberId)) {
         next.unshift({
           avatarUrl: current.image,
@@ -97,6 +110,7 @@ export function OdcAssignmentDialog({
         param: { id: target.id, slug },
       });
       await rpcFetch(request, "设置 ODC 失败");
+      await invalidateOdcScopeQueries(queryClient, slug);
       toast.success(assignments.length > 0 ? "ODC 已设置" : "ODC 设置已清除");
       onSaved();
       onOpenChange(false);
@@ -117,6 +131,20 @@ export function OdcAssignmentDialog({
             ODC”的成员；序列或服务单位留空表示不限。
           </DialogDescription>
         </DialogHeader>
+        {target?.odcMembers.some((row) => row.odcScopeMode === "all") ? (
+          <p className="text-sm text-muted-foreground">
+            以下成员负责全部部门/中心：
+            {target.odcMembers
+              .filter((row) => row.odcScopeMode === "all")
+              .map((row) => row.name)
+              .join("、")}
+            。
+            <a className="underline" href={`/w/${encodeURIComponent(slug)}/studio/members`}>
+              前往成员管理调整范围
+            </a>
+            。
+          </p>
+        ) : null}
         <Field>
           <FieldLabel htmlFor="odc-members">ODC 人员（可多选）</FieldLabel>
           <FieldContent>

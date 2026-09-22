@@ -1,4 +1,5 @@
 import { aiReviewRouter } from "./routes/ai-review/route";
+import { odcResponsibilitiesRouter } from "./routes/odc-responsibilities/route";
 import { resumeSourcesRouter } from "./routes/resume-sources/route";
 import { studioPreRegistrationsRouter } from "./routes/pre-registrations/route";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
@@ -23,6 +24,7 @@ import { workspaceRouter } from "./routes/workspace/route";
 export const studioRouter = factory
   .createApp()
   .route("/ai-review", aiReviewRouter)
+  .route("/odc-responsibilities", odcResponsibilitiesRouter)
   .route("/pre-registrations", studioPreRegistrationsRouter)
   .route("/calendar", studioCalendarRouter)
   .route("/interviews", studioInterviewsRouter)

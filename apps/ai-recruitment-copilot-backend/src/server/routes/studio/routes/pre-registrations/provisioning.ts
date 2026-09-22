@@ -1,4 +1,4 @@
-import type { PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
+import type { OdcScopeMode, PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
 import { applyPreRegistrationOdcAssignments } from "./odc-assignments";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -22,6 +22,7 @@ export interface PreRegistrationProvisioningRecord {
   email: string;
   id: string;
   odcAssignments: PreRegistrationOdcAssignment[];
+  odcScopeMode?: OdcScopeMode;
   recruitingGroupNames: string[];
   recruitingRole: PreRegistrationRecruitingRole;
   telegram: string;
@@ -178,6 +179,7 @@ async function findRegistrationsByEmail(
       email: platformPreRegistration.email,
       id: platformPreRegistration.id,
       odcAssignments: platformPreRegistration.odcAssignments,
+      odcScopeMode: platformPreRegistration.odcScopeMode,
       recruitingGroupNames: platformPreRegistration.recruitingGroupNames,
       recruitingRole: platformPreRegistration.recruitingRole,
       telegram: platformPreRegistration.telegram,
@@ -219,22 +221,26 @@ async function applyRegistration(
       .update(user)
       .set(buildPreRegistrationProfileUpdate(registration))
       .where(eq(user.id, userId));
-    await tx
+    const inserted = await tx
       .insert(member)
       .values({
         id: `mem_${crypto.randomUUID()}`,
+        odcScopeMode: registration.odcScopeMode ?? "selected",
         organizationId: workspace.id,
         role: registration.workspaceRole,
         userId,
       })
-      .onConflictDoNothing({ target: [member.userId, member.organizationId] });
+      .onConflictDoNothing({ target: [member.userId, member.organizationId] })
+      .returning({ id: member.id });
 
-    await applyPreRegistrationOdcAssignments({
-      assignments: registration.odcAssignments,
-      organizationId: workspace.id,
-      tx,
-      userId,
-    });
+    if (inserted.length > 0) {
+      await applyPreRegistrationOdcAssignments({
+        assignments: registration.odcAssignments,
+        organizationId: workspace.id,
+        tx,
+        userId,
+      });
+    }
 
     if (registration.recruitingGroupNames.length === 0) {
       return;

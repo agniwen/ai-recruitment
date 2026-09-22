@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
+import type { OdcScopeMode, PreRegistrationOdcAssignment } from "@arc/db-schema/pre-registration";
 import {
   member,
   organizationRole,
@@ -15,8 +15,9 @@ export async function validatePreRegistrationOdcAssignments(
   organizationId: string,
   workspaceRole: string,
   assignments: PreRegistrationOdcAssignment[],
+  odcScopeMode: OdcScopeMode = "selected",
 ): Promise<"invalid_odc_role" | "invalid_resume_source" | null> {
-  if (assignments.length === 0) {
+  if (assignments.length === 0 && odcScopeMode === "selected") {
     return null;
   }
   const [role] = await tx
@@ -30,6 +31,9 @@ export async function validatePreRegistrationOdcAssignments(
     );
   if (!role?.isOdc) {
     return "invalid_odc_role";
+  }
+  if (assignments.length === 0) {
+    return null;
   }
   const sources = await tx
     .select({ id: resumeSource.id })
