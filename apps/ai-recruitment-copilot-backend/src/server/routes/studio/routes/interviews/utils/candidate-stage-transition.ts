@@ -3,7 +3,10 @@ import { canApproveCandidateAiReview } from "../dao/ai-review-approval";
 import { and, eq, sql } from "drizzle-orm";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
+import {
+  invalidateStudioInterviewCaches,
+  safeUpdateTag,
+} from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import {
   getHumanInterviewOfferReadinessError,
   loadHumanInterviewRoundReadiness,
@@ -24,6 +27,7 @@ import type { CandidateTransitionInput } from "./candidate-transition";
 import { notifyCandidateStageChange } from "./candidate-stage-notification";
 import { refreshDirectUploadDuplicateMatchesBeforeHire } from "./direct-upload-dedup-refresh";
 import { autoCloseRelatedCandidatesAfterHire } from "./related-candidate-auto-closure";
+import { adjustJobDescriptionOnboardedCount } from "../../job-descriptions/utils/job-description-audit";
 
 export type CandidateStageTransitionProvenance =
   | { kind: "manual" }
@@ -296,8 +300,10 @@ export async function transitionCandidateStage(command: {
       now,
     });
     const isHired = command.input.pipelineStage === "closed" && command.input.outcome === "hired";
+    const wasHired = existing.pipelineStage === "closed" && existing.outcome === "hired";
     const isReactivating =
       existing.pipelineStage === "closed" && command.input.pipelineStage !== "closed";
+    const onboardedCountDelta = Number(isHired) - Number(wasHired);
     const onboardingFactPatch = resolveOnboardingFactPatch({
       isHired,
       isReactivating,
@@ -322,6 +328,17 @@ export async function transitionCandidateStage(command: {
           : {}),
       })
       .where(eq(studioInterview.id, command.candidateId));
+    if (onboardedCountDelta !== 0 && existing.jobDescriptionId) {
+      await adjustJobDescriptionOnboardedCount(tx, {
+        candidateId: command.candidateId,
+        delta: onboardedCountDelta as -1 | 1,
+        jobDescriptionId: existing.jobDescriptionId,
+        now,
+        operatorId: command.operatorId,
+        operatorRole: command.operatorRole,
+        organizationId: command.organizationId,
+      });
+    }
     if (
       approvalRecipients.length > 0 ||
       (isReactivating && command.input.pipelineStage === "ai_review")
@@ -403,11 +420,15 @@ export async function transitionCandidateStage(command: {
         toOutcome: transition.patch.outcome,
         toStage: transition.patch.pipelineStage,
       },
+      updatedJobDescriptionId: onboardedCountDelta === 0 ? null : existing.jobDescriptionId,
     } as const;
   });
 
   if (result.kind === "ok") {
     invalidateStudioInterviewCaches(command.organizationId);
+    if (result.updatedJobDescriptionId) {
+      safeUpdateTag(`job-descriptions:${command.organizationId}`);
+    }
     await notifyCandidateStageChange({
       candidateId: command.candidateId,
       organizationId: command.organizationId,

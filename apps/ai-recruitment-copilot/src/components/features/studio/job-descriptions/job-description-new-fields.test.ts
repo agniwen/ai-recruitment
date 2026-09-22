@@ -46,6 +46,8 @@ describe("job description recruiting defaults", () => {
     expect(formSource).toContain("AI面试官（可选）");
     expect(formSource).toContain('<form.Field name="humanInterviewerIds">');
     expect(formSource).toContain("真人面试官（可选）");
+    expect(formSource).toContain('placeholder="根据 HC 和已到岗自动计算"');
+    expect(formSource).toContain("disabled={readOnly || isEdit}");
   });
 
   it("exposes Google Sheet mapped fields on the basic tab", () => {

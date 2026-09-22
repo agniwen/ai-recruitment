@@ -46,6 +46,11 @@ type ManualCloseOutcome = Exclude<CandidateOutcome, "in_pipeline" | "rejected">;
 
 // 人工结案不提供「已淘汰」；rejected 仍保留给自动结束流程与历史数据。
 const CLOSE_OUTCOMES: ManualCloseOutcome[] = ["hired", "withdrawn", "archived"];
+const CLOSE_OUTCOME_LABELS: Record<ManualCloseOutcome, string> = {
+  archived: "不推进入职",
+  hired: candidateOutcomeMeta.hired.label,
+  withdrawn: "候选人拒绝offer",
+};
 
 const REACTIVATE_TARGET_STAGE = "screening" as const;
 const REACTIVATE_TARGET_STAGE_LABEL = "简历初筛";
@@ -151,7 +156,7 @@ function CloseDialog({
           outcome,
           pipelineStage: "closed",
         });
-        toast.success(`已标记为「${candidateOutcomeMeta[outcome].label}」`);
+        toast.success(`已标记为「${CLOSE_OUTCOME_LABELS[outcome]}」`);
         // 详情面板缓存也刷一下，让 action bar 立刻显示「重新激活」。
         // Invalidate detail cache so the action bar swaps to "reactivate".
         await queryClient.invalidateQueries({
@@ -185,7 +190,7 @@ function CloseDialog({
               <div className="flex items-center gap-2" key={value}>
                 <RadioGroupItem id={`outcome-${value}`} value={value} />
                 <Label className="cursor-pointer text-sm" htmlFor={`outcome-${value}`}>
-                  {candidateOutcomeMeta[value].label}
+                  {CLOSE_OUTCOME_LABELS[value]}
                 </Label>
               </div>
             ))}
@@ -272,7 +277,7 @@ function CloseDialog({
 
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="close-feedback">
-              对外反馈话术（可选，给候选人看）
+              拒绝原因
             </Label>
             <Textarea
               id="close-feedback"

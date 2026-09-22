@@ -64,29 +64,24 @@ export function HumanInterviewAvailableTimeSlotsInline({
   }
 
   return (
-    <span className={cn("inline-flex flex-wrap items-center gap-x-1.5 gap-y-1", className)}>
-      <span className="font-medium text-foreground">候选人可预约时间：</span>
+    <span
+      className={cn(
+        "inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted-foreground text-sm",
+        className,
+      )}
+    >
+      <span className="font-medium">候选人可预约时间：</span>
       {slots.map((slot, index) => (
         <span
           className="inline-flex items-center gap-1.5"
           key={`${slot.startAt}-${slot.endAt}-${index}`}
         >
           {index > 0 ? <span className="text-muted-foreground">、</span> : null}
-          <TimeDisplay
-            as="span"
-            className="text-foreground"
-            options={DATE_TIME_DISPLAY_OPTIONS}
-            value={slot.startAt}
-          />
+          <TimeDisplay as="span" options={DATE_TIME_DISPLAY_OPTIONS} value={slot.startAt} />
           <span aria-hidden className="text-muted-foreground">
             至
           </span>
-          <TimeDisplay
-            as="span"
-            className="text-foreground"
-            options={DATE_TIME_DISPLAY_OPTIONS}
-            value={slot.endAt}
-          />
+          <TimeDisplay as="span" options={DATE_TIME_DISPLAY_OPTIONS} value={slot.endAt} />
         </span>
       ))}
     </span>

@@ -10,7 +10,6 @@ export interface DisplayTimeZone {
  */
 export const DISPLAY_TIME_ZONES: readonly DisplayTimeZone[] = [
   { label: "中国标准时间", timeZone: "Asia/Shanghai" },
-  { label: "新加坡时间", timeZone: "Asia/Singapore" },
   { label: "英国时间", timeZone: "Europe/London" },
   { label: "日本时间", timeZone: "Asia/Tokyo" },
   { label: "美国太平洋时间（洛杉矶）", timeZone: "America/Los_Angeles" },

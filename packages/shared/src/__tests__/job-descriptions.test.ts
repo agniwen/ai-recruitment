@@ -61,6 +61,22 @@ describe("jobDescriptionFormSchema salary fields", () => {
 });
 
 describe("jobDescriptionFormSchema recruitment demand fields", () => {
+  it("rejects HC below the onboarded count", () => {
+    const result = jobDescriptionFormSchema.safeParse({
+      ...baseJobDescription,
+      headcount: 1,
+      onboardedCount: 2,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toContainEqual(
+      expect.objectContaining({
+        message: "HC 不能小于已到岗人数，请先核对招聘编制",
+        path: ["headcount"],
+      }),
+    );
+  });
+
   it("allows a job to be saved without an AI interviewer", () => {
     const result = jobDescriptionFormSchema.safeParse({
       ...baseJobDescription,

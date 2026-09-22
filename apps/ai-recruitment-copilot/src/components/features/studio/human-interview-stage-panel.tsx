@@ -234,12 +234,17 @@ export function HumanInterviewStagePanel({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="font-medium text-sm">真人复面进度</h3>
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-muted-foreground text-xs">
-          <span>管理 {candidateName} 的真人复面：安排时间 / 录入面试官 / 标记结果。</span>
-          <HumanInterviewAvailableTimeSlotsInline slots={availableTimeSlots} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="min-w-0 space-y-0.5">
+          <h3 className="font-medium text-sm">真人复面进度</h3>
+          <p className="text-muted-foreground text-xs">
+            管理 {candidateName} 的真人复面：安排时间 / 录入面试官 / 标记结果。
+          </p>
         </div>
+        <HumanInterviewAvailableTimeSlotsInline
+          className="max-w-full sm:ms-auto sm:justify-end sm:text-end"
+          slots={availableTimeSlots}
+        />
       </div>
 
       {roundsContent}

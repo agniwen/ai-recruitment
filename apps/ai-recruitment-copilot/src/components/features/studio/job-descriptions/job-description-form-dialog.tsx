@@ -889,9 +889,19 @@ export function JobDescriptionFormDialog({
                               inputMode="numeric"
                               min={0}
                               onBlur={field.handleBlur}
-                              onChange={(event) =>
-                                field.handleChange(parseOptionalInt(event.target.value))
-                              }
+                              onChange={(event) => {
+                                const headcount = parseOptionalInt(event.target.value);
+                                field.handleChange(headcount);
+                                form.setFieldValue(
+                                  "gapCount",
+                                  headcount === null
+                                    ? null
+                                    : Math.max(
+                                        headcount - (form.getFieldValue("onboardedCount") ?? 0),
+                                        0,
+                                      ),
+                                );
+                              }}
                               placeholder="编制人数"
                               type="number"
                               value={field.state.value ?? ""}
@@ -911,15 +921,23 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>已到岗</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
-                              disabled={readOnly}
+                              disabled={readOnly || isEdit}
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               inputMode="numeric"
                               min={0}
                               onBlur={field.handleBlur}
-                              onChange={(event) =>
-                                field.handleChange(parseOptionalInt(event.target.value))
-                              }
+                              onChange={(event) => {
+                                const onboardedCount = parseOptionalInt(event.target.value);
+                                field.handleChange(onboardedCount);
+                                const headcount = form.getFieldValue("headcount");
+                                form.setFieldValue(
+                                  "gapCount",
+                                  headcount === null || headcount === undefined
+                                    ? null
+                                    : Math.max(headcount - (onboardedCount ?? 0), 0),
+                                );
+                              }}
                               type="number"
                               value={field.state.value ?? ""}
                             />
@@ -938,15 +956,11 @@ export function JobDescriptionFormDialog({
                           <FieldLabel htmlFor={field.name}>缺口</FieldLabel>
                           <FieldContent className="gap-2">
                             <Input
-                              disabled={readOnly}
+                              disabled
                               aria-invalid={!!errors?.length}
                               id={field.name}
                               inputMode="numeric"
-                              min={0}
-                              onBlur={field.handleBlur}
-                              onChange={(event) =>
-                                field.handleChange(parseOptionalInt(event.target.value))
-                              }
+                              placeholder="根据 HC 和已到岗自动计算"
                               type="number"
                               value={field.state.value ?? ""}
                             />

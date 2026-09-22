@@ -45,6 +45,37 @@ function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 describe("TransitionCandidateDialog close", () => {
+  it("uses the requested close-outcome and rejection-reason copy", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <TransitionCandidateDialog
+            candidate={{ candidateName: "候选人", id: "resume-1" }}
+            mode="close"
+            onCompleted={vi.fn()}
+            onOpenChange={vi.fn()}
+            open={true}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(document.querySelector('label[for="outcome-archived"]')?.textContent).toBe("不推进入职");
+    expect(document.querySelector('label[for="outcome-withdrawn"]')?.textContent).toBe(
+      "候选人拒绝offer",
+    );
+    expect(document.querySelector('label[for="close-feedback"]')?.textContent).toBe("拒绝原因");
+
+    act(() => root.unmount());
+  });
+
   it("requires pre-onboarding TG before a candidate can be marked as hired", () => {
     const container = document.createElement("div");
     document.body.append(container);
