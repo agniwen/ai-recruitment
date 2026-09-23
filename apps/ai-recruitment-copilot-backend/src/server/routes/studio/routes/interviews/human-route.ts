@@ -151,8 +151,12 @@ export const studioInterviewHumanRouter = factory
     zValidator(
       "json",
       humanInterviewRoundInputSchema
+        .omit({ externalInterviewers: true })
         .partial()
-        .extend({ validUntil: nullableInstantDateTimeInputSchema }),
+        .extend({
+          interviewerIds: humanInterviewRoundInputSchema.shape.interviewerIds.min(1).optional(),
+          validUntil: nullableInstantDateTimeInputSchema,
+        }),
       jsonValidatorError("真人复面轮次参数无效。"),
     ),
     async (c) => {

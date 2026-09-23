@@ -14,6 +14,7 @@ import type {
   BulkResumeUploadFileDescriptor,
   CreateBulkResumeBatchInput,
   ProcessNextResult,
+  PortfolioAttachment,
 } from "@arc/shared/bulk-resume-upload";
 import type {
   HistoricalResumeImportPage,
@@ -36,6 +37,15 @@ export function uploadResumeForBulk(
   return apiFetch<BulkResumeUploadFileDescriptor>(
     `/api/w/${slug}/studio/resume-upload-batches/uploads`,
     { body: fd, method: "POST" },
+  );
+}
+
+export function uploadPortfolioForBulk(slug: string, file: File): Promise<PortfolioAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<PortfolioAttachment>(
+    `/api/w/${slug}/studio/resume-upload-batches/portfolio-uploads`,
+    { body: formData, method: "POST" },
   );
 }
 

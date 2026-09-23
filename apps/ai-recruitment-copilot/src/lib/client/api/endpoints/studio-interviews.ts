@@ -45,6 +45,7 @@ import type {
 } from "@arc/shared/studio-pipeline-stages";
 import type { ResumeLibraryProfileSnapshot } from "@arc/shared/studio-resumes";
 import { rpc } from "@/lib/client/rpc";
+import { apiFetch } from "../client";
 import { rpcFetch } from "../rpc-fetch";
 
 /**
@@ -614,6 +615,60 @@ export function createOfferDraft(
       param: { id: candidateId, slug },
     }),
     "新建 Offer 失败",
+  );
+}
+
+export function createOfferDraftWithAttachment(
+  slug: string,
+  candidateId: string,
+  input: OfferDraftInput & { sendImmediately?: boolean },
+  file: File,
+): Promise<OfferDraftRecord> {
+  const form = new FormData();
+  form.set("offer", JSON.stringify(input));
+  form.set("file", file);
+  return apiFetch<OfferDraftRecord>(
+    `/api/w/${encodeURIComponent(slug)}/studio/interviews/${encodeURIComponent(candidateId)}/offer-drafts/with-attachment`,
+    { body: form, method: "POST" },
+  );
+}
+
+export function offerApprovalAttachmentUrl(slug: string, candidateId: string, draftId: string) {
+  return `/api/w/${encodeURIComponent(slug)}/studio/interviews/${encodeURIComponent(candidateId)}/offer-drafts/${encodeURIComponent(draftId)}/approval-attachment`;
+}
+
+export function deleteOfferApprovalAttachment(
+  slug: string,
+  candidateId: string,
+  draftId: string,
+): Promise<{ success: boolean }> {
+  return rpcFetch<{ success: boolean }>(
+    rpc.api.w[":slug"].studio.interviews[":id"]["offer-drafts"][":draftId"][
+      "approval-attachment"
+    ].$delete({
+      param: { draftId, id: candidateId, slug },
+    }),
+    "删除审核附件失败",
+  );
+}
+
+export function patchOfferDraftWithAttachment(
+  slug: string,
+  candidateId: string,
+  draftId: string,
+  input: OfferDraftInput,
+  file: File | null,
+): Promise<OfferDraftRecord> {
+  const form = new FormData();
+  form.set("offer", JSON.stringify(input));
+  if (file) {
+    form.set("file", file);
+  } else {
+    form.set("removeAttachment", "true");
+  }
+  return apiFetch<OfferDraftRecord>(
+    `/api/w/${encodeURIComponent(slug)}/studio/interviews/${encodeURIComponent(candidateId)}/offer-drafts/${encodeURIComponent(draftId)}/with-attachment`,
+    { body: form, method: "PATCH" },
   );
 }
 

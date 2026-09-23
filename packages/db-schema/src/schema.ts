@@ -563,6 +563,10 @@ export const studioInterview = pgTable(
     // default 让 prod 旧 INSERT 路径不传值时也能写入。
     // Stage axis; default lets pre-migration INSERTs succeed.
     pipelineStage: text("pipeline_stage").$type<PipelineStage>().notNull().default("ai_review"),
+    portfolioAttachments: jsonb("portfolio_attachments")
+      .$type<{ id: string; name: string; mimeType: string; size: number }[]>()
+      .notNull()
+      .default([]),
     recommendationText: text("recommendation_text"),
     recruitmentSource: text("recruitment_source").$type<ResumeRecruitmentSource>(),
     recruitmentSourceDetail: text("recruitment_source_detail"),
@@ -1029,6 +1033,20 @@ export const departmentOdcMember = pgTable(
     index("department_odc_member_organization_idx").on(table.organizationId),
     index("department_odc_member_member_idx").on(table.organizationId, table.memberId),
   ],
+);
+
+// External requesters can receive bot messages without a login account.
+export const telegramRequesterBinding = pgTable(
+  "telegram_requester_binding",
+  {
+    chatId: text("chat_id").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    username: text("username").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.organizationId, table.username] })],
 );
 
 export const interviewer = pgTable(
@@ -1511,6 +1529,22 @@ export const studioHumanInterviewMeetingRound = pgTable(
   ],
 );
 
+// 外部面试官按轮次保存，不要求系统用户账号。
+export const studioHumanInterviewExternalInterviewer = pgTable(
+  "studio_human_interview_external_interviewer",
+  {
+    id: text("id").primaryKey(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }),
+    leftAt: timestamp("left_at", { withTimezone: true }),
+    name: text("name").notNull(),
+    roundId: text("round_id")
+      .notNull()
+      .references(() => studioHumanInterviewRound.id, { onDelete: "cascade" }),
+    telegram: text("telegram").notNull(),
+  },
+  (table) => [index("human_interview_external_round_idx").on(table.roundId)],
+);
+
 // 会议 ↔ 面试官 junction。保留 role 以支持主持人/旁听者等会议级权限。
 // Meeting ↔ interviewer junction. role leaves room for host/observer permissions.
 export const studioHumanInterviewMeetingInterviewer = pgTable(
@@ -1567,6 +1601,12 @@ export const studioHumanInterviewRoundInterviewer = pgTable(
 export const studioOfferDraft = pgTable(
   "studio_offer_draft",
   {
+    approvalAttachment: jsonb("approval_attachment").$type<{
+      filename: string;
+      mediaType: string;
+      size: number;
+      storageKey: string;
+    } | null>(),
     baseSalary: integer("base_salary").notNull(),
     bonus: integer("bonus"),
     candidateCounter: text("candidate_counter"),

@@ -15,6 +15,7 @@ const candidateInvitePayloadSchema = z.object({
 
 const interviewerInvitePayloadSchema = z.object({
   exp: z.number().int().positive(),
+  external: z.boolean().optional(),
   meetingId: z.string().trim().min(1),
   role: z.enum(["host", "interviewer", "observer"]),
   userId: z.string().trim().min(1),

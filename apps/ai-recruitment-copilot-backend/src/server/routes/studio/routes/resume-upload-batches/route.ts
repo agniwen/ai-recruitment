@@ -25,6 +25,11 @@ import {
 import { processNextItem } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resume-upload-batches/utils/processor";
 import { uploadTaskInboxRouter } from "./routes/inbox/route";
 import { createBatchInputSchema } from "./schema";
+import {
+  InvalidPortfolioFileError,
+  storePortfolioAttachment,
+  validatePortfolioAttachments,
+} from "../resumes/utils/portfolio-attachments";
 
 async function getResumeParseQueueApi() {
   return await import("@arc/resume-parse-queue/resume-parse");
@@ -64,6 +69,26 @@ export const resumeUploadBatchesRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     return c.json(await loadResumePoolImportOptions(activeOrg.id, user.id), 200);
+  })
+  .post("/portfolio-uploads", requirePermission("resumeUploadBatch", "create"), async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    try {
+      const formData = await c.req.formData();
+      const attachment = await storePortfolioAttachment(
+        formData.get("file"),
+        activeOrg.id,
+        user.id,
+      );
+      return c.json(attachment, 201);
+    } catch (error) {
+      if (error instanceof InvalidPortfolioFileError) {
+        return c.json({ error: error.message }, 400);
+      }
+      return c.json({ error: "作品集上传失败，请稍后重试。" }, 500);
+    }
   })
   .post("/uploads", requirePermission("resumeUploadBatch", "create"), async (c) => {
     const { activeOrg, user } = c.var;
@@ -157,8 +182,13 @@ export const resumeUploadBatchesRouter = factory
         );
       const foundSet = new Set(found.map((r) => r.storageKey));
       const missing = keys.filter((k) => !foundSet.has(k));
-      if (missing.length > 0) {
-        return c.json({ error: "部分文件未上传完成。" }, 400);
+      const validPortfolios = await Promise.all(
+        input.files.map((file) =>
+          validatePortfolioAttachments(file.portfolioAttachments ?? [], activeOrg.id, user.id),
+        ),
+      );
+      if (missing.length > 0 || validPortfolios.includes(false)) {
+        return c.json({ error: "部分文件或作品集附件无效、未上传完成。" }, 400);
       }
 
       const batchId = await insertBatchWithItems({

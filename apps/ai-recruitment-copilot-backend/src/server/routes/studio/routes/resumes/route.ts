@@ -3,6 +3,8 @@ import { notifyAiReviewPending } from "./utils/ai-review-notification";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
 import { resumeLibraryReadRouter } from "./read-route";
+import { portfolioRouter } from "./routes/portfolio/route";
+import { validatePortfolioAttachments } from "./utils/portfolio-attachments";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -218,6 +220,7 @@ export function parseResumeReviewFormInput(
 
 export const resumeLibraryRouter = factory
   .createApp()
+  .route("/:id/portfolio", portfolioRouter)
   .route("/", resumeLibraryReadRouter)
   .post(
     "/:id/retry-parse",
@@ -549,6 +552,32 @@ export const resumeLibraryRouter = factory
       }
 
       const input = c.req.valid("json");
+      if (input.portfolioAttachments) {
+        const current = new Map(
+          (existing.portfolioAttachments ?? []).map((attachment) => [attachment.id, attachment]),
+        );
+        const attachments = input.portfolioAttachments;
+        const unchangedAreValid = attachments.every((attachment) => {
+          const previous = current.get(attachment.id);
+          return (
+            !previous ||
+            (previous.name === attachment.name &&
+              previous.mimeType === attachment.mimeType &&
+              previous.size === attachment.size)
+          );
+        });
+        if (
+          !unchangedAreValid ||
+          new Set(attachments.map((attachment) => attachment.id)).size !== attachments.length ||
+          !(await validatePortfolioAttachments(
+            attachments.filter((attachment) => !current.has(attachment.id)),
+            activeOrg.id,
+            c.var.user?.id ?? "",
+          ))
+        ) {
+          return c.json({ error: "作品集附件无效或无权限。" }, 400);
+        }
+      }
       const hasHiredCandidateFields =
         input.alias !== undefined ||
         input.preOnboardingTelegram !== undefined ||
@@ -645,6 +674,7 @@ export const resumeLibraryRouter = factory
         hiringUnitId: input.hiringUnitId ?? null,
         jobDescriptionId: nextJobDescriptionId,
         recommendationText: input.recommendationText || null,
+        ...(input.portfolioAttachments ? { portfolioAttachments: input.portfolioAttachments } : {}),
         targetRole: nextTargetRole,
         updatedAt: now,
         ...(resumeProfile ? { resumeProfile } : {}),

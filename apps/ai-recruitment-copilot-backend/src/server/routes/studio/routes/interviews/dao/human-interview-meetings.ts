@@ -1,8 +1,15 @@
+/* oxlint-disable max-lines -- meeting lifecycle and internal/external invite resolution share persistence helpers */
+import {
+  listExternalMeetingInterviewers,
+  resolveExternalInterviewerInvite,
+  markExternalInterviewerAttendance,
+} from "./external-interviewers";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  studioHumanInterviewExternalInterviewer,
   studioHumanInterviewMeeting,
   studioHumanInterviewMeetingInterviewer,
   studioHumanInterviewMeetingRound,
@@ -148,6 +155,21 @@ async function hydrateMeetings(meetings: MeetingRow[]): Promise<HumanInterviewMe
     interviewersByMeeting.set(row.meetingId, list);
   }
 
+  for (const row of await listExternalMeetingInterviewers(meetingIds)) {
+    const list = interviewersByMeeting.get(row.meetingId) ?? [];
+    list.push({
+      external: true,
+      id: row.id,
+      image: null,
+      joinedAt: serializeDate(row.joinedAt),
+      leftAt: serializeDate(row.leftAt),
+      name: row.name,
+      role: "interviewer",
+      telegram: row.telegram,
+    });
+    interviewersByMeeting.set(row.meetingId, list);
+  }
+
   return meetings.map((meeting) =>
     toRecord({
       interviewers: interviewersByMeeting.get(meeting.id) ?? [],
@@ -262,6 +284,17 @@ export async function createHumanInterviewMeeting({
     throw new HumanInterviewMeetingError("只有待进行的真人复面轮次可以加入会议。", 400);
   }
 
+  if (!uniqueInterviewerIds.length) {
+    const external = await db
+      .select({ id: studioHumanInterviewExternalInterviewer.id })
+      .from(studioHumanInterviewExternalInterviewer)
+      .where(inArray(studioHumanInterviewExternalInterviewer.roundId, uniqueRoundIds))
+      .limit(1);
+    if (!external.length) {
+      throw new HumanInterviewMeetingError("至少添加 1 位面试官", 400);
+    }
+  }
+
   const existingLinks = await db
     .select({ roundId: studioHumanInterviewMeetingRound.roundId })
     .from(studioHumanInterviewMeetingRound)
@@ -309,13 +342,15 @@ export async function createHumanInterviewMeeting({
         roundId,
       })),
     );
-    await tx.insert(studioHumanInterviewMeetingInterviewer).values(
-      uniqueInterviewerIds.map((userId, index) => ({
-        meetingId: id,
-        role: index === 0 ? ("host" as const) : ("interviewer" as const),
-        userId,
-      })),
-    );
+    if (uniqueInterviewerIds.length) {
+      await tx.insert(studioHumanInterviewMeetingInterviewer).values(
+        uniqueInterviewerIds.map((userId, index) => ({
+          meetingId: id,
+          role: index === 0 ? ("host" as const) : ("interviewer" as const),
+          userId,
+        })),
+      );
+    }
   });
 
   const created = await loadHumanInterviewMeetingById(id, organizationId);
@@ -413,11 +448,13 @@ export async function issueHumanInterviewMeetingLinks({
   return {
     candidateLinks,
     interviewerLinks: meeting.interviewers.map((interviewer) => ({
+      external: interviewer.external,
       name: interviewer.name,
       role: interviewer.role,
       url: `/human-interview/interviewer/${encodeURIComponent(
         buildInterviewerInviteToken({
           exp: interviewerExpiresAt,
+          external: interviewer.external,
           meetingId,
           role: interviewer.role,
           userId: interviewer.id,
@@ -517,6 +554,10 @@ export async function resolveHumanInterviewMeetingInterviewerInviteToken(
   const payload = verifyInterviewerInviteToken(inviteToken);
   if (!payload) {
     return null;
+  }
+
+  if (payload.external) {
+    return resolveExternalInterviewerInvite(payload);
   }
 
   const [row] = await db
@@ -726,6 +767,15 @@ export async function markHumanInterviewParticipantJoined({
     return;
   }
 
+  if (identity.startsWith("interviewer_external_")) {
+    await markExternalInterviewerAttendance(
+      meetingId,
+      identity.slice("interviewer_external_".length),
+      { joinedAt: now },
+    );
+    return;
+  }
+
   if (identity.startsWith("interviewer_")) {
     await db
       .update(studioHumanInterviewMeetingInterviewer)
@@ -762,6 +812,15 @@ export async function markHumanInterviewParticipantLeft({
           eq(studioHumanInterviewMeetingRound.roundId, identity.slice("candidate_".length)),
         ),
       );
+    return;
+  }
+
+  if (identity.startsWith("interviewer_external_")) {
+    await markExternalInterviewerAttendance(
+      meetingId,
+      identity.slice("interviewer_external_".length),
+      { leftAt: now },
+    );
     return;
   }
 

@@ -137,6 +137,16 @@ export async function buildAttachmentKey(attachmentId: string, extension: string
   return `${prefix}chat-attachments/${attachmentId}.${safeExt}`;
 }
 
+export async function buildOfferApprovalAttachmentKey(
+  attachmentId: string,
+  extension: string,
+): Promise<string> {
+  const { config } = await getClient();
+  const safeExt = extension.replaceAll(/[^a-z0-9]/gi, "").toLowerCase() || "bin";
+  const prefix = config.keyPrefix ? `${config.keyPrefix.replace(/\/+$/, "")}/` : "";
+  return `${prefix}offer-approval-attachments/${attachmentId}.${safeExt}`;
+}
+
 // 基于内容哈希命名的 chat 附件 S3 key——多个 chat_attachment 行共用同一个 hash key。
 // Hash-keyed S3 key for chat attachments — multiple rows can share the same key.
 export async function buildAttachmentKeyByHash(hash: string, extension: string): Promise<string> {
@@ -218,6 +228,14 @@ export async function putObjectBytes(input: {
       Key: input.storageKey,
     }),
   );
+}
+
+export async function deleteObject(storageKey: string): Promise<void> {
+  const [{ DeleteObjectCommand }, { client, config }] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    getClient(),
+  ]);
+  await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: storageKey }));
 }
 
 export interface ObjectResult {

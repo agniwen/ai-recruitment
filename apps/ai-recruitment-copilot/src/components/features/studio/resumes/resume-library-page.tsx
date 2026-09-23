@@ -915,11 +915,11 @@ export function ResumeLibraryPage() {
 
       <BulkUploadConfirmDialog
         files={pendingFiles}
-        onConfirmed={async (files, config: BulkUploadConfirmConfig) => {
+        onConfirmed={async (files, config: BulkUploadConfirmConfig, portfolios) => {
           setConfirmOpen(false);
           setProgressOpen(true);
           setPendingFiles([]);
-          await bulk.start(files, config);
+          await bulk.start(files, config, portfolios);
         }}
         onOpenChange={(open) => {
           setConfirmOpen(open);

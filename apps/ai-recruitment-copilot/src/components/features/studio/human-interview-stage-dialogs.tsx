@@ -38,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { addOneHourToDateTimeLocalInputValue } from "./human-interview-stage-utils";
 import { HumanInterviewAvailableTimeSlots } from "./human-interview-available-time-slots";
 import { HumanInterviewTimeZonePreview } from "./human-interview-time-zone-preview";
+import { useExternalInterviewers } from "./use-external-interviewers";
 import { useWorkspaceInterviewerMembers } from "./use-workspace-interviewer-members";
 import { useHumanInterviewScheduleConfirmation } from "./use-human-interview-schedule-confirmation";
 
@@ -73,6 +74,7 @@ export function ScheduleRoundDialog({
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const { data: members = [] } = useWorkspaceInterviewerMembers(open);
+  const external = useExternalInterviewers(open, candidateId);
   const { confirmSchedule, conflictDialog } = useHumanInterviewScheduleConfirmation();
   const [label, setLabel] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -116,7 +118,11 @@ export function ScheduleRoundDialog({
         throw new Error("请填写面试时间");
       }
       const validUntilIso = dateTimeLocalInputToISOString(validUntil);
+      if (validUntilIso && new Date(validUntilIso) <= new Date(scheduledAtIso)) {
+        throw new Error("有效时间至必须晚于面试时间");
+      }
       if (
+        interviewerIds.length > 0 &&
         !(await confirmSchedule({
           interviewerIds,
           scheduledAt: scheduledAtIso,
@@ -125,7 +131,11 @@ export function ScheduleRoundDialog({
       ) {
         return null;
       }
+      if (!(await external.confirm())) {
+        return null;
+      }
       const round = await createHumanInterviewRound(slug, candidateId, {
+        externalInterviewers: external.input(),
         format: "online",
         interviewerIds,
         label: roundLabel,
@@ -134,7 +144,7 @@ export function ScheduleRoundDialog({
         notes: notes.trim() || null,
         scheduledAt: scheduledAtIso,
       });
-      await createHumanInterviewMeeting(slug, {
+      const meeting = await createHumanInterviewMeeting(slug, {
         interviewerIds,
         notes: notes.trim() || null,
         roundIds: [round.id],
@@ -142,6 +152,11 @@ export function ScheduleRoundDialog({
         title: roundLabel,
         validUntil: validUntilIso,
       });
+      if (meeting.externalNotificationFailures?.length) {
+        toast.warning(
+          `面试已创建，但以下人员 TG 通知失败，请复制链接手动发送：${meeting.externalNotificationFailures.join("、")}`,
+        );
+      }
       return round;
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "创建失败"),
@@ -169,7 +184,7 @@ export function ScheduleRoundDialog({
       }}
       open={open}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>安排真人复面</DialogTitle>
           <DialogDescription>
@@ -232,6 +247,8 @@ export function ScheduleRoundDialog({
             />
           </div>
 
+          {external.fields}
+
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="round-notes">
               备注（可选）
@@ -256,7 +273,12 @@ export function ScheduleRoundDialog({
             取消
           </Button>
           <Button
-            disabled={mutation.isPending || interviewerIds.length === 0}
+            disabled={
+              mutation.isPending ||
+              external.loading ||
+              !external.valid ||
+              (interviewerIds.length === 0 && external.count === 0)
+            }
             onClick={() => mutation.mutate()}
           >
             {mutation.isPending ? "保存中…" : "保存"}
@@ -264,6 +286,7 @@ export function ScheduleRoundDialog({
         </DialogFooter>
       </DialogContent>
       {conflictDialog}
+      {external.confirmation}
     </Dialog>
   );
 }

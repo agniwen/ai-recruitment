@@ -1,5 +1,17 @@
 const TELEGRAM_USERNAME_PATTERN = /^[a-zA-Z0-9_]{5,32}$/u;
 
+export function extractRequesterTelegramUsernames(value: string | null | undefined): string[] {
+  // Consume the entire handle before validation so overlong handles cannot match a prefix.
+  const mentions = [...(value ?? "").matchAll(/@([a-zA-Z0-9_]+)/gu)];
+  return [
+    ...new Set(
+      mentions
+        .map((match) => match[1].toLowerCase())
+        .filter((username) => TELEGRAM_USERNAME_PATTERN.test(username) && !/^\d+$/u.test(username)),
+    ),
+  ];
+}
+
 export function extractTelegramUsername(value: string | null | undefined): string | null {
   const normalized = value?.trim() ?? "";
   if (!normalized) {

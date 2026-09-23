@@ -48,6 +48,13 @@ function resolveDateField(next: string | null | undefined, current: string | nul
 
 function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
   return {
+    approvalAttachment: row.approvalAttachment
+      ? {
+          filename: row.approvalAttachment.filename,
+          mediaType: row.approvalAttachment.mediaType,
+          size: row.approvalAttachment.size,
+        }
+      : null,
     baseSalary: row.baseSalary,
     bonus: row.bonus,
     candidateCounter: row.candidateCounter,
@@ -118,7 +125,58 @@ export async function loadDraftById(
   return row ? toRecord(row) : null;
 }
 
+export async function loadOfferApprovalAttachment(
+  draftId: string,
+  interviewRecordId: string,
+  organizationId: string,
+) {
+  const [row] = await db
+    .select({ approvalAttachment: studioOfferDraft.approvalAttachment })
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.id, draftId),
+        eq(studioOfferDraft.interviewRecordId, interviewRecordId),
+        eq(studioOfferDraft.organizationId, organizationId),
+        ne(studioOfferDraft.status, "deleted"),
+      ),
+    )
+    .limit(1);
+  return row?.approvalAttachment ?? null;
+}
+
+export function removeOfferApprovalAttachment(
+  draftId: string,
+  interviewRecordId: string,
+  organizationId: string,
+) {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ approvalAttachment: studioOfferDraft.approvalAttachment })
+      .from(studioOfferDraft)
+      .where(
+        and(
+          eq(studioOfferDraft.id, draftId),
+          eq(studioOfferDraft.interviewRecordId, interviewRecordId),
+          eq(studioOfferDraft.organizationId, organizationId),
+          ne(studioOfferDraft.status, "deleted"),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!row?.approvalAttachment) {
+      return null;
+    }
+    await tx
+      .update(studioOfferDraft)
+      .set({ approvalAttachment: null, updatedAt: new Date() })
+      .where(eq(studioOfferDraft.id, draftId));
+    return row.approvalAttachment;
+  });
+}
+
 export interface CreateDraftOptions {
+  approvalAttachment?: (typeof studioOfferDraft.$inferInsert)["approvalAttachment"];
   actorId?: string | null;
   actorRole?: string | null;
   interviewRecordId: string;
@@ -135,6 +193,7 @@ export interface CreateDraftOptions {
 // Create new version: max(version)+1; supersede any non-terminal predecessors.
 // FOR UPDATE lock + unique index protect against concurrent inserts.
 export async function createOfferDraft({
+  approvalAttachment = null,
   actorId = null,
   actorRole = null,
   interviewRecordId,
@@ -175,6 +234,7 @@ export async function createOfferDraft({
     }
 
     await tx.insert(studioOfferDraft).values({
+      approvalAttachment,
       baseSalary: input.baseSalary,
       bonus: input.bonus ?? null,
       createdAt: now,
@@ -215,20 +275,25 @@ export interface EditDraftOptions {
   draftId: string;
   organizationId: string;
   input: Partial<OfferDraftInput>;
+  approvalAttachment?: (typeof studioOfferDraft.$inferInsert)["approvalAttachment"];
 }
 
-export async function editOfferDraft({
+export function editOfferDraftWithAttachment({
   draftId,
   organizationId,
   input,
-}: EditDraftOptions): Promise<OfferDraftRecord> {
+  approvalAttachment,
+}: EditDraftOptions): Promise<{
+  updated: OfferDraftRecord;
+  previousAttachment: (typeof studioOfferDraft.$inferSelect)["approvalAttachment"];
+}> {
   const now = new Date();
 
   // 事务 + FOR UPDATE：read existing → 校验 status → merge → write。
   // 防止两名 HR 同时编辑同一份草稿造成 (input ?? existing) merge 字段相互覆盖。
   // Transaction + FOR UPDATE: serialize read → validate → merge → write so
   // concurrent edits to the same draft can't lose each other's writes.
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const [existing] = await tx
       .select()
       .from(studioOfferDraft)
@@ -251,9 +316,10 @@ export async function editOfferDraft({
     // existing.expiresAt / joiningDate are Date columns; resolveDateField wants strings.
     const existingExpiresAtIso = existing.expiresAt ? existing.expiresAt.toISOString() : null;
     const existingJoiningDateIso = existing.joiningDate ? existing.joiningDate.toISOString() : null;
-    await tx
+    const [updated] = await tx
       .update(studioOfferDraft)
       .set({
+        ...(approvalAttachment !== undefined && { approvalAttachment }),
         baseSalary: input.baseSalary ?? existing.baseSalary,
         bonus: input.bonus ?? existing.bonus,
         currency: input.currency ?? existing.currency,
@@ -264,12 +330,20 @@ export async function editOfferDraft({
         position: input.position ?? existing.position,
         updatedAt: now,
       })
-      .where(eq(studioOfferDraft.id, draftId));
+      .where(eq(studioOfferDraft.id, draftId))
+      .returning();
+    if (!updated) {
+      throw new Error("更新后查询失败");
+    }
+    return {
+      previousAttachment: approvalAttachment === undefined ? null : existing.approvalAttachment,
+      updated: toRecord(updated),
+    };
   });
-  const updated = await loadDraftById(draftId, organizationId);
-  if (!updated) {
-    throw new Error("更新后查询失败");
-  }
+}
+
+export async function editOfferDraft(options: EditDraftOptions): Promise<OfferDraftRecord> {
+  const { updated } = await editOfferDraftWithAttachment(options);
   return updated;
 }
 

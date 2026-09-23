@@ -10,6 +10,7 @@ import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  studioHumanInterviewExternalInterviewer,
   studioHumanInterviewMeeting,
   studioHumanInterviewMeetingInterviewer,
   studioHumanInterviewMeetingRound,
@@ -72,6 +73,7 @@ function normalizeRequiredFeedback(value: string | null | undefined): string {
 function toRecord(row: {
   round: typeof studioHumanInterviewRound.$inferSelect;
   interviewers: { id: string; name: string | null; image: string | null }[];
+  externalInterviewers?: HumanInterviewRoundRecord["externalInterviewers"];
 }): HumanInterviewRoundRecord {
   const { round, interviewers } = row;
   return {
@@ -79,6 +81,7 @@ function toRecord(row: {
     cancelledAt: serializeDate(round.cancelledAt),
     completedAt: serializeDate(round.completedAt),
     createdAt: serializeDate(round.createdAt) ?? new Date().toISOString(),
+    externalInterviewers: row.externalInterviewers ?? [],
     feedback: round.feedback,
     format: round.format,
     id: round.id,
@@ -140,7 +143,17 @@ export async function listHumanInterviewRounds(
     list.push({ id: ir.userId, image: ir.image, name: ir.name });
     byRound.set(ir.roundId, list);
   }
-  return rounds.map((round) => toRecord({ interviewers: byRound.get(round.id) ?? [], round }));
+  const externalRows = await db
+    .select()
+    .from(studioHumanInterviewExternalInterviewer)
+    .where(inArray(studioHumanInterviewExternalInterviewer.roundId, roundIds));
+  return rounds.map((round) =>
+    toRecord({
+      externalInterviewers: externalRows.filter((item) => item.roundId === round.id),
+      interviewers: byRound.get(round.id) ?? [],
+      round,
+    }),
+  );
 }
 
 export interface HumanInterviewRoundReadiness {
@@ -268,7 +281,12 @@ export async function loadRoundById(
     .from(studioHumanInterviewRoundInterviewer)
     .innerJoin(user, eq(studioHumanInterviewRoundInterviewer.userId, user.id))
     .where(eq(studioHumanInterviewRoundInterviewer.roundId, roundId));
+  const externalInterviewers = await db
+    .select()
+    .from(studioHumanInterviewExternalInterviewer)
+    .where(eq(studioHumanInterviewExternalInterviewer.roundId, roundId));
   return toRecord({
+    externalInterviewers,
     interviewers: interviewerRows.map((i) => ({ id: i.userId, image: i.image, name: i.name })),
     round,
   });
@@ -286,6 +304,9 @@ export async function createHumanInterviewRound({
   organizationId,
   input,
 }: CreateRoundOptions): Promise<HumanInterviewRoundRecord> {
+  if (!input.interviewerIds.length && !input.externalInterviewers?.length) {
+    throw new EditRoundError("至少添加 1 位面试官", 400);
+  }
   await assertCompletedHumanInterviewRoundsHaveFeedback(interviewRecordId, organizationId);
   await assertWorkspaceInterviewers({
     makeError: (message) => new EditRoundError(message, 400),
@@ -319,12 +340,23 @@ export async function createHumanInterviewRound({
       status: "pending",
       updatedAt: now,
     });
-    await tx.insert(studioHumanInterviewRoundInterviewer).values(
-      input.interviewerIds.map((userId) => ({
-        roundId: id,
-        userId,
-      })),
-    );
+    if (input.interviewerIds.length) {
+      await tx.insert(studioHumanInterviewRoundInterviewer).values(
+        input.interviewerIds.map((userId) => ({
+          roundId: id,
+          userId,
+        })),
+      );
+    }
+    if (input.externalInterviewers?.length) {
+      await tx.insert(studioHumanInterviewExternalInterviewer).values(
+        input.externalInterviewers.map((item) => ({
+          ...item,
+          id: crypto.randomUUID(),
+          roundId: id,
+        })),
+      );
+    }
   });
 
   const created = await loadRoundById(id, organizationId);

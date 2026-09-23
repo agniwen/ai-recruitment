@@ -25,7 +25,7 @@ const jobDescriptionExportQuerySchema = z.object({
 
 export const jobDescriptionExportRouter = factory
   .createApp()
-  .use("*", requirePermission("jd", "read"), requirePermission("dataExport", "export"))
+  .use("*", requirePermission("jd", "read"), requirePermission("jd", "export"))
   .get(
     "/",
     zValidator("query", jobDescriptionExportQuerySchema, jsonValidatorError("查询参数无效。")),

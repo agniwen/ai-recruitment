@@ -18,6 +18,7 @@ const apiMocks = vi.hoisted(() => ({
   createBulkResumeBatch: vi.fn(),
   getBulkResumeBatchDetail: vi.fn(),
   resumeBulkResumeBatch: vi.fn(),
+  uploadPortfolioForBulk: vi.fn(),
   uploadResumeForBulk: vi.fn(),
 }));
 
@@ -59,10 +60,12 @@ const item: BulkResumeBatchItemDto = {
 
 function renderHookHarness({
   mode = "resume",
+  portfolioFile,
   onBatchQueued,
   onRecordsChanged,
 }: {
   mode?: "resume" | "start";
+  portfolioFile?: File;
   onBatchQueued?: (detail: BulkResumeBatchDetailDto) => void;
   onRecordsChanged: () => void;
 }) {
@@ -84,11 +87,11 @@ function renderHookHarness({
       if (mode === "resume") {
         void bulk.resume("batch_1");
       } else {
-        void bulk.start([new File(["resume"], "resume.pdf", { type: "application/pdf" })], {
-          dedupPolicy: "create",
-          jdMode: "auto",
-          jobDescriptionId: null,
-        });
+        void bulk.start(
+          [new File(["resume"], "resume.pdf", { type: "application/pdf" })],
+          { dedupPolicy: "create", jdMode: "auto", jobDescriptionId: null },
+          portfolioFile ? [[portfolioFile]] : [],
+        );
       }
     }, [bulk]);
     return null;
@@ -171,6 +174,36 @@ describe("useBulkUpload", () => {
     act(() => {
       root.unmount();
     });
+  });
+
+  it("associates uploaded portfolio files with only their resume descriptor", async () => {
+    vi.useFakeTimers();
+    const detail: BulkResumeBatchDetailDto = { batch, items: [item] };
+    const portfolioFile = new File(["image"], "portfolio.png", { type: "image/png" });
+    const attachment = {
+      id: "90da6175-37c2-4528-bd7b-c9e4a081ff04",
+      mimeType: "image/png",
+      name: "portfolio.png",
+      size: 5,
+    };
+    apiMocks.uploadResumeForBulk.mockResolvedValue({
+      contentHash: item.contentHash,
+      fileSize: item.fileSize,
+      originalFileName: item.originalFileName,
+      storageKey: "storage/resume.pdf",
+    });
+    apiMocks.uploadPortfolioForBulk.mockResolvedValue(attachment);
+    apiMocks.createBulkResumeBatch.mockResolvedValue(detail);
+    const { root } = renderHookHarness({ mode: "start", onRecordsChanged: vi.fn(), portfolioFile });
+    await flushPromises();
+    expect(apiMocks.uploadPortfolioForBulk).toHaveBeenCalledWith("acme", portfolioFile);
+    expect(apiMocks.createBulkResumeBatch).toHaveBeenCalledWith(
+      "acme",
+      expect.objectContaining({
+        files: [expect.objectContaining({ portfolioAttachments: [attachment] })],
+      }),
+    );
+    act(() => root.unmount());
   });
   it("stops polling after the page unmounts", async () => {
     vi.useFakeTimers();

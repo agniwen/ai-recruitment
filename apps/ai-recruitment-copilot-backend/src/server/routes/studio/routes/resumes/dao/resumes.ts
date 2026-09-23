@@ -1191,6 +1191,7 @@ export async function loadResumeDetail(
     .select({
       ...SELECTED_COLUMNS,
       interviewQuestions: studioInterview.interviewQuestions,
+      portfolioAttachments: studioInterview.portfolioAttachments,
       resumeProfile: studioInterview.resumeProfile,
       resumeReview: studioInterview.resumeReview,
     })
@@ -1224,7 +1225,7 @@ export async function loadResumeDetail(
     return null;
   }
 
-  const { interviewQuestions, resumeProfile, resumeReview, ...rest } = row;
+  const { interviewQuestions, portfolioAttachments, resumeProfile, resumeReview, ...rest } = row;
   const resumeScreeningResult = parseResumeScreeningResult(rest.resumeScreeningResult);
   const [
     derivedFields,
@@ -1273,6 +1274,7 @@ export async function loadResumeDetail(
     jobDescriptionHumanInterviewerIds,
     offerAcceptedAt: serializeDate(rest.offerAcceptedAt),
     offerSentAt: serializeDate(rest.offerSentAt),
+    portfolioAttachments: portfolioAttachments ?? [],
     resumeContentHash: rest.resumeContentHash,
     resumeEvaluationStatus: rest.resumeEvaluationStatus,
     resumeParseError: rest.resumeParseError,

@@ -1,17 +1,12 @@
 "use client";
 
-import { IconFileText as FileTextIcon, IconX as XIcon } from "@tabler/icons-react";
+import { IconFileText as FileTextIcon, IconPaperclip, IconX as XIcon } from "@tabler/icons-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { ResumePoolImportDestination } from "@arc/shared/resume-pool";
-import { ResumePoolImportDestinations } from "../resume-pool/resume-pool-import-destinations";
-import {
-  EMPTY_IMPORT_OPTIONS,
-  emptyImportDestination,
-  importJobNameOptions,
-  resolveImportDestinations,
-} from "../resume-pool/resume-pool-import-selection";
-import { SearchableSelect } from "@/components/ui/searchable-select";
+import { EMPTY_IMPORT_OPTIONS } from "../resume-pool/resume-pool-import-selection";
+import { BulkUploadDestinations } from "./bulk-upload-destinations";
+import { bulkUploadSelectionModel } from "./bulk-upload-selection";
+import type { BulkUploadSelection } from "./bulk-upload-selection";
 import { getCandidateImportOptions } from "@/lib/client/api/endpoints/bulk-resume-upload";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { Button } from "@/components/ui/button";
@@ -21,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import type { ResumeUploadBatchDedupPolicy, ResumeUploadBatchJdMode } from "@arc/db-schema/schema";
 import {
   MAX_BULK_DESTINATIONS,
+  MAX_PORTFOLIO_ATTACHMENTS,
   resumeRecruitmentSourceNeedsDetail,
 } from "@arc/shared/bulk-resume-upload";
 import type { ResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
@@ -39,7 +35,7 @@ interface Props {
   open: boolean;
   files: File[];
   onOpenChange: (open: boolean) => void;
-  onConfirmed: (files: File[], config: BulkUploadConfirmConfig) => void;
+  onConfirmed: (files: File[], config: BulkUploadConfirmConfig, portfolios: File[][]) => void;
   onRemoveFile: (index: number) => void;
 }
 
@@ -69,14 +65,15 @@ export function BulkUploadConfirmDialog({
     queryKey: ["candidate-import-options", slug],
   });
   const options = optionsQuery.data ?? EMPTY_IMPORT_OPTIONS;
-  const [jobName, setJobName] = useState("");
-  const [destinations, setDestinations] = useState<ResumePoolImportDestination[]>([]);
-  const resolvedDestinations = resolveImportDestinations(options, jobName, destinations);
-  const selectedDestinationCount = resolvedDestinations.filter(
-    (row) => row.jobDescriptionId,
-  ).length;
+  const [selection, setSelection] = useState<BulkUploadSelection>({
+    hiringUnitIds: [],
+    jobNames: [],
+  });
+  const { destinations } = bulkUploadSelectionModel(options, selection);
+  const selectedDestinationCount = destinations.length;
   const [recruitmentSource, setRecruitmentSource] = useState<ResumeRecruitmentSource | "">("");
   const [recruitmentSourceDetail, setRecruitmentSourceDetail] = useState("");
+  const [portfolios, setPortfolios] = useState<Map<File, File[]>>(() => new Map());
 
   const sourceNeedsDetail = resumeRecruitmentSourceNeedsDetail(recruitmentSource);
   const canStart =
@@ -85,27 +82,28 @@ export function BulkUploadConfirmDialog({
     (!sourceNeedsDetail || recruitmentSourceDetail.trim().length > 0) &&
     !optionsQuery.isPending &&
     !optionsQuery.isError &&
-    jobName.length > 0 &&
-    resolvedDestinations.length > 0 &&
-    selectedDestinationCount <= MAX_BULK_DESTINATIONS &&
-    resolvedDestinations.every((row) => row.jobDescriptionId);
+    selectedDestinationCount > 0 &&
+    selectedDestinationCount <= MAX_BULK_DESTINATIONS;
 
   function handleStart() {
     if (!canStart) {
       return;
     }
-    onConfirmed(files, {
-      dedupPolicy: "skip",
-      destinations: resolvedDestinations.flatMap((row) =>
-        row.jobDescriptionId
-          ? [{ hiringUnitId: row.hiringUnitId, jobDescriptionId: row.jobDescriptionId }]
-          : [],
-      ),
-      jdMode: "bind",
-      jobDescriptionId: null,
-      recruitmentSource: recruitmentSource as ResumeRecruitmentSource,
-      recruitmentSourceDetail: sourceNeedsDetail ? recruitmentSourceDetail.trim() : null,
-    });
+    onConfirmed(
+      files,
+      {
+        dedupPolicy: "skip",
+        destinations: destinations.map((job) => ({
+          hiringUnitId: job.hiringUnitId,
+          jobDescriptionId: job.id,
+        })),
+        jdMode: "bind",
+        jobDescriptionId: null,
+        recruitmentSource: recruitmentSource as ResumeRecruitmentSource,
+        recruitmentSourceDetail: sourceNeedsDetail ? recruitmentSourceDetail.trim() : null,
+      },
+      files.map((file) => portfolios.get(file) ?? []),
+    );
   }
 
   return (
@@ -130,30 +128,91 @@ export function BulkUploadConfirmDialog({
         {/* 文件清单 / File list */}
         <div>
           <Label className="mb-2 block text-sm">文件清单</Label>
+          <p className="mb-2 text-xs text-muted-foreground">单个作品集附件最大 500 MB。</p>
           <Card className="gap-0 overflow-hidden rounded-md py-0">
             <CardContent className="p-0">
               <ul className="max-h-48 space-y-1 overflow-y-auto bg-muted/30 p-2 text-sm">
                 {files.map((f, idx) => (
                   <li
-                    className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-background"
+                    className="rounded px-2 py-1 hover:bg-background"
                     key={`${f.name}-${f.size}-${f.lastModified}-${f.type}`}
                   >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="truncate">{f.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {formatSize(f.size)}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {formatSize(f.size)}
+                        </span>
                       </span>
-                    </span>
-                    {files.length > 1 ? (
-                      <button
-                        aria-label="移除"
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={() => onRemoveFile(idx)}
-                        type="button"
-                      >
-                        <XIcon className="size-4" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-1 text-xs text-primary hover:underline">
+                          <IconPaperclip className="size-3.5" />
+                          作品集
+                          <input
+                            aria-label={`为 ${f.name} 添加作品集`}
+                            accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.mov,.zip"
+                            className="sr-only"
+                            multiple
+                            onChange={(event) => {
+                              const picked = [...(event.target.files ?? [])];
+                              setPortfolios((current) => {
+                                const next = new Map(current);
+                                next.set(
+                                  f,
+                                  [...(next.get(f) ?? []), ...picked].slice(
+                                    0,
+                                    MAX_PORTFOLIO_ATTACHMENTS,
+                                  ),
+                                );
+                                return next;
+                              });
+                              event.target.value = "";
+                            }}
+                            type="file"
+                          />
+                        </label>
+                        {files.length > 1 ? (
+                          <button
+                            aria-label="移除"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() => onRemoveFile(idx)}
+                            type="button"
+                          >
+                            <XIcon className="size-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                    {(portfolios.get(f) ?? []).length > 0 ? (
+                      <ul className="ml-6 mt-1 space-y-1 text-xs text-muted-foreground">
+                        {(portfolios.get(f) ?? []).map((attachment, attachmentIndex) => (
+                          <li
+                            className="flex items-center justify-between gap-2"
+                            key={`${attachment.name}-${attachmentIndex}`}
+                          >
+                            <span className="truncate">{attachment.name}</span>
+                            <button
+                              aria-label={`移除作品集 ${attachment.name}`}
+                              onClick={() =>
+                                setPortfolios((current) => {
+                                  const next = new Map(current);
+                                  next.set(
+                                    f,
+                                    (next.get(f) ?? []).filter(
+                                      (_, index) => index !== attachmentIndex,
+                                    ),
+                                  );
+                                  return next;
+                                })
+                              }
+                              type="button"
+                            >
+                              <XIcon className="size-3.5" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
                     ) : null}
                   </li>
                 ))}
@@ -171,20 +230,6 @@ export function BulkUploadConfirmDialog({
         />
 
         <div className="space-y-3">
-          <Label htmlFor="candidate-import-job">在招岗位（必选）</Label>
-          <SearchableSelect
-            id="candidate-import-job"
-            value={jobName || null}
-            options={importJobNameOptions(options, resolvedDestinations)}
-            placeholder="请选择在招岗位"
-            disabled={optionsQuery.isPending}
-            onChange={(value) => {
-              setJobName(value ?? "");
-              setDestinations((rows) =>
-                [...new Set(rows.map((row) => row.hiringUnitId))].map(emptyImportDestination),
-              );
-            }}
-          />
           {optionsQuery.isError ? (
             <div role="alert">
               岗位和组织加载失败。
@@ -193,12 +238,10 @@ export function BulkUploadConfirmDialog({
               </Button>
             </div>
           ) : null}
-          <ResumePoolImportDestinations
-            multipleJobs
+          <BulkUploadDestinations
             options={options}
-            jobName={jobName}
-            destinations={resolvedDestinations}
-            onChange={setDestinations}
+            selection={selection}
+            onChange={setSelection}
             disabled={optionsQuery.isPending || optionsQuery.isError}
           />
           {selectedDestinationCount > MAX_BULK_DESTINATIONS ? (

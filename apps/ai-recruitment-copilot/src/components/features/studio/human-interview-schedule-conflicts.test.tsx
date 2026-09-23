@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   createMeeting: vi.fn(),
   createRound: vi.fn(),
   error: vi.fn(),
+  externalCheck: vi.fn(),
+  externalDefaults: vi.fn(),
   listMeetings: vi.fn(),
   listRounds: vi.fn(),
   success: vi.fn(),
@@ -26,6 +28,10 @@ vi.mock("@/lib/client/api", () => ({
   issueHumanInterviewMeetingLinks: vi.fn(),
   listHumanInterviewMeetings: mocks.listMeetings,
   listHumanInterviewRounds: mocks.listRounds,
+}));
+vi.mock("@/lib/client/api/endpoints/external-interviewers", () => ({
+  checkExternalInterviewerBindings: mocks.externalCheck,
+  getExternalInterviewerDefaults: mocks.externalDefaults,
 }));
 vi.mock("sonner", () => ({ toast: { error: mocks.error, success: mocks.success } }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
@@ -109,7 +115,7 @@ async function click(text: string) {
   });
   await flush();
 }
-async function renderDialog() {
+async function renderDialog(interviewerIds = defaultInterviewerIds) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -128,7 +134,7 @@ async function renderDialog() {
           ]}
           candidateId="candidate"
           existingCount={0}
-          defaultInterviewerIds={defaultInterviewerIds}
+          defaultInterviewerIds={interviewerIds}
           onOpenChange={vi.fn()}
           onScheduled={vi.fn()}
         />
@@ -140,6 +146,8 @@ async function renderDialog() {
 }
 
 beforeEach(() => {
+  mocks.externalDefaults.mockResolvedValue([]);
+  mocks.externalCheck.mockResolvedValue([]);
   mocks.check.mockResolvedValue({ conflicts: [] });
   mocks.createRound.mockResolvedValue({ id: "new-round" });
   mocks.createMeeting.mockResolvedValue({ id: "new-meeting" });
@@ -319,4 +327,110 @@ describe("human interview scheduling conflict confirmation", () => {
     expect(mocks.createMeeting).toHaveBeenCalledTimes(1);
     expect(mocks.createRound).not.toHaveBeenCalled();
   });
+});
+
+describe("external interviewer scheduling", () => {
+  it("prefills requester fields and cancels before creating any records", async () => {
+    mocks.externalDefaults.mockResolvedValue([
+      { name: "外部张三", telegram: "@outside1" },
+      { name: "外部李四", telegram: "" },
+    ]);
+    mocks.externalCheck.mockResolvedValue([{ bound: false, name: "外部李四", telegram: "" }]);
+    await renderDialog();
+    expect(document.querySelector<HTMLInputElement>('input[placeholder="姓名"]')?.value).toBe(
+      "外部张三",
+    );
+    await click("保存");
+    expect(document.body.textContent).toContain("外部李四 · 未填写 TG 号");
+    expect(mocks.createRound).not.toHaveBeenCalled();
+    await click("取消保存");
+    expect(mocks.createRound).not.toHaveBeenCalled();
+    expect(mocks.createMeeting).not.toHaveBeenCalled();
+  });
+  it("continues after warning and saves all external interviewer fields", async () => {
+    mocks.externalDefaults.mockResolvedValue([{ name: "外部张三", telegram: "@outside1" }]);
+    mocks.externalCheck.mockResolvedValue([
+      { bound: false, name: "外部张三", telegram: "@outside1" },
+    ]);
+    await renderDialog();
+    await click("保存");
+    expect(document.body.textContent).toContain("@outside1（尚未绑定）");
+    await click("继续创建");
+    expect(mocks.createRound).toHaveBeenCalledWith(
+      "world",
+      "candidate",
+      expect.objectContaining({
+        externalInterviewers: [{ name: "外部张三", telegram: "@outside1" }],
+      }),
+    );
+    expect(mocks.createMeeting).toHaveBeenCalledOnce();
+  });
+  it("does not prompt when all external interviewers are bound", async () => {
+    mocks.externalDefaults.mockResolvedValue([{ name: "张三", telegram: "@outside1" }]);
+    mocks.externalCheck.mockResolvedValue([{ bound: true, name: "张三", telegram: "@outside1" }]);
+    await renderDialog();
+    await click("保存");
+    expect(mocks.createMeeting).toHaveBeenCalledOnce();
+    expect(document.body.textContent).not.toContain("部分外部面试官无法接收 TG 通知");
+  });
+  it("blocks saving on failed binding checks", async () => {
+    mocks.externalDefaults.mockResolvedValue([{ name: "张三", telegram: "@outside1" }]);
+    mocks.externalCheck.mockRejectedValue(new Error("检查失败"));
+    await renderDialog();
+    await click("保存");
+    expect(mocks.createRound).not.toHaveBeenCalled();
+    expect(mocks.error).toHaveBeenCalledWith("检查失败");
+  });
+});
+
+it("schedules with external interviewers only and lets HR remove a prefilled person", async () => {
+  mocks.externalDefaults.mockResolvedValue([
+    { name: "张三", telegram: "@outside1" },
+    { name: "李四", telegram: "" },
+  ]);
+  mocks.externalCheck.mockResolvedValue([{ bound: false, name: "李四", telegram: "" }]);
+  await renderDialog([]);
+  const remove = document.querySelector<HTMLButtonElement>('button[aria-label="删除外部面试官 1"]');
+  act(() => remove?.click());
+  await flush();
+  await click("保存");
+  await click("继续创建");
+  expect(mocks.check).not.toHaveBeenCalled();
+  expect(mocks.createRound).toHaveBeenCalledWith(
+    "world",
+    "candidate",
+    expect.objectContaining({
+      externalInterviewers: [{ name: "李四", telegram: "" }],
+      interviewerIds: [],
+    }),
+  );
+});
+
+it("saves HR edits to the prefilled name and Telegram handle", async () => {
+  mocks.externalDefaults.mockResolvedValue([{ name: "张三", telegram: "@outside1" }]);
+  mocks.externalCheck.mockResolvedValue([{ bound: true, name: "新的姓名", telegram: "@updated1" }]);
+  await renderDialog();
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  for (const [placeholder, value] of [
+    ["姓名", "新的姓名"],
+    ["@用户名（可选）", "@updated1"],
+  ]) {
+    const input = document.querySelector<HTMLInputElement>(`input[placeholder="${placeholder}"]`);
+    act(() => {
+      setValue?.call(input, value);
+      input?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  await flush();
+  await click("保存");
+  expect(mocks.externalCheck).toHaveBeenCalledWith("world", [
+    { name: "新的姓名", telegram: "@updated1" },
+  ]);
+  expect(mocks.createRound).toHaveBeenCalledWith(
+    "world",
+    "candidate",
+    expect.objectContaining({
+      externalInterviewers: [{ name: "新的姓名", telegram: "@updated1" }],
+    }),
+  );
 });

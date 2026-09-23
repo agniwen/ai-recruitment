@@ -75,7 +75,11 @@ export function AiReviewDetailDialog({
           <TabsTrigger value="ai-review">AI 评价</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
-          <ResumeOverviewPanel detail={detail} onViewAiScore={() => setTab("ai-review")} />
+          <ResumeOverviewPanel
+            detail={detail}
+            onViewAiScore={() => setTab("ai-review")}
+            slug={slug}
+          />
         </TabsContent>
         <TabsContent value="ai-review">
           {detail.resumeReviewStatus === "ready" ? (

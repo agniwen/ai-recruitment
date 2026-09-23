@@ -233,6 +233,10 @@ describe("permission matrix cross-cut", () => {
     ["admin", "interview", "delete", true],
     ["member", "interview", "delete", true],
     // jd
+    ["owner", "jd", "export", true],
+    ["admin", "jd", "export", true],
+    ["member", "jd", "export", true],
+    ["noAccess", "jd", "export", false],
     ["member", "jd", "update", true],
     ["member", "jd", "delete", true],
     // resume library / pool / upload batches split

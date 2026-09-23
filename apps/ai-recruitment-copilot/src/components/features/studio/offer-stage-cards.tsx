@@ -14,15 +14,19 @@ import { IconBan, IconCircleCheck, IconMail, IconPencil, IconTrash } from "@tabl
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ClipboardEvent } from "react";
 import { toast } from "sonner";
 import { getOfferDraftStatusMeta } from "@arc/db-schema/studio-interviews";
+import { MAX_OFFER_APPROVAL_ATTACHMENT_BYTES } from "@arc/shared/studio-pipeline-stages";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import {
   cancelOfferDraft,
   deleteOfferDraft,
   fetchStudioResume,
+  offerApprovalAttachmentUrl,
   patchOfferDraft,
+  patchOfferDraftWithAttachment,
   updateCandidateExpectations,
 } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
@@ -43,6 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EntityDeleteDialog } from "./entity-delete-dialog";
+import { OfferAttachmentPreview } from "./offer-attachment-preview";
 import {
   OfferDraftFormFields,
   buildOfferDraftPayload,
@@ -260,6 +265,10 @@ export function OfferCard({
   const meta = getOfferDraftStatusMeta(draft.status);
   const [editing, setEditing] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [removeAttachment, setRemoveAttachment] = useState(false);
+  const [newAttachment, setNewAttachment] = useState<File | null>(null);
+  const [newAttachmentPreviewUrl, setNewAttachmentPreviewUrl] = useState<string | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<OfferFormState>(() => offerFormStateFromDraft(draft));
   const setFormField = createOfferFormFieldSetter(setForm);
 
@@ -268,6 +277,41 @@ export function OfferCard({
       setForm(offerFormStateFromDraft(draft));
     }
   }, [draft, editing]);
+
+  useEffect(() => {
+    if (!newAttachment) {
+      setNewAttachmentPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(newAttachment);
+    setNewAttachmentPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newAttachment]);
+
+  function clearNewAttachment() {
+    setNewAttachment(null);
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = "";
+    }
+  }
+
+  function selectNewAttachment(file: File | null) {
+    if (file && (file.size === 0 || file.size > MAX_OFFER_APPROVAL_ATTACHMENT_BYTES)) {
+      toast.error(file.size === 0 ? "请选择非空附件。" : "附件不能超过 20 MB。");
+      clearNewAttachment();
+      return;
+    }
+    setNewAttachment(file);
+  }
+
+  function handleAttachmentPaste(event: ClipboardEvent<HTMLDivElement>) {
+    const file = [...event.clipboardData.files].find((item) => item.type.startsWith("image/"));
+    if (!file) {
+      return;
+    }
+    event.preventDefault();
+    selectNewAttachment(file.name ? file : new File([file], "ssc-review.png", { type: file.type }));
+  }
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelOfferDraft(slug, candidateId, draft.id),
@@ -278,11 +322,18 @@ export function OfferCard({
     },
   });
   const saveMutation = useMutation({
-    mutationFn: () => patchOfferDraft(slug, candidateId, draft.id, buildOfferDraftPayload(form)),
+    mutationFn: () => {
+      const payload = buildOfferDraftPayload(form);
+      return newAttachment || removeAttachment
+        ? patchOfferDraftWithAttachment(slug, candidateId, draft.id, payload, newAttachment)
+        : patchOfferDraft(slug, candidateId, draft.id, payload);
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "保存失败"),
     onSuccess: () => {
       toast.success("已更新草稿");
       setEditing(false);
+      clearNewAttachment();
+      setRemoveAttachment(false);
       onSaved();
     },
   });
@@ -295,16 +346,17 @@ export function OfferCard({
       onDeleted();
     },
   });
-
   function cancelEditing() {
     setForm(offerFormStateFromDraft(draft));
+    clearNewAttachment();
+    setRemoveAttachment(false);
     setEditing(false);
   }
 
   if (editing && canUpdate && draft.status === "draft") {
     return (
       <Card className="gap-0 rounded-lg py-0">
-        <CardContent className="p-4">
+        <CardContent className="p-4" onPaste={handleAttachmentPaste}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="font-medium text-sm">v{draft.version} · 编辑 Offer 草稿</span>
@@ -317,6 +369,47 @@ export function OfferCard({
             idPrefix={`offer-${draft.id}`}
             onFieldChange={setFormField}
           />
+
+          <div className="mt-3 grid gap-1.5">
+            <Label className="text-sm" htmlFor={`offer-${draft.id}-approval-attachment`}>
+              SSC 已审核截图 / 附件（可选）
+            </Label>
+            {draft.approvalAttachment && !removeAttachment && !newAttachment ? (
+              <OfferApprovalAttachment
+                candidateId={candidateId}
+                draft={draft}
+                inline
+                onDelete={() => setRemoveAttachment(true)}
+                disabled={saveMutation.isPending}
+                slug={slug}
+              />
+            ) : null}
+            <Input
+              id={`offer-${draft.id}-approval-attachment`}
+              onChange={(event) => selectNewAttachment(event.target.files?.[0] ?? null)}
+              ref={attachmentInputRef}
+              type="file"
+            />
+            <p className="text-muted-foreground text-xs">
+              支持图片、文档、压缩包等文件，也可直接粘贴截图；最大 20 MB。
+            </p>
+            {newAttachment ? (
+              <OfferAttachmentPreview
+                filename={newAttachment.name}
+                url={newAttachmentPreviewUrl ?? ""}
+                imageUrl={
+                  /^image\/(avif|bmp|gif|jpeg|png|webp)$/.test(newAttachment.type)
+                    ? newAttachmentPreviewUrl
+                    : null
+                }
+                imageAlt={`待上传附件预览：${newAttachment.name}`}
+                label="已选择："
+                deleteLabel={`移除附件 ${newAttachment.name}`}
+                disabled={saveMutation.isPending}
+                onDelete={clearNewAttachment}
+              />
+            ) : null}
+          </div>
 
           <div className="mt-3 flex justify-end gap-2">
             <Button
@@ -349,6 +442,9 @@ export function OfferCard({
               v{draft.version} · {draft.position}
             </span>
             <Badge variant={meta.tone}>{meta.label}</Badge>
+            {draft.approvalAttachment ? (
+              <OfferApprovalAttachment candidateId={candidateId} draft={draft} slug={slug} />
+            ) : null}
           </div>
 
           <OfferDraftReadonlyFields draft={draft} />
@@ -378,6 +474,95 @@ export function OfferCard({
         />
       </CardContent>
     </Card>
+  );
+}
+
+function OfferApprovalAttachment({
+  candidateId,
+  draft,
+  inline = false,
+  onDelete,
+  disabled,
+  slug,
+}: {
+  candidateId: string;
+  draft: OfferDraftRecord;
+  inline?: boolean;
+  onDelete?: () => void;
+  disabled?: boolean;
+  slug: string;
+}) {
+  const attachment = draft.approvalAttachment;
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{
+    objectUrl: string;
+    requestUrl: string;
+  } | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const url = offerApprovalAttachmentUrl(slug, candidateId, draft.id);
+  const previewUrl = imagePreview?.requestUrl === url ? imagePreview.objectUrl : null;
+
+  useEffect(() => {
+    if (!(previewOpen && attachment?.mediaType.startsWith("image/"))) {
+      return;
+    }
+    const controller = new AbortController();
+    let objectUrl: string | null = null;
+    setImagePreview(null);
+    setImageError(false);
+
+    async function loadPreview() {
+      try {
+        // In dev, image-destination requests bypass the Hono API; fetch reaches the same URL.
+        const response = await fetch(url, { credentials: "include", signal: controller.signal });
+        if (!response.ok) {
+          throw new Error(`附件预览加载失败：${response.status}`);
+        }
+        const blob = await response.blob();
+        if (controller.signal.aborted) {
+          return;
+        }
+        objectUrl = URL.createObjectURL(blob);
+        setImagePreview({ objectUrl, requestUrl: url });
+      } catch {
+        if (!controller.signal.aborted) {
+          setImageError(true);
+        }
+      }
+    }
+
+    void loadPreview();
+    return () => {
+      controller.abort();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [attachment?.mediaType, previewOpen, url]);
+
+  if (!attachment) {
+    return null;
+  }
+
+  let previewMessage: string | undefined;
+  if (attachment.mediaType.startsWith("image/") && (!previewUrl || imageError)) {
+    previewMessage = imageError ? "图片加载失败，请关闭弹窗后重试或下载查看。" : "图片加载中…";
+  }
+  return (
+    <OfferAttachmentPreview
+      compact={!inline}
+      filename={attachment.filename}
+      url={url}
+      imageUrl={imageError ? null : previewUrl}
+      imageAlt={`SSC 审核附件：${attachment.filename}`}
+      label="当前附件："
+      deleteLabel={`删除审核附件：${attachment.filename}`}
+      disabled={disabled}
+      onDelete={onDelete}
+      onPreviewOpenChange={setPreviewOpen}
+      onImageError={() => setImageError(true)}
+      previewMessage={previewMessage}
+    />
   );
 }
 

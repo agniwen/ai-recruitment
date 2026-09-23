@@ -19,6 +19,12 @@ const permissionsSectionSource = readFileSync(
 );
 
 describe("workspace role permission helpers", () => {
+  it("exposes a dedicated export action under job permissions", () => {
+    expect(buildPermissionItems().find((item) => item.key === "jd:export")).toMatchObject({
+      actionLabel: "导出",
+      resourceLabel: "在招岗位",
+    });
+  });
   it("exposes viewing recommendations under job permissions", () => {
     expect(
       buildPermissionItems().find((item) => item.key === "jd:viewRecommendations"),

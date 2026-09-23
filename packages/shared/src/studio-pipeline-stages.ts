@@ -4,6 +4,7 @@
 // Imported by both DAO and client; single source of truth.
 
 import type {
+  ExternalInterviewerInput,
   HumanInterviewMeetingInterviewerRole,
   HumanInterviewMeetingStatus,
   HumanInterviewFormat,
@@ -20,6 +21,7 @@ import type {
  * interviewers are pre-joined user info.
  */
 export interface HumanInterviewRoundRecord {
+  externalInterviewers?: (ExternalInterviewerInput & { id: string })[];
   id: string;
   interviewRecordId: string;
   organizationId: string;
@@ -56,6 +58,8 @@ export interface HumanInterviewMeetingRoundRecord {
 }
 
 export interface HumanInterviewMeetingInterviewerRecord {
+  external?: boolean;
+  telegram?: string;
   id: string;
   name: string;
   image: string | null;
@@ -65,6 +69,7 @@ export interface HumanInterviewMeetingInterviewerRecord {
 }
 
 export interface HumanInterviewMeetingRecord {
+  externalNotificationFailures?: string[];
   id: string;
   organizationId: string;
   title: string;
@@ -95,6 +100,7 @@ export interface HumanInterviewMeetingCandidateLinkRecord {
 }
 
 export interface HumanInterviewMeetingInterviewerLinkRecord {
+  external?: boolean;
   name: string;
   role: HumanInterviewMeetingInterviewerRole;
   url: string;
@@ -148,6 +154,11 @@ export interface PublicHumanInterviewInterviewerPreview {
  */
 export interface OfferDraftRecord {
   id: string;
+  approvalAttachment: {
+    filename: string;
+    mediaType: string;
+    size: number;
+  } | null;
   interviewRecordId: string;
   organizationId: string;
   version: number;
@@ -166,3 +177,5 @@ export interface OfferDraftRecord {
   createdAt: string;
   updatedAt: string;
 }
+
+export const MAX_OFFER_APPROVAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;

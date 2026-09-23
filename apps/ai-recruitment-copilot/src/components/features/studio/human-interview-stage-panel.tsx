@@ -160,7 +160,10 @@ export function HumanInterviewStagePanel({
         title: round.label,
         validUntil: null,
       };
-      if (!(await confirmSchedule({ ...input, excludeRoundIds: [round.id] }))) {
+      if (
+        input.interviewerIds.length > 0 &&
+        !(await confirmSchedule({ ...input, excludeRoundIds: [round.id] }))
+      ) {
         return null;
       }
       return createHumanInterviewMeeting(slug, input);

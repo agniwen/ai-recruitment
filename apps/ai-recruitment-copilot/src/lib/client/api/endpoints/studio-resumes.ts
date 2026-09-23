@@ -9,6 +9,7 @@
  */
 
 import type { InterviewQuestion, ResumeProfile } from "@arc/db-schema/interview/types";
+import type { PortfolioAttachment } from "@arc/shared/bulk-resume-upload";
 import type {
   StudioInterviewRoundDetail,
   StudioInterviewRoundListRecord,
@@ -23,6 +24,7 @@ import type {
 } from "@arc/shared/studio-resumes";
 import type { OdcAnalysisResumeActivity } from "@arc/shared/odc-analysis";
 import { rpc } from "@/lib/client/rpc";
+import { apiFetch } from "@/lib/client/api/client";
 import { rpcFetch } from "../rpc-fetch";
 import type { DedupMatchRecord } from "./studio-interviews";
 
@@ -216,6 +218,28 @@ export function updateStudioResumeIdentity(
       param: { id, slug },
     }),
     "保存候选人信息失败",
+  );
+}
+
+export function uploadStudioResumePortfolio(
+  slug: string,
+  id: string,
+  file: File,
+): Promise<PortfolioAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<PortfolioAttachment>(`/api/w/${slug}/studio/resumes/${id}/portfolio/uploads`, {
+    body: formData,
+    method: "POST",
+  });
+}
+
+export function deleteStudioResumePortfolio(slug: string, id: string, attachmentId: string) {
+  return rpcFetch<{ attachments: PortfolioAttachment[] }>(
+    rpc.api.w[":slug"].studio.resumes[":id"].portfolio[":attachmentId"].$delete({
+      param: { attachmentId, id, slug },
+    }),
+    "删除附件失败",
   );
 }
 

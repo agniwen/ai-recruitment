@@ -109,7 +109,10 @@ export function RoundCard({
               </span>
               <span className="inline-flex items-center gap-1">
                 <IconUsers className="size-3" />
-                {round.interviewers.map((i) => i.name).join("、") || "未指派面试官"}
+                {[
+                  ...round.interviewers.map((i) => i.name),
+                  ...(round.externalInterviewers ?? []).map((i) => `${i.name}（外部）`),
+                ].join("、") || "未指派面试官"}
               </span>
             </div>
           </div>

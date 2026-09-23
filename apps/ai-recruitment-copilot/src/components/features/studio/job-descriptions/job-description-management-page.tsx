@@ -110,7 +110,7 @@ export function JobDescriptionManagementPage({
   const canCreateJobDescription = useHasPermission("jd", "create");
   const canUpdateJobDescription = useHasPermission("jd", "update");
   const canDeleteJobDescription = useHasPermission("jd", "delete");
-  const canExportJobDescription = useHasPermission("dataExport", "export");
+  const canExportJobDescription = useHasPermission("jd", "export");
   const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
   const hasViewRecommendationsPermission = useHasPermission("jd", "viewRecommendations");
   const canViewRecommendations = hasViewRecommendationsPermission && canReadJobDescription;

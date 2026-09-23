@@ -133,6 +133,7 @@ export function OfferStagePanel({
           <p className="text-muted-foreground text-xs">
             管理 {candidateName} 的 Offer：新版本会自动 supersede 旧的草稿/已发版本。
           </p>
+          <p className="mt-1 text-muted-foreground text-xs">该 Offer，须由 SSC 已完成审核确认。</p>
         </div>
         {disabled || !canCreate ? null : (
           <Button onClick={() => setCreateOpen(true)} size="sm">

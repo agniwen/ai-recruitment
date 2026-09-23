@@ -19,6 +19,7 @@ export async function validateBatchDestinations(
         jobDescriptionMode: "bind",
       },
       await loadResumePoolImportOptions(organizationId, userId),
+      true,
     );
   }
   if (input.jdMode === "bind") {

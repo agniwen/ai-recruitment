@@ -3,7 +3,10 @@ import { humanInterviewMeetingInputSchema } from "@arc/db-schema/studio-intervie
 
 export const humanInterviewConflictInputSchema = humanInterviewMeetingInputSchema
   .pick({ interviewerIds: true, scheduledAt: true, validUntil: true })
-  .extend({ excludeRoundIds: z.array(z.string().trim().min(1)).max(20).optional() });
+  .extend({
+    excludeRoundIds: z.array(z.string().trim().min(1)).max(20).optional(),
+    interviewerIds: z.array(z.string().trim().min(1)).min(1).max(20),
+  });
 
 export type HumanInterviewConflictInput = z.infer<typeof humanInterviewConflictInputSchema>;
 

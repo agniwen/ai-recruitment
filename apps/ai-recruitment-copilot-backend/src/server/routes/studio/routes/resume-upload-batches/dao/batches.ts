@@ -21,6 +21,7 @@ import type {
   BulkResumeBatchDetailDto,
   BulkResumeBatchDto,
   BulkResumeBatchItemDto,
+  PortfolioAttachment,
   ResumeRecruitmentSource,
 } from "@arc/shared/bulk-resume-upload";
 import type { ResumeParseJobData } from "@arc/resume-parse-queue/resume-parse";
@@ -94,6 +95,7 @@ export interface CreateBatchInput {
     fileSize: number;
     contentHash: string | null;
     sourceFolder?: string | null;
+    portfolioAttachments?: PortfolioAttachment[];
   }[];
 }
 
@@ -165,6 +167,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
           notes: null,
           organizationId: input.organizationId,
           pipelineStage: "ai_review" as const,
+          portfolioAttachments: file.portfolioAttachments ?? [],
           recruitmentSource: input.recruitmentSource ?? null,
           recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
           resumeContentHash: file.contentHash,

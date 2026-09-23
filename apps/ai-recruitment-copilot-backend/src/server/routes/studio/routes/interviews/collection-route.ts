@@ -1,4 +1,5 @@
 /* oxlint-disable complexity -- collection router coordinates validation, persistence, and access policy. */
+import { notifyExternalInterviewers } from "./utils/external-interviewer-notification";
 import { humanInterviewMeetingsRouter } from "./routes/human-interview-meetings/route";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { zValidator } from "@hono/zod-validator";
@@ -346,8 +347,9 @@ export const studioInterviewCollectionRouter = factory
           input: c.req.valid("json"),
           organizationId: activeOrg.id,
         });
+        const externalNotificationFailures = await notifyExternalInterviewers(created);
         invalidateStudioInterviewCaches(activeOrg.id);
-        return c.json(created, 200);
+        return c.json({ ...created, externalNotificationFailures }, 200);
       } catch (error) {
         if (error instanceof HumanInterviewMeetingError) {
           return c.json({ error: error.message }, error.status);

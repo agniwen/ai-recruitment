@@ -105,7 +105,7 @@ export const WORKSPACE_PERMISSION_GROUPS = [
         label: "禁用评估",
       },
       {
-        actions: ["create", "read", "update", "delete", "viewRecommendations"] as const,
+        actions: ["create", "read", "update", "delete", "export", "viewRecommendations"] as const,
         key: "jd",
         label: "在招岗位",
       },
@@ -310,6 +310,8 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
   jd: {
     create: "允许在「在招岗位」页面新增岗位。",
     delete: "允许删除在招岗位。",
+    export:
+      "允许导出当前筛选条件下有权查看的在招岗位；同时需要在招岗位的查看权限，无需数据导出权限。",
     read: "允许加载岗位列表、全部岗位选项、岗位详情、岗位唯一编码生成和推荐链接；推荐候选人接口还需要「查看推荐」权限。",
     update: "允许编辑岗位描述、招聘要求、关联配置和发布状态。",
     viewRecommendations:

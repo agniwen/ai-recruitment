@@ -378,7 +378,7 @@ export function LaunchInterviewDialog({
             </TabsContent>
 
             <TabsContent value="overview">
-              {resumeDetail ? <ResumeOverviewPanel detail={resumeDetail} /> : null}
+              {resumeDetail ? <ResumeOverviewPanel detail={resumeDetail} slug={slug} /> : null}
             </TabsContent>
 
             <TabsContent value="experience">

@@ -8,10 +8,12 @@ import {
   getBulkResumeBatchDetail,
   resumeBulkResumeBatch,
   uploadResumeForBulk,
+  uploadPortfolioForBulk,
 } from "@/lib/client/api/endpoints/bulk-resume-upload";
 import type {
   BulkResumeBatchDetailDto,
   CreateBulkResumeBatchInput,
+  PortfolioAttachment,
 } from "@arc/shared/bulk-resume-upload";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 
@@ -121,7 +123,7 @@ export function useBulkUpload({ onBatchQueued, onRecordsChanged }: UseBulkUpload
   );
 
   const start = useCallback(
-    async (files: File[], config: StartConfig) => {
+    async (files: File[], config: StartConfig, portfolios: File[][] = []) => {
       pollTokenRef.current += 1;
       abortRef.current = true;
       setState({
@@ -136,6 +138,7 @@ export function useBulkUpload({ onBatchQueued, onRecordsChanged }: UseBulkUpload
         storageKey: string;
         originalFileName: string;
         fileSize: number;
+        portfolioAttachments?: PortfolioAttachment[];
       } | null)[] = files.map(() => null);
       let nextIndex = 0;
       const POOL = 4;
@@ -147,10 +150,14 @@ export function useBulkUpload({ onBatchQueued, onRecordsChanged }: UseBulkUpload
         const file = files[idx];
         try {
           const d = await uploadResumeForBulk(slug, file);
+          const portfolioAttachments = await Promise.all(
+            (portfolios[idx] ?? []).map((portfolio) => uploadPortfolioForBulk(slug, portfolio)),
+          );
           descriptors[idx] = {
             contentHash: d.contentHash,
             fileSize: d.fileSize,
             originalFileName: d.originalFileName,
+            portfolioAttachments,
             storageKey: d.storageKey,
           };
           setState((s) => {

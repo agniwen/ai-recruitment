@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractRequesterTelegramUsernames,
   extractTelegramUsername,
   normalizeTelegramUsername,
   resolveTelegramRecipientId,
@@ -66,5 +67,22 @@ describe("resolveTelegramRecipientId", () => {
         profileTelegram: "@new_name",
       }),
     ).toBeNull();
+  });
+});
+
+describe("extractRequesterTelegramUsernames", () => {
+  it.each([
+    ["李杰@JackLil/野火@yezhu803", ["jacklil", "yezhu803"]],
+    ["知禾\n@Zhihe7149", ["zhihe7149"]],
+    ["葛兵、liz\n@liko188、@liz3572", ["liko188", "liz3572"]],
+    ["陈小宝思瞳@cxb2024888@sitong1632", ["cxb2024888", "sitong1632"]],
+    ["@JackLil\n@jacklil", ["jacklil"]],
+    ["杜克", []],
+    ["JackLil", []],
+    ["@abc @123456", []],
+    [`@${"a".repeat(33)}`, []],
+    [null, []],
+  ])("extracts all complete explicit handles from %s", (value, expected) => {
+    expect(extractRequesterTelegramUsernames(value)).toEqual(expected);
   });
 });

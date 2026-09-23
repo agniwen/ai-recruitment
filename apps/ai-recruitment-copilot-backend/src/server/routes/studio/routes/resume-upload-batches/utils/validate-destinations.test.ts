@@ -84,14 +84,14 @@ describe("bulk upload destination validation", () => {
       "所选岗位与入库组织不匹配",
     );
   });
-  it("still rejects different job names in one batch", async () => {
+  it("accepts different job names in one batch", async () => {
     mocks.options.mockResolvedValue({
       departments: [],
       hiringUnits: [{ id: "tech", name: "技术中心" }],
       jobDescriptions: [jobs[0], { ...jobs[1], name: "高级运营" }],
     });
-    await expect(validateBatchDestinations(request(), "workspace", "uploader")).rejects.toThrow(
-      "同一岗位名称",
-    );
+    await expect(
+      validateBatchDestinations(request(), "workspace", "uploader"),
+    ).resolves.toHaveLength(2);
   });
 });

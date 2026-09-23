@@ -66,6 +66,18 @@ export interface BulkResumeUploadFileDescriptor {
   fileSize: number;
 }
 
+export const MAX_PORTFOLIO_FILE_SIZE_BYTES = 500 * 1024 * 1024;
+
+export const portfolioAttachmentSchema = z.object({
+  id: z.string().uuid(),
+  mimeType: z.string().min(1).max(100),
+  name: z.string().min(1).max(500),
+  size: z.number().int().positive().max(MAX_PORTFOLIO_FILE_SIZE_BYTES),
+});
+
+export type PortfolioAttachment = z.infer<typeof portfolioAttachmentSchema>;
+export const MAX_PORTFOLIO_ATTACHMENTS = 10;
+
 // POST / 创建 batch 请求。
 // Create-batch request payload.
 export const createBulkResumeBatchSchema = z
@@ -82,6 +94,10 @@ export const createBulkResumeBatchSchema = z
           contentHash: z.string().min(1).max(128),
           fileSize: z.number().int().positive().max(MAX_RESUME_FILE_SIZE_BYTES),
           originalFileName: z.string().min(1).max(500),
+          portfolioAttachments: z
+            .array(portfolioAttachmentSchema)
+            .max(MAX_PORTFOLIO_ATTACHMENTS)
+            .optional(),
           storageKey: z.string().min(1),
         }),
       )

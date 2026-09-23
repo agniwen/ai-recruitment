@@ -20,6 +20,13 @@ function getRequiredEnv(
 }
 
 function bindingReply(result: Awaited<ReturnType<typeof bindTelegramUser>>): string {
+  if (result.kind === "requester_bound") {
+    const memberReply = result.memberName ? `同时已绑定成员信息：${result.memberName}。` : "";
+    const ambiguousReply = result.memberAmbiguous
+      ? "系统内有多个成员填写了相同的 TG 号，成员信息未绑定，请联系管理员处理。"
+      : "";
+    return `需求发起人通知绑定成功，无需登录系统。${memberReply}${ambiguousReply}`;
+  }
   if (result.kind === "bound") {
     return `绑定成功，${result.userName}。候选人状态发生变化时，我会在这里通知你。`;
   }
@@ -29,7 +36,7 @@ function bindingReply(result: Awaited<ReturnType<typeof bindTelegramUser>>): str
   if (result.kind === "ambiguous") {
     return "绑定失败：系统内有多个成员填写了相同的 TG 号，请联系管理员处理。";
   }
-  return "未找到与你的 Telegram 用户名一致的成员信息。请先在个人信息中填写 TG 号，再发送 /start。";
+  return "未找到与你的 Telegram 用户名一致的成员或需求发起人信息。成员请在个人信息中填写 TG 号；外部面试官请联系管理员在岗位需求发起人中填写 @用户名，然后重新发送 /start。";
 }
 
 export function isTelegramBotConfigured(): boolean {

@@ -164,7 +164,9 @@ function MeetingLinksContent({ links }: { links: HumanInterviewMeetingLinkBundle
         <div className="space-y-2">
           {links.interviewerLinks.map((link) => (
             <MeetingLinkRow
-              description={interviewerRoleLabel[link.role]}
+              description={
+                link.external ? "外部面试官 · 无需登录" : interviewerRoleLabel[link.role]
+              }
               key={link.userId}
               label={link.name}
               url={link.url}

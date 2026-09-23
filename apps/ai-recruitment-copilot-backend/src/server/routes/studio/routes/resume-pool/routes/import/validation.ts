@@ -29,6 +29,7 @@ function validateUnboundDestination(
 export function validateImportDestinations(
   input: Pick<ResumePoolBatchImportInput, "destinations" | "jobDescriptionMode">,
   options: ResumePoolImportOptions,
+  allowMultipleJobNames = false,
 ) {
   const jobNames = new Set<string>();
   return input.destinations.map((destination) => {
@@ -50,7 +51,7 @@ export function validateImportDestinations(
       throw new Error("所选岗位与入库组织不匹配，请重新选择。");
     }
     jobNames.add(job.name.trim());
-    if (jobNames.size > 1) {
+    if (!allowMultipleJobNames && jobNames.size > 1) {
       throw new Error("请选择同一岗位名称下的入库去向。");
     }
     if (destination.departmentId && destination.departmentId !== job.departmentId) {

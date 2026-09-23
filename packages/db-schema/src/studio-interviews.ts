@@ -275,16 +275,19 @@ export type HumanInterviewMeetingInterviewerRole = z.infer<
 >;
 
 // 复面轮次输入 schema（创建 + 编辑共用，部分字段编辑时可选）。
-// 至少一名面试官；时间可空（未定档）；评分 0-100，可空。
-// Round input schema; interviewers must be non-empty, scheduledAt may be null,
-// score range 0-100.
+// 内部或外部面试官合计至少一名，由 DAO 校验；时间可空，评分 0-100。
+// The DAO requires at least one internal or external interviewer.
+export const externalInterviewerInputSchema = z.object({
+  name: z.string().trim().min(1, "请输入外部面试官姓名").max(100),
+  telegram: z.string().trim().max(120),
+});
+export type ExternalInterviewerInput = z.infer<typeof externalInterviewerInputSchema>;
+
 export const humanInterviewRoundInputSchema = z.object({
+  externalInterviewers: z.array(externalInterviewerInputSchema).max(20).optional(),
   feedback: z.string().trim().max(5000, "面试反馈不能超过 5000 字").nullable().optional(),
   format: humanInterviewFormatSchema,
-  interviewerIds: z
-    .array(z.string().trim().min(1))
-    .min(1, "至少添加 1 位面试官")
-    .max(10, "面试官最多 10 人"),
+  interviewerIds: z.array(z.string().trim().min(1)).max(10, "面试官最多 10 人"),
   label: z.string().trim().min(1, "请输入轮次名称").max(50, "轮次名称不能超过 50 字"),
   location: z.string().trim().max(200).nullable().optional(),
   meetingUrl: z.string().trim().max(500).nullable().optional(),
@@ -297,10 +300,7 @@ export const humanInterviewRoundInputSchema = z.object({
 export type HumanInterviewRoundInput = z.infer<typeof humanInterviewRoundInputSchema>;
 
 export const humanInterviewMeetingInputSchema = z.object({
-  interviewerIds: z
-    .array(z.string().trim().min(1))
-    .min(1, "至少添加 1 位面试官")
-    .max(20, "面试官最多 20 人"),
+  interviewerIds: z.array(z.string().trim().min(1)).max(20, "面试官最多 20 人"),
   notes: z.string().trim().max(1000, "会议备注不能超过 1000 字").nullable().optional(),
   roundIds: z
     .array(z.string().trim().min(1))

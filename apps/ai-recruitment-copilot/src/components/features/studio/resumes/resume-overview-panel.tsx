@@ -9,6 +9,8 @@
 // same data renders the same way in both places.
 
 import { ResumeReviewV5Panel } from "./resume-review-v5-panel";
+import { CandidatePortfolioAttachments } from "./candidate-portfolio-attachments";
+import type { PortfolioAttachment } from "@arc/shared/bulk-resume-upload";
 import type { ResumeReviewStatus } from "@arc/db-schema/studio-interviews";
 import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import { canEditResumeRecord, describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
@@ -57,6 +59,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { fetchSelectableHiringUnits, updateStudioResumeIdentity } from "@/lib/client/api";
+import {
+  deleteStudioResumePortfolio,
+  uploadStudioResumePortfolio,
+} from "@/lib/client/api/endpoints/studio-resumes";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { cn } from "@arc/shared/utils";
 
@@ -647,6 +653,10 @@ function ResumeOverviewCandidateInfoSection({
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<OverviewIdentityDraft>(() => toOverviewIdentityDraft(detail));
+  const [portfolioAttachments, setPortfolioAttachments] = useState<PortfolioAttachment[]>(
+    () => detail.portfolioAttachments ?? [],
+  );
+  const [pendingPortfolioFiles, setPendingPortfolioFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
   const [hiringUnitError, setHiringUnitError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -674,6 +684,8 @@ function ResumeOverviewCandidateInfoSection({
   useEffect(() => {
     if (!editing) {
       setDraft(toOverviewIdentityDraft(detail));
+      setPortfolioAttachments(detail.portfolioAttachments ?? []);
+      setPendingPortfolioFiles([]);
       setHiringUnitError(null);
       setNameError(null);
       setJdError(null);
@@ -706,6 +718,8 @@ function ResumeOverviewCandidateInfoSection({
 
   function handleCancel() {
     setDraft(toOverviewIdentityDraft(detail));
+    setPortfolioAttachments(detail.portfolioAttachments ?? []);
+    setPendingPortfolioFiles([]);
     setHiringUnitError(null);
     setNameError(null);
     setJdError(null);
@@ -753,6 +767,9 @@ function ResumeOverviewCandidateInfoSection({
       cleanup: () => setSaving(false),
       onError: (error) => toast.error(error instanceof Error ? error.message : "保存失败"),
       operation: async () => {
+        const uploaded = await Promise.all(
+          pendingPortfolioFiles.map((file) => uploadStudioResumePortfolio(slug, detail.id, file)),
+        );
         const payload: ResumeIdentityUpdateInput = {
           age,
           candidateEmail: email,
@@ -761,6 +778,7 @@ function ResumeOverviewCandidateInfoSection({
           gender: draft.gender.trim(),
           hiringUnitId: draft.hiringUnitId.trim() || null,
           jobDescriptionId: draft.jobDescriptionId.trim() || null,
+          portfolioAttachments: [...portfolioAttachments, ...uploaded],
           recommendationText: draft.recommendationText.trim(),
           resumeEvaluationStatus: draft.resumeEvaluationStatus,
           targetRole: draft.targetRole.trim(),
@@ -1131,6 +1149,26 @@ function ResumeOverviewCandidateInfoSection({
           />
         </DataFields>
       )}
+      {slug ? (
+        <CandidatePortfolioAttachments
+          attachments={portfolioAttachments}
+          canDelete={canEdit}
+          disabled={saving}
+          editing={editing}
+          onAttachmentsChange={setPortfolioAttachments}
+          onDelete={async (attachmentId) => {
+            const result = await deleteStudioResumePortfolio(slug, detail.id, attachmentId);
+            setPortfolioAttachments(result.attachments);
+            toast.success("附件已删除");
+            await queryClient.invalidateQueries({ queryKey: ["studio-resumes", slug] });
+            onUpdated?.();
+          }}
+          onPendingFilesChange={setPendingPortfolioFiles}
+          pendingFiles={pendingPortfolioFiles}
+          recordId={detail.id}
+          slug={slug}
+        />
+      ) : null}
     </section>
   );
 }
