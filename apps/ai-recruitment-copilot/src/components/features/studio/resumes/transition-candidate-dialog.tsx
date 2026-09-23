@@ -90,7 +90,6 @@ function CloseDialog({
   const defaultOutcome: ManualCloseOutcome =
     initialOutcome && initialOutcome !== "rejected" ? initialOutcome : "archived";
   const [outcome, setOutcome] = useState<ManualCloseOutcome>(defaultOutcome);
-  const [internalNotes, setInternalNotes] = useState("");
   const [feedbackToCandidate, setFeedbackToCandidate] = useState("");
   // 到岗细节
   const [joiningDate, setJoiningDate] = useState("");
@@ -108,7 +107,6 @@ function CloseDialog({
       return;
     }
     setOutcome(defaultOutcome);
-    setInternalNotes("");
     setFeedbackToCandidate("");
     setJoiningDate("");
     setJoiningDepartment("");
@@ -139,7 +137,6 @@ function CloseDialog({
         // 构造 closedMeta partial。Build the closedMeta partial.
         const closedMeta: Omit<ClosedMeta, "previousStage"> = {
           feedbackToCandidate: feedbackToCandidate.trim() || null,
-          internalNotes: internalNotes.trim() || null,
         };
         if (outcome === "hired") {
           closedMeta.hiredDetails = {
@@ -277,29 +274,15 @@ function CloseDialog({
 
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="close-feedback">
-              拒绝原因
+              备注说明（可选）
             </Label>
             <Textarea
               id="close-feedback"
               maxLength={5000}
               onChange={(e) => setFeedbackToCandidate(e.target.value)}
-              placeholder="例如：感谢您参与本次招聘流程……"
+              placeholder="如有需要，可补充本次结案说明"
               rows={2}
               value={feedbackToCandidate}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label className="text-sm" htmlFor="close-notes">
-              内部备注（可选）
-            </Label>
-            <Textarea
-              id="close-notes"
-              maxLength={5000}
-              onChange={(e) => setInternalNotes(e.target.value)}
-              placeholder="给团队看的真实反馈，不发给候选人"
-              rows={2}
-              value={internalNotes}
             />
           </div>
         </div>

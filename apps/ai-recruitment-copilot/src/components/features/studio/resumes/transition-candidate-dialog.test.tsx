@@ -45,7 +45,7 @@ function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 describe("TransitionCandidateDialog close", () => {
-  it("uses the requested close-outcome and rejection-reason copy", () => {
+  it("uses the requested close-outcome and optional note copy", () => {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -71,7 +71,10 @@ describe("TransitionCandidateDialog close", () => {
     expect(document.querySelector('label[for="outcome-withdrawn"]')?.textContent).toBe(
       "候选人拒绝offer",
     );
-    expect(document.querySelector('label[for="close-feedback"]')?.textContent).toBe("拒绝原因");
+    expect(document.querySelector('label[for="close-feedback"]')?.textContent).toBe(
+      "备注说明（可选）",
+    );
+    expect(document.querySelector("#close-notes")).toBeNull();
 
     act(() => root.unmount());
   });
@@ -186,7 +189,6 @@ describe("TransitionCandidateDialog close", () => {
           preOnboardingTelegram: "@candidate-before",
           telegram: "@candidate",
         },
-        internalNotes: null,
       },
       outcome: "hired",
       pipelineStage: "closed",
