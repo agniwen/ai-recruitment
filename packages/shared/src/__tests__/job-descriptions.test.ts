@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createDefaultResumeScreeningPolicy,
+  isJobDescriptionInactive,
   jobDescriptionCodeSchema,
   jobDescriptionFormSchema,
 } from "../job-descriptions";
@@ -12,11 +13,29 @@ const baseJobDescription = {
   description: "",
   humanInterviewerIds: [],
   interviewerIds: ["interviewer-1"],
+  manuallyInactive: false,
   name: "前端工程师",
   priority: "P0",
   prompt: "岗位职责和任职要求",
   resumeScreeningPolicy: createDefaultResumeScreeningPolicy(),
 };
+
+describe("job description availability", () => {
+  it("treats manual deactivation and Google deletion as independent reasons to exclude a job", () => {
+    expect(isJobDescriptionInactive({ googleSheetDeleted: null, manuallyInactive: false })).toBe(
+      false,
+    );
+    expect(isJobDescriptionInactive({ googleSheetDeleted: false, manuallyInactive: false })).toBe(
+      false,
+    );
+    expect(isJobDescriptionInactive({ googleSheetDeleted: true, manuallyInactive: false })).toBe(
+      true,
+    );
+    expect(isJobDescriptionInactive({ googleSheetDeleted: false, manuallyInactive: true })).toBe(
+      true,
+    );
+  });
+});
 
 describe("jobDescriptionFormSchema salary fields", () => {
   it("allows salary fields to be omitted", () => {

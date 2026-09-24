@@ -255,6 +255,7 @@ function CandidateExportTable() {
     queryFn: async () => {
       const response = await rpc.api.w[":slug"].studio["job-descriptions"].all.$get({
         param: { slug },
+        query: {},
       });
       if (!response.ok) {
         throw new Error("加载在招岗位列表失败");

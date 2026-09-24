@@ -13,6 +13,7 @@ const filters = {
   recruitmentStatus: "招聘中",
   sourceSheet: "招聘表",
   textFilters: "encoded-filter",
+  validityStatus: "inactive",
 };
 
 describe("buildJobDescriptionQuery", () => {
@@ -39,6 +40,7 @@ describe("buildJobDescriptionQuery", () => {
       sortOrder: "asc",
       sourceSheet: "招聘表",
       textFilters: "encoded-filter",
+      validityStatus: "inactive",
     });
   });
 

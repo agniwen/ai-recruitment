@@ -381,6 +381,33 @@ describe("job and organization multi-selection", () => {
     expect(getStartButton().textContent).toContain("1 条记录");
     act(() => root.unmount());
   });
+  it("defaults every concrete destination to checked and submits only checked rows", () => {
+    const onConfirmed = vi.fn();
+    const { root } = renderDialog(onConfirmed, relationOptions);
+    selectSource();
+    selectValues("candidate-import-job", ["岗位A"]);
+    selectValues("resume-pool-import-hiring-unit", ["A", "B"]);
+    const first = document.querySelector<HTMLElement>(
+      '[data-destination-id="A-A"] [role="checkbox"]',
+    );
+    const second = document.querySelector<HTMLElement>(
+      '[data-destination-id="A-B"] [role="checkbox"]',
+    );
+    expect(first?.getAttribute("aria-checked")).toBe("true");
+    expect(second?.getAttribute("aria-checked")).toBe("true");
+    act(() => first?.click());
+    expect(first?.getAttribute("aria-checked")).toBe("false");
+    expect(getStartButton().textContent).toContain("1 条记录");
+    act(() => second?.click());
+    expect(getStartButton().disabled).toBe(true);
+    act(() => first?.click());
+    expect(getStartButton().disabled).toBe(false);
+    act(() => getStartButton().click());
+    expect(onConfirmed.mock.lastCall?.[1].destinations).toEqual([
+      { hiringUnitId: "A", jobDescriptionId: "A-A" },
+    ]);
+    act(() => root.unmount());
+  });
   it("blocks more than 50 concrete destinations and allows reducing organizations", () => {
     const options = {
       ...multiOptions,

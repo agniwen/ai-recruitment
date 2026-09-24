@@ -1,4 +1,5 @@
 import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
+import { isJobDescriptionInactive } from "@arc/shared/job-descriptions";
 import type { DataExportColumn } from "@/components/features/studio/data-export/data-export-model";
 
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -39,6 +40,11 @@ export const jobDescriptionExportColumns: readonly DataExportColumn<JobDescripti
   { id: "hiringUnitName", label: "编制组织", value: (row) => row.hiringUnitName, width: 20 },
   { id: "departmentName", label: "部门", value: (row) => row.departmentName, width: 18 },
   { id: "recruitmentStatus", label: "招聘状态", value: (row) => row.recruitmentStatus },
+  {
+    id: "inactive",
+    label: "是否失效",
+    value: (row) => (isJobDescriptionInactive(row) ? "是" : "否"),
+  },
   { id: "controlCategory", label: "岗位管控分类", value: (row) => row.controlCategory },
   { id: "jobSeries", label: "序列", value: (row) => row.jobSeries },
   { id: "jobLevel", label: "职级", value: (row) => row.jobLevel },

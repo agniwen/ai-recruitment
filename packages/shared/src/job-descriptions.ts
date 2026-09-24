@@ -161,6 +161,7 @@ export const jobDescriptionBaseSchema = z
     interviewerIds: z.array(z.string().trim().min(1)).max(20, "最多只能选择 20 位面试官"),
     jobLevel: nullableTextSchema(80, "职级"),
     jobSeries: nullableTextSchema(120, "序列"),
+    manuallyInactive: z.boolean(),
     name: z.string().trim().min(1, "请输入岗位名称").max(120, "岗位名称不能超过 120 个字符"),
     notes: nullableTextSchema(2000, "备注说明"),
     offeredPendingOnboardCount: nullableCountSchema("已发 offer 待入职"),
@@ -247,6 +248,7 @@ export interface JobDescriptionRecord {
   humanInterviewerIds: string[];
   jobLevel: string | null;
   jobSeries: string | null;
+  manuallyInactive: boolean;
   notes: string | null;
   offeredPendingOnboardCount: number | null;
   onboardedCount: number | null;
@@ -284,6 +286,12 @@ export interface JobDescriptionListRecord extends JobDescriptionRecord {
   // 非归档候选人 / 简历计数；用于列表"简历关联"列。
   // Non-archived candidate count; powers the "resume association" column.
   resumeCount: number;
+}
+
+export function isJobDescriptionInactive(
+  job: Pick<JobDescriptionRecord, "googleSheetDeleted" | "manuallyInactive">,
+): boolean {
+  return job.manuallyInactive || job.googleSheetDeleted === true;
 }
 
 export interface JobDescriptionGoogleSheetsSyncSkippedRow {

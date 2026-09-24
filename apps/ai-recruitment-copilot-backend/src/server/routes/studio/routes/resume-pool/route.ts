@@ -6,7 +6,7 @@ import { zValidator } from "@hono/zod-validator";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
-import { hiringUnit, jobDescription } from "@arc/db-schema/schema";
+import { hiringUnit } from "@arc/db-schema/schema";
 import { and, eq } from "drizzle-orm";
 import {
   parseResumeFastToProfile,
@@ -415,9 +415,11 @@ export const resumePoolRouter = factory
         return c.json({ error: input.error.issues[0]?.message ?? "表单校验失败。" }, 400);
       }
       if (input.data.jobDescriptionId) {
-        const ok = await jobDescriptionIdsExist([input.data.jobDescriptionId], activeOrg.id);
+        const ok = await jobDescriptionIdsExist([input.data.jobDescriptionId], activeOrg.id, {
+          selectableOnly: true,
+        });
         if (!ok) {
-          return c.json({ error: "所选在招岗位不存在。" }, 400);
+          return c.json({ error: "所选在招岗位不存在或已失效。" }, 400);
         }
       }
 
@@ -446,6 +448,7 @@ export const resumePoolRouter = factory
           input.data.scope === "private"
             ? ["studio_interview", "resume_pool_item"]
             : ["studio_interview"],
+        uploaderUserId: user.id,
       });
       const id = await createResumePoolItem({
         candidateEmail: input.data.candidateEmail ?? null,
@@ -509,18 +512,11 @@ export const resumePoolRouter = factory
       }
       const input = c.req.valid("json");
       if (input.jobDescriptionId) {
-        const [jd] = await db
-          .select({ id: jobDescription.id })
-          .from(jobDescription)
-          .where(
-            and(
-              eq(jobDescription.id, input.jobDescriptionId),
-              eq(jobDescription.organizationId, activeOrg.id),
-            ),
-          )
-          .limit(1);
-        if (!jd) {
-          return c.json({ error: "所选在招岗位不存在。" }, 400);
+        const selectable = await jobDescriptionIdsExist([input.jobDescriptionId], activeOrg.id, {
+          selectableOnly: true,
+        });
+        if (!selectable) {
+          return c.json({ error: "所选在招岗位不存在或已失效。" }, 400);
         }
       }
       const hiringUnitError = await validateImportHiringUnit({
@@ -589,7 +585,7 @@ export const resumePoolRouter = factory
         poolItemId: item.id,
       });
       if (bindResult === "job_description_not_found") {
-        return c.json({ error: "所选在招岗位不存在。" }, 400);
+        return c.json({ error: "所选在招岗位不存在或已失效。" }, 400);
       }
       if (bindResult === "already_bound") {
         return c.json({ error: "该简历已绑定岗位。" }, 409);

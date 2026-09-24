@@ -41,6 +41,7 @@ describe("resolveResumeCreateDedupConflict", () => {
       findDuplicates,
       organizationId: "org",
       resumeProfile: PROFILE,
+      uploaderUserId: "uploader-1",
     });
 
     expect(conflict).toEqual({ matches: [MATCH], status: "duplicate_found" });
@@ -50,6 +51,7 @@ describe("resolveResumeCreateDedupConflict", () => {
       organizationId: "org",
       phone: PROFILE.phone,
       resumeProfile: PROFILE,
+      uploaderUserId: "uploader-1",
     });
   });
 

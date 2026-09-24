@@ -13,6 +13,7 @@ import type {
   ResumeVectorStore,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/vector-store";
 import { department, jobDescription, resumeSemanticIndex } from "@arc/db-schema/schema";
+import { selectableJobDescriptionCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { hashJobDescriptionForSemanticIndex } from "./hash";
 
 export interface JdSemanticIndexJob {
@@ -117,6 +118,7 @@ async function loadJdSource(job: JdSemanticIndexJob): Promise<JobDescriptionSema
       and(
         eq(jobDescription.id, job.sourceId),
         eq(jobDescription.organizationId, job.organizationId),
+        selectableJobDescriptionCondition,
       ),
     )
     .limit(1);

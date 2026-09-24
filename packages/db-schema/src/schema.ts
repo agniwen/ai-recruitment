@@ -1156,6 +1156,7 @@ export const jobDescription = pgTable(
     id: text("id").primaryKey(),
     jobLevel: text("job_level"),
     jobSeries: text("job_series"),
+    manuallyInactive: boolean("manually_inactive").default(false).notNull(),
     name: text("name").notNull(),
     notes: text("notes"),
     offeredPendingOnboardCount: integer("offered_pending_onboard_count"),

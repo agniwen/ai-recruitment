@@ -23,6 +23,31 @@ export interface PersistDuplicateMatchesInput {
   embeddingVersion?: string;
 }
 
+const sourceUploader = sql<string | null>`case
+  when ${resumeDuplicateMatch.sourceType} = 'studio_interview' then
+    (select ${studioInterview.createdBy} from ${studioInterview}
+      where ${studioInterview.id} = ${resumeDuplicateMatch.sourceId}
+        and ${studioInterview.organizationId} = ${resumeDuplicateMatch.organizationId})
+  when ${resumeDuplicateMatch.sourceType} = 'resume_pool_item' then
+    (select ${resumePoolItem.createdBy} from ${resumePoolItem}
+      where ${resumePoolItem.id} = ${resumeDuplicateMatch.sourceId}
+        and ${resumePoolItem.organizationId} = ${resumeDuplicateMatch.organizationId})
+end`;
+const matchedUploader = sql<string | null>`case
+  when ${resumeDuplicateMatch.matchedSourceType} = 'studio_interview' then
+    (select ${studioInterview.createdBy} from ${studioInterview}
+      where ${studioInterview.id} = ${resumeDuplicateMatch.matchedSourceId}
+        and ${studioInterview.organizationId} = ${resumeDuplicateMatch.organizationId})
+  when ${resumeDuplicateMatch.matchedSourceType} = 'resume_pool_item' then
+    (select ${resumePoolItem.createdBy} from ${resumePoolItem}
+      where ${resumePoolItem.id} = ${resumeDuplicateMatch.matchedSourceId}
+        and ${resumePoolItem.organizationId} = ${resumeDuplicateMatch.organizationId})
+end`;
+
+export const crossUploaderDuplicateCondition = sql<boolean>`(
+  ${sourceUploader} is null or ${matchedUploader} is null or ${sourceUploader} <> ${matchedUploader}
+)`;
+
 export function toDuplicateMatchInsertRows(input: Required<PersistDuplicateMatchesInput>) {
   return input.matches.map((match) => ({
     embeddingVersion: input.embeddingVersion,
@@ -143,6 +168,7 @@ export async function listActiveDuplicateMatchCounts(input: {
         eq(resumeDuplicateMatch.sourceType, input.sourceType),
         inArray(resumeDuplicateMatch.sourceId, input.sourceIds),
         inArray(resumeDuplicateMatch.status, ["active", "confirmed"]),
+        crossUploaderDuplicateCondition,
       ),
     )
     .groupBy(resumeDuplicateMatch.sourceId);
@@ -228,6 +254,7 @@ export async function listDuplicateMatchesForSource(input: {
         eq(resumeDuplicateMatch.sourceType, input.sourceType),
         eq(resumeDuplicateMatch.sourceId, input.sourceId),
         inArray(resumeDuplicateMatch.status, ["active", "confirmed"]),
+        crossUploaderDuplicateCondition,
       ),
     )
     .orderBy(desc(resumeDuplicateMatch.score), desc(resumeDuplicateMatch.createdAt));

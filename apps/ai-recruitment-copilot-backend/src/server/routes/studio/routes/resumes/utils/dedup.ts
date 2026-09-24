@@ -25,6 +25,7 @@ export async function resolveResumeCreateDedupConflict({
   findDuplicates = findSemanticResumeDuplicates,
   organizationId,
   resumeProfile,
+  uploaderUserId,
 }: {
   candidateEmail: string | null;
   candidateName: string | null;
@@ -33,6 +34,7 @@ export async function resolveResumeCreateDedupConflict({
   findDuplicates?: FindDuplicates;
   organizationId: string;
   resumeProfile: ResumeProfile | null;
+  uploaderUserId?: string | null;
 }): Promise<ResumeCreateDedupConflict | null> {
   if (dedupPolicy === "force" || !resumeProfile) {
     return null;
@@ -43,6 +45,7 @@ export async function resolveResumeCreateDedupConflict({
     organizationId,
     phone: candidatePhone || resumeProfile.phone || null,
     resumeProfile,
+    uploaderUserId,
   });
   return matches.length > 0 ? { matches, status: "duplicate_found" } : null;
 }

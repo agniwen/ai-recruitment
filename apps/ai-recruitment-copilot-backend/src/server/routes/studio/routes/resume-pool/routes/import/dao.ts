@@ -33,7 +33,7 @@ export async function batchImportResumePoolItem(
     throw new Error("简历解析完成后才能入库。");
   }
   const options = await loadResumePoolImportOptions(input.organizationId, input.userId);
-  const destinations = validateImportDestinations(input, options);
+  const destinations = validateImportDestinations(input, options, true);
   const records = await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`pool-batch:${input.organizationId}:${input.poolItemId}:${input.requestId}`}, 0))`,
@@ -72,6 +72,7 @@ export async function batchImportResumePoolItem(
         phone: source.candidatePhone ?? source.resumeProfile?.phone ?? null,
         resumeProfile: source.resumeProfile,
         sourceTypes: ["studio_interview"],
+        uploaderUserId: input.userId,
       });
       if (matches.length) {
         return { matches, status: "duplicate_found" as const };

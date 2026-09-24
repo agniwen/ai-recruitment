@@ -78,7 +78,7 @@ export function ResumeJobUnitFields({
   const query = useQuery({
     queryFn: async () => {
       const payload = await rpcFetch<{ records: JobDescriptionListRecord[] }>(
-        rpc.api.w[":slug"].studio["job-descriptions"].all.$get({ param: { slug } }),
+        rpc.api.w[":slug"].studio["job-descriptions"].all.$get({ param: { slug }, query: {} }),
         "加载在招岗位失败",
       );
       return payload.records;

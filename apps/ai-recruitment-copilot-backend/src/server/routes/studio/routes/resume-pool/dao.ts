@@ -906,6 +906,7 @@ export function importPoolItemToResumeLibrary(
         phone: source.candidatePhone ?? source.resumeProfile?.phone ?? null,
         resumeProfile: source.resumeProfile,
         sourceTypes: ["studio_interview"],
+        uploaderUserId: admission.importedBy,
       });
       return matches;
     },

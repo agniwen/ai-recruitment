@@ -176,6 +176,7 @@ export const studioInterviewsRouter = factory
         organizationId: activeOrg.id,
         phone: input.phone ?? null,
         resumeProfile: input.resumeProfile ?? null,
+        uploaderUserId: c.var.user?.id,
       });
       console.info("[resume-dedup-check] response", {
         matchCount: matches.length,

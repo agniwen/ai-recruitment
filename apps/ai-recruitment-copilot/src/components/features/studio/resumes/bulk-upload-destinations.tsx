@@ -1,7 +1,12 @@
 import type { ResumePoolImportOptions } from "@arc/shared/resume-pool";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SearchableMultiSelect } from "@/components/ui/searchable-multi-select";
-import { bulkUploadSelectionModel, changeBulkUploadSelection } from "./bulk-upload-selection";
+import {
+  bulkUploadSelectionModel,
+  changeBulkUploadSelection,
+  toggleBulkUploadDestination,
+} from "./bulk-upload-selection";
 import type { BulkUploadSelection } from "./bulk-upload-selection";
 
 export function BulkUploadDestinations({
@@ -15,7 +20,10 @@ export function BulkUploadDestinations({
   onChange: (selection: BulkUploadSelection) => void;
   disabled: boolean;
 }) {
-  const { jobOptions, unitOptions, destinations } = bulkUploadSelectionModel(options, selection);
+  const { jobOptions, unitOptions, availableDestinations, destinations } = bulkUploadSelectionModel(
+    options,
+    selection,
+  );
   return (
     <div className="flex flex-col gap-4">
       <div className="space-y-3">
@@ -55,7 +63,7 @@ export function BulkUploadDestinations({
         </p>
       ) : null}
       {unitOptions.map((unit) => {
-        const jobs = destinations.filter((job) => job.hiringUnitId === unit.value);
+        const jobs = availableDestinations.filter((job) => job.hiringUnitId === unit.value);
         if (jobs.length === 0) {
           return null;
         }
@@ -63,14 +71,24 @@ export function BulkUploadDestinations({
           <section className="rounded-lg border p-4" key={unit.value} aria-label={unit.label}>
             <p className="text-sm font-medium">{unit.label}</p>
             {jobs.map((job) => (
-              <p
-                className="mt-3 text-xs text-muted-foreground"
+              <label
+                className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground"
                 key={job.id}
                 data-destination-id={job.id}
               >
-                推荐至：{job.name}；部门：{job.departmentName || "未设置"}；服务单位：
-                {job.serviceUnit || "未设置"}；需求编号：{job.code || job.id}
-              </p>
+                <Checkbox
+                  aria-label={`入库去向：${job.name}，${job.departmentName || "未设置"}，${job.code || job.id}`}
+                  checked={destinations.some((selected) => selected.id === job.id)}
+                  disabled={disabled}
+                  onCheckedChange={(checked) =>
+                    onChange(toggleBulkUploadDestination(selection, job.id, checked === true))
+                  }
+                />
+                <span>
+                  推荐至：{job.name}；部门：{job.departmentName || "未设置"}；服务单位：
+                  {job.serviceUnit || "未设置"}；需求编号：{job.code || job.id}
+                </span>
+              </label>
             ))}
           </section>
         );

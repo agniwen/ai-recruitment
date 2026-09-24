@@ -34,6 +34,7 @@ function job(input: {
     interviewers: [],
     jobLevel: null,
     jobSeries: null,
+    manuallyInactive: false,
     name: input.name,
     notes: null,
     offeredPendingOnboardCount: null,

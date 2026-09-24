@@ -43,6 +43,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/human-interview-livekit";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
 import { loadJobDescriptionById } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
+import { isJobDescriptionInactive } from "@arc/shared/job-descriptions";
 import { syncResumeSkills } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/skills";
 import {
   loadInterviewRoundDetail,
@@ -137,6 +138,9 @@ export const studioInterviewCollectionRouter = factory
         if (!selectedJobDescription) {
           return c.json({ error: "所选在招岗位不存在。" }, 400);
         }
+        if (isJobDescriptionInactive(selectedJobDescription)) {
+          return c.json({ error: "所选在招岗位已失效。" }, 400);
+        }
         if (selectedJobDescription.aiInterviewDisabled) {
           return c.json({ error: "所选在招岗位已禁用 AI 面试。" }, 409);
         }
@@ -193,6 +197,7 @@ export const studioInterviewCollectionRouter = factory
         dedupPolicy: parseResumeCreateDedupPolicy(formData.get("dedupPolicy")),
         organizationId: activeOrg.id,
         resumeProfile: analysis?.resumeProfile ?? null,
+        uploaderUserId: c.var.user?.id,
       });
       if (dedupConflict) {
         return c.json(dedupConflict, 409);

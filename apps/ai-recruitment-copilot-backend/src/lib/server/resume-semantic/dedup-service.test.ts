@@ -34,6 +34,63 @@ const queryProfile: ResumeProfile = {
 };
 
 describe("findSemanticResumeDuplicates", () => {
+  it("ignores the current uploader's resumes but keeps another uploader's match", async () => {
+    const matches = await findSemanticResumeDuplicates(
+      {
+        organizationId: "org-1",
+        resumeProfile: queryProfile,
+        uploaderUserId: "uploader-a",
+      },
+      {
+        embed: vi.fn(({ chunks }) =>
+          Promise.resolve(
+            chunks.map((chunk: { chunkType: string }) => ({ ...chunk, embedding: [1, 2] })),
+          ),
+        ),
+        embeddingConfig: {
+          apiKey: "key",
+          baseUrl: "https://dashscope.example/v1",
+          dimensions: 2,
+          model: "text-embedding-v4",
+        },
+        enabled: true,
+        loadCandidates: () =>
+          Promise.resolve(
+            [
+              { createdBy: "uploader-a", id: "own-resume" },
+              { createdBy: "uploader-b", id: "other-resume" },
+            ].map((candidate) => ({
+              ...candidate,
+              candidateEmail: null,
+              candidateName: "张三",
+              candidatePhone: null,
+              createdAt: "2026-01-02T00:00:00.000Z",
+              jobDescriptionName: null,
+              resumeProfile: queryProfile,
+              status: "active" as const,
+              targetRole: null,
+            })),
+          ),
+        vectorStore: {
+          deleteResumeEmbeddings: vi.fn(),
+          ensureCollection: vi.fn(),
+          searchSimilarResumes: vi.fn(({ chunkType }) =>
+            Promise.resolve(
+              ["own-resume", "other-resume"].map((sourceId) => ({
+                chunkType,
+                score: 0.96,
+                sourceId,
+                sourceType: "studio_interview" as const,
+              })),
+            ),
+          ),
+          upsertResumeEmbeddings: vi.fn(),
+        },
+      },
+    );
+    expect(matches.map((match) => match.id)).toEqual(["other-resume"]);
+  });
+
   it("returns no matches when semantic dedup is disabled", async () => {
     const matches = await findSemanticResumeDuplicates(
       {

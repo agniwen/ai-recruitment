@@ -37,6 +37,7 @@ describe("refreshDirectUploadDuplicateMatchesBeforeHire", () => {
           findDuplicates: findDuplicates as never,
           loadCandidate: vi.fn().mockResolvedValue({
             candidateCount: 37,
+            createdBy: "user-1",
             poolItemId: null,
             profile,
             sourceType: "direct_upload",
@@ -52,6 +53,7 @@ describe("refreshDirectUploadDuplicateMatchesBeforeHire", () => {
         resultLimit: 37,
         sourceTypes: ["studio_interview"],
         throwOnError: true,
+        uploaderUserId: "user-1",
       }),
     );
     expect(replaceDuplicateSnapshot).toHaveBeenCalledOnce();

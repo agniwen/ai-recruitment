@@ -11,6 +11,7 @@ export interface JobDescriptionFilters extends Record<string, string> {
   interviewerId: string;
   recruitmentStatus: string;
   sourceSheet: string;
+  validityStatus: string;
 }
 
 interface JobDescriptionQueryParams {
@@ -24,6 +25,12 @@ export function buildJobDescriptionQuery(
   params: JobDescriptionQueryParams,
   pagination?: { page: number; pageSize: number },
 ) {
+  let validityStatus: "active" | "inactive" | undefined;
+  if (params.filters.validityStatus === "active") {
+    validityStatus = "active";
+  } else if (params.filters.validityStatus === "inactive") {
+    validityStatus = "inactive";
+  }
   const sortBy: "createdAt" | "name" | "updatedAt" =
     params.sortBy === "name" || params.sortBy === "updatedAt" ? params.sortBy : "createdAt";
   return {
@@ -42,6 +49,7 @@ export function buildJobDescriptionQuery(
     ...(params.filters.googleSheetStatus
       ? { googleSheetStatus: params.filters.googleSheetStatus }
       : {}),
+    ...(validityStatus ? { validityStatus } : {}),
     ...(params.filters.hiringUnitId ? { hiringUnitId: params.filters.hiringUnitId } : {}),
     ...(params.filters.interviewerId ? { interviewerId: params.filters.interviewerId } : {}),
     ...(params.filters.recruitmentStatus

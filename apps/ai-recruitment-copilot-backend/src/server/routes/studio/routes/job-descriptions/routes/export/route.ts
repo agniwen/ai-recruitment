@@ -21,6 +21,7 @@ const jobDescriptionExportQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
   sourceSheet: z.string().optional(),
   textFilters: listTextFiltersSchema("jobs"),
+  validityStatus: z.enum(["active", "inactive"]).optional(),
 });
 
 export const jobDescriptionExportRouter = factory
@@ -52,6 +53,7 @@ export const jobDescriptionExportRouter = factory
           search: q.search,
           sourceSheet: q.sourceSheet,
           textFilters: q.textFilters,
+          validityStatus: q.validityStatus,
         },
         { sortBy: q.sortBy, sortOrder: q.sortOrder },
       );

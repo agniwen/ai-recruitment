@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- this page owns the full job-description grid and its actions. */
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import type { DepartmentRecord } from "@arc/shared/departments";
@@ -53,6 +54,8 @@ import { useJobDescriptionDeepLink } from "@/components/features/studio/job-desc
 import { JobDescriptionToolbarActions } from "@/components/features/studio/job-descriptions/job-description-management-actions";
 import { JobDescriptionLongTextHoverCard } from "@/components/features/studio/job-descriptions/job-description-long-text-hover-card";
 import { jobDescriptionSourceColumn } from "@/components/features/studio/job-descriptions/job-description-source-column";
+import { jobDescriptionValidityColumn } from "@/components/features/studio/job-descriptions/job-description-validity-column";
+import { useJobDescriptionValidity } from "@/components/features/studio/job-descriptions/use-job-description-validity";
 import { createJobDescriptionListFilters } from "@/components/features/studio/job-descriptions/job-description-list-filters";
 import { useHasPermission } from "@/hooks/use-has-permission";
 import { DataExportDialog } from "@/components/features/studio/data-export/data-export-dialog";
@@ -169,6 +172,7 @@ export function JobDescriptionManagementPage({
       interviewerId: "",
       recruitmentStatus: "",
       sourceSheet: "",
+      validityStatus: "",
     },
     queryFn: fetchJobDescriptions,
     queryKeyBase: ["job-descriptions", slug],
@@ -206,6 +210,12 @@ export function JobDescriptionManagementPage({
     void queryClient.invalidateQueries({ queryKey: ["studio-interviews", slug] });
     void router.invalidate();
   }
+
+  const validityActions = useJobDescriptionValidity(
+    canUpdateJobDescription,
+    invalidateJobDescriptionData,
+    slug,
+  );
 
   const crud = useEntityCrud<JobDescriptionListRecord, JobDescriptionRecord>({
     deleteEntity: (record) =>
@@ -299,6 +309,7 @@ export function JobDescriptionManagementPage({
         size: 120,
         title: "招聘状态",
       }),
+      jobDescriptionValidityColumn,
       textColumn<JobDescriptionListRecord>({
         fallback: "—",
         key: "controlCategory",
@@ -572,6 +583,7 @@ export function JobDescriptionManagementPage({
           },
         ],
         menu: [
+          ...validityActions,
           {
             label: "查看推荐",
             onClick: (r) => {
@@ -600,6 +612,7 @@ export function JobDescriptionManagementPage({
       canReadResumeLibrary,
       canUpdateJobDescription,
       canViewRecommendations,
+      validityActions,
     ],
   );
 

@@ -2,6 +2,7 @@
 import { loadJobDescriptionForReader } from "./utils/read-detail";
 import { jobDescriptionReferenceOptionsRouter } from "./routes/reference-options/route";
 import { jobDescriptionLinkedTemplatesRouter } from "./routes/linked-templates/route";
+import { jobDescriptionValidityRouter } from "./routes/validity/route";
 import { resolveJobDescriptionResumeSource } from "./resume-source";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import { zValidator } from "@hono/zod-validator";
@@ -191,6 +192,7 @@ function buildManualJobDescriptionRecord(args: {
     id: crypto.randomUUID(),
     jobLevel: nullableText(input.jobLevel),
     jobSeries: nullableText(input.jobSeries),
+    manuallyInactive: input.manuallyInactive,
     name: input.name.trim(),
     notes: nullableText(input.notes),
     offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,
@@ -241,6 +243,7 @@ const jobDescriptionListQuerySchema = z.object({
   sortOrder: z.string().optional(),
   sourceSheet: z.string().optional(),
   textFilters: listTextFiltersSchema("jobs"),
+  validityStatus: z.enum(["active", "inactive"]).optional(),
 });
 
 const recommendationBodySchema = z.object({
@@ -259,6 +262,7 @@ export const jobDescriptionsRouter = factory
   .route("/export", jobDescriptionExportRouter)
   .route("/reference-options", jobDescriptionReferenceOptionsRouter)
   .route("/:id/linked-templates", jobDescriptionLinkedTemplatesRouter)
+  .route("/:id/validity", jobDescriptionValidityRouter)
   .post(
     "/ai-generate",
     requirePermission("jd", "update"),
@@ -317,6 +321,7 @@ export const jobDescriptionsRouter = factory
           search: q.search,
           sourceSheet: q.sourceSheet,
           textFilters: q.textFilters,
+          validityStatus: q.validityStatus,
         },
         {
           page: q.page,
@@ -328,14 +333,26 @@ export const jobDescriptionsRouter = factory
       return c.json(result, 200);
     },
   )
-  .get("/all", requirePermission("jd", "read"), async (c) => {
-    const { activeOrg } = c.var;
-    if (!activeOrg) {
-      return c.json({ message: "Unauthorized" }, 401);
-    }
-    const records = await listAllJobDescriptions(activeOrg.id, { actorUserId: c.var.user?.id });
-    return c.json({ records }, 200);
-  })
+  .get(
+    "/all",
+    requirePermission("jd", "read"),
+    zValidator(
+      "query",
+      z.object({ includeInactive: z.literal("true").optional() }),
+      jsonValidatorError("查询参数无效。"),
+    ),
+    async (c) => {
+      const { activeOrg } = c.var;
+      if (!activeOrg) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const records = await listAllJobDescriptions(activeOrg.id, {
+        actorUserId: c.var.user?.id,
+        includeInactive: c.req.valid("query").includeInactive === "true",
+      });
+      return c.json({ records }, 200);
+    },
+  )
   .post("/generate-code", requirePermission("jd", "read"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {
@@ -649,6 +666,7 @@ export const jobDescriptionsRouter = factory
         ...(!existing.code && input.code ? { code: input.code } : {}),
         jobLevel: nullableText(input.jobLevel),
         jobSeries: nullableText(input.jobSeries),
+        manuallyInactive: input.manuallyInactive,
         name: input.name.trim(),
         notes: nullableText(input.notes),
         offeredPendingOnboardCount: input.offeredPendingOnboardCount ?? null,

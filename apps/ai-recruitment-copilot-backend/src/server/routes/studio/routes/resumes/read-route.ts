@@ -254,6 +254,7 @@ export const resumeLibraryReadRouter = factory
         phone: input.phone ?? null,
         resultLimit: 50,
         resumeProfile: input.resumeProfile ?? null,
+        uploaderUserId: user.id,
       });
       const studioIds = foundMatches
         .filter((match) => match.sourceType === "studio_interview")

@@ -22,6 +22,7 @@ export function JobDescriptionViewDialog({
     queryFn: async () => {
       const response = await rpc.api.w[":slug"].studio["job-descriptions"].all.$get({
         param: { slug },
+        query: { includeInactive: "true" },
       });
       if (!response.ok) {
         throw new Error("加载在招岗位列表失败");
@@ -29,7 +30,7 @@ export function JobDescriptionViewDialog({
       const payload = (await response.json()) as { records: JobDescriptionListRecord[] };
       return payload.records;
     },
-    queryKey: ["job-descriptions", "all", slug],
+    queryKey: ["job-descriptions", "all", "including-inactive", slug],
     staleTime: 60_000,
   });
 

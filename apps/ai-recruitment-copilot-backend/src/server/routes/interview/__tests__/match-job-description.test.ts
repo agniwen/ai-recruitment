@@ -42,6 +42,7 @@ const jobDescriptions: JobDescriptionListRecord[] = [
     interviewers: [],
     jobLevel: null,
     jobSeries: null,
+    manuallyInactive: false,
     name: "前端工程师",
     notes: null,
     offeredPendingOnboardCount: null,

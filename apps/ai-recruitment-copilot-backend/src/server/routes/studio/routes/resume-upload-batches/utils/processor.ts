@@ -16,6 +16,7 @@ import {
   studioInterview,
 } from "@arc/db-schema/schema";
 import type { ProcessNextResult } from "@arc/shared/bulk-resume-upload";
+import { isJobDescriptionInactive } from "@arc/shared/job-descriptions";
 import { getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { parseResumeBytesToProfile } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
 import { isResumeParseCacheEnabled } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-parse-cache-policy";
@@ -449,8 +450,8 @@ async function fetchAndParse(
     const boundJobDescription = boundId
       ? await loadJobDescriptionById(organizationId, boundId, { actorUserId: userId })
       : null;
-    if (!boundJobDescription) {
-      throw new Error("绑定的岗位不存在或无权访问，请重新选择岗位。");
+    if (!boundJobDescription || isJobDescriptionInactive(boundJobDescription)) {
+      throw new Error("绑定的岗位不存在、已失效或无权访问，请重新选择岗位。");
     }
     jobDescriptionId = boundId;
   }

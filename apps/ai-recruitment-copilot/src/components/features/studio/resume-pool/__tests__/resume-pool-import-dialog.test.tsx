@@ -37,12 +37,18 @@ vi.mock("@/components/ui/searchable-multi-select", () => ({
   SearchableMultiSelect: ({
     id,
     onChange,
+    options,
   }: {
     id?: string;
     onChange: (value: string[]) => void;
+    options: { value: string }[];
   }) => (
-    <button data-testid={id} onClick={() => onChange(["hiring-unit-1"])} type="button">
-      选择用人组织
+    <button
+      data-testid={id}
+      onClick={() => onChange(options.map((option) => option.value))}
+      type="button"
+    >
+      选择选项
     </button>
   ),
 }));
@@ -120,6 +126,83 @@ afterEach(() => {
 });
 
 describe("ImportResumePoolDialog", () => {
+  it("selects multiple job names and imports only checked destinations", async () => {
+    importResumePoolItemMock.mockResolvedValue({ records: [], status: "imported" });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    queryClient.setQueryData(["resume-pool", "test-workspace", "import-options"], {
+      departments: [],
+      hiringUnits: [{ id: "hiring-unit-1", name: "研发一部" }],
+      jobDescriptions: [
+        {
+          ...jobDescriptionsMock[0],
+          departmentId: "dept-1",
+          hiringUnitId: "hiring-unit-1",
+        },
+        {
+          ...jobDescriptionsMock[0],
+          departmentId: "dept-2",
+          hiringUnitId: "hiring-unit-1",
+          id: "job-description-2",
+          name: "后端工程师",
+        },
+      ],
+    });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <ImportResumePoolDialog
+            item={{ ...importedItem, importedResumeRecordId: null }}
+            onImported={vi.fn()}
+            onOpenChange={vi.fn()}
+          />
+        </QueryClientProvider>,
+      );
+      await Promise.resolve();
+    });
+    await act(async () => {
+      [...document.querySelectorAll("label")]
+        .find((label) => label.textContent?.trim() === "绑定岗位")
+        ?.click();
+      await Promise.resolve();
+    });
+    act(() =>
+      document.querySelector<HTMLButtonElement>('[data-testid="candidate-import-job"]')?.click(),
+    );
+    act(() =>
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="resume-pool-import-hiring-unit"]')
+        ?.click(),
+    );
+    const selected = document.querySelector<HTMLElement>(
+      '[data-destination-id="job-description-2"] [role="checkbox"]',
+    );
+    expect(document.querySelectorAll("[data-destination-id]")).toHaveLength(2);
+    expect(selected?.getAttribute("aria-checked")).toBe("true");
+    act(() => selected?.click());
+    const confirm = [...document.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("确认入库"),
+    );
+    expect(confirm?.textContent).toContain("1 条记录");
+    await act(async () => {
+      confirm?.click();
+      await Promise.resolve();
+    });
+    expect(importResumePoolItemMock.mock.lastCall?.[2].destinations).toEqual([
+      {
+        departmentId: "dept-1",
+        hiringUnitId: "hiring-unit-1",
+        jobDescriptionId: "job-description-1",
+        serviceUnit: "产品技术部",
+      },
+    ]);
+    act(() => root.unmount());
+  });
+
   it("prefills source job details when the modal opens", async () => {
     listHiringUnitsMock.mockResolvedValue(Response.json({ records: [] }));
     const container = document.createElement("div");

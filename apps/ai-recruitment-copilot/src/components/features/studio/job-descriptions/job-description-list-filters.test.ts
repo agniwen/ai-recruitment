@@ -23,6 +23,7 @@ describe("createJobDescriptionListFilters", () => {
       "sourceSheet",
       "recruitmentStatus",
       "googleSheetStatus",
+      "validityStatus",
       "hiringUnitId",
       "departmentId",
       "interviewerId",
@@ -47,6 +48,15 @@ describe("createJobDescriptionListFilters", () => {
       { label: "研发岗位", value: "研发岗位" },
     ]);
     expect(sourceSheetFilter.searchPlaceholder).toBe("搜索来源表格…");
+    const validityFilter = filters.find((filter) => filter.key === "validityStatus");
+    expect(validityFilter).toMatchObject({
+      label: "是否失效",
+      options: [
+        { label: "有效", value: "active" },
+        { label: "已失效", value: "inactive" },
+      ],
+      type: "select",
+    });
     const hiringUnitFilter = filters.find((filter) => filter.key === "hiringUnitId");
     expect(hiringUnitFilter?.type).toBe("multi-select");
     if (!hiringUnitFilter || hiringUnitFilter.type !== "multi-select") {

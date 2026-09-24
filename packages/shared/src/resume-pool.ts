@@ -178,8 +178,10 @@ export const resumePoolBatchImportSchema = z
       .min(1, "请选择入库组织")
       .max(50)
       .refine(
-        (rows) => new Set(rows.map((row) => row.hiringUnitId)).size === rows.length,
-        "入库组织不能重复",
+        (rows) =>
+          new Set(rows.map((row) => `${row.hiringUnitId}:${row.jobDescriptionId ?? ""}`)).size ===
+          rows.length,
+        "入库去向不能重复",
       ),
     jobDescriptionMode: z.enum(["none", "bind"]),
     recommendationText: z.string().trim().max(2000).default(""),

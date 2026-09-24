@@ -1,18 +1,20 @@
 "use client";
 
 import { ResumePoolImportDestinations } from "./resume-pool-import-destinations";
-import {
-  EMPTY_IMPORT_OPTIONS,
-  importJobNameOptions,
-  resolveImportDestination,
-} from "./resume-pool-import-selection";
+import { EMPTY_IMPORT_OPTIONS } from "./resume-pool-import-selection";
+import { BulkUploadDestinations } from "../resumes/bulk-upload-destinations";
+import { bulkUploadSelectionModel } from "../resumes/bulk-upload-selection";
+import type { BulkUploadSelection } from "../resumes/bulk-upload-selection";
 
 import { IconDatabase, IconExternalLink, IconLoader2 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ResumePoolScope } from "@arc/db-schema/schema";
 import type { JobDescriptionListRecord } from "@arc/shared/job-descriptions";
 import { resumePoolScopeMeta } from "@arc/shared/resume-pool";
-import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
+import {
+  describeResumeRecruitmentSource,
+  MAX_BULK_DESTINATIONS,
+} from "@arc/shared/bulk-resume-upload";
 import type {
   ResumePoolImportDestination,
   ResumePoolImportDuplicateResult,
@@ -30,7 +32,6 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -260,8 +261,20 @@ export function ImportResumePoolDialog({
   const options = importOptionsQuery.data ?? EMPTY_IMPORT_OPTIONS;
   const { jobDescriptions } = options;
   const [mode, setMode] = useState<"none" | "bind">("none");
-  const [jobName, setJobName] = useState("");
+  const [bindSelection, setBindSelection] = useState<BulkUploadSelection>({
+    hiringUnitIds: [],
+    jobNames: [],
+  });
   const [destinations, setDestinations] = useState<ResumePoolImportDestination[]>([]);
+  const boundDestinations = bulkUploadSelectionModel(options, bindSelection).destinations.map(
+    (job) => ({
+      departmentId: job.departmentId ?? null,
+      hiringUnitId: job.hiringUnitId,
+      jobDescriptionId: job.id,
+      serviceUnit: job.serviceUnit ?? null,
+    }),
+  );
+  const activeDestinations = mode === "bind" ? boundDestinations : destinations;
   const requestIdRef = useRef(crypto.randomUUID());
   const submissionFingerprintRef = useRef("");
   const [recommendationText, setRecommendationText] = useState("");
@@ -275,7 +288,7 @@ export function ImportResumePoolDialog({
     if (!item) {
       setMode("none");
       setDestinations([]);
-      setJobName("");
+      setBindSelection({ hiringUnitIds: [], jobNames: [] });
       requestIdRef.current = crypto.randomUUID();
       setRecommendationText("");
       setDuplicates(null);
@@ -292,7 +305,10 @@ export function ImportResumePoolDialog({
       item.scope === "private" && item.jobDescriptionId && sourceJobDescription;
     if (recommendationItemIdRef.current !== item.id) {
       setMode(canUseSourceJd ? "bind" : "none");
-      setJobName(canUseSourceJd ? sourceJobDescription.name.trim() : "");
+      setBindSelection({
+        hiringUnitIds: [],
+        jobNames: canUseSourceJd ? [sourceJobDescription.name.trim()] : [],
+      });
       setDestinations([]);
       requestIdRef.current = crypto.randomUUID();
     }
@@ -311,19 +327,21 @@ export function ImportResumePoolDialog({
       if (!item) {
         throw new Error("请选择要入库的简历");
       }
-      if (destinations.length === 0) {
-        throw new Error("请选择入库组织");
+      if (activeDestinations.length === 0) {
+        throw new Error("请选择入库去向");
       }
-      const fingerprint = JSON.stringify({ destinations, mode, recommendationText });
+      const fingerprint = JSON.stringify({
+        destinations: activeDestinations,
+        mode,
+        recommendationText,
+      });
       if (submissionFingerprintRef.current !== fingerprint) {
         requestIdRef.current = crypto.randomUUID();
         submissionFingerprintRef.current = fingerprint;
       }
       return await batchImportResumePoolItem(slug, item.id, {
         dedupPolicy,
-        destinations: destinations.map((row) =>
-          resolveImportDestination(options, mode === "bind" ? jobName : "", row),
-        ),
+        destinations: activeDestinations,
         jobDescriptionMode: mode,
         recommendationText,
         requestId: requestIdRef.current,
@@ -350,13 +368,8 @@ export function ImportResumePoolDialog({
     },
   });
 
-  const bindInvalid =
-    mode === "bind" &&
-    (!jobName ||
-      destinations.some(
-        (row) => !resolveImportDestination(options, jobName, row).jobDescriptionId,
-      ));
-  const hiringUnitInvalid = destinations.length === 0;
+  const bindInvalid = mode === "bind" && boundDestinations.length === 0;
+  const hiringUnitInvalid = activeDestinations.length === 0;
   const { isPending } = mutation;
   const recruitmentSource = describePoolItemRecruitmentSource(item);
   let dialogDescription: string | undefined;
@@ -378,6 +391,7 @@ export function ImportResumePoolDialog({
                 isPending ||
                 bindInvalid ||
                 hiringUnitInvalid ||
+                activeDestinations.length > MAX_BULK_DESTINATIONS ||
                 importOptionsQuery.isPending ||
                 importOptionsQuery.isError
               }
@@ -389,7 +403,7 @@ export function ImportResumePoolDialog({
                 <IconDatabase className="size-4" />
               )}
               {isReimport ? "确认再次入库" : "确认入库"}
-              {destinations.length ? `（${destinations.length} 个组织）` : ""}
+              {activeDestinations.length ? `（${activeDestinations.length} 条记录）` : ""}
             </Button>
           </>
         }
@@ -414,19 +428,16 @@ export function ImportResumePoolDialog({
                 disabled={isPending}
                 onValueChange={(value) => {
                   setMode(value === "bind" ? "bind" : "none");
-                  setJobName("");
-                  setDestinations((rows) =>
-                    rows
-                      .filter(
-                        (row) =>
-                          value === "bind" ||
-                          options.hiringUnits.some(
-                            (unit) =>
-                              unit.id === row.hiringUnitId && unit.canImportWithoutJob !== false,
-                          ),
-                      )
-                      .map((row) => ({ ...row, jobDescriptionId: null })),
-                  );
+                  if (value === "none") {
+                    setDestinations((rows) =>
+                      rows.filter((row) =>
+                        options.hiringUnits.some(
+                          (unit) =>
+                            unit.id === row.hiringUnitId && unit.canImportWithoutJob !== false,
+                        ),
+                      ),
+                    );
+                  }
                 }}
                 value={mode}
               >
@@ -441,33 +452,6 @@ export function ImportResumePoolDialog({
               </RadioGroup>
             </FieldContent>
           </Field>
-          {mode === "bind" ? (
-            <Field data-invalid={bindInvalid ? true : undefined}>
-              <FieldLabel htmlFor="resume-pool-import-jd">在招岗位</FieldLabel>
-              <FieldContent>
-                <SearchableSelect
-                  disabled={isPending}
-                  id="resume-pool-import-jd"
-                  invalid={bindInvalid}
-                  onChange={(next) => {
-                    setJobName(next ?? "");
-                    setDestinations((rows) =>
-                      rows.map((row) =>
-                        resolveImportDestination(options, next ?? "", {
-                          ...row,
-                          jobDescriptionId: null,
-                        }),
-                      ),
-                    );
-                  }}
-                  options={importJobNameOptions(options, destinations)}
-                  placeholder="请选择在招岗位"
-                  searchPlaceholder="搜索岗位..."
-                  value={jobName || null}
-                />
-              </FieldContent>
-            </Field>
-          ) : null}
           {importOptionsQuery.isError ? (
             <div role="alert" className="text-sm text-destructive">
               入库选项加载失败。
@@ -476,14 +460,28 @@ export function ImportResumePoolDialog({
               </Button>
             </div>
           ) : null}
-          <ResumePoolImportDestinations
-            bindJob={mode === "bind"}
-            options={options}
-            jobName={mode === "bind" ? jobName : ""}
-            destinations={destinations}
-            onChange={setDestinations}
-            disabled={isPending || importOptionsQuery.isPending}
-          />
+          {mode === "bind" ? (
+            <BulkUploadDestinations
+              disabled={isPending || importOptionsQuery.isPending}
+              onChange={setBindSelection}
+              options={options}
+              selection={bindSelection}
+            />
+          ) : (
+            <ResumePoolImportDestinations
+              bindJob={false}
+              destinations={destinations}
+              disabled={isPending || importOptionsQuery.isPending}
+              jobName=""
+              onChange={setDestinations}
+              options={options}
+            />
+          )}
+          {activeDestinations.length > MAX_BULK_DESTINATIONS ? (
+            <p className="text-sm text-destructive" role="alert">
+              每次最多选择 {MAX_BULK_DESTINATIONS} 个具体岗位去向，请减少选择。
+            </p>
+          ) : null}
           <Field>
             <FieldLabel>简历来源</FieldLabel>
             <FieldContent>

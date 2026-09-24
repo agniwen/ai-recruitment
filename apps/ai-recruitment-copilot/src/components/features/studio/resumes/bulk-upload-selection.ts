@@ -10,6 +10,7 @@ type SelectionOptions = Pick<ResumePoolImportOptions, "departments" | "hiringUni
 export interface BulkUploadSelection {
   jobNames: string[];
   hiringUnitIds: string[];
+  excludedJobIds?: string[];
 }
 
 // Names identify the visible job groups; IDs identify concrete destinations.
@@ -55,11 +56,27 @@ export function bulkUploadSelectionModel(
         value: unit.id,
       };
     });
-  const destinations =
+  const availableDestinations =
     names.size === 0
       ? []
       : jobs.filter((job) => names.has(job.name.trim()) && selectedUnits.has(job.hiringUnitId));
-  return { destinations, jobOptions, unitOptions };
+  const excludedJobIds = new Set(selection.excludedJobIds);
+  const destinations = availableDestinations.filter((job) => !excludedJobIds.has(job.id));
+  return { availableDestinations, destinations, jobOptions, unitOptions };
+}
+
+export function toggleBulkUploadDestination(
+  selection: BulkUploadSelection,
+  jobId: string,
+  checked: boolean,
+): BulkUploadSelection {
+  const excludedJobIds = new Set(selection.excludedJobIds);
+  if (checked) {
+    excludedJobIds.delete(jobId);
+  } else {
+    excludedJobIds.add(jobId);
+  }
+  return { ...selection, excludedJobIds: [...excludedJobIds] };
 }
 
 // Reconcile in the user's event, so filtering does not cause an effect feedback loop.

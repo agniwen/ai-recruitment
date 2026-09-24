@@ -15,6 +15,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/embedding";
 import { enqueueResumeSemanticIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/enqueue";
 import { enqueueJobDescriptionIndexJobBestEffort } from "@arc/ai-recruitment-copilot-backend/lib/server/jd-semantic/enqueue";
+import { selectableJobDescriptionCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { resolveDepartmentHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 import { getResumeSemanticIndexConfig } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer";
 import {
@@ -391,6 +392,7 @@ async function countIndexedJdVectors(organizationId: string, actorUserId: string
         eq(resumeSemanticIndex.organizationId, organizationId),
         eq(resumeSemanticIndex.sourceType, "job_description"),
         eq(resumeSemanticIndex.status, "indexed"),
+        selectableJobDescriptionCondition,
         scopeCondition,
       ),
     );
@@ -436,6 +438,7 @@ async function loadJobDescriptionsForDisplay(
       and(
         eq(jobDescription.organizationId, organizationId),
         inArray(jobDescription.id, ids),
+        selectableJobDescriptionCondition,
         scopeCondition,
       ),
     );
@@ -451,7 +454,13 @@ async function enqueueVisibleJobDescriptionsForReindex(input: {
     .select({ id: jobDescription.id })
     .from(jobDescription)
     .innerJoin(department, eq(jobDescription.departmentId, department.id))
-    .where(and(eq(jobDescription.organizationId, input.organizationId), scopeCondition));
+    .where(
+      and(
+        eq(jobDescription.organizationId, input.organizationId),
+        selectableJobDescriptionCondition,
+        scopeCondition,
+      ),
+    );
   if (rows.length === 0) {
     return "empty";
   }

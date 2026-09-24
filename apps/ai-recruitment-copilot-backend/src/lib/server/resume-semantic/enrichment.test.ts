@@ -26,6 +26,7 @@ describe("runResumeSemanticEnrichmentJob", () => {
       expect.objectContaining({
         excludeSources: [{ sourceId: "resume-1", sourceType: "studio_interview" }],
         sourceTypes: ["studio_interview"],
+        uploaderUserId: "user-1",
       }),
     );
     expect(replaceDuplicateSnapshot).toHaveBeenCalledWith({
@@ -63,6 +64,7 @@ describe("runResumeSemanticEnrichmentJob", () => {
         poolOwnerUserId: "user-1",
         poolScope: "private",
         sourceTypes: ["studio_interview", "resume_pool_item"],
+        uploaderUserId: "user-1",
       }),
     );
   });

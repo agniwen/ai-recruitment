@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { department, jobDescription, resumePoolEvent, resumePoolItem } from "@arc/db-schema/schema";
 import { buildJobDescriptionHiringUnitScopeCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
+import { selectableJobDescriptionCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import type { HiringUnitAccessScope } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope";
 
 interface BindResumePoolItemJobDescriptionInput {
@@ -25,6 +26,7 @@ export async function bindResumePoolItemJobDescription(
         and(
           eq(jobDescription.id, input.jobDescriptionId),
           eq(jobDescription.organizationId, input.organizationId),
+          selectableJobDescriptionCondition,
           scopeCondition,
         ),
       )

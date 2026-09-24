@@ -155,4 +155,21 @@ describe("job-derived organization access", () => {
       ).map((row) => row.serviceUnit),
     ).toEqual(["平台", "另一个服务单位"]);
   });
+  it("accepts different job names in one organization for pool import", () => {
+    const multipleNames = {
+      ...restricted,
+      jobDescriptions: [
+        options.jobDescriptions[0],
+        { ...options.jobDescriptions[0], id: "backend", name: "后端" },
+      ],
+    };
+    const parsed = resumePoolBatchImportSchema.parse({
+      ...base,
+      destinations: [
+        { hiringUnitId: "one", jobDescriptionId: "a" },
+        { hiringUnitId: "one", jobDescriptionId: "backend" },
+      ],
+    });
+    expect(validateImportDestinations(parsed, multipleNames, true)).toHaveLength(2);
+  });
 });

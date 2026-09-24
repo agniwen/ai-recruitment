@@ -64,6 +64,23 @@ import type {
 const jobHiringUnit = alias(hiringUnit, "job_description_hiring_unit");
 const departmentHiringUnit = alias(hiringUnit, "job_description_department_hiring_unit");
 
+export const selectableJobDescriptionCondition = and(
+  eq(jobDescription.manuallyInactive, false),
+  or(isNull(jobDescription.googleSheetDeleted), eq(jobDescription.googleSheetDeleted, false)),
+);
+
+function jobDescriptionValidityCondition(status?: "active" | "inactive") {
+  if (status === "active") {
+    return selectableJobDescriptionCondition;
+  }
+  if (status === "inactive") {
+    return or(
+      eq(jobDescription.manuallyInactive, true),
+      eq(jobDescription.googleSheetDeleted, true),
+    );
+  }
+}
+
 const SORT_COLUMNS = ["createdAt", "name", "updatedAt"] as const;
 type SortColumn = (typeof SORT_COLUMNS)[number];
 
@@ -159,6 +176,7 @@ function buildWhereConditions({
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
+  extraCondition,
 }: {
   code?: string;
   dateField?: "requestedDate" | "expectedOnboardDate";
@@ -175,8 +193,12 @@ function buildWhereConditions({
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
+  extraCondition?: SQL;
 }) {
-  const conditions: SQL[] = [eq(jobDescription.organizationId, organizationId)];
+  const conditions: SQL[] = [
+    eq(jobDescription.organizationId, organizationId),
+    extraCondition,
+  ].filter((condition): condition is SQL => condition !== undefined);
   if (code) {
     conditions.push(ilike(jobDescription.code, `%${code}%`));
   }
@@ -274,6 +296,7 @@ function listJobDescriptionRows({
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
+  extraCondition,
   sortBy = "createdAt",
   sortOrder = "desc",
   limit,
@@ -294,6 +317,7 @@ function listJobDescriptionRows({
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
+  extraCondition?: SQL;
   sortBy?: SortColumn;
   sortOrder?: "asc" | "desc";
   limit?: number;
@@ -305,6 +329,7 @@ function listJobDescriptionRows({
     dateFrom,
     dateTo,
     departmentIds,
+    extraCondition,
     googleSheetStatuses,
     hiringUnitIds,
     interviewerIds,
@@ -340,6 +365,7 @@ function listJobDescriptionRows({
       id: jobDescription.id,
       jobLevel: jobDescription.jobLevel,
       jobSeries: jobDescription.jobSeries,
+      manuallyInactive: jobDescription.manuallyInactive,
       name: jobDescription.name,
       notes: jobDescription.notes,
       offeredPendingOnboardCount: jobDescription.offeredPendingOnboardCount,
@@ -401,6 +427,7 @@ async function countJobDescriptionRows({
   interviewerIds,
   jdIdsForInterviewers,
   scopeCondition,
+  extraCondition,
 }: {
   code?: string;
   dateField?: "requestedDate" | "expectedOnboardDate";
@@ -417,6 +444,7 @@ async function countJobDescriptionRows({
   interviewerIds?: string[];
   jdIdsForInterviewers?: string[];
   scopeCondition?: SQL;
+  extraCondition?: SQL;
 }) {
   const where = buildWhereConditions({
     code,
@@ -424,6 +452,7 @@ async function countJobDescriptionRows({
     dateFrom,
     dateTo,
     departmentIds,
+    extraCondition,
     googleSheetStatuses,
     hiringUnitIds,
     interviewerIds,
@@ -570,6 +599,7 @@ function toJobDescriptionListRecord(
     interviewers,
     jobLevel: row.jobLevel,
     jobSeries: row.jobSeries,
+    manuallyInactive: row.manuallyInactive,
     name: row.name,
     notes: row.notes,
     offeredPendingOnboardCount: row.offeredPendingOnboardCount,
@@ -624,6 +654,7 @@ export async function queryPaginatedJobDescriptions(
     textFilters,
     search,
     sourceSheet,
+    validityStatus,
   } = parseJobDescriptionListFilters(filters);
   const { page, pageSize, sortBy, sortOrder } = parseJobDescriptionPagination(pagination);
   const offset = (page - 1) * pageSize;
@@ -635,6 +666,7 @@ export async function queryPaginatedJobDescriptions(
     }),
     filters?.resumeSourceId ? eq(jobDescription.resumeSourceId, filters.resumeSourceId) : undefined,
   );
+  const validityCondition = jobDescriptionValidityCondition(validityStatus);
 
   const [records, total] = await Promise.all([
     listJobDescriptionRows({
@@ -643,6 +675,7 @@ export async function queryPaginatedJobDescriptions(
       dateFrom,
       dateTo,
       departmentIds,
+      extraCondition: validityCondition,
       googleSheetStatuses,
       hiringUnitIds,
       interviewerIds,
@@ -664,6 +697,7 @@ export async function queryPaginatedJobDescriptions(
       dateFrom,
       dateTo,
       departmentIds,
+      extraCondition: validityCondition,
       googleSheetStatuses,
       hiringUnitIds,
       interviewerIds,
@@ -718,6 +752,7 @@ export async function queryAllJobDescriptions(
     search,
     sourceSheet,
     textFilters,
+    validityStatus,
   } = parseJobDescriptionListFilters(filters);
   const jdIdsForInterviewers = await resolveJdIdsForInterviewers(organizationId, interviewerIds);
   const scopeCondition = and(
@@ -727,12 +762,14 @@ export async function queryAllJobDescriptions(
     }),
     filters?.resumeSourceId ? eq(jobDescription.resumeSourceId, filters.resumeSourceId) : undefined,
   );
+  const validityCondition = jobDescriptionValidityCondition(validityStatus);
   const rows = await listJobDescriptionRows({
     code,
     dateField,
     dateFrom,
     dateTo,
     departmentIds,
+    extraCondition: validityCondition,
     googleSheetStatuses,
     hiringUnitIds,
     interviewerIds,
@@ -816,13 +853,14 @@ export async function loadJobDescriptionFilterOptions(
 
 export async function listAllJobDescriptions(
   organizationId: string,
-  options?: { actorUserId?: string | null },
+  options?: { actorUserId?: string | null; includeInactive?: boolean },
 ): Promise<JobDescriptionListRecord[]> {
   const scopeCondition = await resolveJobDescriptionHiringUnitScopeCondition({
     actorUserId: options?.actorUserId,
     organizationId,
   });
   const rows = await listJobDescriptionRows({
+    extraCondition: options?.includeInactive ? undefined : selectableJobDescriptionCondition,
     organizationId,
     scopeCondition,
     sortBy: "name",
@@ -874,6 +912,7 @@ export async function fetchJobDescriptionsByCodes(
 export async function jobDescriptionIdsExist(
   ids: string[],
   organizationId: string,
+  options?: { selectableOnly?: boolean },
 ): Promise<boolean> {
   if (ids.length === 0) {
     return true;
@@ -881,7 +920,13 @@ export async function jobDescriptionIdsExist(
   const rows = await db
     .select({ id: jobDescription.id })
     .from(jobDescription)
-    .where(and(inArray(jobDescription.id, ids), eq(jobDescription.organizationId, organizationId)));
+    .where(
+      and(
+        inArray(jobDescription.id, ids),
+        eq(jobDescription.organizationId, organizationId),
+        options?.selectableOnly ? selectableJobDescriptionCondition : undefined,
+      ),
+    );
   return rows.length === new Set(ids).size;
 }
 
@@ -924,6 +969,7 @@ export async function loadJobDescriptionById(
       id: jobDescription.id,
       jobLevel: jobDescription.jobLevel,
       jobSeries: jobDescription.jobSeries,
+      manuallyInactive: jobDescription.manuallyInactive,
       name: jobDescription.name,
       notes: jobDescription.notes,
       offeredPendingOnboardCount: jobDescription.offeredPendingOnboardCount,
@@ -1186,6 +1232,7 @@ export function serializeJobDescription(
     interviewerIds,
     jobLevel: row.jobLevel,
     jobSeries: row.jobSeries,
+    manuallyInactive: row.manuallyInactive,
     name: row.name,
     notes: row.notes,
     offeredPendingOnboardCount: row.offeredPendingOnboardCount,

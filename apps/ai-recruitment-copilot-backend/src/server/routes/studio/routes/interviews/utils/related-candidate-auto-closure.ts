@@ -3,6 +3,7 @@ import type { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { interviewAuditLog, resumeDuplicateMatch, studioInterview } from "@arc/db-schema/schema";
 import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";
 import { getResumeSemanticIndexConfig } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/indexer";
+import { crossUploaderDuplicateCondition } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/duplicate-matches";
 import {
   AUTO_CLOSE_RESUME_SIMILARITY_THRESHOLD,
   buildAutomaticCandidateClosure,
@@ -78,6 +79,7 @@ async function loadStoredSemanticMatches(
         eq(resumeDuplicateMatch.embeddingVersion, embeddingVersion),
         inArray(resumeDuplicateMatch.status, ["active", "confirmed"]),
         gte(resumeDuplicateMatch.score, AUTO_CLOSE_RESUME_SIMILARITY_THRESHOLD),
+        crossUploaderDuplicateCondition,
         or(
           and(
             eq(resumeDuplicateMatch.sourceType, "studio_interview"),

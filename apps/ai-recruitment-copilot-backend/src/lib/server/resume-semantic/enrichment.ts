@@ -26,7 +26,7 @@ async function loadSemanticEnrichmentSource(
 ): Promise<SemanticEnrichmentSource | null> {
   if (job.sourceType === "studio_interview") {
     const [row] = await db
-      .select({ profile: studioInterview.resumeProfile })
+      .select({ createdBy: studioInterview.createdBy, profile: studioInterview.resumeProfile })
       .from(studioInterview)
       .where(
         and(
@@ -35,7 +35,7 @@ async function loadSemanticEnrichmentSource(
         ),
       )
       .limit(1);
-    return row?.profile ? { createdBy: null, profile: row.profile, scope: null } : null;
+    return row?.profile ? { createdBy: row.createdBy, profile: row.profile, scope: null } : null;
   }
   if (job.sourceType !== "resume_pool_item") {
     return null;
@@ -82,6 +82,7 @@ export async function runResumeSemanticEnrichmentJob(
     resumeProfile: source.profile,
     sourceTypes: privatePool ? ["studio_interview", "resume_pool_item"] : ["studio_interview"],
     throwOnError: true,
+    uploaderUserId: source.createdBy,
   });
   await deps.replaceDuplicateSnapshot({
     matches,

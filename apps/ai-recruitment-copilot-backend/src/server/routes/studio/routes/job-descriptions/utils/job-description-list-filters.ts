@@ -3,6 +3,7 @@ import { z } from "zod";
 import { odcAnalysisDemandDateFieldValues } from "@arc/shared/odc-analysis";
 
 const googleSheetStatusSchema = z.enum(["active", "deleted", "unlinked"]);
+const validityStatusSchema = z.enum(["active", "inactive"]);
 const MAX_ID_FILTER_VALUES = 500;
 const MAX_ID_LENGTH = 120;
 const dateOnlySchema = z.string().date().optional().nullable();
@@ -20,6 +21,7 @@ const jobDescriptionListFiltersSchema = z.object({
   search: z.string().trim().max(120).optional().nullable(),
   sourceSheet: z.string().trim().max(500).optional().nullable(),
   textFilters: listTextFiltersSchema("jobs"),
+  validityStatus: validityStatusSchema.optional().nullable(),
 });
 
 export type JobDescriptionGoogleSheetStatusFilter = z.infer<typeof googleSheetStatusSchema>;
@@ -37,6 +39,7 @@ export interface JobDescriptionListFilterInput {
   textFilters?: string;
   search?: string | null;
   sourceSheet?: string | null;
+  validityStatus?: z.infer<typeof validityStatusSchema> | null;
 }
 
 function csvToValues(value?: string | null): string[] | undefined {
@@ -85,5 +88,6 @@ export function parseJobDescriptionListFilters(filters?: JobDescriptionListFilte
     search: parsed.data.search?.trim() || undefined,
     sourceSheet: parsed.data.sourceSheet?.trim() || undefined,
     textFilters: parsed.data.textFilters,
+    validityStatus: parsed.data.validityStatus ?? undefined,
   };
 }

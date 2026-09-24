@@ -72,6 +72,16 @@ export function createJobDescriptionListFilters({
       type: "select",
     },
     {
+      key: "validityStatus",
+      label: "是否失效",
+      options: [
+        { label: "有效", value: "active" },
+        { label: "已失效", value: "inactive" },
+      ],
+      placeholder: "全部状态",
+      type: "select",
+    },
+    {
       emptyMessage: "没有匹配的编制组织",
       key: "hiringUnitId",
       label: "编制组织",

@@ -22,6 +22,7 @@ interface DirectUploadDedupRefreshDeps {
   findDuplicates: typeof findSemanticResumeDuplicates;
   loadCandidate: (input: { candidateId: string; organizationId: string }) => Promise<{
     candidateCount: number;
+    createdBy: string | null;
     poolItemId: string | null;
     profile: ResumeProfile | null;
     sourceType: StudioInterviewResumeSourceType | null;
@@ -33,6 +34,7 @@ async function loadCandidate(input: { candidateId: string; organizationId: strin
   const [[candidate], [candidateCountRow]] = await Promise.all([
     db
       .select({
+        createdBy: studioInterview.createdBy,
         poolItemId: studioInterview.resumeSourcePoolItemId,
         profile: studioInterview.resumeProfile,
         sourceType: studioInterview.resumeSourceType,
@@ -87,6 +89,7 @@ export async function refreshDirectUploadDuplicateMatchesBeforeHire(
     resumeProfile: candidate.profile,
     sourceTypes: ["studio_interview"],
     throwOnError: true,
+    uploaderUserId: candidate.createdBy,
   });
   await deps.replaceDuplicateSnapshot({
     matches,

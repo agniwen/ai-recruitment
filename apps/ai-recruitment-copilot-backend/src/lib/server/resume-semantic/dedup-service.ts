@@ -27,6 +27,7 @@ interface SemanticCandidateRecord {
   candidateName: string;
   candidatePhone: string | null;
   createdAt: string;
+  createdBy?: string | null;
   id: string;
   jobDescriptionName: string | null;
   resumeProfile: ResumeProfile | null;
@@ -49,6 +50,7 @@ interface FindSemanticResumeDuplicatesInput {
   resultLimit?: number;
   sourceTypes?: ResumeSemanticSourceType[];
   throwOnError?: boolean;
+  uploaderUserId?: string | null;
 }
 
 interface SemanticDedupDeps {
@@ -189,6 +191,9 @@ export async function findSemanticResumeDuplicates(
       poolScope: input.poolScope,
     });
     const semanticMatches = candidates.flatMap((candidate): DedupMatchRecord[] => {
+      if (input.uploaderUserId && candidate.createdBy === input.uploaderUserId) {
+        return [];
+      }
       const candidateSourceType = candidate.sourceType ?? "studio_interview";
       const vectorScores = bySource.get(sourceKey(candidateSourceType, candidate.id));
       if (!vectorScores) {
@@ -296,6 +301,7 @@ async function loadSemanticDedupCandidates(
             candidateName: studioInterview.candidateName,
             candidatePhone: studioInterview.candidatePhone,
             createdAt: studioInterview.createdAt,
+            createdBy: studioInterview.createdBy,
             id: studioInterview.id,
             jobDescriptionName: jobDescription.name,
             pipelineStage: studioInterview.pipelineStage,
@@ -329,6 +335,7 @@ async function loadSemanticDedupCandidates(
             candidateName: resumePoolItem.candidateName,
             candidatePhone: resumePoolItem.candidatePhone,
             createdAt: resumePoolItem.createdAt,
+            createdBy: resumePoolItem.createdBy,
             id: resumePoolItem.id,
             jobDescriptionName: jobDescription.name,
             resumeProfile: resumePoolItem.resumeProfile,

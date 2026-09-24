@@ -16,6 +16,7 @@ describe("parseJobDescriptionListFilters", () => {
         recruitmentStatus: "招聘中,暂停招聘",
         search: " 工程师 ",
         sourceSheet: " 业务岗位汇总 ",
+        validityStatus: "inactive",
       }),
     ).toEqual({
       code: "REQ-001",
@@ -29,6 +30,7 @@ describe("parseJobDescriptionListFilters", () => {
       recruitmentStatuses: ["招聘中", "暂停招聘"],
       search: "工程师",
       sourceSheet: "业务岗位汇总",
+      validityStatus: "inactive",
     });
   });
 
@@ -57,6 +59,7 @@ describe("parseJobDescriptionListFilters", () => {
       recruitmentStatuses: undefined,
       search: undefined,
       sourceSheet: undefined,
+      validityStatus: undefined,
     });
   });
 

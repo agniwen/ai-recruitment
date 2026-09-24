@@ -346,9 +346,11 @@ export const resumeLibraryRouter = factory
         return c.json({ error: "Unauthorized" }, 401);
       }
       if (input.data.jobDescriptionId) {
-        const ok = await jobDescriptionIdsExist([input.data.jobDescriptionId], activeOrg.id);
+        const ok = await jobDescriptionIdsExist([input.data.jobDescriptionId], activeOrg.id, {
+          selectableOnly: true,
+        });
         if (!ok) {
-          return c.json({ error: "所选在招岗位不存在。" }, 400);
+          return c.json({ error: "所选在招岗位不存在或已失效。" }, 400);
         }
       }
 
@@ -382,6 +384,7 @@ export const resumeLibraryRouter = factory
         organizationId: activeOrg.id,
         phone: input.data.candidatePhone || resumeProfile?.phone || null,
         resumeProfile,
+        uploaderUserId: c.var.user?.id,
       });
 
       let generatedReview: Awaited<ReturnType<typeof generateResumeReviewBestEffort>> = null;
@@ -594,14 +597,16 @@ export const resumeLibraryRouter = factory
       }
       const [jobDescriptionExists, hiringUnit] = await Promise.all([
         input.jobDescriptionId
-          ? jobDescriptionIdsExist([input.jobDescriptionId], activeOrg.id)
+          ? jobDescriptionIdsExist([input.jobDescriptionId], activeOrg.id, {
+              selectableOnly: input.jobDescriptionId !== existing.jobDescriptionId,
+            })
           : Promise.resolve(true),
         input.hiringUnitId
           ? loadHiringUnitById(input.hiringUnitId, activeOrg.id)
           : Promise.resolve(null),
       ]);
       if (!jobDescriptionExists) {
-        return c.json({ error: "所选在招岗位不存在。" }, 400);
+        return c.json({ error: "所选在招岗位不存在或已失效。" }, 400);
       }
       if (input.hiringUnitId && !hiringUnit) {
         return c.json({ error: "所选用人组织不存在。" }, 400);
@@ -816,9 +821,11 @@ export const resumeLibraryRouter = factory
       // 编辑接口不再接受简历文件替换 / 简历评价（notes、resumeReview）更新。
       // Edit no longer accepts resume file replacement or resume notes / review updates.
       if (input.data.jobDescriptionId) {
-        const ok = await jobDescriptionIdsExist([input.data.jobDescriptionId], activeOrg.id);
+        const ok = await jobDescriptionIdsExist([input.data.jobDescriptionId], activeOrg.id, {
+          selectableOnly: input.data.jobDescriptionId !== existing.jobDescriptionId,
+        });
         if (!ok) {
-          return c.json({ error: "所选在招岗位不存在。" }, 400);
+          return c.json({ error: "所选在招岗位不存在或已失效。" }, 400);
         }
       }
       const { hiringUnitId } = input.data;
