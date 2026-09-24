@@ -127,20 +127,24 @@ export function OfferStagePanel({
     <div className="space-y-5">
       <CandidateExpectationsBlock candidateId={candidateId} disabled={disabled || !canUpdate} />
 
-      <div className="flex items-center justify-between">
+      <div className="@container flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-medium text-sm">Offer 版本</h3>
           <p className="text-muted-foreground text-xs">
             管理 {candidateName} 的 Offer：新版本会自动 supersede 旧的草稿/已发版本。
           </p>
-          <p className="mt-1 text-muted-foreground text-xs">该 Offer，须由 SSC 已完成审核确认。</p>
         </div>
-        {disabled || !canCreate ? null : (
-          <Button onClick={() => setCreateOpen(true)} size="sm">
-            <IconPlus className="size-4" />
-            新建 Offer
-          </Button>
-        )}
+        <div className="flex w-full items-center justify-between gap-3 @2xl:ml-auto @2xl:w-auto @2xl:justify-end">
+          <p className="text-left text-destructive text-xs @2xl:text-right">
+            该 Offer，需要SSC已完成审核确认的Offer
+          </p>
+          {disabled || !canCreate ? null : (
+            <Button onClick={() => setCreateOpen(true)} size="sm">
+              <IconPlus className="size-4" />
+              新建 Offer
+            </Button>
+          )}
+        </div>
       </div>
 
       {renderDraftsContent()}

@@ -219,7 +219,7 @@ export function CandidatePortfolioAttachments({
   return (
     <section aria-label="附件" className="mt-3 min-w-0 space-y-1">
       <div className="flex items-center gap-2">
-        <h4 className="text-xs text-muted-foreground">附件</h4>
+        <h4 className="text-xs text-muted-foreground">作品集-附件</h4>
         {editing && attachments.length + pendingFiles.length < MAX_PORTFOLIO_ATTACHMENTS ? (
           <label className="inline-flex cursor-pointer items-center gap-1 text-xs text-primary hover:underline">
             <IconPlus className="size-3.5" />

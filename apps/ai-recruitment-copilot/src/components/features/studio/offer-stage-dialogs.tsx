@@ -175,7 +175,7 @@ export function CreateOrEditOfferDialog({
             {mode === "edit" ? "草稿状态可编辑。" : "新建版本会自动 supersede 已发出未结的旧版本。"}
           </DialogDescription>
           {mode === "create" ? (
-            <p className="text-muted-foreground text-xs">该 Offer，须由 SSC 已完成审核确认。</p>
+            <p className="text-muted-foreground text-xs">该 Offer，需要SSC已完成审核确认的Offer</p>
           ) : null}
         </DialogHeader>
 
