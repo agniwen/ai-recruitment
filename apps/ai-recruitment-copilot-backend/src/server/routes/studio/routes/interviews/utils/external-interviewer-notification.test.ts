@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HumanInterviewMeetingRecord } from "@arc/shared/studio-pipeline-stages";
 import { notifyExternalInterviewers } from "./external-interviewer-notification";
-const mocks = vi.hoisted(() => ({ configured: vi.fn(), resolve: vi.fn(), send: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  candidates: vi.fn(),
+  configured: vi.fn(),
+  resolve: vi.fn(),
+  send: vi.fn(),
+}));
 vi.mock("../dao/external-interviewers", () => ({
+  loadExternalInterviewCandidates: mocks.candidates,
   resolveExternalInterviewerBindings: mocks.resolve,
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot", () => ({
@@ -25,6 +31,16 @@ beforeEach(() => {
   vi.stubEnv("BETTER_AUTH_SECRET", "test-secret");
   vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://example.com");
   mocks.configured.mockReturnValue(true);
+  mocks.candidates.mockResolvedValue([
+    {
+      candidateName: "Alex",
+      departmentName: "效能部",
+      hiringUnitName: "研发中心",
+      id: "candidate-1",
+      jobDescriptionName: "工程师",
+      organizationSlug: "work",
+    },
+  ]);
   mocks.resolve.mockResolvedValue([
     { chatId: "123", name: "张三", telegram: "@tester1" },
     { chatId: null, name: "李四", telegram: "" },
@@ -39,10 +55,34 @@ describe("external interviewer notifications", () => {
       { name: "李四", telegram: "" },
     ]);
     expect(mocks.send).toHaveBeenCalledOnce();
-    const [[chatId, text]] = mocks.send.mock.calls;
+    const [[chatId, card]] = mocks.send.mock.calls;
     expect(chatId).toBe("123");
-    expect(text).toContain("https://example.com/human-interview/interviewer/");
-    const [, token] = text.match(/interviewer\/([^\n]+)/u);
+    expect(card).toMatchObject({ title: "真人面试邀请", type: "card" });
+    const action = card.children.find((child: { type: string }) => child.type === "actions");
+    expect(action.children).toEqual([
+      {
+        label: "进入面试",
+        type: "link-button",
+        url: expect.stringMatching(/^https:\/\/example\.com\/human-interview\/interviewer\//u),
+      },
+      {
+        label: "查看候选人详情",
+        type: "link-button",
+        url: "https://example.com/resume-review/work/candidate-1",
+      },
+    ]);
+    expect(card.children).toContainEqual({
+      children: [
+        { label: "候选人", type: "field", value: "Alex" },
+        { label: "岗位", type: "field", value: "工程师" },
+        { label: "用人组织", type: "field", value: "研发中心" },
+        { label: "部门", type: "field", value: "效能部" },
+      ],
+      type: "fields",
+    });
+    const token = decodeURIComponent(
+      new URL(action.children[0].url).pathname.split("/").at(-1) ?? "",
+    );
     const payload = JSON.parse(Buffer.from(token.split(".")[0], "base64url").toString());
     expect(payload).toMatchObject({
       external: true,

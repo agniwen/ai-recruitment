@@ -1,20 +1,54 @@
 import type { InterviewerInvitePayload } from "./human-interview-meeting-access";
 import type { HumanInterviewMeetingInterviewerInviteScope } from "./human-interview-meetings";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { resolveTelegramRecipientId } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import {
   jobDescription,
+  department,
+  hiringUnit,
+  organization,
   studioInterview,
   studioHumanInterviewExternalInterviewer,
   studioHumanInterviewMeeting,
   studioHumanInterviewMeetingRound,
+  studioHumanInterviewRound,
   telegramRequesterBinding,
+  user,
 } from "@arc/db-schema/schema";
 import type { ExternalInterviewerInput } from "@arc/db-schema/studio-interviews";
 import {
   externalInterviewerUsername,
   parseRequesterInterviewers,
 } from "@arc/shared/external-interviewers";
+
+export function loadExternalInterviewCandidates(meetingId: string, organizationId: string) {
+  return db
+    .select({
+      candidateName: studioInterview.candidateName,
+      departmentName: department.name,
+      hiringUnitName: hiringUnit.name,
+      id: studioInterview.id,
+      jobDescriptionName: jobDescription.name,
+      organizationSlug: organization.slug,
+    })
+    .from(studioHumanInterviewMeetingRound)
+    .innerJoin(
+      studioHumanInterviewRound,
+      eq(studioHumanInterviewMeetingRound.roundId, studioHumanInterviewRound.id),
+    )
+    .innerJoin(studioInterview, eq(studioHumanInterviewRound.interviewRecordId, studioInterview.id))
+    .innerJoin(organization, eq(studioInterview.organizationId, organization.id))
+    .leftJoin(jobDescription, eq(studioInterview.jobDescriptionId, jobDescription.id))
+    .leftJoin(department, eq(jobDescription.departmentId, department.id))
+    .leftJoin(hiringUnit, eq(studioInterview.hiringUnitId, hiringUnit.id))
+    .where(
+      and(
+        eq(studioHumanInterviewMeetingRound.meetingId, meetingId),
+        eq(studioInterview.organizationId, organizationId),
+      ),
+    );
+}
 
 export async function loadExternalInterviewerDefaults(candidateId: string, organizationId: string) {
   const [row] = await db
@@ -60,6 +94,29 @@ export async function resolveExternalInterviewerBindings(
         )
     : [];
   const recipients = new Map(rows.map((row) => [row.username, row.chatId]));
+  const users = usernames.length
+    ? await db
+        .select({
+          boundUsername: user.telegramBoundUsername,
+          chatId: user.telegramChatId,
+          telegram: user.telegram,
+        })
+        .from(user)
+        .where(
+          inArray(sql<string>`lower(trim(leading '@' from trim(${user.telegram})))`, usernames),
+        )
+    : [];
+  for (const profile of users) {
+    const username = externalInterviewerUsername(profile.telegram ?? "");
+    const chatId = resolveTelegramRecipientId({
+      boundUsername: profile.boundUsername,
+      chatId: profile.chatId,
+      profileTelegram: profile.telegram,
+    });
+    if (username && chatId && !recipients.has(username)) {
+      recipients.set(username, chatId);
+    }
+  }
   return interviewers.map((item) => ({
     ...item,
     chatId: recipients.get(externalInterviewerUsername(item.telegram) ?? "") ?? null,
