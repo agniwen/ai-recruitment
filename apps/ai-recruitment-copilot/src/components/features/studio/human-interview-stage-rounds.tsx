@@ -111,7 +111,11 @@ export function RoundCard({
                 <IconUsers className="size-3" />
                 {[
                   ...round.interviewers.map((i) => i.name),
-                  ...(round.externalInterviewers ?? []).map((i) => `${i.name}（外部）`),
+                  ...(round.externalInterviewers ?? []).map((i) =>
+                    i.telegram.trim()
+                      ? `${i.name}（外部 · TG：${i.telegram.trim()}）`
+                      : `${i.name}（外部）`,
+                  ),
                 ].join("、") || "未指派面试官"}
               </span>
             </div>
