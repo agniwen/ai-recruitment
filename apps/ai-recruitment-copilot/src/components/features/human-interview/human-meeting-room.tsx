@@ -2,6 +2,7 @@
 
 import {
   IconDeviceDesktopUp,
+  IconMessage,
   IconLoader2,
   IconLogin,
   IconMicrophone,
@@ -16,6 +17,9 @@ import {
 
 import {
   DisconnectButton,
+  ConnectionQualityIndicator,
+  ParticipantName,
+  TrackMutedIndicator,
   LiveKitRoom,
   ParticipantTile,
   RoomAudioRenderer,
@@ -24,13 +28,20 @@ import {
   useRoomContext,
   useTrackRefContext,
   useParticipants,
+  useIsSpeaking,
   useTracks,
 } from "@livekit/components-react";
 import type { TrackReferenceOrPlaceholder } from "@livekit/components-react";
 
-import { ConnectionState, RoomEvent, Track } from "livekit-client";
+import {
+  ConnectionState,
+  RoomEvent,
+  Track,
+  VideoPresets,
+  ScreenSharePresets,
+} from "livekit-client";
 import type { MouseEvent } from "react";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import type {
   HumanInterviewMeetingTokenResponse,
@@ -52,6 +63,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MicrophoneDeviceMenu, VoiceEffectMenu } from "./human-meeting-audio-controls";
+
+import { HumanMeetingChat } from "./human-meeting-chat";
 
 type HumanMeetingRoomProps =
   | {
@@ -114,7 +127,7 @@ const interviewerRoleLabel = {
   interviewer: "面试官",
   observer: "旁听",
 } as const;
-const EARLY_JOIN_WINDOW_MS = 5 * 60 * 1000;
+const EARLY_JOIN_WINDOW_MS = 10 * 60 * 1000;
 const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
   day: "2-digit",
   hour: "2-digit",
@@ -133,9 +146,6 @@ function formatDateTime(iso: string | null): string {
 }
 
 function getRoomTitle(props: HumanMeetingRoomProps): string {
-  if (props.mode === "candidate") {
-    return props.preview.title;
-  }
   return props.preview.title;
 }
 
@@ -166,7 +176,7 @@ function getStartBlockMessage(
   if (timestamp === null || timestamp <= nowMs) {
     return null;
   }
-  return `面试时间为 ${formatDateTime(scheduledAt)}，可提前 5 分钟进入，当前暂不能进入会议。`;
+  return `面试时间为 ${formatDateTime(scheduledAt)}，可提前 10 分钟进入，当前暂不能进入会议。`;
 }
 
 interface ParticipantMetadata {
@@ -413,7 +423,7 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
   return (
     <LiveKitRoom
       audio={false}
-      className="h-dvh overflow-hidden bg-zinc-950 text-white"
+      className="dark human-meeting-theme h-dvh overflow-hidden bg-zinc-950 text-white"
       connect
       onDisconnected={() => dispatch({ type: "disconnected" })}
       onError={(e) => {
@@ -426,6 +436,8 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
     >
       <DefaultMicrophoneStarter enabled={token.participantRole !== "observer"} />
       <HumanMeetingStage
+        chatInviteToken={props.inviteToken}
+        chatMode={props.mode}
         canPublish={token.participantRole !== "observer"}
         canUseVoiceEffects={props.mode === "interviewer" && token.participantRole !== "observer"}
         canEndMeeting={props.mode === "interviewer"}
@@ -483,6 +495,8 @@ function DefaultMicrophoneStarter({ enabled }: { enabled: boolean }) {
 }
 
 function HumanMeetingStage({
+  chatInviteToken,
+  chatMode,
   canPublish,
   canUseVoiceEffects,
   canEndMeeting,
@@ -491,6 +505,8 @@ function HumanMeetingStage({
   participantName,
   title,
 }: {
+  chatInviteToken: string;
+  chatMode: "candidate" | "interviewer";
   canPublish: boolean;
   canUseVoiceEffects: boolean;
   canEndMeeting: boolean;
@@ -499,6 +515,9 @@ function HumanMeetingStage({
   participantName: string;
   title: string;
 }) {
+  const [chatOpen, setChatOpen] = useState(false);
+  const closeChat = useCallback(() => setChatOpen(false), []);
+  const [focusedTrackKey, setFocusedTrackKey] = useState<string | null>(null);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const participants = useParticipants();
   const tracks = useTracks(
@@ -508,6 +527,16 @@ function HumanMeetingStage({
     ],
     { onlySubscribed: false },
   );
+
+  const manuallyFocusedTrack = tracks.find((track) => meetingTrackKey(track) === focusedTrackKey);
+  const focusedTrack =
+    manuallyFocusedTrack ??
+    tracks.find((track) => track.source === Track.Source.ScreenShare) ??
+    tracks[0];
+  const sideTracks = tracks.filter((track) => track !== focusedTrack);
+  if (focusedTrackKey && !manuallyFocusedTrack) {
+    setFocusedTrackKey(null);
+  }
 
   async function handleEndConfirm(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -530,38 +559,81 @@ function HumanMeetingStage({
         </Badge>
       </header>
 
-      <div
-        className={cn(
-          "grid min-h-0 flex-1 gap-3 p-3",
-          "auto-rows-fr overflow-hidden",
-          tracks.length <= 1 && "grid-cols-1",
-          tracks.length > 1 && tracks.length <= 4 && "grid-cols-1 md:grid-cols-2",
-          tracks.length > 4 && "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3",
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {focusedTrack ? (
+          <div
+            data-slot="meeting-focus-layout"
+            className={cn(
+              "grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden p-3",
+              sideTracks.length > 0
+                ? "grid-rows-[minmax(0,1fr)_8rem] md:grid-cols-[minmax(0,1fr)_13rem] md:grid-rows-1"
+                : "grid-cols-1 grid-rows-1",
+            )}
+          >
+            <div className="min-h-0 min-w-0">
+              <TrackLoop tracks={[focusedTrack]}>
+                <HumanParticipantTile
+                  onResetFocus={manuallyFocusedTrack ? () => setFocusedTrackKey(null) : undefined}
+                />
+              </TrackLoop>
+            </div>
+            {sideTracks.length > 0 ? (
+              <aside
+                aria-label="其他参会画面"
+                className="grid min-h-0 min-w-0 auto-cols-[12rem] grid-flow-col gap-3 overflow-x-auto md:auto-cols-auto md:auto-rows-[8rem] md:grid-flow-row md:content-start md:overflow-x-hidden md:overflow-y-auto"
+              >
+                <TrackLoop tracks={sideTracks}>
+                  <HumanParticipantTile onFocusTrack={setFocusedTrackKey} />
+                </TrackLoop>
+              </aside>
+            ) : null}
+          </div>
+        ) : (
+          <div className="grid flex-1 place-items-center text-white/60">等待参会画面…</div>
         )}
-      >
-        <TrackLoop tracks={tracks}>
-          <HumanParticipantTile />
-        </TrackLoop>
+        <HumanMeetingChat
+          access={{ inviteToken: chatInviteToken, mode: chatMode }}
+          open={chatOpen}
+          onClose={closeChat}
+        />
       </div>
 
       <footer className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-white/10 border-t px-4 py-3">
+        <button
+          type="button"
+          className={controlButtonClass}
+          aria-expanded={chatOpen}
+          onClick={() => setChatOpen((value) => !value)}
+        >
+          <IconMessage className="size-4" />
+          聊天
+        </button>
         {canPublish ? (
           <>
-            <TrackToggle
-              className={mediaToggleButtonClass}
-              showIcon={false}
-              source={Track.Source.Microphone}
+            <fieldset
+              aria-label="麦克风控制"
+              className="inline-flex h-9 items-stretch overflow-hidden rounded-md border border-white/15 bg-white/10"
             >
-              <IconMicrophone className="toggle-on size-4" />
-              <IconMicrophoneOff className="toggle-off size-4" />
-              <span className="toggle-on">麦克风</span>
-              <span className="toggle-off">已静音</span>
-            </TrackToggle>
-            <MicrophoneDeviceMenu />
+              <TrackToggle
+                className={cn(
+                  mediaToggleButtonClass,
+                  "h-full rounded-none border-0 bg-transparent",
+                )}
+                showIcon={false}
+                source={Track.Source.Microphone}
+              >
+                <IconMicrophone className="toggle-on size-4" />
+                <IconMicrophoneOff className="toggle-off size-4" />
+                <span className="toggle-on">麦克风</span>
+                <span className="toggle-off">已静音</span>
+              </TrackToggle>
+              <MicrophoneDeviceMenu />
+            </fieldset>
             {canUseVoiceEffects ? <VoiceEffectMenu /> : null}
             <TrackToggle
               className={mediaToggleButtonClass}
               showIcon={false}
+              captureOptions={{ resolution: VideoPresets.h720.resolution }}
               source={Track.Source.Camera}
             >
               <IconVideo className="toggle-on size-4" />
@@ -572,6 +644,7 @@ function HumanMeetingStage({
             <TrackToggle
               className={controlButtonClass}
               showIcon={false}
+              captureOptions={{ resolution: ScreenSharePresets.h720fps15.resolution }}
               source={Track.Source.ScreenShare}
             >
               <IconDeviceDesktopUp className="size-4" />
@@ -620,27 +693,90 @@ function HumanMeetingStage({
   );
 }
 
-function HumanParticipantTile() {
+function meetingTrackKey(track: TrackReferenceOrPlaceholder) {
+  return `${track.participant.identity}:${track.source}`;
+}
+
+function HumanParticipantTile({
+  onFocusTrack,
+  onResetFocus,
+}: {
+  onFocusTrack?: (key: string) => void;
+  onResetFocus?: () => void;
+}) {
   const trackRef = useTrackRefContext();
   const badge = getParticipantBadge(trackRef);
+  const isSpeaking = useIsSpeaking(trackRef.participant);
+  const highlightSpeaker = isSpeaking && trackRef.source === Track.Source.Camera;
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden rounded-lg border border-white/10 bg-zinc-900">
+    <div
+      data-speaking={highlightSpeaker}
+      className={cn(
+        "relative isolate h-full min-h-0 overflow-hidden rounded-lg border bg-zinc-900 transition-colors duration-200 motion-reduce:transition-none",
+        highlightSpeaker ? "border-emerald-400" : "border-white/10",
+      )}
+    >
       <ParticipantTile
         className={cn(
           "relative h-full min-h-0 w-full overflow-hidden bg-zinc-900",
           "[&_.lk-focus-toggle-button]:hidden",
-          "[&_.lk-participant-metadata]:absolute [&_.lk-participant-metadata]:right-3 [&_.lk-participant-metadata]:bottom-3 [&_.lk-participant-metadata]:left-3",
-          "[&_.lk-participant-metadata]:flex [&_.lk-participant-metadata]:items-center [&_.lk-participant-metadata]:justify-between",
-          "[&_.lk-participant-metadata-item]:rounded-md [&_.lk-participant-metadata-item]:bg-black/55 [&_.lk-participant-metadata-item]:px-2 [&_.lk-participant-metadata-item]:py-1",
+          "[&_.lk-participant-metadata]:hidden",
           "[&_.lk-participant-placeholder]:absolute [&_.lk-participant-placeholder]:inset-0 [&_.lk-participant-placeholder]:grid [&_.lk-participant-placeholder]:place-items-center [&_.lk-participant-placeholder]:bg-zinc-900",
           "[&_.lk-participant-placeholder_svg]:size-16 [&_.lk-participant-placeholder_svg]:text-white/25",
-          "[&_video]:relative [&_video]:z-10 [&_video]:h-full [&_video]:w-full [&_video]:object-cover",
+          "[&_video]:relative [&_video]:z-10 [&_video]:h-full [&_video]:w-full",
+          trackRef.source === Track.Source.ScreenShare
+            ? "[&_video]:object-contain"
+            : "[&_video]:object-cover",
         )}
         trackRef={trackRef}
       />
+      <div className="pointer-events-none absolute right-2 bottom-2 left-2 z-20 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-background/90 px-2 py-1 text-foreground">
+          {trackRef.source === Track.Source.ScreenShare ? (
+            <IconDeviceDesktopUp aria-label="屏幕共享" className="size-3.5 shrink-0" />
+          ) : (
+            <TrackMutedIndicator
+              trackRef={{ participant: trackRef.participant, source: Track.Source.Microphone }}
+              show="muted"
+              className="flex shrink-0 text-destructive [&_svg]:size-3.5"
+            />
+          )}
+          <ParticipantName
+            participant={trackRef.participant}
+            className="min-w-0 truncate text-sm"
+          />
+          {trackRef.participant.isLocal ? <span className="shrink-0 text-xs">（我）</span> : null}
+        </div>
+        <ConnectionQualityIndicator
+          participant={trackRef.participant}
+          className="flex shrink-0 items-center rounded-md bg-background/90 px-2 py-1 text-muted-foreground data-[lk-quality=excellent]:text-emerald-400 data-[lk-quality=good]:text-amber-400 data-[lk-quality=poor]:text-destructive data-[lk-quality=lost]:text-destructive [&_svg]:size-4"
+        />
+      </div>
+      {onFocusTrack ? (
+        <button
+          type="button"
+          aria-label={`将${trackRef.participant.name || trackRef.participant.identity}的${trackRef.source === Track.Source.ScreenShare ? "共享屏幕" : "摄像头"}设为主画面`}
+          title="设为主画面"
+          className="absolute inset-0 z-30 cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          onClick={() => onFocusTrack(meetingTrackKey(trackRef))}
+        />
+      ) : null}
+      {onResetFocus ? (
+        <Button
+          className="absolute top-2 right-2 z-30"
+          onClick={onResetFocus}
+          size="sm"
+          variant="secondary"
+        >
+          自动布局
+        </Button>
+      ) : null}
       <Badge
-        className="pointer-events-none absolute top-3 left-3 z-20 max-w-[calc(100%-1.5rem)] truncate shadow-sm backdrop-blur"
+        className={cn(
+          "pointer-events-none absolute top-2 left-2 z-20 truncate text-[10px] shadow-sm backdrop-blur",
+          onResetFocus ? "max-w-[calc(100%-7rem)]" : "max-w-[calc(100%-1rem)]",
+        )}
         title={badge.label}
         variant={badge.tone === "candidate" ? "info" : "inverse"}
       >

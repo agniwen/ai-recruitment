@@ -7,7 +7,6 @@ import { zhCN } from "date-fns/locale";
 import { DISPLAY_TIME_ZONE, formatDate } from "@arc/shared/utils/time";
 import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { humanInterviewFormatMeta } from "@arc/db-schema/studio-interviews";
 import type { StudioCalendarEvent } from "@arc/shared/studio-calendar";
 import { PageHeader } from "@/components/features/studio/page-header";
 import {
@@ -39,6 +38,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { fetchStudioCalendar } from "@/lib/client/api";
 import { studioCalendarKeys } from "@/lib/client/api/query-keys";
 import { AiInterviewEventHoverCard } from "./ai-interview-event-hover-card";
+import { HumanInterviewEventHoverCard } from "./human-interview-event-hover-card";
 
 const CALENDAR_I18N = {
   labels: {
@@ -130,32 +130,6 @@ function CalendarEventIcon({ occurrence }: EventCalendarRenderEventProps<StudioC
 
   return (
     <Icon aria-hidden="true" className="size-3 shrink-0" data-calendar-event-icon={event.kind} />
-  );
-}
-
-function CalendarEventTooltip({ event }: { event: StudioCalendarEvent | undefined }) {
-  if (!event) {
-    return null;
-  }
-  const candidates = event.candidates.map((candidate) => candidate.candidateName).join("、");
-  const interviewers =
-    event.kind === "human"
-      ? event.interviewers.map((interviewer) => interviewer.name).join("、")
-      : "";
-
-  return (
-    <div className="flex max-w-72 flex-col gap-1.5">
-      <div className="font-medium">{event.title}</div>
-      <div>类型：{calendarEventTypeLabel(event)}</div>
-      {candidates ? <div>候选人：{candidates}</div> : null}
-      {interviewers ? <div>面试官：{interviewers}</div> : null}
-      {event.kind === "human" ? (
-        <div>形式：{humanInterviewFormatMeta[event.format].label}</div>
-      ) : null}
-      {event.kind === "human" && event.location ? <div>地点：{event.location}</div> : null}
-      <div>开始：{formatDate(event.startAt, "YYYY年M月D日 HH:mm")}</div>
-      <div>结束：{formatDate(event.endAt, "YYYY年M月D日 HH:mm")}</div>
-    </div>
   );
 }
 
@@ -290,7 +264,6 @@ export function StudioCalendarPage({ slug }: { slug: string }) {
             className="h-[min(760px,calc(100vh-12rem))] min-h-[560px] overflow-hidden rounded-lg"
             defaultView="week"
             events={events}
-            eventTooltip
             i18n={CALENDAR_I18N}
             timeZone={DISPLAY_TIME_ZONE}
             interactions={{ drag: false, resize: false, selectSlot: false }}
@@ -298,18 +271,16 @@ export function StudioCalendarPage({ slug }: { slug: string }) {
             locale={zhCN}
             onRangeChange={handleRangeChange}
             renderEventIcon={(props) => <CalendarEventIcon {...props} />}
-            renderEventPreview={({ occurrence, trigger }) =>
-              occurrence.event.data?.kind === "ai" ? (
-                <AiInterviewEventHoverCard
-                  event={occurrence.event.data}
-                  slug={slug}
-                  trigger={trigger}
-                />
-              ) : null
-            }
-            renderEventTooltip={({ occurrence }) => (
-              <CalendarEventTooltip event={occurrence.event.data} />
-            )}
+            renderEventPreview={({ occurrence, trigger }) => {
+              const event = occurrence.event.data;
+              if (event?.kind === "ai") {
+                return <AiInterviewEventHoverCard event={event} slug={slug} trigger={trigger} />;
+              }
+              if (event?.kind === "human") {
+                return <HumanInterviewEventHoverCard event={event} slug={slug} trigger={trigger} />;
+              }
+              return null;
+            }}
             scrollToHour={8}
             views={["month", "week", "day"]}
             weekStartsOn={1}

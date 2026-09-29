@@ -354,13 +354,12 @@ export function getOfferDraftStatusMeta(status: string) {
   return offerDraftStatusMeta[status as OfferDraftStatus] ?? unknownOfferDraftStatusMeta;
 }
 
-// Offer 输入 schema：薪资以「元」为单位（integer），currency 默认 CNY。
-// Salary stored as integer "元" (CNY cents not used early-stage; CNY is dominant).
+// Offer 金额以所选币种的主单位存储（整数），不做汇率换算，新建默认 USD。
 export const offerDraftInputSchema = z.object({
   baseSalary: z.number().int().min(0, "Base salary 不能为负"),
   bonus: z.number().int().min(0).nullable().optional(),
   candidateCounter: z.string().trim().max(2000).nullable().optional(),
-  currency: z.string().trim().min(1).max(8).default("CNY").optional(),
+  currency: z.string().trim().min(1).max(8).optional(),
   equity: z.string().trim().max(500).nullable().optional(),
   expiresAt: z.string().trim().nullable().optional(),
   joiningDate: z.string().trim().nullable().optional(),
@@ -382,6 +381,7 @@ export type OfferResponseInput = z.infer<typeof offerResponseInputSchema>;
 // 候选人期望（在 offer 阶段录入，后续 dialog prefill 用）。
 // Candidate expectations; populated during the offer flow and used to prefill.
 export const candidateExpectationsMetaSchema = z.object({
+  currency: z.string().trim().min(1).max(8).optional(),
   currentSalary: z.number().int().min(0).nullable().optional(),
   earliestJoiningDate: z.string().trim().nullable().optional(),
   expectedSalary: z.number().int().min(0).nullable().optional(),

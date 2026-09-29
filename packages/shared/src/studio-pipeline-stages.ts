@@ -21,6 +21,7 @@ import type {
  * interviewers are pre-joined user info.
  */
 export interface HumanInterviewRoundRecord {
+  externalNotificationFailures?: string[];
   externalInterviewers?: (ExternalInterviewerInput & { id: string })[];
   id: string;
   interviewRecordId: string;
@@ -92,8 +93,12 @@ export interface HumanInterviewMeetingRecord {
 
 export interface HumanInterviewMeetingCandidateLinkRecord {
   candidateName: string;
+  companyName: string | null;
+  departmentName: string | null;
   expiresAt: string;
+  hiringUnitName: string | null;
   interviewRecordId: string;
+  jobDescriptionName: string | null;
   roundId: string;
   roundLabel: string;
   url: string;

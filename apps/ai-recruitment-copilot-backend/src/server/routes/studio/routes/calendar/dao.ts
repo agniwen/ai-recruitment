@@ -5,6 +5,7 @@ import {
   interviewConversation,
   interviewConversationTurn,
   jobDescription,
+  studioHumanInterviewExternalInterviewer,
   studioHumanInterviewMeeting,
   studioHumanInterviewMeetingRound,
   studioHumanInterviewRound,
@@ -192,7 +193,7 @@ export async function listStudioCalendarEvents({
 
   const roundIds = candidateRows.map((row) => row.roundId);
   const aiRoundIds = aiRows.map((row) => row.roundId);
-  const [interviewerRows, aiResultRoundRows] = await Promise.all([
+  const [interviewerRows, aiResultRoundRows, externalInterviewerRows] = await Promise.all([
     roundIds.length === 0
       ? []
       : db
@@ -218,6 +219,17 @@ export async function listStudioCalendarEvents({
               isNotNull(interviewConversation.endedAt),
             ),
           ),
+    roundIds.length === 0
+      ? []
+      : db
+          .select({
+            id: studioHumanInterviewExternalInterviewer.id,
+            name: studioHumanInterviewExternalInterviewer.name,
+            roundId: studioHumanInterviewExternalInterviewer.roundId,
+          })
+          .from(studioHumanInterviewExternalInterviewer)
+          .where(inArray(studioHumanInterviewExternalInterviewer.roundId, roundIds))
+          .orderBy(asc(studioHumanInterviewExternalInterviewer.name)),
   ]);
 
   const candidatesByEvent = new Map<string, StudioCalendarCandidate[]>();
@@ -235,14 +247,24 @@ export async function listStudioCalendarEvents({
 
   const eventIdByRound = new Map(candidateRows.map((row) => [row.roundId, eventIdFor(row)]));
   const interviewersByEvent = new Map<string, StudioCalendarInterviewer[]>();
-  for (const row of interviewerRows) {
+  for (const row of [
+    ...interviewerRows.map((interviewer) => ({ ...interviewer, kind: "internal" as const })),
+    ...externalInterviewerRows.map((interviewer) => ({
+      ...interviewer,
+      kind: "external" as const,
+    })),
+  ]) {
     const eventId = eventIdByRound.get(row.roundId);
     if (!eventId) {
       continue;
     }
     const interviewers = interviewersByEvent.get(eventId) ?? [];
-    if (!interviewers.some((interviewer) => interviewer.id === row.id)) {
-      interviewers.push({ id: row.id, name: row.name });
+    if (
+      !interviewers.some(
+        (interviewer) => interviewer.id === row.id && interviewer.kind === row.kind,
+      )
+    ) {
+      interviewers.push({ id: row.id, kind: row.kind, name: row.name });
     }
     interviewersByEvent.set(eventId, interviewers);
   }

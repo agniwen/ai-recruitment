@@ -53,7 +53,7 @@ const fetchStudioCalendarMock = vi.hoisted(() =>
           endAt: humanEndAt.toISOString(),
           format: "online" as const,
           id: "human:round-2",
-          interviewers: [{ id: "user-1", name: "王面试官" }],
+          interviewers: [{ id: "user-1", kind: "internal", name: "王面试官" }],
           kind: "human" as const,
           location: null,
           meetingUrl: null,
@@ -89,9 +89,9 @@ const fetchStudioCalendarMock = vi.hoisted(() =>
             },
           ],
           endAt: endAt.toISOString(),
-          format: "offline" as const,
+          format: "onsite" as const,
           id: "human:round-4",
-          interviewers: [{ id: "user-2", name: "陈面试官" }],
+          interviewers: [{ id: "user-2", kind: "internal", name: "陈面试官" }],
           kind: "human" as const,
           location: "会议室 A",
           meetingUrl: null,
@@ -179,7 +179,7 @@ describe("StudioCalendarPage", () => {
     expect(aiEvent?.getAttribute("aria-label")).toContain("AI 面试记录");
     expect(humanEvent?.getAttribute("aria-label")).toContain("真人面试");
     expect(aiEvent?.dataset.calendarEventPreview).toBe("ai");
-    expect(humanEvent?.dataset.calendarEventPreview).toBeUndefined();
+    expect(humanEvent?.dataset.calendarEventPreview).toBe("human");
 
     const pendingCalendar = Promise.withResolvers<{ events: never[] }>();
     fetchStudioCalendarMock.mockImplementationOnce(() => pendingCalendar.promise);

@@ -18,6 +18,7 @@ import { formatDate as formatChinaDate } from "@arc/shared/utils/time";
 import { DatePicker } from "@/components/date-time-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OfferCurrencySelect, offerCurrencySymbol } from "./offer-currency";
 import { Textarea } from "@/components/ui/textarea";
 
 // Toast 文案 helper：避免内联三元嵌套（mode + sendImmediately 两维组合）。
@@ -50,6 +51,7 @@ export function formatIsoDateOnly(iso: string): string {
 export interface OfferFormState {
   position: string;
   baseSalary: string;
+  currency: string;
   bonus: string;
   equity: string;
   joiningDate: string;
@@ -61,6 +63,7 @@ export function createBlankOfferFormState(): OfferFormState {
   return {
     baseSalary: "",
     bonus: "",
+    currency: "USD",
     equity: "",
     expiresAt: "",
     joiningDate: "",
@@ -73,6 +76,7 @@ export function offerFormStateFromDraft(draft: OfferDraftRecord): OfferFormState
   return {
     baseSalary: String(draft.baseSalary),
     bonus: draft.bonus === null ? "" : String(draft.bonus),
+    currency: draft.currency || "CNY",
     equity: draft.equity ?? "",
     expiresAt: draft.expiresAt ? formatIsoDateOnly(draft.expiresAt) : "",
     joiningDate: draft.joiningDate ? formatIsoDateOnly(draft.joiningDate) : "",
@@ -99,6 +103,7 @@ export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
   return {
     baseSalary: parsedBase,
     bonus: parsedBonus,
+    currency: form.currency,
     equity: form.equity.trim() || null,
     expiresAt: form.expiresAt || null,
     joiningDate: form.joiningDate || null,
@@ -116,11 +121,12 @@ export function OfferDraftFormFields({
   idPrefix: string;
   onFieldChange: <K extends keyof OfferFormState>(field: K, value: OfferFormState[K]) => void;
 }) {
+  const symbol = offerCurrencySymbol(form.currency);
   const fullSpanClassName = "sm:col-span-2";
 
   return (
     <div className="grid gap-3 py-2 sm:grid-cols-2">
-      <div className={`grid gap-1.5 ${fullSpanClassName}`}>
+      <div className="grid gap-1.5">
         <Label className="text-sm" htmlFor={`${idPrefix}-position`}>
           职位
         </Label>
@@ -133,8 +139,18 @@ export function OfferDraftFormFields({
         />
       </div>
       <div className="grid gap-1.5">
+        <Label className="text-sm" htmlFor={`${idPrefix}-currency`}>
+          币种
+        </Label>
+        <OfferCurrencySelect
+          id={`${idPrefix}-currency`}
+          value={form.currency}
+          onChange={(value) => onFieldChange("currency", value)}
+        />
+      </div>
+      <div className="grid gap-1.5">
         <Label className="text-sm" htmlFor={`${idPrefix}-base`}>
-          Base 月薪 (¥)
+          Base 月薪 ({symbol})
         </Label>
         <Input
           id={`${idPrefix}-base`}
@@ -147,7 +163,7 @@ export function OfferDraftFormFields({
       </div>
       <div className="grid gap-1.5">
         <Label className="text-sm" htmlFor={`${idPrefix}-bonus`}>
-          年度奖金 (¥，可选)
+          年度奖金 ({symbol}，可选)
         </Label>
         <Input
           id={`${idPrefix}-bonus`}

@@ -3,37 +3,24 @@
 
 import {
   IconBan,
-  IconCheck,
   IconCircleCheck,
   IconCopy,
-  IconLoader2,
   IconPencil,
   IconPlayerStop,
   IconUsers,
   IconVideo,
-  IconX,
 } from "@tabler/icons-react";
-import { useMutation } from "@tanstack/react-query";
-import type { FormEvent } from "react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { humanInterviewFormatMeta } from "@arc/db-schema/studio-interviews";
 import type {
   HumanInterviewMeetingRecord,
   HumanInterviewRoundRecord,
 } from "@arc/shared/studio-pipeline-stages";
-import { dateTimeLocalInputToISOString } from "@/lib/client/datetime-local";
-import { patchHumanInterviewRound } from "@/lib/client/api";
-import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DATE_TIME_DISPLAY_OPTIONS, TimeDisplay } from "@/components/features/display/time-display";
-import { DateTimePicker } from "@/components/date-time-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import {
-  addOneHourToDateTimeLocalInputValue,
-  addOneHourToIsoString,
   canCancelHumanInterviewRound,
   canCompleteHumanInterviewRound,
   canEndHumanInterviewMeeting,
@@ -42,9 +29,9 @@ import {
   canRescheduleHumanInterviewRound,
   describeRoundSummaryStatus,
   hasRoundDetails,
-  toDateTimeLocalInputValue,
 } from "./human-interview-stage-utils";
-import { HumanInterviewTimeZonePreview } from "./human-interview-time-zone-preview";
+
+import { EditHumanInterviewRoundDialog } from "./edit-human-interview-round-dialog";
 
 export function RoundCard({
   round,
@@ -73,7 +60,9 @@ export function RoundCard({
   onOpenLinks: (meeting: HumanInterviewMeetingRecord) => void;
   onRescheduled: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const statusBadge = describeRoundSummaryStatus(round, meeting);
+  const canEdit = canUpdate && canRescheduleHumanInterviewRound(round, meeting, disabled);
   const canWrite = disabled !== true;
   const canCreateMeeting =
     canCreate &&
@@ -97,13 +86,7 @@ export function RoundCard({
               <Badge variant={statusBadge.tone}>{statusBadge.label}</Badge>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
-              <RoundScheduledAtControl
-                canUpdate={canUpdate}
-                disabled={disabled}
-                meeting={meeting}
-                onRescheduled={onRescheduled}
-                round={round}
-              />
+              <RoundScheduleSummary round={round} meeting={meeting} />
               <span className="inline-flex items-center gap-1">
                 {humanInterviewFormatMeta[round.format].label}
               </span>
@@ -120,6 +103,12 @@ export function RoundCard({
               </span>
             </div>
           </div>
+          {canEdit ? (
+            <Button onClick={() => setEditing(true)} size="sm" variant="ghost">
+              <IconPencil data-icon="inline-start" />
+              编辑
+            </Button>
+          ) : null}
         </div>
 
         {hasRoundDetails(round) ? (
@@ -155,169 +144,15 @@ export function RoundCard({
           onOpenLinks={onOpenLinks}
         />
       </CardContent>
+      {editing ? (
+        <EditHumanInterviewRoundDialog
+          meeting={meeting}
+          onOpenChange={setEditing}
+          onSaved={onRescheduled}
+          round={round}
+        />
+      ) : null}
     </Card>
-  );
-}
-
-function RoundScheduledAtControl({
-  round,
-  meeting,
-  canUpdate,
-  disabled,
-  onRescheduled,
-}: {
-  round: HumanInterviewRoundRecord;
-  meeting: HumanInterviewMeetingRecord | null;
-  canUpdate: boolean;
-  disabled?: boolean;
-  onRescheduled: () => void;
-}) {
-  const slug = useWorkspaceSlug();
-  const [editing, setEditing] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState(() =>
-    toDateTimeLocalInputValue(round.scheduledAt),
-  );
-  const [validUntil, setValidUntil] = useState(() =>
-    toDateTimeLocalInputValue(meeting?.validUntil ?? addOneHourToIsoString(round.scheduledAt)),
-  );
-  const canReschedule = canUpdate && canRescheduleHumanInterviewRound(round, meeting, disabled);
-  const inputId = `human-round-${round.id}-scheduled-at`;
-  const validUntilInputId = `human-round-${round.id}-valid-until`;
-  const mutation = useMutation({
-    mutationFn: () =>
-      patchHumanInterviewRound(slug, round.interviewRecordId, round.id, {
-        scheduledAt: dateTimeLocalInputToISOString(scheduledAt),
-        validUntil: dateTimeLocalInputToISOString(validUntil),
-      }),
-    onError: (e) => toast.error(e instanceof Error ? e.message : "调整时间失败"),
-    onSuccess: () => {
-      toast.success("面试时间已调整");
-      setEditing(false);
-      onRescheduled();
-    },
-  });
-
-  function startEditing() {
-    if (!canReschedule) {
-      return;
-    }
-    setScheduledAt(toDateTimeLocalInputValue(round.scheduledAt));
-    setValidUntil(
-      toDateTimeLocalInputValue(meeting?.validUntil ?? addOneHourToIsoString(round.scheduledAt)),
-    );
-    setEditing(true);
-  }
-
-  function cancelEditing() {
-    setScheduledAt(toDateTimeLocalInputValue(round.scheduledAt));
-    setValidUntil(
-      toDateTimeLocalInputValue(meeting?.validUntil ?? addOneHourToIsoString(round.scheduledAt)),
-    );
-    setEditing(false);
-  }
-
-  function handleScheduledAtChange(value: string) {
-    setScheduledAt(value);
-    if (!validUntil) {
-      setValidUntil(addOneHourToDateTimeLocalInputValue(value));
-    }
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    mutation.mutate();
-  }
-
-  if (editing) {
-    return (
-      <form className="inline-flex min-h-7 flex-wrap items-center gap-1.5" onSubmit={handleSubmit}>
-        <span className="w-full text-muted-foreground text-xs">
-          面试时间和有效时间按中国标准时间（UTC+8）设置。
-        </span>
-        <Label className="sr-only" htmlFor={inputId}>
-          面试时间
-        </Label>
-        <DateTimePicker
-          className="h-7 w-[13.5rem] text-xs"
-          disabled={mutation.isPending}
-          id={inputId}
-          onValueChange={handleScheduledAtChange}
-          required
-          value={scheduledAt}
-        />
-        <HumanInterviewTimeZonePreview
-          className="w-full"
-          label="面试时间换算"
-          value={scheduledAt}
-        />
-        <Label className="sr-only" htmlFor={validUntilInputId}>
-          有效时间至
-        </Label>
-        <DateTimePicker
-          className="h-7 w-[13.5rem] text-xs"
-          disabled={mutation.isPending}
-          id={validUntilInputId}
-          onValueChange={setValidUntil}
-          value={validUntil}
-        />
-        <HumanInterviewTimeZonePreview className="w-full" label="有效时间换算" value={validUntil} />
-        <Button
-          aria-label="保存面试时间"
-          className="h-7 w-7 p-0"
-          disabled={mutation.isPending}
-          size="icon"
-          title="保存面试时间"
-          type="submit"
-        >
-          {mutation.isPending ? (
-            <IconLoader2 className="size-3.5 animate-spin" />
-          ) : (
-            <IconCheck className="size-3.5" />
-          )}
-        </Button>
-        <Button
-          aria-label="取消调整时间"
-          className="h-7 w-7 p-0"
-          disabled={mutation.isPending}
-          onClick={cancelEditing}
-          size="icon"
-          title="取消调整时间"
-          type="button"
-          variant="outline"
-        >
-          <IconX className="size-3.5" />
-        </Button>
-      </form>
-    );
-  }
-
-  return (
-    <span className="inline-flex min-h-7 flex-wrap items-center gap-1.5">
-      <span className="inline-flex items-center gap-1">
-        {round.scheduledAt ? (
-          <TimeDisplay options={DATE_TIME_DISPLAY_OPTIONS} value={round.scheduledAt} />
-        ) : (
-          <span className="text-muted-foreground/70">时间未定</span>
-        )}
-      </span>
-      {meeting?.validUntil ? (
-        <span className="inline-flex items-center gap-1">
-          有效至 <TimeDisplay options={DATE_TIME_DISPLAY_OPTIONS} value={meeting.validUntil} />
-        </span>
-      ) : null}
-      {canReschedule ? (
-        <Button
-          aria-label="调整面试时间"
-          className="h-6 w-6 p-0"
-          onClick={startEditing}
-          size="icon"
-          title="调整面试时间"
-          variant="ghost"
-        >
-          <IconPencil className="size-3.5" />
-        </Button>
-      ) : null}
-    </span>
   );
 }
 
@@ -410,5 +245,31 @@ function RoundCardActions({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+function RoundScheduleSummary({
+  round,
+  meeting,
+}: {
+  round: HumanInterviewRoundRecord;
+  meeting: HumanInterviewMeetingRecord | null;
+}) {
+  return (
+    <>
+      {" "}
+      <span>
+        {round.scheduledAt ? (
+          <TimeDisplay options={DATE_TIME_DISPLAY_OPTIONS} value={round.scheduledAt} />
+        ) : (
+          "时间未定"
+        )}
+      </span>
+      {meeting?.validUntil ? (
+        <span>
+          有效至 <TimeDisplay options={DATE_TIME_DISPLAY_OPTIONS} value={meeting.validUntil} />
+        </span>
+      ) : null}
+    </>
   );
 }

@@ -91,6 +91,18 @@ describe("external interviewer notifications", () => {
       userId: "external-a",
     });
   });
+  it("resends updated details and reports unbound recipients", async () => {
+    expect(
+      await notifyExternalInterviewers(
+        { ...meeting, scheduledAt: "2026-10-02T02:00:00Z", title: "更新后的面试" },
+        "updated",
+      ),
+    ).toEqual(["李四"]);
+    const [[, card]] = mocks.send.mock.calls;
+    expect(card.title).toBe("真人面试安排已更新");
+    expect(JSON.stringify(card)).toContain("更新后的面试");
+    expect(JSON.stringify(card)).toContain("请以本条通知的时间和链接为准");
+  });
   it("reports send failures without failing the saved meeting", async () => {
     mocks.send.mockRejectedValue(new Error("provider down"));
     expect(await notifyExternalInterviewers(meeting)).toEqual(["张三"]);

@@ -1502,6 +1502,31 @@ export const studioHumanInterviewMeeting = pgTable(
   ],
 );
 
+// 真人会议聊天：数据库保存消息，LiveKit 通知在线参会者刷新。
+export const studioHumanInterviewMeetingChatMessage = pgTable(
+  "studio_human_interview_meeting_chat_message",
+  {
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    id: text("id").primaryKey(),
+    meetingId: text("meeting_id")
+      .notNull()
+      .references(() => studioHumanInterviewMeeting.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    participantIdentity: text("participant_identity").notNull(),
+    senderName: text("sender_name").notNull(),
+  },
+  (table) => [
+    index("studio_human_meeting_chat_meeting_idx").on(table.meetingId, table.createdAt),
+    check(
+      "studio_human_meeting_chat_content_check",
+      sql`length(trim(${table.content})) > 0 AND length(${table.content}) <= 2000`,
+    ),
+  ],
+);
+
 // 会议 ↔ 候选人轮次 junction。每个 round 仍然指向 studio_interview 简历/候选人记录；
 // 这里承载候选人参加同一场会议的邀请和入离会时间。
 //
@@ -1614,7 +1639,7 @@ export const studioOfferDraft = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdByRole: text("created_by_role"),
-    currency: text("currency").notNull().default("CNY"),
+    currency: text("currency").notNull().default("USD"),
     equity: text("equity"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     id: text("id").primaryKey(),

@@ -39,8 +39,8 @@ vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "worl
 vi.mock("@/lib/client/api/query-keys", () => ({
   humanInterviewKeys: {
     links: (slug: string, id: string) => ["links", slug, id],
-    meetings: (slug: string, id: string) => ["meetings", slug, id],
-    rounds: (slug: string, id: string) => ["rounds", slug, id],
+    meetings: (slug: string, id: string) => ["human-interview-meetings", slug, id],
+    rounds: (slug: string, id: string) => ["human-interview-rounds", slug, id],
   },
   invalidateHumanInterviewCandidateQueries: vi.fn(),
 }));
@@ -170,6 +170,7 @@ afterEach(() => {
   });
   document.body.replaceChildren();
   vi.resetAllMocks();
+  vi.useRealTimers();
 });
 
 describe("human interview scheduling conflict confirmation", () => {
@@ -211,6 +212,53 @@ describe("human interview scheduling conflict confirmation", () => {
     expect(availableTimes?.classList.contains("text-sm")).toBe(true);
     expect(availableTimes?.classList.contains("text-muted-foreground")).toBe(true);
     expect(availableTimes?.querySelector(".text-foreground")).toBeNull();
+  });
+
+  it("refreshes on window transitions and every minute, then stops after unmount", async () => {
+    vi.useFakeTimers();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    act(() =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <HumanInterviewStagePanel candidateId="candidate" candidateName="测试候选人" />
+        </QueryClientProvider>,
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    mocks.listRounds.mockClear();
+    mocks.listMeetings.mockClear();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(59_999);
+    });
+    expect(mocks.listRounds).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(mocks.listRounds).toHaveBeenCalledTimes(1);
+    expect(mocks.listMeetings).toHaveBeenCalledTimes(1);
+    for (const event of ["blur", "focus", "visibilitychange"]) {
+      mocks.listRounds.mockClear();
+      mocks.listMeetings.mockClear();
+      await act(async () => {
+        (event === "visibilitychange" ? document : window).dispatchEvent(new Event(event));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(mocks.listRounds).toHaveBeenCalledTimes(1);
+      expect(mocks.listMeetings).toHaveBeenCalledTimes(1);
+    }
+    act(() => root.unmount());
+    mocks.listRounds.mockClear();
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mocks.listRounds).not.toHaveBeenCalled();
+    client.clear();
   });
 
   it("checks the full time range before creating the round or meeting", async () => {

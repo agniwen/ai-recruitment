@@ -498,6 +498,53 @@ describe("human interview rounds DAO", () => {
       .from(studioHumanInterviewMeetingInterviewer)
       .where(eq(studioHumanInterviewMeetingInterviewer.meetingId, meeting.id));
     expect(meetingInterviewerRows.map((item) => item.userId)).toEqual([INTERVIEWER_B]);
+
+    const externalOnly = await editHumanInterviewRound({
+      input: {
+        externalInterviewers: [{ name: "吉米", telegram: "" }],
+        interviewerIds: [],
+        label: "修改后的面试",
+      },
+      organizationId: ORG,
+      roundId: round.id,
+    });
+    expect(externalOnly.label).toBe("修改后的面试");
+    expect(externalOnly.interviewers).toEqual([]);
+    expect(externalOnly.externalInterviewers).toHaveLength(1);
+    const meetings = await listHumanInterviewMeetings({
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG,
+    });
+    expect(meetings.find((item) => item.id === meeting.id)?.title).toBe("修改后的面试");
+    expect(
+      await db
+        .select()
+        .from(studioHumanInterviewMeetingInterviewer)
+        .where(eq(studioHumanInterviewMeetingInterviewer.meetingId, meeting.id)),
+    ).toEqual([]);
+
+    const unchanged = await editHumanInterviewRound({
+      input: { externalInterviewers: [{ name: "吉米", telegram: "" }] },
+      organizationId: ORG,
+      roundId: round.id,
+    });
+    expect(unchanged.externalInterviewers?.[0]?.id).toBe(
+      externalOnly.externalInterviewers?.[0]?.id,
+    );
+    await expect(
+      editHumanInterviewRound({
+        input: { externalInterviewers: [], interviewerIds: [] },
+        organizationId: ORG,
+        roundId: round.id,
+      }),
+    ).rejects.toThrow("至少添加 1 位面试官");
+    const restored = await editHumanInterviewRound({
+      input: { externalInterviewers: [], interviewerIds: [INTERVIEWER_A] },
+      organizationId: ORG,
+      roundId: round.id,
+    });
+    expect(restored.externalInterviewers).toEqual([]);
+    expect(restored.interviewers.map((item) => item.id)).toEqual([INTERVIEWER_A]);
   });
 });
 

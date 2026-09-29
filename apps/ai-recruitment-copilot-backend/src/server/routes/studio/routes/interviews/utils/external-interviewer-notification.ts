@@ -15,6 +15,7 @@ import {
 
 export async function notifyExternalInterviewers(
   meeting: HumanInterviewMeetingRecord,
+  event: "created" | "updated" = "created",
 ): Promise<string[]> {
   const external = meeting.interviewers.filter((item) => item.external);
   if (!external.length) {
@@ -30,6 +31,9 @@ export async function notifyExternalInterviewers(
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || process.env.BETTER_AUTH_URL?.trim();
     for (const [index, recipient] of recipients.entries()) {
       if (!recipient.chatId) {
+        if (event === "updated") {
+          failed.push(recipient.name);
+        }
         continue;
       }
       try {
@@ -58,6 +62,9 @@ export async function notifyExternalInterviewers(
           recipient.chatId,
           Card({
             children: [
+              ...(event === "updated"
+                ? [CardText("面试安排已更新，请以本条通知的时间和链接为准。")]
+                : []),
               Fields([
                 Field({ label: "面试官", value: recipient.name }),
                 Field({ label: "面试", value: meeting.title }),
@@ -71,7 +78,7 @@ export async function notifyExternalInterviewers(
                   Field({ label: "部门", value: candidate.departmentName ?? "未关联部门" }),
                 ]),
               ),
-              CardText("进入面试无需登录，面试开始前 5 分钟可进入。查看候选人详情需登录。"),
+              CardText("进入面试无需登录，面试开始前 10 分钟可进入。查看候选人详情需登录。"),
               Actions([
                 LinkButton({ label: "进入面试", url }),
                 ...candidates.map((candidate) =>
@@ -88,7 +95,7 @@ export async function notifyExternalInterviewers(
                 ),
               ]),
             ],
-            title: "真人面试邀请",
+            title: event === "updated" ? "真人面试安排已更新" : "真人面试邀请",
           }),
         );
       } catch {

@@ -6,7 +6,7 @@
 // auth + zod validation, then call into these helpers.
 /* oxlint-disable max-lines -- round scheduling, evaluation, and cancellation share transactional helpers */
 
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, notInArray } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -428,12 +428,13 @@ function resolveValidUntilInput({
   return resolved;
 }
 
-async function syncLinkedScheduledMeetingWindow({
+async function syncLinkedScheduledMeetingDetails({
   tx,
   roundId,
   organizationId,
   scheduledAt,
   validUntil,
+  title,
   now,
 }: {
   tx: Tx;
@@ -441,6 +442,7 @@ async function syncLinkedScheduledMeetingWindow({
   organizationId: string;
   scheduledAt: Date | null;
   validUntil: string | null | undefined;
+  title: string | undefined;
   now: Date;
 }) {
   const linkedMeetings = await tx
@@ -462,7 +464,7 @@ async function syncLinkedScheduledMeetingWindow({
     );
 
   if (linkedMeetings.some((meeting) => meeting.status !== "scheduled")) {
-    throw new EditRoundError("已开始、已结束或已取消的会议不能调整时间", 400);
+    throw new EditRoundError("已开始、已结束或已取消的会议不能修改安排", 400);
   }
 
   const meetingIds = uniq(linkedMeetings.map((meeting) => meeting.id));
@@ -477,7 +479,7 @@ async function syncLinkedScheduledMeetingWindow({
   });
   await tx
     .update(studioHumanInterviewMeeting)
-    .set({ scheduledAt, updatedAt: now, validUntil: nextValidUntil })
+    .set({ scheduledAt, title, updatedAt: now, validUntil: nextValidUntil })
     .where(
       and(
         eq(studioHumanInterviewMeeting.organizationId, organizationId),
@@ -525,15 +527,28 @@ async function syncLinkedScheduledMeetingInterviewers({
 
   await tx
     .delete(studioHumanInterviewMeetingInterviewer)
-    .where(inArray(studioHumanInterviewMeetingInterviewer.meetingId, meetingIds));
-  await tx.insert(studioHumanInterviewMeetingInterviewer).values(
-    meetingIds.flatMap((meetingId) =>
-      interviewerIds.map((userId) => ({
-        meetingId,
-        userId,
-      })),
-    ),
-  );
+    .where(
+      and(
+        inArray(studioHumanInterviewMeetingInterviewer.meetingId, meetingIds),
+        interviewerIds.length
+          ? notInArray(studioHumanInterviewMeetingInterviewer.userId, interviewerIds)
+          : undefined,
+      ),
+    );
+  if (interviewerIds.length === 0) {
+    return;
+  }
+  await tx
+    .insert(studioHumanInterviewMeetingInterviewer)
+    .values(
+      meetingIds.flatMap((meetingId) =>
+        interviewerIds.map((userId) => ({
+          meetingId,
+          userId,
+        })),
+      ),
+    )
+    .onConflictDoNothing();
 }
 
 // oxlint-disable-next-line complexity -- pending and completed rounds have intentionally separate edit policies.
@@ -649,12 +664,18 @@ export async function editHumanInterviewRound({
     // input.scheduledAt (string) → Date; undefined preserves existing,
     // null/"" clears it.
     const nextScheduledAt = resolveScheduledAtInput(input.scheduledAt, existing.scheduledAt);
-    if (input.scheduledAt !== undefined || input.validUntil !== undefined) {
-      await syncLinkedScheduledMeetingWindow({
+    if (
+      input.scheduledAt !== undefined ||
+      input.validUntil !== undefined ||
+      input.label !== undefined ||
+      input.externalInterviewers !== undefined
+    ) {
+      await syncLinkedScheduledMeetingDetails({
         now,
         organizationId,
         roundId,
         scheduledAt: nextScheduledAt,
+        title: input.label,
         tx,
         validUntil: input.validUntil,
       });
@@ -674,8 +695,22 @@ export async function editHumanInterviewRound({
       })
       .where(eq(studioHumanInterviewRound.id, roundId));
 
-    if (input.interviewerIds && input.interviewerIds.length > 0) {
-      const interviewerIds = uniq(input.interviewerIds);
+    if (input.interviewerIds !== undefined || input.externalInterviewers !== undefined) {
+      const currentInternal = await tx
+        .select()
+        .from(studioHumanInterviewRoundInterviewer)
+        .where(eq(studioHumanInterviewRoundInterviewer.roundId, roundId));
+      const currentExternal = await tx
+        .select()
+        .from(studioHumanInterviewExternalInterviewer)
+        .where(eq(studioHumanInterviewExternalInterviewer.roundId, roundId));
+      const interviewerIds = uniq(
+        input.interviewerIds ?? currentInternal.map((item) => item.userId),
+      );
+      const externalInterviewers = input.externalInterviewers ?? currentExternal;
+      if (!interviewerIds.length && !externalInterviewers.length) {
+        throw new EditRoundError("至少添加 1 位面试官", 400);
+      }
       await syncLinkedScheduledMeetingInterviewers({
         interviewerIds,
         organizationId,
@@ -685,9 +720,35 @@ export async function editHumanInterviewRound({
       await tx
         .delete(studioHumanInterviewRoundInterviewer)
         .where(eq(studioHumanInterviewRoundInterviewer.roundId, roundId));
-      await tx
-        .insert(studioHumanInterviewRoundInterviewer)
-        .values(interviewerIds.map((userId) => ({ roundId, userId })));
+      if (interviewerIds.length) {
+        await tx
+          .insert(studioHumanInterviewRoundInterviewer)
+          .values(interviewerIds.map((userId) => ({ roundId, userId })));
+      }
+      if (input.externalInterviewers !== undefined) {
+        const retainedIds = new Set<string>();
+        for (const item of input.externalInterviewers) {
+          const unchanged = currentExternal.find(
+            (row) =>
+              !retainedIds.has(row.id) && row.name === item.name && row.telegram === item.telegram,
+          );
+          if (unchanged) {
+            retainedIds.add(unchanged.id);
+          } else {
+            await tx
+              .insert(studioHumanInterviewExternalInterviewer)
+              .values({ ...item, id: crypto.randomUUID(), roundId });
+          }
+        }
+        const removedIds = currentExternal
+          .filter((row) => !retainedIds.has(row.id))
+          .map((row) => row.id);
+        if (removedIds.length) {
+          await tx
+            .delete(studioHumanInterviewExternalInterviewer)
+            .where(inArray(studioHumanInterviewExternalInterviewer.id, removedIds));
+        }
+      }
     }
   });
 

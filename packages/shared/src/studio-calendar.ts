@@ -14,6 +14,7 @@ export interface StudioCalendarCandidate {
 
 export interface StudioCalendarInterviewer {
   id: string;
+  kind: "internal" | "external";
   name: string;
 }
 

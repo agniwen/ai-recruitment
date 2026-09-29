@@ -2,7 +2,6 @@ import {
   IconCheck,
   IconChevronDown,
   IconLoader2,
-  IconMicrophone,
   IconWand,
   IconWaveSine,
 } from "@tabler/icons-react";
@@ -68,14 +67,17 @@ export function MicrophoneDeviceMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <button className={deviceButtonClass} type="button">
-            <IconMicrophone className="size-4" />
-            <span className="max-w-36 truncate">{selectedLabel}</span>
+          <button
+            aria-label="选择麦克风"
+            title={`当前麦克风：${selectedLabel}`}
+            className="inline-flex h-full w-8 items-center justify-center border-white/15 border-l text-white transition hover:bg-white/15 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+            type="button"
+          >
             <IconChevronDown className="size-3.5 opacity-70" />
           </button>
         }
       />
-      <DropdownMenuContent align="center" className="w-72" side="top">
+      <DropdownMenuContent align="center" className="dark human-meeting-theme w-72" side="top">
         <DropdownMenuGroup>
           {devices.length === 0 ? (
             <DropdownMenuItem disabled>未检测到麦克风</DropdownMenuItem>
@@ -176,7 +178,7 @@ export function VoiceEffectMenu() {
           </button>
         }
       />
-      <DropdownMenuContent align="center" className="w-44" side="top">
+      <DropdownMenuContent align="center" className="dark human-meeting-theme w-44" side="top">
         <DropdownMenuGroup>
           {voiceEffectOptions.map((option) => (
             <DropdownMenuItem

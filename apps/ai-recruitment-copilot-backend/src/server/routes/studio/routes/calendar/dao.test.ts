@@ -39,6 +39,7 @@ describe.skipIf(!fixture.url)("calendar DAO interval overlap (PostgreSQL)", () =
         scheduled_at timestamp, started_at timestamp, ended_at timestamp, valid_until timestamptz);
       ALTER TABLE studio_human_interview_meeting ADD organization_id text DEFAULT 'org';
       CREATE TEMP TABLE studio_human_interview_meeting_round (meeting_id text, round_id text);
+      CREATE TEMP TABLE studio_human_interview_external_interviewer (id text, round_id text, name text);
       CREATE TEMP TABLE studio_human_interview_round_interviewer (round_id text, user_id text);
       CREATE TEMP TABLE studio_human_interview_meeting_interviewer (meeting_id text, user_id text);
       CREATE TEMP TABLE member (organization_id text, user_id text, is_interviewer boolean);
@@ -54,7 +55,7 @@ describe.skipIf(!fixture.url)("calendar DAO interval overlap (PostgreSQL)", () =
   });
   beforeEach(async () => {
     await client.unsafe(`
-      TRUNCATE studio_interview, studio_human_interview_round, studio_human_interview_meeting,
+      TRUNCATE studio_human_interview_external_interviewer, studio_interview, studio_human_interview_round, studio_human_interview_meeting,
         studio_human_interview_meeting_round, studio_interview_schedule, interview_conversation,
         studio_human_interview_meeting_interviewer, studio_human_interview_round_interviewer, member, "user";
       INSERT INTO studio_interview VALUES ('candidate', 'org', 'creator', '测试候选人');
@@ -76,6 +77,18 @@ describe.skipIf(!fixture.url)("calendar DAO interval overlap (PostgreSQL)", () =
         endAt: "2026-09-18T18:02:00.000Z",
         id: "meeting",
         startAt: "2026-09-16T17:02:00.000Z",
+      }),
+    ]);
+  });
+
+  it("includes internal and external interviewers without exposing contact details", async () => {
+    await client`INSERT INTO studio_human_interview_external_interviewer VALUES ('external-1', 'round', '外部面试官')`;
+    expect(await list()).toEqual([
+      expect.objectContaining({
+        interviewers: [
+          { id: "interviewer-1", kind: "internal", name: "面试官一" },
+          { id: "external-1", kind: "external", name: "外部面试官" },
+        ],
       }),
     ]);
   });

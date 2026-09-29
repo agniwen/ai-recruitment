@@ -240,7 +240,7 @@ export async function createOfferDraft({
       createdAt: now,
       createdBy: actorId,
       createdByRole: actorRole,
-      currency: input.currency ?? "CNY",
+      currency: input.currency ?? "USD",
       equity: input.equity ?? null,
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
       id,

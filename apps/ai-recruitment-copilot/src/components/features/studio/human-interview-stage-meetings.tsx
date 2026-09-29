@@ -129,25 +129,44 @@ export function MeetingLinksDialog({
               {error instanceof Error ? error.message : "生成链接失败"}
             </p>
           ) : null}
-          {data ? <MeetingLinksContent links={data} /> : null}
+          {data ? (
+            <MeetingLinksContent links={data} scheduledAt={meeting?.scheduledAt ?? null} />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function MeetingLinksContent({ links }: { links: HumanInterviewMeetingLinkBundle }) {
+function MeetingLinksContent({
+  links,
+  scheduledAt,
+}: {
+  links: HumanInterviewMeetingLinkBundle;
+  scheduledAt: string | null;
+}) {
   return (
     <div className="space-y-5">
       <section className="space-y-2">
         <h4 className="flex items-center gap-2 font-medium text-sm">
           <IconUsers className="size-4" />
-          候选人链接
+          候选人确认链接
         </h4>
+        <p className="text-muted-foreground text-xs">
+          复制后包含公司、岗位、轮次和面试时间，可直接发送给候选人。
+        </p>
         <div className="space-y-2">
           {links.candidateLinks.map((link) => (
             <MeetingLinkRow
-              description={`${link.roundLabel} · 有效至 ${formatDateTime(link.expiresAt)}`}
+              copyText={buildCandidateLinkCopy({
+                candidateName: link.candidateName,
+                companyName: link.companyName,
+                jobDescriptionName: link.jobDescriptionName,
+                roundLabel: link.roundLabel,
+                scheduledAt,
+                url: link.url,
+              })}
+              description={`${link.jobDescriptionName ?? "未关联岗位"} · ${link.roundLabel} · 有效至 ${formatDateTime(link.expiresAt)}`}
               key={link.roundId}
               label={link.candidateName}
               url={link.url}
@@ -159,14 +178,26 @@ function MeetingLinksContent({ links }: { links: HumanInterviewMeetingLinkBundle
       <section className="space-y-2">
         <h4 className="flex items-center gap-2 font-medium text-sm">
           <IconLink className="size-4" />
-          面试官链接
+          面试官会议链接
         </h4>
+        <p className="text-muted-foreground text-xs">
+          复制后包含会议名称、岗位、部门、用人组织、面试时间和会议身份，可直接发送给面试官。
+        </p>
         <div className="space-y-2">
           {links.interviewerLinks.map((link) => (
             <MeetingLinkRow
-              description={
-                link.external ? "外部面试官 · 无需登录" : interviewerRoleLabel[link.role]
-              }
+              copyText={buildInterviewerLinkCopy({
+                departmentNames: formatMeetingNames(links, "departmentName"),
+                external: link.external ?? false,
+                hiringUnitNames: formatMeetingNames(links, "hiringUnitName"),
+                interviewerName: link.name,
+                jobDescriptionName: formatMeetingJobNames(links),
+                meetingTitle: links.title,
+                roleLabel: interviewerRoleLabel[link.role],
+                scheduledAt,
+                url: link.url,
+              })}
+              description={`${link.external ? "外部面试官 · 无需登录 · " : ""}${interviewerRoleLabel[link.role]} · ${formatMeetingJobNames(links)}`}
               key={link.userId}
               label={link.name}
               url={link.url}
@@ -178,11 +209,75 @@ function MeetingLinksContent({ links }: { links: HumanInterviewMeetingLinkBundle
   );
 }
 
+export function buildCandidateLinkCopy({
+  candidateName,
+  companyName,
+  jobDescriptionName,
+  roundLabel,
+  scheduledAt,
+  url,
+}: {
+  candidateName: string;
+  companyName: string | null;
+  jobDescriptionName: string | null;
+  roundLabel: string;
+  scheduledAt: string | null;
+  url: string;
+}): string {
+  const timeCopy = scheduledAt ? `\n面试时间：${formatDateTime(scheduledAt)}` : "";
+  const companyCopy = companyName ? `\n公司：${companyName}` : "";
+  return `${candidateName}，您好：\n这是您的真人面试确认链接。${companyCopy}\n应聘岗位：${jobDescriptionName ?? "待确认"}\n面试轮次：${roundLabel}${timeCopy}\n请打开链接确认是否参加，本链接仅供本人使用，请勿转发。\n${toAbsoluteUrl(url)}`;
+}
+
+export function buildInterviewerLinkCopy({
+  departmentNames,
+  external,
+  hiringUnitNames,
+  interviewerName,
+  jobDescriptionName,
+  meetingTitle,
+  roleLabel,
+  scheduledAt,
+  url,
+}: {
+  departmentNames: string | null;
+  external: boolean;
+  hiringUnitNames: string | null;
+  interviewerName: string;
+  jobDescriptionName: string;
+  meetingTitle: string;
+  roleLabel: string;
+  scheduledAt: string | null;
+  url: string;
+}): string {
+  const timeCopy = scheduledAt ? `\n面试时间：${formatDateTime(scheduledAt)}` : "";
+  const organizationCopy = hiringUnitNames ? `\n用人组织：${hiringUnitNames}` : "";
+  const departmentCopy = departmentNames ? `\n部门：${departmentNames}` : "";
+  const accessCopy = external ? "无需登录即可打开" : "请使用本人账号打开";
+  return `${interviewerName}，您好：\n这是「${meetingTitle}」真人面试的面试官会议链接。\n岗位：${jobDescriptionName}${organizationCopy}${departmentCopy}${timeCopy}\n您本次的会议身份为${roleLabel}，${accessCopy}，本链接请勿转发。\n${toAbsoluteUrl(url)}`;
+}
+
+export function formatMeetingJobNames(links: HumanInterviewMeetingLinkBundle): string {
+  return formatMeetingNames(links, "jobDescriptionName") ?? "未关联岗位";
+}
+
+export function formatMeetingNames(
+  links: HumanInterviewMeetingLinkBundle,
+  field: "departmentName" | "hiringUnitName" | "jobDescriptionName",
+): string | null {
+  const names = [
+    ...new Set(links.candidateLinks.map((link) => link[field]?.trim()).filter(Boolean)),
+  ];
+  return names.length > 0 ? names.join("、") : null;
+}
+
 function MeetingLinkRow({
+  copyText,
   description,
   label,
   url,
 }: {
+  copyText: string;
   description: string;
   label: string;
   url: string;
@@ -190,16 +285,16 @@ function MeetingLinkRow({
   const absoluteUrl = toAbsoluteUrl(url);
 
   async function handleCopy() {
-    const result = await copyTextToClipboard(absoluteUrl);
+    const result = await copyTextToClipboard(copyText);
     if (result === "copied") {
-      toast.success("链接已复制");
+      toast.success("发送文案已复制");
       return;
     }
     if (result === "manual") {
       toast.info("已打开手动复制窗口");
       return;
     }
-    toast.error("复制失败，请手动选择链接");
+    toast.error("复制失败，请手动选择链接或文案");
   }
 
   return (
@@ -214,7 +309,7 @@ function MeetingLinkRow({
         </div>
         <Button className="md:self-end" onClick={handleCopy} size="sm" variant="outline">
           <IconCopy className="size-4" />
-          复制
+          复制消息
         </Button>
       </CardContent>
     </Card>

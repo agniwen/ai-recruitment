@@ -9,12 +9,16 @@ import { uniq } from "lodash-es";
 import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
+  department,
+  hiringUnit,
   studioHumanInterviewExternalInterviewer,
   studioHumanInterviewMeeting,
   studioHumanInterviewMeetingInterviewer,
   studioHumanInterviewMeetingRound,
   studioHumanInterviewRound,
   studioInterview,
+  globalConfig,
+  jobDescription,
   user,
 } from "@arc/db-schema/schema";
 import type { HumanInterviewMeetingInput } from "@arc/db-schema/studio-interviews";
@@ -377,7 +381,11 @@ export async function issueHumanInterviewMeetingLinks({
       candidateInviteExpiresAt: studioHumanInterviewMeetingRound.candidateInviteExpiresAt,
       candidateInviteTokenHash: studioHumanInterviewMeetingRound.candidateInviteTokenHash,
       candidateName: studioInterview.candidateName,
+      configuredCompanyName: globalConfig.companyName,
+      departmentName: department.name,
+      hiringUnitName: hiringUnit.name,
       interviewRecordId: studioHumanInterviewRound.interviewRecordId,
+      jobDescriptionName: jobDescription.name,
       label: studioHumanInterviewRound.label,
       roundId: studioHumanInterviewMeetingRound.roundId,
     })
@@ -387,6 +395,28 @@ export async function issueHumanInterviewMeetingLinks({
       eq(studioHumanInterviewMeetingRound.roundId, studioHumanInterviewRound.id),
     )
     .innerJoin(studioInterview, eq(studioHumanInterviewRound.interviewRecordId, studioInterview.id))
+    .leftJoin(
+      jobDescription,
+      and(
+        eq(studioInterview.jobDescriptionId, jobDescription.id),
+        eq(studioInterview.organizationId, jobDescription.organizationId),
+      ),
+    )
+    .leftJoin(
+      department,
+      and(
+        eq(jobDescription.departmentId, department.id),
+        eq(studioInterview.organizationId, department.organizationId),
+      ),
+    )
+    .leftJoin(
+      hiringUnit,
+      and(
+        eq(studioInterview.hiringUnitId, hiringUnit.id),
+        eq(studioInterview.organizationId, hiringUnit.organizationId),
+      ),
+    )
+    .leftJoin(globalConfig, eq(globalConfig.organizationId, studioInterview.organizationId))
     .where(eq(studioHumanInterviewMeetingRound.meetingId, meetingId))
     .orderBy(asc(studioHumanInterviewRound.sortOrder));
 
@@ -436,8 +466,12 @@ export async function issueHumanInterviewMeetingLinks({
 
     candidateLinks.push({
       candidateName: row.candidateName,
+      companyName: row.configuredCompanyName?.trim() || null,
+      departmentName: row.departmentName,
       expiresAt: expiresAt.toISOString(),
+      hiringUnitName: row.hiringUnitName,
       interviewRecordId: row.interviewRecordId,
+      jobDescriptionName: row.jobDescriptionName,
       roundId: row.roundId,
       roundLabel: row.label,
       url: `/human-interview/${encodeURIComponent(token)}`,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { externalInterviewerInputSchema } from "@arc/db-schema/studio-interviews";
 import type { ExternalInterviewerInput } from "@arc/db-schema/studio-interviews";
 import type { ExternalInterviewerBindingStatus } from "@arc/shared/external-interviewers";
@@ -27,14 +27,22 @@ import {
 type Entry = ExternalInterviewerInput & { key: string };
 const EMPTY: Entry[] = [];
 
-export function useExternalInterviewers(open: boolean, candidateId: string) {
+export function useExternalInterviewers(
+  open: boolean,
+  candidateId: string,
+  initialInterviewers?: ExternalInterviewerInput[],
+) {
+  const initialEntries = useMemo(
+    () => initialInterviewers?.map((item) => ({ ...item, key: crypto.randomUUID() })),
+    [initialInterviewers],
+  );
   const slug = useWorkspaceSlug();
   const [draft, setDraft] = useState<Entry[] | null>(null);
   const [unbound, setUnbound] = useState<ExternalInterviewerBindingStatus[]>([]);
   const pending = useRef<((confirmed: boolean) => void) | null>(null);
   const active = useRef(open);
   const defaults = useQuery({
-    enabled: open,
+    enabled: open && initialInterviewers === undefined,
     queryFn: async () => {
       const values = await getExternalInterviewerDefaults(slug, candidateId);
       return values.map((item) => ({ ...item, key: crypto.randomUUID() }));
@@ -56,7 +64,7 @@ export function useExternalInterviewers(open: boolean, candidateId: string) {
       pending.current = null;
     };
   }, [open, candidateId]);
-  const entries = draft ?? defaults.data ?? EMPTY;
+  const entries = draft ?? initialEntries ?? defaults.data ?? EMPTY;
 
   function resolveConfirmation(confirmed: boolean) {
     pending.current?.(confirmed);
@@ -93,11 +101,17 @@ export function useExternalInterviewers(open: boolean, candidateId: string) {
       <Field>
         <FieldLabel>外部面试官</FieldLabel>
         <FieldDescription>
-          已从岗位需求发起人预填，可修改。无需系统账号；已绑定 TG
-          的面试官会收到通知，其他人可手动转发邀请链接。
+          {initialInterviewers
+            ? "保存后会向已绑定 TG 的面试官重新发送安排通知，其他人需手动转发最新邀请链接。"
+            : "已从岗位需求发起人预填，可修改。无需系统账号；已绑定 TG 的面试官会收到通知，其他人可手动转发邀请链接。"}
         </FieldDescription>
-        {defaults.isLoading ? <output>正在加载需求发起人…</output> : null}
-        {defaults.isError ? (
+        <FieldDescription className="text-destructive">
+          需要多人面试时，请分别添加多位面试官。每个面试官链接同一时间仅限一人在线，请勿共用链接。
+        </FieldDescription>
+        {initialInterviewers === undefined && defaults.isLoading ? (
+          <output>正在加载需求发起人…</output>
+        ) : null}
+        {initialInterviewers === undefined && defaults.isError ? (
           <div role="alert">
             加载需求发起人失败。
             <Button onClick={() => void defaults.refetch()} type="button" variant="link">
@@ -155,7 +169,9 @@ export function useExternalInterviewers(open: boolean, candidateId: string) {
         ))}
         <Button
           className="self-start"
-          disabled={defaults.isFetching || entries.length >= 20}
+          disabled={
+            (initialInterviewers === undefined && defaults.isFetching) || entries.length >= 20
+          }
           onClick={() =>
             setDraft([...entries, { key: crypto.randomUUID(), name: "", telegram: "" }])
           }
@@ -205,7 +221,7 @@ export function useExternalInterviewers(open: boolean, candidateId: string) {
     count: entries.length,
     fields,
     input,
-    loading: defaults.isFetching || defaults.isError,
+    loading: initialInterviewers === undefined && (defaults.isFetching || defaults.isError),
     valid: entries.every((entry) => entry.name.trim()),
   };
 }

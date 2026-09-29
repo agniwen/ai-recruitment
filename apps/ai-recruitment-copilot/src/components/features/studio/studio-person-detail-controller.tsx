@@ -1,7 +1,7 @@
 /* oxlint-disable complexity max-lines -- detail controller coordinates query and command state. */
 "use client";
 
-import { IconExternalLink, IconRobot } from "@tabler/icons-react";
+import { IconExternalLink, IconRefresh, IconRobot } from "@tabler/icons-react";
 
 import { useReducedMotion } from "motion/react";
 import type { StudioInterviewConversationReport } from "@arc/db-schema/interview-session";
@@ -51,6 +51,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useHasPermission } from "@/hooks/use-has-permission";
+import { matchesDetailRefresh } from "./detail-refresh";
 import { PipelineStageActionBar } from "./pipeline-stage-action-bar";
 import {
   ResumeEvaluationActions,
@@ -205,6 +206,7 @@ export function useStudioPersonDetailController({
   }
   const slug = optionalSlug ?? "";
   const [uiState, dispatchUi] = useReducer(detailPanelUiReducer, initialDetailPanelUiState);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<StudioPersonDetailTab>(defaultTab ?? "overview");
   const [metadataReport, setMetadataReport] = useState<StudioInterviewConversationReport | null>(
     null,
@@ -346,6 +348,31 @@ export function useStudioPersonDetailController({
     queryKey: ["studio-resume-rounds", slug, effectiveRecordId, accessMode] as const,
     refetchOnWindowFocus: true,
   });
+  async function refreshCurrentTab() {
+    if (!effectiveRecordId || isRefreshing) {
+      return;
+    }
+    setIsRefreshing(true);
+    try {
+      await queryClient.refetchQueries(
+        {
+          predicate: (query) =>
+            matchesDetailRefresh(query.queryKey, {
+              recordId: effectiveRecordId,
+              roundIds: candidateRounds.map((candidateRound) => candidateRound.id),
+              slug,
+              tab: activeTab,
+            }),
+          type: "active",
+        },
+        { cancelRefetch: false, throwOnError: true },
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "刷新失败，请重试");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
   const latestCandidateRoundId = mode === "resume" ? (candidateRounds.at(-1)?.id ?? null) : null;
   useEffect(() => {
     setSelectedResultConversationId(null);
@@ -924,6 +951,19 @@ export function useStudioPersonDetailController({
         </TabsList>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
           {headerActionBar}
+          {mode === "resume" ? (
+            <Button
+              className="w-full sm:w-auto"
+              disabled={isRefreshing || !effectiveRecordId}
+              onClick={refreshCurrentTab}
+              size="sm"
+              variant="ghost"
+              aria-label="刷新当前页签"
+            >
+              <IconRefresh className={cn("size-4", isRefreshing && "animate-spin")} />
+              {isRefreshing ? "刷新中…" : "刷新"}
+            </Button>
+          ) : null}
           <ResumeDocumentPreviewButton
             className="w-full sm:w-auto"
             disabled={!record.hasResumeFile}

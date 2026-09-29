@@ -432,7 +432,11 @@ export const studioInterviewsRouter = factory
         if (!existing) {
           return null;
         }
-        const next = { ...existing.candidateExpectationsMeta, ...input };
+        const next = {
+          currency: existing.candidateExpectationsMeta ? "CNY" : "USD",
+          ...existing.candidateExpectationsMeta,
+          ...input,
+        };
         await tx
           .update(studioInterview)
           .set({ candidateExpectationsMeta: next, updatedAt: now })

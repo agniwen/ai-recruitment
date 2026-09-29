@@ -46,6 +46,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { OfferCurrencySelect, offerCurrencySymbol, formatOfferMoney } from "./offer-currency";
 import { EntityDeleteDialog } from "./entity-delete-dialog";
 import { OfferAttachmentPreview } from "./offer-attachment-preview";
 import {
@@ -75,6 +76,7 @@ export function CandidateExpectationsBlock({
   const meta = resume?.candidateExpectationsMeta;
 
   const [editing, setEditing] = useState(false);
+  const [currency, setCurrency] = useState("USD");
   const [expectedSalary, setExpectedSalary] = useState("");
   const [currentSalary, setCurrentSalary] = useState("");
   const [earliestJoiningDate, setEarliestJoiningDate] = useState("");
@@ -84,8 +86,9 @@ export function CandidateExpectationsBlock({
   // Sync form when entering edit mode.
   useEffect(() => {
     if (editing) {
-      setExpectedSalary(meta?.expectedSalary ? String(meta.expectedSalary) : "");
-      setCurrentSalary(meta?.currentSalary ? String(meta.currentSalary) : "");
+      setCurrency(meta ? (meta.currency ?? "CNY") : "USD");
+      setExpectedSalary(String(meta?.expectedSalary ?? ""));
+      setCurrentSalary(String(meta?.currentSalary ?? ""));
       setEarliestJoiningDate(meta?.earliestJoiningDate ?? "");
       setNotes(meta?.notes ?? "");
     }
@@ -102,6 +105,7 @@ export function CandidateExpectationsBlock({
         throw new Error("薪资需为非负整数");
       }
       return updateCandidateExpectations(slug, candidateId, {
+        currency,
         currentSalary: parsedCurrent,
         earliestJoiningDate: earliestJoiningDate || null,
         expectedSalary: parsedExpected,
@@ -124,9 +128,19 @@ export function CandidateExpectationsBlock({
         <CardContent className="p-4">
           <h4 className="mb-3 font-medium text-sm">编辑候选人期望</h4>
           <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label className="text-sm" htmlFor="expectations-currency">
+                币种
+              </Label>
+              <OfferCurrencySelect
+                id="expectations-currency"
+                value={currency}
+                onChange={setCurrency}
+              />
+            </div>
             <div className="grid gap-1.5">
               <Label className="text-sm" htmlFor="exp-salary">
-                期望月薪
+                期望月薪 ({offerCurrencySymbol(currency)})
               </Label>
               <Input
                 id="exp-salary"
@@ -140,7 +154,7 @@ export function CandidateExpectationsBlock({
             </div>
             <div className="grid gap-1.5">
               <Label className="text-sm" htmlFor="cur-salary">
-                当前月薪
+                当前月薪 ({offerCurrencySymbol(currency)})
               </Label>
               <Input
                 id="cur-salary"
@@ -214,11 +228,11 @@ export function CandidateExpectationsBlock({
         <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
           <ExpectationField
             label="期望月薪"
-            value={meta?.expectedSalary ? `¥ ${meta.expectedSalary.toLocaleString()}` : null}
+            value={formatOfferMoney(meta?.expectedSalary, meta?.currency)}
           />
           <ExpectationField
             label="当前月薪"
-            value={meta?.currentSalary ? `¥ ${meta.currentSalary.toLocaleString()}` : null}
+            value={formatOfferMoney(meta?.currentSalary, meta?.currency)}
           />
           <ExpectationField label="最早入职日" value={meta?.earliestJoiningDate ?? null} />
           <ExpectationField label="备注" value={meta?.notes ?? null} />
@@ -652,11 +666,11 @@ function OfferDraftReadonlyFields({ draft }: { draft: OfferDraftRecord }) {
   return (
     <dl className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm lg:grid-cols-4">
       <ReadonlyOfferField label="职位" value={draft.position} />
-      <ReadonlyOfferField label="Base 月薪" value={`¥ ${draft.baseSalary.toLocaleString()}`} />
       <ReadonlyOfferField
-        label="年度奖金"
-        value={draft.bonus === null ? null : `¥ ${draft.bonus.toLocaleString()}`}
+        label="Base 月薪"
+        value={formatOfferMoney(draft.baseSalary, draft.currency)}
       />
+      <ReadonlyOfferField label="年度奖金" value={formatOfferMoney(draft.bonus, draft.currency)} />
       <ReadonlyOfferField label="期权 / 股票" value={draft.equity} />
       <ReadonlyOfferField
         label="预计入职日"

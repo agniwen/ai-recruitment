@@ -4,7 +4,7 @@
 import { IconPlus, IconUsers } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useReducer } from "react";
+import { useEffect, useReducer } from "react";
 import { toast } from "sonner";
 import type { ResumeAvailableTimeSlot } from "@arc/shared/studio-resumes";
 import type {
@@ -118,11 +118,10 @@ export function HumanInterviewStagePanel({
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const { confirmSchedule, conflictDialog } = useHumanInterviewScheduleConfirmation();
-  // Keep human-interview live while the tab is open: poll every 30s, and use
-  // TanStack Query's built-in window-focus refetch (global default is off).
   const humanInterviewQueryOptions = {
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true as const,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: false,
   };
   const { data: rounds = [], isLoading } = useQuery({
     ...humanInterviewQueryOptions,
@@ -134,6 +133,30 @@ export function HumanInterviewStagePanel({
     queryFn: () => listHumanInterviewMeetings(slug, { interviewRecordId: candidateId }),
     queryKey: humanInterviewKeys.meetings(slug, candidateId),
   });
+
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.refetchQueries(
+        {
+          predicate: (query) =>
+            (query.queryKey[0] === "human-interview-rounds" ||
+              query.queryKey[0] === "human-interview-meetings") &&
+            query.queryKey[1] === slug &&
+            query.queryKey[2] === candidateId,
+          type: "active",
+        },
+        { cancelRefetch: false },
+      );
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("blur", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("blur", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [candidateId, queryClient, slug]);
 
   function invalidateRounds() {
     void invalidateHumanInterviewCandidateQueries(queryClient, { candidateId, slug });

@@ -52,7 +52,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderCard(mediaType: string, filename: string, canUpdate = false) {
+function renderCard(mediaType: string, filename: string, canUpdate = false, currency = "CNY") {
   const onSaved = vi.fn();
   const draft: OfferDraftRecord = {
     approvalAttachment: { filename, mediaType, size: 3 },
@@ -60,7 +60,7 @@ function renderCard(mediaType: string, filename: string, canUpdate = false) {
     bonus: null,
     candidateCounter: null,
     createdAt: "2026-09-23T00:00:00.000Z",
-    currency: "CNY",
+    currency,
     equity: null,
     expiresAt: null,
     id: "offer-1",
@@ -100,6 +100,14 @@ function renderCard(mediaType: string, filename: string, canUpdate = false) {
 }
 
 describe("OfferCard approval attachment", () => {
+  it.each([
+    ["CNY", "¥"],
+    ["USD", "$"],
+    ["GBP", "£"],
+  ])("uses %s for the offer salary", (currency, symbol) => {
+    const { host } = renderCard("image/png", "ssc.png", false, currency);
+    expect(host.textContent).toContain(`${symbol} 30,000`);
+  });
   it.each([
     ["image/png", "ssc.png", true],
     ["application/octet-stream", "ssc.zip", false],

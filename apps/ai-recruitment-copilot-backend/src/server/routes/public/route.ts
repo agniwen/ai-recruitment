@@ -46,8 +46,11 @@ import {
 import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import { publicInterviewRoundReportsRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/public/routes/interview-rounds/routes/reports/route";
 
+import { humanInterviewChatRouter } from "./routes/human-interview-chat/route";
+
 export const publicRouter = factory
   .createApp()
+  .route("/human-interview-meetings", humanInterviewChatRouter)
   .route("/interview-rounds/:id/reports", publicInterviewRoundReportsRouter)
   .get("/minimax-voice-previews/:id", async (c) => {
     const id = c.req.param("id");
@@ -113,7 +116,7 @@ export const publicRouter = factory
       scope.status === "scheduled" &&
       isHumanInterviewMeetingBeforeScheduledStart(scope.scheduledAt)
     ) {
-      return c.json({ error: "未到入会时间，面试开始前 5 分钟可进入会议。" }, 403);
+      return c.json({ error: "未到入会时间，面试开始前 10 分钟可进入会议。" }, 403);
     }
     if (isHumanInterviewMeetingAfterValidUntil(scope.validUntil)) {
       return c.json({ error: "该真人复面会议已超过有效时间。" }, 403);
@@ -199,7 +202,7 @@ export const publicRouter = factory
       scope.status === "scheduled" &&
       isHumanInterviewMeetingBeforeScheduledStart(scope.scheduledAt)
     ) {
-      return c.json({ error: "未到入会时间，面试开始前 5 分钟可进入会议。" }, 403);
+      return c.json({ error: "未到入会时间，面试开始前 10 分钟可进入会议。" }, 403);
     }
     if (isHumanInterviewMeetingAfterValidUntil(scope.validUntil)) {
       return c.json({ error: "该真人复面会议已超过有效时间。" }, 403);

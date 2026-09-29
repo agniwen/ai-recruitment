@@ -1,3 +1,4 @@
+import { notifyUpdatedHumanInterviewRound } from "./utils/updated-human-interview-notification";
 import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -150,13 +151,9 @@ export const studioInterviewHumanRouter = factory
     requirePermission("humanInterview", "update"),
     zValidator(
       "json",
-      humanInterviewRoundInputSchema
-        .omit({ externalInterviewers: true })
-        .partial()
-        .extend({
-          interviewerIds: humanInterviewRoundInputSchema.shape.interviewerIds.min(1).optional(),
-          validUntil: nullableInstantDateTimeInputSchema,
-        }),
+      humanInterviewRoundInputSchema.partial().extend({
+        validUntil: nullableInstantDateTimeInputSchema,
+      }),
       jsonValidatorError("真人复面轮次参数无效。"),
     ),
     async (c) => {
@@ -190,8 +187,9 @@ export const studioInterviewHumanRouter = factory
             organizationId: activeOrg.id,
           });
         }
+        const externalNotificationFailures = await notifyUpdatedHumanInterviewRound(updated);
         invalidateStudioInterviewCaches(activeOrg.id);
-        return c.json(updated, 200);
+        return c.json({ ...updated, externalNotificationFailures }, 200);
       } catch (error) {
         if (error instanceof EditRoundError) {
           return c.json({ error: error.message }, error.status);
