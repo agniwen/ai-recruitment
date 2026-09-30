@@ -13,6 +13,7 @@ import {
   studioHumanInterviewMeeting,
   studioHumanInterviewMeetingRound,
   studioHumanInterviewRound,
+  telegramRecipientBinding,
   telegramRequesterBinding,
   user,
 } from "@arc/db-schema/schema";
@@ -93,7 +94,21 @@ export async function resolveExternalInterviewerBindings(
           ),
         )
     : [];
+  const registered = usernames.length
+    ? await db
+        .select({
+          chatId: telegramRecipientBinding.chatId,
+          username: telegramRecipientBinding.username,
+        })
+        .from(telegramRecipientBinding)
+        .where(inArray(telegramRecipientBinding.username, usernames))
+    : [];
   const recipients = new Map(rows.map((row) => [row.username, row.chatId]));
+  for (const row of registered) {
+    if (row.username) {
+      recipients.set(row.username, row.chatId);
+    }
+  }
   const users = usernames.length
     ? await db
         .select({

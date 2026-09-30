@@ -1035,6 +1035,13 @@ export const departmentOdcMember = pgTable(
   ],
 );
 
+// Bot opt-in is independent of membership or requester configuration.
+export const telegramRecipientBinding = pgTable("telegram_recipient_binding", {
+  chatId: text("chat_id").primaryKey(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  username: text("username").unique(),
+});
+
 // External requesters can receive bot messages without a login account.
 export const telegramRequesterBinding = pgTable(
   "telegram_requester_binding",

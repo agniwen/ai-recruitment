@@ -52,6 +52,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
           ),
         );
       }
+      const recipientMigration = readFileSync(
+        new URL(
+          "../../../../../../../../ai-recruitment-copilot/drizzle/20260930120000_add_telegram_recipient_binding/migration.sql",
+          import.meta.url,
+        ),
+        "utf-8",
+      );
+      await db.execute(
+        sql.raw(
+          recipientMigration.replace(
+            'CREATE TABLE "telegram_recipient_binding"',
+            'CREATE TEMP TABLE "telegram_recipient_binding"',
+          ),
+        ),
+      );
       const migration = readFileSync(
         new URL(
           "../../../../../../../../ai-recruitment-copilot/drizzle/20260923140000_add_human_interview_external_interviewer/migration.sql",
@@ -93,6 +108,21 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       ]);
       expect(await loadExternalInterviewerDefaults("candidate", "other")).toBeNull();
       expect(await loadExternalInterviewerDefaults("candidate", "org")).toEqual([]);
+    });
+
+    it("resolves recipients who registered before being added as external interviewers", async () => {
+      await db.execute(
+        sql`INSERT INTO telegram_recipient_binding (username,chat_id) VALUES ('newexternal','456')`,
+      );
+      expect(
+        await resolveExternalInterviewerBindings("org", [
+          { name: "外部面试官", telegram: "@NewExternal" },
+          { name: "未登记", telegram: "@unknown" },
+        ]),
+      ).toEqual([
+        { chatId: "456", name: "外部面试官", telegram: "@NewExternal" },
+        { chatId: null, name: "未登记", telegram: "@unknown" },
+      ]);
     });
 
     it("persists an external-only round and issues usable links even without TG", async () => {

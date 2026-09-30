@@ -24,13 +24,13 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-async function start(type = "private") {
+async function start(type = "private", username: string | undefined = "JackLil") {
   getTelegramBot();
   expect(mocks.slash).toHaveBeenCalledWith("/start", expect.any(Function));
   const post = vi.fn();
   await mocks.slash.mock.calls[0][1]({
     channel: { post },
-    raw: { chat: { id: 12_345, type }, from: { username: "JackLil" } },
+    raw: { chat: { id: 12_345, type }, from: { username } },
     text: "@someone_else",
   });
   return post;
@@ -46,6 +46,17 @@ describe("Telegram /start binding", () => {
     const post = await start();
     expect(mocks.bind).toHaveBeenCalledWith({ chatId: "12345", username: "JackLil" });
     expect(post).toHaveBeenCalledWith("需求发起人通知绑定成功，无需登录系统。");
+  });
+  it("allows followers without a Telegram username", async () => {
+    mocks.bind.mockResolvedValue({ kind: "registered", memberAmbiguous: false });
+    getTelegramBot();
+    const post = vi.fn();
+    await mocks.slash.mock.calls[0][1]({
+      channel: { post },
+      raw: { chat: { id: 12_345, type: "private" }, from: { first_name: "小王" } },
+    });
+    expect(mocks.bind).toHaveBeenCalledWith({ chatId: "12345", username: undefined });
+    expect(post).toHaveBeenCalledWith("关注成功，你可以在这里接收通知。");
   });
   it("rejects group binding", async () => {
     const post = await start("group");
@@ -70,9 +81,9 @@ describe("Telegram /start binding", () => {
     const post = await start();
     expect(post).toHaveBeenCalledWith(expect.stringContaining("同时已绑定成员信息：李杰"));
   });
-  it("provides instructions for external requesters without a match", async () => {
-    mocks.bind.mockResolvedValue({ kind: "not_found" });
+  it("confirms registration without a matching system identity", async () => {
+    mocks.bind.mockResolvedValue({ kind: "registered", memberAmbiguous: false });
     const post = await start();
-    expect(post).toHaveBeenCalledWith(expect.stringContaining("外部面试官请联系管理员"));
+    expect(post).toHaveBeenCalledWith("关注成功，你可以在这里接收通知。");
   });
 });

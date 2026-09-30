@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { telegramRequesterBinding, user } from "@arc/db-schema/schema";
+import { telegramRecipientBinding, telegramRequesterBinding, user } from "@arc/db-schema/schema";
 import { bindTelegramUser } from "./dao";
 
 const mocks = vi.hoisted(() => ({
@@ -49,7 +49,7 @@ describe("Telegram member and external requester binding", () => {
       memberAmbiguous: false,
       memberName: null,
     });
-    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalledWith(user);
     expect(mocks.insert).toHaveBeenCalledWith(telegramRequesterBinding);
     expect(mocks.values).toHaveBeenCalledWith([
       { chatId: "12345", organizationId: "org-a", username: "jacklil" },
@@ -72,7 +72,7 @@ describe("Telegram member and external requester binding", () => {
       telegramChatId: "12345",
       updatedAt: expect.any(Date),
     });
-    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.insert).toHaveBeenCalledWith(telegramRecipientBinding);
   });
 
   it("binds both identities in one transaction", async () => {
@@ -84,8 +84,8 @@ describe("Telegram member and external requester binding", () => {
       memberName: "李杰",
     });
     expect(mocks.transaction).toHaveBeenCalledOnce();
-    expect(mocks.update).toHaveBeenCalledOnce();
-    expect(mocks.insert).toHaveBeenCalledOnce();
+    expect(mocks.update).toHaveBeenCalledWith(user);
+    expect(mocks.insert).toHaveBeenCalledTimes(2);
   });
 
   it("does not bind ambiguous members but still binds an explicit requester handle", async () => {
@@ -96,25 +96,36 @@ describe("Telegram member and external requester binding", () => {
       memberAmbiguous: true,
       memberName: null,
     });
-    expect(mocks.update).not.toHaveBeenCalled();
-    expect(mocks.insert).toHaveBeenCalledOnce();
+    expect(mocks.update).not.toHaveBeenCalledWith(user);
+    expect(mocks.insert).toHaveBeenCalledTimes(2);
   });
 
-  it("preserves ambiguity failures when no requester matches", async () => {
+  it("registers notifications without binding ambiguous members", async () => {
     mocks.members.mockResolvedValue([{ id: "a" }, { id: "b" }]);
-    expect(await bindTelegramUser(input)).toEqual({ kind: "ambiguous" });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(await bindTelegramUser(input)).toEqual({ kind: "registered", memberAmbiguous: true });
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.update).not.toHaveBeenCalledWith(user);
+    expect(mocks.values).toHaveBeenCalledWith({ chatId: "12345", username: "jacklil" });
   });
 
-  it("rejects names without explicit handles and unrelated handles", async () => {
+  it("registers a sender even without a matching member or requester", async () => {
     mocks.requesters.mockResolvedValue([{ organizationId: "org", requester: "JackLil" }]);
-    expect(await bindTelegramUser(input)).toEqual({ kind: "not_found" });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(await bindTelegramUser(input)).toEqual({ kind: "registered", memberAmbiguous: false });
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.update).not.toHaveBeenCalledWith(user);
+    expect(mocks.values).toHaveBeenCalledWith({ chatId: "12345", username: "jacklil" });
   });
 
-  it("rejects missing usernames before database access", async () => {
+  it("registers followers without a Telegram username or system identity", async () => {
     expect(await bindTelegramUser({ ...input, username: undefined })).toEqual({
-      kind: "missing_username",
+      kind: "registered",
+      memberAmbiguous: false,
+    });
+    expect(mocks.insert).toHaveBeenCalledWith(telegramRecipientBinding);
+    expect(mocks.values).toHaveBeenCalledWith({ chatId: "12345", username: null });
+    expect(mocks.upsert).toHaveBeenCalledWith({
+      set: { updatedAt: expect.any(Date), username: null },
+      target: telegramRecipientBinding.chatId,
     });
     expect(mocks.members).not.toHaveBeenCalled();
     expect(mocks.requesters).not.toHaveBeenCalled();

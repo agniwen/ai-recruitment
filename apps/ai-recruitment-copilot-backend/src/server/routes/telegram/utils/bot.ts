@@ -30,13 +30,10 @@ function bindingReply(result: Awaited<ReturnType<typeof bindTelegramUser>>): str
   if (result.kind === "bound") {
     return `绑定成功，${result.userName}。候选人状态发生变化时，我会在这里通知你。`;
   }
-  if (result.kind === "missing_username") {
-    return "绑定失败：你的 Telegram 账号尚未设置用户名，请设置后重新发送 /start。";
-  }
-  if (result.kind === "ambiguous") {
-    return "绑定失败：系统内有多个成员填写了相同的 TG 号，请联系管理员处理。";
-  }
-  return "未找到与你的 Telegram 用户名一致的成员或需求发起人信息。成员请在个人信息中填写 TG 号；外部面试官请联系管理员在岗位需求发起人中填写 @用户名，然后重新发送 /start。";
+  const ambiguousReply = result.memberAmbiguous
+    ? "系统内有多个成员填写了相同的 TG 号，成员信息未绑定，请联系管理员处理。"
+    : "";
+  return `关注成功，你可以在这里接收通知。${ambiguousReply}`;
 }
 
 export function isTelegramBotConfigured(): boolean {
@@ -81,7 +78,7 @@ export function getTelegramBot(): TelegramBot {
   });
 
   bot.onDirectMessage(async (thread) => {
-    await thread.post("发送 /start 可绑定候选人状态通知。");
+    await thread.post("发送 /start 即可关注并接收通知。");
   });
 
   cached = { adapter, bot };
