@@ -14,7 +14,7 @@
 
 1. 有效邀请页面挂载时创建独立的 `visitId` 和 `tabId`，立即记录 `page_opened`；FingerprintJS 5 在浏览器本地异步运行，禁用 monitoring，仅保存 visitorId 和版本，不保存原始指纹组件。
 2. `browserId` 是本域 localStorage 中的随机 UUID；它不是用户 ID。每次点击入会创建新的 `attemptId`，标签页复制不会复用页面 ID。
-3. 入会/结束请求携带三个 trace 请求头。后端从已验证的邀请确定参与者 identity 与角色，记录 `token_issued`，把 trace 写进 LiveKit token metadata。邀请、JWT、密钥不进入结构化事件表。
+3. 入会/结束请求携带 visit/tab/attempt 和已采集的 browser/fingerprint trace 请求头。后端从已验证的邀请确定参与者 identity 与角色，记录 `token_issued`，把 trace 写进 LiveKit token metadata。邀请、JWT、密钥不进入结构化事件表。
 4. 客户端记录连接、断线原因、重连、离开按钮、结束请求、页面显隐/离开/恢复、设备切换/错误、轨道发布/静音、运行异常、网络变化。30 秒心跳，连接期间 15 秒 RTC 质量采样。
 5. 浏览器通过 `POST /api/public/interview-telemetry` 批量提交，以 Authorization Bearer 携带邀请。服务端重新解析邀请，禁止客户端指定身份/会议/角色/证据来源。
 6. LiveKit POST `/api/livekit/webhook`，以 SDK 校验 Authorization JWT 与原始请求体 SHA-256，再写入 `livekit` 来源事件（包括服务端 disconnect reason、Room SID、Participant SID）。写入失败返回 503，重复事件去重。
@@ -107,12 +107,14 @@ Hono 请求日志对真人面试邀请路径脱敏，并去除诊断查询的参
 
 ## 直接 SQL 排查
 
+`browser_id`、`fingerprint_id`、`fingerprint_version` 为独立字段，带中文注释；指纹索引用于直接查询。新客户端在采集成功后的事件中持续携带指纹，不依赖 `details`。指纹就绪后按同一会议、参与身份、visit 回填较早的空字段；迁移也按此范围回填旧 JSON 中的唯一证据。不同访问、不同参与者以及冲突指纹不相互推断。旧客户端的 JSON 继续接收并映射到独立字段。
+
 使用参数化查询。按 UI 相同顺序读取整场：
 
 ```sql
 SELECT received_at, occurred_at, source, type, participant_name, participant_identity,
        visit_id, tab_id, attempt_id, client_sequence, room_sid, participant_sid,
-       ip, ip_source, user_agent, details
+       browser_id, fingerprint_id, fingerprint_version, ip, ip_source, user_agent, details
 FROM interview_telemetry_event
 WHERE meeting_id = $1
 ORDER BY received_at, occurred_at, client_sequence, id;
@@ -136,7 +138,7 @@ GROUP BY meeting_id, participant_identity;
 WITH visits AS (
   SELECT DISTINCT meeting_id, participant_identity, visit_id
   FROM interview_telemetry_event
-  WHERE type = 'fingerprint_ready' AND details->>'fingerprint' = $1
+  WHERE source = 'client' AND type = 'fingerprint_ready' AND fingerprint_id = $1
 )
 SELECT e.* FROM interview_telemetry_event e
 JOIN visits v USING (meeting_id, participant_identity, visit_id)

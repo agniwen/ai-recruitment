@@ -42,7 +42,7 @@ function conditions(q: LogQuery) {
         and fingerprint_event.participant_identity = ${event.participantIdentity}
         and fingerprint_event.visit_id = ${event.visitId}
         and fingerprint_event.type = 'fingerprint_ready'
-        and fingerprint_event.details->>'fingerprint' = ${q.fingerprint}
+        and fingerprint_event.fingerprint_id = ${q.fingerprint}
     )`
       : undefined,
   );
@@ -83,7 +83,7 @@ export async function listLoggedMeetings(q: LogQuery) {
         .select({
           fingerprints: sql<string[]>`array_remove(array_agg(distinct case
             when ${event.source} = 'client' and ${event.type} = 'fingerprint_ready'
-            then nullif(btrim(${event.details}->>'fingerprint'), '')
+            then nullif(btrim(${event.fingerprintId}), '')
           end), null)`,
           identity: event.participantIdentity,
           meetingId: event.meetingId,
@@ -146,12 +146,10 @@ export async function loadMeetingLog(meetingId: string, q: LogQuery) {
     db
       .select({
         attempts: sql<number>`count(distinct ${event.attemptId})::int`,
-        browserIds: sql<
-          string[]
-        >`array_remove(array_agg(distinct ${event.details}->>'browserId'), null)`,
+        browserIds: sql<string[]>`array_remove(array_agg(distinct ${event.browserId}), null)`,
         fingerprints: sql<
           string[]
-        >`array_remove(array_agg(distinct ${event.details}->>'fingerprint'), null)`,
+        >`array_remove(array_agg(distinct nullif(btrim(${event.fingerprintId}), '')), null)`,
         identity: event.participantIdentity,
         ips: sql<string[]>`array_remove(array_agg(distinct ${event.ip}), null)`,
         name: sql<string | null>`max(${event.participantName})`,
@@ -167,7 +165,7 @@ export async function loadMeetingLog(meetingId: string, q: LogQuery) {
       .select({
         attempts: sql<number>`count(distinct ${event.attemptId})::int`,
         events: count(),
-        fingerprints: sql<number>`count(distinct ${event.details}->>'fingerprint')::int`,
+        fingerprints: sql<number>`count(distinct nullif(btrim(${event.fingerprintId}), ''))::int`,
         keyEvents: sql<number>`count(*) filter (where ${keyEventCondition})::int`,
         lastWebhookAt: sql<
           string | null

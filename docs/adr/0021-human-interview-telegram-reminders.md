@@ -36,6 +36,10 @@ Telegram 和 PostgreSQL 不能共享事务：如果 TG 已接受消息而响应�
 
 ## 配置和上线
 
+`20261009230000_fix_meeting_reminder_timezone` 将历史 UTC 无时区会议预约字段显式转换成 `timestamptz`，不改变实际预约时刻。已使用带时区字段的库跳过类型转换。迁移在同一事务中重建依赖该字段的触发器，纠正错误排期、递增版本、唤醒 Worker，并迁移上一版本的成功发送记录防止重复发送。`queued_revision` 保留用于清理旧任务。已过期会议由 Worker 清理，不补发过时提醒。回归验证必须包含生产使用的 `Asia/Shanghai` 连接和旧字段类型，不能仅用新建 `timestamptz` 测试库。
+
+Worker 输出排期同步结果及消费结果（会议 ID、版本、排期时间、发送/失败/未绑定计数）。过期或停用排期的 `error_code` 分别为 `meeting_started`、`meeting_inactive`，避免正常跳过被误认为已经发送。
+
 先执行 `20261009160000_meeting_reminder_queue`（依赖旧提醒迁移），再发布 Worker；切换时先停止旧轮询 Worker，避免两套发送器重叠。新迁移一次性为已有未来会议建立任务记录，无需长期扫描旧业务数据。
 
 Worker 需要 `DATABASE_URL`、`REDIS_URL`、`TELEGRAM_BOT_TOKEN`、`TELEGRAM_WEBHOOK_SECRET_TOKEN`，以及与 Web/Backend 一致的 `NEXT_PUBLIC_BASE_URL`、`BETTER_AUTH_SECRET`。现有队列前缀按数据库隔离；如设置 `RESUME_PARSE_QUEUE_PREFIX`，同一环境的 Worker 必须一致。配置 TG 时默认启用，`HUMAN_INTERVIEW_REMINDERS_ENABLED=false` 可关闭；缺少 Redis 会明确报错并保留待同步记录。

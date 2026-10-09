@@ -27,6 +27,35 @@ describe.skipIf(!url)("telemetry database round trip", () => {
         "utf-8",
       ),
     );
+    await sql`insert into interview_telemetry_event
+      (id,event_key,meeting_id,organization_id,meeting_title,participant_identity,visit_id,source,type,occurred_at,details)
+      values
+      ('old-open','old-open','old','org','迁移测试','candidate_one','visit','client','page_opened',now(),'{"browserId":"10000000-0000-4000-8000-000000000001"}'),
+      ('old-fp','old-fp','old','org','迁移测试','candidate_one','visit','client','fingerprint_ready',now(),${sql.json({ fingerprint: "a".repeat(32), fingerprintVersion: "old-version" })}),
+      ('other-person','other-person','old','org','迁移测试','candidate_two','visit','client','page_opened',now(),'{}'),
+      ('other-meeting','other-meeting','other','org','迁移测试','candidate_one','visit','client','page_opened',now(),'{}')`;
+    await sql.unsafe(
+      await readFile(
+        new URL(
+          "../../../../../../../ai-recruitment-copilot/drizzle/20261009231000_interview_browser_evidence_columns/migration.sql",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    );
+    expect(
+      await sql`select id,browser_id,fingerprint_id,fingerprint_version from interview_telemetry_event where id='old-open'`,
+    ).toMatchObject([
+      {
+        browser_id: "10000000-0000-4000-8000-000000000001",
+        fingerprint_id: "a".repeat(32),
+        fingerprint_version: "old-version",
+      },
+    ]);
+    expect(
+      await sql`select fingerprint_id from interview_telemetry_event where id in ('other-person','other-meeting')`,
+    ).toEqual([{ fingerprint_id: null }, { fingerprint_id: null }]);
+    await sql`delete from interview_telemetry_event`;
     await sql`create table studio_human_interview_meeting (id text primary key, organization_id text, title text, livekit_room_name text)`;
     await sql`insert into studio_human_interview_meeting values ('meeting', 'org', 'Miles 一面', 'human_room')`;
     dao = await import("./dao");
@@ -114,6 +143,9 @@ describe.skipIf(!url)("telemetry database round trip", () => {
     const renamed = await logs.listLoggedMeetings(filters);
     expect(renamed.records).toHaveLength(1);
     expect(renamed.records[0].eventCount).toBe(4);
+    expect(
+      await sql`select count(*)::int AS count from interview_telemetry_event where fingerprint_id=${"a".repeat(32)} and meeting_id='meeting'`,
+    ).toEqual([{ count: 4 }]);
     const nameSearch = await logs.listLoggedMeetings({ ...filters, search: "申请者" });
     expect(nameSearch.records[0].eventCount).toBe(4);
     const correlated = await logs.loadMeetingLog("meeting", {
@@ -138,6 +170,60 @@ describe.skipIf(!url)("telemetry database round trip", () => {
     await pruneInterviewTelemetry();
     const pruned = await logs.loadMeetingLog("meeting", filters);
     expect(pruned.total).toBe(4);
+  });
+  it("persists first-class browser evidence for client events and token requests", async () => {
+    const trace = {
+      browserId: randomUUID(),
+      fingerprintId: "f".repeat(32),
+      fingerprintVersion: "fingerprintjs-test",
+      tabId: randomUUID(),
+      visitId: randomUUID(),
+    };
+    await sql`insert into studio_human_interview_meeting values ('new-evidence', 'org', '独立字段', 'new-evidence-room')`;
+    await dao.saveClientEvents(
+      {
+        meetingId: "new-evidence",
+        meetingTitle: "独立字段",
+        organizationId: "org",
+        participantIdentity: "candidate_new",
+        participantName: "候选人",
+        participantRole: "candidate",
+        roomName: "new-evidence-room",
+      },
+      [
+        {
+          ...trace,
+          clientSequence: 1,
+          details: {},
+          id: randomUUID(),
+          occurredAt: new Date().toISOString(),
+          type: "fingerprint_ready",
+        },
+      ],
+      new Headers(),
+    );
+    await dao.recordServerTelemetry({
+      headers: new Headers({
+        "x-interview-browser-id": trace.browserId,
+        "x-interview-fingerprint-id": trace.fingerprintId,
+        "x-interview-fingerprint-version": trace.fingerprintVersion,
+        "x-interview-tab-id": trace.tabId,
+        "x-interview-visit-id": trace.visitId,
+      }),
+      participantIdentity: "candidate_new",
+      roomName: "new-evidence-room",
+      type: "token_issued",
+    });
+    const result = await logs.loadMeetingLog("new-evidence", {
+      fingerprint: trace.fingerprintId,
+      page: 1,
+      pageSize: 50,
+    });
+    expect(result.total).toBe(2);
+    for (const row of result.records) {
+      expect(row).toMatchObject(trace);
+      expect(row.details).not.toHaveProperty("fingerprint");
+    }
   });
   it("filters routine events before pagination and summarizes participant evidence across all pages", async () => {
     await sql`insert into studio_human_interview_meeting values ('noise', 'org', '日志展示测试', 'human_noise')`;

@@ -45,15 +45,15 @@ suite("interview media archive persistence", () => {
     const org = randomUUID();
     await db.$client`insert into organization (id, name, slug, created_at) values (${org}, 'Test', ${org}, now())`;
     await db.$client`insert into studio_human_interview_meeting (id, organization_id, title, livekit_room_name) values (${meetingId}, ${org}, '留底隔离测试', ${roomName})`;
-    for (const [index, attempt, ip, details] of [
-      [0, trace.attemptId, "203.0.113.8", { browserId: "device-test" }],
-      [1, "other-attempt", "203.0.113.9", {}],
+    for (const [index, attempt, ip, browserId] of [
+      [0, trace.attemptId, "203.0.113.8", "device-test"],
+      [1, "other-attempt", "203.0.113.9", null],
     ] as const) {
-      await db.$client`insert into interview_telemetry_event (id, event_key, meeting_id, meeting_title, organization_id, participant_identity, occurred_at, received_at, source, type, attempt_id, visit_id, ip, ip_source, user_agent, details)
-      values (${randomUUID()}, ${randomUUID()}, ${meetingId}, '留底隔离测试', ${org}, ${identity}, now(), now() + ${`${index} seconds`}::interval, 'server', 'token_issued', ${attempt}, ${trace.visitId}, ${ip}, 'test-proxy', 'Test browser', ${JSON.stringify(details)}::jsonb)`;
+      await db.$client`insert into interview_telemetry_event (id, event_key, meeting_id, meeting_title, organization_id, participant_identity, occurred_at, received_at, source, type, attempt_id, visit_id, ip, ip_source, user_agent, browser_id)
+      values (${randomUUID()}, ${randomUUID()}, ${meetingId}, '留底隔离测试', ${org}, ${identity}, now(), now() + ${`${index} seconds`}::interval, 'server', 'token_issued', ${attempt}, ${trace.visitId}, ${ip}, 'test-proxy', 'Test browser', ${browserId})`;
     }
-    await db.$client`insert into interview_telemetry_event (id, event_key, meeting_id, meeting_title, organization_id, participant_identity, occurred_at, source, type, visit_id, details)
-      values (${randomUUID()}, ${randomUUID()}, ${meetingId}, '留底隔离测试', ${org}, ${identity}, now(), 'client', 'fingerprint_ready', ${trace.visitId}, ${JSON.stringify({ fingerprint: "a".repeat(32) })}::jsonb)`;
+    await db.$client`insert into interview_telemetry_event (id, event_key, meeting_id, meeting_title, organization_id, participant_identity, occurred_at, source, type, visit_id, fingerprint_id)
+      values (${randomUUID()}, ${randomUUID()}, ${meetingId}, '留底隔离测试', ${org}, ${identity}, now(), 'client', 'fingerprint_ready', ${trace.visitId}, ${"a".repeat(32)})`;
   });
   afterAll(async () => {
     await (await import("@arc/ai-recruitment-copilot-backend/lib/server/db")).closeDatabase();

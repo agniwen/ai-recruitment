@@ -113,7 +113,9 @@ export function parseParticipantEvidence(participant: CaptureParticipant) {
     // Unknown clients have no trace.
   }
   const parsed = interviewTraceSchema.safeParse(metadata?.interview_trace);
-  const trace: InterviewMediaEnvironment = parsed.success ? parsed.data : {};
+  const trace: InterviewMediaEnvironment = parsed.success
+    ? { ...parsed.data, fingerprint: parsed.data.fingerprintId }
+    : {};
   return {
     environment: trace,
     role:
@@ -158,7 +160,12 @@ async function environmentSnapshot(meetingId: string, participant: CapturePartic
     }
   }
   for (const key of ["browserId", "fingerprint", "fingerprintVersion"] as const) {
-    const value = fingerprint[0]?.details[key] ?? request[0]?.details[key];
+    const column = key === "fingerprint" ? "fingerprintId" : key;
+    const value =
+      fingerprint[0]?.[column] ??
+      request[0]?.[column] ??
+      fingerprint[0]?.details[key] ??
+      request[0]?.details[key];
     if (typeof value === "string") {
       environment[key] = value;
     }

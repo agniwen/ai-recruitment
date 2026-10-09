@@ -90,8 +90,11 @@ describe("platform interview timeline", () => {
     router.meetingId = "meeting";
     const base = {
       attemptId: "attempt",
+      browserId: null,
       clientSequence: null,
       eventKey: "event",
+      fingerprintId: "a".repeat(32),
+      fingerprintVersion: "fingerprintjs-test",
       id: "event",
       ip: null,
       ipSource: null,

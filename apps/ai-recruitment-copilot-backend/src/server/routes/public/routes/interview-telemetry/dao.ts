@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, isNull, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { interviewTelemetryEvent, studioHumanInterviewMeeting } from "@arc/db-schema/schema";
 import type { InterviewClientEvent, InterviewTrace } from "@arc/shared/interview-telemetry";
@@ -65,13 +65,38 @@ export async function saveClientEvents(
         ...scope,
         ...evidence,
         ...event,
+        browserId: event.browserId ?? event.details.browserId,
         eventKey: id,
+        fingerprintId: event.fingerprintId ?? event.details.fingerprint,
+        fingerprintVersion: event.fingerprintVersion ?? event.details.fingerprintVersion,
         id: randomUUID(),
         occurredAt: new Date(occurredAt),
         source: "client",
       })),
     )
     .onConflictDoNothing();
+  // Fingerprinting is asynchronous. Fill earlier rows only within this exact visit and identity.
+  for (const event of events) {
+    const fingerprintId = event.fingerprintId ?? event.details.fingerprint;
+    if (event.type !== "fingerprint_ready" || !fingerprintId) {
+      continue;
+    }
+    await db
+      .update(interviewTelemetryEvent)
+      .set({
+        browserId: sql`coalesce(${interviewTelemetryEvent.browserId}, ${event.browserId ?? event.details.browserId ?? null})`,
+        fingerprintId,
+        fingerprintVersion: event.fingerprintVersion ?? event.details.fingerprintVersion,
+      })
+      .where(
+        and(
+          eq(interviewTelemetryEvent.meetingId, scope.meetingId),
+          eq(interviewTelemetryEvent.participantIdentity, scope.participantIdentity),
+          eq(interviewTelemetryEvent.visitId, event.visitId),
+          isNull(interviewTelemetryEvent.fingerprintId),
+        ),
+      );
+  }
 }
 
 export async function recordServerTelemetry(input: {

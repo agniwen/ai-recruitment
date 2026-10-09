@@ -16,6 +16,9 @@ export function requestEvidence(headers: Headers) {
 export function readInterviewTrace(headers: Headers) {
   const result = interviewTraceSchema.safeParse({
     attemptId: headers.get("x-interview-attempt-id") ?? undefined,
+    browserId: headers.get("x-interview-browser-id") ?? undefined,
+    fingerprintId: headers.get("x-interview-fingerprint-id") ?? undefined,
+    fingerprintVersion: headers.get("x-interview-fingerprint-version") ?? undefined,
     tabId: headers.get("x-interview-tab-id"),
     visitId: headers.get("x-interview-visit-id"),
   });

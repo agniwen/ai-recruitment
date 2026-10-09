@@ -1592,9 +1592,12 @@ export const interviewTelemetryEvent = pgTable(
   "interview_telemetry_event",
   {
     attemptId: text("attempt_id"),
+    browserId: text("browser_id"),
     clientSequence: integer("client_sequence"),
     details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
     eventKey: text("event_key").notNull(),
+    fingerprintId: text("fingerprint_id"),
+    fingerprintVersion: text("fingerprint_version"),
     id: text("id").primaryKey(),
     ip: text("ip"),
     ipSource: text("ip_source"),
@@ -1628,6 +1631,11 @@ export const interviewTelemetryEvent = pgTable(
       table.id,
     ),
     index("interview_telemetry_event_received_idx").on(table.receivedAt),
+    index("interview_telemetry_event_fingerprint_idx").on(
+      table.fingerprintId,
+      table.meetingId,
+      table.visitId,
+    ),
     index("interview_telemetry_event_visit_idx").on(
       table.meetingId,
       table.visitId,

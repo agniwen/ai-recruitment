@@ -10,6 +10,32 @@ afterEach(() => {
 });
 
 describe("interview telemetry buffer", () => {
+  it("carries the browser fingerprint as first-class evidence across events and request headers", async () => {
+    vi.useFakeTimers();
+    const send = vi.fn().mockResolvedValue({});
+    const client = createTelemetryClient("candidate", "invite", send);
+    client.emit("fingerprint_ready", {
+      fingerprint: "a".repeat(32),
+      fingerprintVersion: "fingerprintjs-test",
+    });
+    client.emit("connected");
+    await client.flush();
+    for (const event of send.mock.calls[0][0]) {
+      expect(event).toMatchObject({
+        browserId: expect.any(String),
+        fingerprintId: "a".repeat(32),
+        fingerprintVersion: "fingerprintjs-test",
+      });
+      expect(event.details).not.toHaveProperty("fingerprint");
+    }
+    expect(client.headers()["x-interview-fingerprint-id"]).toBe("a".repeat(32));
+    const nextVisit = createTelemetryClient("candidate", "invite", send);
+    expect(nextVisit.trace.browserId).toBe(client.trace.browserId);
+    expect(nextVisit.trace.visitId).not.toBe(client.trace.visitId);
+    expect(nextVisit.trace.tabId).not.toBe(client.trace.tabId);
+    client.dispose();
+    nextVisit.dispose();
+  });
   it("sends final events with keepalive while a normal request is still in flight", async () => {
     vi.useFakeTimers();
     const deferred = Promise.withResolvers<boolean>();

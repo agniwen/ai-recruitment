@@ -2,6 +2,7 @@ import type {
   InterviewClientEvent,
   InterviewClientEventType,
   InterviewEventDetails,
+  InterviewTrace,
 } from "@arc/shared/interview-telemetry";
 import { interviewEventDetailsSchema } from "@arc/shared/interview-telemetry";
 import { rpc } from "@/lib/client/rpc";
@@ -54,8 +55,8 @@ export function createTelemetryClient(
   sender?: TelemetrySender,
 ) {
   // Fresh per page instance (not sessionStorage, which is cloned when duplicating a tab).
-  const trace = {
-    attemptId: undefined as string | undefined,
+  const trace: InterviewTrace = {
+    browserId: browserId(),
     tabId: crypto.randomUUID(),
     visitId: crypto.randomUUID(),
   };
@@ -128,6 +129,10 @@ export function createTelemetryClient(
     if (!parsed.success) {
       return;
     }
+    const { browserId: browser, fingerprint, fingerprintVersion, ...eventDetails } = parsed.data;
+    trace.browserId = browser ?? trace.browserId;
+    trace.fingerprintId = fingerprint ?? trace.fingerprintId;
+    trace.fingerprintVersion = fingerprintVersion ?? trace.fingerprintVersion;
     if (queue.length >= 200) {
       queue.shift();
       droppedEvents += 1;
@@ -138,7 +143,7 @@ export function createTelemetryClient(
       id: crypto.randomUUID(),
       ...trace,
       ...room,
-      details: { ...parsed.data, droppedEvents },
+      details: { ...eventDetails, droppedEvents },
       occurredAt: new Date().toISOString(),
       type,
     });
@@ -165,10 +170,15 @@ export function createTelemetryClient(
         "x-interview-tab-id": trace.tabId,
         "x-interview-visit-id": trace.visitId,
         ...(trace.attemptId ? { "x-interview-attempt-id": trace.attemptId } : {}),
+        ...(trace.browserId ? { "x-interview-browser-id": trace.browserId } : {}),
+        ...(trace.fingerprintId ? { "x-interview-fingerprint-id": trace.fingerprintId } : {}),
+        ...(trace.fingerprintVersion
+          ? { "x-interview-fingerprint-version": trace.fingerprintVersion }
+          : {}),
       };
     },
     opened() {
-      emit("page_opened", { ...readNetwork(), browserId: browserId(), release: BUILD_TIME });
+      emit("page_opened", { ...readNetwork(), release: BUILD_TIME });
       void flush();
     },
     setRoom(value: typeof room) {

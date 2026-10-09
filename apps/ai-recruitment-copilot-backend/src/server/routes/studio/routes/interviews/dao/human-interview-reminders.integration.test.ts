@@ -34,7 +34,7 @@ describe.skipIf(!testUrl)("human interview reminders in an isolated PostgreSQL d
     process.env.DATABASE_URL = testUrl;
     vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://example.test");
     vi.stubEnv("BETTER_AUTH_SECRET", "isolated-reminder-test-secret");
-    sql = postgres(testUrl);
+    sql = postgres(testUrl, { connection: { TimeZone: "Asia/Shanghai" } });
     await sql.unsafe(`
       CREATE TABLE organization (id text PRIMARY KEY, name text, slug text);
       CREATE TABLE "user" (id text PRIMARY KEY, telegram text, telegram_bound_username text, telegram_chat_id text);
@@ -139,6 +139,65 @@ describe.skipIf(!testUrl)("human interview reminders in an isolated PostgreSQL d
     expect(await dao.loadHumanInterviewReminderRounds(job, now)).toEqual([]);
     await sql`update studio_human_interview_meeting set scheduled_at=null`;
     expect(await dao.loadHumanInterviewReminderRounds(job, now)).toEqual([]);
+  });
+  it("repairs legacy UTC timestamps under Asia/Shanghai, invalidates old jobs and preserves successful deliveries", async () => {
+    await sql.unsafe(`
+      DROP TRIGGER human_interview_reminder_schedule_changed ON studio_human_interview_meeting;
+      ALTER TABLE studio_human_interview_meeting ALTER COLUMN scheduled_at TYPE timestamp USING scheduled_at AT TIME ZONE 'UTC';
+      CREATE TRIGGER human_interview_reminder_schedule_changed
+        AFTER INSERT OR UPDATE OF scheduled_at, status OR DELETE ON studio_human_interview_meeting
+        FOR EACH ROW EXECUTE FUNCTION sync_human_interview_reminder_schedule();
+    `);
+    await sql`update studio_human_interview_meeting set scheduled_at='2026-10-09 02:01:00'`;
+    const [broken] =
+      await sql`select revision,scheduled_at from studio_human_interview_reminder_schedule`;
+    expect(broken.scheduled_at.toISOString()).toBe("2026-10-08T18:01:00.000Z");
+    await sql`update studio_human_interview_reminder_schedule set queued_revision=revision,next_sync_at=null`;
+    await sql`insert into studio_human_interview_meeting_reminder_delivery(meeting_id,revision,recipient_key,round_ids,scheduled_at,chat_id,roles,status,attempts,last_attempt_at,sent_at)
+      values ('meeting',${broken.revision},'chat:104','["round"]',${broken.scheduled_at},'104','["分配 ODC"]','sent',1,now(),now())`;
+    const migration = await readFile(
+      new URL(
+        "../../../../../../../../ai-recruitment-copilot/drizzle/20261009230000_fix_meeting_reminder_timezone/migration.sql",
+        import.meta.url,
+      ),
+      "utf-8",
+    );
+    await sql.unsafe(migration);
+    const [fixed] =
+      await sql`select revision,queued_revision,scheduled_at,next_sync_at from studio_human_interview_reminder_schedule`;
+    expect(fixed.revision).toBe(broken.revision + 1);
+    expect(fixed.queued_revision).toBe(broken.revision);
+    expect(fixed.scheduled_at.toISOString()).toBe("2026-10-09T02:01:00.000Z");
+    expect(fixed.next_sync_at).not.toBeNull();
+    const clock = new Date("2026-10-09T01:51:00Z");
+    expect(
+      await dao.loadHumanInterviewReminderRounds({ ...job, revision: broken.revision }, clock),
+    ).toEqual([]);
+    const [reminder] = await dao.loadHumanInterviewReminderRounds(
+      { ...job, revision: fixed.revision },
+      clock,
+    );
+    expect(reminder.scheduledAt.toISOString()).toBe("2026-10-09T02:01:00.000Z");
+    await service.runHumanInterviewReminders({ ...job, revision: fixed.revision }, () => clock);
+    expect(post).toHaveBeenCalledTimes(5);
+    expect(post.mock.calls.some(([chat]) => chat === "104")).toBe(false);
+    await sql.unsafe(migration);
+    const [repeated] = await sql`select revision from studio_human_interview_reminder_schedule`;
+    expect(repeated.revision).toBe(fixed.revision);
+    await sql`update studio_human_interview_meeting set scheduled_at='2026-10-09T03:00:00Z'`;
+    const [rescheduled] =
+      await sql`select scheduled_at from studio_human_interview_reminder_schedule`;
+    expect(rescheduled.scheduled_at.toISOString()).toBe("2026-10-09T03:00:00.000Z");
+  });
+  it("records why an expired meeting was removed instead of queued", async () => {
+    const { syncHumanInterviewReminderSchedules } =
+      await import("./human-interview-reminder-schedule");
+    await sql`update studio_human_interview_reminder_schedule set next_sync_at=${now}`;
+    await syncHumanInterviewReminderSchedules(new Date("2026-10-09T02:00:00Z"));
+    expect(queue.ensure).not.toHaveBeenCalled();
+    const [stopped] =
+      await sql`select error_code,next_sync_at from studio_human_interview_reminder_schedule`;
+    expect(stopped).toMatchObject({ error_code: "meeting_started", next_sync_at: null });
   });
   it.each(["cancelled", "ended"])("excludes %s meetings", async (status) => {
     await sql`update studio_human_interview_meeting set status=${status}`;

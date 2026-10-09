@@ -25,13 +25,14 @@ export async function syncHumanInterviewReminderSchedules(now = new Date()) {
         }
       }
       const active = row.active && row.scheduledAt && row.scheduledAt > now;
+      const stopReason = row.active && row.scheduledAt ? "meeting_started" : "meeting_inactive";
       await (active && row.scheduledAt
         ? ensureHumanInterviewReminderJob(job, row.scheduledAt)
         : removeHumanInterviewReminderJob(job));
       await db
         .update(schedule)
         .set({
-          errorCode: null,
+          errorCode: active ? null : stopReason,
           // Recover lost Redis jobs after their due time, without checking every future meeting.
           nextSyncAt:
             active && row.scheduledAt
@@ -46,6 +47,12 @@ export async function syncHumanInterviewReminderSchedules(now = new Date()) {
             isNotNull(schedule.nextSyncAt),
           ),
         );
+      console.info("[human-interview-reminders] schedule synchronized", {
+        meetingId: row.meetingId,
+        revision: row.revision,
+        scheduledAt: row.scheduledAt?.toISOString(),
+        status: active ? "queued" : stopReason,
+      });
     } catch {
       await db
         .update(schedule)

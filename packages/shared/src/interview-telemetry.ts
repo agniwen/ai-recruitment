@@ -81,6 +81,12 @@ export const interviewEventDetailsSchema = z
 
 export const interviewTraceSchema = z.object({
   attemptId: z.uuid().optional(),
+  browserId: z.uuid().optional(),
+  fingerprintId: z
+    .string()
+    .regex(/^[a-f0-9]{32,64}$/i)
+    .optional(),
+  fingerprintVersion: shortText.optional(),
   tabId: z.uuid(),
   visitId: z.uuid(),
 });

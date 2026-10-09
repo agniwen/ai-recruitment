@@ -103,8 +103,8 @@ function EventExplanation({ event }: { event: TimelineEvent }) {
     <>
       {reason ? <p className="mt-1 text-xs">{reason}</p> : null}
       {event.type === "network_changed" ? <p className="mt-1 text-xs">{network}</p> : null}
-      {typeof event.details.fingerprint === "string" ? (
-        <p className="mt-1 break-all font-mono text-xs">{event.details.fingerprint}</p>
+      {event.fingerprintId ? (
+        <p className="mt-1 break-all font-mono text-xs">{event.fingerprintId}</p>
       ) : null}
     </>
   );
@@ -169,7 +169,10 @@ function EventRow({ event }: { event: TimelineEvent }) {
               "LiveKit 会话": event.participantSid,
               "LiveKit 房间": event.roomSid,
               "入会 ID": event.attemptId,
+              指纹采集器版本: event.fingerprintVersion,
               浏览器: event.userAgent,
+              "浏览器存储 ID": event.browserId,
+              "浏览器指纹 ID": event.fingerprintId,
               "访问 ID": event.visitId,
               页面事件序号: event.clientSequence?.toString(),
               "页面实例 ID（刷新后变化）": event.tabId,

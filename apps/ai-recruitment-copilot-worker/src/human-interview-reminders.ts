@@ -29,6 +29,7 @@ export async function startHumanInterviewReminders() {
       () => new Date(),
       waitForHumanInterviewReminderSend,
     );
+    console.info("[human-interview-reminders] job processed", { ...job, ...result });
     if (result.retry) {
       throw new Error("Reminder recipients are awaiting retry or Telegram binding");
     }
