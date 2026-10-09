@@ -109,6 +109,7 @@ describe("Offer custom currency", () => {
     renderDialog();
     const trigger = document.body.querySelector<HTMLButtonElement>('[id$="-currency"]');
     expect(trigger).not.toBeNull();
+    expect(trigger?.textContent).toContain("人民币 CNY");
     await act(() => trigger?.click());
     const other = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (option) => option.textContent?.includes("其他"),

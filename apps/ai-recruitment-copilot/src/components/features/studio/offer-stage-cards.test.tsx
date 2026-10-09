@@ -101,12 +101,18 @@ function renderCard(mediaType: string, filename: string, canUpdate = false, curr
 
 describe("OfferCard approval attachment", () => {
   it.each([
-    ["CNY", "¥"],
-    ["USD", "$"],
-    ["GBP", "£"],
-  ])("uses %s for the offer salary", (currency, symbol) => {
-    const { host } = renderCard("image/png", "ssc.png", false, currency);
+    ["CNY", "¥", "人民币 CNY"],
+    ["USD", "$", "美元 USD"],
+    ["GBP", "£", "英镑 GBP"],
+  ])("preserves %s when displaying and editing the offer salary", (currency, symbol, label) => {
+    const { host } = renderCard("image/png", "ssc.png", true, currency);
     expect(host.textContent).toContain(`${symbol} 30,000`);
+    act(() => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.trim() === "编辑")
+        ?.click();
+    });
+    expect(host.querySelector('[id$="-currency"]')?.textContent).toContain(label);
   });
   it.each([
     ["image/png", "ssc.png", true],

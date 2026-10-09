@@ -1776,7 +1776,7 @@ export const studioOfferDraft = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdByRole: text("created_by_role"),
-    currency: text("currency").notNull().default("USD"),
+    currency: text("currency").notNull().default("CNY"),
     equity: text("equity"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     id: text("id").primaryKey(),

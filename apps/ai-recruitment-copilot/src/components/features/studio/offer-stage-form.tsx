@@ -63,7 +63,7 @@ export function createBlankOfferFormState(): OfferFormState {
   return {
     baseSalary: "",
     bonus: "",
-    currency: "USD",
+    currency: "CNY",
     equity: "",
     expiresAt: "",
     joiningDate: "",

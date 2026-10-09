@@ -47,8 +47,10 @@ describe("offer currencies", () => {
     expect(offerDraftInputSchema.partial().safeParse({ currency }).success).toBe(false);
     expect(candidateExpectationsMetaSchema.safeParse({ currency }).success).toBe(false);
   });
-  it("defaults new offers to USD while keeping omitted update currency absent", () => {
-    expect(createBlankOfferFormState().currency).toBe("USD");
+  it("defaults new offers to CNY while keeping omitted update currency absent", () => {
+    const form = { ...createBlankOfferFormState(), baseSalary: "30000", position: "工程师" };
+    expect(form.currency).toBe("CNY");
+    expect(offerDraftInputSchema.parse(buildOfferDraftPayload(form)).currency).toBe("CNY");
     expect(offerDraftInputSchema.partial().parse({ position: "工程师" })).not.toHaveProperty(
       "currency",
     );
