@@ -429,3 +429,65 @@ describe("job and organization multi-selection", () => {
     act(() => root.unmount());
   });
 });
+
+function clickText(text: string) {
+  const element = [...document.querySelectorAll<HTMLElement>("button, [role=menuitem]")].find(
+    (item) => item.textContent === text,
+  );
+  if (!element) {
+    throw new Error(`Missing control: ${text}`);
+  }
+  element.click();
+}
+function enter(label: string, value: string) {
+  const element = document.querySelector<HTMLInputElement>(`[aria-label="${label}"]`);
+  if (!element) {
+    throw new Error(`Missing input: ${label}`);
+  }
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+it("appends multiple links to only the selected resume and can edit or remove each draft", async () => {
+  const onConfirmed = vi.fn();
+  const { root } = renderDialog(onConfirmed, defaultOptions, 2);
+
+  act(() => clickText("作品集"));
+  act(() => clickText("添加链接"));
+  act(() => {
+    enter("链接地址 1", "https://example.com/design");
+    clickText("再添加一个链接");
+  });
+  act(() => enter("链接地址 2", "https://github.com/example"));
+  await act(async () => {
+    clickText("添加 2 个链接");
+    await Promise.resolve();
+  });
+  const candidateRows = [...document.querySelectorAll("li")].filter((li) =>
+    li.textContent?.includes("resume-"),
+  );
+  expect(candidateRows[0]?.textContent).toContain("https://example.com/design");
+  expect(candidateRows[0]?.textContent).toContain("https://github.com/example");
+  expect(candidateRows[1]?.textContent).not.toContain("https://");
+  act(() => clickText("作品集"));
+  act(() => clickText("添加链接"));
+  act(() => enter("链接地址 1", "https://example.com/new"));
+  await act(async () => {
+    clickText("添加 1 个链接");
+    await Promise.resolve();
+  });
+  expect(candidateRows[0]?.querySelectorAll('a[target="_blank"]')).toHaveLength(3);
+  act(() => clickText("编辑"));
+  act(() => enter("显示名称 1", "个人作品"));
+  await act(async () => {
+    clickText("保存");
+    await Promise.resolve();
+  });
+  expect(candidateRows[0]?.textContent).toContain("个人作品");
+  act(() =>
+    document.querySelector<HTMLButtonElement>('[aria-label="移除作品集 个人作品"]')?.click(),
+  );
+  expect(candidateRows[0]?.querySelectorAll('a[target="_blank"]')).toHaveLength(2);
+  expect(onConfirmed).not.toHaveBeenCalled();
+  act(() => root.unmount());
+});

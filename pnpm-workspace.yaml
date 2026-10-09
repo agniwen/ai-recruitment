@@ -41,6 +41,8 @@ packageExtensions:
     dependencies:
       shiki: ^3.19.0
 overrides:
+  # Compatible 9.x release with npm provenance; newer 9.x dependencies fail no-downgrade.
+  "@livekit/rtc-node>pino": 9.9.5
   react: 19.2.7
   react-dom: 19.2.7
 peerDependencyRules:

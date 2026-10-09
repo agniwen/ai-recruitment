@@ -4,7 +4,6 @@ import {
   IconDeviceDesktopUp,
   IconMessage,
   IconLoader2,
-  IconLogin,
   IconMicrophone,
   IconMicrophoneOff,
   IconPhoneOff,
@@ -23,9 +22,9 @@ import {
   LiveKitRoom,
   ParticipantTile,
   RoomAudioRenderer,
+  StartAudio,
   TrackLoop,
   TrackToggle,
-  useRoomContext,
   useTrackRefContext,
   useParticipants,
   useIsSpeaking,
@@ -33,23 +32,19 @@ import {
 } from "@livekit/components-react";
 import type { TrackReferenceOrPlaceholder } from "@livekit/components-react";
 
-import {
-  ConnectionState,
-  RoomEvent,
-  Track,
-  VideoPresets,
-  ScreenSharePresets,
-} from "livekit-client";
+import { DisconnectReason, Track, VideoPresets, ScreenSharePresets } from "livekit-client";
 import type { MouseEvent } from "react";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { toast } from "sonner";
 import type {
   HumanInterviewMeetingTokenResponse,
   PublicHumanInterviewInterviewerPreview,
   PublicHumanInterviewMeetingPreview,
 } from "@arc/shared/studio-pipeline-stages";
+import { ApiError } from "@/lib/client/api";
 import { cn } from "@arc/shared/utils";
-import { DISPLAY_TIME_ZONE } from "@arc/shared/utils/time";
+import { useQuery } from "@tanstack/react-query";
+import { TimeDisplay } from "@/components/features/display/time-display";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,7 +59,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MicrophoneDeviceMenu, VoiceEffectMenu } from "./human-meeting-audio-controls";
 
+import {
+  fetchMeetingPreview,
+  fetchCandidateToken,
+  fetchInterviewerToken,
+  endInterviewerMeeting,
+} from "./human-meeting-api";
+import { getMeetingPollInterval } from "./human-meeting-polling";
+import { MeetingJoinButton } from "./human-meeting-join-button";
 import { HumanMeetingChat } from "./human-meeting-chat";
+import { useMeetingTelemetry } from "./use-meeting-telemetry";
+import { MeetingTelemetryObserver } from "./meeting-telemetry-observer";
+import { MeetingMicrophoneNotice, useMeetingMicrophone } from "./human-meeting-microphone";
 
 type HumanMeetingRoomProps =
   | {
@@ -78,105 +84,20 @@ type HumanMeetingRoomProps =
       preview: PublicHumanInterviewInterviewerPreview;
     };
 
-interface TokenErrorPayload {
-  error?: string;
-  message?: string;
-}
-
-async function fetchCandidateToken(
-  inviteToken: string,
-): Promise<HumanInterviewMeetingTokenResponse> {
-  const response = await fetch(
-    `/api/public/human-interview-meetings/${encodeURIComponent(inviteToken)}/livekit-token`,
-    { method: "POST" },
-  );
-  const body = (await response.json().catch(() => null)) as TokenErrorPayload | null;
-  if (!response.ok) {
-    throw new Error(body?.error ?? body?.message ?? `进入会议失败（${response.status}）`);
-  }
-  return body as HumanInterviewMeetingTokenResponse;
-}
-
-async function fetchInterviewerToken(
-  inviteToken: string,
-): Promise<HumanInterviewMeetingTokenResponse> {
-  const response = await fetch(
-    `/api/public/human-interview-meetings/interviewer/${encodeURIComponent(inviteToken)}/livekit-token`,
-    { method: "POST" },
-  );
-  const body = (await response.json().catch(() => null)) as TokenErrorPayload | null;
-  if (!response.ok) {
-    throw new Error(body?.error ?? body?.message ?? `进入会议失败（${response.status}）`);
-  }
-  return body as HumanInterviewMeetingTokenResponse;
-}
-
-async function endInterviewerMeeting(inviteToken: string): Promise<void> {
-  const response = await fetch(
-    `/api/public/human-interview-meetings/interviewer/${encodeURIComponent(inviteToken)}/end`,
-    { method: "POST" },
-  );
-  const body = (await response.json().catch(() => null)) as TokenErrorPayload | null;
-  if (!response.ok) {
-    throw new Error(body?.error ?? body?.message ?? `结束会议失败（${response.status}）`);
-  }
-}
-
 const interviewerRoleLabel = {
   host: "主持人",
   interviewer: "面试官",
   observer: "旁听",
 } as const;
-const EARLY_JOIN_WINDOW_MS = 10 * 60 * 1000;
-const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  month: "2-digit",
-  timeZone: DISPLAY_TIME_ZONE,
-  year: "numeric",
-});
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) {
-    return "时间未定";
-  }
-  const value = new Date(iso);
-  return dateTimeFormatter.format(value);
-}
-
 function getRoomTitle(props: HumanMeetingRoomProps): string {
   return props.preview.title;
 }
 
 function getRoomSubtitle(props: HumanMeetingRoomProps): string {
   if (props.mode === "candidate") {
-    return `${props.preview.candidateName} · ${props.preview.roundLabel} · ${formatDateTime(props.preview.scheduledAt)}`;
+    return `${props.preview.candidateName} · ${props.preview.roundLabel}`;
   }
-  return `${props.preview.interviewerName} · ${interviewerRoleLabel[props.preview.role]} · ${formatDateTime(props.preview.scheduledAt)}`;
-}
-
-function getScheduledStartTimestamp(
-  scheduledAt: string | null,
-  status: HumanMeetingRoomProps["preview"]["status"],
-): number | null {
-  if (status !== "scheduled" || !scheduledAt) {
-    return null;
-  }
-  const timestamp = new Date(scheduledAt).getTime();
-  return Number.isNaN(timestamp) ? null : timestamp - EARLY_JOIN_WINDOW_MS;
-}
-
-function getStartBlockMessage(
-  scheduledAt: string | null,
-  status: HumanMeetingRoomProps["preview"]["status"],
-  nowMs: number,
-): string | null {
-  const timestamp = getScheduledStartTimestamp(scheduledAt, status);
-  if (timestamp === null || timestamp <= nowMs) {
-    return null;
-  }
-  return `面试时间为 ${formatDateTime(scheduledAt)}，可提前 10 分钟进入，当前暂不能进入会议。`;
+  return `${props.preview.interviewerName} · ${interviewerRoleLabel[props.preview.role]}`;
 }
 
 interface ParticipantMetadata {
@@ -225,26 +146,32 @@ function getParticipantBadge(trackRef: TrackReferenceOrPlaceholder): {
 
 async function loadMeetingToken(
   props: HumanMeetingRoomProps,
+  headers: Record<string, string>,
 ): Promise<
-  { token: HumanInterviewMeetingTokenResponse; error: null } | { token: null; error: string }
+  | { token: HumanInterviewMeetingTokenResponse; error: null }
+  | { token: null; error: string; errorCode: number | string }
 > {
   try {
     const token =
       props.mode === "candidate"
-        ? await fetchCandidateToken(props.inviteToken)
-        : await fetchInterviewerToken(props.inviteToken);
+        ? await fetchCandidateToken(props.inviteToken, headers)
+        : await fetchInterviewerToken(props.inviteToken, headers);
     return { error: null, token };
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "进入会议失败",
+      errorCode: error instanceof ApiError ? error.status : "transport_error",
       token: null,
     };
   }
 }
 
-async function finishInterviewerMeeting(inviteToken: string): Promise<{ error: string | null }> {
+async function finishInterviewerMeeting(
+  inviteToken: string,
+  headers: Record<string, string>,
+): Promise<{ error: string | null }> {
   try {
-    await endInterviewerMeeting(inviteToken);
+    await endInterviewerMeeting(inviteToken, headers);
     return { error: null };
   } catch (error) {
     return {
@@ -266,6 +193,7 @@ interface MeetingRoomState {
   isEnding: boolean;
   isJoining: boolean;
   joinError: string | null;
+  microphonePreflightError: Error | null;
   token: HumanInterviewMeetingTokenResponse | null;
 }
 
@@ -273,9 +201,12 @@ type MeetingRoomAction =
   | { type: "disconnected" }
   | { type: "endingFinished" }
   | { type: "endingStarted" }
-  | { message: string; type: "joinBlocked" }
   | { message: string; type: "joinFailed" }
-  | { token: HumanInterviewMeetingTokenResponse; type: "joinSucceeded" }
+  | {
+      token: HumanInterviewMeetingTokenResponse;
+      microphonePreflightError: Error | null;
+      type: "joinSucceeded";
+    }
   | { type: "joinStarted" }
   | { message: string; type: "roomError" };
 
@@ -283,6 +214,7 @@ const initialMeetingRoomState: MeetingRoomState = {
   isEnding: false,
   isJoining: false,
   joinError: null,
+  microphonePreflightError: null,
   token: null,
 };
 
@@ -297,7 +229,6 @@ function meetingRoomReducer(state: MeetingRoomState, action: MeetingRoomAction):
     case "endingStarted": {
       return { ...state, isEnding: true };
     }
-    case "joinBlocked":
     case "joinFailed":
     case "roomError": {
       return { ...state, isJoining: false, joinError: action.message };
@@ -306,7 +237,12 @@ function meetingRoomReducer(state: MeetingRoomState, action: MeetingRoomAction):
       return { ...state, isJoining: true, joinError: null };
     }
     case "joinSucceeded": {
-      return { ...state, isJoining: false, token: action.token };
+      return {
+        ...state,
+        isJoining: false,
+        microphonePreflightError: action.microphonePreflightError,
+        token: action.token,
+      };
     }
     default: {
       return state;
@@ -315,46 +251,56 @@ function meetingRoomReducer(state: MeetingRoomState, action: MeetingRoomAction):
 }
 
 export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
+  const telemetry = useMeetingTelemetry(props.mode, props.inviteToken);
   const [state, dispatch] = useReducer(meetingRoomReducer, initialMeetingRoomState);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const { isEnding, isJoining, joinError, token } = state;
-  const startBlockMessage = getStartBlockMessage(
-    props.preview.scheduledAt,
-    props.preview.status,
-    nowMs,
-  );
-
+  const accessQuery = useQuery({
+    enabled: !token,
+    gcTime: 0,
+    initialData: props.preview,
+    queryFn: () => fetchMeetingPreview(props.mode, props.inviteToken),
+    queryKey: ["human-meeting-preview", props.mode, props.inviteToken],
+    // The server supplies a duration, so a wrong device clock cannot lock entry.
+    refetchInterval: (query) =>
+      getMeetingPollInterval(
+        query.state.status === "error" ? null : query.state.data?.entryAccess.recheckAfterMs,
+      ),
+    refetchOnMount: "always",
+    refetchOnReconnect: "always",
+    refetchOnWindowFocus: "always",
+    retry: false,
+    staleTime: 0,
+  });
+  const preview = accessQuery.data;
+  const { entryAccess } = preview;
+  const entryBlocked = accessQuery.isError || !entryAccess.canJoin;
+  const tooEarly = entryAccess.reason === "too_early";
+  const { refetch } = accessQuery;
   useEffect(() => {
-    const timestamp = getScheduledStartTimestamp(props.preview.scheduledAt, props.preview.status);
-    if (timestamp === null) {
+    if (token) {
       return;
     }
-    const remainingMs = timestamp - Date.now();
-    if (remainingMs <= 0) {
-      return;
-    }
-    const timer = window.setTimeout(
-      () => {
-        setNowMs(Date.now());
-      },
-      Math.min(remainingMs, 60_000),
-    );
-    return () => window.clearTimeout(timer);
-  }, [props.preview.scheduledAt, props.preview.status, nowMs]);
+    const checkOnFocus = () => {
+      void refetch();
+    };
+    window.addEventListener("focus", checkOnFocus);
+    return () => window.removeEventListener("focus", checkOnFocus);
+  }, [refetch, token]);
 
-  async function joinMeeting() {
-    if (startBlockMessage) {
-      dispatch({ message: startBlockMessage, type: "joinBlocked" });
-      toast.warning(startBlockMessage);
+  async function joinMeeting(microphonePreflightError: Error | null) {
+    if (entryBlocked) {
       return;
     }
     dispatch({ type: "joinStarted" });
-    const result = await loadMeetingToken(props);
+    telemetry.startAttempt();
+    const result = await loadMeetingToken(props, telemetry.headers());
     if (result.token) {
-      dispatch({ token: result.token, type: "joinSucceeded" });
+      dispatch({ microphonePreflightError, token: result.token, type: "joinSucceeded" });
       return;
     }
+    void accessQuery.refetch();
     dispatch({ message: result.error, type: "joinFailed" });
+    telemetry.emit("join_failed", { errorCode: result.errorCode });
     toast.error(result.error);
   }
 
@@ -363,21 +309,33 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
       return;
     }
     dispatch({ type: "endingStarted" });
-    const result = await finishInterviewerMeeting(props.inviteToken);
+    telemetry.emit("end_requested");
+    const result = await finishInterviewerMeeting(props.inviteToken, telemetry.headers());
     dispatch({ type: "endingFinished" });
     if (result.error) {
+      telemetry.emit("end_failed");
       toast.error(result.error);
       throw new Error(result.error);
     }
     toast.success("会议已结束");
+    telemetry.emit("end_completed");
+    telemetry.flush();
     dispatch({ type: "disconnected" });
   }
 
   if (!token) {
-    const entryMessage = startBlockMessage ?? joinError;
+    let entryMessage = joinError;
+    if (entryAccess.reason === "closed") {
+      entryMessage = "该真人复面会议已结束或取消。";
+    } else if (entryAccess.reason === "expired") {
+      entryMessage = "该真人复面会议已超过有效时间。";
+    }
+    if (accessQuery.isError) {
+      entryMessage = "检查入会状态失败，请重试。";
+    }
     let joinButtonText = "进入会议";
-    if (startBlockMessage) {
-      joinButtonText = "未到入会时间";
+    if (entryBlocked) {
+      joinButtonText = tooEarly && !accessQuery.isError ? "未到入会时间" : "暂不可入会";
     } else if (isJoining) {
       joinButtonText = "连接中…";
     }
@@ -390,31 +348,60 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
           </div>
           <div className="space-y-2">
             <h1 className="font-semibold text-2xl tracking-normal">{getRoomTitle(props)}</h1>
-            <p className="text-muted-foreground text-sm">{getRoomSubtitle(props)}</p>
+            <p className="text-muted-foreground text-sm">
+              {getRoomSubtitle(props)} ·{" "}
+              <TimeDisplay
+                value={preview.scheduledAt}
+                options="YYYY/MM/DD HH:mm"
+                emptyText="时间未定"
+              />
+              （北京时间）
+            </p>
           </div>
-          {entryMessage ? (
-            <p
-              className={cn(
-                "text-sm",
-                startBlockMessage ? "text-muted-foreground" : "text-destructive",
-              )}
-            >
-              {entryMessage}
+          <p className="rounded-lg bg-muted/50 p-3 text-left text-xs leading-5 text-muted-foreground">
+            为便于面试安全核查，本会议会记录设备标识与
+            IP，并定时保存短音频片段；开启摄像头时会定时截取画面。留底资料长期保留，仅平台管理员可查看和清理。
+          </p>
+          <p className="text-sm text-muted-foreground">
+            需要发言时，请允许浏览器使用麦克风；若之前已禁止，请先在地址栏的网站权限中开启。
+          </p>
+          {tooEarly && !accessQuery.isError ? (
+            <p className="text-sm text-muted-foreground">
+              面试时间为 <TimeDisplay value={preview.scheduledAt} options="YYYY/MM/DD HH:mm" />
+              （北京时间），可提前 10 分钟进入，当前暂不能进入会议。
             </p>
           ) : null}
-          <Button
-            className="min-w-36"
-            disabled={isJoining || Boolean(startBlockMessage)}
-            onClick={joinMeeting}
-            size="lg"
-          >
-            {isJoining ? (
-              <IconLoader2 className="size-4 animate-spin" />
-            ) : (
-              <IconLogin className="size-4" />
-            )}
-            {joinButtonText}
-          </Button>
+          {entryMessage && (!tooEarly || accessQuery.isError) ? (
+            <p className="text-sm text-destructive">{entryMessage}</p>
+          ) : null}
+          <MeetingJoinButton
+            disabled={entryBlocked}
+            isJoining={isJoining}
+            label={joinButtonText}
+            preview={preview}
+            onJoin={joinMeeting}
+            onCheckError={(error) => {
+              telemetry.emit("media_device_error", {
+                deviceKind: "audioinput",
+                errorName: error.name,
+                reason: "pre_join_check",
+              });
+              telemetry.flush();
+            }}
+          />
+          {entryBlocked ? (
+            <div>
+              <Button
+                variant="ghost"
+                disabled={accessQuery.isFetching}
+                onClick={() => {
+                  void accessQuery.refetch();
+                }}
+              >
+                {accessQuery.isFetching ? "检查中…" : "检查入会状态"}
+              </Button>
+            </div>
+          ) : null}
         </section>
       </main>
     );
@@ -425,8 +412,15 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
       audio={false}
       className="dark human-meeting-theme h-dvh overflow-hidden bg-zinc-950 text-white"
       connect
-      onDisconnected={() => dispatch({ type: "disconnected" })}
+      onDisconnected={(reason) => {
+        telemetry.emit("disconnected", {
+          reason: reason === undefined ? "UNKNOWN_REASON" : DisconnectReason[reason],
+        });
+        telemetry.flush();
+        dispatch({ type: "disconnected" });
+      }}
       onError={(e) => {
+        telemetry.emit("room_error", { errorName: e.name });
         dispatch({ message: e.message, type: "roomError" });
         toast.error(e.message);
       }}
@@ -434,7 +428,7 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
       token={token.participantToken}
       video={false}
     >
-      <DefaultMicrophoneStarter enabled={token.participantRole !== "observer"} />
+      <MeetingTelemetryObserver telemetry={telemetry} />
       <HumanMeetingStage
         chatInviteToken={props.inviteToken}
         chatMode={props.mode}
@@ -442,56 +436,18 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
         canUseVoiceEffects={props.mode === "interviewer" && token.participantRole !== "observer"}
         canEndMeeting={props.mode === "interviewer"}
         isEnding={isEnding}
+        microphonePreflightError={state.microphonePreflightError}
         onEndMeeting={endMeeting}
+        onLeave={() => {
+          telemetry.emit("leave_clicked");
+          telemetry.flush();
+        }}
         participantName={token.participantName}
         title={getRoomTitle(props)}
       />
       <RoomAudioRenderer />
     </LiveKitRoom>
   );
-}
-
-function DefaultMicrophoneStarter({ enabled }: { enabled: boolean }) {
-  const room = useRoomContext();
-  const hasTriedStart = useRef(false);
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    let cancelled = false;
-    async function startDefaultMicrophone() {
-      if (cancelled || hasTriedStart.current) {
-        return;
-      }
-      const publication = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-      if (publication?.isEnabled && !publication.isMuted) {
-        hasTriedStart.current = true;
-        return;
-      }
-
-      hasTriedStart.current = true;
-      try {
-        await room.localParticipant.setMicrophoneEnabled(true, { deviceId: "default" });
-      } catch (error) {
-        hasTriedStart.current = false;
-        toast.error(error instanceof Error ? error.message : "默认麦克风启用失败");
-      }
-    }
-
-    if (room.state === ConnectionState.Connected) {
-      void startDefaultMicrophone();
-    }
-    room.on(RoomEvent.Connected, startDefaultMicrophone);
-
-    return () => {
-      cancelled = true;
-      room.off(RoomEvent.Connected, startDefaultMicrophone);
-    };
-  }, [enabled, room]);
-
-  return null;
 }
 
 function HumanMeetingStage({
@@ -501,7 +457,9 @@ function HumanMeetingStage({
   canUseVoiceEffects,
   canEndMeeting,
   isEnding,
+  microphonePreflightError,
   onEndMeeting,
+  onLeave,
   participantName,
   title,
 }: {
@@ -511,10 +469,13 @@ function HumanMeetingStage({
   canUseVoiceEffects: boolean;
   canEndMeeting: boolean;
   isEnding: boolean;
+  microphonePreflightError: Error | null;
   onEndMeeting: () => Promise<void> | void;
+  onLeave: () => void;
   participantName: string;
   title: string;
 }) {
+  const microphone = useMeetingMicrophone(canPublish, microphonePreflightError);
   const [chatOpen, setChatOpen] = useState(false);
   const closeChat = useCallback(() => setChatOpen(false), []);
   const [focusedTrackKey, setFocusedTrackKey] = useState<string | null>(null);
@@ -558,6 +519,7 @@ function HumanMeetingStage({
           {participants.length}
         </Badge>
       </header>
+      <MeetingMicrophoneNotice microphone={microphone} />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {focusedTrack ? (
@@ -612,6 +574,7 @@ function HumanMeetingStage({
           <>
             <fieldset
               aria-label="麦克风控制"
+              disabled={microphone.pending}
               className="inline-flex h-9 items-stretch overflow-hidden rounded-md border border-white/15 bg-white/10"
             >
               <TrackToggle
@@ -621,13 +584,14 @@ function HumanMeetingStage({
                 )}
                 showIcon={false}
                 source={Track.Source.Microphone}
+                onDeviceError={microphone.onError}
               >
                 <IconMicrophone className="toggle-on size-4" />
                 <IconMicrophoneOff className="toggle-off size-4" />
                 <span className="toggle-on">麦克风</span>
                 <span className="toggle-off">已静音</span>
               </TrackToggle>
-              <MicrophoneDeviceMenu />
+              <MicrophoneDeviceMenu onError={microphone.onError} />
             </fieldset>
             {canUseVoiceEffects ? <VoiceEffectMenu /> : null}
             <TrackToggle
@@ -667,7 +631,8 @@ function HumanMeetingStage({
             {isEnding ? "结束中…" : "结束会议"}
           </button>
         ) : null}
-        <DisconnectButton className={leaveButtonClass}>
+        <StartAudio className={controlButtonClass} label="点击开启会议声音" />
+        <DisconnectButton className={leaveButtonClass} onClick={onLeave}>
           <IconPhoneOff className="size-4" />
           离开
         </DisconnectButton>

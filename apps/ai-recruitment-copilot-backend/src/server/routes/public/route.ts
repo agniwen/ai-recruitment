@@ -1,3 +1,4 @@
+import { getHumanInterviewMeetingEntryAccess } from "../studio/routes/interviews/dao/human-interview-meeting-access";
 // 中文：公开访问入口的只读路由族。挂在 /api/public 下，不依赖 workspace
 // auth；对 roundId/candidateId/邀请 token 做一次反查拿到 organizationId，然后复用
 // studio 路由族里既有的 DAO 返回完整数据（候选人姓名、简历 PDF、面试报告、
@@ -47,9 +48,13 @@ import { loadResumeDetail } from "@arc/ai-recruitment-copilot-backend/server/rou
 import { publicInterviewRoundReportsRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/public/routes/interview-rounds/routes/reports/route";
 
 import { humanInterviewChatRouter } from "./routes/human-interview-chat/route";
+import { interviewTelemetryRouter } from "./routes/interview-telemetry/route";
+import { readInterviewTrace } from "./routes/interview-telemetry/utils";
+import { recordServerTelemetrySafely } from "./routes/interview-telemetry/dao";
 
 export const publicRouter = factory
   .createApp()
+  .route("/interview-telemetry", interviewTelemetryRouter)
   .route("/human-interview-meetings", humanInterviewChatRouter)
   .route("/interview-rounds/:id/reports", publicInterviewRoundReportsRouter)
   .get("/minimax-voice-previews/:id", async (c) => {
@@ -89,8 +94,10 @@ export const publicRouter = factory
     if (!scope) {
       return c.json({ error: "真人复面链接不可用。" }, 404);
     }
+    c.header("Cache-Control", "no-store");
     return c.json(
       {
+        entryAccess: getHumanInterviewMeetingEntryAccess(scope),
         interviewerName: scope.interviewerName,
         meetingId: scope.meetingId,
         role: scope.role,
@@ -130,6 +137,7 @@ export const publicRouter = factory
         canPublish: scope.role !== "observer",
         metadata: {
           human_interview_meeting_id: scope.meetingId,
+          interview_trace: readInterviewTrace(c.req.raw.headers),
           participant_role: scope.role,
           participant_type: "interviewer",
           user_id: scope.userId,
@@ -138,6 +146,14 @@ export const publicRouter = factory
         participantName: scope.interviewerName,
         participantRole: scope.role,
         roomName: scope.liveKitRoomName,
+      });
+      await recordServerTelemetrySafely({
+        headers: c.req.raw.headers,
+        participantIdentity: `interviewer_${scope.userId}`,
+        participantName: scope.interviewerName,
+        participantRole: scope.role,
+        roomName: scope.liveKitRoomName,
+        type: "token_issued",
       });
       return c.json(token, 200);
     } catch (error) {
@@ -163,8 +179,20 @@ export const publicRouter = factory
       return c.json({ error: "真人复面链接不可用。" }, 404);
     }
     const roomName = await endHumanInterviewMeeting({ meetingId: scope.meetingId });
+    await recordServerTelemetrySafely({
+      headers: c.req.raw.headers,
+      participantIdentity: `interviewer_${scope.userId}`,
+      participantName: scope.interviewerName,
+      participantRole: scope.role,
+      roomName,
+      type: "end_authorized",
+    });
     try {
-      await deleteHumanInterviewLiveKitRoom(roomName);
+      await deleteHumanInterviewLiveKitRoom(roomName, {
+        action: "interviewer_end",
+        headers: c.req.raw.headers,
+        userId: scope.userId,
+      });
     } catch (error) {
       if (!(error instanceof HumanInterviewLiveKitConfigError)) {
         console.warn("failed to delete livekit human interview room", error);
@@ -177,9 +205,11 @@ export const publicRouter = factory
     if (!scope) {
       return c.json({ error: "真人复面链接不可用。" }, 404);
     }
+    c.header("Cache-Control", "no-store");
     return c.json(
       {
         candidateName: scope.candidateName,
+        entryAccess: getHumanInterviewMeetingEntryAccess(scope),
         meetingId: scope.meetingId,
         roundLabel: scope.roundLabel,
         scheduledAt: scope.scheduledAt,
@@ -217,6 +247,7 @@ export const publicRouter = factory
         metadata: {
           human_interview_meeting_id: scope.meetingId,
           interview_record_id: scope.interviewRecordId,
+          interview_trace: readInterviewTrace(c.req.raw.headers),
           participant_role: "candidate",
           participant_type: "candidate",
           round_id: scope.roundId,
@@ -225,6 +256,14 @@ export const publicRouter = factory
         participantName: scope.candidateName,
         participantRole: "candidate",
         roomName: scope.liveKitRoomName,
+      });
+      await recordServerTelemetrySafely({
+        headers: c.req.raw.headers,
+        participantIdentity: `candidate_${scope.roundId}`,
+        participantName: scope.candidateName,
+        participantRole: "candidate",
+        roomName: scope.liveKitRoomName,
+        type: "token_issued",
       });
       return c.json(token, 200);
     } catch (error) {

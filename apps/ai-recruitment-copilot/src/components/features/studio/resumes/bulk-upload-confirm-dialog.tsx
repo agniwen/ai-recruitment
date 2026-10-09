@@ -1,6 +1,6 @@
 "use client";
 
-import { IconFileText as FileTextIcon, IconPaperclip, IconX as XIcon } from "@tabler/icons-react";
+import { IconFileText as FileTextIcon, IconLink, IconX as XIcon } from "@tabler/icons-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EMPTY_IMPORT_OPTIONS } from "../resume-pool/resume-pool-import-selection";
@@ -19,8 +19,11 @@ import {
   MAX_PORTFOLIO_ATTACHMENTS,
   resumeRecruitmentSourceNeedsDetail,
 } from "@arc/shared/bulk-resume-upload";
-import type { ResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
+import type { ResumeRecruitmentSource, PortfolioLink } from "@arc/shared/bulk-resume-upload";
 import { ResumeRecruitmentSourceFields } from "./resume-recruitment-source-fields";
+
+import { PortfolioAddMenu } from "./portfolio-add-menu";
+import { PortfolioLinkDialog } from "./portfolio-link-dialog";
 
 export interface BulkUploadConfirmConfig {
   destinations: { hiringUnitId: string; jobDescriptionId: string }[];
@@ -35,7 +38,11 @@ interface Props {
   open: boolean;
   files: File[];
   onOpenChange: (open: boolean) => void;
-  onConfirmed: (files: File[], config: BulkUploadConfirmConfig, portfolios: File[][]) => void;
+  onConfirmed: (
+    files: File[],
+    config: BulkUploadConfirmConfig,
+    portfolios: (File | PortfolioLink)[][],
+  ) => void;
   onRemoveFile: (index: number) => void;
 }
 
@@ -73,7 +80,11 @@ export function BulkUploadConfirmDialog({
   const selectedDestinationCount = destinations.length;
   const [recruitmentSource, setRecruitmentSource] = useState<ResumeRecruitmentSource | "">("");
   const [recruitmentSourceDetail, setRecruitmentSourceDetail] = useState("");
-  const [portfolios, setPortfolios] = useState<Map<File, File[]>>(() => new Map());
+  const [portfolios, setPortfolios] = useState<Map<File, (File | PortfolioLink)[]>>(
+    () => new Map(),
+  );
+
+  const [editLink, setEditLink] = useState<{ file: File; link: PortfolioLink } | null>(null);
 
   const sourceNeedsDetail = resumeRecruitmentSourceNeedsDetail(recruitmentSource);
   const canStart =
@@ -107,158 +118,214 @@ export function BulkUploadConfirmDialog({
   }
 
   return (
-    <Modal
-      description={`上传 ${files.length} 份简历，每份按选中的具体岗位去向分别创建记录。部门和服务单位由岗位自动带出。`}
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
-            取消
-          </Button>
-          <Button disabled={!canStart} onClick={handleStart} type="button">
-            开始上传（{files.length} 份 / {files.length * selectedDestinationCount} 条记录）
-          </Button>
-        </div>
-      }
-      onOpenChange={onOpenChange}
-      open={open}
-      size="md"
-      title="批量上传简历"
-    >
-      <div className="space-y-6">
-        {/* 文件清单 / File list */}
-        <div>
-          <Label className="mb-2 block text-sm">文件清单</Label>
-          <p className="mb-2 text-xs text-muted-foreground">单个作品集附件最大 500 MB。</p>
-          <Card className="gap-0 overflow-hidden rounded-md py-0">
-            <CardContent className="p-0">
-              <ul className="max-h-48 space-y-1 overflow-y-auto bg-muted/30 p-2 text-sm">
-                {files.map((f, idx) => (
-                  <li
-                    className="rounded px-2 py-1 hover:bg-background"
-                    key={`${f.name}-${f.size}-${f.lastModified}-${f.type}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{f.name}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {formatSize(f.size)}
+    <>
+      <Modal
+        description={`上传 ${files.length} 份简历，每份按选中的具体岗位去向分别创建记录。部门和服务单位由岗位自动带出。`}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+              取消
+            </Button>
+            <Button disabled={!canStart} onClick={handleStart} type="button">
+              开始上传（{files.length} 份 / {files.length * selectedDestinationCount} 条记录）
+            </Button>
+          </div>
+        }
+        onOpenChange={onOpenChange}
+        open={open}
+        size="md"
+        title="批量上传简历"
+      >
+        <div className="space-y-6">
+          {/* 文件清单 / File list */}
+          <div>
+            <Label className="mb-2 block text-sm">文件清单</Label>
+            <p className="mb-2 text-xs text-muted-foreground">
+              每份简历可添加文件和多个链接，合计最多 10 项。单个文件最大 500 MB。
+            </p>
+            <Card className="gap-0 overflow-hidden rounded-md py-0">
+              <CardContent className="p-0">
+                <ul className="max-h-80 space-y-1 overflow-y-auto bg-muted/30 p-2 text-sm">
+                  {files.map((f, idx) => (
+                    <li
+                      className="rounded px-2 py-1 hover:bg-background"
+                      key={`${f.name}-${f.size}-${f.lastModified}-${f.type}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{f.name}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {formatSize(f.size)}
+                          </span>
                         </span>
-                      </span>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <label className="inline-flex cursor-pointer items-center gap-1 text-xs text-primary hover:underline">
-                          <IconPaperclip className="size-3.5" />
-                          作品集
-                          <input
-                            aria-label={`为 ${f.name} 添加作品集`}
-                            accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.mov,.zip"
-                            className="sr-only"
-                            multiple
-                            onChange={(event) => {
-                              const picked = [...(event.target.files ?? [])];
+                        <div className="flex shrink-0 items-center gap-2">
+                          <PortfolioAddMenu
+                            label="作品集"
+                            remaining={MAX_PORTFOLIO_ATTACHMENTS - (portfolios.get(f)?.length ?? 0)}
+                            onFiles={(picked) =>
                               setPortfolios((current) => {
                                 const next = new Map(current);
-                                next.set(
-                                  f,
-                                  [...(next.get(f) ?? []), ...picked].slice(
-                                    0,
-                                    MAX_PORTFOLIO_ATTACHMENTS,
-                                  ),
-                                );
+                                next.set(f, [...(next.get(f) ?? []), ...picked]);
                                 return next;
-                              });
-                              event.target.value = "";
-                            }}
-                            type="file"
+                              })
+                            }
+                            onLinks={(links) =>
+                              setPortfolios((current) => {
+                                const next = new Map(current);
+                                next.set(f, [
+                                  ...(next.get(f) ?? []),
+                                  ...links.map((link) => ({
+                                    ...link,
+                                    id: crypto.randomUUID(),
+                                    kind: "link" as const,
+                                  })),
+                                ]);
+                                return next;
+                              })
+                            }
                           />
-                        </label>
-                        {files.length > 1 ? (
-                          <button
-                            aria-label="移除"
-                            className="text-muted-foreground hover:text-foreground"
-                            onClick={() => onRemoveFile(idx)}
-                            type="button"
-                          >
-                            <XIcon className="size-4" />
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                    {(portfolios.get(f) ?? []).length > 0 ? (
-                      <ul className="ml-6 mt-1 space-y-1 text-xs text-muted-foreground">
-                        {(portfolios.get(f) ?? []).map((attachment, attachmentIndex) => (
-                          <li
-                            className="flex items-center justify-between gap-2"
-                            key={`${attachment.name}-${attachmentIndex}`}
-                          >
-                            <span className="truncate">{attachment.name}</span>
+                          {files.length > 1 ? (
                             <button
-                              aria-label={`移除作品集 ${attachment.name}`}
-                              onClick={() =>
-                                setPortfolios((current) => {
-                                  const next = new Map(current);
-                                  next.set(
-                                    f,
-                                    (next.get(f) ?? []).filter(
-                                      (_, index) => index !== attachmentIndex,
-                                    ),
-                                  );
-                                  return next;
-                                })
-                              }
+                              aria-label="移除"
+                              className="text-muted-foreground hover:text-foreground"
+                              onClick={() => onRemoveFile(idx)}
                               type="button"
                             >
-                              <XIcon className="size-3.5" />
+                              <XIcon className="size-4" />
                             </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      {(portfolios.get(f) ?? []).length > 0 ? (
+                        <ul className="ml-6 mt-1 space-y-1 text-xs text-muted-foreground">
+                          {(portfolios.get(f) ?? []).map((attachment, attachmentIndex) => (
+                            <li
+                              className="flex items-center justify-between gap-2"
+                              key={`${attachment.name}-${attachmentIndex}`}
+                            >
+                              <div className="flex min-w-0 flex-1 items-center gap-2">
+                                {"url" in attachment ? (
+                                  <IconLink className="size-3.5 shrink-0" />
+                                ) : (
+                                  <FileTextIcon className="size-3.5 shrink-0" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  {"url" in attachment ? (
+                                    <>
+                                      <a
+                                        className="block truncate text-primary hover:underline"
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {attachment.name || attachment.url}
+                                      </a>
+                                      <span className="block truncate" title={attachment.url}>
+                                        {attachment.url}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="block truncate">{attachment.name}</span>
+                                  )}
+                                </div>
+                              </div>
+                              {"url" in attachment ? (
+                                <button
+                                  type="button"
+                                  className="shrink-0 text-primary hover:underline"
+                                  onClick={() => setEditLink({ file: f, link: attachment })}
+                                >
+                                  编辑
+                                </button>
+                              ) : null}
+                              <button
+                                aria-label={`移除作品集 ${attachment.name}`}
+                                onClick={() =>
+                                  setPortfolios((current) => {
+                                    const next = new Map(current);
+                                    next.set(
+                                      f,
+                                      (next.get(f) ?? []).filter(
+                                        (_, index) => index !== attachmentIndex,
+                                      ),
+                                    );
+                                    return next;
+                                  })
+                                }
+                                type="button"
+                              >
+                                <XIcon className="size-3.5" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
 
-        <ResumeRecruitmentSourceFields
-          detail={recruitmentSourceDetail}
-          idPrefix="resume-recruitment"
-          onDetailChange={setRecruitmentSourceDetail}
-          onSourceChange={setRecruitmentSource}
-          source={recruitmentSource}
-        />
-
-        <div className="space-y-3">
-          {optionsQuery.isError ? (
-            <div role="alert">
-              岗位和组织加载失败。
-              <Button variant="link" onClick={() => void optionsQuery.refetch()}>
-                重试
-              </Button>
-            </div>
-          ) : null}
-          <BulkUploadDestinations
-            options={options}
-            selection={selection}
-            onChange={setSelection}
-            disabled={optionsQuery.isPending || optionsQuery.isError}
+          <ResumeRecruitmentSourceFields
+            detail={recruitmentSourceDetail}
+            idPrefix="resume-recruitment"
+            onDetailChange={setRecruitmentSourceDetail}
+            onSourceChange={setRecruitmentSource}
+            source={recruitmentSource}
           />
-          {selectedDestinationCount > MAX_BULK_DESTINATIONS ? (
-            <p role="alert" className="text-sm text-destructive">
-              每次最多选择 {MAX_BULK_DESTINATIONS} 个具体岗位去向，请减少选择。
-            </p>
-          ) : null}
-        </div>
 
-        {/* 查重说明 / Deduplication note */}
-        <div>
-          <Label className="mb-2 block text-sm">查重处理</Label>
-          <p className="rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground text-sm">
-            命中疑似重复时仍会入库，并在列表中标记“疑似重复”。
-          </p>
+          <div className="space-y-3">
+            {optionsQuery.isError ? (
+              <div role="alert">
+                岗位和组织加载失败。
+                <Button variant="link" onClick={() => void optionsQuery.refetch()}>
+                  重试
+                </Button>
+              </div>
+            ) : null}
+            <BulkUploadDestinations
+              options={options}
+              selection={selection}
+              onChange={setSelection}
+              disabled={optionsQuery.isPending || optionsQuery.isError}
+            />
+            {selectedDestinationCount > MAX_BULK_DESTINATIONS ? (
+              <p role="alert" className="text-sm text-destructive">
+                每次最多选择 {MAX_BULK_DESTINATIONS} 个具体岗位去向，请减少选择。
+              </p>
+            ) : null}
+          </div>
+
+          {/* 查重说明 / Deduplication note */}
+          <div>
+            <Label className="mb-2 block text-sm">查重处理</Label>
+            <p className="rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground text-sm">
+              命中疑似重复时仍会入库，并在列表中标记“疑似重复”。
+            </p>
+          </div>
         </div>
-      </div>
-    </Modal>
+      </Modal>
+      {editLink ? (
+        <PortfolioLinkDialog
+          initialLink={editLink.link}
+          maxLinks={1}
+          onClose={() => setEditLink(null)}
+          onSubmit={(links) =>
+            setPortfolios((current) => {
+              const next = new Map(current);
+              next.set(
+                editLink.file,
+                (next.get(editLink.file) ?? []).map((item) =>
+                  "url" in item && item.id === editLink.link.id ? { ...item, ...links[0] } : item,
+                ),
+              );
+              return next;
+            })
+          }
+        />
+      ) : null}
+    </>
   );
 }

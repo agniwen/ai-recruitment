@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,8 @@ interface EntityDeleteDialogProps<TRecord> {
    * (e.g. "still has dependents, cannot delete").
    */
   confirmDisabled?: boolean | ((record: TRecord) => boolean);
+  /** 删除请求进行中：展示进度，禁止重复提交和关闭弹窗。 */
+  isPending?: boolean;
 }
 
 /**
@@ -56,6 +59,7 @@ export function EntityDeleteDialog<TRecord>({
   confirmLabel = "删除",
   cancelLabel = "取消",
   confirmDisabled = false,
+  isPending = false,
 }: EntityDeleteDialogProps<TRecord>) {
   let resolvedDescription: ReactNode = null;
   let resolvedDisabled = false;
@@ -72,26 +76,31 @@ export function EntityDeleteDialog<TRecord>({
 
   return (
     <AlertDialog
-      onOpenChange={(open) => {
+      onOpenChange={(open, details) => {
+        if (isPending) {
+          details.cancel();
+          return;
+        }
         if (!open) {
           onClose();
         }
       }}
       open={record !== null}
     >
-      <AlertDialogContent>
+      <AlertDialogContent aria-busy={isPending}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{resolvedDescription}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel disabled={isPending}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
-            disabled={resolvedDisabled}
+            disabled={resolvedDisabled || isPending}
             onClick={() => void onConfirm()}
             variant="destructive"
           >
-            {confirmLabel}
+            {isPending ? <Spinner aria-label="正在删除" data-icon="inline-start" /> : null}
+            {isPending ? "删除中…" : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

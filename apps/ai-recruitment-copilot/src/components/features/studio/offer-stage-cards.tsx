@@ -46,7 +46,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { OfferCurrencySelect, offerCurrencySymbol, formatOfferMoney } from "./offer-currency";
+import {
+  OfferCurrencySelect,
+  offerCurrencySymbol,
+  formatOfferMoney,
+  parseOfferCurrency,
+} from "./offer-currency";
 import { EntityDeleteDialog } from "./entity-delete-dialog";
 import { OfferAttachmentPreview } from "./offer-attachment-preview";
 import {
@@ -105,7 +110,7 @@ export function CandidateExpectationsBlock({
         throw new Error("薪资需为非负整数");
       }
       return updateCandidateExpectations(slug, candidateId, {
-        currency,
+        currency: parseOfferCurrency(currency),
         currentSalary: parsedCurrent,
         earliestJoiningDate: earliestJoiningDate || null,
         expectedSalary: parsedExpected,

@@ -87,6 +87,11 @@ const manageNavSections: NavSection[] = [
     id: "livekit",
     items: [
       {
+        icon: IconHistory,
+        path: "/platform/interview-logs",
+        title: "面试日志",
+      },
+      {
         icon: IconServer,
         path: "/platform/livekit/overview",
         title: "服务概览",

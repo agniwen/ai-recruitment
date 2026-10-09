@@ -473,7 +473,11 @@ export const studioInterviewCollectionRouter = factory
           organizationId: activeOrg.id,
         });
         try {
-          await deleteHumanInterviewLiveKitRoom(roomName);
+          await deleteHumanInterviewLiveKitRoom(roomName, {
+            action: "workspace_end",
+            headers: c.req.raw.headers,
+            userId: c.var.user?.id,
+          });
         } catch (error) {
           if (!(error instanceof HumanInterviewLiveKitConfigError)) {
             console.warn("failed to delete livekit human interview room", error);
@@ -503,7 +507,11 @@ export const studioInterviewCollectionRouter = factory
           organizationId: activeOrg.id,
         });
         try {
-          await deleteHumanInterviewLiveKitRoom(roomName);
+          await deleteHumanInterviewLiveKitRoom(roomName, {
+            action: "workspace_delete",
+            headers: c.req.raw.headers,
+            userId: c.var.user?.id,
+          });
         } catch (error) {
           if (!(error instanceof HumanInterviewLiveKitConfigError)) {
             console.warn("failed to delete livekit human interview room", error);

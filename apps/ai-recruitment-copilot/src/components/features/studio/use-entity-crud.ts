@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface UseEntityCrudOptions<TList, TFull> {
@@ -45,6 +45,8 @@ export function useEntityCrud<TList, TFull>(options: UseEntityCrudOptions<TList,
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<TFull | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<TList | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const deleteInFlight = useRef(false);
 
   const onFormOpenChange = useCallback((next: boolean) => {
     setFormDialogOpen(next);
@@ -80,18 +82,27 @@ export function useEntityCrud<TList, TFull>(options: UseEntityCrudOptions<TList,
   );
 
   const handleDelete = useCallback(async () => {
-    if (!deleteRecord) {
+    if (!deleteRecord || deleteInFlight.current) {
       return;
     }
-    const response = await deleteEntity(deleteRecord);
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    if (!response.ok) {
-      toast.error(payload?.error ?? deleteFallbackError);
-      return;
+    deleteInFlight.current = true;
+    setIsDeleting(true);
+    try {
+      const response = await deleteEntity(deleteRecord);
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        toast.error(payload?.error ?? deleteFallbackError);
+        return;
+      }
+      setDeleteRecord(null);
+      toast.success(deleteSuccess);
+      invalidate();
+    } catch {
+      toast.error(deleteFallbackError);
+    } finally {
+      deleteInFlight.current = false;
+      setIsDeleting(false);
     }
-    setDeleteRecord(null);
-    toast.success(deleteSuccess);
-    invalidate();
   }, [deleteRecord, deleteEntity, deleteSuccess, deleteFallbackError, invalidate]);
 
   return {
@@ -99,6 +110,7 @@ export function useEntityCrud<TList, TFull>(options: UseEntityCrudOptions<TList,
     editingRecord,
     formDialogOpen,
     handleDelete,
+    isDeleting,
     onFormOpenChange,
     openCreate,
     openEdit,

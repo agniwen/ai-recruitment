@@ -1,9 +1,15 @@
 "use client";
 
-import { IconFile, IconFileZip, IconPhoto, IconPlus } from "@tabler/icons-react";
+import { IconFile, IconFileZip, IconPhoto, IconLink, IconExternalLink } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { PortfolioAttachment } from "@arc/shared/bulk-resume-upload";
+import type {
+  PortfolioAttachment,
+  PortfolioItem,
+  PortfolioLink,
+  PortfolioLinkInput,
+} from "@arc/shared/bulk-resume-upload";
+import { formatBytes } from "@arc/shared/utils/format";
 import { MAX_PORTFOLIO_ATTACHMENTS } from "@arc/shared/bulk-resume-upload";
 import { apiFetch } from "@/lib/client/api/client";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -25,16 +31,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import { PortfolioAddMenu } from "./portfolio-add-menu";
+import { PortfolioLinkDialog } from "./portfolio-link-dialog";
+
 interface Props {
-  attachments: PortfolioAttachment[];
+  attachments: PortfolioItem[];
   canDelete?: boolean;
   disabled?: boolean;
   editing: boolean;
   pendingFiles: File[];
   recordId: string;
   slug: string;
-  onAttachmentsChange: (attachments: PortfolioAttachment[]) => void;
+  onAttachmentsChange: (attachments: PortfolioItem[]) => void;
   onDelete?: (id: string) => Promise<void>;
+  onLinks?: (links: PortfolioLinkInput[], linkId?: string) => Promise<void>;
+  onUpload?: (files: File[]) => Promise<void>;
   onPendingFilesChange: (files: File[]) => void;
 }
 
@@ -130,17 +141,25 @@ export function CandidatePortfolioAttachments({
   slug,
   onAttachmentsChange,
   onDelete,
+  onUpload,
+  onLinks,
   onPendingFilesChange,
 }: Props) {
+  const [editLink, setEditLink] = useState<PortfolioLink | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [previewResource, setPreviewResource] = useState<{ source: string; url: string } | null>(
     null,
   );
-  const previewAttachment = attachments.find((attachment) => attachment.id === previewId);
-  const busy = disabled || deleting;
+  const previewAttachment = attachments.find(
+    (attachment): attachment is PortfolioAttachment =>
+      attachment.id === previewId && !("url" in attachment),
+  );
+  const busy = disabled || deleting || uploading;
+  const canUpload = editing || Boolean(onUpload);
   const baseUrl = `/api/w/${encodeURIComponent(slug)}/studio/resumes/${encodeURIComponent(recordId)}/portfolio`;
   const previewUrl = previewAttachment
     ? `${baseUrl}/${encodeURIComponent(previewAttachment.id)}`
@@ -213,50 +232,131 @@ export function CandidatePortfolioAttachments({
     }
   }
 
-  if (!editing && attachments.length === 0) {
-    return null;
+  async function uploadFiles(files: File[]) {
+    if (!onUpload || busy || files.length === 0) {
+      return;
+    }
+    setUploading(true);
+    try {
+      await onUpload(files);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "上传附件失败");
+    } finally {
+      setUploading(false);
+    }
   }
+
   return (
-    <section aria-label="附件" className="mt-3 min-w-0 space-y-1">
-      <div className="flex items-center gap-2">
-        <h4 className="text-xs text-muted-foreground">作品集-附件</h4>
-        {editing && attachments.length + pendingFiles.length < MAX_PORTFOLIO_ATTACHMENTS ? (
-          <label className="inline-flex cursor-pointer items-center gap-1 text-xs text-primary hover:underline">
-            <IconPlus className="size-3.5" />
-            上传附件
-            <input
-              aria-label="上传作品集附件"
-              accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.mov,.zip"
-              className="sr-only"
-              disabled={busy}
-              multiple
-              onChange={(event) => {
-                onPendingFilesChange(
-                  [...pendingFiles, ...(event.target.files ?? [])].slice(
-                    0,
-                    MAX_PORTFOLIO_ATTACHMENTS - attachments.length,
-                  ),
-                );
-                event.target.value = "";
-              }}
-              type="file"
-            />
-          </label>
+    <section aria-label="附件" className="mt-4 min-w-0 space-y-2 border-t border-border/50 pt-4">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-sm font-medium">作品集</h4>
+        {canUpload ? (
+          <PortfolioAddMenu
+            disabled={busy}
+            remaining={MAX_PORTFOLIO_ATTACHMENTS - attachments.length - pendingFiles.length}
+            onFiles={(files) => {
+              if (editing) {
+                onPendingFilesChange([...pendingFiles, ...files]);
+              } else {
+                void uploadFiles(files);
+              }
+            }}
+            onLinks={async (links) => {
+              if (editing) {
+                onAttachmentsChange([
+                  ...attachments,
+                  ...links.map((link) => ({
+                    ...link,
+                    id: crypto.randomUUID(),
+                    kind: "link" as const,
+                  })),
+                ]);
+              } else {
+                await onLinks?.(links);
+              }
+            }}
+          />
         ) : null}
+        {uploading ? <output className="text-xs text-muted-foreground">上传中…</output> : null}
       </div>
-      {editing ? <p className="text-muted-foreground text-xs">单个附件最大 500 MB。</p> : null}
+      {canUpload ? (
+        <p className="text-muted-foreground text-xs">
+          支持文件和多个链接，合计最多 10 项。单个文件最大 500 MB。
+        </p>
+      ) : null}
       {attachments.length === 0 && pendingFiles.length === 0 ? (
-        <p className="text-muted-foreground text-xs">暂无附件</p>
+        <p className="text-muted-foreground text-xs">暂无作品集</p>
       ) : (
-        <ul className="flex min-w-0 flex-col">
+        <ul className="flex min-w-0 flex-col divide-y divide-border/50">
           {attachments.map((attachment) => {
+            if ("url" in attachment) {
+              return (
+                <li className="flex min-w-0 items-center gap-2 py-2" key={attachment.id}>
+                  <IconLink className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <a
+                      className="block truncate text-sm text-primary hover:underline"
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {attachment.name || attachment.url}
+                    </a>
+                    <p className="truncate text-xs text-muted-foreground" title={attachment.url}>
+                      {attachment.url}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 text-xs text-primary">
+                    <a
+                      className="inline-flex items-center gap-1 hover:underline"
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      打开
+                      <IconExternalLink className="size-3" />
+                    </a>
+                    {editing || onLinks ? (
+                      <button
+                        disabled={busy}
+                        type="button"
+                        className="hover:underline disabled:opacity-50"
+                        onClick={() => setEditLink(attachment)}
+                      >
+                        编辑
+                      </button>
+                    ) : null}
+                    {editing || (canDelete && onDelete) ? (
+                      <button
+                        aria-label={`删除附件 ${attachment.name}`}
+                        disabled={busy}
+                        type="button"
+                        className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                        onClick={() =>
+                          setDeleteTarget({
+                            id: attachment.id,
+                            kind: "stored",
+                            name: attachment.name,
+                          })
+                        }
+                      >
+                        移除
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            }
             const url = `${baseUrl}/${encodeURIComponent(attachment.id)}`;
             return (
-              <li className="flex min-w-0 items-center gap-2 py-1" key={attachment.id}>
+              <li className="flex min-w-0 items-center gap-2 py-2" key={attachment.id}>
                 <AttachmentIcon mimeType={attachment.mimeType} name={attachment.name} />
-                <span className="min-w-0 flex-1 truncate text-sm" title={attachment.name}>
-                  {attachment.name}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm" title={attachment.name}>
+                    {attachment.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{formatBytes(attachment.size)}</p>
+                </div>
                 <div className="flex shrink-0 items-center gap-3 whitespace-nowrap text-xs text-primary">
                   <button
                     className="hover:underline"
@@ -286,7 +386,7 @@ export function CandidatePortfolioAttachments({
                       }
                       type="button"
                     >
-                      删除
+                      移除
                     </button>
                   ) : null}
                 </div>
@@ -294,7 +394,7 @@ export function CandidatePortfolioAttachments({
             );
           })}
           {pendingFiles.map((file, index) => (
-            <li className="flex min-w-0 items-center gap-2 py-1" key={`${file.name}-${index}`}>
+            <li className="flex min-w-0 items-center gap-2 py-2" key={`${file.name}-${index}`}>
               <AttachmentIcon mimeType={file.type} name={file.name} />
               <span className="min-w-0 flex-1 truncate text-sm" title={file.name}>
                 {file.name}
@@ -307,12 +407,31 @@ export function CandidatePortfolioAttachments({
                 onClick={() => setDeleteTarget({ index, kind: "pending", name: file.name })}
                 type="button"
               >
-                删除
+                移除
               </button>
             </li>
           ))}
         </ul>
       )}
+      {editLink ? (
+        <PortfolioLinkDialog
+          initialLink={editLink}
+          maxLinks={1}
+          onClose={() => setEditLink(null)}
+          onSubmit={async (links) => {
+            const [link] = links;
+            if (editing) {
+              onAttachmentsChange(
+                attachments.map((item) =>
+                  item.id === editLink.id ? { ...editLink, ...link } : item,
+                ),
+              );
+            } else {
+              await onLinks?.(links, editLink.id);
+            }
+          }}
+        />
+      ) : null}
       <Dialog
         open={Boolean(previewAttachment)}
         onOpenChange={(open) => {
@@ -349,7 +468,7 @@ export function CandidatePortfolioAttachments({
                     type="button"
                     variant="destructive"
                   >
-                    删除
+                    移除
                   </Button>
                 ) : null}
                 <a
@@ -374,7 +493,7 @@ export function CandidatePortfolioAttachments({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除附件？</AlertDialogTitle>
+            <AlertDialogTitle>确认移除作品集？</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget?.name}
               {editing ? " 将在保存候选人信息后移除。" : " 将从该候选人的附件中移除。"}

@@ -18,7 +18,7 @@ import { formatDate as formatChinaDate } from "@arc/shared/utils/time";
 import { DatePicker } from "@/components/date-time-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { OfferCurrencySelect, offerCurrencySymbol } from "./offer-currency";
+import { OfferCurrencySelect, offerCurrencySymbol, parseOfferCurrency } from "./offer-currency";
 import { Textarea } from "@/components/ui/textarea";
 
 // Toast 文案 helper：避免内联三元嵌套（mode + sendImmediately 两维组合）。
@@ -103,7 +103,7 @@ export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
   return {
     baseSalary: parsedBase,
     bonus: parsedBonus,
-    currency: form.currency,
+    currency: parseOfferCurrency(form.currency),
     equity: form.equity.trim() || null,
     expiresAt: form.expiresAt || null,
     joiningDate: form.joiningDate || null,

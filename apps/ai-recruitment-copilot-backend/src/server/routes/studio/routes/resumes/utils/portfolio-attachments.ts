@@ -9,7 +9,7 @@ import {
   MAX_PORTFOLIO_ATTACHMENTS,
   MAX_PORTFOLIO_FILE_SIZE_BYTES,
 } from "@arc/shared/bulk-resume-upload";
-import type { PortfolioAttachment } from "@arc/shared/bulk-resume-upload";
+import type { PortfolioAttachment, PortfolioItem } from "@arc/shared/bulk-resume-upload";
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   doc: "application/msword",
@@ -71,13 +71,17 @@ export async function storePortfolioAttachment(
 }
 
 export async function validatePortfolioAttachments(
-  attachments: PortfolioAttachment[],
+  items: PortfolioItem[],
   organizationId: string,
   userId: string,
 ): Promise<boolean> {
-  if (attachments.length > MAX_PORTFOLIO_ATTACHMENTS) {
+  if (
+    items.length > MAX_PORTFOLIO_ATTACHMENTS ||
+    new Set(items.map((item) => item.id)).size !== items.length
+  ) {
     return false;
   }
+  const attachments = items.filter((item): item is PortfolioAttachment => !("url" in item));
   if (attachments.length === 0) {
     return true;
   }

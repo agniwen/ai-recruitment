@@ -1,3 +1,7 @@
+import type {
+  HumanInterviewMeetingEntryAccess,
+  PublicHumanInterviewMeetingPreview,
+} from "@arc/shared/studio-pipeline-stages";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
@@ -132,12 +136,15 @@ export function verifyInterviewerInviteToken(token: string): InterviewerInvitePa
   return parsed.success && parsed.data.exp >= Date.now() ? parsed.data : null;
 }
 
-export function isHumanInterviewMeetingBeforeScheduledStart(scheduledAt: string | null): boolean {
+export function isHumanInterviewMeetingBeforeScheduledStart(
+  scheduledAt: string | null,
+  nowMs = Date.now(),
+): boolean {
   if (!scheduledAt) {
     return false;
   }
   const start = new Date(scheduledAt);
-  return !Number.isNaN(start.getTime()) && start.getTime() - EARLY_JOIN_WINDOW_MS > Date.now();
+  return !Number.isNaN(start.getTime()) && start.getTime() - EARLY_JOIN_WINDOW_MS > nowMs;
 }
 
 export function isHumanInterviewMeetingAfterValidUntil(
@@ -152,4 +159,28 @@ export function isHumanInterviewMeetingAfterValidUntil(
   return (
     !Number.isNaN(end.getTime()) && !Number.isNaN(now.getTime()) && end.getTime() < now.getTime()
   );
+}
+
+export function getHumanInterviewMeetingEntryAccess(
+  meeting: Pick<PublicHumanInterviewMeetingPreview, "status" | "scheduledAt" | "validUntil">,
+): HumanInterviewMeetingEntryAccess {
+  const nowMs = Date.now();
+  if (meeting.status === "ended" || meeting.status === "cancelled") {
+    return { canJoin: false, reason: "closed", recheckAfterMs: null };
+  }
+  if (isHumanInterviewMeetingAfterValidUntil(meeting.validUntil, nowMs)) {
+    return { canJoin: false, reason: "expired", recheckAfterMs: null };
+  }
+  if (
+    meeting.status === "scheduled" &&
+    meeting.scheduledAt &&
+    isHumanInterviewMeetingBeforeScheduledStart(meeting.scheduledAt, nowMs)
+  ) {
+    return {
+      canJoin: false,
+      reason: "too_early",
+      recheckAfterMs: new Date(meeting.scheduledAt).getTime() - EARLY_JOIN_WINDOW_MS - nowMs,
+    };
+  }
+  return { canJoin: true, reason: null, recheckAfterMs: null };
 }

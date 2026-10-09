@@ -564,7 +564,12 @@ export const studioInterview = pgTable(
     // Stage axis; default lets pre-migration INSERTs succeed.
     pipelineStage: text("pipeline_stage").$type<PipelineStage>().notNull().default("ai_review"),
     portfolioAttachments: jsonb("portfolio_attachments")
-      .$type<{ id: string; name: string; mimeType: string; size: number }[]>()
+      .$type<
+        (
+          | { id: string; name: string; mimeType: string; size: number }
+          | { id: string; kind: "link"; name: string; url: string }
+        )[]
+      >()
       .notNull()
       .default([]),
     recommendationText: text("recommendation_text"),
@@ -1137,6 +1142,9 @@ export const jobDescription = pgTable(
       .notNull()
       .references(() => department.id, { onDelete: "restrict" }),
     description: text("description"),
+    // Snapshot from the last form/import save. Null means this legacy row was not checked.
+    duplicateAtSave: boolean("duplicate_at_save"),
+    duplicateCheckedAt: timestamp("duplicate_checked_at", { withTimezone: true }),
     expectedOnboardDate: text("expected_onboard_date"),
     feishuChatBoundAt: timestamp("feishu_chat_bound_at", { withTimezone: true }),
     feishuChatBoundBy: text("feishu_chat_bound_by").references(() => user.id, {
@@ -1208,6 +1216,11 @@ export const jobDescription = pgTable(
     }).onDelete("no action"),
     index("job_description_resume_source_idx").on(table.organizationId, table.resumeSourceId),
     index("job_description_department_idx").on(table.departmentId),
+    index("job_description_duplicate_lookup_idx").on(
+      table.organizationId,
+      table.departmentId,
+      sql`btrim(${table.name})`,
+    ),
     index("job_description_hiring_unit_idx").on(table.organizationId, table.hiringUnitId),
     index("job_description_name_idx").on(table.name),
     index("job_description_created_at_idx").on(table.createdAt),
@@ -1467,6 +1480,70 @@ export const studioHumanInterviewRound = pgTable(
   ],
 );
 
+// Durable per-recipient claims and delivery results for the ten-minute reminder.
+export const studioHumanInterviewReminderDelivery = pgTable(
+  "studio_human_interview_reminder_delivery",
+  {
+    attemptId: text("attempt_id"),
+    attempts: integer("attempts").default(0).notNull(),
+    chatId: text("chat_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    errorCode: text("error_code"),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }).notNull(),
+    recipientKey: text("recipient_key").notNull(),
+    roles: jsonb("roles").$type<string[]>().notNull(),
+    roundId: text("round_id")
+      .notNull()
+      .references(() => studioHumanInterviewRound.id, { onDelete: "cascade" }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    status: text("status").$type<"sending" | "sent" | "failed" | "unbound" | "skipped">().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.roundId, table.scheduledAt, table.recipientKey] })],
+);
+
+// Transactional meeting reminder outbox. Retained after meeting deletion.
+export const studioHumanInterviewReminderSchedule = pgTable(
+  "studio_human_interview_reminder_schedule",
+  {
+    active: boolean("active").notNull(),
+    errorCode: text("error_code"),
+    meetingId: text("meeting_id").primaryKey(),
+    nextSyncAt: timestamp("next_sync_at", { withTimezone: true }),
+    organizationId: text("organization_id").notNull(),
+    queuedRevision: integer("queued_revision"),
+    revision: integer("revision").notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("human_reminder_schedule_sync_idx")
+      .on(table.nextSyncAt)
+      .where(sql`${table.nextSyncAt} is not null`),
+  ],
+);
+
+export const studioHumanInterviewMeetingReminderDelivery = pgTable(
+  "studio_human_interview_meeting_reminder_delivery",
+  {
+    attemptId: text("attempt_id"),
+    attempts: integer("attempts").default(0).notNull(),
+    chatId: text("chat_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    errorCode: text("error_code"),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }).notNull(),
+    meetingId: text("meeting_id").notNull(),
+    recipientKey: text("recipient_key").notNull(),
+    revision: integer("revision").notNull(),
+    roles: jsonb("roles").$type<string[]>().notNull(),
+    roundIds: jsonb("round_ids").$type<string[]>().notNull(),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    status: text("status").$type<"sending" | "sent" | "failed" | "unbound" | "skipped">().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.meetingId, table.revision, table.recipientKey] })],
+);
+
 // 真人复面会议：一场会议对应一个 LiveKit room，可包含多个候选人的 round 和多个面试官。
 // 评价结果仍然写在 studioHumanInterviewRound；这里仅保存会议级生命周期/录制信息。
 //
@@ -1506,6 +1583,59 @@ export const studioHumanInterviewMeeting = pgTable(
     ),
     index("studio_human_interview_meeting_status_idx").on(table.organizationId, table.status),
     uniqueIndex("studio_human_interview_meeting_livekit_room_idx").on(table.liveKitRoomName),
+  ],
+);
+
+// 真人面试诊断事件：保留会议快照，以便删会后排查。
+// Append-only diagnostics survive meeting deletion; retention is based on receivedAt.
+export const interviewTelemetryEvent = pgTable(
+  "interview_telemetry_event",
+  {
+    attemptId: text("attempt_id"),
+    clientSequence: integer("client_sequence"),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+    eventKey: text("event_key").notNull(),
+    id: text("id").primaryKey(),
+    ip: text("ip"),
+    ipSource: text("ip_source"),
+    meetingId: text("meeting_id").notNull(),
+    meetingTitle: text("meeting_title").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    organizationId: text("organization_id").notNull(),
+    participantIdentity: text("participant_identity").notNull().default(""),
+    participantName: text("participant_name"),
+    participantRole: text("participant_role"),
+    participantSid: text("participant_sid"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+    roomName: text("room_name"),
+    roomSid: text("room_sid"),
+    source: text("source").notNull(),
+    tabId: text("tab_id"),
+    type: text("type").notNull(),
+    userAgent: text("user_agent"),
+    visitId: text("visit_id"),
+  },
+  (table) => [
+    uniqueIndex("interview_telemetry_event_dedupe_idx").on(
+      table.meetingId,
+      table.participantIdentity,
+      table.source,
+      table.eventKey,
+    ),
+    index("interview_telemetry_event_meeting_time_idx").on(
+      table.meetingId,
+      table.receivedAt,
+      table.id,
+    ),
+    index("interview_telemetry_event_received_idx").on(table.receivedAt),
+    index("interview_telemetry_event_visit_idx").on(
+      table.meetingId,
+      table.visitId,
+      table.participantIdentity,
+    ),
+    index("interview_telemetry_event_room_idx").on(table.roomName),
+    index("interview_telemetry_event_attempt_idx").on(table.attemptId),
+    index("interview_telemetry_event_participant_idx").on(table.participantSid),
   ],
 );
 
@@ -2860,3 +2990,5 @@ export const globalConfig = pgTable("global_config", {
     .notNull(),
   updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
 });
+
+export { interviewMediaRoom, interviewMediaAsset, interviewMediaAccess } from "./interview-media";

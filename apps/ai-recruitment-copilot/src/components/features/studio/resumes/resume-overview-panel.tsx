@@ -10,7 +10,7 @@
 
 import { ResumeReviewV5Panel } from "./resume-review-v5-panel";
 import { CandidatePortfolioAttachments } from "./candidate-portfolio-attachments";
-import type { PortfolioAttachment } from "@arc/shared/bulk-resume-upload";
+import type { PortfolioItem } from "@arc/shared/bulk-resume-upload";
 import type { ResumeReviewStatus } from "@arc/db-schema/studio-interviews";
 import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
 import { canEditResumeRecord, describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
@@ -60,6 +60,8 @@ import {
 } from "@/components/ui/select";
 import { fetchSelectableHiringUnits, updateStudioResumeIdentity } from "@/lib/client/api";
 import {
+  addStudioResumePortfolioLinks,
+  updateStudioResumePortfolioLink,
   deleteStudioResumePortfolio,
   uploadStudioResumePortfolio,
 } from "@/lib/client/api/endpoints/studio-resumes";
@@ -653,7 +655,7 @@ function ResumeOverviewCandidateInfoSection({
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<OverviewIdentityDraft>(() => toOverviewIdentityDraft(detail));
-  const [portfolioAttachments, setPortfolioAttachments] = useState<PortfolioAttachment[]>(
+  const [portfolioAttachments, setPortfolioAttachments] = useState<PortfolioItem[]>(
     () => detail.portfolioAttachments ?? [],
   );
   const [pendingPortfolioFiles, setPendingPortfolioFiles] = useState<File[]>([]);
@@ -829,6 +831,7 @@ function ResumeOverviewCandidateInfoSection({
         <Button
           aria-label="编辑候选人信息"
           className="size-7"
+          disabled={saving}
           onClick={() => setEditing(true)}
           size="icon-sm"
           type="button"
@@ -1163,6 +1166,47 @@ function ResumeOverviewCandidateInfoSection({
             await queryClient.invalidateQueries({ queryKey: ["studio-resumes", slug] });
             onUpdated?.();
           }}
+          onLinks={
+            canEdit
+              ? async (links, linkId) => {
+                  setSaving(true);
+                  try {
+                    const result = linkId
+                      ? await updateStudioResumePortfolioLink(slug, detail.id, linkId, links[0])
+                      : await addStudioResumePortfolioLinks(slug, detail.id, links);
+                    setPortfolioAttachments(result.attachments);
+                    toast.success(linkId ? "作品链接已更新" : "作品链接已添加");
+                    await queryClient.invalidateQueries({ queryKey: ["studio-resumes", slug] });
+                    onUpdated?.();
+                  } finally {
+                    setSaving(false);
+                  }
+                }
+              : undefined
+          }
+          onUpload={
+            canEdit
+              ? async (files) => {
+                  setSaving(true);
+                  try {
+                    for (const file of files) {
+                      const attachment = await uploadStudioResumePortfolio(
+                        slug,
+                        detail.id,
+                        file,
+                        true,
+                      );
+                      setPortfolioAttachments((current) => [...current, attachment]);
+                    }
+                    toast.success("附件已上传");
+                  } finally {
+                    setSaving(false);
+                    await queryClient.invalidateQueries({ queryKey: ["studio-resumes", slug] });
+                    onUpdated?.();
+                  }
+                }
+              : undefined
+          }
           onPendingFilesChange={setPendingPortfolioFiles}
           pendingFiles={pendingPortfolioFiles}
           recordId={detail.id}

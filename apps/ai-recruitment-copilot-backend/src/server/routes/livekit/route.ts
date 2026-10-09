@@ -1,4 +1,9 @@
 import { EgressStatus } from "@livekit/protocol";
+import { saveLiveKitTelemetry } from "./telemetry";
+import {
+  MEDIA_RECORDER_IDENTITY,
+  signalMediaRoom,
+} from "../platform/routes/interview-logs/routes/media/capture";
 import { eq } from "drizzle-orm";
 import { WebhookReceiver } from "livekit-server-sdk";
 import type { InterviewRecordingStatus } from "@arc/db-schema/db-enums";
@@ -58,6 +63,10 @@ async function handleHumanInterviewWebhook(
     return false;
   }
 
+  if (event.participant?.identity === MEDIA_RECORDER_IDENTITY) {
+    return true;
+  }
+
   if (event.event === "room_started") {
     await markHumanInterviewMeetingInProgressByRoomName(roomName);
   }
@@ -98,6 +107,22 @@ export const livekitRouter = factory.createApp().post("/webhook", async (c) => {
     return c.json({ error: "Invalid signature" }, 401);
   }
 
+  try {
+    await saveLiveKitTelemetry(event);
+    if (
+      event.room?.name.startsWith("human_") &&
+      event.room.sid &&
+      event.participant?.identity !== MEDIA_RECORDER_IDENTITY &&
+      ["room_started", "participant_joined", "track_published", "room_finished"].includes(
+        event.event,
+      )
+    ) {
+      await signalMediaRoom(event.room.name, event.room.sid, event.event === "room_finished");
+    }
+  } catch {
+    console.warn("interview webhook telemetry persistence failed", { eventId: event.id });
+    return c.json({ error: "Telemetry storage unavailable" }, 503);
+  }
   const humanInterviewHandled = await handleHumanInterviewWebhook(event);
   if (humanInterviewHandled) {
     return c.json({ handled: "human-interview", ok: true });

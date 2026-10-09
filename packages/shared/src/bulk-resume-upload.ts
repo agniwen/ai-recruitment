@@ -78,6 +78,27 @@ export const portfolioAttachmentSchema = z.object({
 export type PortfolioAttachment = z.infer<typeof portfolioAttachmentSchema>;
 export const MAX_PORTFOLIO_ATTACHMENTS = 10;
 
+export const portfolioLinkInputSchema = z.object({
+  name: z.string().trim().max(500, "名称不能超过 500 个字符").default(""),
+  url: z
+    .string()
+    .trim()
+    .max(2000, "链接不能超过 2000 个字符")
+    .url("请输入有效网址")
+    .refine((value) => /^https?:\/\//i.test(value), "仅支持 http 或 https 链接"),
+});
+export const portfolioLinkSchema = portfolioLinkInputSchema.extend({
+  id: z.string().uuid(),
+  kind: z.literal("link"),
+});
+export const portfolioItemSchema = z.union([portfolioLinkSchema, portfolioAttachmentSchema]);
+export const portfolioLinksInputSchema = z.object({
+  links: z.array(portfolioLinkInputSchema).min(1).max(MAX_PORTFOLIO_ATTACHMENTS),
+});
+export type PortfolioLinkInput = z.infer<typeof portfolioLinkInputSchema>;
+export type PortfolioLink = z.infer<typeof portfolioLinkSchema>;
+export type PortfolioItem = z.infer<typeof portfolioItemSchema>;
+
 // POST / 创建 batch 请求。
 // Create-batch request payload.
 export const createBulkResumeBatchSchema = z
@@ -95,7 +116,7 @@ export const createBulkResumeBatchSchema = z
           fileSize: z.number().int().positive().max(MAX_RESUME_FILE_SIZE_BYTES),
           originalFileName: z.string().min(1).max(500),
           portfolioAttachments: z
-            .array(portfolioAttachmentSchema)
+            .array(portfolioItemSchema)
             .max(MAX_PORTFOLIO_ATTACHMENTS)
             .optional(),
           storageKey: z.string().min(1),

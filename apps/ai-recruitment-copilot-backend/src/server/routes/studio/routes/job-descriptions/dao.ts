@@ -1197,7 +1197,10 @@ export function loadJobDescriptionMetrics(
 }
 
 export function serializeJobDescription(
-  row: Omit<typeof jobDescription.$inferSelect, "createdByRole"> & {
+  row: Omit<
+    typeof jobDescription.$inferSelect,
+    "createdByRole" | "duplicateAtSave" | "duplicateCheckedAt"
+  > & {
     departmentName?: string | null;
     resumeSourceName?: string | null;
     departmentHiringUnitId?: string | null;

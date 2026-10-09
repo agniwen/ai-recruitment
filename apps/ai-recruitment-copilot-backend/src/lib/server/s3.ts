@@ -338,3 +338,44 @@ export async function getObjectBytes(storageKey: string): Promise<{
     throw error;
   }
 }
+
+// Human interview samples use the private recording bucket; no object expiry is set.
+export async function putRecordingSample(key: string, bytes: Uint8Array, contentType: string) {
+  const [{ PutObjectCommand }, { client, config }] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    getRecordingClient(),
+  ]);
+  await client.send(
+    new PutObjectCommand({
+      Body: bytes,
+      Bucket: config.bucket,
+      ContentType: contentType,
+      Key: key,
+    }),
+    { abortSignal: AbortSignal.timeout(20_000) },
+  );
+}
+
+export async function getRecordingSample(key: string) {
+  const [{ GetObjectCommand }, { client, config }] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    getRecordingClient(),
+  ]);
+  const result = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }), {
+    abortSignal: AbortSignal.timeout(20_000),
+  });
+  if (!result.Body) {
+    throw new Error("Recording sample missing");
+  }
+  return result.Body.transformToByteArray();
+}
+
+export async function deleteRecordingSample(key: string) {
+  const [{ DeleteObjectCommand }, { client, config }] = await Promise.all([
+    import("@aws-sdk/client-s3"),
+    getRecordingClient(),
+  ]);
+  await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }), {
+    abortSignal: AbortSignal.timeout(20_000),
+  });
+}

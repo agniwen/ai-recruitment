@@ -1,4 +1,5 @@
 import { AccessToken, RoomConfiguration, RoomServiceClient } from "livekit-server-sdk";
+import { recordServerTelemetrySafely } from "../../../../public/routes/interview-telemetry/dao";
 import type {
   HumanInterviewMeetingParticipantRole,
   HumanInterviewMeetingTokenResponse,
@@ -79,11 +80,26 @@ export async function signHumanInterviewMeetingToken({
   };
 }
 
-export async function deleteHumanInterviewLiveKitRoom(roomName: string | null): Promise<void> {
+export async function deleteHumanInterviewLiveKitRoom(
+  roomName: string | null,
+  actor?: { userId?: string; action: string; headers: Headers },
+): Promise<void> {
   if (!roomName) {
     return;
   }
-  const { apiKey, apiSecret, serverUrl } = getLiveKitServerConfig();
-  const client = new RoomServiceClient(toHttpLiveKitUrl(serverUrl), apiKey, apiSecret);
-  await client.deleteRoom(roomName);
+  const context = {
+    details: { action: actor?.action, actorId: actor?.userId },
+    headers: actor?.headers,
+    roomName,
+  };
+  await recordServerTelemetrySafely({ ...context, type: "room_delete_requested" });
+  try {
+    const { apiKey, apiSecret, serverUrl } = getLiveKitServerConfig();
+    const client = new RoomServiceClient(toHttpLiveKitUrl(serverUrl), apiKey, apiSecret);
+    await client.deleteRoom(roomName);
+    await recordServerTelemetrySafely({ ...context, type: "room_deleted" });
+  } catch (error) {
+    await recordServerTelemetrySafely({ ...context, type: "room_delete_failed" });
+    throw error;
+  }
 }

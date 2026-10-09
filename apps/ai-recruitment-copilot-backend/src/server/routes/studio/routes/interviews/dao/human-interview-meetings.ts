@@ -501,7 +501,10 @@ export async function issueHumanInterviewMeetingLinks({
   };
 }
 
-export interface HumanInterviewMeetingInviteScope extends PublicHumanInterviewMeetingPreview {
+export interface HumanInterviewMeetingInviteScope extends Omit<
+  PublicHumanInterviewMeetingPreview,
+  "entryAccess"
+> {
   candidateInviteExpiresAt: string;
   interviewRecordId: string;
   liveKitRoomName: string | null;
@@ -509,7 +512,10 @@ export interface HumanInterviewMeetingInviteScope extends PublicHumanInterviewMe
   roundId: string;
 }
 
-export interface HumanInterviewMeetingInterviewerInviteScope extends PublicHumanInterviewInterviewerPreview {
+export interface HumanInterviewMeetingInterviewerInviteScope extends Omit<
+  PublicHumanInterviewInterviewerPreview,
+  "entryAccess"
+> {
   liveKitRoomName: string | null;
   organizationId: string;
   userId: string;

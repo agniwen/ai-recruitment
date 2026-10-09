@@ -96,3 +96,27 @@ describe("portfolio attachments", () => {
     ).toBe(false);
   });
 });
+
+it("validates files in a mixed collection without requiring stored-file records for links", async () => {
+  mocks.rows = [
+    {
+      filename: attachment.name,
+      id: attachment.id,
+      mediaType: attachment.mimeType,
+      size: attachment.size,
+    },
+  ];
+  const links = [
+    { id: crypto.randomUUID(), kind: "link" as const, name: "作品", url: "https://example.com" },
+    {
+      id: crypto.randomUUID(),
+      kind: "link" as const,
+      name: "项目",
+      url: "https://github.com/example",
+    },
+  ];
+  expect(await validatePortfolioAttachments([attachment, ...links], "org", "user")).toBe(true);
+  expect(await validatePortfolioAttachments([links[0], links[0]], "org", "user")).toBe(false);
+  mocks.rows = [];
+  expect(await validatePortfolioAttachments([attachment, ...links], "org", "user")).toBe(false);
+});

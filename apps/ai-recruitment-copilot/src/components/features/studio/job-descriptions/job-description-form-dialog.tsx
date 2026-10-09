@@ -60,6 +60,7 @@ import {
 import { useWorkspaceInterviewerMembers } from "../use-workspace-interviewer-members";
 import { createJobDescriptionFormValues } from "./job-description-form-values";
 import { JobDescriptionSourceSelect } from "./job-description-source-select";
+import { useJobDescriptionSave } from "./use-job-description-save";
 
 const NAME_MAX_LENGTH = 120;
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -214,6 +215,7 @@ export function JobDescriptionFormDialog({
   onSaved: () => void;
 }) {
   const slug = useWorkspaceSlug();
+  const { duplicateDialog, save } = useJobDescriptionSave({ open, recordId: record?.id, slug });
   const isEdit = record !== null;
   const codeLocked = Boolean(record?.code);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
@@ -284,20 +286,7 @@ export function JobDescriptionFormDialog({
         workTimezone: value.workTimezone?.trim() || null,
       };
 
-      const response = isEdit
-        ? await rpc.api.w[":slug"].studio["job-descriptions"][":id"].$patch({
-            json: body,
-            param: { id: record.id, slug },
-          })
-        : await rpc.api.w[":slug"].studio["job-descriptions"].$post({
-            json: body,
-            param: { slug },
-          });
-      const payload = (await response.json().catch(() => null)) as
-        | ({ error?: string } & Partial<JobDescriptionRecord>)
-        | null;
-      if (!response.ok) {
-        toast.error(payload?.error ?? (isEdit ? "更新失败" : "创建失败"));
+      if (!(await save(body))) {
         return;
       }
       toast.success(isEdit ? "在招岗位已更新" : "在招岗位已创建");
@@ -1468,6 +1457,7 @@ export function JobDescriptionFormDialog({
             ) : null}
           </AnimatedHeight>
         </form>
+        {duplicateDialog}
       </Modal>
     </Tabs>
   );

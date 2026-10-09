@@ -44,7 +44,7 @@ function getDeviceLabel(device: MediaDeviceInfo, index: number): string {
   return `麦克风 ${index + 1}`;
 }
 
-export function MicrophoneDeviceMenu() {
+export function MicrophoneDeviceMenu({ onError }: { onError?: (error: Error) => void }) {
   const { activeDeviceId, devices, setActiveMediaDevice } = useMediaDeviceSelect({
     kind: "audioinput",
     requestPermissions: false,
@@ -59,6 +59,7 @@ export function MicrophoneDeviceMenu() {
       await setActiveMediaDevice(deviceId);
       toast.success("已切换麦克风");
     } catch (error) {
+      onError?.(error instanceof Error ? error : new Error("切换麦克风失败"));
       toast.error(error instanceof Error ? error.message : "切换麦克风失败");
     }
   }

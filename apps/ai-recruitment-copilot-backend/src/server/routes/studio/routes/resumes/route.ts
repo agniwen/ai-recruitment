@@ -562,9 +562,13 @@ export const resumeLibraryRouter = factory
         const attachments = input.portfolioAttachments;
         const unchangedAreValid = attachments.every((attachment) => {
           const previous = current.get(attachment.id);
+          if ("url" in attachment) {
+            return !previous || "url" in previous;
+          }
           return (
             !previous ||
-            (previous.name === attachment.name &&
+            (!("url" in previous) &&
+              previous.name === attachment.name &&
               previous.mimeType === attachment.mimeType &&
               previous.size === attachment.size)
           );

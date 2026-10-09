@@ -10,13 +10,25 @@ import { ResumeOverviewPanel } from "./resume-overview-panel";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const apiMocks = vi.hoisted(() => ({
+  addStudioResumePortfolioLinks: vi.fn(),
   fetchSelectableHiringUnits: vi.fn(),
   updateStudioResumeIdentity: vi.fn(),
+  updateStudioResumePortfolioLink: vi.fn(),
+  uploadStudioResumePortfolio: vi.fn(),
 }));
+
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 
 vi.mock("@/lib/client/api", () => ({
   fetchSelectableHiringUnits: apiMocks.fetchSelectableHiringUnits,
   updateStudioResumeIdentity: apiMocks.updateStudioResumeIdentity,
+}));
+
+vi.mock("@/lib/client/api/endpoints/studio-resumes", () => ({
+  addStudioResumePortfolioLinks: apiMocks.addStudioResumePortfolioLinks,
+  deleteStudioResumePortfolio: vi.fn(),
+  updateStudioResumePortfolioLink: apiMocks.updateStudioResumePortfolioLink,
+  uploadStudioResumePortfolio: apiMocks.uploadStudioResumePortfolio,
 }));
 
 vi.mock("@/components/features/resume/resume-profile-view", () => ({
@@ -121,7 +133,11 @@ function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: str
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function renderOverview(detail: ResumeLibraryDetail, jobBindingRequestKey?: number) {
+function renderOverview(
+  detail: ResumeLibraryDetail,
+  jobBindingRequestKey?: number,
+  canEdit = true,
+) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -133,7 +149,7 @@ function renderOverview(detail: ResumeLibraryDetail, jobBindingRequestKey?: numb
     root.render(
       <QueryClientProvider client={queryClient}>
         <ResumeOverviewPanel
-          canEdit
+          canEdit={canEdit}
           detail={detail}
           jobBindingRequestKey={jobBindingRequestKey}
           slug="workspace"
@@ -377,6 +393,147 @@ it("enters quick edit and requests the linked-job select to open", async () => {
 
   expect(container.querySelector('[aria-label="保存"]')).not.toBeNull();
 
+  act(() => root.unmount());
+  queryClient.clear();
+});
+
+it("uploads from an empty overview without editing or saving candidate identity", async () => {
+  const attachment = { id: "portfolio-1", mimeType: "application/pdf", name: "作品.pdf", size: 4 };
+  apiMocks.uploadStudioResumePortfolio.mockResolvedValue(attachment);
+  const { container, queryClient, root } = renderOverview(makeDetail());
+  expect(container.textContent).toContain("暂无作品集");
+  const input = container.querySelector<HTMLInputElement>('[aria-label="上传作品集附件"]');
+  expect(input).not.toBeNull();
+  const file = new File(["work"], "作品.pdf", { type: "application/pdf" });
+  await act(async () => {
+    Object.defineProperty(input, "files", { value: [file] });
+    input?.dispatchEvent(new Event("change", { bubbles: true }));
+    await Promise.resolve();
+  });
+  expect(apiMocks.uploadStudioResumePortfolio).toHaveBeenCalledWith(
+    "workspace",
+    "resume-1",
+    file,
+    true,
+  );
+  expect(apiMocks.updateStudioResumeIdentity).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("作品.pdf");
+  expect(container.textContent).toContain("查看");
+  expect(container.querySelector('[aria-label="保存"]')).toBeNull();
+  act(() => root.unmount());
+  queryClient.clear();
+});
+
+it("keeps successful files visible when a later upload fails and allows retry", async () => {
+  const attachment = { id: "portfolio-1", mimeType: "application/pdf", name: "成功.pdf", size: 4 };
+  apiMocks.uploadStudioResumePortfolio
+    .mockResolvedValueOnce(attachment)
+    .mockRejectedValueOnce(new Error("上传失败"));
+  const { container, queryClient, root } = renderOverview(makeDetail());
+  const input = container.querySelector<HTMLInputElement>('[aria-label="上传作品集附件"]');
+  await act(async () => {
+    Object.defineProperty(input, "files", {
+      value: [new File(["work"], "成功.pdf"), new File(["work"], "失败.pdf")],
+    });
+    input?.dispatchEvent(new Event("change", { bubbles: true }));
+    await Promise.resolve();
+  });
+  expect(container.textContent).toContain("成功.pdf");
+  expect(container.textContent).not.toContain("失败.pdf");
+  expect(input?.disabled).toBe(false);
+  expect(
+    container.querySelector<HTMLButtonElement>('[aria-label="编辑候选人信息"]')?.disabled,
+  ).toBe(false);
+  act(() => root.unmount());
+  queryClient.clear();
+});
+
+it("does not expose uploads without candidate update permission", () => {
+  const { container, queryClient, root } = renderOverview(makeDetail(), undefined, false);
+  expect(container.querySelector('[aria-label="上传作品集附件"]')).toBeNull();
+  act(() => root.unmount());
+  queryClient.clear();
+});
+
+function click(text: string) {
+  const element = [...document.querySelectorAll<HTMLElement>("button,[role=menuitem]")].find(
+    (item) => item.textContent === text,
+  );
+  if (!element) {
+    throw new Error(`Missing: ${text}`);
+  }
+  element.click();
+}
+function enter(label: string, value: string) {
+  const element = document.querySelector<HTMLInputElement>(`[aria-label="${label}"]`);
+  if (!element) {
+    throw new Error(`Missing: ${label}`);
+  }
+  setInputValue(element, value);
+}
+
+it("adds several links from the overview and edits one without saving candidate identity", async () => {
+  const existing = {
+    id: crypto.randomUUID(),
+    kind: "link" as const,
+    name: "旧作品",
+    url: "https://example.com/old",
+  };
+  const added = [
+    {
+      id: crypto.randomUUID(),
+      kind: "link" as const,
+      name: "https://example.com/new",
+      url: "https://example.com/new",
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: "link" as const,
+      name: "https://github.com/example",
+      url: "https://github.com/example",
+    },
+  ];
+  apiMocks.addStudioResumePortfolioLinks.mockResolvedValue({ attachments: [existing, ...added] });
+  apiMocks.updateStudioResumePortfolioLink.mockResolvedValue({
+    attachments: [{ ...existing, name: "新名称" }, ...added],
+  });
+  const { container, queryClient, root } = renderOverview({
+    ...makeDetail(),
+    portfolioAttachments: [existing],
+  });
+
+  act(() => click("添加作品集"));
+  act(() => click("添加链接"));
+  act(() => {
+    enter("链接地址 1", added[0].url);
+    click("再添加一个链接");
+  });
+  act(() => enter("链接地址 2", added[1].url));
+  await act(async () => {
+    click("添加 2 个链接");
+    await Promise.resolve();
+  });
+  expect(apiMocks.addStudioResumePortfolioLinks).toHaveBeenCalledWith(
+    "workspace",
+    "resume-1",
+    added.map(({ name, url }) => ({ name, url })),
+  );
+  expect(container.textContent).toContain("旧作品");
+  expect(container.textContent).toContain(added[1].url);
+  act(() => click("编辑"));
+  act(() => enter("显示名称 1", "新名称"));
+  await act(async () => {
+    click("保存");
+    await Promise.resolve();
+  });
+  expect(apiMocks.updateStudioResumePortfolioLink).toHaveBeenCalledWith(
+    "workspace",
+    "resume-1",
+    existing.id,
+    { name: "新名称", url: existing.url },
+  );
+  expect(container.textContent).toContain("新名称");
+  expect(apiMocks.updateStudioResumeIdentity).not.toHaveBeenCalled();
   act(() => root.unmount());
   queryClient.clear();
 });

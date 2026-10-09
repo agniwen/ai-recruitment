@@ -103,3 +103,28 @@ describe("new Offer attachment", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:ssc-preview");
   });
 });
+
+describe("Offer custom currency", () => {
+  it("shows a required description for Other and removes it when switching to GBP", async () => {
+    renderDialog();
+    const trigger = document.body.querySelector<HTMLButtonElement>('[id$="-currency"]');
+    expect(trigger).not.toBeNull();
+    await act(() => trigger?.click());
+    const other = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (option) => option.textContent?.includes("其他"),
+    );
+    expect(other).toBeDefined();
+    await act(() => other?.click());
+    const input = document.body.querySelector<HTMLInputElement>('[id$="-currency-description"]');
+    expect(input?.required).toBe(true);
+    expect(input?.maxLength).toBe(100);
+    expect(input?.value).toBe("");
+    await act(() => trigger?.click());
+    const gbp = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
+      option.textContent?.includes("GBP"),
+    );
+    await act(() => gbp?.click());
+    expect(document.body.querySelector('[id$="-currency-description"]')).toBeNull();
+    expect(trigger?.textContent).toContain("GBP");
+  });
+});

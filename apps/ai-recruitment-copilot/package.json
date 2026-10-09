@@ -43,6 +43,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@extend-ai/react-docx": "^0.7.1",
     "@extend-ai/react-xlsx": "^0.10.2",
+    "@fingerprintjs/fingerprintjs": "^5.3.0",
     "@gsap/react": "^2.1.2",
     "@hookform/resolvers": "^5.2.2",
     "@lexical/react": "^0.47.0",

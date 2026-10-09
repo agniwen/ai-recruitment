@@ -778,6 +778,7 @@ export function JobDescriptionManagementPage({
         }}
         onClose={() => crud.setDeleteRecord(null)}
         onConfirm={crud.handleDelete}
+        isPending={crud.isDeleting}
         record={canDeleteJobDescription ? crud.deleteRecord : null}
         title="确认删除这个在招岗位？"
       />

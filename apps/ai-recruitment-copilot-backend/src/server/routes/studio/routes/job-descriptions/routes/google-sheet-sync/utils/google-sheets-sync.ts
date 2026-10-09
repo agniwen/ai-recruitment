@@ -1,3 +1,4 @@
+import { getJobDescriptionDuplicateSnapshot } from "../../../utils/job-description-duplicate";
 import { loadGoogleSheetHierarchy } from "./google-sheets-hierarchy";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -635,9 +636,19 @@ export async function syncGoogleSheetJobDescriptions({
             continue;
           }
           const updateValues = definedJobValues(mappedValues);
+          const duplicate = await getJobDescriptionDuplicateSnapshot(
+            tx,
+            {
+              ...existing,
+              ...updateValues,
+              departmentId: departmentIdForWrite ?? existing.departmentId,
+            },
+            organizationId,
+            existing.id,
+          );
           await tx
             .update(jobDescription)
-            .set({ ...updateValues, googleSheetDeleted: false, updatedAt: now })
+            .set({ ...updateValues, ...duplicate, googleSheetDeleted: false, updatedAt: now })
             .where(
               and(
                 eq(jobDescription.id, existing.id),
@@ -674,11 +685,19 @@ export async function syncGoogleSheetJobDescriptions({
           // Create path must always have a department (NOT NULL column).
           throw new Error(`Google 同步缺少部门：${record.code}`);
         }
-
         const id = crypto.randomUUID();
         const insertValues = definedJobValues(mappedValues);
+        const duplicate = await getJobDescriptionDuplicateSnapshot(
+          tx,
+          {
+            ...insertValues,
+            departmentId: departmentIdForWrite,
+          },
+          organizationId,
+        );
         await tx.insert(jobDescription).values({
           ...insertValues,
+          ...duplicate,
           aiInterviewDisabled: true,
           allowCrossDepartmentInterviewers: false,
           code: record.code,

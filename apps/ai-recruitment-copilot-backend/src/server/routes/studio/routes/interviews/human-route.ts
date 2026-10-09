@@ -239,7 +239,11 @@ export const studioInterviewHumanRouter = factory
         await Promise.all(
           roomNames.map(async (roomName) => {
             try {
-              await deleteHumanInterviewLiveKitRoom(roomName);
+              await deleteHumanInterviewLiveKitRoom(roomName, {
+                action: "round_complete",
+                headers: c.req.raw.headers,
+                userId: c.var.user?.id,
+              });
             } catch (error) {
               if (!(error instanceof HumanInterviewLiveKitConfigError)) {
                 console.warn("failed to delete livekit human interview room", error);
@@ -289,7 +293,11 @@ export const studioInterviewHumanRouter = factory
         });
         for (const roomName of deletedLiveKitRoomNames) {
           try {
-            await deleteHumanInterviewLiveKitRoom(roomName);
+            await deleteHumanInterviewLiveKitRoom(roomName, {
+              action: "round_cancel",
+              headers: c.req.raw.headers,
+              userId: c.var.user?.id,
+            });
           } catch (error) {
             if (!(error instanceof HumanInterviewLiveKitConfigError)) {
               console.warn("failed to delete livekit human interview room", error);

@@ -5,6 +5,7 @@ import { act, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
+  PortfolioLink,
   BulkResumeBatchDetailDto,
   BulkResumeBatchDto,
   BulkResumeBatchItemDto,
@@ -61,11 +62,13 @@ const item: BulkResumeBatchItemDto = {
 function renderHookHarness({
   mode = "resume",
   portfolioFile,
+  portfolioLinks = [],
   onBatchQueued,
   onRecordsChanged,
 }: {
   mode?: "resume" | "start";
   portfolioFile?: File;
+  portfolioLinks?: PortfolioLink[];
   onBatchQueued?: (detail: BulkResumeBatchDetailDto) => void;
   onRecordsChanged: () => void;
 }) {
@@ -90,7 +93,7 @@ function renderHookHarness({
         void bulk.start(
           [new File(["resume"], "resume.pdf", { type: "application/pdf" })],
           { dedupPolicy: "create", jdMode: "auto", jobDescriptionId: null },
-          portfolioFile ? [[portfolioFile]] : [],
+          [[...(portfolioFile ? [portfolioFile] : []), ...portfolioLinks]],
         );
       }
     }, [bulk]);
@@ -194,13 +197,23 @@ describe("useBulkUpload", () => {
     });
     apiMocks.uploadPortfolioForBulk.mockResolvedValue(attachment);
     apiMocks.createBulkResumeBatch.mockResolvedValue(detail);
-    const { root } = renderHookHarness({ mode: "start", onRecordsChanged: vi.fn(), portfolioFile });
+    const portfolioLinks: PortfolioLink[] = [
+      { id: crypto.randomUUID(), kind: "link", name: "作品", url: "https://example.com" },
+      { id: crypto.randomUUID(), kind: "link", name: "项目", url: "https://github.com/example" },
+    ];
+    const { root } = renderHookHarness({
+      mode: "start",
+      onRecordsChanged: vi.fn(),
+      portfolioFile,
+      portfolioLinks,
+    });
     await flushPromises();
+    expect(apiMocks.uploadPortfolioForBulk).toHaveBeenCalledTimes(1);
     expect(apiMocks.uploadPortfolioForBulk).toHaveBeenCalledWith("acme", portfolioFile);
     expect(apiMocks.createBulkResumeBatch).toHaveBeenCalledWith(
       "acme",
       expect.objectContaining({
-        files: [expect.objectContaining({ portfolioAttachments: [attachment] })],
+        files: [expect.objectContaining({ portfolioAttachments: [attachment, ...portfolioLinks] })],
       }),
     );
     act(() => root.unmount());

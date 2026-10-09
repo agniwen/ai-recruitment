@@ -131,7 +131,15 @@ export interface HumanInterviewMeetingTokenResponse {
   serverUrl: string;
 }
 
+export interface HumanInterviewMeetingEntryAccess {
+  canJoin: boolean;
+  reason: "too_early" | "closed" | "expired" | null;
+  /** Delay computed from the server clock; never compare against the device clock. */
+  recheckAfterMs: number | null;
+}
+
 export interface PublicHumanInterviewMeetingPreview {
+  entryAccess: HumanInterviewMeetingEntryAccess;
   candidateName: string;
   meetingId: string;
   roundLabel: string;
@@ -142,6 +150,7 @@ export interface PublicHumanInterviewMeetingPreview {
 }
 
 export interface PublicHumanInterviewInterviewerPreview {
+  entryAccess: HumanInterviewMeetingEntryAccess;
   interviewerName: string;
   meetingId: string;
   role: HumanInterviewMeetingInterviewerRole;

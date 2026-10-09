@@ -204,7 +204,11 @@ export const jobDescriptionBaseSchema = z
   });
 
 export const jobDescriptionFormSchema = jobDescriptionBaseSchema;
-export const jobDescriptionUpdateSchema = jobDescriptionBaseSchema;
+export const jobDescriptionSaveSchema = jobDescriptionBaseSchema.safeExtend({
+  forceSaveDuplicate: z.boolean().optional(),
+});
+export const jobDescriptionUpdateSchema = jobDescriptionSaveSchema;
+export const JOB_DESCRIPTION_DUPLICATE_CODE = "JOB_DESCRIPTION_DUPLICATE";
 
 export type JobDescriptionFormValues = z.infer<typeof jobDescriptionFormSchema>;
 export type JobDescriptionUpdateValues = z.infer<typeof jobDescriptionUpdateSchema>;

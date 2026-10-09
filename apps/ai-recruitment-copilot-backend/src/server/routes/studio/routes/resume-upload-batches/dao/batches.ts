@@ -21,7 +21,7 @@ import type {
   BulkResumeBatchDetailDto,
   BulkResumeBatchDto,
   BulkResumeBatchItemDto,
-  PortfolioAttachment,
+  PortfolioItem,
   ResumeRecruitmentSource,
 } from "@arc/shared/bulk-resume-upload";
 import type { ResumeParseJobData } from "@arc/resume-parse-queue/resume-parse";
@@ -95,7 +95,7 @@ export interface CreateBatchInput {
     fileSize: number;
     contentHash: string | null;
     sourceFolder?: string | null;
-    portfolioAttachments?: PortfolioAttachment[];
+    portfolioAttachments?: PortfolioItem[];
   }[];
 }
 

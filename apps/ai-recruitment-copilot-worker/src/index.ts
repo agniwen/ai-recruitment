@@ -23,6 +23,8 @@ import {
   createJobDescriptionGoogleSheetSyncWorker,
 } from "@arc/resume-parse-queue/job-description-google-sheet-sync";
 import { createWorkerApp } from "./app";
+import { startInterviewTelemetryRetention } from "./interview-telemetry-retention";
+import { startHumanInterviewReminders } from "./human-interview-reminders";
 import { resolveLegacyParseConfig, resolveWorkerServerConfig } from "./config";
 import { getWorkerConnectionSummary, loadWorkerEnv } from "./env";
 import { getResumeParseConfigSummary } from "./parse-config";
@@ -153,6 +155,13 @@ async function recoverIncompleteGoogleSheetSyncJobs(): Promise<void> {
 }
 
 async function main() {
+  let stopInterviewMedia: (() => Promise<void>) | undefined;
+  if (process.env.HUMAN_INTERVIEW_MEDIA_ENABLED === "true") {
+    const { startInterviewMedia } = await import("./interview-media");
+    stopInterviewMedia = await startInterviewMedia();
+  }
+  const stopTelemetryRetention = startInterviewTelemetryRetention();
+  const stopHumanInterviewReminders = await startHumanInterviewReminders();
   const legacyParseConfig = resolveLegacyParseConfig();
   const { hostname, port } = resolveWorkerServerConfig();
   const app = createWorkerApp();
@@ -304,6 +313,9 @@ async function main() {
       try {
         console.info(`[worker] shutting down after ${signal}`);
         mailIngestScheduler?.close();
+        stopTelemetryRetention();
+        await stopInterviewMedia?.();
+        await stopHumanInterviewReminders();
         if (historicalMaintenanceTimer) {
           clearInterval(historicalMaintenanceTimer);
         }
@@ -317,6 +329,9 @@ async function main() {
         await closeResumeSemanticIndexQueue();
         await closeResumeReviewGenerationQueue();
         await closeJobDescriptionGoogleSheetSyncQueue();
+        const { shutdownTelegramBot } =
+          await import("@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot");
+        await shutdownTelegramBot();
         if (process.env.DATABASE_URL) {
           const { closeDatabase } =
             await import("@arc/ai-recruitment-copilot-backend/lib/server/db");

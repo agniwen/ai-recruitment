@@ -25,8 +25,8 @@ import type {
   ScheduleEntryStatus,
 } from "@arc/db-schema/studio-interviews";
 import type { ResumeScreeningResult } from "./resume-screening";
-import { MAX_PORTFOLIO_ATTACHMENTS, portfolioAttachmentSchema } from "./bulk-resume-upload";
-import type { PortfolioAttachment } from "./bulk-resume-upload";
+import { MAX_PORTFOLIO_ATTACHMENTS, portfolioItemSchema } from "./bulk-resume-upload";
+import type { PortfolioItem } from "./bulk-resume-upload";
 
 export const AUTOMATIC_ARCHIVE_REASON_HIRED_ELSEWHERE = "已入职其他岗位";
 
@@ -230,7 +230,7 @@ export interface ResumeAvailableTimeSlot {
  * (may be empty for legacy rows).
  */
 export interface ResumeLibraryDetail extends ResumeLibraryListRecord {
-  portfolioAttachments?: PortfolioAttachment[];
+  portfolioAttachments?: PortfolioItem[];
   canApproveAiReview?: boolean;
   /**
    * 最近一次评估通过时填写的可预约时间段；仅详情返回。
@@ -737,10 +737,7 @@ export const resumeIdentityUpdateSchema = z.object({
   gender: z.string().trim().max(40),
   hiringUnitId: resumeLibraryOptionalHiringUnitIdSchema,
   jobDescriptionId: resumeLibraryOptionalJobDescriptionIdSchema,
-  portfolioAttachments: z
-    .array(portfolioAttachmentSchema)
-    .max(MAX_PORTFOLIO_ATTACHMENTS)
-    .optional(),
+  portfolioAttachments: z.array(portfolioItemSchema).max(MAX_PORTFOLIO_ATTACHMENTS).optional(),
   preOnboardingTelegram: z
     .string()
     .trim()

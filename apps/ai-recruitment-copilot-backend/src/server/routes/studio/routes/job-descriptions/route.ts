@@ -17,9 +17,11 @@ import {
   member,
   studioInterview,
 } from "@arc/db-schema/schema";
+import type { jobDescriptionFormSchema } from "@arc/shared/job-descriptions";
 import {
   JOB_DESCRIPTION_TALENT_RECOMMENDATION_MAX_LIMIT,
-  jobDescriptionFormSchema,
+  jobDescriptionSaveSchema,
+  JOB_DESCRIPTION_DUPLICATE_CODE,
   jobDescriptionUpdateSchema,
 } from "@arc/shared/job-descriptions";
 import { computeResumeScreeningPolicyHash } from "@arc/shared/resume-screening";
@@ -55,6 +57,12 @@ import {
   recordJobDescriptionAudit,
   resolveJobDescriptionStaffing,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/utils/job-description-audit";
+
+import {
+  DuplicateJobDescriptionError,
+  getJobDescriptionDuplicateSnapshot,
+  lockJobDescriptionDuplicateCheck,
+} from "./utils/job-description-duplicate";
 
 const generateJobDescriptionBodySchema = z.object({
   departmentName: z.string().trim().max(120).optional(),
@@ -181,6 +189,8 @@ function buildManualJobDescriptionRecord(args: {
     creationSource: "manual",
     departmentId: input.departmentId,
     description: input.description?.trim() || null,
+    duplicateAtSave: null,
+    duplicateCheckedAt: null,
     expectedOnboardDate: nullableText(input.expectedOnboardDate),
     feishuChatBoundAt: null,
     feishuChatBoundBy: null,
@@ -420,7 +430,8 @@ export const jobDescriptionsRouter = factory
   .post(
     "/",
     requirePermission("jd", "create"),
-    zValidator("json", jobDescriptionFormSchema, jsonValidatorError("表单校验失败。")),
+    zValidator("json", jobDescriptionSaveSchema, jsonValidatorError("表单校验失败。")),
+    // oxlint-disable-next-line complexity -- creation handles references, generated-code retries, and duplicate confirmation.
     async (c) => {
       const { activeOrg } = c.var;
       if (!activeOrg) {
@@ -488,6 +499,12 @@ export const jobDescriptionsRouter = factory
 
         try {
           await db.transaction(async (tx) => {
+            await lockJobDescriptionDuplicateCheck(tx, activeOrg.id);
+            const duplicate = await getJobDescriptionDuplicateSnapshot(tx, record, activeOrg.id);
+            if (duplicate.duplicateAtSave && !input.forceSaveDuplicate) {
+              throw new DuplicateJobDescriptionError();
+            }
+            Object.assign(record, duplicate);
             await tx.insert(jobDescription).values(record);
             if (interviewerIds.length > 0) {
               await tx.insert(jobDescriptionInterviewer).values(
@@ -525,6 +542,12 @@ export const jobDescriptionsRouter = factory
             201,
           );
         } catch (insertError) {
+          if (insertError instanceof DuplicateJobDescriptionError) {
+            return c.json(
+              { code: JOB_DESCRIPTION_DUPLICATE_CODE, error: insertError.message },
+              409,
+            );
+          }
           if (!isJobCodeConflict(insertError)) {
             throw insertError;
           }
@@ -697,6 +720,7 @@ export const jobDescriptionsRouter = factory
       };
       try {
         await db.transaction(async (tx) => {
+          await lockJobDescriptionDuplicateCheck(tx, activeOrg.id);
           const [lockedJob] = await tx
             .select()
             .from(jobDescription)
@@ -713,8 +737,18 @@ export const jobDescriptionsRouter = factory
           if (lockedStaffing.headcountBelowOnboarded) {
             throw new HeadcountBelowOnboardedError();
           }
+          const duplicate = await getJobDescriptionDuplicateSnapshot(
+            tx,
+            baseUpdateValues,
+            activeOrg.id,
+            id,
+          );
+          if (duplicate.duplicateAtSave && !input.forceSaveDuplicate) {
+            throw new DuplicateJobDescriptionError();
+          }
           const updateValues = {
             ...baseUpdateValues,
+            ...duplicate,
             gapCount: lockedStaffing.gapCount,
             onboardedCount: lockedJob.onboardedCount,
           };
@@ -752,7 +786,9 @@ export const jobDescriptionsRouter = factory
               })),
             );
           }
-          const auditedFields = Object.keys(updateValues).filter((field) => field !== "updatedAt");
+          const auditedFields = Object.keys(updateValues).filter(
+            (field) => !["updatedAt", "duplicateAtSave", "duplicateCheckedAt"].includes(field),
+          );
           const changes = {
             ...buildJobDescriptionAuditChanges(lockedJob, updatedJob, auditedFields),
             ...buildJobDescriptionAuditChanges(
@@ -778,6 +814,9 @@ export const jobDescriptionsRouter = factory
           });
         });
       } catch (updateError) {
+        if (updateError instanceof DuplicateJobDescriptionError) {
+          return c.json({ code: JOB_DESCRIPTION_DUPLICATE_CODE, error: updateError.message }, 409);
+        }
         if (updateError instanceof HeadcountBelowOnboardedError) {
           return c.json({ error: "HC 不能小于已到岗人数，请先核对招聘编制。" }, 409);
         }

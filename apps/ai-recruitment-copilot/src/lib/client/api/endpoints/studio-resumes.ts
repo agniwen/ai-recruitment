@@ -9,7 +9,11 @@
  */
 
 import type { InterviewQuestion, ResumeProfile } from "@arc/db-schema/interview/types";
-import type { PortfolioAttachment } from "@arc/shared/bulk-resume-upload";
+import type {
+  PortfolioAttachment,
+  PortfolioItem,
+  PortfolioLinkInput,
+} from "@arc/shared/bulk-resume-upload";
 import type {
   StudioInterviewRoundDetail,
   StudioInterviewRoundListRecord,
@@ -225,9 +229,13 @@ export function uploadStudioResumePortfolio(
   slug: string,
   id: string,
   file: File,
+  attachToCandidate = false,
 ): Promise<PortfolioAttachment> {
   const formData = new FormData();
   formData.append("file", file);
+  if (attachToCandidate) {
+    formData.append("attachToCandidate", "true");
+  }
   return apiFetch<PortfolioAttachment>(`/api/w/${slug}/studio/resumes/${id}/portfolio/uploads`, {
     body: formData,
     method: "POST",
@@ -235,7 +243,7 @@ export function uploadStudioResumePortfolio(
 }
 
 export function deleteStudioResumePortfolio(slug: string, id: string, attachmentId: string) {
-  return rpcFetch<{ attachments: PortfolioAttachment[] }>(
+  return rpcFetch<{ attachments: PortfolioItem[] }>(
     rpc.api.w[":slug"].studio.resumes[":id"].portfolio[":attachmentId"].$delete({
       param: { attachmentId, id, slug },
     }),
@@ -444,4 +452,32 @@ export async function bulkDeleteStudioResumes(
     "批量删除失败",
   );
   return { deleted: data.deletedCount };
+}
+
+export function addStudioResumePortfolioLinks(
+  slug: string,
+  id: string,
+  links: PortfolioLinkInput[],
+) {
+  return rpcFetch<{ attachments: PortfolioItem[] }>(
+    rpc.api.w[":slug"].studio.resumes[":id"].portfolio.links.$post({
+      json: { links },
+      param: { id, slug },
+    }),
+    "添加作品链接失败",
+  );
+}
+export function updateStudioResumePortfolioLink(
+  slug: string,
+  id: string,
+  linkId: string,
+  input: PortfolioLinkInput,
+) {
+  return rpcFetch<{ attachments: PortfolioItem[] }>(
+    rpc.api.w[":slug"].studio.resumes[":id"].portfolio.links[":linkId"].$patch({
+      json: input,
+      param: { id, linkId, slug },
+    }),
+    "修改作品链接失败",
+  );
 }

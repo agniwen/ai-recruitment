@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("formatTimeDisplayText", () => {
-  it.each(["UTC", "Asia/Tokyo", "Asia/Shanghai", "America/Los_Angeles"])(
+  it.each(["Asia/Ho_Chi_Minh", "UTC", "Asia/Tokyo", "Asia/Shanghai", "America/Los_Angeles"])(
     "always uses China time in %s",
     (zone) => {
       process.env.TZ = zone;
