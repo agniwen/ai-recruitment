@@ -358,13 +358,6 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
               （北京时间）
             </p>
           </div>
-          <p className="rounded-lg bg-muted/50 p-3 text-left text-xs leading-5 text-muted-foreground">
-            为便于面试安全核查，本会议会记录设备标识与
-            IP，并定时保存短音频片段；开启摄像头时会定时截取画面。留底资料长期保留，仅平台管理员可查看和清理。
-          </p>
-          <p className="text-sm text-muted-foreground">
-            需要发言时，请允许浏览器使用麦克风；若之前已禁止，请先在地址栏的网站权限中开启。
-          </p>
           {tooEarly && !accessQuery.isError ? (
             <p className="text-sm text-muted-foreground">
               面试时间为 <TimeDisplay value={preview.scheduledAt} options="YYYY/MM/DD HH:mm" />
