@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { auditDescription, auditMetadata, auditTitle, auditTone } from "./timeline-audit";
 
+describe("candidate entry credential audit timeline", () => {
+  it("distinguishes candidate opt-in changes from historical workspace exemptions", () => {
+    const action = "candidate_entry_credential_policy_updated";
+    expect(auditDescription({ reason: "试用", toEnabled: true }, action)).toBe(
+      "已开启入场凭据验证；原因：试用",
+    );
+    expect(auditDescription({ reason: "不兼容", toEnabled: false }, action)).toBe(
+      "已关闭入场凭据验证；原因：不兼容",
+    );
+    expect(auditDescription({ reason: "旧记录", toExempt: true }, action)).toBe(
+      "已单独关闭入场凭据验证；原因：旧记录",
+    );
+    expect(auditDescription({ reason: "旧记录", toExempt: false }, action)).toBe(
+      "已恢复跟随工作空间配置；原因：旧记录",
+    );
+  });
+});
+
 describe("resume evaluation audit timeline", () => {
   it("shows the approval explanation in candidate activity", () => {
     expect(

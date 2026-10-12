@@ -51,10 +51,16 @@ import { humanInterviewChatRouter } from "./routes/human-interview-chat/route";
 import { interviewTelemetryRouter } from "./routes/interview-telemetry/route";
 import { readInterviewTrace } from "./routes/interview-telemetry/utils";
 import { recordServerTelemetrySafely } from "./routes/interview-telemetry/dao";
+import { entryCredentialsRouter } from "./routes/entry-credentials/route";
+import {
+  checkCandidateEntryProof,
+  getCandidateEntryPolicy,
+} from "./routes/entry-credentials/policy";
 
 export const publicRouter = factory
   .createApp()
   .route("/interview-telemetry", interviewTelemetryRouter)
+  .route("/human-interview-meetings/:inviteToken/entry-credentials", entryCredentialsRouter)
   .route("/human-interview-meetings", humanInterviewChatRouter)
   .route("/interview-rounds/:id/reports", publicInterviewRoundReportsRouter)
   .get("/minimax-voice-previews/:id", async (c) => {
@@ -206,8 +212,10 @@ export const publicRouter = factory
       return c.json({ error: "真人复面链接不可用。" }, 404);
     }
     c.header("Cache-Control", "no-store");
+    const entryPolicy = await getCandidateEntryPolicy(scope);
     return c.json(
       {
+        candidateCredentialRequired: entryPolicy.required,
         candidateName: scope.candidateName,
         entryAccess: getHumanInterviewMeetingEntryAccess(scope),
         meetingId: scope.meetingId,
@@ -241,6 +249,20 @@ export const publicRouter = factory
       return c.json({ error: "会议房间尚未初始化。" }, 409);
     }
 
+    const credentialAccess = await checkCandidateEntryProof(
+      scope,
+      c.req.param("inviteToken"),
+      c.req.raw.headers,
+    );
+    if (!credentialAccess.allowed) {
+      return c.json(
+        {
+          code: "ENTRY_CREDENTIAL_REQUIRED",
+          error: "请先完成入场凭据验证；无法验证时请联系 HR 协助处理。",
+        },
+        403,
+      );
+    }
     try {
       const token = await signHumanInterviewMeetingToken({
         canPublish: true,
@@ -258,6 +280,7 @@ export const publicRouter = factory
         roomName: scope.liveKitRoomName,
       });
       await recordServerTelemetrySafely({
+        details: { credentialRef: credentialAccess.credentialRef },
         headers: c.req.raw.headers,
         participantIdentity: `candidate_${scope.roundId}`,
         participantName: scope.candidateName,

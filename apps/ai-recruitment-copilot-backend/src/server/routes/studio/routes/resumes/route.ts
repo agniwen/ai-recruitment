@@ -1,3 +1,4 @@
+import { candidateEntryCredentialRouter } from "./routes/entry-credentials/route";
 /* oxlint-disable max-lines -- resume route keeps its collection and item mutations in one route-owned module. */
 import { notifyAiReviewPending } from "./utils/ai-review-notification";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -221,6 +222,7 @@ export function parseResumeReviewFormInput(
 export const resumeLibraryRouter = factory
   .createApp()
   .route("/:id/portfolio", portfolioRouter)
+  .route("/:id/entry-credentials", candidateEntryCredentialRouter)
   .route("/", resumeLibraryReadRouter)
   .post(
     "/:id/retry-parse",

@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { createHash } from "node:crypto";
+import type { InterviewTrace } from "@arc/shared/interview-telemetry";
 import { interviewTraceSchema } from "@arc/shared/interview-telemetry";
 
 export function requestEvidence(headers: Headers) {
@@ -13,7 +14,7 @@ export function requestEvidence(headers: Headers) {
   };
 }
 
-export function readInterviewTrace(headers: Headers) {
+export function readInterviewTrace(headers: Headers): Partial<InterviewTrace> {
   const result = interviewTraceSchema.safeParse({
     attemptId: headers.get("x-interview-attempt-id") ?? undefined,
     browserId: headers.get("x-interview-browser-id") ?? undefined,

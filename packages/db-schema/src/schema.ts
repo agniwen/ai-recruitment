@@ -515,6 +515,12 @@ export const studioInterview = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdByRole: text("created_by_role"),
+    entryCredentialEnabled: boolean("entry_credential_enabled").notNull().default(false),
+    entryCredentialReason: text("entry_credential_reason"),
+    entryCredentialUpdatedAt: timestamp("entry_credential_updated_at", {
+      withTimezone: true,
+    }),
+    entryCredentialUpdatedBy: text("entry_credential_updated_by"),
     // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
     hiringUnitId: text("hiring_unit_id").references(() => hiringUnit.id, { onDelete: "set null" }),
     hrResumeAssessment: text("hr_resume_assessment"),
@@ -3000,3 +3006,8 @@ export const globalConfig = pgTable("global_config", {
 });
 
 export { interviewMediaRoom, interviewMediaAsset, interviewMediaAccess } from "./interview-media";
+export {
+  candidateEntryCredential,
+  candidateEntryChallenge,
+  candidateEntryCredentialUse,
+} from "./entry-credentials";

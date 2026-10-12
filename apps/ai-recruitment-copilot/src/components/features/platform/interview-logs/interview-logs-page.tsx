@@ -10,6 +10,7 @@ import { fetchLoggedMeetings, fetchMeetingTimeline } from "./api";
 import type { TimelineEvent, MeetingTimeline as TimelineData } from "./api";
 import { ParticipantEnvironments } from "./participant-environments";
 import { MeetingMediaPanel } from "./meeting-media";
+import { MeetingEntryCredentials } from "./meeting-entry-credentials";
 import { MediaArchivesPanel } from "./media-archives";
 import { MeetingFingerprints } from "./meeting-fingerprints";
 
@@ -271,6 +272,7 @@ function MeetingTimeline({ meetingId }: { meetingId: string }) {
         }}
       />
       <MeetingMediaPanel meetingId={meetingId} />
+      <MeetingEntryCredentials meetingId={meetingId} />
       <div className="space-y-3 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-semibold">事件时间线</h3>

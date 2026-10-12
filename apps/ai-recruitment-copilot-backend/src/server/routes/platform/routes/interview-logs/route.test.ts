@@ -17,7 +17,7 @@ describe("platform interview log access", () => {
           await next();
         })
         .route("/logs", createInterviewLogsRouter({ detail, list }));
-      for (const path of ["/logs", "/logs/meeting"]) {
+      for (const path of ["/logs", "/logs/meeting", "/logs/meeting/entry-credentials"]) {
         const response = await app.request(path);
         expect(response.status).toBe(role ? 403 : 401);
       }

@@ -41,7 +41,6 @@ import type {
   PublicHumanInterviewInterviewerPreview,
   PublicHumanInterviewMeetingPreview,
 } from "@arc/shared/studio-pipeline-stages";
-import { ApiError } from "@/lib/client/api";
 import { cn } from "@arc/shared/utils";
 import { useQuery } from "@tanstack/react-query";
 import { TimeDisplay } from "@/components/features/display/time-display";
@@ -60,6 +59,7 @@ import { Button } from "@/components/ui/button";
 import { MicrophoneDeviceMenu, VoiceEffectMenu } from "./human-meeting-audio-controls";
 
 import {
+  tokenErrorCode,
   fetchMeetingPreview,
   fetchCandidateToken,
   fetchInterviewerToken,
@@ -67,6 +67,7 @@ import {
 } from "./human-meeting-api";
 import { getMeetingPollInterval } from "./human-meeting-polling";
 import { MeetingJoinButton } from "./human-meeting-join-button";
+import { useCandidateEntryGate } from "./use-candidate-entry-gate";
 import { HumanMeetingChat } from "./human-meeting-chat";
 import { useMeetingTelemetry } from "./use-meeting-telemetry";
 import { MeetingTelemetryObserver } from "./meeting-telemetry-observer";
@@ -98,6 +99,17 @@ function getRoomSubtitle(props: HumanMeetingRoomProps): string {
     return `${props.preview.candidateName} · ${props.preview.roundLabel}`;
   }
   return `${props.preview.interviewerName} · ${interviewerRoleLabel[props.preview.role]}`;
+}
+
+function candidateRequiresCredential(
+  mode: HumanMeetingRoomProps["mode"],
+  preview: HumanMeetingRoomProps["preview"],
+) {
+  return (
+    mode === "candidate" &&
+    "candidateCredentialRequired" in preview &&
+    preview.candidateCredentialRequired === true
+  );
 }
 
 interface ParticipantMetadata {
@@ -160,7 +172,7 @@ async function loadMeetingToken(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "进入会议失败",
-      errorCode: error instanceof ApiError ? error.status : "transport_error",
+      errorCode: tokenErrorCode(error),
       token: null,
     };
   }
@@ -287,19 +299,46 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
     return () => window.removeEventListener("focus", checkOnFocus);
   }, [refetch, token]);
 
-  async function joinMeeting(microphonePreflightError: Error | null) {
+  const credentialGate = useCandidateEntryGate({
+    headers: telemetry.headers,
+    inviteToken: props.inviteToken,
+    join: joinMeeting,
+    onFailure: (errorName) => {
+      telemetry.emit("entry_credential_client_failed", { errorName });
+      telemetry.flush();
+    },
+    recheck: async () => {
+      const result = await accessQuery.refetch();
+      return (
+        !result.isError &&
+        result.data?.entryAccess.canJoin === true &&
+        !("candidateCredentialRequired" in result.data && result.data.candidateCredentialRequired)
+      );
+    },
+    required: candidateRequiresCredential(props.mode, preview),
+  });
+
+  async function joinMeeting(microphonePreflightError: Error | null, proof?: string) {
     if (entryBlocked) {
       return;
     }
     dispatch({ type: "joinStarted" });
     telemetry.startAttempt();
-    const result = await loadMeetingToken(props, telemetry.headers());
+    const headers: Record<string, string> = telemetry.headers();
+    if (props.mode === "candidate" && proof) {
+      headers["x-interview-entry-proof"] = proof;
+    }
+    const result = await loadMeetingToken(props, headers);
     if (result.token) {
       dispatch({ microphonePreflightError, token: result.token, type: "joinSucceeded" });
       return;
     }
     void accessQuery.refetch();
     dispatch({ message: result.error, type: "joinFailed" });
+    if (props.mode === "candidate" && result.errorCode === "ENTRY_CREDENTIAL_REQUIRED") {
+      credentialGate.requireCredential(microphonePreflightError);
+      return;
+    }
     telemetry.emit("join_failed", { errorCode: result.errorCode });
     toast.error(result.error);
   }
@@ -372,7 +411,7 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
             isJoining={isJoining}
             label={joinButtonText}
             preview={preview}
-            onJoin={joinMeeting}
+            onJoin={credentialGate.beginJoin}
             onCheckError={(error) => {
               telemetry.emit("media_device_error", {
                 deviceKind: "audioinput",
@@ -382,6 +421,7 @@ export function HumanMeetingRoom(props: HumanMeetingRoomProps) {
               telemetry.flush();
             }}
           />
+          {props.mode === "candidate" ? credentialGate.dialog : null}
           {entryBlocked ? (
             <div>
               <Button

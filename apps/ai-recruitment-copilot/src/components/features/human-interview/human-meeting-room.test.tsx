@@ -17,6 +17,12 @@ const live = vi.hoisted(() => ({
   tracks: [] as { source: string; participant: { identity: string; name: string } }[],
 }));
 const TrackContext = createContext(live.tracks[0]);
+const credentials = vi.hoisted(() => ({ verify: vi.fn() }));
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+vi.mock("./entry-credential-api", () => ({
+  credentialErrorMessage: () => "验证失败",
+  verifyCandidateCredential: credentials.verify,
+}));
 vi.mock("./meeting-telemetry-observer", () => ({ MeetingTelemetryObserver: () => null }));
 vi.mock("./use-meeting-telemetry", () => ({
   useMeetingTelemetry: () => ({
@@ -73,6 +79,9 @@ const preview: PublicHumanInterviewMeetingPreview = {
   validUntil: "2026-09-30T09:00:00.000Z",
 };
 beforeEach(() => {
+  credentials.verify
+    .mockReset()
+    .mockResolvedValue({ credentialRef: "K-test", proof: "verified-session" });
   live.connectionState = "disconnected";
   live.room.localParticipant.setMicrophoneEnabled.mockReset();
   Object.defineProperty(navigator, "mediaDevices", {
@@ -237,6 +246,42 @@ async function flushQueryUpdates() {
 }
 
 describe("server-controlled meeting entry", () => {
+  it("opens the gate when the server enables it after preview and passes the verified proof on retry", async () => {
+    const fetchMock = vi.fn().mockImplementation((_url, init) => {
+      if (init?.method === "GET") {
+        return Promise.resolve(Response.json(preview));
+      }
+      if (new Headers(init?.headers).get("x-interview-entry-proof") === "verified-session") {
+        return Promise.resolve(
+          Response.json({
+            participantName: "张三",
+            participantRole: "candidate",
+            participantToken: "token",
+            serverUrl: "wss://example.test",
+          }),
+        );
+      }
+      return Promise.resolve(
+        Response.json(
+          { code: "ENTRY_CREDENTIAL_REQUIRED", error: "请验证入场凭据" },
+          { status: 403 },
+        ),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await renderEntry();
+    await act(() => entryButton()?.click());
+    expect(document.body.textContent).toContain("验证入场凭据");
+    expect(host.querySelector('[data-slot="meeting-focus-layout"]')).toBeNull();
+    await act(() => {
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent === "使用已有凭据验证")
+        ?.click();
+    });
+    expect(credentials.verify).toHaveBeenCalledOnce();
+    expect(host.querySelector('[data-slot="meeting-focus-layout"]')).not.toBeNull();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2);
+  });
   it.each([-3_600_000, 3_600_000])("ignores a device clock offset of %i ms", async (offset) => {
     vi.useFakeTimers();
     vi.setSystemTime(Date.parse("2026-09-30T08:00:00Z") + offset);

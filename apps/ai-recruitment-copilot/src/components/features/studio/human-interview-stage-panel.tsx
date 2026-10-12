@@ -40,6 +40,7 @@ import { HumanInterviewAvailableTimeSlotsInline } from "./human-interview-availa
 import { EndMeetingDialog, MeetingLinksDialog } from "./human-interview-stage-meetings";
 import { RoundCard } from "./human-interview-stage-rounds";
 import { useHumanInterviewScheduleConfirmation } from "./use-human-interview-schedule-confirmation";
+import { CandidateEntryCredentialSetting } from "./candidate-entry-credential-setting";
 
 const EMPTY_INTERVIEWER_IDS: string[] = [];
 const EMPTY_AVAILABLE_TIME_SLOTS: ResumeAvailableTimeSlot[] = [];
@@ -273,6 +274,7 @@ export function HumanInterviewStagePanel({
         />
       </div>
 
+      <CandidateEntryCredentialSetting candidateId={candidateId} disabled={disabled} />
       {roundsContent}
 
       {disabled || !canCreate ? null : (

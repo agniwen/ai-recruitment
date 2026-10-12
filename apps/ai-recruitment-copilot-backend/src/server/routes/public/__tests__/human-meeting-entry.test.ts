@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { publicRouter } from "../route";
 
-const mocks = vi.hoisted(() => ({ resolve: vi.fn(), sign: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  policy: vi.fn(),
+  proof: vi.fn(),
+  resolve: vi.fn(),
+  sign: vi.fn(),
+}));
+vi.mock("../routes/entry-credentials/policy", () => ({
+  checkCandidateEntryProof: mocks.proof,
+  getCandidateEntryPolicy: mocks.policy,
+}));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({ db: {} }));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-meetings",
@@ -44,9 +53,36 @@ const scope = {
   validUntil: "2026-09-30T09:00:00.000Z",
 };
 beforeEach(() => {
+  mocks.policy.mockResolvedValue({ required: false });
+  mocks.proof.mockResolvedValue({ allowed: true, credentialRef: null });
   mocks.resolve.mockResolvedValue(scope);
   mocks.sign.mockResolvedValue({ participantToken: "test-token" });
   vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-30T07:49:59.000Z"));
+});
+
+describe("candidate-only credential enforcement", () => {
+  beforeEach(() => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse("2026-09-30T07:50:00.000Z"));
+  });
+  it("rejects missing/invalid proof before signing a candidate token", async () => {
+    mocks.proof.mockResolvedValue({ allowed: false });
+    const result = await app.request("/public/human-interview-meetings/invite/livekit-token", {
+      method: "POST",
+    });
+    expect(result.status).toBe(403);
+    expect(await result.json()).toMatchObject({ code: "ENTRY_CREDENTIAL_REQUIRED" });
+    expect(mocks.sign).not.toHaveBeenCalled();
+  });
+  it("never applies the candidate gate to interviewer links", async () => {
+    mocks.proof.mockResolvedValue({ allowed: false });
+    const result = await app.request(
+      "/public/human-interview-meetings/interviewer/invite/livekit-token",
+      { method: "POST" },
+    );
+    expect(result.status).toBe(200);
+    expect(mocks.proof).not.toHaveBeenCalled();
+    expect(mocks.policy).not.toHaveBeenCalled();
+  });
 });
 afterEach(() => {
   vi.restoreAllMocks();

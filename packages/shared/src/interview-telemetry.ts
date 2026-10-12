@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const interviewClientEventTypes = [
+  "entry_credential_client_failed",
   "page_opened",
   "page_hidden",
   "page_visible",
@@ -126,6 +127,12 @@ export const interviewEventLabels: Record<string, string> = {
   end_completed: "会议结束请求成功",
   end_failed: "结束会议失败",
   end_requested: "请求结束会议",
+  entry_credential_bypassed: "HR 已免除入场凭据验证",
+  entry_credential_client_failed: "入场凭据操作未完成",
+  entry_credential_failed: "入场凭据验证失败",
+  entry_credential_registered: "登记入场凭据",
+  entry_credential_requested: "发起入场凭据验证",
+  entry_credential_verified: "入场凭据验证成功",
   fingerprint_failed: "浏览器指纹采集失败",
   fingerprint_ready: "浏览器指纹采集完成",
   heartbeat: "页面心跳",

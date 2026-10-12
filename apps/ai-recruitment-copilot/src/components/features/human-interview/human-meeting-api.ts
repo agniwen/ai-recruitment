@@ -4,7 +4,7 @@ import type {
   HumanInterviewMeetingTokenResponse,
 } from "@arc/shared/studio-pipeline-stages";
 import { rpc } from "@/lib/client/rpc";
-import { rpcFetch } from "@/lib/client/api";
+import { ApiError, rpcFetch } from "@/lib/client/api";
 
 export function fetchCandidateToken(inviteToken: string, headers: Record<string, string>) {
   return rpcFetch<HumanInterviewMeetingTokenResponse>(
@@ -57,4 +57,17 @@ export function fetchMeetingPreview(mode: "candidate" | "interviewer", inviteTok
     ),
     "检查入会状态失败，请重试",
   );
+}
+
+export function tokenErrorCode(error: unknown) {
+  if (!(error instanceof ApiError)) {
+    return "transport_error";
+  }
+  const { payload } = error;
+  return payload &&
+    typeof payload === "object" &&
+    "code" in payload &&
+    typeof payload.code === "string"
+    ? payload.code
+    : error.status;
 }

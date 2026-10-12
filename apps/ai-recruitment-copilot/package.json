@@ -51,6 +51,7 @@
     "@paper-design/shaders-react": "0.0.77",
     "@radix-ui/react-visually-hidden": "^1.2.4",
     "@shadcn/react": "^0.1.0",
+    "@simplewebauthn/browser": "14.0.0",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",
     "@streamdown/math": "^1.0.2",

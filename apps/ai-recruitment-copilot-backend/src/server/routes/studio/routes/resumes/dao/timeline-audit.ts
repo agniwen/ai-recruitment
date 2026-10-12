@@ -171,6 +171,13 @@ function jobDescriptionChangeLabel(
 
 // oxlint-disable-next-line complexity -- Audit copy stays centralized by action.
 export function auditDescription(detail: Record<string, unknown>, action: string): string | null {
+  if (action === "candidate_entry_credential_policy_updated") {
+    if (typeof detail.toEnabled === "boolean") {
+      return `${detail.toEnabled ? "已开启入场凭据验证" : "已关闭入场凭据验证"}；原因：${String(detail.reason ?? "未填写")}`;
+    }
+    // Preserve the meaning of historical workspace opt-out audit entries.
+    return `${detail.toExempt ? "已单独关闭入场凭据验证" : "已恢复跟随工作空间配置"}；原因：${String(detail.reason ?? "未填写")}`;
+  }
   if (action === "candidate_transition") {
     if (detail.approvalDecision === "rejected") {
       return typeof detail.reason === "string" && detail.reason.trim()
@@ -316,6 +323,7 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
   const titles: Record<string, string> = {
     agent_report_received: "AI 报告已接收",
     ai_interview_launched: "发起 AI 面试",
+    candidate_entry_credential_policy_updated: "入场凭据设置已调整",
     candidate_information_updated: "候选人信息已更新",
     context_snapshot_refresh: "上下文已刷新",
     human_interview_evaluation_updated: "面试评价已修改",

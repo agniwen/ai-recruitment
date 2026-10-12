@@ -139,6 +139,7 @@ export interface HumanInterviewMeetingEntryAccess {
 }
 
 export interface PublicHumanInterviewMeetingPreview {
+  candidateCredentialRequired?: boolean;
   entryAccess: HumanInterviewMeetingEntryAccess;
   candidateName: string;
   meetingId: string;
