@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import babel from "@rolldown/plugin-babel";
@@ -6,13 +7,8 @@ import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 
-const requireFromQueuePackage = createRequire(
-  new URL("../../packages/resume-parse-queue/package.json", import.meta.url),
-);
-const requireFromBullmq = createRequire(requireFromQueuePackage.resolve("bullmq/package.json"));
-const tslibEsmEntry = requireFromBullmq.resolve("tslib/tslib.es6.mjs");
-const bullmqDependencyPathPattern =
-  /[/\\]node_modules[/\\](?:\.pnpm[/\\])?bullmq@|[/\\]node_modules[/\\]bullmq[/\\]/;
+const tslibEsmDependencyPathPattern =
+  /[/\\]node_modules[/\\](?:bullmq|tsyringe|@peculiar[/\\][^/\\]+)[/\\]/;
 const DEV_BUILD_TIME = "1970-01-01T00:00:00.000Z";
 export default defineConfig(({ command }) => {
   const buildTime = command === "serve" ? DEV_BUILD_TIME : new Date().toISOString();
@@ -65,10 +61,14 @@ export default defineConfig(({ command }) => {
     plugins: [
       {
         enforce: "pre",
-        name: "arc-bullmq-tslib-esm",
+        name: "arc-server-tslib-esm",
         resolveId(source, importer) {
-          if (source === "tslib" && importer && bullmqDependencyPathPattern.test(importer)) {
-            return tslibEsmEntry;
+          if (source === "tslib" && importer && tslibEsmDependencyPathPattern.test(importer)) {
+            // BullMQ and WebAuthn's certificate dependencies need native ESM:
+            // tslib's Node import bridge breaks when bundled by Rolldown/Nitro.
+            // Resolve each dependency's own version (tsyringe still uses v1).
+            const tslibDirectory = path.dirname(createRequire(importer).resolve("tslib"));
+            return path.join(tslibDirectory, "tslib.es6.js");
           }
 
           return null;
