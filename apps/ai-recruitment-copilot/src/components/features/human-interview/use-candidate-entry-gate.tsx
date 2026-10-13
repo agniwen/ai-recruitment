@@ -116,7 +116,7 @@ export function useCandidateEntryGate({
   if (registration) {
     registrationMessage = registration.canCreate
       ? ""
-      : `本场面试已创建 ${registration.createdCount}/${registration.limit} 个入场凭据，已达创建上限。请使用已有凭据验证，或联系 HR。`;
+      : "入场凭据已达到创建上限，请使用已有凭据验证，或联系 HR。";
   }
 
   return {

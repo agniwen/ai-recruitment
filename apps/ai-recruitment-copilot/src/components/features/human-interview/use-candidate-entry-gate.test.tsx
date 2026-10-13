@@ -147,6 +147,7 @@ describe("candidate entry gate", () => {
       expect(verify).toHaveBeenCalledOnce();
       expect(failure).toHaveBeenCalledWith("NotAllowedError");
       expect(document.body.textContent).not.toContain("本场面试已创建");
+      expect(document.body.textContent).not.toContain("已达到创建上限");
       expect(
         [...document.querySelectorAll("button")].some((item) => item.textContent === "重新验证"),
       ).toBe(count > 0);
@@ -166,7 +167,8 @@ describe("candidate entry gate", () => {
       rejectOnce(new DOMException("Cancelled", "NotAllowedError"), count);
       rendered = await renderInAct(<Harness />);
       await click("进入会议");
-      expect(document.body.textContent).toContain(`已创建 ${count}/2`);
+      expect(document.body.textContent).toContain("入场凭据已达到创建上限");
+      expect(document.body.textContent).not.toMatch(/\d/);
       expect(document.body.textContent).not.toContain("创建凭证进入面试");
       expect(button("重新验证")).toBeDefined();
       expect(button("重新检查入会要求")).toBeDefined();
@@ -179,14 +181,15 @@ describe("candidate entry gate", () => {
     rejectOnce(new DOMException("Cancelled", "NotAllowedError"), 1);
     rendered = await renderInAct(<Harness />);
     await click("进入会议");
-    expect(document.body.textContent).not.toContain("已创建 1/2");
+    expect(document.body.textContent).not.toContain("已达到创建上限");
     verify.mockImplementationOnce((...args) => {
       args[4]?.(registration(2));
       return Promise.resolve(verified(2));
     });
     await click("创建凭证进入面试");
     await click("清除失效许可");
-    expect(document.body.textContent).toContain("已创建 2/2");
+    expect(document.body.textContent).toContain("入场凭据已达到创建上限");
+    expect(document.body.textContent).not.toMatch(/\d/);
     expect(document.body.textContent).not.toContain("创建凭证进入面试");
   });
   it("recheck cannot bypass an active requirement but proceeds after an administrator disables it", async () => {

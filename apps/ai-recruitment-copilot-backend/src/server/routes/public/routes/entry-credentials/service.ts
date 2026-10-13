@@ -52,9 +52,7 @@ async function getRegistrationState(scope: CandidateEntryScope, connection: type
 export class EntryRegistrationLimitError extends Error {
   readonly registration: EntryCredentialRegistration;
   constructor(registration: EntryCredentialRegistration) {
-    super(
-      `本场面试已创建 ${registration.createdCount} 个入场凭据，无法继续创建。请使用已有凭据验证，或联系 HR。`,
-    );
+    super("入场凭据已达到创建上限，请使用已有凭据验证，或联系 HR。");
     this.name = "EntryRegistrationLimitError";
     this.registration = registration;
   }
