@@ -13,6 +13,7 @@ import {
 export const candidateEntryCredential = pgTable(
   "candidate_entry_credential",
   {
+    aaguid: text("aaguid"),
     backedUp: boolean("backed_up").notNull(),
     backupEligible: boolean("backup_eligible").notNull(),
     counter: bigint("counter", { mode: "number" }).notNull().default(0),
@@ -73,6 +74,7 @@ export const candidateEntryCredentialUse = pgTable(
     roundId: text("round_id").notNull(),
     userAgent: text("user_agent"),
     visitId: text("visit_id").notNull(),
+    webauthnResponse: jsonb("webauthn_response").$type<Record<string, unknown>>(),
   },
   (table) => [
     uniqueIndex("candidate_entry_use_proof_idx").on(table.proofHash),

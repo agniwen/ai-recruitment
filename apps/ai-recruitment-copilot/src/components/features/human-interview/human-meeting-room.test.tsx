@@ -275,7 +275,7 @@ describe("server-controlled meeting entry", () => {
     expect(host.querySelector('[data-slot="meeting-focus-layout"]')).toBeNull();
     await act(() => {
       [...document.querySelectorAll("button")]
-        .find((button) => button.textContent === "使用已有凭据验证")
+        .find((button) => button.textContent === "重新验证")
         ?.click();
     });
     expect(credentials.verify).toHaveBeenCalledOnce();

@@ -8,6 +8,7 @@ import type * as Admin from "../../../platform/routes/interview-logs/routes/entr
 import type { CandidateEntryScope } from "./policy";
 import { testAuthenticator } from "./test-authenticator";
 import { factory } from "../../../../factory";
+import { entryCredentialVerificationSchema } from "@arc/shared/entry-credentials";
 import type { candidateEntryCredentialRouter } from "../../../studio/routes/resumes/routes/entry-credentials/route";
 
 const access = vi.hoisted(() => ({ authorize: vi.fn(), visibility: vi.fn() }));
@@ -96,6 +97,20 @@ describe.skipIf(!url)("entry credentials with PostgreSQL and real signature veri
     expect(
       await sql`select entry_credential_enabled from studio_interview where id='legacy-candidate'`,
     ).toEqual([{ entry_credential_enabled: false }]);
+    await sql`insert into candidate_entry_credential (id,rp_id,credential_id,user_handle,public_key,backup_eligible,backed_up)
+      values ('legacy-key','interview.example.test','AQID','AQID','AQID',true,true)`;
+    await sql.unsafe(
+      await readFile(
+        new URL(
+          "../../../../../../../ai-recruitment-copilot/drizzle/20261013120000_entry_credential_responses/migration.sql",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    );
+    expect(await sql`select aaguid from candidate_entry_credential where id='legacy-key'`).toEqual([
+      { aaguid: null },
+    ]);
     service = await import("./service");
     policy = await import("./policy");
     admin = await import("../../../platform/routes/interview-logs/routes/entry-credentials/dao");
@@ -270,6 +285,102 @@ describe.skipIf(!url)("entry credentials with PostgreSQL and real signature veri
     };
   }
 
+  it("allows two successful registrations per meeting, retains historical counts and restores device preferences", async () => {
+    const first = await register();
+    const second = await register();
+    expect(first.registration).toEqual({ canCreate: true, createdCount: 1, limit: 2 });
+    expect(second.registration).toEqual({ canCreate: false, createdCount: 2, limit: 2 });
+    // Expired entry proofs and a new invite/visit must not reset the enrollment quota.
+    await sql`update candidate_entry_credential_use set expires_at = now() - interval '1 hour'`;
+    const freshHeaders = headers();
+    freshHeaders.set("x-interview-visit-id", randomUUID());
+    await expect(
+      service.createEntryOptions(scope, "new-invite", freshHeaders, "register"),
+    ).rejects.toMatchObject({ registration: { canCreate: false, createdCount: 2, limit: 2 } });
+    const authentication = await service.createEntryOptions(
+      scope,
+      "invite",
+      headers(),
+      "authenticate",
+    );
+    expect(authentication.registration.createdCount).toBe(2);
+    expect(authentication.options.hints).toEqual(["client-device"]);
+    await expect(
+      service.verifyEntryCredential(scope, "invite", headers(), await assertion(first)),
+    ).resolves.toMatchObject({
+      credentialRef: first.credentialRef,
+      registration: { createdCount: 2 },
+    });
+    const otherMeeting = await service.createEntryOptions(
+      { ...scope, meetingId: "another-meeting" },
+      "invite",
+      headers(),
+      "register",
+    );
+    expect(otherMeeting.registration.createdCount).toBe(0);
+    expect(otherMeeting.options.hints).toEqual(["client-device"]);
+    if (otherMeeting.kind !== "register") {
+      throw new Error("Expected registration");
+    }
+    expect(otherMeeting.options.authenticatorSelection?.authenticatorAttachment).toBe("platform");
+  });
+
+  it("does not spend registration slots for cancellation, failed verification or authenticating an existing credential", async () => {
+    const cancelled = await service.createEntryOptions(scope, "invite", headers(), "register");
+    expect(cancelled.registration.createdCount).toBe(0);
+    const options = await service.createEntryOptions(scope, "invite", headers(), "register");
+    await expect(
+      service.verifyEntryCredential(scope, "invite", headers(), {
+        challengeId: options.challengeId,
+        kind: "register",
+        response: testAuthenticator().register("wrong-challenge"),
+      }),
+    ).rejects.toThrow();
+    const registered = await register();
+    const anotherScope = { ...scope, meetingId: "another-meeting" };
+    await expect(
+      service.verifyEntryCredential(
+        anotherScope,
+        "invite",
+        headers(),
+        await assertion(registered, anotherScope),
+      ),
+    ).resolves.toMatchObject({ registration: { canCreate: true, createdCount: 0 } });
+    const available = await service.createEntryOptions(scope, "invite", headers(), "register");
+    expect(available.registration.createdCount).toBe(1);
+  });
+
+  it("serializes concurrent registrations and rechecks the quota when verifying already-issued challenges", async () => {
+    await register();
+    const attempts = await Promise.all(
+      [0, 1].map(async () => {
+        const h = headers();
+        h.set("x-interview-visit-id", randomUUID());
+        const options = await service.createEntryOptions(scope, "invite", h, "register");
+        return {
+          h,
+          input: {
+            challengeId: options.challengeId,
+            kind: "register" as const,
+            response: testAuthenticator().register(options.options.challenge),
+          },
+        };
+      }),
+    );
+    const results = await Promise.allSettled(
+      attempts.map(({ h, input }) => service.verifyEntryCredential(scope, "invite", h, input)),
+    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.reason).toMatchObject({ registration: { canCreate: false, createdCount: 2 } });
+    expect(await sql`select count(*)::int as n from candidate_entry_credential`).toEqual([
+      { n: 2 },
+    ]);
+    expect(
+      await sql`select count(*)::int as n from candidate_entry_credential_use where method='register'`,
+    ).toEqual([{ n: 2 }]);
+  });
+
   it("defaults off; candidate opt-in enforces proof; disabling immediately permits entry", async () => {
     expect(await policy.getCandidateEntryPolicy(scope)).toEqual({ required: false });
     await expect(
@@ -286,6 +397,66 @@ describe.skipIf(!url)("entry credentials with PostgreSQL and real signature veri
     await expect(
       policy.getCandidateEntryPolicy({ ...scope, organizationId: "other-org" }),
     ).rejects.toThrow();
+  });
+
+  it("persists complete registration and assertion responses, deriving AAGUID from attested data", async () => {
+    const aaguid = "fbfc3007-154e-4ecc-8c0b-6e020557d7bd";
+    const authenticator = testAuthenticator(true, aaguid);
+    const options = await service.createEntryOptions(scope, "invite", headers(), "register");
+    if (options.kind !== "register") {
+      throw new Error("Expected registration");
+    }
+    const native = authenticator.register(options.options.challenge);
+    const response = {
+      ...native,
+      aaguid: "untrusted-client-label",
+      authenticatorAttachment: "platform",
+      clientExtensionResults: {
+        credProps: { future: "retained", rk: true },
+        custom: { nested: [1, "test"] },
+      },
+      response: {
+        ...native.response,
+        custom: { preserved: true },
+        publicKey: "AQID",
+        publicKeyAlgorithm: -7,
+        transports: ["hybrid", "internal"],
+      },
+    };
+    const input = entryCredentialVerificationSchema.parse({
+      challengeId: options.challengeId,
+      kind: "register",
+      response,
+    });
+    const saved = await service.verifyEntryCredential(scope, "invite", headers(), input);
+    expect(
+      await sql`select aaguid from candidate_entry_credential where id=${saved.credentialRef}`,
+    ).toEqual([{ aaguid }]);
+    expect(
+      await sql`select webauthn_response from candidate_entry_credential_use where method='register'`,
+    ).toEqual([{ webauthn_response: response }]);
+    const authentication = await assertion({
+      authenticator,
+      handle: options.options.user.id,
+      ...saved,
+    });
+    const authResponse = {
+      ...authentication.response,
+      clientExtensionResults: { custom: { value: "retained" } },
+    };
+    await service.verifyEntryCredential(
+      scope,
+      "invite",
+      headers(),
+      entryCredentialVerificationSchema.parse({ ...authentication, response: authResponse }),
+    );
+    expect(
+      await sql`select webauthn_response from candidate_entry_credential_use where method='authenticate'`,
+    ).toEqual([{ webauthn_response: authResponse }]);
+    // Full material remains DB evidence rather than leaking into the existing display API.
+    expect(JSON.stringify(await admin.loadMeetingEntryCredentials(scope.meetingId))).not.toContain(
+      "webauthnResponse",
+    );
   });
 
   it("binds a verified session to invite, candidate, organization, meeting, round and visit; hashes secrets", async () => {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { EntryCredentialRegistration } from "@arc/shared/entry-credentials";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -31,6 +32,12 @@ export function useCandidateEntryGate({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setError] = useState<string | null>(null);
+  const [registrationState, setRegistrationState] = useState<{
+    inviteToken: string;
+    registration: EntryCredentialRegistration;
+  } | null>(null);
+  const registration =
+    registrationState?.inviteToken === inviteToken ? registrationState.registration : null;
   const proof = useRef<string | null>(null);
   const microphoneError = useRef<Error | null>(null);
   const pending = useRef<AbortController | null>(null);
@@ -42,21 +49,8 @@ export function useCandidateEntryGate({
     [inviteToken],
   );
 
-  async function beginJoin(captureError: Error | null) {
-    if (open || pending.current) {
-      return;
-    }
-    if (required && !proof.current) {
-      microphoneError.current = captureError;
-      setError(null);
-      setOpen(true);
-      return;
-    }
-    await join(captureError, proof.current ?? undefined);
-  }
-
   async function run(kind: "register" | "authenticate" | "recheck") {
-    if (pending.current) {
+    if (pending.current || (kind === "register" && !registration?.canCreate)) {
       return;
     }
     const controller = new AbortController();
@@ -65,7 +59,8 @@ export function useCandidateEntryGate({
     setError(null);
     try {
       if (kind === "recheck") {
-        if (!(await recheck())) {
+        const allowed = await recheck();
+        if (!allowed) {
           throw new Error("当前仍需验证或暂不可入会。无法完成验证时，请联系 HR 协助处理后再检查。");
         }
       } else {
@@ -74,6 +69,11 @@ export function useCandidateEntryGate({
           kind,
           headers(),
           controller.signal,
+          (state) => {
+            if (!controller.signal.aborted) {
+              setRegistrationState({ inviteToken, registration: state });
+            }
+          },
         );
         controller.signal.throwIfAborted();
         proof.current = result.proof;
@@ -98,6 +98,27 @@ export function useCandidateEntryGate({
     }
   }
 
+  async function beginJoin(captureError: Error | null) {
+    if (open || pending.current) {
+      return;
+    }
+    if (required && !proof.current) {
+      microphoneError.current = captureError;
+      setError(null);
+      setOpen(true);
+      await run("authenticate");
+      return;
+    }
+    await join(captureError, proof.current ?? undefined);
+  }
+
+  let registrationMessage = "尚未获取创建次数，请重新验证后再试。";
+  if (registration) {
+    registrationMessage = registration.canCreate
+      ? ""
+      : `本场面试已创建 ${registration.createdCount}/${registration.limit} 个入场凭据，已达创建上限。请使用已有凭据验证，或联系 HR。`;
+  }
+
   return {
     beginJoin,
     dialog: open ? (
@@ -112,34 +133,35 @@ export function useCandidateEntryGate({
         <DialogContent showCloseButton={!busy}>
           <DialogHeader>
             <DialogTitle>验证入场凭据</DialogTitle>
-            <DialogDescription>
-              请通过系统通行密钥确认入场。已有凭据请选择验证；首次使用请选择创建，并按系统提示完成操作。
-            </DialogDescription>
+            <DialogDescription>请在系统通行密钥窗口中完成入场验证。</DialogDescription>
           </DialogHeader>
           {errorMessage ? (
             <p role="alert" className="text-sm text-destructive">
               {errorMessage}
             </p>
           ) : null}
-          <div className="flex flex-col gap-2">
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void run("authenticate");
-              }}
-            >
-              {busy ? <Spinner /> : null}使用已有凭据验证
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => {
-                void run("register");
-              }}
-            >
-              首次使用，创建入场凭据
-            </Button>
-          </div>
+          {busy ? (
+            <output className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner /> 正在验证，请稍候…
+            </output>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {!registration || registration.createdCount > 0 ? (
+                <Button onClick={() => void run("authenticate")}>重新验证</Button>
+              ) : null}
+              {registration?.canCreate ? (
+                <Button
+                  variant={registration.createdCount > 0 ? "outline" : "default"}
+                  onClick={() => void run("register")}
+                >
+                  创建凭证进入面试
+                </Button>
+              ) : null}
+              {registrationMessage ? (
+                <p className="text-sm text-muted-foreground">{registrationMessage}</p>
+              ) : null}
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">
             无法完成？请联系 HR 协助处理，处理后点击“重新检查入会要求”。
           </p>

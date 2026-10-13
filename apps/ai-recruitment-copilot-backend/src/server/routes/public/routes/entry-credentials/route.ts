@@ -8,7 +8,12 @@ import { factory, jsonValidatorError } from "../../../../factory";
 import { resolveHumanInterviewMeetingInviteToken } from "../../../studio/routes/interviews/dao/human-interview-meetings";
 import { getHumanInterviewMeetingEntryAccess } from "../../../studio/routes/interviews/dao/human-interview-meeting-access";
 import { entryRelyingParty, getCandidateEntryPolicy } from "./policy";
-import { createEntryOptions, recordCredentialEvent, verifyEntryCredential } from "./service";
+import {
+  createEntryOptions,
+  EntryRegistrationLimitError,
+  recordCredentialEvent,
+  verifyEntryCredential,
+} from "./service";
 import { createTelemetryLimiter } from "../interview-telemetry/utils";
 
 const limit = createTelemetryLimiter();
@@ -50,7 +55,17 @@ export const entryCredentialsRouter = factory
           await createEntryOptions(scope, invite, c.req.raw.headers, c.req.valid("json").kind),
           200,
         );
-      } catch {
+      } catch (error) {
+        if (error instanceof EntryRegistrationLimitError) {
+          return c.json(
+            {
+              code: "entry_credential_registration_limit",
+              error: error.message,
+              registration: error.registration,
+            },
+            409,
+          );
+        }
         return c.json({ error: "无法发起凭据验证，请重试或联系 HR。" }, 400);
       }
     },
@@ -76,7 +91,17 @@ export const entryCredentialsRouter = factory
           await verifyEntryCredential(scope, invite, c.req.raw.headers, c.req.valid("json")),
           200,
         );
-      } catch {
+      } catch (error) {
+        if (error instanceof EntryRegistrationLimitError) {
+          return c.json(
+            {
+              code: "entry_credential_registration_limit",
+              error: error.message,
+              registration: error.registration,
+            },
+            409,
+          );
+        }
         await recordCredentialEvent(scope, c.req.raw.headers, "entry_credential_failed", {
           reason: "verification_failed",
         });

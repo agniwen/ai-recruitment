@@ -14,6 +14,22 @@ vi.mock("./entry-credential-api", async (original) => ({
 enableReactActEnvironment();
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 const verify = vi.mocked(verifyCandidateCredential);
+const registration = (createdCount = 0) => ({
+  canCreate: createdCount < 2,
+  createdCount,
+  limit: 2,
+});
+const verified = (createdCount = 0) => ({
+  credentialRef: "K-test",
+  proof: "signed-proof",
+  registration: registration(createdCount),
+});
+function rejectOnce(error: Error, createdCount = 0) {
+  verify.mockImplementationOnce((...args) => {
+    args[4]?.(registration(createdCount));
+    return Promise.reject(error);
+  });
+}
 const join = vi.fn();
 const recheck = vi.fn();
 const failure = vi.fn();
@@ -66,7 +82,11 @@ async function click(label: string) {
   await act(() => button(label).click());
 }
 beforeEach(() => {
-  verify.mockReset().mockResolvedValue({ credentialRef: "K-test", proof: "signed-proof" });
+  verify.mockReset().mockImplementation((...args) => {
+    const result = verified();
+    args[4]?.(result.registration);
+    return Promise.resolve(result);
+  });
   join.mockReset().mockResolvedValue(null);
   recheck.mockReset().mockResolvedValue(false);
   failure.mockReset();
@@ -93,18 +113,17 @@ describe("candidate entry gate", () => {
     expect(verify).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain("验证入场凭据");
   });
-  it("requires an explicit choice, carries proof to entry and reuses only the verified session", async () => {
+  it("authenticates on entry without a prior choice and reuses only the verified session", async () => {
     rendered = await renderInAct(<Harness />);
-    await click("进入会议");
-    expect(join).not.toHaveBeenCalled();
     expect(verify).not.toHaveBeenCalled();
-    await click("使用已有凭据验证");
-    expect(verify).toHaveBeenCalledExactlyOnceWith(
+    await click("进入会议");
+    expect(verify).toHaveBeenCalledOnce();
+    expect(verify.mock.calls[0].slice(0, 4)).toEqual([
       "invite",
       "authenticate",
       traceHeaders(),
       expect.any(AbortSignal),
-    );
+    ]);
     expect(join).toHaveBeenCalledWith(null, "signed-proof");
     await click("进入会议");
     expect(verify).toHaveBeenCalledOnce();
@@ -113,21 +132,65 @@ describe("candidate entry gate", () => {
     await click("进入会议");
     expect(join).toHaveBeenCalledTimes(2);
     expect(document.body.textContent).toContain("验证入场凭据");
+    await click("创建凭证进入面试");
+    expect(verify.mock.calls[1][1]).toBe("register");
+    expect(join).toHaveBeenCalledTimes(3);
   });
-  it("never auto-registers after cancellation; explicit creation can be retried", async () => {
-    verify.mockRejectedValueOnce(new DOMException("Cancelled", "NotAllowedError"));
+  it.each([0, 1])(
+    "offers creation without the count hint, and retry only above zero when %i credentials exist",
+    async (count) => {
+      rejectOnce(new DOMException("Cancelled", "NotAllowedError"), count);
+      rendered = await renderInAct(<Harness />);
+      await click("进入会议");
+      expect(join).not.toHaveBeenCalled();
+      expect(document.body.textContent).toContain("验证已取消或超时");
+      expect(verify).toHaveBeenCalledOnce();
+      expect(failure).toHaveBeenCalledWith("NotAllowedError");
+      expect(document.body.textContent).not.toContain("本场面试已创建");
+      expect(
+        [...document.querySelectorAll("button")].some((item) => item.textContent === "重新验证"),
+      ).toBe(count > 0);
+      if (count > 0) {
+        rejectOnce(new DOMException("Cancelled", "NotAllowedError"), count);
+        await click("重新验证");
+        expect(verify.mock.calls.at(-1)?.[1]).toBe("authenticate");
+      }
+      await click("创建凭证进入面试");
+      expect(verify.mock.calls.at(-1)?.[1]).toBe("register");
+      expect(join).toHaveBeenCalledOnce();
+    },
+  );
+  it.each([2, 3])(
+    "hides creation for %i registrations while retaining retry and HR recheck",
+    async (count) => {
+      rejectOnce(new DOMException("Cancelled", "NotAllowedError"), count);
+      rendered = await renderInAct(<Harness />);
+      await click("进入会议");
+      expect(document.body.textContent).toContain(`已创建 ${count}/2`);
+      expect(document.body.textContent).not.toContain("创建凭证进入面试");
+      expect(button("重新验证")).toBeDefined();
+      expect(button("重新检查入会要求")).toBeDefined();
+      await click("重新验证");
+      expect(verify.mock.calls[1][1]).toBe("authenticate");
+      expect(join).toHaveBeenCalledOnce();
+    },
+  );
+  it("updates the button after the second successful registration", async () => {
+    rejectOnce(new DOMException("Cancelled", "NotAllowedError"), 1);
     rendered = await renderInAct(<Harness />);
     await click("进入会议");
-    await click("使用已有凭据验证");
-    expect(join).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("验证已取消或超时");
-    expect(verify).toHaveBeenCalledOnce();
-    expect(failure).toHaveBeenCalledWith("NotAllowedError");
-    await click("首次使用，创建入场凭据");
-    expect(verify.mock.calls[1][1]).toBe("register");
-    expect(join).toHaveBeenCalledOnce();
+    expect(document.body.textContent).not.toContain("已创建 1/2");
+    verify.mockImplementationOnce((...args) => {
+      args[4]?.(registration(2));
+      return Promise.resolve(verified(2));
+    });
+    await click("创建凭证进入面试");
+    await click("清除失效许可");
+    expect(document.body.textContent).toContain("已创建 2/2");
+    expect(document.body.textContent).not.toContain("创建凭证进入面试");
   });
   it("recheck cannot bypass an active requirement but proceeds after an administrator disables it", async () => {
+    rejectOnce(new DOMException("Cancelled", "NotAllowedError"));
     rendered = await renderInAct(<Harness />);
     await click("进入会议");
     await click("重新检查入会要求");
@@ -136,44 +199,55 @@ describe("candidate entry gate", () => {
     recheck.mockResolvedValueOnce(true);
     await click("重新检查入会要求");
     expect(join.mock.calls).toEqual([[null, undefined]]);
-    expect(verify).not.toHaveBeenCalled();
+    expect(verify).toHaveBeenCalledOnce();
   });
   it("microphone force-entry still passes through the credential gate", async () => {
     const denied = new DOMException("Denied", "NotAllowedError");
     getUserMedia.mockRejectedValue(denied);
     rendered = await renderInAct(<Harness />);
     await click("进入会议");
+    expect(verify).not.toHaveBeenCalled();
     await click("仍然进入（麦克风不可用）");
-    expect(join).not.toHaveBeenCalled();
-    await click("使用已有凭据验证");
+    expect(verify.mock.calls[0][1]).toBe("authenticate");
     expect(join).toHaveBeenCalledExactlyOnceWith(denied, "signed-proof");
   });
   it("blocks duplicate clicks and discards late results after cancellation", async () => {
-    const pending = Promise.withResolvers<{ proof: string; credentialRef: string }>();
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof verifyCandidateCredential>>>();
     verify.mockReturnValueOnce(pending.promise);
     rendered = await renderInAct(<Harness />);
     await click("进入会议");
-    await click("使用已有凭据验证");
-    expect(button("首次使用，创建入场凭据").disabled).toBe(true);
-    await click("使用已有凭据验证");
+    expect(document.body.textContent).not.toContain("创建凭证进入面试");
+    expect(document.querySelector("output")?.textContent).toContain("正在验证");
+    await click("进入会议");
     expect(verify).toHaveBeenCalledOnce();
     await click("返回");
     expect(verify.mock.calls[0][3].aborted).toBe(true);
-    await act(() => pending.resolve({ credentialRef: "K-late", proof: "late-proof" }));
+    await act(() =>
+      pending.resolve({ ...verified(), credentialRef: "K-late", proof: "late-proof" }),
+    );
     expect(join).not.toHaveBeenCalled();
     await click("进入会议");
-    expect(join).not.toHaveBeenCalled();
+    expect(verify).toHaveBeenCalledTimes(2);
+    expect(join).toHaveBeenCalledExactlyOnceWith(null, "signed-proof");
   });
   it("cancels the ceremony on unmount", async () => {
-    const pending = Promise.withResolvers<{ proof: string; credentialRef: string }>();
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof verifyCandidateCredential>>>();
     verify.mockReturnValueOnce(pending.promise);
     rendered = await renderInAct(<Harness />);
     await click("进入会议");
-    await click("使用已有凭据验证");
     await unmountInAct(rendered.root);
     rendered = undefined;
     expect(verify.mock.calls[0][3].aborted).toBe(true);
-    await act(() => pending.resolve({ credentialRef: "K-late", proof: "late-proof" }));
+    await act(() =>
+      pending.resolve({ ...verified(), credentialRef: "K-late", proof: "late-proof" }),
+    );
     expect(join).not.toHaveBeenCalled();
+  });
+  it("does not show temporary debug controls", async () => {
+    rejectOnce(new DOMException("Cancelled", "NotAllowedError"));
+    rendered = await renderInAct(<Harness />);
+    await click("进入会议");
+    expect(document.body.textContent).not.toContain("下载调试日志");
+    expect(document.body.textContent).not.toContain("记录备注");
   });
 });

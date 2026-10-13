@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, countDistinct, eq, gt, lt } from "drizzle-orm";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -11,12 +11,54 @@ import {
   candidateEntryChallenge as challenges,
   candidateEntryCredential as credentials,
   candidateEntryCredentialUse as uses,
+  studioInterview,
 } from "@arc/db-schema/schema";
-import type { EntryCredentialVerification } from "@arc/shared/entry-credentials";
+import { ENTRY_CREDENTIAL_REGISTRATION_LIMIT } from "@arc/shared/entry-credentials";
+import type {
+  EntryCredentialRegistration,
+  EntryCredentialVerification,
+} from "@arc/shared/entry-credentials";
 import { entryRelyingParty, hashEntrySecret } from "./policy";
 import type { CandidateEntryScope } from "./policy";
 import { readInterviewTrace, requestEvidence } from "../interview-telemetry/utils";
 import { recordServerTelemetrySafely } from "../interview-telemetry/dao";
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function getRegistrationState(scope: CandidateEntryScope, connection: typeof db | Tx = db) {
+  const { rpID } = entryRelyingParty();
+  // Successful registrations persist beyond proof expiry; authentication never consumes a slot.
+  const [row] = await connection
+    .select({ createdCount: countDistinct(uses.credentialRef) })
+    .from(uses)
+    .innerJoin(credentials, eq(credentials.id, uses.credentialRef))
+    .where(
+      and(
+        eq(uses.organizationId, scope.organizationId),
+        eq(uses.candidateId, scope.interviewRecordId),
+        eq(uses.meetingId, scope.meetingId),
+        eq(uses.method, "register"),
+        eq(credentials.rpId, rpID),
+      ),
+    );
+  const { createdCount } = row;
+  return {
+    canCreate: createdCount < ENTRY_CREDENTIAL_REGISTRATION_LIMIT,
+    createdCount,
+    limit: ENTRY_CREDENTIAL_REGISTRATION_LIMIT,
+  };
+}
+
+export class EntryRegistrationLimitError extends Error {
+  readonly registration: EntryCredentialRegistration;
+  constructor(registration: EntryCredentialRegistration) {
+    super(
+      `本场面试已创建 ${registration.createdCount} 个入场凭据，无法继续创建。请使用已有凭据验证，或联系 HR。`,
+    );
+    this.name = "EntryRegistrationLimitError";
+    this.registration = registration;
+  }
+}
 
 export function recordCredentialEvent(
   scope: CandidateEntryScope,
@@ -45,6 +87,10 @@ export async function createEntryOptions(
   const { visitId } = readInterviewTrace(headers);
   if (!visitId) {
     throw new Error("Missing visit");
+  }
+  const registration = await getRegistrationState(scope);
+  if (kind === "register" && !registration.canCreate) {
+    throw new EntryRegistrationLimitError(registration);
   }
   const userHandle = randomBytes(32).toString("base64url");
   const generated =
@@ -103,10 +149,9 @@ export async function createEntryOptions(
     visitId,
   });
   await recordCredentialEvent(scope, headers, "entry_credential_requested", { method: kind });
-  return { ...generated, challengeId: id };
+  return { ...generated, challengeId: id, registration };
 }
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 async function verifyCredential(
   tx: Tx,
   input: EntryCredentialVerification,
@@ -124,10 +169,12 @@ async function verifyCredential(
     if (!result.verified || !challenge.userHandle) {
       throw new Error("Invalid registration");
     }
-    const { credential, credentialBackedUp, credentialDeviceType } = result.registrationInfo;
+    const { aaguid, credential, credentialBackedUp, credentialDeviceType } =
+      result.registrationInfo;
     const [saved] = await tx
       .insert(credentials)
       .values({
+        aaguid,
         backedUp: credentialBackedUp,
         backupEligible: credentialDeviceType === "multiDevice",
         counter: credential.counter,
@@ -207,6 +254,26 @@ export async function verifyEntryCredential(
   }
   const proof = randomBytes(32).toString("base64url");
   const saved = await db.transaction(async (tx) => {
+    if (input.kind === "register") {
+      // Serialize creation across tabs/processes before counting and inserting in this transaction.
+      const [candidate] = await tx
+        .select({ id: studioInterview.id })
+        .from(studioInterview)
+        .where(
+          and(
+            eq(studioInterview.id, scope.interviewRecordId),
+            eq(studioInterview.organizationId, scope.organizationId),
+          ),
+        )
+        .for("update");
+      if (!candidate) {
+        throw new Error("Candidate entry scope no longer exists");
+      }
+      const registration = await getRegistrationState(scope, tx);
+      if (!registration.canCreate) {
+        throw new EntryRegistrationLimitError(registration);
+      }
+    }
     const credential = await verifyCredential(tx, input, challenge);
     const evidence = requestEvidence(headers);
     await tx.insert(uses).values({
@@ -227,14 +294,15 @@ export async function verifyEntryCredential(
       roundId: scope.roundId,
       userAgent: evidence.userAgent,
       visitId: challenge.visitId,
+      webauthnResponse: input.response,
     });
-    return credential;
+    return { credential, registration: await getRegistrationState(scope, tx) };
   });
   await recordCredentialEvent(
     scope,
     headers,
     input.kind === "register" ? "entry_credential_registered" : "entry_credential_verified",
-    { credentialRef: saved.id },
+    { credentialRef: saved.credential.id },
   );
-  return { credentialRef: saved.id, proof };
+  return { credentialRef: saved.credential.id, proof, registration: saved.registration };
 }

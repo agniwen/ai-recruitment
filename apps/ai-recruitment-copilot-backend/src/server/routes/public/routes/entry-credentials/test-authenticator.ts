@@ -6,7 +6,10 @@ const hash = (value: string | Buffer) => createHash("sha256").update(value).dige
 function clientData(type: string, challenge: string, origin: string) {
   return Buffer.from(JSON.stringify({ challenge, crossOrigin: false, origin, type }));
 }
-export function testAuthenticator(backupEligible = true) {
+export function testAuthenticator(
+  backupEligible = true,
+  aaguid = "00000000-0000-0000-0000-000000000000",
+) {
   const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const key = publicKey.export({ format: "jwk" });
   const credentialId = randomBytes(32);
@@ -33,7 +36,13 @@ export function testAuthenticator(backupEligible = true) {
     const length = Buffer.alloc(2);
     length.writeUInt16BE(credentialId.length);
     return registration
-      ? Buffer.concat([prefix, Buffer.alloc(16), length, credentialId, cose])
+      ? Buffer.concat([
+          prefix,
+          Buffer.from(aaguid.replaceAll("-", ""), "hex"),
+          length,
+          credentialId,
+          cose,
+        ])
       : prefix;
   }
   return {
