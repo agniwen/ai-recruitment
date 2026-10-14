@@ -323,42 +323,95 @@ describe("job and organization multi-selection", () => {
       act(() => root.unmount());
     },
   );
-  it("removes C from both options and selections when B is deselected, without restoring its check later", () => {
+  it("keeps selected organizations when jobs change and restores matching destinations", () => {
     const onConfirmed = vi.fn();
     const { root } = renderDialog(onConfirmed, relationOptions);
     selectSource();
     selectValues("candidate-import-job", ["岗位A", "岗位B"]);
     selectValues("resume-pool-import-hiring-unit", ["A", "B", "C"]);
     selectValues("candidate-import-job", ["岗位A"]);
-    expect(optionValues("resume-pool-import-hiring-unit")).toEqual(["A", "B"]);
-    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A", "B"]);
+    expect(optionValues("resume-pool-import-hiring-unit")).toEqual(["A", "B", "C"]);
+    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A", "B", "C"]);
+    expect(document.querySelector('output[aria-label="入库匹配提示"]')?.textContent).toContain(
+      "组织C",
+    );
     expect(document.querySelector('[data-destination-id="B-C"]')).toBeNull();
     expect(getStartButton().textContent).toContain("2 条记录");
     act(() => getStartButton().click());
     expect(onConfirmed.mock.lastCall?.[1].destinations).toHaveLength(2);
     selectValues("candidate-import-job", ["岗位A", "岗位B"]);
-    expect(optionValues("resume-pool-import-hiring-unit")).toEqual(["A", "B", "C"]);
-    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A", "B"]);
+    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A", "B", "C"]);
+    expect(document.querySelector('output[aria-label="入库匹配提示"]')).toBeNull();
+    expect(getStartButton().textContent).toContain("4 条记录");
+    selectValues("candidate-import-job", []);
+    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A", "B", "C"]);
+    expect(getStartButton().disabled).toBe(true);
     act(() => root.unmount());
   });
-  it("supports organization-first OR filtering and removes unsupported selected job names", () => {
-    const { root } = renderDialog(vi.fn(), relationOptions);
+  it.each(["jobs-first", "organizations-first"])(
+    "allows sequential selections in either order without removing selected values: %s",
+    (order) => {
+      const onConfirmed = vi.fn();
+      const { root } = renderDialog(onConfirmed, relationOptions);
+      selectSource();
+      if (order === "jobs-first") {
+        selectValues("candidate-import-job", ["岗位A", "岗位B"]);
+        selectValues("resume-pool-import-hiring-unit", ["A"]);
+        expect(optionValues("candidate-import-job", true)).toEqual(["岗位A", "岗位B"]);
+        expect(document.querySelector('output[aria-label="入库匹配提示"]')?.textContent).toContain(
+          "岗位B",
+        );
+        selectValues("resume-pool-import-hiring-unit", ["A", "C"]);
+      } else {
+        selectValues("resume-pool-import-hiring-unit", ["A", "C"]);
+        selectValues("candidate-import-job", ["岗位A"]);
+        expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A", "C"]);
+        expect(document.querySelector('output[aria-label="入库匹配提示"]')?.textContent).toContain(
+          "组织C",
+        );
+        selectValues("candidate-import-job", ["岗位A", "岗位B"]);
+      }
+      expect(optionValues("candidate-import-job")).toEqual(["岗位A", "岗位B"]);
+      expect(optionValues("resume-pool-import-hiring-unit")).toEqual(["A", "B", "C"]);
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(document.querySelector('output[aria-label="入库匹配提示"]')).toBeNull();
+      expect(getStartButton().textContent).toContain("2 条记录");
+      act(() => getStartButton().click());
+      expect(onConfirmed.mock.lastCall?.[1].destinations).toEqual([
+        { hiringUnitId: "A", jobDescriptionId: "A-A" },
+        { hiringUnitId: "C", jobDescriptionId: "B-C" },
+      ]);
+      selectValues("resume-pool-import-hiring-unit", []);
+      expect(optionValues("candidate-import-job", true)).toEqual(["岗位A", "岗位B"]);
+      expect(getStartButton().disabled).toBe(true);
+      act(() => root.unmount());
+    },
+  );
+  it("retains unmatched selections, blocks empty destinations, and allows adding a matching organization", () => {
+    const onConfirmed = vi.fn();
+    const { root } = renderDialog(onConfirmed, relationOptions);
     selectSource();
-    selectValues("resume-pool-import-hiring-unit", ["A", "C"]);
-    expect(optionValues("candidate-import-job")).toEqual(["岗位A", "岗位B"]);
     selectValues("candidate-import-job", ["岗位A", "岗位B"]);
-    expect(getStartButton().textContent).toContain("2 条记录");
-    selectValues("resume-pool-import-hiring-unit", ["B"]);
-    expect(optionValues("candidate-import-job", true)).toEqual(["岗位A", "岗位B"]);
-    expect(getStartButton().textContent).toContain("2 条记录");
     selectValues("resume-pool-import-hiring-unit", ["A"]);
-    expect(optionValues("candidate-import-job")).toEqual(["岗位A"]);
-    expect(optionValues("candidate-import-job", true)).toEqual(["岗位A"]);
-    expect(getStartButton().textContent).toContain("1 条记录");
-    selectValues("candidate-import-job", []);
+    selectValues("candidate-import-job", ["岗位B"]);
+    expect(optionValues("candidate-import-job", true)).toEqual(["岗位B"]);
+    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A"]);
+    expect(document.querySelector('output[aria-label="入库匹配提示"]')?.textContent).toContain(
+      "岗位B",
+    );
+    expect(document.querySelector('output[aria-label="入库匹配提示"]')?.textContent).toContain(
+      "组织A",
+    );
+    expect(document.querySelectorAll("[data-destination-id]")).toHaveLength(0);
     expect(getStartButton().disabled).toBe(true);
-    selectValues("resume-pool-import-hiring-unit", []);
-    expect(optionValues("candidate-import-job")).toEqual(["岗位A", "岗位B"]);
+    expect(onConfirmed).not.toHaveBeenCalled();
+    selectValues("resume-pool-import-hiring-unit", ["A", "C"]);
+    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["A", "C"]);
+    expect(getStartButton().disabled).toBe(false);
+    act(() => getStartButton().click());
+    expect(onConfirmed.mock.lastCall?.[1].destinations).toEqual([
+      { hiringUnitId: "C", jobDescriptionId: "B-C" },
+    ]);
     act(() => root.unmount());
   });
   it("keeps same-name organizations distinct and expands all concrete jobs under a selected name", () => {
@@ -377,7 +430,11 @@ describe("job and organization multi-selection", () => {
       ),
     ).toEqual(["REQ-001081", "REQ-000940", "REQ-001027", "REQ-000200"]);
     selectValues("candidate-import-job", ["高级运营"]);
-    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual(["tech"]);
+    expect(optionValues("resume-pool-import-hiring-unit", true)).toEqual([
+      "tech",
+      "operations-a",
+      "operations-b",
+    ]);
     expect(getStartButton().textContent).toContain("1 条记录");
     act(() => root.unmount());
   });

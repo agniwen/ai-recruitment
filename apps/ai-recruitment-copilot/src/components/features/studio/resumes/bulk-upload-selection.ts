@@ -26,22 +26,33 @@ export function bulkUploadSelectionModel(
   );
   const names = new Set(selection.jobNames);
   const selectedUnits = new Set(selection.hiringUnitIds);
+  // Narrow available options while keeping existing selections visible.
   const jobOptions = [
     ...new Set(
       jobs
-        .filter((job) => selectedUnits.size === 0 || selectedUnits.has(job.hiringUnitId))
+        .filter(
+          (job) =>
+            selectedUnits.size === 0 ||
+            selectedUnits.has(job.hiringUnitId) ||
+            names.has(job.name.trim()),
+        )
         .map((job) => job.name.trim()),
     ),
   ]
     .toSorted((a, b) => a.localeCompare(b, "zh-CN"))
     .map((name) => ({ label: name, value: name }));
-  const matchingJobs = jobs.filter((job) => names.size === 0 || names.has(job.name.trim()));
   const unitOptions = units
-    .filter((unit) => matchingJobs.some((job) => job.hiringUnitId === unit.id))
+    .filter(
+      (unit) =>
+        selectedUnits.has(unit.id) ||
+        jobs.some(
+          (job) => job.hiringUnitId === unit.id && (names.size === 0 || names.has(job.name.trim())),
+        ),
+    )
     .map((unit) => {
       const departmentNames = [
         ...new Set(
-          matchingJobs
+          jobs
             .filter((job) => job.hiringUnitId === unit.id)
             .map(
               (job) =>
@@ -79,19 +90,10 @@ export function toggleBulkUploadDestination(
   return { ...selection, excludedJobIds: [...excludedJobIds] };
 }
 
-// Reconcile in the user's event, so filtering does not cause an effect feedback loop.
 export function changeBulkUploadSelection(
-  options: SelectionOptions,
   selection: BulkUploadSelection,
-  field: keyof BulkUploadSelection,
+  field: "jobNames" | "hiringUnitIds",
   values: string[],
 ): BulkUploadSelection {
-  const next = { ...selection, [field]: [...new Set(values)] };
-  const model = bulkUploadSelectionModel(options, next);
-  if (field === "jobNames") {
-    const allowed = new Set(model.unitOptions.map((unit) => unit.value));
-    return { ...next, hiringUnitIds: next.hiringUnitIds.filter((id) => allowed.has(id)) };
-  }
-  const allowed = new Set(model.jobOptions.map((job) => job.value));
-  return { ...next, jobNames: next.jobNames.filter((name) => allowed.has(name)) };
+  return { ...selection, [field]: [...new Set(values)] };
 }

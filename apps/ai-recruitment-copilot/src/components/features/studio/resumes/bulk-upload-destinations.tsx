@@ -24,6 +24,20 @@ export function BulkUploadDestinations({
     options,
     selection,
   );
+  const unmatchedJobNames =
+    selection.hiringUnitIds.length > 0
+      ? selection.jobNames.filter(
+          (name) => !availableDestinations.some((job) => job.name.trim() === name),
+        )
+      : [];
+  const unmatchedUnits =
+    selection.jobNames.length > 0
+      ? unitOptions.filter(
+          (unit) =>
+            selection.hiringUnitIds.includes(unit.value) &&
+            !availableDestinations.some((job) => job.hiringUnitId === unit.value),
+        )
+      : [];
   return (
     <div className="flex flex-col gap-4">
       <div className="space-y-3">
@@ -35,28 +49,46 @@ export function BulkUploadDestinations({
           placeholder="请选择在招岗位"
           searchPlaceholder="搜索岗位名称..."
           disabled={disabled}
-          onChange={(values) =>
-            onChange(changeBulkUploadSelection(options, selection, "jobNames", values))
-          }
+          onChange={(values) => onChange(changeBulkUploadSelection(selection, "jobNames", values))}
         />
       </div>
       <div className="space-y-3">
         <Label htmlFor="resume-pool-import-hiring-unit">入库组织（可多选）</Label>
         <SearchableMultiSelect
           id="resume-pool-import-hiring-unit"
+          triggerClassName="min-w-0 [&_[data-slot=combobox-chip]]:h-auto [&_[data-slot=combobox-chip]]:max-w-full [&_[data-slot=combobox-chip]]:whitespace-normal [&_[data-slot=combobox-chip]]:wrap-anywhere"
           value={selection.hiringUnitIds}
           options={unitOptions}
           placeholder="请选择入库组织"
           searchPlaceholder="搜索组织或部门..."
           disabled={disabled}
           onChange={(values) =>
-            onChange(changeBulkUploadSelection(options, selection, "hiringUnitIds", values))
+            onChange(changeBulkUploadSelection(selection, "hiringUnitIds", values))
           }
         />
         <p className="text-xs text-muted-foreground">
-          可先选岗位或组织，选项会相互筛选。下方每个具体岗位去向，为每份简历生成一条记录。
+          岗位和组织可多选，选项按另一侧任一已选项筛选，已选内容始终保留。下方每个勾选的具体去向，为每份简历生成一条记录。
         </p>
       </div>
+      {unmatchedJobNames.length > 0 || unmatchedUnits.length > 0 ? (
+        <output
+          aria-label="入库匹配提示"
+          className="block space-y-1 rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground"
+        >
+          {unmatchedJobNames.length > 0 ? (
+            <span className="block">
+              以下岗位在已选组织中暂无匹配去向：{unmatchedJobNames.join("、")}。可继续补选对应组织。
+            </span>
+          ) : null}
+          {unmatchedUnits.length > 0 ? (
+            <span className="block">
+              以下组织与已选岗位暂无匹配去向：{unmatchedUnits.map((unit) => unit.label).join("、")}
+              。可继续补选对应岗位。
+            </span>
+          ) : null}
+          <span className="block">已保留上述选择；入库时仅使用下方勾选的有效去向。</span>
+        </output>
+      ) : null}
       {destinations.length > 0 ? (
         <p className="text-sm font-medium" aria-live="polite">
           入库去向：每份简历生成 {destinations.length} 条记录
