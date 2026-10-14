@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 
 const mocks = vi.hoisted(() => ({
+  listStudioCalendarEvents: vi.fn(),
   loadAiCalendarEventPreview: vi.fn(),
   permissionChecks: [] as [string, string][],
-  resolveRecruitingVisibilityScope: vi.fn(),
+  resolveResumeVisibilityScope: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
@@ -15,12 +16,12 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () 
     },
 }));
 
-vi.mock("@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility", () => ({
-  resolveRecruitingVisibilityScope: mocks.resolveRecruitingVisibilityScope,
+vi.mock("@arc/ai-recruitment-copilot-backend/server/access/resume-visibility", () => ({
+  resolveResumeVisibilityScope: mocks.resolveResumeVisibilityScope,
 }));
 
 vi.mock("./dao", () => ({
-  listStudioCalendarEvents: vi.fn(),
+  listStudioCalendarEvents: mocks.listStudioCalendarEvents,
   loadAiCalendarEventPreview: mocks.loadAiCalendarEventPreview,
 }));
 
@@ -29,26 +30,50 @@ import { studioCalendarRouter } from "./route";
 
 const ORGANIZATION_ID = "org-calendar";
 const USER_ID = "user-calendar";
+const VISIBILITY_SCOPE = {
+  actor: { organizationId: ORGANIZATION_ID, userId: USER_ID },
+  odc: { departmentIds: [], hiringUnitIds: [], resumeSourceIds: ["source"] },
+  odcActor: { organizationId: ORGANIZATION_ID, userId: USER_ID },
+  recruiting: { kind: "restricted", userIds: [USER_ID] },
+};
 
 function makeApp() {
   return factory
     .createApp()
     .use("*", async (c, next) => {
       c.set("activeOrg", { id: ORGANIZATION_ID } as never);
-      c.set("member", { role: "hr" } as never);
+      c.set("member", { role: "odc" } as never);
       c.set("user", { id: USER_ID } as never);
       await next();
     })
     .route("/calendar", studioCalendarRouter);
 }
 
-describe("studioCalendarRouter AI event preview", () => {
+describe("studioCalendarRouter candidate visibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.permissionChecks.length = 0;
-    mocks.resolveRecruitingVisibilityScope.mockResolvedValue({
-      kind: "restricted",
-      userIds: [USER_ID],
+    mocks.resolveResumeVisibilityScope.mockResolvedValue(VISIBILITY_SCOPE);
+  });
+
+  it("passes ODC candidate visibility to the calendar query", async () => {
+    mocks.listStudioCalendarEvents.mockResolvedValue([]);
+    const response = await makeApp().request(
+      "/calendar?start=2026-10-12T00:00:00Z&end=2026-10-19T00:00:00Z",
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ events: [] });
+    expect(mocks.permissionChecks).toContainEqual(["page", "calendar"]);
+    expect(mocks.resolveResumeVisibilityScope).toHaveBeenCalledWith({
+      currentRole: "odc",
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
+    });
+    expect(mocks.listStudioCalendarEvents).toHaveBeenCalledWith({
+      end: new Date("2026-10-19T00:00:00Z"),
+      organizationId: ORGANIZATION_ID,
+      start: new Date("2026-10-12T00:00:00Z"),
+      visibilityScope: VISIBILITY_SCOPE,
     });
   });
 
@@ -93,7 +118,7 @@ describe("studioCalendarRouter AI event preview", () => {
       conversationId: "conversation-1",
       organizationId: ORGANIZATION_ID,
       roundId: "round-1",
-      visibilityScope: { kind: "restricted", userIds: [USER_ID] },
+      visibilityScope: VISIBILITY_SCOPE,
     });
   });
 

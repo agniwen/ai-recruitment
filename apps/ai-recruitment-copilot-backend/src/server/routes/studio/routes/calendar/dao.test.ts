@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type postgres from "postgres";
-import { listStudioCalendarEvents } from "./dao";
+import type { ResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import { listStudioCalendarEvents, loadAiCalendarEventPreview } from "./dao";
 import { findHumanInterviewConflicts } from "../interviews/dao/human-interview-conflicts";
 
 // Explicit opt-in: never use the application's shared DATABASE_URL for fixtures.
@@ -48,6 +49,20 @@ describe.skipIf(!fixture.url)("calendar DAO interval overlap (PostgreSQL)", () =
         round_label text, scheduled_at timestamp, scheduled_end_at timestamp, status text, sort_order int);
       CREATE TEMP TABLE interview_conversation (conversation_id text, organization_id text,
         schedule_entry_id text, started_at timestamp, ended_at timestamp);
+      ALTER TABLE studio_interview
+        ADD job_description_id text DEFAULT 'jd', ADD pipeline_stage text DEFAULT 'human_interview',
+        ADD ai_review_approval_status text DEFAULT 'approved', ADD ai_review_assigned_odc_user_id text,
+        ADD target_role text;
+      ALTER TABLE member ADD id text, ADD role text, ADD odc_scope_mode text DEFAULT 'selected';
+      ALTER TABLE studio_interview_schedule
+        ADD allow_text_input boolean DEFAULT false, ADD conversation_id text,
+        ADD disconnected_at timestamp, ADD session_started_at timestamp;
+      CREATE TEMP TABLE organization_role (organization_id text, role text, is_odc boolean);
+      CREATE TEMP TABLE resume_source_odc_member (organization_id text, member_id text,
+        resume_source_id text, job_series text, service_unit text);
+      CREATE TEMP TABLE job_description (id text, organization_id text, name text,
+        resume_source_id text, job_series text, service_unit text);
+      CREATE TEMP TABLE studio_interview_odc_assignment (interview_record_id text, user_id text);
     `);
   });
   afterAll(async () => {
@@ -57,7 +72,8 @@ describe.skipIf(!fixture.url)("calendar DAO interval overlap (PostgreSQL)", () =
     await client.unsafe(`
       TRUNCATE studio_human_interview_external_interviewer, studio_interview, studio_human_interview_round, studio_human_interview_meeting,
         studio_human_interview_meeting_round, studio_interview_schedule, interview_conversation,
-        studio_human_interview_meeting_interviewer, studio_human_interview_round_interviewer, member, "user";
+        studio_human_interview_meeting_interviewer, studio_human_interview_round_interviewer, member, "user",
+        organization_role, resume_source_odc_member, job_description, studio_interview_odc_assignment;
       INSERT INTO studio_interview VALUES ('candidate', 'org', 'creator', '测试候选人');
       INSERT INTO studio_human_interview_round VALUES
         ('round', 'org', 'candidate', 'online', null, null, '三面', 'pending', '2026-09-16 17:02', 0);
@@ -69,6 +85,98 @@ describe.skipIf(!fixture.url)("calendar DAO interval overlap (PostgreSQL)", () =
       INSERT INTO studio_human_interview_round_interviewer VALUES ('round', 'interviewer-1');
       INSERT INTO studio_human_interview_meeting_interviewer VALUES ('meeting', 'interviewer-1'), ('meeting', 'interviewer-2');
     `);
+  });
+
+  describe("ODC candidate visibility", () => {
+    const visibilityScope: ResumeVisibilityScope = {
+      actor: { organizationId: "org", userId: "odc" },
+      odc: { departmentIds: [], hiringUnitIds: [], resumeSourceIds: ["source"] },
+      odcActor: { organizationId: "org", userId: "odc" },
+      recruiting: { kind: "restricted", userIds: ["odc"] },
+    };
+    const input = {
+      end: new Date("2026-09-20"),
+      organizationId: "org",
+      start: new Date("2026-09-16"),
+      visibilityScope,
+    };
+    const preview = () =>
+      loadAiCalendarEventPreview({
+        organizationId: "org",
+        roundId: "ai-plan",
+        visibilityScope,
+      });
+
+    beforeEach(async () => {
+      await client.unsafe(`
+        INSERT INTO member VALUES ('org', 'odc', false, 'odc-member', 'odc', 'selected');
+        INSERT INTO organization_role VALUES ('org', 'odc', true);
+        INSERT INTO resume_source_odc_member VALUES ('org', 'odc-member', 'source', NULL, NULL);
+        INSERT INTO job_description VALUES ('jd', 'org', '前端开发', 'source', NULL, NULL);
+        INSERT INTO studio_interview_odc_assignment VALUES ('candidate', 'odc');
+        INSERT INTO studio_interview_schedule (id, organization_id, interview_record_id, round_label,
+          scheduled_at, scheduled_end_at, status, sort_order) VALUES
+          ('ai-plan', 'org', 'candidate', 'AI 计划', '2026-09-18 01:00', '2026-09-18 02:00', 'pending', 0),
+          ('ai-result', 'org', 'candidate', 'AI 记录', '2026-09-18 03:00', '2026-09-18 04:00', 'completed', 1);
+        INSERT INTO interview_conversation VALUES ('conversation', 'org', 'ai-result', '2026-09-18 03:00', '2026-09-18 04:00');
+      `);
+    });
+
+    it("shows another creator's assigned candidate in human, AI plan and AI result events", async () => {
+      const events = await listStudioCalendarEvents(input);
+      expect(events.map((event) => event.id)).toEqual([
+        "meeting",
+        "ai:ai-plan",
+        "ai-result:conversation",
+      ]);
+      expect(await preview()).toMatchObject({
+        candidate: { id: "candidate" },
+        round: { id: "ai-plan" },
+      });
+    });
+
+    it.each([
+      ["unassigned candidate", "DELETE FROM studio_interview_odc_assignment"],
+      [
+        "assignment to another ODC",
+        "UPDATE studio_interview_odc_assignment SET user_id = 'another-odc'",
+      ],
+      ["pending approval", "UPDATE studio_interview SET ai_review_approval_status = 'pending'"],
+      ["rejected approval", "UPDATE studio_interview SET ai_review_approval_status = 'rejected'"],
+      ["revoked source", "DELETE FROM resume_source_odc_member"],
+      ["revoked ODC role", "UPDATE organization_role SET is_odc = false"],
+      ["different job series", "UPDATE resume_source_odc_member SET job_series = 'other'"],
+      ["different service unit", "UPDATE resume_source_odc_member SET service_unit = 'other'"],
+    ])("hides events and preview for %s", async (_label, mutation) => {
+      await client.unsafe(mutation);
+      expect(await listStudioCalendarEvents(input)).toEqual([]);
+      expect(await preview()).toBeNull();
+    });
+
+    it("preserves workspace isolation for an assigned candidate", async () => {
+      expect(await listStudioCalendarEvents({ ...input, organizationId: "other" })).toEqual([]);
+      expect(
+        await loadAiCalendarEventPreview({
+          organizationId: "other",
+          roundId: "ai-plan",
+          visibilityScope,
+        }),
+      ).toBeNull();
+    });
+
+    it("does not expose unassigned candidates sharing the same meeting", async () => {
+      await client.unsafe(`
+        INSERT INTO studio_interview VALUES ('hidden-candidate', 'org', 'creator', '未分配候选人');
+        INSERT INTO studio_human_interview_round VALUES
+          ('hidden-round', 'org', 'hidden-candidate', 'online', null, null, '三面', 'pending', '2026-09-16 17:02', 0);
+        INSERT INTO studio_human_interview_meeting_round VALUES ('meeting', 'hidden-round');
+      `);
+      const events = await listStudioCalendarEvents(input);
+      const meeting = events.find((event) => event.id === "meeting");
+      expect(meeting?.candidates.map((candidate) => candidate.interviewRecordId)).toEqual([
+        "candidate",
+      ]);
+    });
   });
 
   it("returns a human meeting on the middle day with its full configured duration", async () => {

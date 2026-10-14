@@ -1,6 +1,7 @@
 import { and, asc, count, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
+import { buildResumeVisibilityCondition } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 import {
   interviewConversation,
   interviewConversationTurn,
@@ -57,7 +58,7 @@ interface ListStudioCalendarEventsInput {
   end: Date;
   organizationId: string;
   start: Date;
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }
 
 function eventIdFor(row: { meetingId: string | null; roundId: string }) {
@@ -80,9 +81,7 @@ export async function listStudioCalendarEvents({
   start,
   visibilityScope,
 }: ListStudioCalendarEventsInput): Promise<StudioCalendarEvent[]> {
-  if (visibilityScope.kind === "none") {
-    return [];
-  }
+  const visibilityCondition = buildResumeVisibilityCondition(visibilityScope);
   const rangeStart = sql`${start.toISOString()}::timestamptz`;
   const rangeEnd = sql`${end.toISOString()}::timestamptz`;
 
@@ -126,9 +125,7 @@ export async function listStudioCalendarEvents({
           ),
           gt(humanEndAt, rangeStart),
           lt(humanStartAt, rangeEnd),
-          visibilityScope.kind === "restricted"
-            ? inArray(studioInterview.createdBy, visibilityScope.userIds)
-            : undefined,
+          visibilityCondition,
         ),
       )
       .orderBy(
@@ -152,9 +149,7 @@ export async function listStudioCalendarEvents({
           eq(studioInterviewSchedule.organizationId, organizationId),
           gt(calendarTimestamp(studioInterviewSchedule.scheduledEndAt), rangeStart),
           lt(calendarTimestamp(studioInterviewSchedule.scheduledAt), rangeEnd),
-          visibilityScope.kind === "restricted"
-            ? inArray(studioInterview.createdBy, visibilityScope.userIds)
-            : undefined,
+          visibilityCondition,
         ),
       )
       .orderBy(asc(studioInterviewSchedule.scheduledAt), asc(studioInterviewSchedule.sortOrder)),
@@ -183,9 +178,7 @@ export async function listStudioCalendarEvents({
           isNotNull(interviewConversation.endedAt),
           gt(calendarTimestamp(interviewConversation.endedAt), rangeStart),
           lt(calendarTimestamp(interviewConversation.startedAt), rangeEnd),
-          visibilityScope.kind === "restricted"
-            ? inArray(studioInterview.createdBy, visibilityScope.userIds)
-            : undefined,
+          visibilityCondition,
         ),
       )
       .orderBy(asc(interviewConversation.startedAt)),
@@ -310,14 +303,9 @@ export async function loadAiCalendarEventPreview({
   conversationId?: string;
   organizationId: string;
   roundId: string;
-  visibilityScope: RecruitingVisibilityScope;
+  visibilityScope: CompatibleResumeVisibilityScope;
 }): Promise<StudioAiCalendarEventPreview | null> {
-  if (
-    visibilityScope.kind === "none" ||
-    (visibilityScope.kind === "restricted" && visibilityScope.userIds.length === 0)
-  ) {
-    return null;
-  }
+  const visibilityCondition = buildResumeVisibilityCondition(visibilityScope);
 
   const [round] = await db
     .select({
@@ -349,9 +337,7 @@ export async function loadAiCalendarEventPreview({
         eq(studioInterviewSchedule.id, roundId),
         eq(studioInterviewSchedule.organizationId, organizationId),
         eq(studioInterview.organizationId, organizationId),
-        visibilityScope.kind === "restricted"
-          ? inArray(studioInterview.createdBy, visibilityScope.userIds)
-          : undefined,
+        visibilityCondition,
       ),
     )
     .limit(1);
