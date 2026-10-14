@@ -530,7 +530,9 @@ export function ResumeDuplicateMatchesDialog({
   title?: ReactNode;
   onOpenChange: (open: boolean) => void;
 }) {
-  let content: ReactNode = <p className="text-muted-foreground text-sm">暂无疑似重复简历。</p>;
+  let content: ReactNode = (
+    <p className="text-muted-foreground text-sm">请联系管理员核实重复情况</p>
+  );
 
   if (isLoading) {
     content = (
@@ -569,7 +571,9 @@ export function ResumeDuplicateMatchesDialog({
               source={source}
             />
           ) : (
-            <p className="py-10 text-center text-muted-foreground text-sm">暂无疑似重复简历</p>
+            <p className="py-10 text-center text-muted-foreground text-sm">
+              请联系管理员核实重复情况
+            </p>
           )}
         </div>
       </div>
