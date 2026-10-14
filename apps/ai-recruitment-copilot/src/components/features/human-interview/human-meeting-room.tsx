@@ -641,7 +641,7 @@ function HumanMeetingStage({
             <TrackToggle
               className={controlButtonClass}
               showIcon={false}
-              captureOptions={{ resolution: ScreenSharePresets.h720fps15.resolution }}
+              captureOptions={{ resolution: ScreenSharePresets.h1080fps15.resolution }}
               source={Track.Source.ScreenShare}
             >
               <IconDeviceDesktopUp className="size-4" />
