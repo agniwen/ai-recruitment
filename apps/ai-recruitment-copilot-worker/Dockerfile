@@ -52,6 +52,7 @@ ENV TZ=Asia/Shanghai
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
+    ca-certificates \
     fontconfig \
     fonts-noto-cjk \
     libreoffice-calc \
