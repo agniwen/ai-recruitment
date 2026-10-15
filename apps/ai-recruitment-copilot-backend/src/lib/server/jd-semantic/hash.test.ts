@@ -3,10 +3,11 @@ import { buildJobDescriptionSemanticTexts } from "@arc/ai-recruitment-copilot-ba
 import type { JobDescriptionSemanticInput } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/text-builders";
 import { hashJobDescriptionForSemanticIndex } from "./hash";
 
-const base = {
+const base: JobDescriptionSemanticInput = {
   departmentName: "算法组",
   description: "负责推荐系统",
   id: "jd-1",
+  matchingProfileText: "核心技能：向量检索",
   name: "推荐算法工程师",
   prompt: "考察向量检索经验",
 };

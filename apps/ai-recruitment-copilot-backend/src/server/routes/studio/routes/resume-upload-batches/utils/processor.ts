@@ -411,6 +411,17 @@ async function fetchAndParse(
   succeededPoolItemId: string | null;
   succeededRecordId: string | null;
 }> {
+  const { loadParsedSmartResumePoolItemId } =
+    await import("../../smart-resume-tasks/utils/process");
+  const parsedSmartPoolItemId = await loadParsedSmartResumePoolItemId(item.id, batchRow.target);
+  if (parsedSmartPoolItemId) {
+    return {
+      autoMatchJobDescription: false,
+      jobDescriptionId: null,
+      succeededPoolItemId: parsedSmartPoolItemId,
+      succeededRecordId: null,
+    };
+  }
   if (!item.storageKey || item.storageKey.length === 0) {
     // 防御性检查：理论上 Zod + chat_attachment notNull 都已校验，但兜底一次
     // 给出可读错误信息，避免被 AWS SDK 抛"No value provided for input HTTP label: Key"。
@@ -816,6 +827,11 @@ async function processClaimedItem(
       await releaseBatchItemForRetry(batchRow.id, item.id);
       throw error;
     }
+  }
+  if (!outcome.errorMessage && batchRow.target === "resume_pool") {
+    const { processSmartResumeRecommendation } =
+      await import("../../smart-resume-tasks/utils/process");
+    await processSmartResumeRecommendation(item.id);
   }
   await writeOutcome(item, batchRow.id, outcome);
 

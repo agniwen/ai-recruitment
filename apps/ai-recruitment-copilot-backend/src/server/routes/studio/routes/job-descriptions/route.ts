@@ -1,5 +1,7 @@
 /* oxlint-disable max-lines -- this mount-local router keeps the complete job-description CRUD boundary together. */
 import { loadJobDescriptionForReader } from "./utils/read-detail";
+import { jobMatchingProfileRouter } from "./routes/matching-profile/route";
+import { jobMatchingIndexRouter } from "./routes/matching-index/route";
 import { jobDescriptionReferenceOptionsRouter } from "./routes/reference-options/route";
 import { jobDescriptionLinkedTemplatesRouter } from "./routes/linked-templates/route";
 import { jobDescriptionValidityRouter } from "./routes/validity/route";
@@ -269,10 +271,12 @@ const recommendationBodySchema = z.object({
 
 export const jobDescriptionsRouter = factory
   .createApp()
+  .route("/matching-index", jobMatchingIndexRouter)
   .route("/export", jobDescriptionExportRouter)
   .route("/reference-options", jobDescriptionReferenceOptionsRouter)
   .route("/:id/linked-templates", jobDescriptionLinkedTemplatesRouter)
   .route("/:id/validity", jobDescriptionValidityRouter)
+  .route("/:id/matching-profile", jobMatchingProfileRouter)
   .post(
     "/ai-generate",
     requirePermission("jd", "update"),

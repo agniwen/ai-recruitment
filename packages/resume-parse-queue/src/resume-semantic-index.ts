@@ -14,6 +14,7 @@ export const RESUME_SEMANTIC_INDEX_JOB_NAME = "index-resume-semantic";
 
 export const resumeSemanticIndexJobSchema = z.object({
   organizationId: z.string().min(1),
+  rebuildJobMatching: z.boolean().optional(),
   sourceId: z.string().min(1),
   sourceType: z.enum(["studio_interview", "resume_pool_item", "job_description"]),
 });
@@ -47,10 +48,11 @@ function jobOptions(): JobsOptions {
 }
 
 export function buildResumeSemanticIndexJobId({
+  rebuildJobMatching,
   sourceId,
   sourceType,
-}: Pick<ResumeSemanticIndexJobData, "sourceId" | "sourceType">): string {
-  return `${sourceType}-${sourceId.replaceAll(":", "-")}`;
+}: Pick<ResumeSemanticIndexJobData, "sourceId" | "sourceType" | "rebuildJobMatching">): string {
+  return `${sourceType}-${sourceId.replaceAll(":", "-")}${rebuildJobMatching ? "-matching-rebuild" : ""}`;
 }
 
 export function resolveResumeSemanticIndexWorkerConcurrency(

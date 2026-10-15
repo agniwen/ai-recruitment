@@ -2,6 +2,7 @@
 
 import type { PreRegistrationOdcAssignment } from "./pre-registration";
 import type { ArcMessage, ArcMessageRole } from "./ai-message";
+import type { JobMatchingProfile, SmartRecommendationResult } from "./job-matching";
 import type {
   CandidateFormDisplayMode,
   CandidateFormOption,
@@ -2070,6 +2071,66 @@ export type ResumeUploadBatchItemAttemptStatus =
   | "succeeded"
   | "failed"
   | "interrupted";
+
+export const jobMatchingProfile = pgTable("job_matching_profile", {
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  jobDescriptionId: text("job_description_id")
+    .primaryKey()
+    .references(() => jobDescription.id, { onDelete: "cascade" }),
+  profile: jsonb("profile").$type<JobMatchingProfile>().notNull(),
+  sourceHash: text("source_hash").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+});
+
+export const smartResumeTask = pgTable(
+  "smart_resume_task",
+  {
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    id: text("id")
+      .primaryKey()
+      .references(() => resumeUploadBatch.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("smart_resume_task_unsubmitted_idx")
+      .on(table.organizationId, table.createdBy, table.createdAt)
+      .where(sql`${table.submittedAt} IS NULL`),
+  ],
+);
+
+export const smartResumeTaskItem = pgTable(
+  "smart_resume_task_item",
+  {
+    createdRecordIds: jsonb("created_record_ids").$type<string[]>().notNull().default([]),
+    error: text("error"),
+    id: text("id")
+      .primaryKey()
+      .references(() => resumeUploadBatchItem.id, { onDelete: "cascade" }),
+    portfolioAttachments: jsonb("portfolio_attachments")
+      .$type<(typeof studioInterview.$inferSelect)["portfolioAttachments"]>()
+      .notNull()
+      .default([]),
+    result: jsonb("result").$type<SmartRecommendationResult>(),
+    selectedJobIds: jsonb("selected_job_ids").$type<string[]>().notNull().default([]),
+    selectionTouched: boolean("selection_touched").notNull().default(false),
+    skipped: boolean("skipped").notNull().default(false),
+    status: text("status")
+      .$type<"pending" | "processing" | "ready" | "failed">()
+      .notNull()
+      .default("pending"),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => smartResumeTask.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("smart_resume_task_item_task_idx").on(table.taskId)],
+);
 
 export const resumeUploadBatchItemAttempt = pgTable(
   "resume_upload_batch_item_attempt",

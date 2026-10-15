@@ -61,6 +61,7 @@ import { rpc } from "@/lib/client/rpc";
 import { runAsyncAction } from "@/lib/client/async-control";
 import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { useHasPermission } from "@/hooks/use-has-permission";
+import { SmartResumeUpload } from "./smart-resume-upload";
 // import { studioResumeKeys } from "@/lib/client/api/query-keys";
 import { StudioPersonDetailDialog } from "@/components/features/studio/studio-person-detail-dialog";
 import { StudioPersonEditDialog } from "@/components/features/studio/studio-person-edit-dialog";
@@ -728,6 +729,9 @@ export function ResumeLibraryPage() {
           canRetryResumeParse={canRetryResumeParse}
           canUpdateResumeLibrary={canUpdateResumeLibrary}
           canUploadResumeLibrary={canUploadResumeLibrary}
+          smartUploadAction={
+            canUploadResumeLibrary ? <SmartResumeUpload onSubmitted={invalidateAll} /> : null
+          }
           empty={resumeLibraryEmptyState}
           error={resumeLibraryListQuery.error}
           fetchNextPage={resumeLibraryListQuery.fetchNextPage}

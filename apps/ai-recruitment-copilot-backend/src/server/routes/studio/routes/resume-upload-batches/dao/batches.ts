@@ -8,6 +8,8 @@ import {
   resumeUploadBatchItemAttempt,
   resumeUploadBatchItem,
   studioInterview,
+  smartResumeTask,
+  smartResumeTaskItem,
 } from "@arc/db-schema/schema";
 import type {
   ResumePoolScope,
@@ -75,6 +77,7 @@ export function toItemDto(row: ItemRow): BulkResumeBatchItemDto {
 }
 
 export interface CreateBatchInput {
+  smartUpload?: boolean;
   batchId?: string;
   organizationId: string;
   userId: string;
@@ -249,6 +252,20 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
         storageKey: file.storageKey,
       })),
     );
+    if (input.smartUpload) {
+      await tx.insert(smartResumeTask).values({
+        createdBy: input.userId,
+        id: batchId,
+        organizationId: input.organizationId,
+      });
+      await tx.insert(smartResumeTaskItem).values(
+        rows.map(({ file, itemId }) => ({
+          id: itemId,
+          portfolioAttachments: file.portfolioAttachments ?? [],
+          taskId: batchId,
+        })),
+      );
+    }
   });
   return batchId;
 }

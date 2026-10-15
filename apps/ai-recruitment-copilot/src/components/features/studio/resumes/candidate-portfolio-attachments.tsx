@@ -40,6 +40,7 @@ interface Props {
   disabled?: boolean;
   editing: boolean;
   pendingFiles: File[];
+  previewBaseUrl?: string;
   recordId: string;
   slug: string;
   onAttachmentsChange: (attachments: PortfolioItem[]) => void;
@@ -137,6 +138,7 @@ export function CandidatePortfolioAttachments({
   disabled = false,
   editing,
   pendingFiles,
+  previewBaseUrl,
   recordId,
   slug,
   onAttachmentsChange,
@@ -160,7 +162,9 @@ export function CandidatePortfolioAttachments({
   );
   const busy = disabled || deleting || uploading;
   const canUpload = editing || Boolean(onUpload);
-  const baseUrl = `/api/w/${encodeURIComponent(slug)}/studio/resumes/${encodeURIComponent(recordId)}/portfolio`;
+  const baseUrl =
+    previewBaseUrl ??
+    `/api/w/${encodeURIComponent(slug)}/studio/resumes/${encodeURIComponent(recordId)}/portfolio`;
   const previewUrl = previewAttachment
     ? `${baseUrl}/${encodeURIComponent(previewAttachment.id)}`
     : "";

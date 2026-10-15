@@ -42,6 +42,7 @@ export interface ResumeStoredEmbeddingChunk {
 }
 
 export interface ResumeVectorSearchInput {
+  allowedSourceIds?: string[];
   chunkType: ResumeSemanticChunkType;
   embedding: number[];
   embeddingVersion?: string;

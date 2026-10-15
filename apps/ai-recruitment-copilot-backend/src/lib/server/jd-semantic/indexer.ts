@@ -12,7 +12,12 @@ import type {
   ResumeEmbeddingChunk,
   ResumeVectorStore,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/resume-semantic/vector-store";
-import { department, jobDescription, resumeSemanticIndex } from "@arc/db-schema/schema";
+import {
+  department,
+  jobDescription,
+  jobMatchingProfile,
+  resumeSemanticIndex,
+} from "@arc/db-schema/schema";
 import { selectableJobDescriptionCondition } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/job-descriptions/dao";
 import { hashJobDescriptionForSemanticIndex } from "./hash";
 
@@ -109,11 +114,13 @@ async function loadJdSource(job: JdSemanticIndexJob): Promise<JobDescriptionSema
       departmentName: department.name,
       description: jobDescription.description,
       id: jobDescription.id,
+      matchingProfile: jobMatchingProfile.profile,
       name: jobDescription.name,
       prompt: jobDescription.prompt,
     })
     .from(jobDescription)
     .leftJoin(department, eq(department.id, jobDescription.departmentId))
+    .leftJoin(jobMatchingProfile, eq(jobMatchingProfile.jobDescriptionId, jobDescription.id))
     .where(
       and(
         eq(jobDescription.id, job.sourceId),
@@ -122,7 +129,12 @@ async function loadJdSource(job: JdSemanticIndexJob): Promise<JobDescriptionSema
       ),
     )
     .limit(1);
-  return row ?? null;
+  return row
+    ? {
+        ...row,
+        matchingProfileText: row.matchingProfile ? JSON.stringify(row.matchingProfile) : null,
+      }
+    : null;
 }
 
 // profileHash 不参与 WHERE，只用 (sourceType, sourceId, embeddingVersion) 查询——

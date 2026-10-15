@@ -53,6 +53,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TextareaCounter } from "@/components/ui/textarea-counter";
 import { hasFieldErrors, toFieldErrors } from "../interviews/interview-form";
 import { ResumeScreeningPolicyFields } from "./job-description-screening-fields";
+import { JobMatchingProfileFields } from "./job-matching-profile-fields";
 import {
   LinkedFormsList,
   LinkedInterviewQuestionTemplatesList,
@@ -1417,6 +1418,9 @@ export function JobDescriptionFormDialog({
               </FieldGroup>
             </TabsContent>
             <TabsContent value="screening">
+              {record ? (
+                <JobMatchingProfileFields slug={slug} jobId={record.id} readOnly={readOnly} />
+              ) : null}
               <form.Field name="resumeScreeningPolicy">
                 {(field) => (
                   <ResumeScreeningPolicyFields

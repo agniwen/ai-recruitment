@@ -24,6 +24,7 @@ import {
 } from "./resume-library-page-model";
 import type { ResumeLibraryGridState } from "./resume-library-page-model";
 interface ResumeLibraryCardListProps {
+  smartUploadAction?: ReactNode;
   canCloseCandidate: boolean;
   canCreateInterview: boolean;
   canDeleteResumeLibrary: boolean;
@@ -65,6 +66,7 @@ interface ResumeLibraryCardListProps {
 }
 
 export function ResumeLibraryCardList({
+  smartUploadAction,
   canCloseCandidate,
   canCreateInterview,
   canDeleteResumeLibrary,
@@ -264,19 +266,22 @@ export function ResumeLibraryCardList({
         searchLoading={isInitialLoading}
         toolbarRight={
           canUploadResumeLibrary || canReadResumeUploadBatch ? (
-            <ButtonGroup>
-              {canUploadResumeLibrary ? (
-                <ResumeUploadEntryButton
-                  disabled={uploadEntryDisabled}
-                  onClick={onOpenUploadEntry}
-                />
-              ) : null}
-              {canReadResumeUploadBatch && hasActiveUploadBatches ? (
-                <Button onClick={onOpenBatchList} type="button">
-                  <IconHistory className="size-4" />
-                </Button>
-              ) : null}
-            </ButtonGroup>
+            <div className="flex flex-wrap items-start justify-end gap-2">
+              <ButtonGroup>
+                {canUploadResumeLibrary ? (
+                  <ResumeUploadEntryButton
+                    disabled={uploadEntryDisabled}
+                    onClick={onOpenUploadEntry}
+                  />
+                ) : null}
+                {canReadResumeUploadBatch && hasActiveUploadBatches ? (
+                  <Button onClick={onOpenBatchList} type="button">
+                    <IconHistory className="size-4" />
+                  </Button>
+                ) : null}
+              </ButtonGroup>
+              {smartUploadAction}
+            </div>
           ) : null
         }
       />

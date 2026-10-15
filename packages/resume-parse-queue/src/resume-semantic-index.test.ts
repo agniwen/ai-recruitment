@@ -50,4 +50,17 @@ describe("resume semantic index queue payload", () => {
     });
     expect(parsed.sourceType).toBe("job_description");
   });
+  it("retains manual rebuild intent in durable jobs and gives it a separate deduplication id", () => {
+    const job = resumeSemanticIndexJobSchema.parse({
+      organizationId: "org",
+      rebuildJobMatching: true,
+      sourceId: "jd:1",
+      sourceType: "job_description",
+    });
+    expect(job.rebuildJobMatching).toBe(true);
+    expect(buildResumeSemanticIndexJobId(job)).toBe("job_description-jd-1-matching-rebuild");
+    expect(buildResumeSemanticIndexJobId({ ...job, rebuildJobMatching: false })).toBe(
+      "job_description-jd-1",
+    );
+  });
 });

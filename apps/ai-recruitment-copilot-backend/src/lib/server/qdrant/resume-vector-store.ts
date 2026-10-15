@@ -220,6 +220,9 @@ export class QdrantResumeVectorStore implements ResumeVectorStore, ResumeVectorR
   }
 
   async searchSimilarResumes(input: ResumeVectorSearchInput): Promise<ResumeVectorSearchResult[]> {
+    if (input.allowedSourceIds?.length === 0) {
+      return [];
+    }
     const must: QdrantFilterCondition[] = [
       mustMatch("organizationId", input.organizationId),
       mustMatch("chunkType", input.chunkType),
@@ -230,6 +233,9 @@ export class QdrantResumeVectorStore implements ResumeVectorStore, ResumeVectorR
     }
     if (input.sourceTypes && input.sourceTypes.length > 0) {
       must.push(mustMatchAny("sourceType", input.sourceTypes));
+    }
+    if (input.allowedSourceIds) {
+      must.push(mustMatchAny("sourceId", input.allowedSourceIds));
     }
 
     const body = await this.client.query(this.collectionName, {

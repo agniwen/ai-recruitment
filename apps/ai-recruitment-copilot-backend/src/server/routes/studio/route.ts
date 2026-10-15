@@ -1,4 +1,5 @@
 import { aiReviewRouter } from "./routes/ai-review/route";
+import { smartResumeTasksRouter } from "./routes/smart-resume-tasks/route";
 import { odcResponsibilitiesRouter } from "./routes/odc-responsibilities/route";
 import { resumeSourcesRouter } from "./routes/resume-sources/route";
 import { studioPreRegistrationsRouter } from "./routes/pre-registrations/route";
@@ -31,6 +32,7 @@ export const studioRouter = factory
   .route("/resume-pool", resumePoolRouter)
   .route("/resumes", resumeLibraryRouter)
   .route("/resume-upload-batches", resumeUploadBatchesRouter)
+  .route("/smart-resume-tasks", smartResumeTasksRouter)
   .route("/resume-sources", resumeSourcesRouter)
   .route("/hiring-units", hiringUnitsRouter)
   .route("/departments", departmentsRouter)

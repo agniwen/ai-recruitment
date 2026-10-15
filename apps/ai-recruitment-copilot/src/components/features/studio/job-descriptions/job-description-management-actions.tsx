@@ -5,6 +5,7 @@ import type { JobDescriptionGoogleSheetsSyncResult } from "@arc/shared/job-descr
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { GoogleSheetsSyncButton } from "./google-sheets-sync-button";
+import { JobMatchingIndexButton } from "./job-matching-index-button";
 
 export function JobDescriptionToolbarActions({
   canCreate,
@@ -27,12 +28,9 @@ export function JobDescriptionToolbarActions({
   onExport: () => void;
   onSynced: (result: JobDescriptionGoogleSheetsSyncResult) => Promise<void> | void;
 }) {
-  if (!(canCreate || canExport || canSync)) {
-    return null;
-  }
-
   return (
     <div className="flex flex-1 flex-wrap justify-end gap-2 sm:flex-none">
+      <JobMatchingIndexButton />
       {canExport ? (
         <Button disabled={exportDisabled} onClick={onExport} type="button" variant="outline">
           <IconDownload data-icon="inline-start" />

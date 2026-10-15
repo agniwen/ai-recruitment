@@ -58,6 +58,7 @@ function latestWork(profile: ResumeProfile) {
 }
 
 export interface JobDescriptionSemanticInput {
+  matchingProfileText?: string | null;
   departmentName: string | null;
   description: string | null;
   id: string;
@@ -99,6 +100,7 @@ export function buildJobDescriptionSemanticTexts(
       chunkType: "skill_role",
       text: sectionOrHeader("岗位和技能要求", [
         name ? `目标岗位：${name}` : null,
+        jd.matchingProfileText ? `结构化画像：${jd.matchingProfileText}` : null,
         prompt ? `能力要求：${prompt}` : null,
         description ? `补充描述：${description}` : null,
       ]),

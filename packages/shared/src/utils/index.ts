@@ -8,6 +8,8 @@
  * Prefer `import { cn, formatDate, ensureArray } from "@arc/shared/utils"` from app code.
  */
 
+export { throttle } from "lodash-es";
+
 export * from "./cn";
 export * from "./guards";
 export * from "./array";

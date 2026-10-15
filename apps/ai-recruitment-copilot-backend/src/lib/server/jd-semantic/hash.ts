@@ -7,6 +7,7 @@ function cleanText(value: string | null | undefined): string {
 
 export function hashJobDescriptionForSemanticIndex(jd: JobDescriptionSemanticInput): string {
   const canonical = {
+    ...(jd.matchingProfileText ? { matchingProfileText: cleanText(jd.matchingProfileText) } : {}),
     departmentName: cleanText(jd.departmentName),
     description: cleanText(jd.description),
     name: cleanText(jd.name),

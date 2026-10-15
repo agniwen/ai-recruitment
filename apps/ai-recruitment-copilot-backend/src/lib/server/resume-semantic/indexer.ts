@@ -166,7 +166,9 @@ export async function listRecoverableResumeSemanticIndexJobs(
       ),
     )
     .limit(limit);
-  return rows;
+  return rows.map((job) =>
+    job.sourceType === "job_description" ? { ...job, rebuildJobMatching: true } : job,
+  );
 }
 
 function semanticIndexId(sourceType: string, sourceId: string, embeddingVersion: string): string {

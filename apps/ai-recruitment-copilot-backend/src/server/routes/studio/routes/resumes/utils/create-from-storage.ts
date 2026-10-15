@@ -10,6 +10,7 @@ import type {
   ResumeScreeningStatus,
 } from "@arc/db-schema/studio-interviews";
 import type { ResumeScreeningResult } from "@arc/shared/resume-screening";
+import type { PortfolioItem } from "@arc/shared/bulk-resume-upload";
 import { syncResumeSkills } from "../dao/skills";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -25,6 +26,7 @@ export interface CreateResumeRecordFromStorageInput {
   jobDescriptionId: string | null;
   notes: string | null;
   organizationId: string;
+  portfolioAttachments?: PortfolioItem[];
   recommendationText?: string | null;
   recruitmentSource?: ResumeRecruitmentSource | null;
   recruitmentSourceDetail?: string | null;
@@ -84,6 +86,7 @@ export async function createResumeRecordFromStorage(
       notes: input.notes,
       organizationId: input.organizationId,
       pipelineStage: "ai_review",
+      portfolioAttachments: input.portfolioAttachments ?? [],
       recommendationText: input.recommendationText ?? null,
       recruitmentSource: input.recruitmentSource ?? null,
       recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
