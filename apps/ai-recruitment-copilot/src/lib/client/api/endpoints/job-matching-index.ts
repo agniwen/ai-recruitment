@@ -17,3 +17,10 @@ export function rebuildJobMatchingIndex(slug: string) {
     "岗位向量任务未能入队",
   );
 }
+
+export function retryFailedJobMatchingIndex(slug: string) {
+  return rpcFetch<{ queued: number }>(
+    endpoint["retry-failed"].$post({ param: { slug } }),
+    "失败岗位未能重新入队",
+  );
+}

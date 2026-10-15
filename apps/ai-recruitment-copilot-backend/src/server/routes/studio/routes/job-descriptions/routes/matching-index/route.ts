@@ -33,4 +33,24 @@ export const jobMatchingIndexRouter = factory
         503,
       );
     }
+  })
+  .post("/retry-failed", async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    try {
+      const result = await startJobMatchingIndexRebuild(activeOrg.id, { failedOnly: true });
+      console.info("[job-matching-index] failed jobs requeued", {
+        organizationId: activeOrg.id,
+        queued: result.queued,
+        userId: user.id,
+      });
+      return c.json(result, 202);
+    } catch {
+      return c.json(
+        { error: "失败岗位未能重新入队，请检查模型、Qdrant 和后台队列配置后重试。" },
+        503,
+      );
+    }
   });

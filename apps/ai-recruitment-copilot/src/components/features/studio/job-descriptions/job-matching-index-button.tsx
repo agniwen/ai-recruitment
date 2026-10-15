@@ -12,14 +12,36 @@ import { useHasPermission } from "@/hooks/use-has-permission";
 import {
   getJobMatchingIndexStatus,
   rebuildJobMatchingIndex,
+  retryFailedJobMatchingIndex,
 } from "@/lib/client/api/endpoints/job-matching-index";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 
 const REBUILD_THROTTLE_MS = 1000;
 
-function IndexStatusDetails({ status }: { status: JobMatchingIndexStatus }) {
+function IndexStatusDetails({
+  status,
+  onRetryFailed,
+  retryDisabled,
+  retrying,
+}: {
+  status: JobMatchingIndexStatus;
+  onRetryFailed: () => void;
+  retryDisabled: boolean;
+  retrying: boolean;
+}) {
   const values = [
     ["可选在招岗位", status.total],
     ["岗位结构化画像", status.profiles],
@@ -33,7 +55,22 @@ function IndexStatusDetails({ status }: { status: JobMatchingIndexStatus }) {
       <dl className="grid grid-cols-2 gap-4">
         {values.map(([label, value]) => (
           <div className="flex flex-col gap-1" key={label}>
-            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+              {label}
+              {label === "处理失败" && status.failed > 0 ? (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0"
+                  aria-label="重试失败岗位"
+                  disabled={retryDisabled}
+                  onClick={onRetryFailed}
+                >
+                  {retrying ? "正在提交…" : "重试"}
+                </Button>
+              ) : null}
+            </dt>
             <dd className="text-lg font-medium tabular-nums">{value}</dd>
           </div>
         ))}
@@ -51,6 +88,7 @@ function JobMatchingIndexControl() {
   const slug = useWorkspaceSlug();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const requestLocked = useRef(false);
   const queryKey = ["job-matching-index", slug];
   const status = useQuery({
@@ -61,19 +99,29 @@ function JobMatchingIndexControl() {
     staleTime: 0,
   });
   const rebuild = useMutation({
-    mutationFn: () => rebuildJobMatchingIndex(slug),
+    mutationFn: (failedOnly: boolean) =>
+      failedOnly ? retryFailedJobMatchingIndex(slug) : rebuildJobMatchingIndex(slug),
     onError: (error) => {
       requestLocked.current = false;
       toast.error(error.message);
     },
-    onSuccess: (result) => {
+    onSuccess: (result, failedOnly) => {
+      setConfirmOpen(false);
       setOpen(false);
       void client.invalidateQueries({ queryKey, refetchType: "none" });
-      toast.success(
-        result.queued
-          ? `已为 ${result.queued} 个岗位创建后台向量任务`
-          : "当前没有需要处理的在招岗位",
-      );
+      if (failedOnly) {
+        toast.success(
+          result.queued
+            ? `已为 ${result.queued} 个失败岗位重新创建后台向量任务`
+            : "当前没有需要重试的失败岗位",
+        );
+      } else {
+        toast.success(
+          result.queued
+            ? `已为 ${result.queued} 个岗位创建后台向量任务`
+            : "当前没有需要处理的在招岗位",
+        );
+      }
     },
     retry: false,
   });
@@ -81,9 +129,9 @@ function JobMatchingIndexControl() {
   const throttledRebuild = useMemo(
     () =>
       throttle(
-        () => {
+        (failedOnly: boolean) => {
           requestLocked.current = true;
-          runRebuild();
+          runRebuild(failedOnly);
         },
         REBUILD_THROTTLE_MS,
         { leading: true, trailing: false },
@@ -96,13 +144,14 @@ function JobMatchingIndexControl() {
     !status.data ||
     Boolean(status.data.configurationError) ||
     status.data.total === 0;
-  const submitRebuild = () => {
-    if (actionDisabled || requestLocked.current) {
+  const submitRebuild = (failedOnly: boolean) => {
+    if (actionDisabled || requestLocked.current || (failedOnly && !status.data?.failed)) {
       return;
     }
-    throttledRebuild();
+    throttledRebuild(failedOnly);
   };
-  const actionLabel = rebuild.isPending ? "正在提交…" : "重建向量";
+  const retrying = rebuild.isPending && rebuild.variables === true;
+  const actionLabel = rebuild.isPending && !rebuild.variables ? "正在提交…" : "重建向量";
   return (
     <>
       <Button
@@ -114,6 +163,7 @@ function JobMatchingIndexControl() {
             return;
           }
           requestLocked.current = false;
+          setConfirmOpen(false);
           setOpen(true);
         }}
       >
@@ -131,9 +181,39 @@ function JobMatchingIndexControl() {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               关闭
             </Button>
-            <Button type="button" disabled={actionDisabled} onClick={submitRebuild}>
-              {actionLabel}
-            </Button>
+            <AlertDialog
+              open={confirmOpen}
+              onOpenChange={(nextOpen) => {
+                if (rebuild.isPending || (nextOpen && (actionDisabled || requestLocked.current))) {
+                  return;
+                }
+                setConfirmOpen(nextOpen);
+              }}
+            >
+              <AlertDialogTrigger disabled={actionDisabled} render={<Button type="button" />}>
+                {actionLabel}
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>确认重建全部岗位向量？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    将重新生成当前工作区全部 {status.data?.total ?? 0}
+                    个可选在招岗位的向量，包含已成功索引的岗位。此操作耗时较长，并会产生模型调用费用。
+                    日常岗位变更会自动更新向量；仅有部分失败时，可返回使用“重试”。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={rebuild.isPending}>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    type="button"
+                    disabled={actionDisabled}
+                    onClick={() => submitRebuild(false)}
+                  >
+                    {rebuild.isPending ? "正在提交…" : "确认重建"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         }
       >
@@ -150,7 +230,14 @@ function JobMatchingIndexControl() {
             </AlertDescription>
           </Alert>
         ) : null}
-        {status.data ? <IndexStatusDetails status={status.data} /> : null}
+        {status.data ? (
+          <IndexStatusDetails
+            status={status.data}
+            onRetryFailed={() => submitRebuild(true)}
+            retryDisabled={actionDisabled}
+            retrying={retrying}
+          />
+        ) : null}
       </Modal>
     </>
   );

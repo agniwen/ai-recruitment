@@ -106,6 +106,53 @@ describe("job index maintenance", () => {
       })),
     );
   });
+  it("retries only failed jobs in the current workspace and embedding version", async () => {
+    const failedRows = [
+      { indexStatus: "failed", job: { id: "failed-profile" }, profile: null },
+      { indexStatus: "failed", job: { id: "failed-vector" }, profile: {} },
+    ];
+    mocks.rows.mockResolvedValue([
+      ...rows,
+      { indexStatus: "pending", job: { id: "running" }, profile: {} },
+      ...failedRows,
+    ]);
+    expect(await startJobMatchingIndexRebuild("org", { failedOnly: true })).toEqual({
+      queued: 2,
+    });
+    expect(mocks.rows).toHaveBeenCalledWith("org", "v1");
+    expect(mocks.pending).toHaveBeenCalledWith(
+      "org",
+      failedRows,
+      expect.objectContaining({ embeddingVersion: "v1" }),
+    );
+    expect(mocks.enqueue).toHaveBeenCalledWith(
+      failedRows.map(({ job }) => ({
+        organizationId: "org",
+        rebuildJobMatching: true,
+        sourceId: job.id,
+        sourceType: "job_description",
+      })),
+    );
+  });
+  it("does not fall back to a full rebuild when no failed jobs remain", async () => {
+    expect(await startJobMatchingIndexRebuild("org", { failedOnly: true })).toEqual({
+      queued: 0,
+    });
+    expect(mocks.ensureCollection).not.toHaveBeenCalled();
+    expect(mocks.pending).not.toHaveBeenCalled();
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+  it("records an enqueue failure only for the jobs selected for retry", async () => {
+    mocks.rows.mockResolvedValue([
+      ...rows,
+      { indexStatus: "failed", job: { id: "failed-job" }, profile: null },
+    ]);
+    mocks.enqueue.mockRejectedValue(new Error("offline"));
+    await expect(startJobMatchingIndexRebuild("org", { failedOnly: true })).rejects.toThrow(
+      "offline",
+    );
+    expect(mocks.failed).toHaveBeenCalledWith("org", ["failed-job"], "v1");
+  });
   it("rejects disabled or unconfigured queues before changing index state", async () => {
     mocks.queueConfigured.mockReturnValue(false);
     await expect(startJobMatchingIndexRebuild("org")).rejects.toThrow("队列");

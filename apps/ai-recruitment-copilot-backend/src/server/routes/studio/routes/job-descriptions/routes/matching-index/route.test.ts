@@ -31,8 +31,10 @@ it.each(["user", "owner", null])(
   async (role) => {
     const read = await app(role).request("/index");
     const rebuild = await app(role).request("/index/rebuild", { method: "POST" });
+    const retry = await app(role).request("/index/retry-failed", { method: "POST" });
     expect(read.status).toBe(role ? 403 : 401);
     expect(rebuild.status).toBe(role ? 403 : 401);
+    expect(retry.status).toBe(role ? 403 : 401);
     expect(mocks.status).not.toHaveBeenCalled();
     expect(mocks.rebuild).not.toHaveBeenCalled();
   },
@@ -45,6 +47,19 @@ it("uses only the workspace resolved by the authenticated request", async () => 
   expect(rebuild.status).toBe(202);
   expect(await rebuild.json()).toEqual({ queued: 2 });
   expect(mocks.rebuild).toHaveBeenCalledWith("requested-workspace");
+});
+it("retries only failed jobs using the authenticated workspace", async () => {
+  const response = await app().request("/index/retry-failed?organizationId=foreign", {
+    method: "POST",
+  });
+  expect(response.status).toBe(202);
+  expect(await response.json()).toEqual({ queued: 2 });
+  expect(mocks.rebuild).toHaveBeenCalledWith("requested-workspace", { failedOnly: true });
+});
+it("reports retry enqueue failures without claiming completion", async () => {
+  mocks.rebuild.mockRejectedValue(new Error("queue unavailable"));
+  const response = await app().request("/index/retry-failed", { method: "POST" });
+  expect(response.status).toBe(503);
 });
 it("reports queue or provider configuration failures without claiming completion", async () => {
   mocks.rebuild.mockRejectedValue(new Error("queue unavailable"));

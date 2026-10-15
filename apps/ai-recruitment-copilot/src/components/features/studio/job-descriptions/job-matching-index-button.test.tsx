@@ -11,6 +11,7 @@ import { JobMatchingIndexButton } from "./job-matching-index-button";
 const mocks = vi.hoisted(() => ({
   permission: vi.fn(),
   rebuild: vi.fn(),
+  retryFailed: vi.fn(),
   session: vi.fn(),
   status: vi.fn(),
 }));
@@ -20,6 +21,7 @@ vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "work
 vi.mock("@/lib/client/api/endpoints/job-matching-index", () => ({
   getJobMatchingIndexStatus: mocks.status,
   rebuildJobMatchingIndex: mocks.rebuild,
+  retryFailedJobMatchingIndex: mocks.retryFailed,
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/components/ui/modal", () => ({
@@ -63,6 +65,7 @@ beforeEach(() => {
   mocks.permission.mockReturnValue(true);
   mocks.status.mockResolvedValue(status);
   mocks.rebuild.mockResolvedValue({ queued: 450 });
+  mocks.retryFailed.mockResolvedValue({ queued: 11 });
 });
 afterEach(async () => {
   await act(() => root?.unmount());
@@ -89,11 +92,19 @@ async function render() {
   await act(() => delay(15));
 }
 const button = (label: string) =>
-  [...(document.querySelector("dialog") ?? document).querySelectorAll("button")].find(
-    (item) => item.textContent === label,
-  );
+  [
+    ...(
+      document.querySelector('[role="alertdialog"]') ??
+      document.querySelector("dialog") ??
+      document
+    ).querySelectorAll("button"),
+  ].find((item) => item.textContent === label);
 async function openControl() {
   await render();
+  await act(() => button("重建向量")?.click());
+  await act(() => delay(15));
+}
+async function openRebuildConfirmation() {
   await act(() => button("重建向量")?.click());
   await act(() => delay(15));
 }
@@ -114,11 +125,41 @@ it("reads the actual point count inside the modal and creates absent vectors des
   expect(mocks.status).toHaveBeenCalledWith("work");
   expect(button("重建向量")?.disabled).toBe(false);
   expect(document.querySelector("dl")?.textContent).toContain("Qdrant 实际向量点数0");
-  await act(() => button("重建向量")?.click());
+  await openRebuildConfirmation();
+  expect(mocks.rebuild).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("450");
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("模型调用费用");
+  await act(() => button("确认重建")?.click());
   await act(() => delay(15));
   expect(mocks.rebuild).toHaveBeenCalledWith("work");
   expect(document.querySelector("dialog")).toBeNull();
   expect(mocks.status).toHaveBeenCalledOnce();
+});
+it("cancels the full rebuild confirmation without submitting or closing the status modal", async () => {
+  await openControl();
+  await openRebuildConfirmation();
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+  expect(document.activeElement?.textContent).toBe("取消");
+  await act(() => button("取消")?.click());
+  await act(() => delay(40));
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.querySelector("dialog")).not.toBeNull();
+  expect(document.activeElement?.textContent).toBe("重建向量");
+  expect(mocks.rebuild).not.toHaveBeenCalled();
+  expect(mocks.retryFailed).not.toHaveBeenCalled();
+});
+it("dismisses the confirmation with Escape without submitting a rebuild", async () => {
+  await openControl();
+  await openRebuildConfirmation();
+  await act(() => {
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }),
+    );
+  });
+  await act(() => delay(40));
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.querySelector("dialog")).not.toBeNull();
+  expect(mocks.rebuild).not.toHaveBeenCalled();
 });
 it("offers rebuilding when Qdrant already has vectors", async () => {
   mocks.status.mockResolvedValue({ ...status, vectorPoints: 1350 });
@@ -126,63 +167,117 @@ it("offers rebuilding when Qdrant already has vectors", async () => {
   expect(button("重建向量")?.disabled).toBe(false);
 });
 it("blocks creation when required infrastructure is unavailable", async () => {
-  mocks.status.mockResolvedValue({ ...status, configurationError: "后台队列尚未配置" });
+  mocks.status.mockResolvedValue({
+    ...status,
+    configurationError: "后台队列尚未配置",
+    failed: 11,
+  });
   await openControl();
   expect(document.body.textContent).toContain("后台队列尚未配置");
   expect(button("重建向量")?.disabled).toBe(true);
+  expect(button("重试")?.disabled).toBe(true);
   expect(mocks.rebuild).not.toHaveBeenCalled();
+});
+it("shows retry next to the failure count and sends only a failed-job request", async () => {
+  mocks.status.mockResolvedValue({ ...status, failed: 11 });
+  await openControl();
+  expect(button("重试")?.closest("div")?.textContent).toContain("处理失败");
+  expect(button("重试")?.closest("div")?.textContent).toContain("11");
+  await act(() => button("重试")?.click());
+  await act(() => delay(15));
+  expect(mocks.retryFailed).toHaveBeenCalledWith("work");
+  expect(mocks.rebuild).not.toHaveBeenCalled();
+  expect(document.querySelector("dialog")).toBeNull();
+});
+it("does not offer retry when there are no failed jobs", async () => {
+  await openControl();
+  expect(button("重试")).toBeUndefined();
+  expect(mocks.retryFailed).not.toHaveBeenCalled();
 });
 it("allows the rebuild path to repair a collection whose point count cannot be read", async () => {
   mocks.status.mockResolvedValue({ ...status, vectorError: "无法读取 Qdrant", vectorPoints: null });
   await openControl();
   expect(button("重建向量")?.disabled).toBe(false);
 });
-it("sends one request for 50 rapid clicks and closes as soon as the request succeeds", async () => {
-  await openControl();
-  const pending = Promise.withResolvers<{ queued: number }>();
-  mocks.rebuild.mockReturnValueOnce(pending.promise);
-  const submit = button("重建向量");
-  await act(() => {
-    for (let index = 0; index < 50; index += 1) {
-      submit?.click();
+it.each([false, true])(
+  "deduplicates 50 rapid clicks and closes on success (failedOnly: %s)",
+  async (failedOnly) => {
+    mocks.status.mockResolvedValue({ ...status, failed: failedOnly ? 11 : 0 });
+    await openControl();
+    const pending = Promise.withResolvers<{ queued: number }>();
+    const action = failedOnly ? mocks.retryFailed : mocks.rebuild;
+    action.mockReturnValueOnce(pending.promise);
+    if (!failedOnly) {
+      await openRebuildConfirmation();
+      expect(action).not.toHaveBeenCalled();
     }
-  });
-  await act(() => delay(15));
-  expect(mocks.rebuild).toHaveBeenCalledOnce();
-  expect(button("正在提交…")?.disabled).toBe(true);
-  expect(document.querySelector<HTMLButtonElement>("button")?.disabled).toBe(true);
-  await act(() => pending.resolve({ queued: 450 }));
-  await act(() => delay(15));
-  expect(document.querySelector("dialog")).toBeNull();
-  expect(mocks.rebuild).toHaveBeenCalledOnce();
-});
-it("also closes when a successful request queues no jobs", async () => {
-  mocks.rebuild.mockResolvedValueOnce({ queued: 0 });
-  await openControl();
-  await act(() => button("重建向量")?.click());
-  await act(() => delay(15));
-  expect(document.querySelector("dialog")).toBeNull();
-  expect(mocks.rebuild).toHaveBeenCalledOnce();
-});
-it("keeps failures open for retry and throttles attempts within one second without automatic retries", async () => {
-  await openControl();
-  const submittedAt = Date.now();
-  const now = vi.spyOn(Date, "now").mockReturnValue(submittedAt);
-  mocks.rebuild.mockRejectedValueOnce(new Error("队列暂不可用"));
-  await act(() => button("重建向量")?.click());
-  await act(() => delay(15));
-  expect(document.querySelector("dialog")).not.toBeNull();
-  expect(button("重建向量")?.disabled).toBe(false);
-  now.mockReturnValue(submittedAt + 500);
-  await act(() => button("重建向量")?.click());
-  await act(() => delay(15));
-  expect(mocks.rebuild).toHaveBeenCalledOnce();
-  now.mockReturnValue(submittedAt + 1500);
-  await act(() => delay(1100));
-  expect(mocks.rebuild).toHaveBeenCalledOnce();
-  expect(document.querySelector("dialog")).not.toBeNull();
-  await act(() => button("重建向量")?.click());
-  await act(() => delay(15));
-  expect(mocks.rebuild).toHaveBeenCalledTimes(2);
-  expect(document.querySelector("dialog")).toBeNull();
-});
+    const submit = button(failedOnly ? "重试" : "确认重建");
+    await act(() => {
+      for (let index = 0; index < 50; index += 1) {
+        submit?.click();
+      }
+      if (failedOnly) {
+        button("重建向量")?.click();
+      }
+    });
+    await act(() => delay(15));
+    expect(action).toHaveBeenCalledOnce();
+    expect(button("正在提交…")?.disabled).toBe(true);
+    if (failedOnly) {
+      expect(button("重建向量")?.disabled).toBe(true);
+      expect(mocks.rebuild).not.toHaveBeenCalled();
+    }
+    expect(document.querySelector<HTMLButtonElement>("button")?.disabled).toBe(true);
+    await act(() => pending.resolve({ queued: 450 }));
+    await act(() => delay(15));
+    expect(document.querySelector("dialog")).toBeNull();
+    expect(action).toHaveBeenCalledOnce();
+  },
+);
+it.each([false, true])(
+  "closes when no jobs remain to queue (failedOnly: %s)",
+  async (failedOnly) => {
+    mocks.status.mockResolvedValue({ ...status, failed: failedOnly ? 11 : 0 });
+    const action = failedOnly ? mocks.retryFailed : mocks.rebuild;
+    action.mockResolvedValueOnce({ queued: 0 });
+    await openControl();
+    if (!failedOnly) {
+      await openRebuildConfirmation();
+    }
+    await act(() => button(failedOnly ? "重试" : "确认重建")?.click());
+    await act(() => delay(15));
+    expect(document.querySelector("dialog")).toBeNull();
+    expect(action).toHaveBeenCalledOnce();
+  },
+);
+it.each([false, true])(
+  "keeps failures open and throttles manual retries without automatic requests (failedOnly: %s)",
+  async (failedOnly) => {
+    mocks.status.mockResolvedValue({ ...status, failed: failedOnly ? 11 : 0 });
+    const label = failedOnly ? "重试" : "确认重建";
+    const action = failedOnly ? mocks.retryFailed : mocks.rebuild;
+    await openControl();
+    if (!failedOnly) {
+      await openRebuildConfirmation();
+    }
+    const submittedAt = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(submittedAt);
+    action.mockRejectedValueOnce(new Error("队列暂不可用"));
+    await act(() => button(label)?.click());
+    await act(() => delay(15));
+    expect(document.querySelector("dialog")).not.toBeNull();
+    expect(button(label)?.disabled).toBe(false);
+    now.mockReturnValue(submittedAt + 500);
+    await act(() => button(label)?.click());
+    await act(() => delay(15));
+    expect(action).toHaveBeenCalledOnce();
+    now.mockReturnValue(submittedAt + 1500);
+    await act(() => delay(1100));
+    expect(action).toHaveBeenCalledOnce();
+    expect(document.querySelector("dialog")).not.toBeNull();
+    await act(() => button(label)?.click());
+    await act(() => delay(15));
+    expect(action).toHaveBeenCalledTimes(2);
+    expect(document.querySelector("dialog")).toBeNull();
+  },
+);

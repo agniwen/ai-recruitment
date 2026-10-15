@@ -95,7 +95,7 @@ export async function markJobMatchingEnqueueFailed(
   await db
     .update(resumeSemanticIndex)
     .set({
-      errorMessage: "岗位向量任务入队失败，请重新点击重建向量。",
+      errorMessage: "岗位向量任务入队失败，请稍后重试。",
       status: "failed",
       updatedAt: new Date(),
     })

@@ -84,13 +84,17 @@ export async function getJobMatchingIndexStatus(
   };
 }
 
-export async function startJobMatchingIndexRebuild(organizationId: string) {
+export async function startJobMatchingIndexRebuild(
+  organizationId: string,
+  { failedOnly = false }: { failedOnly?: boolean } = {},
+) {
   const error = configurationError();
   if (error) {
     throw new Error(error);
   }
   const config = getResumeSemanticIndexConfig();
-  const rows = await loadJobMatchingIndexRows(organizationId, config.embeddingVersion);
+  const allRows = await loadJobMatchingIndexRows(organizationId, config.embeddingVersion);
+  const rows = failedOnly ? allRows.filter((row) => row.indexStatus === "failed") : allRows;
   if (!rows.length) {
     return { queued: 0 };
   }
