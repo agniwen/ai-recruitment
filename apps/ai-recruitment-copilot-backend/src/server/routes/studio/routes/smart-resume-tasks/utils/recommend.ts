@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import pLimit from "p-limit";
+import { serializeErrorDetails } from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import type { SmartRecommendationResult } from "@arc/db-schema/job-matching";
 import { QdrantResumeVectorStore } from "@arc/ai-recruitment-copilot-backend/lib/server/qdrant/resume-vector-store";
@@ -133,7 +134,7 @@ export async function recommendSmartJobs(
     shortlist = shortlistSmartJobs(available, resume, vectorIds);
   }
   const limit = pLimit(3);
-  const profiled = await Promise.all(
+  const profileResults = await Promise.allSettled(
     shortlist.map((entry) =>
       limit(async () => {
         const matching =
@@ -155,6 +156,22 @@ export async function recommendSmartJobs(
       }),
     ),
   );
+  const profiled = profileResults.flatMap((result, index) => {
+    if (result.status === "fulfilled") {
+      return [result.value];
+    }
+    console.warn("[smart-resume-upload] job profile unavailable", {
+      errorDetails: serializeErrorDetails(result.reason).chain.map(
+        ({ code, message, name, status }) => ({ code, message, name, status }),
+      ),
+      jobDescriptionId: shortlist[index]?.job.id,
+      organizationId,
+    });
+    return [];
+  });
+  if (shortlist.length > 0 && profiled.length === 0) {
+    throw new Error("候选岗位画像暂不可用，请稍后重试。");
+  }
   const currentJobs = await loadEligibleSmartJobs(organizationId, userId);
   const allowedNow = new Set(currentJobs.map((entry) => entry.job.id));
   const candidates = profiled

@@ -1,5 +1,6 @@
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { serializeErrorDetails } from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
 import {
   member,
   resumePoolItem,
@@ -101,6 +102,12 @@ export async function processSmartResumeRecommendation(itemId: string) {
       .where(eq(smartResumeTaskItem.id, itemId));
   } catch (error) {
     console.warn("[smart-resume-upload] recommendation failed", {
+      errorDetails: serializeErrorDetails(error).chain.map(({ code, message, name, status }) => ({
+        code,
+        message,
+        name,
+        status,
+      })),
       errorType: error instanceof Error ? error.name : "Unknown",
       itemId,
     });
