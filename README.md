@@ -26,6 +26,9 @@ for the Python agent. Do not mix them.
 
 ## Quick Start
 
+同事首次搭建并同步现有本地数据，请使用 [本地启动与数据库交接指南](docs/local-handoff.md)。
+它提供新电脑初始化脚本、数据库导出/空库导入，以及可直接交给 AI 执行的中文指令。
+
 ```bash
 make install
 cp apps/ai-recruitment-copilot/.env.example apps/ai-recruitment-copilot/.env

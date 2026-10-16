@@ -8,11 +8,13 @@ import { createAuthClient } from "better-auth/react";
 import type { auth } from "@arc/ai-recruitment-copilot-backend/lib/server/auth";
 import { ac, roles } from "@arc/shared/permissions";
 import { env } from "@/env/client";
+import { platformFetch } from "./platform-mfa";
 
 export const authClient = createAuthClient({
   baseURL: env.NEXT_PUBLIC_BETTER_AUTH_URL,
   fetchOptions: {
     credentials: "include",
+    customFetchImpl: platformFetch,
   },
   plugins: [
     adminClient(),

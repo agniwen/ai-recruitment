@@ -26,7 +26,7 @@ Worker 使用 `@livekit/rtc-node` 的原始媒体流，音频同时限制墙钟�
 - 文件使用私有 `RECORDING_R2_*` 存储的 `human-interview-samples/` 前缀，PostgreSQL 不存二进制。管理员通过鉴权的内容接口读取，浏览器关闭预览后释放 Blob URL；不发公开 URL。
 - 开发可显式指定绝对路径 `INTERVIEW_MEDIA_LOCAL_DIR`；Web/后端与采样器须指向同一目录，生产禁止使用本地目录。
 - 先落库登记文件 key，再上传，再改成 ready。超过两分钟仍 pending 的记录标记中断，可由管理员清理，即使上传后进程中断也能追踪文件。
-- 环境快照使用同一 meeting + participant + attempt（或 participant SID）的后端请求证据，以及同一 visit 的指纹事件。不得用同 IP 推定是同一设备/同一人。客户端标识均属于关联线索，无法读取硬件序列号、MAC 或 IMEI。IP 只来自已配置并由可信代理覆盖的 `INTERVIEW_TELEMETRY_IP_HEADER`；未知就保留未知。
+- 环境快照使用同一 meeting + participant + attempt（或 participant SID）的后端请求证据，以及同一 visit 的指纹事件。不得用同 IP 推定是同一设备/同一人。客户端标识均属于关联线索，无法读取硬件序列号、MAC 或 IMEI。2026-10-16 起，IP 默认优先读取有效的 `X-Real-IP`，缺失或无效时取 `X-Forwarded-For` 第一个地址，不再依赖请求头名称配置；生产代理须覆盖这两个头并限制后端直连，未知就保留未知。
 
 ## 长期保留与管理
 

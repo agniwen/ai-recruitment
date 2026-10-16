@@ -1,10 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DedupMatchRecord } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/studio-interviews";
 import {
   deleteDuplicateMatchesForSource,
   listDuplicateMatchesForSource,
   toDuplicateMatchInsertRows,
 } from "./duplicate-matches";
+
+const { select } = vi.hoisted(() => ({ select: vi.fn() }));
+
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({ db: { select } }));
+
+beforeEach(() => {
+  select.mockReset();
+});
 
 const MATCH: DedupMatchRecord = {
   candidateEmail: "dup@example.com",
@@ -88,6 +96,65 @@ describe("toDuplicateMatchInsertRows", () => {
 });
 
 describe("listDuplicateMatchesForSource", () => {
+  it("returns the matched application's current organization and recruiting stage", async () => {
+    const matchRows = [
+      {
+        matchedSourceId: "target-resume-id",
+        matchedSourceType: "studio_interview",
+        reasons: [],
+        score: 92,
+        signals: [],
+      },
+    ];
+    const target = {
+      candidateEmail: null,
+      candidateName: "重复候选人",
+      candidatePhone: null,
+      createdAt: new Date("2026-06-30T00:00:00.000Z"),
+      departmentName: "前端研发部",
+      hiringUnitName: "用人组织 A",
+      id: "target-resume-id",
+      jobDescriptionName: "前端工程师",
+      outcome: "in_pipeline",
+      pipelineStage: "offer",
+      resumeEvaluationStatus: "pass",
+      resumeProfile: null,
+      resumeSourceName: "研发中心",
+      status: "active",
+      targetRole: "前端工程师",
+      uploaderImage: null,
+      uploaderName: "上传人",
+    };
+    const targetQuery = {
+      from: vi.fn().mockReturnThis(),
+      leftJoin: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([target]),
+    };
+    select
+      .mockReturnValueOnce({
+        from: () => ({ where: () => ({ orderBy: () => Promise.resolve(matchRows) }) }),
+      })
+      .mockReturnValueOnce(targetQuery);
+
+    const matches = await listDuplicateMatchesForSource({
+      organizationId: "org-1",
+      sourceId: "source-id",
+      sourceType: "studio_interview",
+      visibilityScope: { kind: "all" },
+    });
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      createdAt: "2026-06-30T00:00:00.000Z",
+      departmentName: "前端研发部",
+      hiringUnitName: "用人组织 A",
+      outcome: "in_pipeline",
+      pipelineStage: "offer",
+      resumeEvaluationStatus: "pass",
+      resumeSourceName: "研发中心",
+    });
+  });
+
   it("is exported for duplicate badge detail endpoints", () => {
     expect(listDuplicateMatchesForSource).toBeTypeOf("function");
   });

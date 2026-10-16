@@ -17,6 +17,7 @@ import { publicRouter } from "./routes/public/route";
 import { resumeRouter } from "./routes/resume/route";
 import { telegramRouter } from "./routes/telegram/route";
 import { workspaceRouter } from "./routes/workspace/route";
+import { securityRouter } from "./routes/security/route";
 
 // 中文：所有业务路由都聚合到 apiRoutes，再以 .route("/api", apiRoutes) 挂上去。
 // 不要写 .basePath("/api") —— 那样 hc<AppType> 推断出的客户端类型不会带 /api 前缀，
@@ -34,6 +35,7 @@ const apiRoutes = factory
   .route("/resume", resumeRouter)
   .route("/interview", interviewRouter)
   .route("/platform", platformRouter)
+  .route("/security", securityRouter)
   .route("/public", publicRouter)
   .route("/join", joinRouter)
   .route("/w/:slug", workspaceRouter);

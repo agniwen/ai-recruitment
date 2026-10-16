@@ -1,4 +1,5 @@
 import type { MeetingTimeline } from "./api";
+import { IpReveal } from "../security/ip-reveal";
 
 const roles: Record<string, string> = {
   candidate: "候选人",
@@ -33,9 +34,11 @@ const filterClass =
 export function ParticipantEnvironments({
   participants,
   onFilter,
+  meetingId,
 }: {
   participants: MeetingTimeline["participants"];
-  onFilter: (filter: { identity?: string; fingerprint?: string; ip?: string }) => void;
+  meetingId: string;
+  onFilter: (filter: { identity?: string; fingerprint?: string }) => void;
 }) {
   if (!participants.length) {
     return null;
@@ -47,7 +50,7 @@ export function ParticipantEnvironments({
           参与者与浏览器
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          汇总整场会议，不受下方事件筛选影响。点击姓名、指纹或 IP 可筛选相关事件。
+          汇总整场会议，不受下方事件筛选影响。点击姓名、指纹可筛选相关事件；IP 需要点击查看。
           同一行的多个值不代表一一对应的设备；精确关联请查看访问 ID。
         </p>
       </div>
@@ -110,17 +113,9 @@ export function ParticipantEnvironments({
                   )}
                 </td>
                 <td className="min-w-32 font-mono text-xs">
-                  {participant.ips.length
-                    ? participant.ips.map((ip) => (
-                        <button
-                          key={ip}
-                          type="button"
-                          aria-label={`按 IP ${ip} 查看事件`}
-                          className={`${filterClass} block break-all`}
-                          onClick={() => onFilter({ ip })}
-                        >
-                          {ip}
-                        </button>
+                  {participant.ipEventIds.length
+                    ? participant.ipEventIds.map((id) => (
+                        <IpReveal key={id} hasIp reference={{ id, kind: "telemetry", meetingId }} />
                       ))
                     : "IP 未采集"}
                 </td>

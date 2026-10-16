@@ -10,6 +10,7 @@ import {
   IconRadio,
   IconRobot,
   IconServer,
+  IconShieldLock,
   IconUsers,
 } from "@tabler/icons-react";
 import { Link, useRouterState } from "@tanstack/react-router";
@@ -79,6 +80,11 @@ const manageNavSections: NavSection[] = [
         icon: IconRobot,
         path: "/platform/agent-tests",
         title: "Agent 测试",
+      },
+      {
+        icon: IconShieldLock,
+        path: "/platform/security",
+        title: "后台两步验证",
       },
     ],
     title: "平台管理",

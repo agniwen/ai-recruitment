@@ -1,12 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { platformRouter } from "../route";
+import { SecurityError } from "../../security/mfa/service";
+import type * as MfaService from "../../security/mfa/service";
 
 const queueMocks = vi.hoisted(() => ({
   clear: vi.fn(),
   getResumeParseQueueOverview: vi.fn(),
   listResumeParseQueueJobs: vi.fn(),
+  requireRecentMfa: vi.fn(),
 }));
+
+vi.mock("../../security/mfa/service", async (importOriginal) => ({
+  ...(await importOriginal<typeof MfaService>()),
+  requireRecentMfa: queueMocks.requireRecentMfa,
+}));
+afterAll(() => vi.unstubAllEnvs());
+const writeHeaders = { origin: "https://arc.example.invalid" };
 
 vi.mock("../queue-clear", () => ({ clearPendingParseJobs: queueMocks.clear }));
 
@@ -55,6 +65,7 @@ const app = factory
   .createApp()
   .use(async (c, next) => {
     c.set("user", { id: "admin_1", role: "admin" } as never);
+    c.set("session", { id: "admin_session" } as never);
     await next();
   })
   .route("/platform", platformRouter);
@@ -62,12 +73,18 @@ const app = factory
 describe("platform queue routes", () => {
   it("clears the parse queue for admins", async () => {
     queueMocks.clear.mockResolvedValue({ removed: 12 });
-    const response = await app.request("/platform/queues/resume-parse/jobs", { method: "DELETE" });
+    const response = await app.request("/platform/queues/resume-parse/jobs", {
+      headers: writeHeaders,
+      method: "DELETE",
+    });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ removed: 12 });
   });
   it("rejects unsupported queues", async () => {
-    const response = await app.request("/platform/queues/unknown/jobs", { method: "DELETE" });
+    const response = await app.request("/platform/queues/unknown/jobs", {
+      headers: writeHeaders,
+      method: "DELETE",
+    });
     expect(response.status).toBe(404);
     expect(queueMocks.clear).not.toHaveBeenCalled();
   });
@@ -85,8 +102,22 @@ describe("platform queue routes", () => {
     expect(response.status).toBe(403);
     expect(queueMocks.clear).not.toHaveBeenCalled();
   });
+  it("blocks a platform admin without recent MFA before doing privileged work", async () => {
+    queueMocks.requireRecentMfa.mockRejectedValueOnce(
+      new SecurityError("MFA_REQUIRED", "请先验证"),
+    );
+    const response = await app.request("/platform/queues/resume-parse/jobs", {
+      headers: writeHeaders,
+      method: "DELETE",
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "MFA_REQUIRED" });
+    expect(queueMocks.clear).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("BETTER_AUTH_URL", "https://arc.example.invalid");
+    queueMocks.requireRecentMfa.mockResolvedValue(new Date(Date.now() + 900_000).toISOString());
     queueMocks.listResumeParseQueueJobs.mockResolvedValue({
       page: 1,
       pageSize: 20,

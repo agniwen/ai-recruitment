@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { installSecurityTestKeys } from "../../../../../test-utils/security-keys";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Service from "./service";
@@ -56,6 +57,7 @@ describe.skipIf(!url)("entry credentials with PostgreSQL and real signature veri
   let admin: typeof Admin;
   let exemptions: typeof candidateEntryCredentialRouter;
   beforeAll(async () => {
+    installSecurityTestKeys();
     if (
       !url ||
       !["localhost", "127.0.0.1"].includes(new URL(url).hostname) ||
@@ -65,7 +67,6 @@ describe.skipIf(!url)("entry credentials with PostgreSQL and real signature veri
     }
     vi.stubEnv("DATABASE_URL", url);
     vi.stubEnv("INTERVIEW_ENTRY_CREDENTIAL_ORIGIN", "https://interview.example.test");
-    vi.stubEnv("INTERVIEW_TELEMETRY_IP_HEADER", "x-real-ip");
     sql = postgres(url, { max: 1 });
     await sql`create table global_config (organization_id text primary key, updated_at timestamptz, updated_by text)`;
     await sql`create table studio_interview (id text primary key, organization_id text not null, updated_at timestamptz)`;
@@ -489,7 +490,7 @@ describe.skipIf(!url)("entry credentials with PostgreSQL and real signature veri
     expect(stored).toMatchObject({
       fingerprint_id: "a".repeat(32),
       invite_hash: policy.hashEntrySecret("invite"),
-      ip: "203.0.113.1",
+      ip: expect.stringMatching(/^ip:v1:/),
       proof_hash: policy.hashEntrySecret(result.proof),
     });
     await sql`update candidate_entry_credential_use set expires_at = now() - interval '1 second'`;

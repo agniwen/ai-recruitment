@@ -7,6 +7,7 @@ import {
   interviewMediaAccess as access,
 } from "@arc/db-schema/schema";
 import { readMedia, removeMedia } from "./storage";
+import { hideStoredIp } from "@arc/ai-recruitment-copilot-backend/lib/server/ip-encryption";
 
 export async function listMediaArchives({ page, search }: { page: number; search?: string }) {
   const where = search
@@ -79,6 +80,7 @@ export async function loadMeetingMedia(
       ...row,
       capturedAt: row.capturedAt.toISOString(),
       deletedAt: row.deletedAt?.toISOString() ?? null,
+      environment: hideStoredIp(row.environment),
     })),
     rooms: rooms.map(({ leaseOwner: _owner, leaseUntil: _until, ...r }) => ({
       ...r,

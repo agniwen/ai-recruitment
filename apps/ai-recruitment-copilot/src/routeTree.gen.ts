@@ -31,7 +31,9 @@ import { Route as PlatformMailIngestAccountsRouteImport } from './routes/platfor
 import { Route as PlatformOrganizationsRouteImport } from './routes/platform.organizations'
 import { Route as PlatformQueuesRouteImport } from './routes/platform.queues'
 import { Route as PlatformResumeParseCacheRouteImport } from './routes/platform.resume-parse-cache'
+import { Route as PlatformSecurityRouteImport } from './routes/platform.security'
 import { Route as PlatformUsersRouteImport } from './routes/platform.users'
+import { Route as PlatformVerifyRouteImport } from './routes/platform.verify'
 import { Route as RRoundIdRouteImport } from './routes/r.$roundId'
 import { Route as StudioCalendarRouteImport } from './routes/studio.calendar'
 import { Route as StudioInterviewsRouteImport } from './routes/studio.interviews'
@@ -193,9 +195,19 @@ const PlatformResumeParseCacheRoute =
     path: '/resume-parse-cache',
     getParentRoute: () => PlatformRoute,
   } as any)
+const PlatformSecurityRoute = PlatformSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => PlatformRoute,
+} as any)
 const PlatformUsersRoute = PlatformUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => PlatformRoute,
+} as any)
+const PlatformVerifyRoute = PlatformVerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
   getParentRoute: () => PlatformRoute,
 } as any)
 const RRoundIdRoute = RRoundIdRouteImport.update({
@@ -464,7 +476,9 @@ export interface FileRoutesByFullPath {
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
+  '/platform/security': typeof PlatformSecurityRoute
   '/platform/users': typeof PlatformUsersRoute
+  '/platform/verify': typeof PlatformVerifyRoute
   '/r/$roundId': typeof RRoundIdRoute
   '/studio/calendar': typeof StudioCalendarRoute
   '/studio/interviews': typeof StudioInterviewsRoute
@@ -534,7 +548,9 @@ export interface FileRoutesByTo {
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
+  '/platform/security': typeof PlatformSecurityRoute
   '/platform/users': typeof PlatformUsersRoute
+  '/platform/verify': typeof PlatformVerifyRoute
   '/r/$roundId': typeof RRoundIdRoute
   '/studio/calendar': typeof StudioCalendarRoute
   '/studio/interviews': typeof StudioInterviewsRoute
@@ -604,7 +620,9 @@ export interface FileRoutesById {
   '/platform/organizations': typeof PlatformOrganizationsRoute
   '/platform/queues': typeof PlatformQueuesRoute
   '/platform/resume-parse-cache': typeof PlatformResumeParseCacheRoute
+  '/platform/security': typeof PlatformSecurityRoute
   '/platform/users': typeof PlatformUsersRoute
+  '/platform/verify': typeof PlatformVerifyRoute
   '/r/$roundId': typeof RRoundIdRoute
   '/studio/calendar': typeof StudioCalendarRoute
   '/studio/interviews': typeof StudioInterviewsRoute
@@ -677,7 +695,9 @@ export interface FileRouteTypes {
     | '/platform/organizations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
+    | '/platform/security'
     | '/platform/users'
+    | '/platform/verify'
     | '/r/$roundId'
     | '/studio/calendar'
     | '/studio/interviews'
@@ -747,7 +767,9 @@ export interface FileRouteTypes {
     | '/platform/organizations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
+    | '/platform/security'
     | '/platform/users'
+    | '/platform/verify'
     | '/r/$roundId'
     | '/studio/calendar'
     | '/studio/interviews'
@@ -816,7 +838,9 @@ export interface FileRouteTypes {
     | '/platform/organizations'
     | '/platform/queues'
     | '/platform/resume-parse-cache'
+    | '/platform/security'
     | '/platform/users'
+    | '/platform/verify'
     | '/r/$roundId'
     | '/studio/calendar'
     | '/studio/interviews'
@@ -1041,11 +1065,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlatformResumeParseCacheRouteImport
       parentRoute: typeof PlatformRoute
     }
+    '/platform/security': {
+      id: '/platform/security'
+      path: '/security'
+      fullPath: '/platform/security'
+      preLoaderRoute: typeof PlatformSecurityRouteImport
+      parentRoute: typeof PlatformRoute
+    }
     '/platform/users': {
       id: '/platform/users'
       path: '/users'
       fullPath: '/platform/users'
       preLoaderRoute: typeof PlatformUsersRouteImport
+      parentRoute: typeof PlatformRoute
+    }
+    '/platform/verify': {
+      id: '/platform/verify'
+      path: '/verify'
+      fullPath: '/platform/verify'
+      preLoaderRoute: typeof PlatformVerifyRouteImport
       parentRoute: typeof PlatformRoute
     }
     '/r/$roundId': {
@@ -1424,7 +1462,9 @@ interface PlatformRouteChildren {
   PlatformOrganizationsRoute: typeof PlatformOrganizationsRoute
   PlatformQueuesRoute: typeof PlatformQueuesRoute
   PlatformResumeParseCacheRoute: typeof PlatformResumeParseCacheRoute
+  PlatformSecurityRoute: typeof PlatformSecurityRoute
   PlatformUsersRoute: typeof PlatformUsersRoute
+  PlatformVerifyRoute: typeof PlatformVerifyRoute
 }
 
 const PlatformRouteChildren: PlatformRouteChildren = {
@@ -1436,7 +1476,9 @@ const PlatformRouteChildren: PlatformRouteChildren = {
   PlatformOrganizationsRoute: PlatformOrganizationsRoute,
   PlatformQueuesRoute: PlatformQueuesRoute,
   PlatformResumeParseCacheRoute: PlatformResumeParseCacheRoute,
+  PlatformSecurityRoute: PlatformSecurityRoute,
   PlatformUsersRoute: PlatformUsersRoute,
+  PlatformVerifyRoute: PlatformVerifyRoute,
 }
 
 const PlatformRouteWithChildren = PlatformRoute._addFileChildren(

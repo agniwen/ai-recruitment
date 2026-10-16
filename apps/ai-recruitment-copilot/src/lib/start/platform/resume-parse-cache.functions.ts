@@ -8,6 +8,7 @@ import { loadPlatformResumeParseCacheHydrationState } from "./resume-parse-cache
 export type PlatformResumeParseCacheState =
   | { status: "unauthenticated" }
   | { status: "forbidden" }
+  | { status: "mfa-required" }
   | {
       dehydratedState: JsonValue;
       status: "ready";

@@ -191,6 +191,7 @@ export interface ResumeLibraryListRecord {
   duplicateMatch: ResumeDuplicateMatchSummary | null;
   hiringUnitId: string | null;
   hiringUnitName: string | null;
+  resumeSourceName?: string | null;
   humanInterviewScheduledAt: string | null;
   humanInterviewerId: string | null;
   // 是否已存在至少一个 AI 面试轮次（studioInterviewSchedule）。

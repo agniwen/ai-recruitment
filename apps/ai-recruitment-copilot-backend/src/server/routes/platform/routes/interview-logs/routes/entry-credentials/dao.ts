@@ -1,6 +1,7 @@
 import { and, eq, desc, count, countDistinct, max } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { candidateEntryCredentialUse as uses } from "@arc/db-schema/schema";
+import { hideStoredIp } from "@arc/ai-recruitment-copilot-backend/lib/server/ip-encryption";
 
 // Only successful, server-verified uses are evidence. Never expose credential material or proof hashes.
 export async function loadMeetingEntryCredentials(meetingId: string) {
@@ -54,7 +55,7 @@ export async function loadMeetingEntryCredentials(meetingId: string) {
       ]);
       return {
         associations: associations.map((row) => ({
-          ...row,
+          ...hideStoredIp(row),
           createdAt: row.createdAt.toISOString(),
         })),
         credentialRef: group.credentialRef,

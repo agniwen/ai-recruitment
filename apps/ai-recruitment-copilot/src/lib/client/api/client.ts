@@ -16,6 +16,7 @@
  */
 
 import { ApiError } from "./errors";
+import { platformFetch } from "../platform-mfa";
 
 /**
  * `apiFetch` 的额外配置。
@@ -124,13 +125,16 @@ export async function apiFetch<T = unknown>(
 
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await platformFetch(path, {
       credentials: "include",
       ...rest,
       body: finalBody,
       headers: finalHeaders,
     });
   } catch (networkError) {
+    if (networkError instanceof ApiError) {
+      throw networkError;
+    }
     throw new ApiError("网络请求失败 / Network request failed", {
       cause: networkError,
       status: 0,

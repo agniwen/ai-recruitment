@@ -1,0 +1,91 @@
+# 首次部署应用覆盖模板；与仓库根 docker-compose.yml 同目录。
+# 基于 2026-10-15 运维覆盖文件，增加公开构建参数、日志轮转、停止宽限期。
+# 不是线上原文件：升级时逐项合并；停止时间需按最长任务/面试时长调整。
+# 前置：基础设施已经建立 arc-infra_default 网络；.env 已填写真实配置。
+networks:
+  arcinfra:
+    external: true
+    name: arc-infra_default
+services:
+  agent:
+    build:
+      context: ./apps/livekit-agent
+      dockerfile: Dockerfile
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      TZ: Asia/Shanghai
+    healthcheck:
+      interval: 30s
+      retries: 3
+      start_period: 60s
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request,sys; sys.exit(0 if
+          urllib.request.urlopen('http://127.0.0.1:8081/', timeout=3).status <
+          500 else 1)"
+      timeout: 5s
+    init: true
+    networks:
+      - default
+      - arcinfra
+    ports:
+      - 127.0.0.1:8081:8081
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65536
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    stop_grace_period: 15m
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
+  web:
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - default
+      - arcinfra
+    ports:
+      - 127.0.0.1:3000:3000
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65536
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    stop_grace_period: 1m
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
+    build:
+      args:
+        NEXT_PUBLIC_ENABLE_INTERVIEW_RECORDING: ${NEXT_PUBLIC_ENABLE_INTERVIEW_RECORDING:-true}
+        NEXT_PUBLIC_ENABLE_CANDIDATE_SPECIFIC_INTERVIEW_QUESTIONS: ${NEXT_PUBLIC_ENABLE_CANDIDATE_SPECIFIC_INTERVIEW_QUESTIONS:-true}
+  worker:
+    environment:
+      TZ: Asia/Shanghai
+    networks:
+      - default
+      - arcinfra
+    ports:
+      - 127.0.0.1:8790:8790
+    ulimits:
+      nofile:
+        hard: 65536
+        soft: 65536
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    stop_grace_period: 10m
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"

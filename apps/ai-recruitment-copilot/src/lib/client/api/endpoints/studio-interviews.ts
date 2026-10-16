@@ -44,6 +44,7 @@ import type {
   OfferDraftRecord,
 } from "@arc/shared/studio-pipeline-stages";
 import type { ResumeLibraryProfileSnapshot } from "@arc/shared/studio-resumes";
+import type { ResumeDuplicateRecruitmentContext } from "@arc/shared/resume-duplicates";
 import { rpc } from "@/lib/client/rpc";
 import { apiFetch } from "../client";
 import { rpcFetch } from "../rpc-fetch";
@@ -52,7 +53,7 @@ import { rpcFetch } from "../rpc-fetch";
  * 简历语义查重单条命中。
  * A single semantic resume duplicate match entry.
  */
-export interface DedupMatchRecord {
+export interface DedupMatchRecord extends ResumeDuplicateRecruitmentContext {
   id: string;
   sourceType?: ResumeSemanticSourceType;
   candidateName: string;
@@ -82,7 +83,7 @@ export interface DedupMatchRecord {
  * Source candidate summary shown in the "view suspected duplicates" dialog.
  * Built client-side from list-row data so the modal can compare without an extra fetch.
  */
-export interface DedupSourceCandidate {
+export interface DedupSourceCandidate extends ResumeDuplicateRecruitmentContext {
   id: string;
   candidateName: string;
   candidateEmail: string | null;
@@ -92,6 +93,7 @@ export interface DedupSourceCandidate {
   resumeProfileSnapshot: ResumeLibraryProfileSnapshot | null;
   skills: string[];
   sourceType?: ResumeSemanticSourceType;
+  status?: "active" | "archived";
   createdAt?: string;
   uploaderImage?: string | null;
   uploaderName?: string | null;

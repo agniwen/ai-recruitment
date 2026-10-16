@@ -43,6 +43,7 @@ import {
   jobDescription,
   jobDescriptionHumanInterviewer,
   jobDescriptionInterviewer,
+  resumeSource,
   studioHumanInterviewRound,
   studioHumanInterviewRoundInterviewer,
   studioInterview,
@@ -445,6 +446,11 @@ const SELECTED_COLUMNS = {
   resumeScreeningResult: studioInterview.resumeScreeningResult,
   resumeScreeningStatus: studioInterview.resumeScreeningStatus,
   resumeSkills: sql<unknown>`${studioInterview.resumeProfile}->'skills'`.as("resume_skills"),
+  resumeSourceName: sql<string | null>`(
+    select ${resumeSource.name} from ${resumeSource}
+    where ${resumeSource.organizationId} = ${studioInterview.organizationId}
+      and ${resumeSource.id} = coalesce(${jobDescription.resumeSourceId}, ${hiringUnit.resumeSourceId})
+  )`.as("resume_source_name"),
   resumeStorageKey: studioInterview.resumeStorageKey,
   resumeWorkCompany: sql<
     string | null
@@ -517,6 +523,7 @@ const LIST_SELECTED_COLUMNS = {
   resumeScreeningResult: SELECTED_COLUMNS.resumeScreeningResult,
   resumeScreeningStatus: SELECTED_COLUMNS.resumeScreeningStatus,
   resumeSkills: SELECTED_COLUMNS.resumeSkills,
+  resumeSourceName: SELECTED_COLUMNS.resumeSourceName,
   resumeStorageKey: SELECTED_COLUMNS.resumeStorageKey,
   resumeWorkCompany: SELECTED_COLUMNS.resumeWorkCompany,
   resumeWorkExperiences: SELECTED_COLUMNS.resumeWorkExperiences,
@@ -1052,6 +1059,7 @@ function toRecord(
     resumeScreeningStale,
     resumeScreeningStatus: row.resumeScreeningStatus,
     resumeSkills: buildResumeSkills(row.resumeSkills),
+    resumeSourceName: row.resumeSourceName,
     resumeSummary: row.resumeReviewConclusion ?? row.notes?.trim() ?? null,
     stageProgress: resolvedDerived.stageProgress,
     targetRole: row.targetRole,

@@ -1,9 +1,18 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
-import { jobDescription, resumePoolItem, studioInterview, user } from "@arc/db-schema/schema";
+import {
+  department,
+  hiringUnit,
+  jobDescription,
+  resumePoolItem,
+  resumeSource,
+  studioInterview,
+  user,
+} from "@arc/db-schema/schema";
 import type { ResumePoolScope, ResumeSemanticSourceType } from "@arc/db-schema/schema";
 import { getCandidateActivityStatus } from "@arc/shared/candidate-pipeline-machine";
+import type { ResumeDuplicateRecruitmentContext } from "@arc/shared/resume-duplicates";
 import type { DedupMatchRecord } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/studio-interviews";
 import { buildResumeProfileSnapshotFromProfile } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resume-profile-snapshot";
 import { QdrantResumeVectorStore } from "../qdrant/resume-vector-store";
@@ -22,7 +31,7 @@ import type {
   ResumeVectorStore,
 } from "./vector-store";
 
-interface SemanticCandidateRecord {
+interface SemanticCandidateRecord extends ResumeDuplicateRecruitmentContext {
   candidateEmail: string | null;
   candidateName: string;
   candidatePhone: string | null;
@@ -214,10 +223,16 @@ export async function findSemanticResumeDuplicates(
           candidatePhone: candidate.candidatePhone,
           conflictingSignals: rerank.conflictingSignals,
           createdAt: candidate.createdAt,
+          departmentName: candidate.departmentName ?? null,
+          hiringUnitName: candidate.hiringUnitName ?? null,
           id: candidate.id,
           jobDescriptionName: candidate.jobDescriptionName,
           level: rerank.level,
+          outcome: candidate.outcome ?? null,
+          pipelineStage: candidate.pipelineStage ?? null,
+          resumeEvaluationStatus: candidate.resumeEvaluationStatus ?? null,
           resumeProfileSnapshot: buildResumeProfileSnapshotFromProfile(candidate.resumeProfile),
+          resumeSourceName: candidate.resumeSourceName ?? null,
           score: rerank.score,
           semanticReasons: rerank.reasons,
           similarity: toSimilarity(vectorScores),
@@ -302,10 +317,15 @@ async function loadSemanticDedupCandidates(
             candidatePhone: studioInterview.candidatePhone,
             createdAt: studioInterview.createdAt,
             createdBy: studioInterview.createdBy,
+            departmentName: department.name,
+            hiringUnitName: hiringUnit.name,
             id: studioInterview.id,
             jobDescriptionName: jobDescription.name,
+            outcome: studioInterview.outcome,
             pipelineStage: studioInterview.pipelineStage,
+            resumeEvaluationStatus: studioInterview.resumeEvaluationStatus,
             resumeProfile: studioInterview.resumeProfile,
+            resumeSourceName: resumeSource.name,
             targetRole: studioInterview.targetRole,
             uploaderImage: user.image,
             uploaderName: user.name,
@@ -317,6 +337,30 @@ async function loadSemanticDedupCandidates(
             and(
               eq(studioInterview.jobDescriptionId, jobDescription.id),
               eq(jobDescription.organizationId, studioInterview.organizationId),
+            ),
+          )
+          .leftJoin(
+            hiringUnit,
+            and(
+              eq(studioInterview.hiringUnitId, hiringUnit.id),
+              eq(hiringUnit.organizationId, studioInterview.organizationId),
+            ),
+          )
+          .leftJoin(
+            department,
+            and(
+              eq(jobDescription.departmentId, department.id),
+              eq(department.organizationId, studioInterview.organizationId),
+            ),
+          )
+          .leftJoin(
+            resumeSource,
+            and(
+              eq(
+                resumeSource.id,
+                sql`coalesce(${jobDescription.resumeSourceId}, ${hiringUnit.resumeSourceId})`,
+              ),
+              eq(resumeSource.organizationId, studioInterview.organizationId),
             ),
           )
           .where(

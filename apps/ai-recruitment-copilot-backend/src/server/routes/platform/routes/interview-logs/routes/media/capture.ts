@@ -1,4 +1,8 @@
 import { randomUUID, createHash } from "node:crypto";
+import {
+  copyIpSnapshot,
+  ipContext,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/ip-encryption";
 import { and, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -125,7 +129,12 @@ export function parseParticipantEvidence(participant: CaptureParticipant) {
   };
 }
 
-async function environmentSnapshot(meetingId: string, participant: CaptureParticipant) {
+async function environmentSnapshot(
+  meetingId: string,
+  participant: CaptureParticipant,
+  assetId: string,
+  organizationId: string,
+) {
   const evidence = parseParticipantEvidence(participant);
   const trace = evidence.environment;
   // Match this connection's attempt/visit, never infer a device from a shared IP or identity alone.
@@ -153,7 +162,15 @@ async function environmentSnapshot(meetingId: string, participant: CapturePartic
       : [],
   ]);
   const environment: InterviewMediaEnvironment = { ...trace };
-  for (const key of ["ip", "ipSource", "userAgent"] as const) {
+  if (request[0]?.ip) {
+    environment.ip =
+      (await copyIpSnapshot(
+        request[0].ip,
+        ipContext("telemetry", request[0].organizationId, request[0].id),
+        ipContext("media", organizationId, assetId),
+      )) ?? undefined;
+  }
+  for (const key of ["ipSource", "userAgent"] as const) {
     const value = request[0]?.[key];
     if (value) {
       environment[key] = value;
@@ -186,8 +203,13 @@ export async function reserveMediaSample(input: {
   if (!room) {
     return null;
   }
-  const { environment, role } = await environmentSnapshot(room.meetingId, input.participant);
   const id = randomUUID();
+  const { environment, role } = await environmentSnapshot(
+    room.meetingId,
+    input.participant,
+    id,
+    room.organizationId,
+  );
   const backend = input.skipReason ? null : mediaStorageBackend();
   const [row] = await db
     .insert(asset)

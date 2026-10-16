@@ -22,6 +22,7 @@ vi.mock("@tanstack/react-router", () => ({
   }),
 }));
 vi.mock("./api", () => ({ fetchLoggedMeetings: vi.fn(), fetchMeetingTimeline: vi.fn() }));
+vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("./meeting-media", () => ({
   MeetingMediaPanel: () => <section aria-label="音视频留底" />,
 }));
@@ -95,8 +96,8 @@ describe("platform interview timeline", () => {
       eventKey: "event",
       fingerprintId: "a".repeat(32),
       fingerprintVersion: "fingerprintjs-test",
+      hasIp: false,
       id: "event",
-      ip: null,
       ipSource: null,
       meetingId: "meeting",
       meetingTitle: "Miles 一面",
@@ -122,7 +123,7 @@ describe("platform interview timeline", () => {
           browserIds: ["browser-1"],
           fingerprints: ["a".repeat(32)],
           identity: "candidate_round",
-          ips: ["127.0.0.1"],
+          ipEventIds: ["event"],
           name: "Miles",
           role: "candidate",
           userAgents: [
@@ -165,7 +166,8 @@ describe("platform interview timeline", () => {
     const environments = document.querySelector('table[aria-label="参与者与浏览器"]');
     expect(environments?.textContent).toContain("a".repeat(32));
     expect(environments?.textContent).toContain("Chrome 153.0.0.0 · macOS");
-    expect(environments?.textContent).toContain("127.0.0.1");
+    expect(environments?.textContent).not.toContain("127.0.0.1");
+    expect(environments?.textContent).toContain("查看 IP");
     expect(environments?.querySelector("details")).toBeNull();
     expect(fetchMeetingTimeline).toHaveBeenLastCalledWith(
       "meeting",

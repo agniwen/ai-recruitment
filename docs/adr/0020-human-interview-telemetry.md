@@ -59,13 +59,14 @@ Hono 请求日志对真人面试邀请路径脱敏，并去除诊断查询的参
 
 1. 在目标库的发布流程中执行现有 `pnpm --filter @arc/ai-recruitment-copilot db:migrate`，使用运维提供的目标 `DATABASE_URL`。先迁移再发布 Web/Backend/Worker；迁移仅新增表与索引。
 2. 发布含采集代码和 Platform 页面的 Web、相应 Backend 及 Worker。独立 Backend 和集成 Web 挂载复用同一 Hono router。
-3. 在处理浏览器 API 请求的 Web/Backend 容器配置 `INTERVIEW_TELEMETRY_IP_HEADER=x-real-ip`。仅当入口代理**覆盖**该头且禁止绕过代理直连应用时启用：
+3. 2026-10-16 起无需配置 `INTERVIEW_TELEMETRY_IP_HEADER`：默认优先读取有效的 `X-Real-IP`，缺失或无效时取 `X-Forwarded-For` 第一个地址。生产入口代理必须**覆盖**这两个请求头并禁止绕过代理直连应用：
 
    ```nginx
    proxy_set_header X-Real-IP $remote_addr;
+   proxy_set_header X-Forwarded-For $remote_addr;
    ```
 
-   多级代理/CDN 须先正确配置 Nginx 的可信 real_ip 来源；不要直接信任浏览器提交的 X-Forwarded-For。未配置时 UI 会明确显示 IP 未采集。
+   多级代理/CDN 须先正确配置 Nginx 的可信 real_ip 来源；不要直接透传浏览器提交的 X-Forwarded-For。两个头都没有有效地址时 UI 会明确显示 IP 未采集，本地直连不会自动取得底层连接 IP。
 
 4. 给 Worker 配置 `INTERVIEW_TELEMETRY_RETENTION_DAYS=90`（或约定的 7–365 天值），确认 Worker 正常运行。
 5. 自托管 LiveKit 的 `webhook` 配置示例：

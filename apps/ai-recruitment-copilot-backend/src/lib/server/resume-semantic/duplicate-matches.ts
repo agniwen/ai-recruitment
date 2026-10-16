@@ -5,10 +5,14 @@ import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilo
 import type { DedupMatchRecord } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/studio-interviews";
 import { buildResumeProfileSnapshotFromProfile } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resume-profile-snapshot";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
+import type { ResumeDuplicateRecruitmentContext } from "@arc/shared/resume-duplicates";
 import {
+  department,
+  hiringUnit,
   jobDescription,
   resumeDuplicateMatch,
   resumePoolItem,
+  resumeSource,
   studioInterview,
   user,
 } from "@arc/db-schema/schema";
@@ -202,7 +206,7 @@ function profileSkills(profile: ResumeProfile | null | undefined): string[] {
 
 function toMatchRecord(
   match: DuplicateMatchRow,
-  target: {
+  target: ResumeDuplicateRecruitmentContext & {
     candidateEmail: string | null;
     candidateName: string;
     candidatePhone: string | null;
@@ -222,10 +226,16 @@ function toMatchRecord(
     candidatePhone: target.candidatePhone,
     conflictingSignals: match.signals,
     createdAt: target.createdAt.toISOString(),
+    departmentName: target.departmentName ?? null,
+    hiringUnitName: target.hiringUnitName ?? null,
     id: target.id,
     jobDescriptionName: target.jobDescriptionName,
     level: match.level,
+    outcome: target.outcome ?? null,
+    pipelineStage: target.pipelineStage ?? null,
+    resumeEvaluationStatus: target.resumeEvaluationStatus ?? null,
     resumeProfileSnapshot: buildResumeProfileSnapshotFromProfile(target.resumeProfile),
+    resumeSourceName: target.resumeSourceName ?? null,
     score: match.score,
     semanticReasons: match.reasons,
     similarity: match.similarity ?? undefined,
@@ -275,9 +285,15 @@ export async function listDuplicateMatchesForSource(input: {
             candidateName: studioInterview.candidateName,
             candidatePhone: studioInterview.candidatePhone,
             createdAt: studioInterview.createdAt,
+            departmentName: department.name,
+            hiringUnitName: hiringUnit.name,
             id: studioInterview.id,
             jobDescriptionName: jobDescription.name,
+            outcome: studioInterview.outcome,
+            pipelineStage: studioInterview.pipelineStage,
+            resumeEvaluationStatus: studioInterview.resumeEvaluationStatus,
             resumeProfile: studioInterview.resumeProfile,
+            resumeSourceName: resumeSource.name,
             status: sql<"active" | "archived">`
               CASE
                 WHEN ${studioInterview.pipelineStage} = 'closed' THEN 'archived'
@@ -295,6 +311,30 @@ export async function listDuplicateMatchesForSource(input: {
             and(
               eq(studioInterview.jobDescriptionId, jobDescription.id),
               eq(jobDescription.organizationId, studioInterview.organizationId),
+            ),
+          )
+          .leftJoin(
+            hiringUnit,
+            and(
+              eq(studioInterview.hiringUnitId, hiringUnit.id),
+              eq(hiringUnit.organizationId, studioInterview.organizationId),
+            ),
+          )
+          .leftJoin(
+            department,
+            and(
+              eq(jobDescription.departmentId, department.id),
+              eq(department.organizationId, studioInterview.organizationId),
+            ),
+          )
+          .leftJoin(
+            resumeSource,
+            and(
+              eq(
+                resumeSource.id,
+                sql`coalesce(${jobDescription.resumeSourceId}, ${hiringUnit.resumeSourceId})`,
+              ),
+              eq(resumeSource.organizationId, studioInterview.organizationId),
             ),
           )
           .where(

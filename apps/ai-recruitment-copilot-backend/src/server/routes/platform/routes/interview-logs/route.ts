@@ -2,10 +2,11 @@ import { zValidator } from "@hono/zod-validator";
 import { factory, jsonValidatorError } from "../../../../factory";
 import { adminMiddleware } from "../../../../middlewares/admin";
 import { listLoggedMeetings, loadMeetingLog } from "./dao";
-import { logQuerySchema } from "./schema";
+import { logQuerySchema, logUrlQuerySchema } from "./schema";
 
 import { interviewMediaRouter } from "./routes/media/route";
 import { meetingEntryCredentialsRouter } from "./routes/entry-credentials/route";
+import { ipRouter } from "./routes/ip/route";
 
 const defaultDependencies = { detail: loadMeetingLog, list: listLoggedMeetings };
 
@@ -17,14 +18,28 @@ export function createInterviewLogsRouter(dependencies = defaultDependencies) {
       c.header("Cache-Control", "no-store");
       await next();
     })
-    .get("/", zValidator("query", logQuerySchema, jsonValidatorError("查询参数无效")), async (c) =>
-      c.json(await dependencies.list(c.req.valid("query")), 200),
+    .get(
+      "/",
+      zValidator("query", logUrlQuerySchema, jsonValidatorError("查询参数无效")),
+      async (c) => c.json(await dependencies.list(c.req.valid("query")), 200),
     )
     .route("/media", interviewMediaRouter)
+    .route("/ip", ipRouter)
+    .post(
+      "/search",
+      zValidator("json", logQuerySchema, jsonValidatorError("查询参数无效")),
+      async (c) => c.json(await dependencies.list(c.req.valid("json")), 200),
+    )
+    .post(
+      "/:meetingId/search",
+      zValidator("json", logQuerySchema, jsonValidatorError("查询参数无效")),
+      async (c) =>
+        c.json(await dependencies.detail(c.req.param("meetingId"), c.req.valid("json")), 200),
+    )
     .route("/:meetingId/entry-credentials", meetingEntryCredentialsRouter)
     .get(
       "/:meetingId",
-      zValidator("query", logQuerySchema, jsonValidatorError("查询参数无效")),
+      zValidator("query", logUrlQuerySchema, jsonValidatorError("查询参数无效")),
       async (c) =>
         c.json(await dependencies.detail(c.req.param("meetingId"), c.req.valid("query")), 200),
     );

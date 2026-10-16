@@ -1,5 +1,6 @@
 /* oxlint-disable unicorn/no-await-expression-member -- Keep integration assertions next to the awaited database observation. */
 import { randomUUID } from "node:crypto";
+import { installSecurityTestKeys } from "../../../../../../../test-utils/security-keys";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,6 +33,7 @@ suite("interview media archive persistence", () => {
     sid: "PA_test",
   };
   beforeAll(async () => {
+    installSecurityTestKeys();
     const url = new URL(testUrl);
     if (url.hostname !== "127.0.0.1" || !url.pathname.startsWith("/arc_media_test_")) {
       throw new Error("Isolated local media test database required");
@@ -81,7 +83,7 @@ suite("interview media archive persistence", () => {
     expect(sample.environment).toMatchObject({
       browserId: "device-test",
       fingerprint: "a".repeat(32),
-      ip: "203.0.113.8",
+      ip: expect.stringMatching(/^ip:v1:/),
       ...trace,
     });
     expect(JSON.stringify(sample)).not.toContain("not-evidence");
@@ -99,7 +101,10 @@ suite("interview media archive persistence", () => {
     await db.$client`delete from interview_telemetry_event where meeting_id = ${meetingId}`;
     await db.$client`delete from studio_human_interview_meeting where id = ${meetingId}`;
     expect((await dao.listMediaArchives({ page: 1 })).records[0].meetingId).toBe(meetingId);
-    expect((await dao.loadMeetingMedia(meetingId, { page: 1 })).records[0].environment.ip).toBe(
+    expect((await dao.loadMeetingMedia(meetingId, { page: 1 })).records[0].environment.hasIp).toBe(
+      true,
+    );
+    expect(JSON.stringify(await dao.loadMeetingMedia(meetingId, { page: 1 }))).not.toContain(
       "203.0.113.8",
     );
 

@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, genericOAuth } from "better-auth/plugins";
 import type { GenericOAuthConfig } from "better-auth/plugins";
@@ -25,6 +25,8 @@ import { ac, roles } from "@arc/shared/permissions";
 import { optionalUserTelegramSchema } from "@arc/shared/user-profile";
 import { db } from "./db";
 import * as schema from "@arc/db-schema/schema";
+import { encryptIp, sessionIpContext } from "./ip-encryption";
+import { requireRecentMfa, SecurityError } from "../../server/routes/security/mfa/service";
 
 const baseURL = getRequiredEnv("BETTER_AUTH_URL");
 const trustedOrigins = uniq([baseURL, "http://localhost:3000"]);
@@ -262,10 +264,38 @@ export const auth = betterAuth({
             console.warn("[auth] failed to apply workspace pre-registration", error);
           }
         },
+        async before(newSession) {
+          return {
+            data: {
+              ...newSession,
+              ipAddress: null,
+              ipCiphertext: await encryptIp(
+                newSession.ipAddress,
+                sessionIpContext(newSession.userId, newSession.token),
+              ),
+            },
+          };
+        },
+      },
+      update: {
+        // oxlint-disable-next-line require-await -- Better Auth requires an async database hook.
+        async before(updatedSession) {
+          // Better Auth refreshes expiry, not network evidence. Never reintroduce raw IPs.
+          return "ipAddress" in updatedSession
+            ? { data: { ...updatedSession, ipAddress: null } }
+            : undefined;
+        },
       },
     },
     user: {
       update: {
+        async after(updatedUser) {
+          if (updatedUser.role !== "admin" || updatedUser.banned) {
+            await db
+              .delete(schema.platformMfaGrant)
+              .where(eq(schema.platformMfaGrant.userId, updatedUser.id));
+          }
+        },
         // oxlint-disable-next-line require-await -- hook contract requires async
         async before(updatedUser) {
           if (!("telegram" in updatedUser)) {
@@ -295,6 +325,24 @@ export const auth = betterAuth({
   hooks: {
     // oxlint-disable-next-line require-await -- middleware contract requires async
     before: createAuthMiddleware(async (ctx) => {
+      // Better Auth admin endpoints run outside the Hono platform router.
+      if (ctx.path.startsWith("/admin/")) {
+        const current = await getSessionFromCtx(ctx);
+        if (!current || current.user.role !== "admin") {
+          throw new APIError("FORBIDDEN", { message: "无权访问平台后台。" });
+        }
+        try {
+          await requireRecentMfa(
+            { sessionId: current.session.id, userId: current.user.id },
+            ctx.headers ?? new Headers(),
+          );
+        } catch (error) {
+          throw new APIError("FORBIDDEN", {
+            code: error instanceof SecurityError ? error.code : "SECURITY_UNAVAILABLE",
+            message: "请先在平台后台完成两步验证。",
+          });
+        }
+      }
       if (attemptsDynamicRoleIdentifierUpdate(ctx.path, ctx.body)) {
         throw new APIError("BAD_REQUEST", {
           message: "角色标识创建后不可更改。",
@@ -494,6 +542,9 @@ export const auth = betterAuth({
   // at 1 day. 5 minutes is a balanced trade between DB write frequency and
   // perceived freshness; expiresIn stays at 7 days.
   session: {
+    additionalFields: {
+      ipCiphertext: { input: false, required: false, returned: false, type: "string" },
+    },
     // 7 天 = 60 * 60 * 24 * 7
     expiresIn: 60 * 60 * 24 * 7,
     // 5 分钟 = 60 * 5；让"最近活跃"列足够新鲜

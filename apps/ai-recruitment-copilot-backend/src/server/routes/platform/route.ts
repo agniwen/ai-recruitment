@@ -8,6 +8,7 @@ import { zValidator } from "@hono/zod-validator";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { createInternalErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/error-handler";
 import { adminMiddleware } from "@arc/ai-recruitment-copilot-backend/server/middlewares/admin";
+import { platformMfaMiddleware } from "@arc/ai-recruitment-copilot-backend/server/middlewares/platform-mfa";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { organization, member, session, user } from "@arc/db-schema/schema";
 import { resumeParseStatusValues } from "@arc/db-schema/studio-interviews";
@@ -602,6 +603,7 @@ const platformQueues = factory
 export const platformRouter = factory
   .createApp()
   .use(adminMiddleware)
+  .use(platformMfaMiddleware)
   .route("/agent-tests", platformAgentTestsRouter)
   .route("/livekit", platformLiveKitRouter)
   .route("/interview-logs", interviewLogsRouter)

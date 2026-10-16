@@ -11,12 +11,18 @@
 
 import {
   IconAlertTriangle as AlertTriangleIcon,
+  IconChevronRight as ChevronRightIcon,
   IconLoader2 as Loader2Icon,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Suspense, lazy, useState } from "react";
 import type { DedupMatchRecord, DedupSourceCandidate } from "@/lib/client/api";
+import {
+  candidateOutcomeMeta,
+  pipelineStageMeta,
+  resumeEvaluationStatusMeta,
+} from "@arc/db-schema/studio-interviews";
 import { formatDate } from "@arc/shared/utils/time";
 import { cn } from "@arc/shared/utils";
 import { StudioPersonDetailDialog } from "@/components/features/studio/studio-person-detail-dialog";
@@ -76,9 +82,72 @@ function textOrNull(value: string | null | undefined) {
   return text || null;
 }
 
-function MetaText({ className, children }: { className?: string; children: ReactNode }) {
+function recruitmentStageLabel(candidate: DedupMatchRecord | DedupSourceCandidate): string {
+  if (candidate.pipelineStage === "closed") {
+    return candidate.outcome && candidate.outcome !== "in_pipeline"
+      ? candidateOutcomeMeta[candidate.outcome].label
+      : pipelineStageMeta.closed.label;
+  }
+  if (candidate.pipelineStage === "screening") {
+    const evaluation = candidate.resumeEvaluationStatus
+      ? resumeEvaluationStatusMeta[candidate.resumeEvaluationStatus].label
+      : "待评估";
+    return `${pipelineStageMeta.screening.label} · ${evaluation}`;
+  }
+  if (candidate.pipelineStage) {
+    return pipelineStageMeta[candidate.pipelineStage].label;
+  }
+  if (candidate.status === "archived") {
+    return "已归档";
+  }
+  return candidate.sourceType === "resume_pool_item" ? "人才库" : "未知环节";
+}
+
+function RecruitmentContext({ candidate }: { candidate: DedupMatchRecord | DedupSourceCandidate }) {
+  const fields = [
+    { label: "用人组织", value: textOrNull(candidate.hiringUnitName) },
+    { label: "部门/中心（来源）", value: textOrNull(candidate.resumeSourceName) },
+    { label: "部门", value: textOrNull(candidate.departmentName) },
+  ];
+  let stageMeta = candidate.pipelineStage
+    ? pipelineStageMeta[candidate.pipelineStage]
+    : pipelineStageMeta.closed;
+  if (
+    candidate.pipelineStage === "closed" &&
+    candidate.outcome &&
+    candidate.outcome !== "in_pipeline"
+  ) {
+    stageMeta = candidateOutcomeMeta[candidate.outcome];
+  }
+
   return (
-    <p className={cn("min-w-0 text-muted-foreground text-xs leading-5", className)}>{children}</p>
+    <section aria-label="投递去向" className="rounded-lg bg-muted/60 p-4">
+      <dl className="grid min-w-0 grid-cols-2 gap-x-5 gap-y-4 @min-[42rem]:grid-cols-4">
+        {fields.map(({ label, value }) => (
+          <div className="min-w-0 space-y-1.5" key={label}>
+            <dt className="text-xs leading-5 text-muted-foreground">{label}</dt>
+            <dd className="min-w-0 break-words text-base font-semibold leading-6 text-foreground">
+              {value ?? <EmptyValue />}
+            </dd>
+          </div>
+        ))}
+        <div className="min-w-0 space-y-1.5">
+          <dt className="text-xs leading-5 text-muted-foreground">当前环节</dt>
+          <dd>
+            <Badge
+              className="max-w-full whitespace-normal text-sm font-semibold"
+              variant={stageMeta.tone}
+            >
+              {recruitmentStageLabel(candidate)}
+            </Badge>
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 min-w-0 break-words text-sm leading-5">
+        <span className="me-2 text-xs text-muted-foreground">投递岗位</span>
+        {textOrNull(candidate.jobDescriptionName) ?? <EmptyValue />}
+      </p>
+    </section>
   );
 }
 
@@ -88,21 +157,6 @@ function FieldLine({ label, value }: { label: string; value: ReactNode }) {
       <span className="shrink-0 text-muted-foreground">{label}</span>
       <span className="min-w-0 break-all text-foreground">{value}</span>
     </div>
-  );
-}
-
-function RoleText({
-  targetRole,
-  jobDescriptionName,
-}: {
-  targetRole: string | null | undefined;
-  jobDescriptionName: string | null | undefined;
-}) {
-  return (
-    <MetaText>
-      {textOrNull(targetRole) ?? "未填目标岗位"}
-      {textOrNull(jobDescriptionName) ? ` · ${jobDescriptionName}` : ""}
-    </MetaText>
   );
 }
 
@@ -128,17 +182,14 @@ function SkillsLine({ skills }: { skills: string[] | null | undefined }) {
 function ContactFields({
   email,
   phone,
-  createdAt,
 }: {
   email: string | null | undefined;
   phone: string | null | undefined;
-  createdAt?: string | null;
 }) {
   return (
     <div className="grid min-w-0 gap-1">
       <FieldLine label="邮箱" value={textOrNull(email) ?? <EmptyValue />} />
       <FieldLine label="手机" value={textOrNull(phone) ?? <EmptyValue />} />
-      {createdAt ? <FieldLine label="创建" value={formatCreatedAt(createdAt)} /> : null}
     </div>
   );
 }
@@ -216,8 +267,8 @@ function CandidateIdentity({
 }
 
 function CandidateBody({
+  candidate,
   targetRole,
-  jobDescriptionName,
   email,
   phone,
   createdAt,
@@ -227,8 +278,8 @@ function CandidateBody({
   uploaderName,
   footer,
 }: {
+  candidate: DedupMatchRecord | DedupSourceCandidate;
   targetRole: string | null | undefined;
-  jobDescriptionName: string | null | undefined;
   email: string | null | undefined;
   phone: string | null | undefined;
   createdAt?: string | null;
@@ -239,13 +290,30 @@ function CandidateBody({
   footer?: ReactNode;
 }) {
   return (
-    <div className="min-w-0 space-y-2.5">
-      <RoleText jobDescriptionName={jobDescriptionName} targetRole={targetRole} />
-      <UploaderMeta image={uploaderImage} name={uploaderName} />
-      <ContactFields createdAt={createdAt} email={email} phone={phone} />
-      <ResumeProfileSnapshotView showLabels snapshot={snapshot} />
-      <SkillsLine skills={skills} />
+    <div className="min-w-0 space-y-3">
+      <RecruitmentContext candidate={candidate} />
+      <div className="grid min-w-0 gap-3 @min-[36rem]:grid-cols-2">
+        <div className="min-w-0 space-y-1">
+          <UploaderMeta image={uploaderImage} name={uploaderName} />
+          {createdAt ? <FieldLine label="创建" value={formatCreatedAt(createdAt)} /> : null}
+        </div>
+        <ContactFields email={email} phone={phone} />
+      </div>
       {footer}
+      <details className="group/resume-summary min-w-0 border-t border-border/60 pt-2">
+        <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+          <ChevronRightIcon
+            aria-hidden
+            className="size-4 shrink-0 group-open/resume-summary:rotate-90"
+          />
+          简历摘要与技能
+        </summary>
+        <div className="space-y-3 pt-3">
+          <FieldLine label="求职意向" value={textOrNull(targetRole) ?? <EmptyValue />} />
+          <ResumeProfileSnapshotView showLabels snapshot={snapshot} />
+          <SkillsLine skills={skills} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -321,14 +389,14 @@ function ResumePoolMatchDetailDialog({
 
 function SourceCandidatePanel({ source }: { source: DedupSourceCandidate }) {
   return (
-    <aside className="min-h-0 min-w-0 overflow-y-auto">
-      <div className="mb-3 text-muted-foreground text-xs">当前候选人</div>
+    <aside className="@container min-h-0 min-w-0">
+      <div className="mb-3 text-sm font-semibold text-primary">本次投递</div>
       <CandidateIdentity id={source.id} name={source.candidateName} />
       <div className="mt-2">
         <CandidateBody
+          candidate={source}
           createdAt={source.createdAt}
           email={source.candidateEmail}
-          jobDescriptionName={source.jobDescriptionName}
           phone={source.candidatePhone}
           skills={source.skills}
           snapshot={source.resumeProfileSnapshot}
@@ -350,9 +418,11 @@ function MatchCandidateRow({
   onOpenDetail?: (match: DedupMatchRecord) => void;
   onOpenResume?: (match: DedupMatchRecord) => void;
 }) {
-  const statusLabel = match.status === "active" ? "有效" : "已归档";
   return (
-    <div className="min-w-0 py-4 first:pt-0 last:pb-0">
+    <article
+      aria-label={`${match.candidateName}的疑似历史投递`}
+      className="@container min-w-0 rounded-xl border bg-card p-4"
+    >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -365,9 +435,7 @@ function MatchCandidateRow({
                 {typeof match.score === "number" ? ` ${match.score}%` : ""}
               </Badge>
             ) : null}
-            <span className="text-muted-foreground text-[11px]">
-              {sourceTypeLabel(match)} · {statusLabel}
-            </span>
+            <span className="text-muted-foreground text-[11px]">{sourceTypeLabel(match)}</span>
           </div>
         </div>
         {onOpenDetail || onOpenResume ? (
@@ -398,12 +466,12 @@ function MatchCandidateRow({
         ) : null}
       </div>
 
-      <div className="mt-2 min-w-0">
+      <div className="mt-3 min-w-0">
         <CandidateBody
+          candidate={match}
           createdAt={match.createdAt}
           email={match.candidateEmail}
           footer={<JudgmentLines match={match} />}
-          jobDescriptionName={match.jobDescriptionName}
           phone={match.candidatePhone}
           skills={match.skills}
           snapshot={match.resumeProfileSnapshot}
@@ -412,7 +480,7 @@ function MatchCandidateRow({
           uploaderName={match.uploaderName}
         />
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -464,7 +532,7 @@ export function ResumeDedupMatchList({
 
   return (
     <>
-      <div className={cn("min-h-0 divide-y overflow-y-auto", className)}>
+      <div className={cn("min-h-0 space-y-4 overflow-y-auto", className)}>
         {matches.map((match) => {
           const canReadMatch = !source || (canReadCurrent && canReadSourceType(match.sourceType));
           return (
@@ -545,23 +613,17 @@ export function ResumeDuplicateMatchesDialog({
     content = <p className="py-8 text-center text-destructive text-sm">疑似重复简历加载失败。</p>;
   } else if (matches.length > 0 || source) {
     content = (
-      <div className={cn("flex min-h-0 flex-col lg:flex-1 lg:flex-row", source ? "gap-0" : null)}>
+      <div className="flex min-h-0 flex-col gap-5 lg:flex-1 lg:flex-row">
         {source ? (
-          <div className="hidden min-h-0 w-2/5 shrink-0 overflow-y-auto border-border/70 border-r pr-5 lg:block">
+          <div className="min-h-0 shrink-0 lg:w-80 lg:overflow-y-auto lg:border-e lg:border-border/70 lg:pe-5 xl:w-96">
             <SourceCandidatePanel source={source} />
           </div>
         ) : null}
 
-        <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", source ? "lg:pl-5" : null)}>
-          {source ? (
-            <div className="mb-3 shrink-0 border-border/70 border-b pb-3 lg:hidden">
-              <SourceCandidatePanel source={source} />
-            </div>
-          ) : null}
-
-          <div className="mb-2 shrink-0 text-muted-foreground text-xs">
-            疑似记录
-            <span className="ml-1.5 text-foreground">{matches.length}</span>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="mb-3 flex shrink-0 items-center gap-2 text-sm font-semibold">
+            疑似历史投递
+            <span className="text-muted-foreground font-normal">{matches.length} 条</span>
           </div>
 
           {matches.length > 0 ? (
@@ -584,7 +646,7 @@ export function ResumeDuplicateMatchesDialog({
     <Modal
       className="h-[min(90dvh,900px)] max-h-[90dvh]"
       bodyClassName="flex min-w-0 flex-col overflow-x-hidden overflow-y-auto [overflow-wrap:anywhere] lg:overflow-hidden"
-      description="对照当前候选人与疑似记录的联系方式、履历与技能，结合判断依据确认是否为同一人。"
+      description="先核对历史投递的组织、来源、部门和当前环节，再结合联系方式与简历摘要确认是否为同一人。"
       onOpenChange={onOpenChange}
       open={open}
       size="full"

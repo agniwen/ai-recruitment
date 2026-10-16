@@ -8,6 +8,11 @@ import {
   resolveHumanInterviewMeetingInterviewerInviteToken,
 } from "../../../studio/routes/interviews/dao/human-interview-meetings";
 import { requestEvidence, readInterviewTrace } from "./utils";
+import {
+  encryptIp,
+  ipContext,
+  ipLookupHash,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/ip-encryption";
 
 export interface TelemetryScope {
   meetingId: string;
@@ -61,18 +66,25 @@ export async function saveClientEvents(
   await db
     .insert(interviewTelemetryEvent)
     .values(
-      events.map(({ id, occurredAt, ...event }) => ({
-        ...scope,
-        ...evidence,
-        ...event,
-        browserId: event.browserId ?? event.details.browserId,
-        eventKey: id,
-        fingerprintId: event.fingerprintId ?? event.details.fingerprint,
-        fingerprintVersion: event.fingerprintVersion ?? event.details.fingerprintVersion,
-        id: randomUUID(),
-        occurredAt: new Date(occurredAt),
-        source: "client",
-      })),
+      await Promise.all(
+        events.map(async ({ id, occurredAt, ...event }) => {
+          const rowId = randomUUID();
+          return {
+            ...scope,
+            ...evidence,
+            ...event,
+            browserId: event.browserId ?? event.details.browserId,
+            eventKey: id,
+            fingerprintId: event.fingerprintId ?? event.details.fingerprint,
+            fingerprintVersion: event.fingerprintVersion ?? event.details.fingerprintVersion,
+            id: rowId,
+            ip: await encryptIp(evidence.ip, ipContext("telemetry", scope.organizationId, rowId)),
+            ipLookupHash: evidence.ip ? ipLookupHash(evidence.ip) : null,
+            occurredAt: new Date(occurredAt),
+            source: "client",
+          };
+        }),
+      ),
     )
     .onConflictDoNothing();
   // Fingerprinting is asynchronous. Fill earlier rows only within this exact visit and identity.
@@ -144,15 +156,19 @@ export async function recordServerTelemetry(input: {
   if (!snapshot) {
     return;
   }
+  const rowId = randomUUID();
+  const evidence = input.headers ? requestEvidence(input.headers) : null;
   await db
     .insert(interviewTelemetryEvent)
     .values({
       ...snapshot,
-      ...(input.headers ? requestEvidence(input.headers) : {}),
+      ...evidence,
       ...(input.headers ? readInterviewTrace(input.headers) : input.trace),
       details: input.details ?? {},
       eventKey: input.eventKey ?? randomUUID(),
-      id: randomUUID(),
+      id: rowId,
+      ip: await encryptIp(evidence?.ip, ipContext("telemetry", snapshot.organizationId, rowId)),
+      ipLookupHash: evidence?.ip ? ipLookupHash(evidence.ip) : null,
       occurredAt: input.occurredAt ?? new Date(),
       participantIdentity: input.participantIdentity ?? "",
       participantName: input.participantName,

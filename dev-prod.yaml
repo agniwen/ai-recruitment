@@ -1,0 +1,105 @@
+# Local dependencies for native `make dev`. Reference: /opt/arc-infra and
+# /opt/livekit, inspected over SSH on 2026-10-14. Never contains production secrets.
+# Keep the existing Compose project and PostgreSQL volume so local data survives.
+name: ai-recruitment-local-db
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-recruitment-local-postgres
+    environment:
+      POSTGRES_USER: ${LOCAL_POSTGRES_USER:?Run make dev-prod-config}
+      POSTGRES_PASSWORD: ${LOCAL_POSTGRES_PASSWORD:?Run make dev-prod-config}
+      POSTGRES_DB: ai_recruitment
+      TZ: Asia/Shanghai
+    ports: ["127.0.0.1:54324:5432"]
+    volumes: ["data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    command: [redis-server, --appendonly, "yes"]
+    ports: ["127.0.0.1:16379:6379"]
+    volumes: ["redis:/data"]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports: ["127.0.0.1:16333:6333"]
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes: ["qdrant:/qdrant/storage"]
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: [server, /data, --console-address, ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${LOCAL_MINIO_USER:?Run make dev-prod-config}
+      MINIO_ROOT_PASSWORD: ${LOCAL_MINIO_PASSWORD:?Run make dev-prod-config}
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:3000,http://127.0.0.1:3000
+    ports: ["127.0.0.1:19100:9000", "127.0.0.1:19101:9001"]
+    volumes: ["minio:/data"]
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9000/minio/health/live]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ROOT_USER: ${LOCAL_MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${LOCAL_MINIO_PASSWORD}
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
+        mc mb --ignore-existing local/ai-recruitment-resumes local/ai-recruitment-recordings
+
+  livekit:
+    image: livekit/livekit-server:v1.13.6
+    command: [--config, /etc/livekit.yaml]
+    ports:
+      - "127.0.0.1:17890:7880"
+      - "${DEV_PROD_HOST_IP:?Run make dev-prod-config}:17891:17891/tcp"
+      - "${DEV_PROD_HOST_IP}:17892:17892/udp"
+    volumes: ["./.devtools/dev-prod/livekit.yaml:/etc/livekit.yaml:ro"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  egress:
+    image: livekit/egress:v1.15.0
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes: ["./.devtools/dev-prod/egress.yaml:/etc/egress.yaml:ro"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    cap_add: [SYS_ADMIN]
+    shm_size: 1gb
+    depends_on:
+      livekit: { condition: service_started }
+      minio-init: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+volumes:
+  data:
+    external: true
+    name: ai-recruitment-local-db_data
+  redis:
+  minio:
+  qdrant:

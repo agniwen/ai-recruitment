@@ -7,6 +7,7 @@ import { loadPlatformUsersHydrationState } from "./users.server";
 export type PlatformUsersState =
   | { status: "unauthenticated" }
   | { status: "forbidden" }
+  | { status: "mfa-required" }
   | {
       dehydratedState: JsonValue;
       status: "ready";

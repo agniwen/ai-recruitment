@@ -110,6 +110,7 @@
     "pdfjs-dist": "5.4.296",
     "pg": "^8.20.0",
     "postgres": "^3.4.9",
+    "qrcode.react": "4.2.0",
     "react": "catalog:",
     "react-day-picker": "^9.14.0",
     "react-dom": "catalog:",

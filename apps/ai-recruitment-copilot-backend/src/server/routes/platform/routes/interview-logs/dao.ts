@@ -2,6 +2,10 @@ import { and, or, eq, inArray, ilike, gte, lte, desc, asc, count, sql } from "dr
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { interviewTelemetryEvent as event } from "@arc/db-schema/schema";
 import type { LogQuery } from "./schema";
+import {
+  hideStoredIp,
+  ipLookupHash,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/ip-encryption";
 
 // Keep raw evidence intact. Only hide routine client signals in the key-event view;
 // unfamiliar states and every server/LiveKit event remain visible.
@@ -34,7 +38,7 @@ function conditions(q: LogQuery) {
     q.visitId ? eq(event.visitId, q.visitId) : undefined,
     q.attemptId ? eq(event.attemptId, q.attemptId) : undefined,
     q.type ? eq(event.type, q.type) : undefined,
-    q.ip ? eq(event.ip, q.ip) : undefined,
+    q.ip ? eq(event.ipLookupHash, ipLookupHash(q.ip)) : undefined,
     q.fingerprint
       ? sql`exists (
       select 1 from interview_telemetry_event fingerprint_event
@@ -129,7 +133,7 @@ export async function listLoggedMeetings(q: LogQuery) {
 
 export async function loadMeetingLog(meetingId: string, q: LogQuery) {
   const where = and(eq(event.meetingId, meetingId), conditions(q));
-  const [records, [total], participants, [summary]] = await Promise.all([
+  const [records, [total], participants, [summary], participantIps] = await Promise.all([
     db
       .select()
       .from(event)
@@ -151,7 +155,6 @@ export async function loadMeetingLog(meetingId: string, q: LogQuery) {
           string[]
         >`array_remove(array_agg(distinct nullif(btrim(${event.fingerprintId}), '')), null)`,
         identity: event.participantIdentity,
-        ips: sql<string[]>`array_remove(array_agg(distinct ${event.ip}), null)`,
         name: sql<string | null>`max(${event.participantName})`,
         role: sql<string | null>`max(${event.participantRole})`,
         userAgents: sql<string[]>`array_remove(array_agg(distinct ${event.userAgent}), null)`,
@@ -159,7 +162,7 @@ export async function loadMeetingLog(meetingId: string, q: LogQuery) {
       })
       .from(event)
       .where(and(eq(event.meetingId, meetingId), sql`${event.participantIdentity} <> ''`))
-      .groupBy(event.participantIdentity)
+      .groupBy(event.meetingId, event.participantIdentity)
       .orderBy(asc(sql`min(${event.receivedAt})`), asc(event.participantIdentity)),
     db
       .select({
@@ -178,13 +181,24 @@ export async function loadMeetingLog(meetingId: string, q: LogQuery) {
       })
       .from(event)
       .where(eq(event.meetingId, meetingId)),
+    db
+      .select({ id: sql<string>`min(${event.id})`, identity: event.participantIdentity })
+      .from(event)
+      .where(and(eq(event.meetingId, meetingId), sql`${event.ip} is not null`))
+      .groupBy(event.participantIdentity, sql`coalesce(${event.ipLookupHash}, ${event.ip})`)
+      .orderBy(asc(sql`min(${event.id})`)),
   ]);
   return {
     page: q.page,
     pageSize: q.pageSize,
-    participants: participants.filter((r) => r.name),
+    participants: participants
+      .filter((r) => r.name)
+      .map((row) => ({
+        ...row,
+        ipEventIds: participantIps.filter((ip) => ip.identity === row.identity).map((ip) => ip.id),
+      })),
     records: records.map((r) => ({
-      ...r,
+      ...hideStoredIp(r),
       occurredAt: r.occurredAt.toISOString(),
       receivedAt: r.receivedAt.toISOString(),
     })),

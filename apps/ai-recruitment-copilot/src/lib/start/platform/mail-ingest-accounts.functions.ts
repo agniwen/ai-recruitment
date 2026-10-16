@@ -7,6 +7,7 @@ import { loadPlatformMailIngestAccountsHydrationState } from "./mail-ingest-acco
 export type PlatformMailIngestAccountsState =
   | { status: "unauthenticated" }
   | { status: "forbidden" }
+  | { status: "mfa-required" }
   | {
       dehydratedState: JsonValue;
       status: "ready";

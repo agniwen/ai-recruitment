@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { encryptIp, ipContext } from "@arc/ai-recruitment-copilot-backend/lib/server/ip-encryption";
 import { and, countDistinct, eq, gt, lt } from "drizzle-orm";
 import {
   generateAuthenticationOptions,
@@ -274,6 +275,7 @@ export async function verifyEntryCredential(
     }
     const credential = await verifyCredential(tx, input, challenge);
     const evidence = requestEvidence(headers);
+    const useId = randomUUID();
     await tx.insert(uses).values({
       browserId: trace.browserId,
       candidateId: scope.interviewRecordId,
@@ -281,9 +283,9 @@ export async function verifyEntryCredential(
       credentialRef: credential.id,
       expiresAt: new Date(Date.now() + 30 * 60_000),
       fingerprintId: trace.fingerprintId,
-      id: randomUUID(),
+      id: useId,
       inviteHash: hashEntrySecret(invite),
-      ip: evidence.ip,
+      ip: await encryptIp(evidence.ip, ipContext("entry-use", scope.organizationId, useId)),
       meetingId: scope.meetingId,
       method: input.kind,
       organizationId: scope.organizationId,

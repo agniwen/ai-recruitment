@@ -26,7 +26,7 @@ const asset: MediaAsset = {
   deletedAt: null,
   deletedBy: null,
   durationMs: null,
-  environment: { browserId: "browser-one", fingerprint: "b".repeat(32), ip: "203.0.113.1" },
+  environment: { browserId: "browser-one", fingerprint: "b".repeat(32), hasIp: true },
   errorCode: null,
   id: "sample",
   kind: "image",
@@ -89,7 +89,8 @@ describe("interview media admin panel", () => {
   it("shows device evidence and fetches private bytes only when preview is opened, then releases them", async () => {
     await renderPanel();
     expect(document.body.textContent).toContain("browser-one");
-    expect(document.body.textContent).toContain("203.0.113.1");
+    expect(document.body.textContent).not.toContain("203.0.113.1");
+    expect(document.body.textContent).toContain("查看 IP");
     expect(document.body.textContent).toContain("b".repeat(32));
     expect(fetchMediaBlob).not.toHaveBeenCalled();
     click("查看截图");

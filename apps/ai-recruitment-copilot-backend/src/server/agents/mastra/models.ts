@@ -243,3 +243,29 @@ export function withThinkingDisabled(model: CoreMastraModelConfig): ModelWithRet
       : DISABLED_THINKING_PROVIDER_OPTIONS;
   return [{ model, modelSettings: { reasoning: "none" }, providerOptions }];
 }
+
+export function withOpenRouterFallback(
+  model: CoreMastraModelConfig,
+  env: EnvLike = process.env,
+): ModelWithRetries[] {
+  const primary = withThinkingDisabled(model);
+  const apiKey = readEnv(env, "OPENROUTER_API_KEY");
+  if (!apiKey) {
+    return primary;
+  }
+  return [
+    ...primary.map((entry) => ({ ...entry, maxRetries: 0 })),
+    {
+      maxRetries: 0,
+      model: {
+        apiKey,
+        modelId: sanitizeModelId(readEnv(env, "OPENROUTER_FALLBACK_MODEL"), "x-ai/grok-4.7"),
+        providerId: "openrouter",
+        url: sanitizeApiUrl(readEnv(env, "OPENROUTER_BASE_URL"), "https://openrouter.ai/api/v1"),
+      },
+      // Grok 4.7 requires reasoning and rejects requests that disable it.
+      modelSettings: { reasoning: "low" },
+      providerOptions: { openrouter: { reasoning: { effort: "low", exclude: true } } },
+    },
+  ];
+}

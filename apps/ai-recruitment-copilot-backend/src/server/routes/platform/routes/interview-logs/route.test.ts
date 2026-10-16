@@ -46,5 +46,17 @@ describe("platform interview log access", () => {
     expect(detail).toHaveBeenLastCalledWith("meeting", expect.objectContaining({ view: "key" }));
     const invalidView = await app.request("/logs/meeting?view=unknown");
     expect(invalidView.status).toBe(400);
+    const urlIp = await app.request("/logs/meeting?ip=203.0.113.7");
+    expect(urlIp.status).toBe(400);
+    const postIp = await app.request("/logs/meeting/search", {
+      body: JSON.stringify({ ip: "203.0.113.7" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(postIp.status).toBe(200);
+    expect(detail).toHaveBeenLastCalledWith(
+      "meeting",
+      expect.objectContaining({ ip: "203.0.113.7" }),
+    );
   });
 });

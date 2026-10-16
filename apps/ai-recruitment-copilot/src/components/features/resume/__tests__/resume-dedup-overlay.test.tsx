@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { CandidateOutcome, PipelineStage } from "@arc/db-schema/studio-interviews";
 import {
   enableReactActEnvironment,
   installNoopResizeObserver,
@@ -48,7 +49,67 @@ afterEach(async () => {
 });
 
 describe("ResumeDuplicateMatchesDialog", () => {
-  it("shows uploader avatars and names for the current candidate and suspected records", async () => {
+  it("keeps each historical destination and stage visible while resume summaries expand independently", async () => {
+    const { root, container } = await renderInAct(
+      <QueryClientProvider client={new QueryClient()}>
+        <ResumeDedupMatchList
+          matches={["技术中心", "渠道中心"].map((hiringUnitName, index) => ({
+            candidateEmail: "candidate@example.com",
+            candidateName: "刘鑫",
+            candidatePhone: null,
+            createdAt: "2026-10-14T10:20:00.000Z",
+            departmentName: index === 0 ? "运营组" : "Agent开发部",
+            hiringUnitName,
+            id: `history-${index}`,
+            jobDescriptionName: "前端开发工程师",
+            outcome: "in_pipeline",
+            pipelineStage: index === 0 ? "offer" : "human_interview",
+            resumeProfileSnapshot: {
+              education: [],
+              educationHasMore: false,
+              projects: [],
+              projectsHasMore: false,
+              work: [{ primary: "历史工作公司" }],
+              workHasMore: false,
+            },
+            resumeSourceName: `${hiringUnitName}来源`,
+            semanticReasons: ["工作经历高度相似"],
+            skills: ["React", "TypeScript"],
+            status: "active",
+            targetRole: "前端开发",
+          }))}
+        />
+      </QueryClientProvider>,
+    );
+    roots.push(root);
+
+    const cards = container.querySelectorAll("article");
+    expect(cards).toHaveLength(2);
+    for (const [index, card] of [...cards].entries()) {
+      const context = card.querySelector('[aria-label="投递去向"]');
+      assert(context);
+      expect(context.textContent).toContain(index === 0 ? "技术中心" : "渠道中心");
+      expect(context.textContent).toContain(index === 0 ? "运营组" : "Agent开发部");
+      expect(context.textContent).toContain(index === 0 ? "Offer" : "真人复面");
+      expect(context.textContent).toContain("投递岗位");
+      expect(context.closest("details")).toBeNull();
+      expect(card.querySelector("details")?.open).toBe(false);
+    }
+
+    const firstSummary = cards[0]?.querySelector("details");
+    assert(firstSummary);
+    const toggle = firstSummary.querySelector("summary");
+    assert(toggle);
+    expect(firstSummary.textContent).toContain("历史工作公司");
+    expect(firstSummary.textContent).toContain("React");
+    toggle.click();
+    expect(firstSummary.open).toBe(true);
+    expect(cards[1]?.querySelector("details")?.open).toBe(false);
+    toggle.click();
+    expect(firstSummary.open).toBe(false);
+  });
+
+  it("shows recruiting context and uploaders for the current candidate and suspected records", async () => {
     const queryClient = new QueryClient();
     const { root } = await renderInAct(
       <QueryClientProvider client={queryClient}>
@@ -59,10 +120,14 @@ describe("ResumeDuplicateMatchesDialog", () => {
               candidateName: "疑似候选人",
               candidatePhone: null,
               createdAt: "2026-07-24T00:00:00.000Z",
+              departmentName: "历史投递部门",
+              hiringUnitName: "历史用人组织",
               id: "suspected-id",
               jobDescriptionName: null,
               level: "high",
-              resumeFileName: "suspected.pdf",
+              outcome: "in_pipeline",
+              pipelineStage: "offer",
+              resumeSourceName: "历史来源中心",
               score: 94,
               status: "active",
               targetRole: null,
@@ -77,9 +142,14 @@ describe("ResumeDuplicateMatchesDialog", () => {
             candidateName: "当前候选人",
             candidatePhone: null,
             createdAt: "2026-07-24T00:00:00.000Z",
+            departmentName: "当前投递部门",
+            hiringUnitName: "当前用人组织",
             id: "current-id",
             jobDescriptionName: null,
+            outcome: "in_pipeline",
+            pipelineStage: "screening",
             resumeProfileSnapshot: null,
+            resumeSourceName: "当前来源中心",
             skills: [],
             targetRole: null,
             uploaderImage: "https://example.com/current.png",
@@ -93,6 +163,19 @@ describe("ResumeDuplicateMatchesDialog", () => {
     expect(document.body.textContent).toContain("上传人");
     expect(document.body.textContent).toContain("当前上传人");
     expect(document.body.textContent).toContain("疑似上传人");
+    for (const label of ["用人组织", "部门/中心（来源）", "部门", "当前环节"]) {
+      expect(document.body.textContent).toContain(label);
+    }
+    const currentPanelText = document.querySelector("aside")?.textContent;
+    expect(currentPanelText).toContain("当前用人组织");
+    expect(currentPanelText).toContain("当前来源中心");
+    expect(currentPanelText).toContain("当前投递部门");
+    expect(currentPanelText).toContain("待评估");
+    expect(currentPanelText).not.toContain("历史用人组织");
+    expect(document.body.textContent).toContain("历史用人组织");
+    expect(document.body.textContent).toContain("历史来源中心");
+    expect(document.body.textContent).toContain("历史投递部门");
+    expect(document.body.textContent).toContain("Offer");
     const riskBadge = [...document.querySelectorAll<HTMLElement>('[data-slot="badge"]')].find(
       (element) => element.textContent === "高度疑似 94%",
     );
@@ -125,6 +208,47 @@ describe("ResumeDuplicateMatchesDialog", () => {
     expect(detailButton?.className).toContain("lg:inline-flex");
     expect(resumeButton?.className).toContain("hidden");
     expect(resumeButton?.className).toContain("lg:inline-flex");
+  });
+
+  it.each<[PipelineStage, CandidateOutcome, string]>([
+    ["screening", "in_pipeline", "待评估"],
+    ["ai_review", "in_pipeline", "AI 评价审核"],
+    ["written_test", "in_pipeline", "笔试"],
+    ["ai_interview", "in_pipeline", "AI 面试"],
+    ["human_interview", "in_pipeline", "真人复面"],
+    ["offer", "in_pipeline", "Offer"],
+    ["closed", "archived", "已归档"],
+    ["closed", "rejected", "已淘汰"],
+    ["closed", "hired", "已到岗"],
+    ["closed", "withdrawn", "已撤回"],
+  ])("shows the actual stage for %s / %s", async (pipelineStage, outcome, label) => {
+    const { root, container } = await renderInAct(
+      <QueryClientProvider client={new QueryClient()}>
+        <ResumeDedupMatchList
+          matches={[
+            {
+              candidateEmail: null,
+              candidateName: "疑似候选人",
+              candidatePhone: null,
+              createdAt: "2026-07-24T00:00:00.000Z",
+              id: "suspected-id",
+              jobDescriptionName: null,
+              outcome,
+              pipelineStage,
+              sourceType: "studio_interview",
+              status: pipelineStage === "closed" ? "archived" : "active",
+              targetRole: null,
+            },
+          ]}
+        />
+      </QueryClientProvider>,
+    );
+    roots.push(root);
+
+    expect(container.textContent).toContain(label);
+    if (outcome !== "archived") {
+      expect(container.textContent).not.toContain("已归档");
+    }
   });
 
   it("hides cross-resource comparison actions without permission to read both sides", async () => {

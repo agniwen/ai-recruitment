@@ -4,12 +4,15 @@ import type { InterviewTrace } from "@arc/shared/interview-telemetry";
 import { interviewTraceSchema } from "@arc/shared/interview-telemetry";
 
 export function requestEvidence(headers: Headers) {
-  // Enable only behind a proxy which OVERWRITES this header and blocks direct backend access.
-  const header = process.env.INTERVIEW_TELEMETRY_IP_HEADER?.toLowerCase();
-  const value = header ? headers.get(header)?.trim() : null;
+  // The reverse proxy must overwrite these headers and block direct backend access.
+  const candidates = [
+    ["x-real-ip", headers.get("x-real-ip")?.trim()],
+    ["x-forwarded-for", headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim()],
+  ] as const;
+  const evidence = candidates.find(([, value]) => value && isIP(value));
   return {
-    ip: value && isIP(value) ? value : null,
-    ipSource: value && isIP(value) ? `trusted-proxy:${header}` : "unavailable",
+    ip: evidence?.[1] ?? null,
+    ipSource: evidence ? `trusted-proxy:${evidence[0]}` : "unavailable",
     userAgent: headers.get("user-agent")?.slice(0, 512) ?? null,
   };
 }

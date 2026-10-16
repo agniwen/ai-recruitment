@@ -55,6 +55,7 @@ describe.skipIf(!url)("telemetry database round trip", () => {
     expect(
       await sql`select fingerprint_id from interview_telemetry_event where id in ('other-person','other-meeting')`,
     ).toEqual([{ fingerprint_id: null }, { fingerprint_id: null }]);
+    await sql`alter table interview_telemetry_event add column ip_lookup_hash text`;
     await sql`delete from interview_telemetry_event`;
     await sql`create table studio_human_interview_meeting (id text primary key, organization_id text, title text, livekit_room_name text)`;
     await sql`insert into studio_human_interview_meeting values ('meeting', 'org', 'Miles 一面', 'human_room')`;

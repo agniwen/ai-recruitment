@@ -8,7 +8,10 @@ export type MeetingTimeline = InferResponseType<(typeof logs)[":meetingId"]["$ge
 export type TimelineEvent = MeetingTimeline["records"][number];
 
 export function fetchLoggedMeetings(query: Record<string, string>, signal: AbortSignal) {
-  return rpcFetch<MeetingLogs>(logs.$get({ query }, { init: { signal } }), "加载面试日志失败");
+  return rpcFetch<MeetingLogs>(
+    logs.search.$post({ json: query }, { init: { signal } }),
+    "加载面试日志失败",
+  );
 }
 export function fetchMeetingTimeline(
   meetingId: string,
@@ -16,7 +19,7 @@ export function fetchMeetingTimeline(
   signal: AbortSignal,
 ) {
   return rpcFetch<MeetingTimeline>(
-    logs[":meetingId"].$get({ param: { meetingId }, query }, { init: { signal } }),
+    logs[":meetingId"].search.$post({ json: query, param: { meetingId } }, { init: { signal } }),
     "加载会议时间线失败",
   );
 }

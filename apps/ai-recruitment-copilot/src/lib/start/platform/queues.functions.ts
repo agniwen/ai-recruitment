@@ -15,6 +15,7 @@ const queueFiltersSchema = z.object({
 export type PlatformQueuesState =
   | { status: "unauthenticated" }
   | { status: "forbidden" }
+  | { status: "mfa-required" }
   | {
       dehydratedState: JsonValue;
       status: "ready";

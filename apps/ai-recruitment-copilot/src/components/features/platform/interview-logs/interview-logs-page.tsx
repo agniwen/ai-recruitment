@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { fetchLoggedMeetings, fetchMeetingTimeline } from "./api";
 import type { TimelineEvent, MeetingTimeline as TimelineData } from "./api";
 import { ParticipantEnvironments } from "./participant-environments";
+import { IpReveal } from "../security/ip-reveal";
 import { MeetingMediaPanel } from "./meeting-media";
 import { MeetingEntryCredentials } from "./meeting-entry-credentials";
 import { MediaArchivesPanel } from "./media-archives";
@@ -159,7 +160,10 @@ function EventRow({ event }: { event: TimelineEvent }) {
         ) : null}
       </td>
       <td className="min-w-60 py-4 text-xs">
-        <div className="font-mono">{event.ip || "IP 未采集"}</div>
+        <IpReveal
+          hasIp={event.hasIp}
+          reference={{ id: event.id, kind: "telemetry", meetingId: event.meetingId }}
+        />
         <details className="mt-2">
           <summary className="cursor-pointer text-muted-foreground">
             查看设备、会话及事件详情
@@ -264,6 +268,7 @@ function MeetingTimeline({ meetingId }: { meetingId: string }) {
         与客户端事件仅用于关联线索，不能单独证明操作者身份或作弊。
       </p>
       <ParticipantEnvironments
+        meetingId={meetingId}
         participants={data?.participants ?? []}
         onFilter={(filter) => {
           setDraft({ ...emptyFilters, ...filter });

@@ -37,7 +37,7 @@
 
 服务端 `INTERVIEW_ENTRY_CREDENTIAL_ORIGIN` 应为候选人实际访问的唯一页面源（含本地端口），未设置则沿用 `NEXT_PUBLIC_BASE_URL`。例如生产页面为 `https://recruitment.example.com`，本地为 `http://localhost:3000`。不使用请求 Host 或代理头推导可信源。生产必须 HTTPS，仅本机 localhost / 127.0.0.1 允许 HTTP；origin 必须与浏览器一致。后端独立部署时仍配置前端页面源。RP ID 使用该源的主机名，变更域名后不能直接复用旧域名凭据。
 
-SimpleWebAuthn 服务端运行于支持 WebCrypto 的现代 Node.js 环境；当前依赖要求 Node.js 20 及以上，项目开发和部署推荐 Node.js 22 及以上。来源 IP 沿用 `INTERVIEW_TELEMETRY_IP_HEADER` 可信代理配置；缺少可靠来源时记录为空，不猜测地址。
+SimpleWebAuthn 服务端运行于支持 WebCrypto 的现代 Node.js 环境；当前依赖要求 Node.js 20 及以上，项目开发和部署推荐 Node.js 22 及以上。2026-10-16 起，来源 IP 默认优先读取有效的 `X-Real-IP`，缺失或无效时取 `X-Forwarded-For` 第一个地址，不再依赖请求头名称配置；生产代理须覆盖这两个头并限制后端直连，缺少有效地址时记录为空，不猜测地址。
 
 可在不修改配置的情况下保持功能关闭；由平台管理员关闭该候选人的开关均可处理系统凭据管理器不可用、用户取消、浏览器不兼容等情况。系统弹窗不能保证完全无网络依赖，也不能保证每个浏览器都能发现同一凭据。
 

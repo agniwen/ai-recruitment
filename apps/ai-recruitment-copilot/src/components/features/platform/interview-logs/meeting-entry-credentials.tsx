@@ -5,6 +5,7 @@ import { rpcFetch } from "@/lib/client/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TimeDisplay } from "@/components/features/display/time-display";
+import { IpReveal } from "../security/ip-reveal";
 
 const endpoint = rpc.api.platform["interview-logs"][":meetingId"]["entry-credentials"];
 type MeetingCredentials = InferResponseType<typeof endpoint.$get, 200>;
@@ -89,7 +90,12 @@ export function MeetingEntryCredentials({ meetingId }: { meetingId: string }) {
                   <dt>访问编号</dt>
                   <dd>{use.visitId}</dd>
                   <dt>来源 IP</dt>
-                  <dd>{use.ip ?? "未获取"}</dd>
+                  <dd>
+                    <IpReveal
+                      hasIp={use.hasIp}
+                      reference={{ id: use.id, kind: "entry-use", meetingId: use.meetingId }}
+                    />
+                  </dd>
                   <dt>浏览器信息</dt>
                   <dd>{use.userAgent ?? "未获取"}</dd>
                 </dl>

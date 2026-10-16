@@ -16,6 +16,7 @@ import {
 import { EntityDeleteDialog } from "@/components/features/studio/entity-delete-dialog";
 import { deleteMediaAsset, fetchMeetingMedia, fetchMediaBlob } from "./media-api";
 import type { MediaAsset } from "./media-api";
+import { IpReveal } from "../security/ip-reveal";
 
 const formatTime = (date: string) =>
   new Date(date).toLocaleString("zh-CN", { hour12: false, timeZone: "Asia/Shanghai" });
@@ -258,7 +259,12 @@ export function MeetingMediaPanel({ meetingId }: { meetingId: string }) {
               <dt className="text-muted-foreground">浏览器指纹</dt>
               <dd className="break-all font-mono">{asset.environment.fingerprint || "未采集"}</dd>
               <dt className="text-muted-foreground">IP</dt>
-              <dd className="break-all font-mono">{asset.environment.ip || "未获取可信来源 IP"}</dd>
+              <dd>
+                <IpReveal
+                  hasIp={asset.environment.hasIp}
+                  reference={{ id: asset.id, kind: "media", meetingId: asset.meetingId }}
+                />
+              </dd>
             </dl>
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer">连接与浏览器信息</summary>

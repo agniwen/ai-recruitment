@@ -7,6 +7,7 @@ import { loadPlatformOrganizationsHydrationState } from "./organizations.server"
 export type PlatformOrganizationsState =
   | { status: "unauthenticated" }
   | { status: "forbidden" }
+  | { status: "mfa-required" }
   | {
       dehydratedState: JsonValue;
       status: "ready";

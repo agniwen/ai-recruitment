@@ -84,17 +84,39 @@ describe("interview telemetry intake", () => {
     expect(allow("other", 1)).toBe(true);
     expect(allow("same", 60_001)).toBe(true);
   });
-  it("does not trust forwarded headers unless explicitly configured", () => {
+  it("collects x-real-ip without a configured header", () => {
     const headers = new Headers({
       "x-forwarded-for": "198.51.100.1, 127.0.0.1",
       "x-real-ip": "203.0.113.5",
     });
     vi.stubEnv("INTERVIEW_TELEMETRY_IP_HEADER", "");
-    expect(requestEvidence(headers).ip).toBeNull();
-    vi.stubEnv("INTERVIEW_TELEMETRY_IP_HEADER", "x-real-ip");
-    expect(requestEvidence(headers).ip).toBe("203.0.113.5");
-    headers.set("x-real-ip", "invalid");
-    expect(requestEvidence(headers).ip).toBeNull();
-    vi.unstubAllEnvs();
+    try {
+      expect(requestEvidence(headers)).toMatchObject({
+        ip: "203.0.113.5",
+        ipSource: "trusted-proxy:x-real-ip",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it.each<[string, Record<string, string>, string | null]>([
+    ["missing x-real-ip", { "x-forwarded-for": "198.51.100.1, 127.0.0.1" }, "198.51.100.1"],
+    [
+      "invalid x-real-ip",
+      { "x-forwarded-for": "198.51.100.1", "x-real-ip": "invalid" },
+      "198.51.100.1",
+    ],
+    ["blank x-real-ip", { "x-forwarded-for": "198.51.100.1", "x-real-ip": " " }, "198.51.100.1"],
+    ["IPv6", { "x-forwarded-for": "2001:db8::1, 127.0.0.1" }, "2001:db8::1"],
+    ["whitespace", { "x-forwarded-for": " 198.51.100.1 , 127.0.0.1" }, "198.51.100.1"],
+    ["invalid first address", { "x-forwarded-for": "unknown, 127.0.0.1" }, null],
+    ["IP with a port", { "x-forwarded-for": "198.51.100.1:1234" }, null],
+    ["missing headers", {}, null],
+  ])("falls back to the first forwarded address: %s", (_name, values, ip) => {
+    const headers = new Headers(values);
+    expect(requestEvidence(headers)).toMatchObject({
+      ip,
+      ipSource: ip ? "trusted-proxy:x-forwarded-for" : "unavailable",
+    });
   });
 });

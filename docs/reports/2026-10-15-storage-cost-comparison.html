@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>面试文件存储费用估算 · R2 / S3 / MinIO</title>
+  <style>
+    :root{--paper:#f5f3ed;--white:#fffefa;--ink:#182e2b;--muted:#5e6d67;--line:#d9ded5;--green:#086a57;--mint:#e4eee6;--blue:#436c99;--rust:#ae593a;--gold:#ad822a;--serif:"Songti SC","Noto Serif SC","STSong",serif;--sans:"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;--mono:"SFMono-Regular","Cascadia Mono",Consolas,monospace}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.7}a{color:var(--green);text-underline-offset:4px}button,input,select{font:inherit}button,a,input,select,summary{-webkit-tap-highlight-color:transparent}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #3b997f;outline-offset:3px}button{border:1px solid var(--line);background:var(--white);color:var(--ink);border-radius:7px;padding:8px 14px;font-weight:600}button:hover{border-color:var(--green);background:#edf3ec}button:active{transform:translateY(1px)}.wrap{max-width:1512px;margin:auto;padding:0 44px}.masthead{display:flex;justify-content:space-between;align-items:center;padding:22px 0;border-bottom:1px solid var(--line);font-size:13px;letter-spacing:.04em}.brand{font-family:var(--mono);font-weight:700;letter-spacing:.1em}.masthead nav{display:flex;gap:22px;align-items:center}.masthead a{color:var(--muted);text-decoration:none}.hero{padding:42px 0 35px;display:flex;gap:30px;justify-content:space-between;align-items:flex-start}.eyebrow{font:12px var(--mono);letter-spacing:.13em;color:var(--green);text-transform:uppercase;margin:0 0 12px}.hero h1{font-family:var(--serif);font-weight:700;font-size:calc(clamp(29px,3.3vw,49px) + 1px);line-height:1.25;letter-spacing:.01em;margin:0 0 16px}.hero p{margin:0;color:var(--muted);max-width:720px}.edition{min-width:185px;border-left:2px solid var(--green);padding:3px 0 3px 20px;font-size:13px;color:var(--muted)}.edition strong{display:block;font-size:17px;color:var(--ink);margin-bottom:4px}.layout{display:grid;grid-template-columns:324px minmax(0,1fr);gap:32px;align-items:start}.controls{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto;background:var(--white);border:1px solid var(--line);border-radius:12px;padding:23px;scrollbar-width:thin}.control-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:16px}.control-heading h2{font-size:19px;margin:0}.text-button{border:0;padding:3px;color:var(--green);font-size:13px;background:transparent}.field{margin:0 0 17px}.field label{display:block;font-size:14px;font-weight:600;margin-bottom:6px}.field .hint{display:block;font-size:12px;line-height:1.6;color:var(--muted);margin-top:5px}.input-wrap{position:relative}.input-wrap input,.field select{width:100%;border:1px solid #cbd3c9;border-radius:6px;background:white;color:var(--ink);padding:9px 52px 9px 11px;min-height:43px;font-family:var(--mono);font-size:17px;font-variant-numeric:tabular-nums}.field select{font-family:var(--sans);font-size:13px;padding:10px 28px 10px 9px}.input-wrap .unit{pointer-events:none;position:absolute;right:11px;top:11px;color:var(--muted);font-size:13px}.attachment input{border:1.5px solid var(--green);background:#f3f8f1;font-size:23px;font-weight:700;min-height:51px}.attachment .unit{top:15px}.two-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.two-fields input{padding-right:38px}.controls details{border-top:1px solid var(--line);padding-top:13px;margin-top:2px}.controls summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--green);padding-bottom:12px}.check{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:12px 0}.check input{accent-color:var(--green);margin:5px 0 0}.advanced{padding-top:4px}.error{margin:8px 0;color:#a12626;font-size:13px}.notice{font-size:13px;color:var(--muted);margin:0}.jump{display:block;text-align:center;background:var(--green);color:white;text-decoration:none;border-radius:6px;padding:9px;margin-top:15px;font-size:14px;font-weight:600}.results{min-width:0}.overview{border-top:2px solid var(--ink);padding:20px 0 21px}.overview-heading{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:16px}.overview-heading h2{font-size:19px;margin:0}.live-label{font-size:12px;color:var(--green);display:flex;gap:6px;align-items:center}.live-label:before{content:"";width:6px;height:6px;background:var(--green);border-radius:50%}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.metric{border-right:1px solid var(--line);padding-right:14px}.metric:last-child{border:0}.metric .label{font-size:13px;color:var(--muted)}.metric .number{display:block;font-family:var(--mono);font-size:calc(clamp(23px,2.6vw,37px) + 1px);font-weight:600;letter-spacing:-.05em;line-height:1.55;white-space:nowrap}.metric .number small{font:14px var(--sans);letter-spacing:0;margin-left:4px}.metric .caption{display:block;font-size:12px;color:var(--muted)}.model-note{margin:14px 0 0;font-size:13px;color:var(--muted)}.panel{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:25px;margin:0 0 24px}.panel-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:20px}.panel-head h2{font-size:21px;line-height:1.4;margin:0 0 7px}.section-index{font:12px var(--mono);color:var(--green);letter-spacing:.1em;margin-bottom:5px}.muted{font-size:13px;color:var(--muted);margin:0}.mode-switch{display:flex;flex-shrink:0;gap:3px;padding:3px;border:1px solid var(--line);border-radius:7px}.mode-switch button{border:0;border-radius:4px;padding:6px 10px;font-size:13px;background:transparent;white-space:nowrap}.mode-switch button[aria-pressed="true"]{background:var(--ink);color:white}.quick-months{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:22px}.quick-months span{font-size:13px;color:var(--muted);margin-right:5px}.quick-months button{padding:3px 10px;font-size:12px}.quick-months button[aria-pressed="true"]{background:var(--mint);border-color:var(--green);color:var(--green)}.cost-row{display:grid;grid-template-columns:187px minmax(60px,1fr) 110px;gap:18px;align-items:center;min-height:57px;border-bottom:1px solid #edf0e9}.cost-row:last-child{border:0}.provider-name{font-size:14px;font-weight:600;line-height:1.4}.provider-name small{display:block;font-weight:400;color:var(--muted);font-size:11px;margin-top:3px}.bar-track{height:10px;background:#eef0e9;border-radius:2px;overflow:hidden}.bar{height:100%;width:0;background:var(--bar-color);border-radius:2px;transition:width .25s ease}.cost-value{text-align:right;font:600 22px var(--mono);letter-spacing:-.04em;white-space:nowrap}.chart-note{font-size:12px;color:var(--muted);margin:17px 0 0}.takeaway{padding:17px 0 0;margin:16px 0 0;border-top:1px solid var(--line);font-size:14px}.takeaway strong{color:var(--green)}.volume-components{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:18px 0}.volume-component span{display:block;font-size:13px;color:var(--muted)}.volume-component strong{font-family:var(--mono);font-size:22px;font-weight:500;white-space:nowrap}.volume-component small{display:block;font-size:11px;color:var(--muted);margin-top:4px}.composition{display:flex;height:16px;overflow:hidden;border-radius:3px;background:#edf0e9}.composition span{min-width:0;transition:width .2s}.legend{display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}.dot{display:inline-block;width:8px;height:8px;background:var(--c);border-radius:2px;margin-right:5px}.table-scroll{overflow:auto;overscroll-behavior-inline:contain;margin:14px 0;scrollbar-width:thin}table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}th{text-align:right;background:#f0f2eb;color:#4b5c54;font-weight:600;padding:11px 12px;white-space:nowrap;border-bottom:1px solid var(--line)}td{padding:12px;text-align:right;border-bottom:1px solid #e7ebe2;white-space:nowrap;font-family:var(--mono)}th:first-child,td:first-child{text-align:left;font-family:var(--sans)}td small{display:block;font-family:var(--sans);font-size:11px;color:var(--muted);white-space:normal}tr.selected-row td{background:#eaf2e8;font-weight:600}tfoot td{background:#f0f2eb;font-weight:700}.detail-costs th,.detail-costs td{padding:10px 8px}.note-list{margin:12px 0 0;padding:0;list-style:none;color:var(--muted);font-size:13px}.note-list li{padding-left:13px;position:relative;margin:7px 0}.note-list li:before{content:"·";position:absolute;left:0;font-weight:700}.section-title{font-size:25px;font-family:var(--serif);margin:35px 0 17px}.formula{font-family:var(--mono);font-size:13px;background:#eff2e9;padding:17px;border-radius:6px;line-height:1.9;overflow-wrap:anywhere;margin:14px 0}.split{display:grid;grid-template-columns:1fr 1fr;gap:22px}.split p{font-size:13px;color:var(--muted);margin:8px 0}.split h3{margin:0;font-size:15px}.rule{border:0;border-top:1px solid var(--line);margin:21px 0}.static-note{font-size:12px;color:var(--muted);background:#eeeae1;border-radius:4px;padding:3px 8px;white-space:nowrap}.sources{display:grid;grid-template-columns:1fr 1fr;gap:9px 25px;font-size:13px;padding:0;list-style:none}.sources a{overflow-wrap:anywhere}.method details{border-top:1px solid var(--line);margin-top:17px;padding-top:13px}.method summary{cursor:pointer;font-weight:600;font-size:14px}.method p{font-size:13px;color:var(--muted)}.file-path{font-family:var(--mono);font-size:11px;overflow-wrap:anywhere}.warning{padding:10px 14px;border:1px solid #c89b55;background:#fff7e5;border-radius:6px;font-size:13px;color:#74541a;margin-top:14px}.footer{border-top:1px solid var(--line);margin-top:15px;padding:23px 0 35px;display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}[hidden]{display:none!important}
+    @media(min-width:1500px){.layout{grid-template-columns:340px minmax(0,1fr);gap:42px}.controls{padding:26px}.panel{padding:29px}}
+    @media(max-width:1100px){.wrap{padding:0 24px}.layout{grid-template-columns:286px minmax(0,1fr);gap:22px}.controls{padding:19px}.panel{padding:20px}.cost-row{grid-template-columns:160px minmax(40px,1fr) 94px;gap:12px}.cost-value{font-size:19px}.panel-head{flex-wrap:wrap}.metrics{gap:13px}.metric .number{font-size:27px}.volume-components{gap:10px}.volume-component strong{font-size:18px}}
+    @media(max-width:820px){.layout{grid-template-columns:1fr}.controls{position:static;max-height:none;padding:23px}.primary-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.primary-fields .two-fields{display:contents}.advanced{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}.advanced .check{grid-column:1/-1}.hero{padding:28px 0;gap:18px}.edition{min-width:155px;padding-left:13px}.hero h1{font-size:34px}.hero p{font-size:14px}.cost-row{grid-template-columns:180px minmax(40px,1fr) 100px}.metric .number{font-size:34px}.jump{max-width:240px;margin:14px 0 0}.controls .notice{max-width:560px}.metrics{gap:20px}.panel{padding:24px}.volume-component strong{font-size:23px}}
+    @media(max-width:520px){.wrap{padding:0 17px}.masthead{padding:17px 0}.brand{font-size:11px}.masthead nav{gap:13px;font-size:12px}.masthead button{padding:5px 9px;font-size:12px}.hero{display:block}.hero h1{font-size:31px}.edition{margin-top:17px;padding-left:12px;min-width:0;font-size:12px}.edition strong{display:inline;font-size:13px;margin-right:9px}.edition br{display:none}.panel,.controls{padding:19px;border-radius:9px}.panel-head h2{font-size:19px}.metrics{gap:11px}.metric{padding-right:7px}.metric .number{font-size:24px}.metric .number small{font-size:11px;margin-left:2px}.metric .caption{font-size:11px}.overview-heading{gap:8px}.overview-heading h2{font-size:17px}.cost-row{grid-template-columns:132px minmax(25px,1fr) 91px;gap:10px;min-height:63px}.provider-name{font-size:13px}.provider-name small{font-size:10px}.cost-value{font-size:18px}.volume-components{grid-template-columns:1fr 1fr;gap:14px}.volume-component strong{font-size:23px}.legend{gap:12px}.split{grid-template-columns:1fr;gap:15px}.sources{grid-template-columns:1fr}.footer{display:block}.footer span{display:block}.table-scroll{margin-right:-5px}.static-note{font-size:11px}.hero .eyebrow{font-size:11px}.mode-switch button{font-size:12px}.controls .field label{font-size:13px}.field .hint{font-size:11px}}
+    @media(max-width:520px){.masthead{display:block}.masthead .brand{display:block;margin-bottom:12px;white-space:nowrap}.masthead nav{gap:20px}.masthead nav a,.masthead nav button{white-space:nowrap}.masthead nav button{margin-left:auto}.edition strong{display:block;margin-bottom:4px}.edition span{display:inline-block;margin-right:9px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.bar,.composition span{transition:none}button:active{transform:none}}
+    @media print{body{background:white;font-size:12px}.wrap{max-width:none;padding:0}.masthead nav,.jump,.quick-months,.mode-switch,.text-button{display:none}.hero{padding:20px 0}.hero h1{font-size:30px}.layout{display:block}.controls{position:static;max-height:none;overflow:visible;break-inside:avoid;margin-bottom:22px}.primary-fields,.advanced{display:grid;grid-template-columns:repeat(4,1fr);gap:0 15px}.primary-fields .two-fields{display:contents}.controls details[open]{break-inside:avoid}.controls .field{margin-bottom:9px}.controls input,.controls select{font-size:13px;min-height:30px;padding:4px 35px 4px 6px}.input-wrap .unit{top:5px}.controls .hint{font-size:10px}.panel{break-inside:avoid;padding:18px;margin-bottom:18px}.metrics{grid-template-columns:repeat(3,1fr)}.table-scroll{overflow:visible}table{font-size:11px}.panel-head h2{font-size:18px}th,td{padding:7px 8px}a{color:inherit}.bar,.composition span{print-color-adjust:exact;-webkit-print-color-adjust:exact}.sources{grid-template-columns:1fr 1fr}.method{break-inside:auto}.footer{padding-bottom:0}.cost-row{min-height:43px}.cost-value{font-size:19px}}
+    .server-resources table{min-width:540px}.server-resources th:last-child,.server-resources td:last-child{text-align:left}.server-resources td:last-child{font-family:var(--sans);white-space:normal;min-width:225px}.server-resources .resource-watch td{background:#fff7e5}.server-resources .resource-action td{background:#fff0ec}.resource-watch strong{color:#80540d}.resource-action strong{color:#a33327}.resource-status{display:block;width:fit-content;margin-top:5px;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600;line-height:1.7}.resource-watch .resource-status{color:#80540d;background:#f9e4b5}.resource-action .resource-status{color:#a33327;background:#f9d8ce}.resource-todo{margin:18px 0;padding:16px 18px;border:1px solid #e9b5a7;border-left:3px solid #b44230;border-radius:6px;background:#fff5f1}.resource-todo h3{margin:0 0 8px;color:#a33327;font-size:15px;line-height:1.5}.resource-todo p{margin:6px 0;color:#694d43;font-size:13px;line-height:1.8}.resource-todo .todo-note{color:var(--muted);font-size:12px}@media print{.server-resources table{min-width:0}.server-resources .resource-watch td,.server-resources .resource-action td,.resource-todo,.resource-status{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead"><span class="brand">AI RECRUITMENT / COST STUDY</span><nav aria-label="报告导航"><a href="#rates">单价依据</a><a href="#sources">资料来源</a><button id="print" type="button">打印报告</button></nav></header>
+  <section class="hero">
+    <div><p class="eyebrow">Storage economics · interactive estimate</p><h1>面试文件存储费用估算</h1><p>调整业务量和附件大小，比较 R2、Amazon S3 与自建 MinIO。<br>按现有截图、音频片段和候选人附件计算，永久保存，持续累积。</p></div>
+    <div class="edition"><strong>附件默认 50 MB / 人</strong><span>价格核验 2026.10.15</span><br><span>AWS 新加坡 · 人民币预算</span></div>
+  </section>
+  <div class="layout">
+    <aside class="controls" aria-label="计算参数">
+      <form id="parameters" novalidate>
+        <div class="control-heading"><h2>输入业务参数</h2><button type="button" id="reset" class="text-button">恢复默认</button></div>
+        <div class="primary-fields">
+          <div class="field attachment"><label for="attachmentMB">每位候选人附件总量</label><div class="input-wrap"><input id="attachmentMB" name="attachmentMB" type="number" min="0" max="5000" step="1" value="50" inputmode="decimal"><span class="unit">MB</span></div><span class="hint">简历、作品集及其他附件合计，每人只保存一次。</span></div>
+          <div class="field"><label for="dailyInterviews">每天面试场数</label><div class="input-wrap"><input id="dailyInterviews" name="dailyInterviews" type="number" min="0" max="100000" step="1" value="300" inputmode="numeric"><span class="unit">场</span></div></div>
+          <div class="two-fields">
+            <div class="field"><label for="minutes">平均面试时长</label><div class="input-wrap"><input id="minutes" name="minutes" type="number" min="1" max="240" step="1" value="40" inputmode="numeric"><span class="unit">分钟</span></div></div>
+            <div class="field"><label for="months">测算第几个月</label><div class="input-wrap"><input id="months" name="months" type="number" min="1" max="60" step="1" value="12" inputmode="numeric"><span class="unit">月</span></div></div>
+          </div>
+          <div class="two-fields">
+            <div class="field"><label for="participants">参与采样人数</label><div class="input-wrap"><input id="participants" name="participants" type="number" min="1" max="10" step="1" value="2" inputmode="numeric"><span class="unit">人</span></div></div>
+            <div class="field"><label for="rounds">每人平均面试</label><div class="input-wrap"><input id="rounds" name="rounds" type="number" min="1" max="20" step="0.1" value="1" inputmode="decimal"><span class="unit">场</span></div><span class="hint">多轮面试共用同一份附件。</span></div>
+          </div>
+        </div>
+        <details id="advanced-controls"><summary>采样大小、读取与其他计费参数</summary><div class="advanced">
+          <div class="field"><label for="imageKB">每张截图平均大小</label><div class="input-wrap"><input id="imageKB" name="imageKB" type="number" min="1" max="5000" step="1" value="100"><span class="unit">KB</span></div><span class="hint">当前每人 30 秒一张，JPEG 最长边 960 像素、质量 75。</span></div>
+          <div class="field"><label for="attachmentFiles">每人附件文件数</label><div class="input-wrap"><input id="attachmentFiles" name="attachmentFiles" type="number" min="1" max="1000" step="1" value="1"><span class="unit">个</span></div><span class="hint">仅影响请求费和小对象最低容量，不改变附件总量。</span></div>
+          <div class="field"><label for="readPercent">每月读取数据比例</label><div class="input-wrap"><input id="readPercent" name="readPercent" type="number" min="0" max="1000" step="0.1" value="1"><span class="unit">%</span></div><span class="hint">100% 为完整读一遍；分析多次可超过 100%。</span></div>
+          <div class="field"><label for="readBase">读取比例的计算基数</label><select id="readBase" name="readBase"><option value="new">当月新增数据</option><option value="all">月底全部存量</option></select></div>
+          <div class="field"><label for="initialGB">初始已有文件量</label><div class="input-wrap"><input id="initialGB" name="initialGB" type="number" min="0" max="1000000" step="0.01" value="0"><span class="unit">GB</span></div><span class="hint">默认只算新增文件；现有 MinIO 目录约 34.49 GB，可手动加入。</span></div>
+          <div class="field"><label for="fx">预算汇率</label><div class="input-wrap"><input id="fx" name="fx" type="number" min="0.01" max="100" step="0.01" value="7.2"><span class="unit">元/$</span></div></div>
+          <div class="field"><label for="diskPrice">MinIO 数据盘单价</label><div class="input-wrap"><input id="diskPrice" name="diskPrice" type="number" min="0" max="5" step="0.001" value="0.096"><span class="unit">$/GiB</span></div><span class="hint">每月单价。默认 AWS 新加坡 gp3；可替换为其他磁盘报价。</span></div>
+          <div class="field"><label for="utilization">数据盘目标利用率</label><div class="input-wrap"><input id="utilization" name="utilization" type="number" min="10" max="100" step="1" value="80"><span class="unit">%</span></div><span class="hint">80% 表示额外保留 20% 空闲。</span></div>
+          <div class="field"><label for="efficiency">冗余后的存储有效率</label><div class="input-wrap"><input id="efficiency" name="efficiency" type="number" min="10" max="100" step="1" value="100"><span class="unit">%</span></div><span class="hint">单份 100%；双副本约 50%；纠删码按实际配置。</span></div>
+          <div class="field"><label for="minioExtra">MinIO 其他月费</label><div class="input-wrap"><input id="minioExtra" name="minioExtra" type="number" min="0" max="1000000" step="1" value="0"><span class="unit">元</span></div><span class="hint">自填服务器、备份、网络和运维等合计。默认 0 表示未计入。</span></div>
+          <div class="field"><label for="awsFreeEgress">AWS 剩余免费出站额度</label><div class="input-wrap"><input id="awsFreeEgress" name="awsFreeEgress" type="number" min="0" max="100" step="1" value="100"><span class="unit">GiB</span></div><span class="hint">账户共享额度；超出部分按新加坡首档 $0.12/GiB 估算。</span></div>
+          <label class="check"><input id="roundBudget" name="roundBudget" type="checkbox" checked><span>每场容量向上取整至 5 MB，留出预算余量</span></label>
+          <label class="check"><input id="r2Free" name="r2Free" type="checkbox" checked><span>使用 R2 标准层每月免费额度<br>10 GB · 100 万次写入 · 1,000 万次读取</span></label>
+        </div></details>
+        <p id="input-error" class="error" role="alert" hidden></p>
+        <p class="notice">所有输入只在本页计算。<strong>保存期限为永久</strong>，“第几个月”表示累积时间，不会到期删除。</p>
+        <a class="jump" href="#results">查看费用结果 ↓</a>
+      </form>
+    </aside>
+    <main class="results" id="results">
+      <section class="overview" aria-labelledby="overview-title">
+        <div class="overview-heading"><h2 id="overview-title">当前参数下的容量预算</h2><span class="live-label" id="calc-status">随输入实时更新</span></div>
+        <div class="metrics">
+          <div class="metric"><span class="label">每场分摊预算</span><strong class="number" id="metric-interview">90<small>MB</small></strong><span class="caption" id="exact-volume">原始估算约 85.2 MB</span></div>
+          <div class="metric"><span class="label">每月新增容量</span><strong class="number" id="metric-monthly">810<small>GB</small></strong><span class="caption" id="monthly-count">9,000 场 / 9,000 位新增候选人</span></div>
+          <div class="metric"><span class="label" id="metric-total-label">第 12 月末累计</span><strong class="number" id="metric-total">9.72<small>TB</small></strong><span class="caption" id="initial-note">从新增容量为零开始</span></div>
+        </div>
+        <p class="model-note" id="headline-note">每天 300 场，每场 40 分钟，两人采样；附件按每位候选人 50 MB 计一次。</p>
+      </section>
+
+      <section class="panel" aria-labelledby="compare-title">
+        <div class="panel-head"><div><div class="section-index">01 / COST COMPARISON</div><h2 id="compare-title">第 12 个月要付多少钱</h2><p class="muted" id="comparison-subtitle">对象存储含读写请求与取回费；MinIO 默认仅含数据盘。</p></div><div class="mode-switch" aria-label="费用展示方式"><button type="button" data-mode="monthly" aria-pressed="true">当月费用</button><button type="button" data-mode="cumulative" aria-pressed="false">累计支出</button></div></div>
+        <div class="quick-months" aria-label="快速选择月份"><span>查看月份</span><button type="button" data-month="1" aria-pressed="false">1</button><button type="button" data-month="6" aria-pressed="false">6</button><button type="button" data-month="12" aria-pressed="true">12</button><button type="button" data-month="24" aria-pressed="false">24</button><button type="button" data-month="36" aria-pressed="false">36</button></div>
+        <div id="cost-bars" aria-label="各方案费用对比"></div>
+        <p class="chart-note" id="billing-note"></p>
+        <p class="takeaway" id="takeaway"></p>
+        <div class="warning" id="estimate-warning" hidden></div>
+        <span class="sr-only" role="status" aria-live="polite" id="live-summary"></span>
+      </section>
+
+      <section class="panel" aria-labelledby="volume-title"><div class="section-index">02 / DATA VOLUME</div><h2 id="volume-title" style="font-size:21px;margin:0">文件量是怎样算出来的</h2><p class="muted">容量按每场分摊；附件按候选人去重。下列数字随输入变化。</p>
+        <div class="volume-components">
+          <div class="volume-component"><span>定时截图</span><strong id="image-volume"></strong><small id="image-count"></small></div>
+          <div class="volume-component"><span>音频片段</span><strong id="audio-volume"></strong><small id="audio-count"></small></div>
+          <div class="volume-component"><span>附件分摊</span><strong id="attachment-volume"></strong><small id="attachment-count"></small></div>
+          <div class="volume-component"><span>预算余量</span><strong id="buffer-volume"></strong><small>取整形成的容量余量</small></div>
+        </div>
+        <div class="composition" aria-hidden="true"><span id="segment-image" style="background:#436c99"></span><span id="segment-audio" style="background:#ad822a"></span><span id="segment-attachment" style="background:#086a57"></span><span id="segment-buffer" style="background:#b9c5b2"></span></div>
+        <div class="legend"><span><i class="dot" style="--c:#436c99"></i>截图</span><span><i class="dot" style="--c:#ad822a"></i>音频</span><span><i class="dot" style="--c:#086a57"></i>附件</span><span><i class="dot" style="--c:#b9c5b2"></i>预算余量</span></div>
+        <ul class="note-list"><li>截图每人每 30 秒一张；音频每人每 2 分钟录制最多 15 秒，16 kHz / 单声道 / 16 bit WAV，单段最多 480,044 字节。</li><li id="requests-note"></li><li>假设双方持续发布音视频轨道。关闭摄像头、静音或去重会减少实际文件量，重连和重试可能增加请求。</li></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="growth-title"><div class="section-index">03 / LONG TERM BUDGET</div><h2 id="growth-title" style="font-size:21px;margin:0">永久保存，费用逐月增加</h2><p class="muted">每行是对应月份的账单，首年累计是前 12 个月费用之和。</p><div class="table-scroll"><table id="forecast-table"><thead><tr><th scope="col">时间</th><th scope="col">月底容量</th><th scope="col">R2 标准</th><th scope="col">S3 标准</th><th scope="col">MinIO¹</th></tr></thead><tbody id="forecast-body"></tbody><tfoot id="forecast-total"></tfoot></table></div><p class="muted">¹ 默认只含数据盘；填写“其他月费”后一起计入。按每月初为月底容量扩容、保留指定空闲比例测算。</p>
+        <hr class="rule"><h3 style="font-size:16px;margin:0 0 9px">低频方案的长期费用</h3><div class="table-scroll"><table><thead><tr><th scope="col">存储层</th><th scope="col">第 12 月</th><th scope="col">第 24 月</th><th scope="col">首年累计</th></tr></thead><tbody id="cold-body"></tbody></table></div><p class="muted">按新对象直接写入各存储层独立比较。R2 低频 / S3 Standard IA 最短保存 30 天；S3 Glacier Instant Retrieval 最短 90 天，支持即时读取。转层策略的额外请求未纳入。</p>
+      </section>
+
+      <section class="panel" aria-labelledby="breakdown-title"><div class="section-index">04 / BILLING DETAILS</div><h2 id="breakdown-title" style="font-size:21px;margin:0">当月账单拆开看</h2><p class="muted" id="detail-caption"></p><div class="table-scroll"><table class="detail-costs"><thead><tr><th scope="col">方案</th><th scope="col">容量</th><th scope="col">写入</th><th scope="col">读取</th><th scope="col">数据取回</th><th scope="col">公网出站</th><th scope="col">其他</th><th scope="col">合计</th></tr></thead><tbody id="detail-body"></tbody></table></div><ul class="note-list"><li>R2 标准包含可用免费额度；R2 的容量、百万次请求和低频取回量均按官方计费单位向上取整。</li><li>S3 低频和即时归档已计入每个对象至少 128 KiB 的容量。截图、音频和均分后的附件分别计算。</li><li>R2 直接公网出站免费。AWS 共享免费额度用完后计入出站费；MinIO 的网络费用请填入“其他月费”。</li></ul></section>
+
+      <section class="panel" id="rates" aria-labelledby="rates-title"><div class="section-index">05 / PRICE REFERENCE</div><h2 id="rates-title" style="font-size:21px;margin:0">每 G 单价与 MinIO 换算</h2><p class="muted">以下是官方基础单价，不随业务量变化。人民币列随汇率更新。</p><div class="table-scroll"><table><thead><tr><th scope="col">对象存储</th><th scope="col">美元 / 月</th><th scope="col">人民币 / 月</th><th scope="col">计费基础</th></tr></thead><tbody id="object-rates"></tbody></table></div>
+        <div class="table-scroll"><table><thead><tr><th scope="col">AWS EBS 磁盘类型</th><th scope="col">新加坡 $/GiB/月</th><th scope="col">弗吉尼亚 $/GiB/月</th><th scope="col">新加坡 ¥/GiB/月</th></tr></thead><tbody id="ebs-rates"></tbody></table></div>
+        <p class="muted">gp3 含 3,000 IOPS 与 125 MiB/s 吞吐，额外性能另计。st1 / sc1 适合大块顺序读写，最低 125 GiB；大量小对象需要实测。io2 另收 IOPS 费用。</p>
+        <div class="formula" id="minio-formula"></div><p class="muted" id="fixed-tb"></p><hr class="rule"><div class="split"><div><h3>对象存储按实际数据量计费</h3><p>R2 按每日峰值的月平均计费，S3 按时间加权容量估算。新加坡 S3 标准首 50 TiB 为 $0.025/GiB，下 450 TiB 为 $0.024，之后 $0.023，计算器已计入阶梯。</p></div><div><h3>云硬盘按已开通容量计费</h3><p>EBS 即使没写满也收费。MinIO 总费用还应包含服务器、系统盘、冗余、快照、网络和运维；单份数据盘不代表托管对象存储的冗余水平。</p></div></div>
+      </section>
+
+      <section class="panel server-resources" aria-labelledby="server-title">
+        <div class="panel-head"><div><div class="section-index">06 / RETAINED RESOURCES</div><h2 id="server-title">AI面试存留资源</h2><p class="muted">Linode · 2026 年 10 月 15 日 17:07 · 上海时间</p></div><span class="static-note">历史快照，不随输入变化</span></div>
+        <div class="table-scroll"><table><thead><tr><th scope="col">检查项</th><th scope="col">结果</th><th scope="col">说明</th></tr></thead><tbody>
+          <tr><td>运行内存</td><td>31.34 GiB</td><td>可用 24.18 GiB</td></tr>
+          <tr class="resource-watch"><td>系统磁盘<span class="resource-status">空间偏紧 · 需关注</span></td><td><strong>已用约 548 GB</strong></td><td>可用约 94 GB · <strong>使用率 86%</strong></td></tr>
+          <tr><td>MinIO 数据目录</td><td>34.49 GB</td><td>约占整盘已用空间 6%</td></tr>
+          <tr class="resource-action"><td>Docker 构建缓存<span class="resource-status">待清理 · 原因待查</span></td><td><strong>491.2 GB</strong></td><td><strong>484.9 GB</strong> 被标记为可回收；需删除不再需要的构建缓存。</td></tr>
+        </tbody></table></div>
+        <aside class="resource-todo" aria-labelledby="resource-todo-title"><h3 id="resource-todo-title">待办：清理 Docker 构建缓存，并由运营 / 运维排查占用原因</h3><p>删除不再需要的构建缓存；检查构建频率、重复缓存以及缓存保留和自动清理策略，确认为何积累到 491.2 GB。清理后复核磁盘空间，并跟踪缓存是否继续增长。</p><p class="todo-note">构建缓存不属于面试存留文件。484.9 GB 是 Docker 标记的可回收量，实际释放空间以清理结果为准；目前尚未执行清理，也未确认大量占用的具体原因。</p></aside>
+        <p class="muted">MinIO 目录容量包含元数据，仅是迁移容量参考。现有套餐内的空闲磁盘可能没有新增月费，迁走 MinIO 也不会自动降低整台服务器账单。</p>
+      </section>
+
+      <section class="panel method" id="sources" aria-labelledby="sources-title"><div class="section-index">07 / METHOD & SOURCES</div><h2 id="sources-title" style="font-size:21px;margin:0">计算口径与资料来源</h2><ul class="note-list"><li>MB / GB / TB 按十进制；AWS 容量换算为 GiB。每月 30 天、每年 360 天。默认汇率 7.2 为预算假设，非实时结算汇率。</li><li>每月新增候选人数 = 每天面试场数 × 30 ÷ 每人平均面试场数。媒体按面试场数计，附件只按新增候选人数计。</li><li>“读取新增数据”按当月预算新增字节量及对应对象数计算；“读取全部存量”按月底存量计算。初始文件的小对象分布按当前输入的文件结构估计。</li><li>媒体按永久保存估算；常规诊断事件在 PostgreSQL，代码默认清理 90 天前的事件。独立完整 MP4 录制、模型分析、转写和数据库费用未包含。</li><li>请求按每个文件一次 PUT / GET 估算。批量列举、额外 HEAD、失败重试、分片上传、迁移和生命周期转层另计；免费额度按当前勾选及输入处理。</li><li>公开单价截至 2026 年 10 月 15 日，未计税费、新账户促销和议价折扣。AWS 大额公网流量按首档估算，可能高于实际阶梯价格。</li></ul>
+        <ul class="sources"><li><a href="https://developers.cloudflare.com/r2/pricing/" target="_blank" rel="noopener noreferrer">Cloudflare R2 官方定价 ↗</a></li><li><a href="https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-southeast-1/index.json" target="_blank" rel="noopener noreferrer">AWS S3 新加坡区域价目 ↗</a></li><li><a href="https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/ebs.json" target="_blank" rel="noopener noreferrer">AWS EBS 区域价目 ↗</a></li><li><a href="https://aws.amazon.com/ebs/pricing/" target="_blank" rel="noopener noreferrer">AWS EBS 计费说明 ↗</a></li><li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html" target="_blank" rel="noopener noreferrer">S3 最低容量与保存期限 ↗</a></li><li><a href="https://aws.amazon.com/about-aws/global-infrastructure/global-network/faqs/" target="_blank" rel="noopener noreferrer">AWS 共享免费出站额度 ↗</a></li><li><a href="https://docs.aws.amazon.com/ebs/latest/userguide/hdd-vols.html" target="_blank" rel="noopener noreferrer">AWS HDD 卷使用限制 ↗</a></li></ul>
+        <details><summary>查看现有系统的代码依据</summary><p>真人面试采样需要 HUMAN_INTERVIEW_MEDIA_ENABLED=true。当前假设该功能已启用；完整录制未并入采样预算。以下路径为本次核对的本地源码。</p><p class="file-path">/Users/apple/Desktop/project/company/ai-recruitment/apps/ai-recruitment-copilot-worker/src/interview-media-sampling.ts<br>/Users/apple/Desktop/project/company/ai-recruitment/apps/ai-recruitment-copilot-worker/src/interview-media.ts<br>/Users/apple/Desktop/project/company/ai-recruitment/apps/ai-recruitment-copilot-backend/src/lib/server/s3.ts<br>/Users/apple/Desktop/project/company/ai-recruitment/apps/ai-recruitment-copilot-backend/src/server/routes/public/routes/interview-telemetry/retention.ts</p></details>
+      </section>
+    </main>
+  </div>
+  <footer class="footer"><span>AI 招聘系统 · 存储费用评估 · 附件默认 50 MB / 候选人</span><span>独立 HTML · 离线可用 · 永久保存模型</span></footer>
+</div>
+<noscript><p style="padding:24px">请启用 JavaScript 以使用动态费用计算。</p></noscript>
+<script>
+"use strict";
+const DEFAULTS={attachmentMB:50,dailyInterviews:300,minutes:40,months:12,participants:2,rounds:1,imageKB:100,attachmentFiles:1,readPercent:1,readBase:"new",initialGB:0,fx:7.2,diskPrice:.096,utilization:80,efficiency:100,minioExtra:0,awsFreeEgress:100,roundBudget:true,r2Free:true};
+const PROVIDERS=[{id:"r2",name:"R2 标准",note:"$0.015 / GB · 直接出站免费",color:"#086a57"},{id:"r2ia",name:"R2 低频",note:"$0.010 / GB · 取回另计",color:"#46907c"},{id:"s3",name:"S3 标准",note:"$0.025 / GiB · 新加坡",color:"#436c99"},{id:"s3ia",name:"S3 Standard IA",note:"$0.0138 / GiB · 最低 128 KiB",color:"#7895b1"},{id:"gir",name:"S3 即时归档",note:"Glacier Instant Retrieval",color:"#ad822a"},{id:"minio",name:"MinIO 数据盘",note:"自建 · 默认 AWS gp3",color:"#ae593a"}];
+const $=id=>document.getElementById(id);
+const n=(value,digits=0)=>new Intl.NumberFormat("zh-CN",{maximumFractionDigits:digits}).format(value);
+const money=(value,digits=0)=>"¥"+new Intl.NumberFormat("zh-CN",{minimumFractionDigits:digits,maximumFractionDigits:digits}).format(value);
+const ceilUnit=value=>Math.max(0,Math.ceil(value-1e-9));
+function capacity(gb){return gb>=1000?{value:gb/1000,unit:"TB"}:{value:gb,unit:"GB"};}
+function capacityText(gb){const c=capacity(gb);return n(c.value,c.unit==="TB"?2:1)+" "+c.unit;}
+function s3StandardStorage(gib){return Math.min(gib,51200)*.025+Math.min(Math.max(gib-51200,0),460800)*.024+Math.max(gib-512000,0)*.023;}
+function computeVolumes(p){
+  const images=Math.ceil(p.minutes*60/30)*p.participants;
+  const audios=Math.ceil(p.minutes*60/120)*p.participants;
+  const imageMB=images*p.imageKB/1000;
+  const audioMB=audios*480044/1e6;
+  const attachmentShareMB=p.attachmentMB/p.rounds;
+  const rawMB=imageMB+audioMB+attachmentShareMB;
+  const budgetMB=p.roundBudget?ceilUnit(rawMB/5)*5:rawMB;
+  const interviews=p.dailyInterviews*30,candidates=interviews/p.rounds;
+  const files=p.attachmentMB>0?p.attachmentFiles:0;
+  const objects=(images+audios)*interviews+files*candidates;
+  const monthlyGB=budgetMB*interviews/1000;
+  const attachmentPad=files?Math.max(131072-p.attachmentMB*1e6/files,0)*files*candidates:0;
+  const paddingGB=(Math.max(131072-p.imageKB*1000,0)*images*interviews+Math.max(131072-480044,0)*audios*interviews+attachmentPad)/1e9;
+  const fileDensity=budgetMB>0?(images+audios+files/p.rounds)/(budgetMB/1000):0;
+  const paddingRatio=monthlyGB>0?paddingGB/monthlyGB:((Math.max(131072-p.imageKB*1000,0)*images+Math.max(131072-480044,0)*audios+(files?Math.max(131072-p.attachmentMB*1e6/files,0)*files/p.rounds:0))/1e9)/(budgetMB/1000);
+  return{images,audios,imageMB,audioMB,attachmentShareMB,rawMB,budgetMB,interviews,candidates,objects,monthlyGB,paddingGB,fileDensity,paddingRatio};
+}
+function calculateMonth(p,v,m){
+  const meanGB=p.initialGB+v.monthlyGB*(m-.5),endGB=p.initialGB+v.monthlyGB*m,peakGB=meanGB+v.monthlyGB/60;
+  const gib=meanGB*1e9/2**30,lowGib=(meanGB+p.initialGB*v.paddingRatio+v.paddingGB*(m-.5))*1e9/2**30;
+  const readGB=(p.readBase==="all"?endGB:v.monthlyGB)*p.readPercent/100;
+  const get=(p.readBase==="all"?p.initialGB*v.fileDensity+v.objects*m:v.objects)*p.readPercent/100;
+  const readGib=readGB*1e9/2**30,egress=Math.max(readGib-p.awsFreeEgress,0)*.12;
+  const diskGiB=ceilUnit(endGB*1e9/2**30/(p.utilization/100)/(p.efficiency/100));
+  const costs={};
+  const add=(id,storage,write,read,retrieval,outbound,other=0)=>{const parts={storage:storage*p.fx,write:write*p.fx,read:read*p.fx,retrieval:retrieval*p.fx,egress:outbound*p.fx,other};parts.total=Object.values(parts).reduce((s,x)=>s+x,0);costs[id]=parts;};
+  add("r2",Math.max(ceilUnit(peakGB)-(p.r2Free?10:0),0)*.015,ceilUnit(Math.max(v.objects-(p.r2Free?1e6:0),0)/1e6)*4.5,ceilUnit(Math.max(get-(p.r2Free?1e7:0),0)/1e6)*.36,0,0);
+  add("r2ia",ceilUnit(peakGB)*.01,ceilUnit(v.objects/1e6)*9,ceilUnit(get/1e6)*.9,ceilUnit(readGB)*.01,0);
+  add("s3",s3StandardStorage(gib),v.objects/1000*.005,get/1000*.0004,0,egress);
+  add("s3ia",lowGib*.0138,v.objects/1000*.01,get/1000*.001,readGib*.01,egress);
+  add("gir",lowGib*.005,v.objects/1000*.02,get/1000*.01,readGib*.03,egress);
+  add("minio",diskGiB*p.diskPrice,0,0,0,0,p.minioExtra);
+  return{m,meanGB,endGB,peakGB,readGB,get,lowGib,diskGiB,costs};
+}
+function forecast(p){const volumes=computeVolumes(p);return{volumes,months:Array.from({length:Math.max(24,p.months)},(_,i)=>calculateMonth(p,volumes,i+1))};}
+function totals(months,count){return Object.fromEntries(PROVIDERS.map(x=>[x.id,months.slice(0,count).reduce((s,m)=>s+m.costs[x.id].total,0)]));}
+let mode="monthly",lastParameters={...DEFAULTS},announcementTimer;
+function readParameters(){
+  const form=$("parameters"),p={};
+  for(const [key,initial] of Object.entries(DEFAULTS)){const el=$(key);if(typeof initial==="boolean")p[key]=el.checked;else if(typeof initial==="number"){if(el.value.trim()===""||!el.validity.valid||!Number.isFinite(el.valueAsNumber))return null;p[key]=el.valueAsNumber;}else p[key]=el.value;}
+  if(!form.checkValidity())return null;return p;
+}
+function render(p){
+  lastParameters={...p};
+  const f=forecast(p),v=f.volumes,m=f.months[p.months-1],sum=totals(f.months,p.months),year=totals(f.months,12),moneyTotals=mode==="monthly"?Object.fromEntries(PROVIDERS.map(x=>[x.id,m.costs[x.id].total])):sum;
+  $("metric-interview").innerHTML=n(v.budgetMB,2)+"<small>MB</small>";
+  $("exact-volume").textContent="原始估算约 "+n(v.rawMB,2)+" MB";
+  $("metric-monthly").innerHTML=n(v.monthlyGB,1)+"<small>GB</small>";
+  $("monthly-count").textContent=n(v.interviews)+" 场 / "+n(v.candidates,1)+" 位新增候选人";
+  const cap=capacity(m.endGB);$("metric-total").innerHTML=n(cap.value,2)+"<small>"+cap.unit+"</small>";
+  $("metric-total-label").textContent="第 "+p.months+" 月末累计";
+  $("initial-note").textContent=p.initialGB?"含初始 "+capacityText(p.initialGB)+" 文件":"从新增容量为零开始";
+  $("headline-note").textContent="每天 "+n(p.dailyInterviews)+" 场，每场 "+p.minutes+" 分钟，"+p.participants+" 人采样；每位候选人附件 "+n(p.attachmentMB)+" MB，平均参加 "+n(p.rounds,1)+" 场。";
+  $("compare-title").textContent=mode==="monthly"?"第 "+p.months+" 个月要付多少钱":"截至第 "+p.months+" 个月共花多少钱";
+  const maximum=Math.max(...Object.values(moneyTotals),1);
+  $("cost-bars").innerHTML=PROVIDERS.map(provider=>{const label=provider.id==="minio"?(p.minioExtra>0?"MinIO 预算合计":"MinIO 数据盘"):provider.name;return '<div class="cost-row"><div class="provider-name">'+label+'<small>'+provider.note+'</small></div><div class="bar-track" aria-hidden="true"><div class="bar" style="--bar-color:'+provider.color+';width:'+moneyTotals[provider.id]/maximum*100+'%"></div></div><strong class="cost-value" id="cost-'+provider.id+'">'+money(moneyTotals[provider.id])+'</strong></div>';}).join("");
+  $("billing-note").textContent="当月 S3 平均存量 "+capacityText(m.meanGB)+"；R2 日峰值平均 "+capacityText(m.peakGB)+"；MinIO 预配 "+n(m.diskGiB)+" GiB。金额按预算汇率 "+n(p.fx,2)+" 换算。";
+  const objectOptions=PROVIDERS.filter(x=>x.id!=="minio");const cheapest=objectOptions.reduce((a,b)=>moneyTotals[a.id]<=moneyTotals[b.id]?a:b);
+  $("takeaway").innerHTML="本次所比较的对象存储中，"+(mode==="monthly"?"该月":"截至该月累计")+"费用最低的是 <strong>"+cheapest.name+" · "+money(moneyTotals[cheapest.id])+"</strong>。"+(cheapest.id==="gir"?"需接受至少保存 90 天及按读取量收费。":cheapest.id.includes("ia")?"低频层取回数据另收费，最短保存 30 天。":"标准层没有最低保存期限，适合读取需求尚未稳定的文件。")+(p.minioExtra===0?" MinIO 其他月费尚未填写，当前只比较数据盘。":" MinIO 已计入自填其他月费 "+money(p.minioExtra)+"。");
+  $("image-volume").textContent=n(v.imageMB,2)+" MB";$("image-count").textContent=n(v.images)+" 张 × "+n(p.imageKB)+" KB";
+  $("audio-volume").textContent=n(v.audioMB,2)+" MB";$("audio-count").textContent=n(v.audios)+" 段 × 480,044 字节";
+  $("attachment-volume").textContent=n(v.attachmentShareMB,2)+" MB";$("attachment-count").textContent=n(p.attachmentMB)+" MB ÷ "+n(p.rounds,1)+" 场/人";
+  $("buffer-volume").textContent=n(v.budgetMB-v.rawMB,2)+" MB";
+  [["image",v.imageMB],["audio",v.audioMB],["attachment",v.attachmentShareMB],["buffer",v.budgetMB-v.rawMB]].forEach(([id,value])=>$("segment-"+id).style.width=(v.budgetMB?value/v.budgetMB*100:0)+"%");
+  $("requests-note").textContent="每月约 "+n(v.objects)+" 次写入；所选月份约 "+n(m.get)+" 次读取、"+capacityText(m.readGB)+" 取回数据。读取比例按"+(p.readBase==="new"?"当月新增数据":"月底全部存量")+"的 "+n(p.readPercent,1)+"% 计算。";
+  const displayMonths=[...new Set([1,3,6,12,24,p.months])].sort((a,b)=>a-b);
+  $("forecast-body").innerHTML=displayMonths.map(number=>{const row=f.months[number-1];return '<tr'+(number===p.months?' class="selected-row"':'')+'><td>第 '+number+' 个月</td><td>'+capacityText(row.endGB)+'</td><td>'+money(row.costs.r2.total)+'</td><td>'+money(row.costs.s3.total)+'</td><td>'+money(row.costs.minio.total)+'</td></tr>';}).join("");
+  $("forecast-total").innerHTML='<tr><td>首年累计</td><td>'+capacityText(f.months[11].endGB)+'</td><td>'+money(year.r2)+'</td><td>'+money(year.s3)+'</td><td>'+money(year.minio)+'</td></tr>';
+  $("cold-body").innerHTML=PROVIDERS.filter(x=>["r2ia","s3ia","gir"].includes(x.id)).map(x=>'<tr><td>'+x.name+'</td><td>'+money(f.months[11].costs[x.id].total)+'</td><td>'+money(f.months[23].costs[x.id].total)+'</td><td>'+money(year[x.id])+'</td></tr>').join("");
+  $("detail-caption").textContent="第 "+p.months+" 个月 · 人民币 · 含输入的免费额度 · 保留两位小数。累计支出模式不改变本表。";
+  $("detail-body").innerHTML=PROVIDERS.map(x=>{const c=m.costs[x.id];return '<tr><td>'+x.name+'</td>'+["storage","write","read","retrieval","egress","other","total"].map(key=>'<td>'+money(c[key],2)+'</td>').join("")+'</tr>';}).join("");
+  $("object-rates").innerHTML=[["R2 标准",.015,"GB"],["R2 低频",.01,"GB"],["S3 标准 首档",.025,"GiB"],["S3 Standard IA",.0138,"GiB"],["S3 即时归档",.005,"GiB"]].map(([name,price,unit])=>'<tr><td>'+name+'</td><td>$'+price+' / '+unit+'</td><td>'+money(price*p.fx,4)+'</td><td>实际计费容量</td></tr>').join("");
+  $("ebs-rates").innerHTML=[["gp3 通用 SSD",.096,.08],["gp2 通用 SSD",.12,.1],["st1 吞吐型 HDD",.054,.045],["sc1 冷 HDD",.018,.015],["io2 高性能 SSD",.138,.125]].map(([name,sg,us])=>'<tr><td>'+name+'</td><td>$'+sg.toFixed(3)+'</td><td>$'+us.toFixed(3)+'</td><td>'+money(sg*p.fx,4)+'</td></tr>').join("");
+  $("minio-formula").innerHTML="采购容量 = 向上取整〔文件字节数 ÷ 2³⁰ ÷ "+p.utilization+"% 利用率 ÷ "+p.efficiency+"% 存储有效率〕<br>当前月费 = "+n(m.diskGiB)+" GiB × $"+p.diskPrice+" × "+n(p.fx,2)+" + "+money(p.minioExtra)+" 其他月费 = <strong>"+money(m.costs.minio.total,2)+"</strong>";
+  const oneTBDisk=ceilUnit(1e12/2**30/(p.utilization/100)/(p.efficiency/100));
+  $("fixed-tb").textContent="相同 1 TB 文件持有整月的纯容量费：R2 标准 "+money(1000*.015*p.fx)+"，S3 标准 "+money(1e12/2**30*.025*p.fx)+"，MinIO 数据盘 "+money(oneTBDisk*p.diskPrice*p.fx)+"。按当前汇率、磁盘单价及空闲/冗余参数计算，未计免费额度、请求和其他月费。";
+  const warnings=[];if(m.readGB*1e9/2**30-p.awsFreeEgress>10240)warnings.push("公网出站已超过首档 10 TiB，当前仍按 $0.12/GiB 保守估算，采购前需核对阶梯价格。");if(p.initialGB>0)warnings.push("初始文件的对象数量与小文件分布按当前参数估计；一次性迁移费用未计入。");
+  $("estimate-warning").hidden=!warnings.length;$("estimate-warning").textContent=warnings.join(" ");
+  document.querySelectorAll("[data-month]").forEach(b=>b.setAttribute("aria-pressed",String(Number(b.dataset.month)===p.months)));
+  document.querySelectorAll("[data-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.mode===mode)));
+  clearTimeout(announcementTimer);announcementTimer=setTimeout(()=>$("live-summary").textContent="费用已更新。每月新增 "+capacityText(v.monthlyGB)+"；第 "+p.months+" 个月 R2 标准 "+money(m.costs.r2.total)+"，S3 标准 "+money(m.costs.s3.total)+"，MinIO "+money(m.costs.minio.total)+"。",250);
+}
+function update(){const parameters=readParameters();$("input-error").hidden=Boolean(parameters);if(parameters){$("calc-status").textContent="随输入实时更新";render(parameters);}else{$("input-error").textContent="请填写有效范围内的数字；空值不会作为 0。结果暂保留上次有效计算。";$("calc-status").textContent="待补全参数 · 显示上次结果";}}
+$("parameters").addEventListener("input",update);$("parameters").addEventListener("change",update);$("parameters").addEventListener("submit",event=>event.preventDefault());
+$("reset").addEventListener("click",()=>{for(const [key,value]of Object.entries(DEFAULTS)){if(typeof value==="boolean")$(key).checked=value;else $(key).value=String(value);}mode="monthly";update();});
+document.querySelectorAll("[data-month]").forEach(button=>button.addEventListener("click",()=>{$("months").value=button.dataset.month;update();}));
+document.querySelectorAll("[data-mode]").forEach(button=>button.addEventListener("click",()=>{mode=button.dataset.mode;render(lastParameters);}));
+$("print").addEventListener("click",()=>window.print());
+render(DEFAULTS);
+</script>
+</body>
+</html>

@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import type { StudioCandidateRecord } from "@arc/shared/studio-candidates";
+import type { ResumeDuplicateRecruitmentContext } from "@arc/shared/resume-duplicates";
 import type { ResumeLibraryProfileSnapshot } from "@arc/shared/studio-resumes";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { jobDescription, studioInterview, user } from "@arc/db-schema/schema";
 import type { ResumeSemanticSourceType } from "@arc/db-schema/schema";
 
-export interface DedupMatchRecord {
+export interface DedupMatchRecord extends ResumeDuplicateRecruitmentContext {
   id: string;
   sourceType?: ResumeSemanticSourceType;
   candidateName: string;

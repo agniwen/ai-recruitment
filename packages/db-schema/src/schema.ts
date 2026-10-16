@@ -197,6 +197,7 @@ export const session = pgTable(
     id: text("id").primaryKey(),
     impersonatedBy: text("impersonated_by"),
     ipAddress: text("ip_address"),
+    ipCiphertext: text("ip_ciphertext"),
     token: text("token").notNull().unique(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .$onUpdate(() => /* @__PURE__ */ new Date())
@@ -207,6 +208,51 @@ export const session = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
+);
+
+export const platformMfaFactor = pgTable("platform_mfa_factor", {
+  enrollmentExpiresAt: timestamp("enrollment_expires_at", { withTimezone: true }),
+  enrollmentSessionId: text("enrollment_session_id"),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  failureWindowAt: timestamp("failure_window_at", { withTimezone: true }),
+  lastUsedStep: integer("last_used_step").notNull().default(-1),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  pendingExpiresAt: timestamp("pending_expires_at", { withTimezone: true }),
+  pendingSecret: text("pending_secret"),
+  pendingSessionId: text("pending_session_id"),
+  recoveryCodeHashes: jsonb("recovery_code_hashes").$type<string[]>().notNull().default([]),
+  secret: text("secret").notNull(),
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+});
+
+export const platformMfaGrant = pgTable("platform_mfa_grant", {
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  sessionId: text("session_id")
+    .primaryKey()
+    .references(() => session.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+});
+
+export const platformSecurityAudit = pgTable(
+  "platform_security_audit",
+  {
+    action: text("action").notNull(),
+    actorId: text("actor_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id"),
+    outcome: text("outcome").notNull(),
+    sessionId: text("session_id"),
+    targetId: text("target_id"),
+  },
+  (t) => [index("platform_security_audit_actor_time_idx").on(t.actorId, t.createdAt)],
 );
 
 export const account = pgTable(
@@ -1607,6 +1653,7 @@ export const interviewTelemetryEvent = pgTable(
     fingerprintVersion: text("fingerprint_version"),
     id: text("id").primaryKey(),
     ip: text("ip"),
+    ipLookupHash: text("ip_lookup_hash"),
     ipSource: text("ip_source"),
     meetingId: text("meeting_id").notNull(),
     meetingTitle: text("meeting_title").notNull(),
@@ -1638,6 +1685,7 @@ export const interviewTelemetryEvent = pgTable(
       table.id,
     ),
     index("interview_telemetry_event_received_idx").on(table.receivedAt),
+    index("interview_telemetry_event_ip_lookup_idx").on(table.ipLookupHash),
     index("interview_telemetry_event_fingerprint_idx").on(
       table.fingerprintId,
       table.meetingId,

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import { findSemanticResumeDuplicates } from "./dedup-service";
 
+vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({ db: {} }));
+
 const queryProfile: ResumeProfile = {
   age: null,
   educationExperiences: [],
@@ -166,9 +168,15 @@ describe("findSemanticResumeDuplicates", () => {
               candidateName: "李四",
               candidatePhone: "13900000000",
               createdAt: "2026-01-02T00:00:00.000Z",
+              departmentName: "前端研发部",
+              hiringUnitName: "用人组织 A",
               id: "candidate-semantic",
               jobDescriptionName: null,
+              outcome: "hired",
+              pipelineStage: "closed",
+              resumeEvaluationStatus: "pass",
               resumeProfile: queryProfile,
+              resumeSourceName: "研发中心",
               status: "archived",
               targetRole: "全栈工程师",
               uploaderImage: "https://example.com/uploader.png",
@@ -185,8 +193,14 @@ describe("findSemanticResumeDuplicates", () => {
     );
 
     expect(matches[0]).toMatchObject({
+      departmentName: "前端研发部",
+      hiringUnitName: "用人组织 A",
       id: "candidate-semantic",
       level: "high",
+      outcome: "hired",
+      pipelineStage: "closed",
+      resumeEvaluationStatus: "pass",
+      resumeSourceName: "研发中心",
       uploaderImage: "https://example.com/uploader.png",
       uploaderName: "上传人昵称",
     });

@@ -1,3 +1,4 @@
+import { platformMfaHref } from "@arc/shared/platform-security";
 import { HydrationBoundary } from "@tanstack/react-query";
 import type { DehydratedState } from "@tanstack/react-query";
 import { createFileRoute, redirect, useLoaderData } from "@tanstack/react-router";
@@ -65,12 +66,15 @@ export const Route = createFileRoute("/platform/resume-parse-cache")({
   validateSearch: (search: Record<string, unknown>) => coerceSearchParams(search),
   loader: async (loaderContext) => {
     const { location } = loaderContext as unknown as {
-      location: { search: SearchParamsRecord };
+      location: { href: string; search: SearchParamsRecord };
     };
     const query = parsePlatformResumeParseCacheQuery(location.search);
     const state = (await loadPlatformResumeParseCacheState({
       data: { query },
     })) as PlatformResumeParseCacheState;
+    if (state.status === "mfa-required") {
+      throw redirect({ href: platformMfaHref(location.href), replace: true });
+    }
     if (state.status === "unauthenticated") {
       throw redirect({ href: "/login" });
     }

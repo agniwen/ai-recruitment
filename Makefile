@@ -9,6 +9,7 @@ AGENT_SCRIPT := src/agent.py
 
 .PHONY: help install web-install agent-install agent-download \
         dev web-dev web-dev-fresh worker-dev worker-start worker-typecheck \
+        dev-prod-config dev-prod-up dev-prod-down dev-prod-status dev-prod dev-prod-web \
         agent-dev agent-console agent-start agent-shell \
         agent-deploy agent-update-secrets agent-clean clean
 
@@ -30,6 +31,26 @@ agent-download: ## 下载 Silero VAD + turn-detector 模型
 	cd $(AGENT_DIR) && uv run $(AGENT_SCRIPT) download-files
 
 # ---------- dev ----------
+
+DEV_PROD_COMPOSE := docker compose --env-file .env.dev-prod.local -f dev-prod.yaml
+
+dev-prod-config: ## 备份并统一本机 .env，生成 dev-prod 的本地密钥与配置
+	node scripts/configure-dev-prod.mjs
+
+dev-prod-up: ## 启动本地数据库、队列、存储、向量库及 LiveKit/录像依赖
+	$(DEV_PROD_COMPOSE) up -d
+
+dev-prod-down: ## 停止本项目依赖并保留数据卷
+	$(DEV_PROD_COMPOSE) down
+
+dev-prod-status: ## 查看本项目 Docker 依赖状态
+	$(DEV_PROD_COMPOSE) ps
+
+dev-prod: dev-prod-up ## 启动 Docker 依赖和本机 Web / worker / 语音 agent
+	@$(MAKE) -j3 dev-prod-web worker-dev agent-dev
+
+dev-prod-web: ## 启动可被本地 Docker 回调访问的 Web（固定 3000 端口）
+	pnpm --filter @arc/ai-recruitment-copilot dev --host 0.0.0.0 --port 3000 --strictPort
 
 dev: ## 并行启动 TanStack Start + LiveKit agent worker + 简历解析 worker
 	@$(MAKE) -j3 web-dev agent-dev worker-dev
