@@ -352,15 +352,15 @@ describe("OfferCard SSC confirmation", () => {
   });
 
   it.each([
-    ["pending", true, false, "SSC接收确认"],
-    ["pending", false, true, null],
-    ["confirming", true, false, null],
-    ["confirming", false, true, "SSC完成确认"],
-    ["completed", true, true, null],
-    [null, true, true, null],
+    ["pending", true, false, true, false],
+    ["pending", false, true, false, false],
+    ["confirming", true, false, false, false],
+    ["confirming", false, true, false, true],
+    ["completed", true, true, false, false],
+    [null, true, true, false, false],
   ] as const)(
     "gates %s actions by their dedicated permission",
-    async (status, canReceive, canConfirm, label) => {
+    async (status, canReceive, canConfirm, receiveEnabled, confirmEnabled) => {
       const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
         canConfirm,
         canReceive,
@@ -371,10 +371,61 @@ describe("OfferCard SSC confirmation", () => {
       const sscButtons = [...host.querySelectorAll("button")].filter((button) =>
         button.textContent?.includes("SSC"),
       );
-      expect(sscButtons.map((button) => button.textContent?.trim())).toEqual(label ? [label] : []);
+      if (status === "pending" || status === "confirming") {
+        expect(sscButtons.map((button) => button.textContent?.trim())).toEqual([
+          "SSC接收确认",
+          "SSC完成确认",
+        ]);
+        expect(findButton(host, "SSC接收确认")?.disabled).toBe(!receiveEnabled);
+        expect(findButton(host, "SSC完成确认")?.disabled).toBe(!confirmEnabled);
+      } else {
+        expect(sscButtons).toHaveLength(0);
+      }
       expect(findButton(host, "编辑")).toBeUndefined();
     },
   );
+
+  it.each(["pending", "confirming"] as const)(
+    "explains both missing SSC permissions for %s",
+    async (status) => {
+      const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+        disabled: false,
+        draft: { sscConfirmationStatus: status },
+      });
+      await flushMutation();
+      expect(findButton(host, "SSC接收确认")?.disabled).toBe(true);
+      expect(findButton(host, "SSC完成确认")?.disabled).toBe(true);
+      expect(host.textContent).toContain("当前账号无SSC接收确认权限");
+      expect(host.textContent).toContain("当前账号无SSC完成确认权限");
+    },
+  );
+
+  it.each(["deleted", "superseded"] as const)(
+    "offers no SSC actions for a %s version",
+    async (status) => {
+      const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+        canConfirm: true,
+        canReceive: true,
+        disabled: false,
+        draft: { sscConfirmationStatus: "pending", status },
+      });
+      await flushMutation();
+      expect(findButton(host, "SSC接收确认")).toBeUndefined();
+      expect(findButton(host, "SSC完成确认")).toBeUndefined();
+    },
+  );
+
+  it("offers no SSC actions for a closed candidate", async () => {
+    const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+      canConfirm: true,
+      canReceive: true,
+      disabled: true,
+      draft: { sscConfirmationStatus: "pending" },
+    });
+    await flushMutation();
+    expect(findButton(host, "SSC接收确认")).toBeUndefined();
+    expect(findButton(host, "SSC完成确认")).toBeUndefined();
+  });
 
   it.each(["pending", "confirming"] as const)(
     "explains why %s cannot be sent or hired",

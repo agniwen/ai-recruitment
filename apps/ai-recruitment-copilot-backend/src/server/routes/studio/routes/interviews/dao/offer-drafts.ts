@@ -31,7 +31,7 @@ import type {
   OfferDraftStatus,
   PipelineStage,
 } from "@arc/db-schema/studio-interviews";
-import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import type { OfferDraftRecord, OfferSscState } from "@arc/shared/studio-pipeline-stages";
 import {
   getHumanInterviewOfferReadinessError,
   loadHumanInterviewRoundReadiness,
@@ -153,6 +153,65 @@ function resetSscConfirmation(row: typeof studioOfferDraft.$inferSelect) {
       };
 }
 
+async function loadAuthorizedOfferCandidateContext(input: {
+  actorUserId: string;
+  organizationId: string;
+  interviewRecordId: string;
+}) {
+  const [membership] = await db
+    .select({ role: member.role })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(
+      and(
+        eq(member.organizationId, input.organizationId),
+        eq(member.userId, input.actorUserId),
+        eq(user.banned, false),
+      ),
+    )
+    .limit(1);
+  if (!membership) {
+    throw new OfferDraftError("没有权限访问此 Offer。", 403);
+  }
+  const snapshot = await computeWorkspacePermissionSnapshot({
+    memberRole: membership.role,
+    organizationId: input.organizationId,
+    userId: input.actorUserId,
+  });
+  if (!hasPermissionInStatements(snapshot.statements, "offer", "read")) {
+    throw new OfferDraftError("没有权限查看 Offer。", 403);
+  }
+  const visibility = await resolveResumeVisibilityScope({
+    currentRole: membership.role,
+    organizationId: input.organizationId,
+    userId: input.actorUserId,
+  });
+  const [candidate] = await db
+    .select({
+      candidateName: studioInterview.candidateName,
+      pipelineStage: studioInterview.pipelineStage,
+    })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, input.interviewRecordId),
+        eq(studioInterview.organizationId, input.organizationId),
+        buildResumeVisibilityCondition(visibility),
+      ),
+    )
+    .limit(1);
+  if (!candidate) {
+    throw new OfferDraftError("候选人记录不存在。", 404);
+  }
+  return {
+    actorRole: membership.role,
+    canConfirm: hasPermissionInStatements(snapshot.statements, "offer", "confirm"),
+    canReceive: hasPermissionInStatements(snapshot.statements, "offer", "receive"),
+    candidateName: candidate.candidateName,
+    pipelineStage: candidate.pipelineStage,
+  };
+}
+
 export async function loadAuthorizedOfferSscContext(input: {
   draftId: string;
   actorUserId: string;
@@ -177,59 +236,37 @@ export async function loadAuthorizedOfferSscContext(input: {
   if (!draft) {
     throw new OfferDraftError("Offer 不存在。", 404);
   }
-  const [membership] = await db
-    .select({ role: member.role })
-    .from(member)
-    .innerJoin(user, eq(user.id, member.userId))
-    .where(
-      and(
-        eq(member.organizationId, draft.organizationId),
-        eq(member.userId, input.actorUserId),
-        eq(user.banned, false),
-      ),
-    )
-    .limit(1);
-  if (!membership) {
-    throw new OfferDraftError("没有权限访问此 Offer。", 403);
-  }
-  const snapshot = await computeWorkspacePermissionSnapshot({
-    memberRole: membership.role,
+  const context = await loadAuthorizedOfferCandidateContext({
+    actorUserId: input.actorUserId,
+    interviewRecordId: draft.interviewRecordId,
     organizationId: draft.organizationId,
-    userId: input.actorUserId,
   });
-  if (!hasPermissionInStatements(snapshot.statements, "offer", "read")) {
-    throw new OfferDraftError("没有权限查看 Offer。", 403);
-  }
-  const visibility = await resolveResumeVisibilityScope({
-    currentRole: membership.role,
-    organizationId: draft.organizationId,
-    userId: input.actorUserId,
-  });
-  const [candidate] = await db
+  return { ...context, draft: toRecord(draft) };
+}
+
+export async function loadCurrentOfferSscState(input: {
+  actorUserId: string;
+  organizationId: string;
+  interviewRecordId: string;
+}): Promise<OfferSscState | null> {
+  await loadAuthorizedOfferCandidateContext(input);
+  const [state] = await db
     .select({
-      candidateName: studioInterview.candidateName,
-      pipelineStage: studioInterview.pipelineStage,
+      id: studioOfferDraft.id,
+      sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
+      status: studioOfferDraft.status,
+      version: studioOfferDraft.version,
     })
-    .from(studioInterview)
+    .from(studioOfferDraft)
     .where(
       and(
-        eq(studioInterview.id, draft.interviewRecordId),
-        eq(studioInterview.organizationId, draft.organizationId),
-        buildResumeVisibilityCondition(visibility),
+        eq(studioOfferDraft.interviewRecordId, input.interviewRecordId),
+        eq(studioOfferDraft.organizationId, input.organizationId),
       ),
     )
+    .orderBy(desc(studioOfferDraft.version))
     .limit(1);
-  if (!candidate) {
-    throw new OfferDraftError("候选人记录不存在。", 404);
-  }
-  return {
-    actorRole: membership.role,
-    canConfirm: hasPermissionInStatements(snapshot.statements, "offer", "confirm"),
-    canReceive: hasPermissionInStatements(snapshot.statements, "offer", "receive"),
-    candidateName: candidate.candidateName,
-    draft: toRecord(draft),
-    pipelineStage: candidate.pipelineStage,
-  };
+  return state ?? null;
 }
 
 interface OfferSscActionInput {

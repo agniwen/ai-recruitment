@@ -20,6 +20,7 @@ import {
   editOfferDraft,
   editOfferDraftWithAttachment,
   listOfferDrafts,
+  loadCurrentOfferSscState,
   loadDraftById,
   loadOfferApprovalAttachment,
   maybeAdvanceToOffer,
@@ -161,6 +162,31 @@ export const offerDraftsRouter = factory
     }
     const drafts = await listOfferDrafts(recordId, activeOrg.id);
     return c.json(drafts, 200);
+  })
+  .get("/ssc/current", requirePermission("offer", "read"), async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const interviewRecordId = c.req.param("id");
+    if (!interviewRecordId) {
+      return c.json({ error: "候选人记录不存在。" }, 404);
+    }
+    try {
+      return c.json(
+        await loadCurrentOfferSscState({
+          actorUserId: user.id,
+          interviewRecordId,
+          organizationId: activeOrg.id,
+        }),
+        200,
+      );
+    } catch (error) {
+      if (error instanceof OfferDraftError) {
+        return c.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
   })
   .post(
     "/",

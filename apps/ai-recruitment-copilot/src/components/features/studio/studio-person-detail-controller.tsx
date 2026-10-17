@@ -30,6 +30,7 @@ import {
   fetchStudioResumeReviewRounds,
   fetchStudioResumeReviewTimeline,
   fetchStudioResumeTimeline,
+  getCurrentOfferSscState,
   resolvePublicInterviewRecordId,
   resolveStudioInterviewRecordId,
 } from "@/lib/client/api";
@@ -525,6 +526,18 @@ export function useStudioPersonDetailController({
     }
   }, [optimisticPipelineStage, record?.pipelineStage]);
   const visiblePipelineStage = optimisticPipelineStage ?? record?.pipelineStage;
+  const { data: currentOfferSscState } = useQuery({
+    enabled:
+      enabled &&
+      canReadOffer &&
+      !!effectiveRecordId &&
+      mode === "resume" &&
+      visiblePipelineStage === "offer",
+    queryFn: () => getCurrentOfferSscState(slug, effectiveRecordId as string),
+    queryKey: ["offer-ssc-state", slug, effectiveRecordId],
+  });
+  // Disabled queries retain cached data; hide the summary after read permission is revoked.
+  const visibleOfferSscState = canReadOffer ? currentOfferSscState : null;
   const hasRecord = record !== null;
   const tabVisibilityRecord = hasRecord
     ? {
@@ -776,6 +789,7 @@ export function useStudioPersonDetailController({
     record.outcome ? (
       <PipelineStageActionBar
         recordId={record.id}
+        offerSscState={visibleOfferSscState}
         aiInterviewDisabled={record.jobDescriptionAiInterviewDisabled}
         humanInterviewDone={Boolean(
           resumeRecord?.stageProgress.humanInterview &&

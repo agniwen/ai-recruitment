@@ -133,7 +133,7 @@ beforeEach(async () => {
   await db.delete(studioOfferDraft).where(eq(studioOfferDraft.organizationId, ORG));
   await db
     .update(studioInterview)
-    .set({ outcome: "in_pipeline", pipelineStage: "offer" })
+    .set({ createdBy: FIRST_SSC, outcome: "in_pipeline", pipelineStage: "offer" })
     .where(eq(studioInterview.id, CANDIDATE));
 });
 
@@ -172,6 +172,88 @@ async function newOffer() {
     organizationId: ORG,
   });
 }
+
+describe("current Offer SSC state", () => {
+  const path = `/${CANDIDATE}/offer-drafts/ssc/current`;
+
+  it("returns only the SSC summary to a custom role with Offer read access", async () => {
+    const offer = await newOffer();
+    await db
+      .update(studioOfferDraft)
+      .set({
+        approvalAttachment: {
+          filename: "private-review.pdf",
+          mediaType: "application/pdf",
+          size: 10,
+          storageKey: "private/ssc-review.pdf",
+        },
+        notes: "private negotiation notes",
+      })
+      .where(eq(studioOfferDraft.id, offer.id));
+
+    const response = await makeApp(RECEIVE_ONLY_SSC).request(path);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      id: offer.id,
+      sscConfirmationStatus: "pending",
+      status: "draft",
+      version: 1,
+    });
+  });
+
+  it.each(["deleted", "superseded"] as const)(
+    "keeps a newer %s version instead of falling back to an accepted confirmed Offer",
+    async (status) => {
+      const accepted = await newOffer();
+      await db
+        .update(studioOfferDraft)
+        .set({ sscConfirmationStatus: "completed", status: "accepted" })
+        .where(eq(studioOfferDraft.id, accepted.id));
+      const latest = await newOffer();
+      await db.update(studioOfferDraft).set({ status }).where(eq(studioOfferDraft.id, latest.id));
+
+      const response = await makeApp().request(path);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        id: latest.id,
+        sscConfirmationStatus: "pending",
+        status,
+        version: 2,
+      });
+    },
+  );
+
+  it("returns null when an authorized visible candidate has no Offer", async () => {
+    const response = await makeApp(RECEIVE_ONLY_SSC).request(path);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBeNull();
+  });
+
+  it.each([false, true])(
+    "checks actual Offer read permission when an Offer exists: %s",
+    async (exists) => {
+      if (exists) {
+        await newOffer();
+      }
+      await expect(makeApp(FORBIDDEN_USER).request(path)).resolves.toHaveProperty("status", 403);
+    },
+  );
+
+  it("hides the SSC state when the reader cannot see the candidate", async () => {
+    await newOffer();
+    await db
+      .update(studioInterview)
+      .set({ createdBy: SECOND_SSC })
+      .where(eq(studioInterview.id, CANDIDATE));
+    await expect(makeApp(RECEIVE_ONLY_SSC).request(path)).resolves.toHaveProperty("status", 404);
+  });
+
+  it("does not treat a missing candidate as an empty Offer history", async () => {
+    await expect(
+      makeApp().request("/missing-candidate/offer-drafts/ssc/current"),
+    ).resolves.toHaveProperty("status", 404);
+  });
+});
 
 describe("Offer SSC confirmation", () => {
   it("creates a pending internal Offer", async () => {

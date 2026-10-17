@@ -162,6 +162,14 @@ export interface PublicHumanInterviewInterviewerPreview {
   title: string;
 }
 
+/** Current SSC state uses the highest persisted version, including deleted versions. */
+export interface OfferSscState {
+  id: string;
+  version: number;
+  status: OfferDraftStatus;
+  sscConfirmationStatus: OfferSscConfirmationStatus | null;
+}
+
 /**
  * Offer 草稿单版本 DTO（DAO 返回 + 客户端消费）。
  *

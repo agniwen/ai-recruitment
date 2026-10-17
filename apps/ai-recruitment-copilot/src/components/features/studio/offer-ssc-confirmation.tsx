@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useId } from "react";
 import { toast } from "sonner";
 import {
   getOfferDraftStatusMeta,
@@ -14,6 +15,30 @@ import {
 } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
+function getOfferSscActionState(draft: OfferDraftRecord, canReceive: boolean, canConfirm: boolean) {
+  const status = draft.sscConfirmationStatus ?? null;
+  let receiveDisabledReason: string | null = null;
+  let confirmDisabledReason: string | null = null;
+  if (!canReceive) {
+    receiveDisabledReason = "当前账号无SSC接收确认权限";
+  } else if (status !== "pending") {
+    receiveDisabledReason = "SSC已接收确认";
+  }
+  if (!canConfirm) {
+    confirmDisabledReason = "当前账号无SSC完成确认权限";
+  } else if (status === "pending") {
+    confirmDisabledReason = "请先完成SSC接收确认";
+  }
+  return {
+    canConfirm: canConfirm && status === "confirming" && draft.status === "draft",
+    canReceive: canReceive && status === "pending" && draft.status === "draft",
+    confirmDisabledReason,
+    receiveDisabledReason,
+    showActions: draft.status === "draft" && status !== null,
+    status,
+  };
+}
 
 export function useOfferSscConfirmation({
   canConfirm = false,
@@ -32,11 +57,9 @@ export function useOfferSscConfirmation({
   onSaved: () => void | Promise<void>;
   slug: string;
 }) {
-  const sscStatus = draft.sscConfirmationStatus ?? null;
-  const canReceiveCurrent = canReceive && sscStatus === "pending" && draft.status === "draft";
-  const canConfirmCurrent = canConfirm && sscStatus === "confirming" && draft.status === "draft";
+  const actions = getOfferSscActionState(draft, canReceive, canConfirm);
   const { data: telegramLink } = useQuery({
-    enabled: !disabled && (canReceiveCurrent || canConfirmCurrent),
+    enabled: !disabled && (actions.canReceive || actions.canConfirm),
     queryFn: () => getOfferSscTelegramLink(slug, candidateId, draft.id),
     queryKey: ["offer-ssc-telegram-link", slug, candidateId, draft.id],
   });
@@ -54,12 +77,12 @@ export function useOfferSscConfirmation({
     },
   });
   return {
-    canConfirm: canConfirmCurrent,
-    canReceive: canReceiveCurrent,
+    ...actions,
     error: mutation.error,
     isPending: mutation.isPending,
     mutate: mutation.mutate,
-    telegramUrl: canReceiveCurrent || canConfirmCurrent ? (telegramLink?.url ?? null) : null,
+    pendingAction: mutation.isPending ? mutation.variables : null,
+    telegramUrl: actions.canReceive || actions.canConfirm ? (telegramLink?.url ?? null) : null,
   };
 }
 
@@ -114,6 +137,13 @@ export function OfferSscActions({
   confirmation: ReturnType<typeof useOfferSscConfirmation>;
   isBusy: boolean;
 }) {
+  const id = useId();
+  if (!confirmation.showActions) {
+    return null;
+  }
+  if (confirmation.status === "completed") {
+    return <p className="text-muted-foreground text-xs">SSC确认已完成</p>;
+  }
   return (
     <>
       {confirmation.telegramUrl && !isBusy ? (
@@ -126,16 +156,36 @@ export function OfferSscActions({
           在 Telegram 中确认
         </a>
       ) : null}
-      {confirmation.canReceive ? (
-        <Button disabled={isBusy} onClick={() => confirmation.mutate("receive")} size="sm">
-          {confirmation.isPending ? "接收中…" : "SSC接收确认"}
+      <div className="flex flex-col items-end gap-1">
+        <Button
+          aria-describedby={confirmation.receiveDisabledReason ? `${id}-receive-reason` : undefined}
+          disabled={isBusy || !confirmation.canReceive}
+          onClick={() => confirmation.mutate("receive")}
+          size="sm"
+        >
+          {confirmation.pendingAction === "receive" ? "接收中…" : "SSC接收确认"}
         </Button>
-      ) : null}
-      {confirmation.canConfirm ? (
-        <Button disabled={isBusy} onClick={() => confirmation.mutate("complete")} size="sm">
-          {confirmation.isPending ? "确认中…" : "SSC完成确认"}
+        {confirmation.receiveDisabledReason ? (
+          <p className="text-muted-foreground text-xs" id={`${id}-receive-reason`}>
+            {confirmation.receiveDisabledReason}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        <Button
+          aria-describedby={confirmation.confirmDisabledReason ? `${id}-confirm-reason` : undefined}
+          disabled={isBusy || !confirmation.canConfirm}
+          onClick={() => confirmation.mutate("complete")}
+          size="sm"
+        >
+          {confirmation.pendingAction === "complete" ? "确认中…" : "SSC完成确认"}
         </Button>
-      ) : null}
+        {confirmation.confirmDisabledReason ? (
+          <p className="text-muted-foreground text-xs" id={`${id}-confirm-reason`}>
+            {confirmation.confirmDisabledReason}
+          </p>
+        ) : null}
+      </div>
     </>
   );
 }

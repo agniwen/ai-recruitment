@@ -1,12 +1,15 @@
 import type { StudioPersonDetailTab } from "./studio-person-detail-model";
 
-/** 仅匹配当前候选人及当前 tab 的查询，不刷新其他候选人或列表。 */
+/** 刷新当前候选人资料、SSC 摘要及当前 tab 查询，不触碰其他候选人或列表。 */
 export function matchesDetailRefresh(
   key: readonly unknown[],
   input: { slug: string; recordId: string; tab: StudioPersonDetailTab; roundIds: string[] },
 ): boolean {
   if (key[1] !== input.slug) {
     return false;
+  }
+  if (key[0] === "offer-ssc-state") {
+    return key[2] === input.recordId;
   }
   if (key[0] === "studio-resumes") {
     if (key[3] !== input.recordId) {

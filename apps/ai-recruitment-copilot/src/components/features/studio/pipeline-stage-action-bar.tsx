@@ -2,6 +2,7 @@
 /* oxlint-disable max-lines -- the action bar keeps all stage-specific controls in one switch */
 
 import { AiReviewApprovalButton } from "./ai-review/ai-review-approval-button";
+import { OfferSscProgressSteps } from "./offer-ssc-progress";
 
 import {
   IconArrowBackUp,
@@ -20,8 +21,9 @@ import {
 // owns mutations; this component only tracks transient pending UI state.
 
 import type { ComponentProps, ReactNode } from "react";
+import type { OfferSscState } from "@arc/shared/studio-pipeline-stages";
 import { useState } from "react";
-import { pipelineStageMeta } from "@arc/db-schema/studio-interviews";
+import { getOfferSscConfirmationMeta, pipelineStageMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage, ScheduleEntryStatus } from "@arc/db-schema/studio-interviews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +47,7 @@ import { copyInterviewLink } from "@/components/features/studio/interviews/inter
 export interface PipelineStageActionBarProps {
   recordId: string;
   pipelineStage: PipelineStage;
+  offerSscState?: OfferSscState | null;
   evaluationActions?: ReactNode;
   primaryAction?: ReactNode;
   aiInterviewDisabled?: boolean;
@@ -114,6 +117,7 @@ function shouldShowInterviewProgressAction(input: {
 export function PipelineStageActionBar({
   recordId,
   pipelineStage,
+  offerSscState,
   evaluationActions,
   primaryAction,
   aiInterviewDisabled = false,
@@ -218,6 +222,7 @@ export function PipelineStageActionBar({
       <RecruitmentStageHoverCard
         onViewCurrentStage={onViewCurrentStage}
         pipelineStage={pipelineStage}
+        offerSscState={offerSscState}
       />
       {/* fieldset disabled locks every nested control (incl. primaryAction / Tooltip wrappers). */}
       <fieldset
@@ -372,19 +377,30 @@ function getHoverFlowSteps(pipelineStage: PipelineStage): PipelineStage[] {
 function RecruitmentStageHoverCard({
   onViewCurrentStage,
   pipelineStage,
+  offerSscState,
 }: {
   onViewCurrentStage: () => void;
   pipelineStage: PipelineStage;
+  offerSscState?: OfferSscState | null;
 }) {
   const flowSteps = getHoverFlowSteps(pipelineStage);
   const currentIndex = flowSteps.indexOf(pipelineStage);
+  const state = pipelineStage === "offer" ? offerSscState : null;
+  const retired = state?.status === "deleted" || state?.status === "superseded";
+  const sscStatus = retired ? null : state?.sscConfirmationStatus;
+  let stageLabel: string = pipelineStageMeta[pipelineStage].label;
+  if (retired) {
+    stageLabel = "Offer · 待新增有效版本";
+  } else if (sscStatus) {
+    stageLabel = `Offer · ${getOfferSscConfirmationMeta(sscStatus).label}`;
+  }
 
   return (
     <HoverCard>
       <HoverCardTrigger
         render={
           <Button
-            aria-label={`查看当前阶段：${pipelineStageMeta[pipelineStage].label}`}
+            aria-label={`查看当前阶段：${stageLabel}`}
             className="h-8 px-3 font-medium"
             onClick={onViewCurrentStage}
             size="sm"
@@ -392,7 +408,7 @@ function RecruitmentStageHoverCard({
             variant="text"
           >
             <IconInfoCircle className="size-4" />
-            当前阶段：{pipelineStageMeta[pipelineStage].label}
+            当前阶段：{stageLabel}
           </Button>
         }
       />
@@ -400,9 +416,7 @@ function RecruitmentStageHoverCard({
         <div className="space-y-3">
           <div>
             <p className="font-medium text-sm">完整招聘流程</p>
-            <p className="mt-1 text-muted-foreground text-xs">
-              当前处于「{pipelineStageMeta[pipelineStage].label}」
-            </p>
+            <p className="mt-1 text-muted-foreground text-xs">当前处于「{stageLabel}」</p>
           </div>
           <ol className="space-y-0">
             {flowSteps.map((stage, index) => {
@@ -440,6 +454,12 @@ function RecruitmentStageHoverCard({
               );
             })}
           </ol>
+          {state ? (
+            <div className="border-border border-t pt-3">
+              <p className="mb-2 font-medium text-sm">SSC 确认进度</p>
+              <OfferSscProgressSteps status={sscStatus ?? null} />
+            </div>
+          ) : null}
         </div>
       </HoverCardContent>
     </HoverCard>

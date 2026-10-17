@@ -15,7 +15,7 @@ import { IconHeartHandshake, IconPlus } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
-import { listOfferDrafts } from "@/lib/client/api";
+import { getCurrentOfferSscState, listOfferDrafts } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +27,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { CandidateExpectationsBlock, OfferCard } from "./offer-stage-cards";
+import { OfferSscProgress } from "./offer-ssc-progress";
 import {
   AcceptedConfirmDialog,
   CreateOrEditOfferDialog,
@@ -66,10 +67,15 @@ export function OfferStagePanel({
     queryFn: () => listOfferDrafts(slug, candidateId),
     queryKey: ["offer-drafts", slug, candidateId],
   });
+  const { data: currentSscState = null, isLoading: isSscStateLoading } = useQuery({
+    queryFn: () => getCurrentOfferSscState(slug, candidateId),
+    queryKey: ["offer-ssc-state", slug, candidateId],
+  });
 
   async function invalidateDrafts() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["offer-drafts", slug, candidateId] }),
+      queryClient.invalidateQueries({ queryKey: ["offer-ssc-state", slug, candidateId] }),
       queryClient.invalidateQueries({ queryKey: ["studio-resumes"] }),
     ]);
   }
@@ -133,6 +139,7 @@ export function OfferStagePanel({
 
   return (
     <div className="space-y-5">
+      <OfferSscProgress current={currentSscState} loading={isSscStateLoading} />
       <CandidateExpectationsBlock candidateId={candidateId} disabled={disabled || !canUpdate} />
 
       <div className="@container flex flex-wrap items-center justify-between gap-3">

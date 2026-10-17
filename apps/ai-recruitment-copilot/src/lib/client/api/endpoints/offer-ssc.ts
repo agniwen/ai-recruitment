@@ -1,6 +1,18 @@
-import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import type { OfferDraftRecord, OfferSscState } from "@arc/shared/studio-pipeline-stages";
 import { rpc } from "@/lib/client/rpc";
 import { rpcFetch } from "../rpc-fetch";
+
+export function getCurrentOfferSscState(
+  slug: string,
+  candidateId: string,
+): Promise<OfferSscState | null> {
+  return rpcFetch<OfferSscState | null>(
+    rpc.api.w[":slug"].studio.interviews[":id"]["offer-drafts"].ssc.current.$get({
+      param: { id: candidateId, slug },
+    }),
+    "加载当前 SSC 确认状态失败",
+  );
+}
 
 export function receiveOfferSscConfirmation(
   slug: string,

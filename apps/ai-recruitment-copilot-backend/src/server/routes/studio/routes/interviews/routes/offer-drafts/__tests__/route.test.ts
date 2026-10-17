@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   limit: vi.fn(),
   listOfferDrafts: vi.fn(),
   loadAuthorizedOfferSscContext: vi.fn(),
+  loadCurrentOfferSscState: vi.fn(),
   loadDraftById: vi.fn(),
   loadHumanInterviewRoundReadiness: vi.fn(),
   loadOfferApprovalAttachment: vi.fn(),
@@ -81,6 +82,7 @@ vi.mock(
     editOfferDraftWithAttachment: mocks.editOfferDraftWithAttachment,
     listOfferDrafts: mocks.listOfferDrafts,
     loadAuthorizedOfferSscContext: mocks.loadAuthorizedOfferSscContext,
+    loadCurrentOfferSscState: mocks.loadCurrentOfferSscState,
     loadDraftById: mocks.loadDraftById,
     loadOfferApprovalAttachment: mocks.loadOfferApprovalAttachment,
     maybeAdvanceToOffer: mocks.maybeAdvanceToOffer,
@@ -133,6 +135,7 @@ describe("offerDraftsRouter", () => {
 
   it("declares CRUD-specific offer permissions", () => {
     expect(mocks.permissionCalls).toEqual([
+      ["offer", "read"],
       ["offer", "read"],
       ["offer", "create"],
       ["offer", "create"],
