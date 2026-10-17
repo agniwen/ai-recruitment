@@ -176,6 +176,46 @@ async function pick(id: string, label: string) {
 }
 
 describe("SSC responsibility editor", () => {
+  it("fixes the source when launched from source management and invalidates SSC and member caches", async () => {
+    const saved = vi.fn();
+    await mount(
+      <SscResponsibilityEditorDialog
+        open
+        record={null}
+        fixedSource={{ id: "source-1", name: "实际业务中心" }}
+        onOpenChange={vi.fn()}
+        onSaved={saved}
+      />,
+    );
+    const client = clients.at(-1);
+    client?.setQueryData(["studio-ssc-responsibilities", "work", "global"], { records: [] });
+    client?.setQueryData(["workspace-members", "work"], { records: [] });
+    const source = document.querySelector<HTMLInputElement>("#ssc-fixed-source");
+    expect(source?.readOnly).toBe(true);
+    expect(source?.value).toBe("实际业务中心");
+    expect(document.querySelector("#ssc-resumeSourceId")).toBeNull();
+    await waitForUi(() => expect(button("保存")?.disabled).toBe(false));
+    await act(() => button("保存")?.click());
+    await waitForUi(() => expect(saved).toHaveBeenCalledOnce());
+    expect(mocks.create).toHaveBeenCalledWith({
+      json: {
+        centerName: "实际业务中心",
+        demandOwner: "",
+        email: "",
+        notes: "",
+        resumeSourceId: "source-1",
+        sscName: "",
+        telegram: "",
+        workspaceRole: "ssc-01",
+      },
+      param: { slug: "work" },
+    });
+    expect(
+      client?.getQueryState(["studio-ssc-responsibilities", "work", "global"])?.isInvalidated,
+    ).toBe(true);
+    expect(client?.getQueryState(["workspace-members", "work"])?.isInvalidated).toBe(true);
+  });
+
   it("saves a selected real center with the unique SSC role while contacts remain blank", async () => {
     const saved = vi.fn();
     await mount(

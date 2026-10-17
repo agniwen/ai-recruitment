@@ -151,7 +151,7 @@ export async function loadSscResponsibilityAdministrator(organizationId: string,
   return record && isWorkspaceAdministratorRole(record.membership.role) ? record.membership : null;
 }
 
-function duplicateError(error: unknown): boolean {
+export function duplicateError(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;
   }
@@ -180,6 +180,7 @@ export async function queryPaginatedSscResponsibilities(
     : null;
   const where = and(
     eq(sscResponsibility.organizationId, organizationId),
+    query.resumeSourceId ? eq(sscResponsibility.resumeSourceId, query.resumeSourceId) : undefined,
     pattern
       ? or(
           ilike(sscResponsibility.centerName, pattern),

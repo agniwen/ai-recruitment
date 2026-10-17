@@ -10,7 +10,13 @@ import {
   queryPaginatedSscResponsibilities,
   updateSscResponsibility,
 } from "./dao";
-import { sscResponsibilitiesQuerySchema, sscResponsibilityInputSchema } from "./schema";
+import {
+  sscAssignmentCandidatesQuerySchema,
+  sscResponsibilitiesQuerySchema,
+  sscResponsibilityInputSchema,
+  sscSourceAssignmentInputSchema,
+} from "./schema";
+import { assignSscSourceCandidates, listSscAssignmentCandidates } from "./source-assignment-dao";
 
 const SAVE_VALIDATION_MESSAGES = {
   invalid_role: "请选择当前工作区中标记为 SSC 的工作区角色。",
@@ -35,6 +41,44 @@ export const sscResponsibilitiesRouter = factory
   .use("*", requirePermission("page", "sscResponsibilities"))
   .get("/options", async (c) =>
     c.json(await listSscResponsibilityOptions(getWorkspaceRequestContext(c).organization.id), 200),
+  )
+  .get(
+    "/candidates",
+    zValidator(
+      "query",
+      sscAssignmentCandidatesQuerySchema,
+      jsonValidatorError("请选择部门/中心。"),
+    ),
+    async (c) => {
+      const result = await listSscAssignmentCandidates(
+        getWorkspaceRequestContext(c).organization.id,
+        c.req.valid("query").resumeSourceId,
+      );
+      if (result === "invalid_source") {
+        return c.json({ error: SAVE_VALIDATION_MESSAGES.invalid_source }, 400);
+      }
+      return c.json(result, 200);
+    },
+  )
+  .post(
+    "/assign",
+    zValidator("json", sscSourceAssignmentInputSchema, jsonValidatorError("SSC 分配参数无效。")),
+    async (c) => {
+      const result = await assignSscSourceCandidates(
+        getWorkspaceRequestContext(c).organization.id,
+        c.req.valid("json"),
+      );
+      if (result === "invalid_source") {
+        return c.json({ error: SAVE_VALIDATION_MESSAGES.invalid_source }, 400);
+      }
+      if (result === "duplicate") {
+        return c.json({ error: "所选 SSC 已负责该部门/中心，请刷新后重试。" }, 409);
+      }
+      if (result === "stale") {
+        return c.json({ error: "SSC 候选人员或角色已变化，请刷新后重新选择。" }, 409);
+      }
+      return c.json(result, 201);
+    },
   )
   .get(
     "/",

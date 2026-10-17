@@ -1,7 +1,7 @@
 "use client";
 
 import { IconArrowsSort, IconPlus } from "@tabler/icons-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -40,6 +40,12 @@ import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { EntityDeleteDialog } from "../entity-delete-dialog";
 import { PageHeader } from "../page-header";
+import { invalidateSscResponsibilityQueries } from "./ssc-responsibility-queries";
+
+export interface SscResponsibilitySource {
+  id: string;
+  name: string;
+}
 
 export interface SscResponsibilityRecord {
   id: string;
@@ -135,6 +141,7 @@ function SscSourceField({
   disabled,
   loading,
   onChange,
+  fixedName,
 }: {
   value: string | null;
   originalName: string | undefined;
@@ -142,7 +149,16 @@ function SscSourceField({
   disabled: boolean;
   loading: boolean;
   onChange: (source: SscResponsibilityOptions["resumeSources"][number]) => void;
+  fixedName?: string;
 }) {
+  if (fixedName !== undefined) {
+    return (
+      <div className="grid gap-1.5 sm:col-span-2">
+        <Label htmlFor="ssc-fixed-source">中心/部门</Label>
+        <Input id="ssc-fixed-source" readOnly value={fixedName} />
+      </div>
+    );
+  }
   return (
     <div className="grid gap-1.5 sm:col-span-2">
       <Label htmlFor="ssc-resumeSourceId">中心/部门 *</Label>
@@ -234,14 +250,28 @@ export function SscResponsibilityEditorDialog({
   record,
   onOpenChange,
   onSaved,
+  fixedSource,
 }: {
   open: boolean;
   record: SscResponsibilityRecord | null;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  fixedSource?: SscResponsibilitySource;
 }) {
   const slug = useWorkspaceSlug();
-  const [form, setForm] = useState<EditorForm>(record ?? EMPTY_FORM);
+  const queryClient = useQueryClient();
+  const initialForm = useMemo(
+    () =>
+      fixedSource
+        ? {
+            ...(record ?? EMPTY_FORM),
+            centerName: fixedSource.name,
+            resumeSourceId: fixedSource.id,
+          }
+        : (record ?? EMPTY_FORM),
+    [record, fixedSource],
+  );
+  const [form, setForm] = useState<EditorForm>(initialForm);
   const optionsQuery = useQuery({
     enabled: open,
     queryFn: () =>
@@ -256,9 +286,9 @@ export function SscResponsibilityEditorDialog({
     resolveEditorAssociations(form, record, optionsQuery.data);
   useEffect(() => {
     if (open) {
-      setForm(record ?? EMPTY_FORM);
+      setForm(initialForm);
     }
-  }, [open, record]);
+  }, [open, initialForm]);
   const canSubmit =
     Boolean(selectedRole && (selectedSource || keepOriginalCenter)) &&
     !optionsQuery.isPending &&
@@ -275,8 +305,9 @@ export function SscResponsibilityEditorDialog({
       );
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "保存失败"),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(record ? "SSC 负责组织已更新" : "SSC 负责组织已新增");
+      await invalidateSscResponsibilityQueries(queryClient, slug);
       onSaved();
       onOpenChange(false);
     },
@@ -309,6 +340,7 @@ export function SscResponsibilityEditorDialog({
             <SscSourceField
               value={form.resumeSourceId}
               originalName={keepOriginalCenter ? record?.centerName : undefined}
+              fixedName={fixedSource ? (selectedSource?.name ?? fixedSource.name) : undefined}
               sources={sources}
               disabled={mutation.isPending || optionsQuery.isPending || optionsQuery.isError}
               loading={optionsQuery.isPending}
@@ -433,6 +465,7 @@ function sortableTextColumn(options: {
 
 export function SscResponsibilitiesGrid() {
   const slug = useWorkspaceSlug();
+  const queryClient = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<SscResponsibilityRecord | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<SscResponsibilityRecord | null>(null);
@@ -468,10 +501,10 @@ export function SscResponsibilitiesGrid() {
         "删除 SSC 负责组织失败",
       ),
     onError: (error) => toast.error(error instanceof Error ? error.message : "删除失败"),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("SSC 负责组织已删除");
       setDeletingRecord(null);
-      grid.invalidate();
+      await invalidateSscResponsibilityQueries(queryClient, slug);
     },
   });
   const columns = useMemo(
@@ -549,7 +582,7 @@ export function SscResponsibilitiesGrid() {
           open={editorOpen}
           record={editingRecord}
           onOpenChange={setEditorOpen}
-          onSaved={grid.invalidate}
+          onSaved={() => setEditorOpen(false)}
         />
       ) : null}
       <EntityDeleteDialog

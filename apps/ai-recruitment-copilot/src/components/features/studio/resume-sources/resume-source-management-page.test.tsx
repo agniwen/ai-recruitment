@@ -9,7 +9,10 @@ vi.mock("@/hooks/use-has-permission", () => ({
   useHasPermission: (resource: string, action: string) =>
     mocks.permissions.has(`${resource}:${action}`),
 }));
-vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "work" }));
+vi.mock("@/lib/client/workspace-context", () => ({
+  useWorkspaceMemberRole: () => "admin",
+  useWorkspaceSlug: () => "work",
+}));
 vi.mock("@/lib/client/rpc", () => ({
   rpc: { api: { w: { ":slug": { studio: { "resume-sources": { $get: mocks.get } } } } } },
 }));
