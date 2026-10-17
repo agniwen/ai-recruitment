@@ -58,9 +58,9 @@ const EMPTY_FORM: EditorForm = {
 const INPUT_FIELDS = [
   { key: "demandOwner", label: "需求对接负责人", maxLength: 100, required: false },
   { key: "centerName", label: "中心/部门", maxLength: 200, required: true },
-  { key: "sscName", label: "SSC 花名", maxLength: 100, required: true },
+  { key: "sscName", label: "SSC 花名", maxLength: 100, required: false },
   { key: "telegram", label: "SSC TG", maxLength: 120, required: false },
-  { key: "email", label: "SSC 邮箱", maxLength: 254, required: true },
+  { key: "email", label: "SSC 邮箱", maxLength: 254, required: false },
 ] as const;
 
 export function SscResponsibilityEditorDialog({
@@ -81,7 +81,7 @@ export function SscResponsibilityEditorDialog({
       setForm(record ?? EMPTY_FORM);
     }
   }, [open, record]);
-  const canSubmit = Boolean(form.centerName.trim() && form.sscName.trim() && form.email.trim());
+  const canSubmit = Boolean(form.centerName.trim());
   const mutation = useMutation({
     mutationFn: () => {
       const json: EditorForm = {
@@ -128,7 +128,8 @@ export function SscResponsibilityEditorDialog({
           <DialogHeader>
             <DialogTitle>{record ? "编辑 SSC 负责组织" : "新增 SSC 负责组织"}</DialogTitle>
             <DialogDescription>
-              SSC 无需先注册；同一中心/部门可以配置多名 SSC。标有 * 的字段为必填。
+              SSC 无需先注册；同一中心/部门可以配置多名
+              SSC。仅中心/部门必填，资料可先留空，后续补充。
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-5 sm:grid-cols-2">
@@ -190,13 +191,16 @@ function sortKey(value: string | undefined): "centerName" | "sscName" | "email" 
 
 function sortableTextColumn(options: {
   key: "centerName" | "sscName" | "email";
+  fallback?: string;
   primary?: boolean;
   title: string;
 }) {
   return customColumn<SscResponsibilityRecord>({
     accessorKey: options.key,
     cell: (row) => (
-      <span className={options.primary ? "font-medium" : undefined}>{row[options.key]}</span>
+      <span className={options.primary ? "font-medium" : undefined}>
+        {row[options.key] || options.fallback || ""}
+      </span>
     ),
     enableSorting: true,
     key: options.key,
@@ -262,9 +266,9 @@ export function SscResponsibilitiesGrid() {
     () => [
       textColumn<SscResponsibilityRecord>({ key: "demandOwner", title: "需求对接负责人" }),
       sortableTextColumn({ key: "centerName", primary: true, title: "中心/部门" }),
-      sortableTextColumn({ key: "sscName", title: "SSC 花名" }),
-      textColumn<SscResponsibilityRecord>({ key: "telegram", title: "SSC TG" }),
-      sortableTextColumn({ key: "email", title: "SSC 邮箱" }),
+      sortableTextColumn({ fallback: "待补充", key: "sscName", title: "SSC 花名" }),
+      textColumn<SscResponsibilityRecord>({ fallback: "待补充", key: "telegram", title: "SSC TG" }),
+      sortableTextColumn({ fallback: "待补充", key: "email", title: "SSC 邮箱" }),
       textColumn<SscResponsibilityRecord>({ key: "notes", title: "备注" }),
       dateColumn<SscResponsibilityRecord>({ key: "createdAt", sortable: true, title: "创建时间" }),
       actionsColumn<SscResponsibilityRecord>({
@@ -341,9 +345,7 @@ export function SscResponsibilitiesGrid() {
           }
         }}
         title="删除 SSC 负责组织？"
-        description={(row) =>
-          `确定删除 ${row.sscName}（${row.email}）负责 ${row.centerName} 的预录入关系？`
-        }
+        description={(row) => `确定删除 ${row.centerName} 的 SSC 预录入关系？`}
       />
     </div>
   );

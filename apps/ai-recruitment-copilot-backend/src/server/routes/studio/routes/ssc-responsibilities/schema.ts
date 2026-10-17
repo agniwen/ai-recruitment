@@ -3,9 +3,14 @@ import { z } from "zod";
 export const sscResponsibilityInputSchema = z.object({
   centerName: z.string().trim().min(1, "请输入中心/部门。").max(200),
   demandOwner: z.string().trim().max(100),
-  email: z.string().trim().max(254).email("请输入有效的 SSC 邮箱。").toLowerCase(),
+  email: z
+    .string()
+    .trim()
+    .max(254)
+    .toLowerCase()
+    .pipe(z.union([z.literal(""), z.string().email("请输入有效的 SSC 邮箱。")])),
   notes: z.string().trim().max(4000),
-  sscName: z.string().trim().min(1, "请输入 SSC 花名。").max(100),
+  sscName: z.string().trim().max(100),
   telegram: z.string().trim().max(120),
 });
 

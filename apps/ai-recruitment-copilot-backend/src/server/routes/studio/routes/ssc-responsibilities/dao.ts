@@ -5,7 +5,10 @@ import { member, sscResponsibility, user } from "@arc/db-schema/schema";
 import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import type { SscResponsibilitiesQuery, SscResponsibilityInput } from "./schema";
 
-const UNIQUE_RELATIONSHIP_CONSTRAINT = "ssc_responsibility_workspace_center_email_uq";
+const UNIQUE_RELATIONSHIP_CONSTRAINTS = new Set([
+  "ssc_responsibility_workspace_center_identity_uq",
+  "ssc_responsibility_workspace_center_email_uq",
+]);
 
 export async function loadSscResponsibilityAdministrator(organizationId: string, userId: string) {
   const [record] = await db
@@ -30,8 +33,12 @@ function duplicateError(error: unknown): boolean {
   if (
     "code" in error &&
     error.code === "23505" &&
-    (("constraint_name" in error && error.constraint_name === UNIQUE_RELATIONSHIP_CONSTRAINT) ||
-      ("constraint" in error && error.constraint === UNIQUE_RELATIONSHIP_CONSTRAINT))
+    (("constraint_name" in error &&
+      typeof error.constraint_name === "string" &&
+      UNIQUE_RELATIONSHIP_CONSTRAINTS.has(error.constraint_name)) ||
+      ("constraint" in error &&
+        typeof error.constraint === "string" &&
+        UNIQUE_RELATIONSHIP_CONSTRAINTS.has(error.constraint)))
   ) {
     return true;
   }

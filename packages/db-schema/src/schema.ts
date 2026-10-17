@@ -403,15 +403,18 @@ export const sscResponsibility = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("ssc_responsibility_workspace_center_email_uq").on(
+    uniqueIndex("ssc_responsibility_workspace_center_identity_uq").on(
       table.organizationId,
       sql`lower(btrim(${table.centerName}))`,
-      sql`lower(btrim(${table.email}))`,
+      sql`(CASE
+        WHEN btrim(${table.email}) <> '' THEN 'email:' || lower(btrim(${table.email}))
+        WHEN btrim(${table.telegram}) <> '' THEN 'telegram:' || lower(btrim(${table.telegram}))
+        WHEN btrim(${table.sscName}) <> '' THEN 'name:' || lower(btrim(${table.sscName}))
+        ELSE 'unassigned'
+      END)`,
     ),
     index("ssc_responsibility_org_center_idx").on(table.organizationId, table.centerName),
     check("ssc_responsibility_center_check", sql`length(btrim(${table.centerName})) > 0`),
-    check("ssc_responsibility_name_check", sql`length(btrim(${table.sscName})) > 0`),
-    check("ssc_responsibility_email_check", sql`length(btrim(${table.email})) > 0`),
   ],
 );
 

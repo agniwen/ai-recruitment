@@ -130,11 +130,125 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       });
     });
 
+    it.each([{ sscName: "" }, { email: "" }])(
+      "accepts missing SSC information %j",
+      async (patch) => {
+        const id = await create({ ...INPUT, ...patch });
+        await expect(list()).resolves.toMatchObject({ records: [{ id, ...patch }] });
+      },
+    );
+
+    it("pre-enters a center when all five other fields are blank", async () => {
+      const id = await create({
+        centerName: "  待分配中心  ",
+        demandOwner: " ",
+        email: " ",
+        notes: " ",
+        sscName: " ",
+        telegram: " ",
+      });
+      await expect(list()).resolves.toMatchObject({
+        records: [
+          {
+            centerName: "待分配中心",
+            demandOwner: "",
+            email: "",
+            id,
+            notes: "",
+            sscName: "",
+            telegram: "",
+          },
+        ],
+      });
+    });
+
+    it("keeps different named SSCs at the same center when their email and TG are blank", async () => {
+      await create({ ...INPUT, email: "", sscName: "Alice", telegram: "" });
+      await create({ ...INPUT, email: "", sscName: "Bob", telegram: "" });
+      await expect(list()).resolves.toHaveProperty("total", 2);
+    });
+
+    it("uses TG before name and email before TG when choosing a duplicate identity", async () => {
+      await create({ ...INPUT, email: "", sscName: "Same Name", telegram: "@first" });
+      await create({ ...INPUT, email: "", sscName: "Same Name", telegram: "@second" });
+      await expect(
+        request("", "POST", {
+          ...INPUT,
+          email: "",
+          sscName: "Different Name",
+          telegram: " @FIRST ",
+        }),
+      ).resolves.toHaveProperty("status", 409);
+      await create({
+        ...INPUT,
+        email: "filled@example.com",
+        sscName: "Same Name",
+        telegram: "@first",
+      });
+      await expect(list()).resolves.toHaveProperty("total", 3);
+    });
+
+    it("keeps the email, TG, name and unassigned identity namespaces distinct", async () => {
+      await create({ ...INPUT, email: "", sscName: "", telegram: "shared" });
+      await create({ ...INPUT, email: "", sscName: "shared", telegram: "" });
+      await create({ ...INPUT, email: "", sscName: "", telegram: "" });
+      await create({ ...INPUT, email: "", sscName: "unassigned", telegram: "" });
+      await create({ ...INPUT, email: "shared@example.com", sscName: "", telegram: "" });
+      await create({ ...INPUT, email: "", sscName: "", telegram: "shared@example.com" });
+      await expect(list()).resolves.toHaveProperty("total", 6);
+    });
+
+    it.each([
+      [
+        "telegram",
+        { email: "", sscName: "First", telegram: " @Pending " },
+        { email: "", sscName: "Second", telegram: "@PENDING" },
+      ],
+      [
+        "name",
+        { email: "", sscName: " Alice ", telegram: "" },
+        { email: " ", sscName: "ALICE", telegram: " " },
+      ],
+      [
+        "unassigned",
+        { email: "", sscName: "", telegram: "" },
+        { email: " ", sscName: " ", telegram: " " },
+      ],
+    ] as const)(
+      "rejects concurrent normalized %s fallback identities",
+      async (_kind, first, second) => {
+        const responses = await Promise.all([
+          request("", "POST", { ...INPUT, ...first, centerName: " Fallback Center " }),
+          request("", "POST", { ...INPUT, ...second, centerName: "fallback CENTER" }),
+        ]);
+        expect(responses.map((response) => response.status).toSorted()).toEqual([201, 409]);
+        await expect(list()).resolves.toHaveProperty("total", 1);
+      },
+    );
+
+    it("fills in an email and rejects conflicts when moving between identity types", async () => {
+      const alice = { ...INPUT, email: "", sscName: "Alice", telegram: "" };
+      const bob = { ...INPUT, email: "", sscName: "Bob", telegram: "" };
+      const aliceId = await create(alice);
+      const bobId = await create(bob);
+      await expect(
+        request(`/${aliceId}`, "PATCH", { ...alice, email: " FILLED@EXAMPLE.COM " }),
+      ).resolves.toHaveProperty("status", 200);
+      await expect(
+        request(`/${bobId}`, "PATCH", { ...bob, email: "filled@example.com" }),
+      ).resolves.toHaveProperty("status", 409);
+      await create(alice);
+      await expect(request(`/${aliceId}`, "PATCH", alice)).resolves.toHaveProperty("status", 409);
+      const result = await list();
+      expect(result.records.find((row: { id: string }) => row.id === aliceId).email).toBe(
+        "filled@example.com",
+      );
+      expect(result.records.find((row: { id: string }) => row.id === bobId).email).toBe("");
+    });
+
     it.each([
       { centerName: " " },
-      { sscName: "" },
       { email: "not-an-email" },
-      { email: "" },
       { email: undefined },
       { demandOwner: 42 },
       { notes: null },

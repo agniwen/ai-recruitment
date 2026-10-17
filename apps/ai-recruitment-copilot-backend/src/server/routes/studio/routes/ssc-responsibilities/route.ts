@@ -46,7 +46,7 @@ export const sscResponsibilitiesRouter = factory
         c.req.valid("json"),
       );
       if (result === "duplicate") {
-        return c.json({ error: "该中心/部门与 SSC 邮箱的对应关系已存在。" }, 409);
+        return c.json({ error: "该中心/部门与 SSC 人员的对应关系已存在。" }, 409);
       }
       return c.json(result, 201);
     },
@@ -64,7 +64,7 @@ export const sscResponsibilitiesRouter = factory
         return c.json({ error: "SSC 负责组织信息不存在。" }, 404);
       }
       if (result === "duplicate") {
-        return c.json({ error: "该中心/部门与 SSC 邮箱的对应关系已存在。" }, 409);
+        return c.json({ error: "该中心/部门与 SSC 人员的对应关系已存在。" }, 409);
       }
       return c.json(result, 200);
     },

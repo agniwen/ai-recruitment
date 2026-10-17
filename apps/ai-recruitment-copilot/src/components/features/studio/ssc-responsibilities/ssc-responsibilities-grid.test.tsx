@@ -141,6 +141,82 @@ async function fill(id: string, value: string) {
 }
 
 describe("SSC responsibility editor", () => {
+  it("saves a center-only entry while SSC contact details are still blank", async () => {
+    const saved = vi.fn();
+    await mount(
+      <SscResponsibilityEditorDialog open record={null} onOpenChange={vi.fn()} onSaved={saved} />,
+    );
+    await fill("ssc-centerName", "  待配置中心  ");
+
+    expect(button("保存")?.disabled).toBe(false);
+    await act(() => button("保存")?.click());
+    await waitForUi(() => expect(saved).toHaveBeenCalledOnce());
+    expect(mocks.create).toHaveBeenCalledWith({
+      json: {
+        centerName: "待配置中心",
+        demandOwner: "",
+        email: "",
+        notes: "",
+        sscName: "",
+        telegram: "",
+      },
+      param: { slug: "work" },
+    });
+  });
+
+  it("keeps saving disabled when the center is blank even with SSC details filled", async () => {
+    await mount(
+      <SscResponsibilityEditorDialog open record={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />,
+    );
+    await fill("ssc-centerName", "   ");
+    await fill("ssc-sscName", "林风");
+    await fill("ssc-email", "ssc@example.com");
+
+    expect(button("保存")?.disabled).toBe(true);
+    await act(() => button("保存")?.click());
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("allows previously empty SSC details to be filled in on an existing entry", async () => {
+    const saved = vi.fn();
+    const incomplete = {
+      ...record,
+      demandOwner: "",
+      email: "",
+      notes: "",
+      sscName: "",
+      telegram: "",
+    };
+    await mount(
+      <SscResponsibilityEditorDialog
+        open
+        record={incomplete}
+        onOpenChange={vi.fn()}
+        onSaved={saved}
+      />,
+    );
+    for (const id of ["ssc-sscName", "ssc-email", "ssc-telegram"]) {
+      expect(document.querySelector<HTMLInputElement>(`#${id}`)?.value).toBe("");
+    }
+    expect(button("保存")?.disabled).toBe(false);
+    await fill("ssc-sscName", "  后补SSC  ");
+    await fill("ssc-email", "LATER@EXAMPLE.COM");
+    await fill("ssc-telegram", "  @later  ");
+    await act(() => button("保存")?.click());
+    await waitForUi(() => expect(saved).toHaveBeenCalledOnce());
+    expect(mocks.patch).toHaveBeenCalledWith({
+      json: {
+        centerName: "未建中心",
+        demandOwner: "",
+        email: "later@example.com",
+        notes: "",
+        sscName: "后补SSC",
+        telegram: "@later",
+      },
+      param: { id: "ssc-1", slug: "work" },
+    });
+  });
+
   it("accepts unregistered SSC and unknown organization text with optional fields blank", async () => {
     const saved = vi.fn();
     await mount(
@@ -197,6 +273,28 @@ describe("SSC responsibility editor", () => {
 });
 
 describe("SSC responsibility grid", () => {
+  it("shows missing SSC contact details as pending completion without changing the saved values", async () => {
+    mocks.list.mockImplementation(() =>
+      Promise.resolve(
+        Response.json({
+          page: 1,
+          pageSize: 20,
+          records: [{ ...record, email: "", sscName: "", telegram: "" }],
+          total: 1,
+          totalPages: 1,
+        }),
+      ),
+    );
+    const host = await mountGrid();
+    await waitForUi(() => expect(host.textContent).toContain("未建中心"));
+    expect(host.textContent?.match(/待补充/g)).toHaveLength(3);
+    await act(() => button("编辑")?.click());
+    for (const id of ["ssc-sscName", "ssc-email", "ssc-telegram"]) {
+      expect(document.querySelector<HTMLInputElement>(`#${id}`)?.value).toBe("");
+    }
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
   it("passes URL pagination, sorting and literal search to the workspace endpoint", async () => {
     const host = await mountGrid("?page=2&pageSize=20&search=%25_team&sortBy=email&sortOrder=desc");
     await waitForUi(() => expect(host.textContent).toContain("林风"));
