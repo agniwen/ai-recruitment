@@ -19,6 +19,7 @@ import type { getQueryClient } from "@/lib/client/query-client";
 import { AppWatermark } from "@/components/features/watermark/app-watermark";
 import { env } from "@/env/client";
 import { ROOT_DOCUMENT_TITLE, documentTitleMeta } from "@/lib/start/document-title";
+import { documentFontLinks } from "@/lib/start/document-fonts";
 
 const ROOT_DESCRIPTION =
   "面向招聘场景的 AI 协同工作台，覆盖简历筛选、模拟面试与候选人评估全流程。AI Recruitment Copilot — your end-to-end hiring workflow.";
@@ -90,31 +91,7 @@ export const Route = createRootRouteWithContext<{
   head: ({ matches }) => ({
     links: [
       { href: "/favicon.ico", rel: "icon" },
-      {
-        crossOrigin: "anonymous",
-        href: "https://cdn.jsdelivr.net",
-        rel: "preconnect",
-      },
-      {
-        crossOrigin: "anonymous",
-        href: "https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Regular.min.css",
-        rel: "stylesheet",
-      },
-      {
-        crossOrigin: "anonymous",
-        href: "https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Medium.min.css",
-        rel: "stylesheet",
-      },
-      {
-        crossOrigin: "anonymous",
-        href: "https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Semibold.min.css",
-        rel: "stylesheet",
-      },
-      {
-        crossOrigin: "anonymous",
-        href: "https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Bold.min.css",
-        rel: "stylesheet",
-      },
+      ...documentFontLinks(env.NEXT_PUBLIC_ENABLE_REMOTE_FONTS),
     ],
     meta: [
       { charSet: "utf-8" },

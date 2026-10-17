@@ -19,6 +19,7 @@ describe("client env", () => {
     expect(env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN).toBe(false);
     expect(env.NEXT_PUBLIC_ENABLE_CANDIDATE_SPECIFIC_INTERVIEW_QUESTIONS).toBe(true);
     expect(env.NEXT_PUBLIC_ENABLE_INTERVIEW_RECORDING).toBe(true);
+    expect(env.NEXT_PUBLIC_ENABLE_REMOTE_FONTS).toBe(true);
     expect(env.NEXT_PUBLIC_ENABLE_INTERVIEW_DEVELOPER_DETAILS).toBe(false);
     expect(env.NEXT_PUBLIC_ENABLE_WATERMARK).toBe(true);
     expect(env.NEXT_PUBLIC_FORCE_APP_UPDATE_NOTICE).toBe(false);
@@ -50,6 +51,24 @@ describe("client env", () => {
     });
 
     expect(env.NEXT_PUBLIC_ENABLE_WATERMARK).toBe(false);
+  });
+
+  it("allows disabling remote fonts for deployments without reliable CDN access", () => {
+    const env = createClientEnv({
+      ...configuredEnv,
+      NEXT_PUBLIC_ENABLE_REMOTE_FONTS: "false",
+    });
+
+    expect(env.NEXT_PUBLIC_ENABLE_REMOTE_FONTS).toBe(false);
+  });
+
+  it("rejects invalid remote font switches", () => {
+    expect(() =>
+      createClientEnv({
+        ...configuredEnv,
+        NEXT_PUBLIC_ENABLE_REMOTE_FONTS: "sometimes",
+      }),
+    ).toThrow();
   });
 
   it("allows enabling interview developer details from public env", () => {
