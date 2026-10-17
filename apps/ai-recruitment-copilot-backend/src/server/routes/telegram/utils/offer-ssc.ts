@@ -1,13 +1,14 @@
 import type { ActionEvent, SlashCommandEvent } from "chat";
 import { z } from "zod";
 import {
-  completeOfferSscConfirmation,
   loadAuthorizedOfferSscContext,
   OfferDraftError,
   receiveOfferSscConfirmation,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
 import { buildTelegramOfferCard } from "./offer-ssc-card";
+import { handleTelegramOfferCompletionAction } from "./offer-ssc-completion";
+export { handleTelegramOfferScreenshot } from "./offer-ssc-completion";
 
 const telegramSender = z.object({
   id: z.number().int().positive(),
@@ -17,7 +18,7 @@ const privateChat = z.object({ id: z.number().int().positive(), type: z.literal(
 const commandMessage = z.object({ chat: privateChat, from: telegramSender });
 const callbackQuery = z.object({
   from: telegramSender,
-  message: z.object({ chat: privateChat }),
+  message: z.object({ chat: privateChat, message_id: z.number().int().positive() }),
 });
 const MAX_REVISION = 2_147_483_647;
 const bindingRequired = "请先在系统填写本人 TG 用户名，再私聊机器人发送 /start 完成绑定后重试。";
@@ -83,8 +84,14 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     await event.thread?.post("请使用本人账号私聊机器人处理 Offer。");
     return;
   }
-  const parsed = parseCallback(event.value);
-  if (!parsed || (event.actionId !== "osr" && event.actionId !== "osc")) {
+  const initialAction = event.actionId === "osr" || event.actionId === "osc";
+  const parsed = initialAction ? parseCallback(event.value) : null;
+  if (
+    (initialAction && !parsed) ||
+    (!initialAction &&
+      (!["osf", "osu", "osx"].includes(event.actionId) ||
+        !/^[0-9a-f]{32}$/u.test(event.value ?? "")))
+  ) {
     await event.thread.post("Offer 操作无效，请从系统重新打开。");
     return;
   }
@@ -97,10 +104,23 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       await event.thread.post(bindingRequired);
       return;
     }
+    if (event.actionId !== "osr") {
+      await handleTelegramOfferCompletionAction(
+        event,
+        {
+          actorUserId,
+          chatId: String(callback.data.message.chat.id),
+          messageId: callback.data.message.message_id,
+        },
+        parsed ?? undefined,
+      );
+      return;
+    }
+    if (!parsed) {
+      return;
+    }
     const context = await loadAuthorizedOfferSscContext({ actorUserId, draftId: parsed.draftId });
-    const transition =
-      event.actionId === "osr" ? receiveOfferSscConfirmation : completeOfferSscConfirmation;
-    const draft = await transition({
+    const draft = await receiveOfferSscConfirmation({
       actor: { id: actorUserId, role: context.actorRole },
       draftId: parsed.draftId,
       interviewRecordId: context.draft.interviewRecordId,

@@ -1,5 +1,6 @@
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { normalizeTelegramUsername } from "./utils/identity";
+import { resolveLedgerTelegramOfferActor } from "./ssc-recipients";
 
 /** Notification-only numeric recipients are deliberately not approval identities. */
 export async function resolveBoundTelegramOfferActor(input: {
@@ -21,6 +22,12 @@ export async function resolveBoundTelegramOfferActor(input: {
     limit: 2,
     where: { telegramChatId: input.telegramUserId },
   });
+  if (users.length === 0) {
+    return await resolveLedgerTelegramOfferActor({
+      telegramUserId: input.telegramUserId,
+      username,
+    });
+  }
   if (users.length !== 1) {
     return null;
   }

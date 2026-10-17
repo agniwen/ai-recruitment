@@ -8,6 +8,7 @@ import { buildTelegramOfferCard } from "@arc/ai-recruitment-copilot-backend/serv
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import { buildCandidateDetailUrl } from "./candidate-stage-notification";
 import type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
+import { listSourceSscTelegramRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-recipients";
 
 export type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
 
@@ -165,24 +166,30 @@ export async function getOfferSscNotificationTargets(
   ) {
     return [];
   }
-  const profiles = await db
-    .select({
-      banned: user.banned,
-      organizationId: member.organizationId,
-      telegram: user.telegram,
-      telegramBoundUsername: user.telegramBoundUsername,
-      telegramChatId: user.telegramChatId,
-      userId: user.id,
-    })
-    .from(member)
-    .innerJoin(user, eq(user.id, member.userId))
-    .where(
-      and(
-        eq(member.organizationId, input.organizationId),
-        input.event === "pending" ? undefined : eq(user.id, offer.createdBy ?? ""),
-      ),
-    )
-    .orderBy(asc(user.id));
+  const profiles =
+    input.event === "pending"
+      ? await listSourceSscTelegramRecipients({
+          interviewRecordId: input.interviewRecordId,
+          organizationId: input.organizationId,
+        })
+      : await db
+          .select({
+            banned: user.banned,
+            organizationId: member.organizationId,
+            telegram: user.telegram,
+            telegramBoundUsername: user.telegramBoundUsername,
+            telegramChatId: user.telegramChatId,
+            userId: user.id,
+          })
+          .from(member)
+          .innerJoin(user, eq(user.id, member.userId))
+          .where(
+            and(
+              eq(member.organizationId, input.organizationId),
+              eq(user.id, offer.createdBy ?? ""),
+            ),
+          )
+          .orderBy(asc(user.id));
   const organization = await db.query.organization.findFirst({
     columns: { slug: true },
     where: { id: input.organizationId },

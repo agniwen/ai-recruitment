@@ -194,6 +194,12 @@ export interface OfferDraftRecord {
   sscReceivedAt?: string | null;
   sscCompletedBy?: string | null;
   sscCompletedAt?: string | null;
+  sscCompletionAttachment?: {
+    filename: string;
+    mediaType: string;
+    revision: number;
+    size: number;
+  } | null;
   baseSalary: number;
   currency: string;
   bonus: number | null;
@@ -210,3 +216,4 @@ export interface OfferDraftRecord {
 }
 
 export const MAX_OFFER_APPROVAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const MAX_SSC_COMPLETION_SCREENSHOT_BYTES = 10 * 1024 * 1024;

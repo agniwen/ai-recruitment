@@ -10,6 +10,7 @@
 
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { deleteObject } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
   studioHumanInterviewRound,
   studioInterview,
@@ -84,6 +85,15 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
     sentAt: serializeDate(row.sentAt),
     sscCompletedAt: serializeDate(row.sscCompletedAt),
     sscCompletedBy: row.sscCompletedBy,
+    sscCompletionAttachment:
+      row.sscCompletionAttachment?.revision === row.sscRevision
+        ? {
+            filename: row.sscCompletionAttachment.filename,
+            mediaType: row.sscCompletionAttachment.mediaType,
+            revision: row.sscCompletionAttachment.revision,
+            size: row.sscCompletionAttachment.size,
+          }
+        : null,
     sscConfirmationStatus: row.sscConfirmationStatus,
     sscReceivedAt: serializeDate(row.sscReceivedAt),
     sscReceivedBy: row.sscReceivedBy,
@@ -147,6 +157,7 @@ function resetSscConfirmation(row: typeof studioOfferDraft.$inferSelect) {
     : {
         sscCompletedAt: null,
         sscCompletedBy: null,
+        sscCompletionAttachment: null,
         sscConfirmationStatus: "pending" as const,
         sscReceivedAt: null,
         sscReceivedBy: null,
@@ -270,7 +281,7 @@ export async function loadCurrentOfferSscState(input: {
   return state ?? null;
 }
 
-interface OfferSscActionInput {
+export interface OfferSscActionInput {
   draftId: string;
   interviewRecordId: string;
   organizationId: string;
@@ -279,8 +290,15 @@ interface OfferSscActionInput {
   source?: "manual" | "telegram";
 }
 
+export interface OfferSscCompletionInput extends OfferSscActionInput {
+  internalApprovalConfirmed: true;
+  completionAttachment?: NonNullable<
+    (typeof studioOfferDraft.$inferInsert)["sscCompletionAttachment"]
+  >;
+}
+
 async function transitionOfferSscConfirmation(
-  input: OfferSscActionInput,
+  input: OfferSscActionInput & Partial<Pick<OfferSscCompletionInput, "completionAttachment">>,
   action: "receive" | "complete",
 ) {
   const context = await loadAuthorizedOfferSscContext({ ...input, actorUserId: input.actor.id });
@@ -344,6 +362,7 @@ async function transitionOfferSscConfirmation(
           : {
               sscCompletedAt: now,
               sscCompletedBy: input.actor.id,
+              sscCompletionAttachment: input.completionAttachment ?? null,
               sscConfirmationStatus: "completed",
               updatedAt: now,
             },
@@ -356,6 +375,10 @@ async function transitionOfferSscConfirmation(
     await recordCandidateActivityInTransaction(tx, {
       action: action === "receive" ? "offer_ssc_received" : "offer_ssc_completed",
       detail: {
+        ...(action === "complete" && {
+          hasApprovalScreenshot: Boolean(input.completionAttachment),
+          internalApprovalConfirmed: true,
+        }),
         channel: input.source ?? "manual",
         draftId: existing.id,
         revision: existing.sscRevision,
@@ -379,19 +402,74 @@ async function transitionOfferSscConfirmation(
   if (result.changed) {
     invalidateStudioInterviewCaches(input.organizationId);
   }
-  return result.draft;
+  return result;
 }
 
 export async function receiveOfferSscConfirmation(
   input: OfferSscActionInput,
 ): Promise<OfferDraftRecord> {
-  return await transitionOfferSscConfirmation(input, "receive");
+  const result = await transitionOfferSscConfirmation(input, "receive");
+  return result.draft;
+}
+
+export async function completeOfferSscConfirmationWithEvidence(input: OfferSscCompletionInput) {
+  if (input.internalApprovalConfirmed !== true) {
+    throw new OfferDraftError("请确认已经完成内部审批。", 400);
+  }
+  if (input.completionAttachment && input.completionAttachment.revision !== input.revision) {
+    throw new OfferDraftError("审批截图与当前 Offer 修订不一致，请重新上传。", 409);
+  }
+  const result = await transitionOfferSscConfirmation(input, "complete");
+  return {
+    attachmentUsed: result.changed && Boolean(input.completionAttachment),
+    draft: result.draft,
+  };
 }
 
 export async function completeOfferSscConfirmation(
-  input: OfferSscActionInput,
+  input: OfferSscCompletionInput,
 ): Promise<OfferDraftRecord> {
-  return await transitionOfferSscConfirmation(input, "complete");
+  const result = await completeOfferSscConfirmationWithEvidence(input);
+  return result.draft;
+}
+
+export async function loadOfferSscCompletionAttachment(input: {
+  actorUserId: string;
+  draftId: string;
+  interviewRecordId: string;
+  organizationId: string;
+}) {
+  const context = await loadAuthorizedOfferSscContext(input);
+  if (["deleted", "superseded"].includes(context.draft.status)) {
+    return null;
+  }
+  const [row] = await db
+    .select({
+      attachment: studioOfferDraft.sscCompletionAttachment,
+      revision: studioOfferDraft.sscRevision,
+    })
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.id, input.draftId),
+        eq(studioOfferDraft.organizationId, input.organizationId),
+        eq(studioOfferDraft.interviewRecordId, input.interviewRecordId),
+        eq(studioOfferDraft.sscConfirmationStatus, "completed"),
+      ),
+    )
+    .limit(1);
+  return row?.attachment && row.attachment.revision === row.revision ? row.attachment : null;
+}
+
+async function cleanupCompletionAttachment(storageKey: string | null | undefined) {
+  if (!storageKey) {
+    return;
+  }
+  try {
+    await deleteObject(storageKey);
+  } catch (error) {
+    console.error("Failed to delete obsolete SSC completion screenshot", error);
+  }
 }
 
 // 列出候选人所有 offer 版本，按 version desc（最新在前）。
@@ -454,12 +532,12 @@ export async function loadOfferApprovalAttachment(
   return row?.approvalAttachment ?? null;
 }
 
-export function removeOfferApprovalAttachment(
+export async function removeOfferApprovalAttachment(
   draftId: string,
   interviewRecordId: string,
   organizationId: string,
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const candidate = await lockCandidateForOffer(tx, interviewRecordId, organizationId);
     const [row] = await tx
       .select()
@@ -496,8 +574,13 @@ export function removeOfferApprovalAttachment(
         revision: row.sscRevision + 1,
       });
     }
-    return row.approvalAttachment;
+    return {
+      attachment: row.approvalAttachment,
+      obsoleteCompletionKey: row.sscCompletionAttachment?.storageKey,
+    };
   });
+  await cleanupCompletionAttachment(result?.obsoleteCompletionKey);
+  return result?.attachment ?? null;
 }
 
 export interface CreateDraftOptions {
@@ -616,7 +699,7 @@ export interface EditDraftOptions {
   approvalAttachment?: (typeof studioOfferDraft.$inferInsert)["approvalAttachment"];
 }
 
-export function editOfferDraftWithAttachment({
+export async function editOfferDraftWithAttachment({
   draftId,
   organizationId,
   input,
@@ -631,7 +714,7 @@ export function editOfferDraftWithAttachment({
   // 防止两名 HR 同时编辑同一份草稿造成 (input ?? existing) merge 字段相互覆盖。
   // Transaction + FOR UPDATE: serialize read → validate → merge → write so
   // concurrent edits to the same draft can't lose each other's writes.
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const candidate = await lockDraftCandidate(tx, draftId, organizationId);
     const [existing] = await tx
       .select()
@@ -698,10 +781,13 @@ export function editOfferDraftWithAttachment({
       });
     }
     return {
+      obsoleteCompletionAttachment: changed ? existing.sscCompletionAttachment : null,
       previousAttachment: approvalAttachment === undefined ? null : existing.approvalAttachment,
       updated: toRecord(updated),
     };
   });
+  await cleanupCompletionAttachment(result.obsoleteCompletionAttachment?.storageKey);
+  return { previousAttachment: result.previousAttachment, updated: result.updated };
 }
 
 export async function editOfferDraft(options: EditDraftOptions): Promise<OfferDraftRecord> {

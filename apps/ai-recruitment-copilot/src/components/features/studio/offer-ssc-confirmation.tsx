@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import {
   getOfferDraftStatusMeta,
@@ -15,6 +15,9 @@ import {
 } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { OfferSscCompleteDialog } from "./offer-ssc-complete-dialog";
+
+type OfferSscAction = { action: "receive" } | { action: "complete"; file: File | null };
 
 function getOfferSscActionState(draft: OfferDraftRecord, canReceive: boolean, canConfirm: boolean) {
   const status = draft.sscConfirmationStatus ?? null;
@@ -64,25 +67,52 @@ export function useOfferSscConfirmation({
     queryKey: ["offer-ssc-telegram-link", slug, candidateId, draft.id],
   });
   const mutation = useMutation({
-    mutationFn: (action: "receive" | "complete") => {
+    mutationFn: (inputAction: OfferSscAction) => {
       const input = { revision: draft.sscRevision ?? 1 };
-      return action === "receive"
+      return inputAction.action === "receive"
         ? receiveOfferSscConfirmation(slug, candidateId, draft.id, input)
-        : completeOfferSscConfirmation(slug, candidateId, draft.id, input);
+        : completeOfferSscConfirmation(
+            slug,
+            candidateId,
+            draft.id,
+            { ...input, internalApprovalConfirmed: true },
+            inputAction.file,
+          );
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "SSC确认操作失败"),
-    onSuccess: async (_updated, action) => {
+    onSuccess: async (_updated, { action }) => {
       await onSaved();
       toast.success(action === "receive" ? "SSC已接收，当前 Offer 确认中" : "SSC已完成确认");
     },
   });
   return {
     ...actions,
+    canConfirm: !disabled && actions.canConfirm,
+    canReceive: !disabled && actions.canReceive,
+    complete: (file: File | null) => {
+      if (disabled || !actions.canConfirm || mutation.isPending) {
+        return Promise.reject(new Error("当前 Offer 无法完成 SSC 确认，请刷新后重试。"));
+      }
+      return mutation.mutateAsync({ action: "complete", file });
+    },
+    contextKey: JSON.stringify([
+      slug,
+      candidateId,
+      draft.id,
+      draft.version,
+      draft.sscRevision ?? 1,
+      draft.status,
+      actions.status,
+      canConfirm,
+      Boolean(disabled),
+    ]),
     error: mutation.error,
     isPending: mutation.isPending,
-    mutate: mutation.mutate,
-    pendingAction: mutation.isPending ? mutation.variables : null,
-    telegramUrl: actions.canReceive || actions.canConfirm ? (telegramLink?.url ?? null) : null,
+    pendingAction: mutation.isPending ? mutation.variables?.action : null,
+    receive: () => mutation.mutate({ action: "receive" }),
+    showActions: !disabled && actions.showActions,
+    telegramUrl:
+      !disabled && (actions.canReceive || actions.canConfirm) ? (telegramLink?.url ?? null) : null,
   };
 }
 
@@ -138,6 +168,10 @@ export function OfferSscActions({
   isBusy: boolean;
 }) {
   const id = useId();
+  const [openContext, setOpenContext] = useState<string | null>(null);
+  useEffect(() => {
+    setOpenContext(null);
+  }, [confirmation.contextKey]);
   if (!confirmation.showActions) {
     return null;
   }
@@ -160,7 +194,7 @@ export function OfferSscActions({
         <Button
           aria-describedby={confirmation.receiveDisabledReason ? `${id}-receive-reason` : undefined}
           disabled={isBusy || !confirmation.canReceive}
-          onClick={() => confirmation.mutate("receive")}
+          onClick={confirmation.receive}
           size="sm"
         >
           {confirmation.pendingAction === "receive" ? "接收中…" : "SSC接收确认"}
@@ -175,7 +209,7 @@ export function OfferSscActions({
         <Button
           aria-describedby={confirmation.confirmDisabledReason ? `${id}-confirm-reason` : undefined}
           disabled={isBusy || !confirmation.canConfirm}
-          onClick={() => confirmation.mutate("complete")}
+          onClick={() => setOpenContext(confirmation.contextKey)}
           size="sm"
         >
           {confirmation.pendingAction === "complete" ? "确认中…" : "SSC完成确认"}
@@ -186,6 +220,13 @@ export function OfferSscActions({
           </p>
         ) : null}
       </div>
+      {openContext === confirmation.contextKey && confirmation.canConfirm ? (
+        <OfferSscCompleteDialog
+          key={confirmation.contextKey}
+          onClose={() => setOpenContext(null)}
+          onConfirm={confirmation.complete}
+        />
+      ) : null}
     </>
   );
 }

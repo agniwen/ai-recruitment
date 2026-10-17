@@ -1114,6 +1114,16 @@ export const telegramRecipientBinding = pgTable("telegram_recipient_binding", {
   username: text("username").unique(),
 });
 
+// Approval identities keep a numeric Telegram account pinned independently of mutable handles.
+export const sscTelegramIdentity = pgTable("ssc_telegram_identity", {
+  chatId: text("chat_id").notNull().unique("ssc_telegram_identity_chat_id_uq"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  username: text("username").notNull(),
+});
+
 // External requesters can receive bot messages without a login account.
 export const telegramRequesterBinding = pgTable(
   "telegram_requester_binding",
@@ -1870,6 +1880,13 @@ export const studioOfferDraft = pgTable(
     sentByRole: text("sent_by_role"),
     sscCompletedAt: timestamp("ssc_completed_at", { withTimezone: true }),
     sscCompletedBy: text("ssc_completed_by").references(() => user.id, { onDelete: "set null" }),
+    sscCompletionAttachment: jsonb("ssc_completion_attachment").$type<{
+      filename: string;
+      mediaType: string;
+      revision: number;
+      size: number;
+      storageKey: string;
+    } | null>(),
     // NULL preserves historical Offers; every newly created Offer starts pending.
     sscConfirmationStatus: text("ssc_confirmation_status").$type<OfferSscConfirmationStatus>(),
     sscReceivedAt: timestamp("ssc_received_at", { withTimezone: true }),

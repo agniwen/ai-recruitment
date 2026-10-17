@@ -88,12 +88,16 @@ export function getTelegramBot(): TelegramBot {
     await openTelegramOffer(event, event.text?.trim() ?? "");
   });
 
-  bot.onAction(["osr", "osc"], async (event) => {
+  bot.onAction(["osr", "osc", "osf", "osu", "osx"], async (event) => {
     const { handleTelegramOfferAction } = await import("./offer-ssc");
     await handleTelegramOfferAction(event);
   });
 
-  bot.onDirectMessage(async (thread) => {
+  bot.onDirectMessage(async (thread, message) => {
+    const { handleTelegramOfferScreenshot } = await import("./offer-ssc");
+    if (await handleTelegramOfferScreenshot(thread, message)) {
+      return;
+    }
     await thread.post("发送 /start 即可关注并接收通知。");
   });
 

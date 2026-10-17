@@ -171,23 +171,12 @@ describe("offerDraftsRouter", () => {
   });
 
   it("declares CRUD-specific offer permissions", () => {
-    expect(mocks.permissionCalls).toEqual([
-      ["offer", "read"],
-      ["offer", "read"],
-      ["offer", "create"],
-      ["offer", "create"],
-      ["offer", "read"],
-      ["offer", "update"],
-      ["offer", "update"],
-      ["offer", "update"],
-      ["offer", "read"],
-      ["offer", "receive"],
-      ["offer", "confirm"],
-      ["offer", "update"],
-      ["offer", "update"],
-      ["offer", "delete"],
-      ["offer", "delete"],
-    ]);
+    expect(mocks.permissionCalls.every(([resource]) => resource === "offer")).toBe(true);
+    const counts: Record<string, number> = {};
+    for (const [, action] of mocks.permissionCalls) {
+      counts[action] = (counts[action] ?? 0) + 1;
+    }
+    expect(counts).toEqual({ confirm: 2, create: 2, delete: 2, read: 5, receive: 1, update: 5 });
   });
 
   it("lists drafts through the mounted candidate path", async () => {
@@ -215,275 +204,116 @@ describe("offerDraftsRouter", () => {
     expect(mocks.createOfferDraft).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    "rejects immediate sending before saving an Offer (attachment=%s)",
-    async (withAttachment) => {
-      const input = { baseSalary: 30_000, position: "工程师", sendImmediately: true };
-      const form = new FormData();
-      form.set("offer", JSON.stringify(input));
-      form.set("file", new File(["image"], "approval.png", { type: "image/png" }));
-      const response = await makeApp().request(
-        `/${RECORD_ID}/offer-drafts${withAttachment ? "/with-attachment" : ""}`,
-        {
-          body: withAttachment ? form : JSON.stringify(input),
-          headers: withAttachment ? undefined : { "Content-Type": "application/json" },
-          method: "POST",
-        },
-      );
-      expect(response.status).toBe(400);
-      expect(mocks.createOfferDraft).not.toHaveBeenCalled();
-      expect(mocks.putObjectBytes).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each([false, true])(
-    "returns a DAO validation error when a candidate closes after HTTP preflight (attachment=%s)",
-    async (withAttachment) => {
-      mocks.limit.mockResolvedValue([{ id: RECORD_ID, pipelineStage: "offer" }]);
-      mocks.createOfferDraft.mockRejectedValue(
-        new OfferDraftError("已结案候选人不能创建 Offer。", 400),
-      );
-      const input = { baseSalary: 30_000, position: "工程师" };
-      const form = new FormData();
-      form.set("offer", JSON.stringify(input));
-      form.set("file", new File(["image"], "approval.png", { type: "image/png" }));
-      const response = await makeApp().request(
-        `/${RECORD_ID}/offer-drafts${withAttachment ? "/with-attachment" : ""}`,
-        {
-          body: withAttachment ? form : JSON.stringify(input),
-          headers: withAttachment ? undefined : { "Content-Type": "application/json" },
-          method: "POST",
-        },
-      );
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ error: "已结案候选人不能创建 Offer。" });
-      if (withAttachment) {
-        expect(mocks.deleteObject).toHaveBeenCalledWith("offer-approval-attachments/file.png");
-      }
-    },
-  );
-
-  it("stores a selected image on the created Offer and serves it to readers", async () => {
-    const offer = {
-      approvalAttachment: { filename: "ssc.png", mediaType: "image/png", size: 3 },
-      id: "offer-1",
-      interviewRecordId: RECORD_ID,
-      position: "高级前端",
-      version: 1,
-    };
-    mocks.limit.mockResolvedValue([{ id: RECORD_ID, pipelineStage: "offer" }]);
-    mocks.createOfferDraft.mockResolvedValue(offer);
-    mocks.loadOfferApprovalAttachment.mockResolvedValue({
-      ...offer.approvalAttachment,
-      storageKey: "offer-approval-attachments/file.png",
-    });
-    mocks.getObjectStream.mockResolvedValue({
-      body: new ReadableStream({
-        start: (controller) => {
-          controller.enqueue(new Uint8Array([1, 2, 3]));
-          controller.close();
-        },
-      }),
-      contentLength: 3,
-    });
-    const form = new FormData();
-    form.set("offer", JSON.stringify({ baseSalary: 30_000, position: offer.position }));
-    form.set("file", new File([new Uint8Array([1, 2, 3])], "ssc.png", { type: "image/png" }));
-
-    const created = await makeApp().request(`/${RECORD_ID}/offer-drafts/with-attachment`, {
-      body: form,
+  it("rejects immediate sending before saving a JSON Offer", async () => {
+    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts`, {
+      body: JSON.stringify({ baseSalary: 30_000, position: "工程师", sendImmediately: true }),
+      headers: { "Content-Type": "application/json" },
       method: "POST",
     });
-
-    expect(created.status).toBe(200);
-    expect(mocks.createOfferDraft).toHaveBeenCalledWith(
-      expect.objectContaining({
-        approvalAttachment: {
-          filename: "ssc.png",
-          mediaType: "image/png",
-          size: 3,
-          storageKey: "offer-approval-attachments/file.png",
-        },
-        interviewRecordId: RECORD_ID,
-        organizationId: ORG_ID,
-      }),
-    );
-    const response = await makeApp().request(
-      `/${RECORD_ID}/offer-drafts/offer-1/approval-attachment`,
-    );
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(response.headers.get("Content-Type")).toBe("image/png");
-    expect(response.headers.get("Content-Disposition")).toContain("inline");
-    expect(mocks.loadOfferApprovalAttachment).toHaveBeenCalledWith("offer-1", RECORD_ID, ORG_ID);
-  });
-
-  it("keeps zip attachments downloadable", async () => {
-    mocks.limit.mockResolvedValue([{ id: RECORD_ID, pipelineStage: "offer" }]);
-    mocks.createOfferDraft.mockResolvedValue({ id: "offer-zip", position: "工程师", version: 2 });
-    mocks.loadOfferApprovalAttachment.mockResolvedValue({
-      filename: "ssc-review.zip",
-      mediaType: "application/octet-stream",
-      size: 3,
-      storageKey: "offer-approval-attachments/file.zip",
-    });
-    mocks.getObjectStream.mockResolvedValue({
-      body: new ReadableStream({ start: (controller) => controller.close() }),
-    });
-    const form = new FormData();
-    form.set("offer", JSON.stringify({ baseSalary: 30_000, position: "工程师" }));
-    form.set(
-      "file",
-      new File([new Uint8Array([1, 2, 3])], "ssc-review.zip", { type: "application/zip" }),
-    );
-
-    const created = await makeApp().request(`/${RECORD_ID}/offer-drafts/with-attachment`, {
-      body: form,
-      method: "POST",
-    });
-    expect(created.status).toBe(200);
-    expect(mocks.createOfferDraft).toHaveBeenCalledWith(
-      expect.objectContaining({
-        approvalAttachment: expect.objectContaining({
-          filename: "ssc-review.zip",
-          mediaType: "application/octet-stream",
-        }),
-      }),
-    );
-
-    const response = await makeApp().request(
-      `/${RECORD_ID}/offer-drafts/offer-zip/approval-attachment`,
-    );
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Disposition")).toContain("attachment;");
-    expect(response.headers.get("Content-Type")).toBe("application/octet-stream");
-  });
-
-  it("rejects empty approval attachments before creating an Offer", async () => {
-    const form = new FormData();
-    form.set("offer", JSON.stringify({ baseSalary: 30_000, position: "高级前端" }));
-    form.set("file", new File([], "empty.zip", { type: "application/zip" }));
-
-    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts/with-attachment`, {
-      body: form,
-      method: "POST",
-    });
-
     expect(response.status).toBe(400);
     expect(mocks.createOfferDraft).not.toHaveBeenCalled();
     expect(mocks.putObjectBytes).not.toHaveBeenCalled();
   });
 
-  it("removes a saved attachment within the current candidate and organization", async () => {
-    const attachment = {
-      filename: "ssc.png",
-      mediaType: "image/png",
-      size: 3,
-      storageKey: "offer-approval-attachments/file.png",
-    };
-    mocks.removeOfferApprovalAttachment.mockResolvedValue(attachment);
-
-    const response = await makeApp().request(
-      `/${RECORD_ID}/offer-drafts/offer-1/approval-attachment`,
-      { method: "DELETE" },
+  it("returns a DAO validation error when a candidate closes after JSON creation preflight", async () => {
+    mocks.limit.mockResolvedValue([{ id: RECORD_ID, pipelineStage: "offer" }]);
+    mocks.createOfferDraft.mockRejectedValue(
+      new OfferDraftError("已结案候选人不能创建 Offer。", 400),
     );
-
-    expect(response.status).toBe(200);
-    expect(mocks.removeOfferApprovalAttachment).toHaveBeenCalledWith("offer-1", RECORD_ID, ORG_ID);
-    expect(mocks.deleteObject).toHaveBeenCalledWith(attachment.storageKey);
-    expect(mocks.recordCandidateActivity).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "offer_draft_updated",
-        detail: { approvalAttachmentRemoved: true, draftId: "offer-1", filename: "ssc.png" },
-        interviewRecordId: RECORD_ID,
-        organizationId: ORG_ID,
-      }),
-    );
-    expect(mocks.invalidateStudioInterviewCaches).toHaveBeenCalledWith(ORG_ID);
+    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts`, {
+      body: JSON.stringify({ baseSalary: 30_000, position: "工程师" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "已结案候选人不能创建 Offer。" });
   });
 
-  it("returns 404 when the saved attachment does not exist", async () => {
-    mocks.removeOfferApprovalAttachment.mockResolvedValue(null);
+  it.each([
+    ["POST", "/with-attachment", "new"],
+    ["POST", "/with-attachment", "empty"],
+    ["PATCH", "/offer-1/with-attachment", "replace"],
+    ["PATCH", "/offer-1/with-attachment", "remove"],
+    ["DELETE", "/offer-1/approval-attachment", "delete"],
+  ])(
+    "retires legacy ODC attachment writes without touching stored data: %s %s (%s)",
+    async (method, path, mode) => {
+      const form = new FormData();
+      form.set("offer", JSON.stringify({ baseSalary: 30_000, position: "工程师" }));
+      if (mode === "remove") {
+        form.set("removeAttachment", "true");
+      } else {
+        form.set(
+          "file",
+          new File([mode === "empty" ? "" : "image"], "legacy.png", { type: "image/png" }),
+        );
+      }
+      const response = await makeApp().request(`/${RECORD_ID}/offer-drafts${path}`, {
+        body: method === "DELETE" ? undefined : form,
+        method,
+      });
+      expect(response.status).toBe(410);
+      expect(mocks.putObjectBytes).not.toHaveBeenCalled();
+      expect(mocks.deleteObject).not.toHaveBeenCalled();
+      expect(mocks.createOfferDraft).not.toHaveBeenCalled();
+      expect(mocks.editOfferDraftWithAttachment).not.toHaveBeenCalled();
+      expect(mocks.removeOfferApprovalAttachment).not.toHaveBeenCalled();
+      expect(mocks.recordCandidateActivity).not.toHaveBeenCalled();
+    },
+  );
 
-    const response = await makeApp().request(
-      `/${RECORD_ID}/offer-drafts/offer-1/approval-attachment`,
-      { method: "DELETE" },
-    );
+  it.each([
+    ["historical.png", "image/png", "inline"],
+    ["historical.zip", "application/octet-stream", "attachment;"],
+  ])(
+    "preserves private reads of historical ODC attachments: %s",
+    async (filename, mediaType, disposition) => {
+      mocks.loadOfferApprovalAttachment.mockResolvedValue({
+        filename,
+        mediaType,
+        size: 3,
+        storageKey: "private/historical",
+      });
+      mocks.getObjectStream.mockResolvedValue({
+        body: new ReadableStream({
+          start: (controller) => {
+            controller.enqueue(new Uint8Array([1, 2, 3]));
+            controller.close();
+          },
+        }),
+        contentLength: 3,
+      });
+      const response = await makeApp().request(
+        `/${RECORD_ID}/offer-drafts/offer-1/approval-attachment`,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+      expect(response.headers.get("Content-Type")).toBe(mediaType);
+      expect(response.headers.get("Content-Disposition")).toContain(disposition);
+      expect(mocks.loadOfferApprovalAttachment).toHaveBeenCalledWith("offer-1", RECORD_ID, ORG_ID);
+    },
+  );
 
-    expect(response.status).toBe(404);
-    expect(mocks.deleteObject).not.toHaveBeenCalled();
-    expect(mocks.recordCandidateActivity).not.toHaveBeenCalled();
-  });
-
-  it("replaces an attachment together with edited Offer fields", async () => {
-    const previousAttachment = {
-      filename: "old.png",
-      mediaType: "image/png",
-      size: 3,
-      storageKey: "offer-approval-attachments/old.png",
-    };
-    mocks.loadDraftById.mockResolvedValue({ id: "offer-1", interviewRecordId: RECORD_ID });
-    mocks.editOfferDraftWithAttachment.mockResolvedValue({
-      previousAttachment,
-      updated: { id: "offer-1", interviewRecordId: RECORD_ID, position: "新职位", version: 1 },
-    });
-    const form = new FormData();
-    form.set("offer", JSON.stringify({ baseSalary: 31_000, position: "新职位" }));
-    form.set("file", new File(["new"], "new.png", { type: "image/png" }));
-
-    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts/offer-1/with-attachment`, {
-      body: form,
-      method: "PATCH",
-    });
-
-    expect(response.status).toBe(200);
-    expect(mocks.editOfferDraftWithAttachment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        approvalAttachment: expect.objectContaining({ filename: "new.png" }),
-        draftId: "offer-1",
-        input: expect.objectContaining({ baseSalary: 31_000, position: "新职位" }),
-        organizationId: ORG_ID,
-      }),
-    );
-    expect(mocks.deleteObject).toHaveBeenCalledWith(previousAttachment.storageKey);
-  });
-
-  it("removes an attachment when saving the edited Offer", async () => {
-    mocks.loadDraftById.mockResolvedValue({ id: "offer-1", interviewRecordId: RECORD_ID });
-    mocks.editOfferDraftWithAttachment.mockResolvedValue({
-      previousAttachment: { storageKey: "offer-approval-attachments/old.png" },
-      updated: { id: "offer-1", interviewRecordId: RECORD_ID, position: "工程师", version: 1 },
-    });
-    const form = new FormData();
-    form.set("offer", JSON.stringify({ baseSalary: 30_000, position: "工程师" }));
-    form.set("removeAttachment", "true");
-
-    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts/offer-1/with-attachment`, {
-      body: form,
-      method: "PATCH",
-    });
-
-    expect(response.status).toBe(200);
-    expect(mocks.editOfferDraftWithAttachment).toHaveBeenCalledWith(
-      expect.objectContaining({ approvalAttachment: null }),
-    );
-    expect(mocks.putObjectBytes).not.toHaveBeenCalled();
-  });
-
-  it("cleans up a replacement upload if editing the draft fails", async () => {
-    mocks.loadDraftById.mockResolvedValue({ id: "offer-1", interviewRecordId: RECORD_ID });
-    mocks.editOfferDraftWithAttachment.mockRejectedValue(new Error("database unavailable"));
-    const form = new FormData();
-    form.set("offer", JSON.stringify({ baseSalary: 30_000, position: "工程师" }));
-    form.set("file", new File(["new"], "new.png", { type: "image/png" }));
-
-    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts/offer-1/with-attachment`, {
-      body: form,
-      method: "PATCH",
-    });
-    expect(response.status).toBe(500);
-    expect(mocks.deleteObject).toHaveBeenCalledWith("offer-approval-attachments/file.png");
-  });
+  it.each(["header", "stream"])(
+    "rejects an oversized screenshot request before form parsing: %s",
+    async (mode) => {
+      const oversized = 10 * 1024 * 1024 + 64 * 1024 + 1;
+      const response = await makeApp().request(
+        `/${RECORD_ID}/offer-drafts/offer-1/ssc/complete-with-attachment`,
+        {
+          body: mode === "header" ? "not parsed" : new Uint8Array(oversized),
+          headers: {
+            "Content-Type": "application/octet-stream",
+            ...(mode === "header" ? { "Content-Length": String(oversized) } : {}),
+          },
+          method: "POST",
+        },
+      );
+      expect(response.status).toBe(413);
+      expect(mocks.putObjectBytes).not.toHaveBeenCalled();
+      expect(mocks.completeOfferSscConfirmation).not.toHaveBeenCalled();
+    },
+  );
 
   it("preserves audit and cache side effects across offer mutations", async () => {
     const offer = {

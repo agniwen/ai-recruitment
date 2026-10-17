@@ -1,26 +1,34 @@
 import { eq } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
-  interviewAuditLog,
-  member,
-  organization,
-  organizationRole,
-  recruitingGroup,
-  recruitingGroupMember,
-  studioInterview,
-  studioOfferDraft,
-  user,
-} from "@arc/db-schema/schema";
-import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
+  buildOfferApprovalAttachmentKey,
+  getObjectStream,
+  putObjectBytes,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
+import { interviewAuditLog, studioInterview, studioOfferDraft } from "@arc/db-schema/schema";
 import {
+  completeOfferSscConfirmation,
   createOfferDraft,
   editOfferDraft,
   editOfferDraftWithAttachment,
   removeOfferApprovalAttachment,
   sendOfferDraft,
 } from "../dao/offer-drafts";
-import { offerDraftsRouter } from "../routes/offer-drafts/route";
+import {
+  CANDIDATE,
+  CONFIRM_ONLY_SSC,
+  FIRST_SSC,
+  FORBIDDEN_USER,
+  INPUT,
+  ORG,
+  RECEIVE_ONLY_SSC,
+  SECOND_SSC,
+  makeApp,
+  newOffer,
+  requestAction,
+  setupOfferSscFixture,
+} from "./offer-ssc-fixture";
 
 const notificationMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
 vi.mock("../dao/offer-ssc-notification-outbox", () => ({
@@ -47,91 +55,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
   safeUpdateTag: vi.fn(),
 }));
 
-const ORG = "test_offer_ssc_org";
-const CANDIDATE = "test_offer_ssc_candidate";
-const FIRST_SSC = "test_offer_ssc_first";
-const SECOND_SSC = "test_offer_ssc_second";
-const FORBIDDEN_USER = "test_offer_ssc_forbidden";
-const RECEIVE_ONLY_SSC = "test_offer_ssc_receive_only";
-const CONFIRM_ONLY_SSC = "test_offer_ssc_confirm_only";
-const FIXTURE_MEMBERS = [
-  { id: FIRST_SSC, role: "owner" },
-  { id: SECOND_SSC, role: "owner" },
-  { id: FORBIDDEN_USER, role: "noAccess" },
-  { id: RECEIVE_ONLY_SSC, role: "sscReceiveOnly" },
-  { id: CONFIRM_ONLY_SSC, role: "sscConfirmOnly" },
-];
-const INPUT = { baseSalary: 30_000, currency: "CNY", position: "工程师" };
-
-async function cleanup() {
-  await db.delete(organization).where(eq(organization.id, ORG));
-  for (const { id } of FIXTURE_MEMBERS) {
-    await db.delete(user).where(eq(user.id, id));
-  }
-}
-
-beforeAll(async () => {
-  await cleanup();
-  await db.insert(organization).values({ id: ORG, name: "Offer SSC test", slug: ORG });
-  await db.insert(organizationRole).values([
-    {
-      id: `${ORG}_receive_role`,
-      name: "SSC 接收确认测试角色",
-      organizationId: ORG,
-      permission: JSON.stringify({ offer: ["read", "receive"] }),
-      role: "sscReceiveOnly",
-    },
-    {
-      id: `${ORG}_confirm_role`,
-      name: "SSC 完成确认测试角色",
-      organizationId: ORG,
-      permission: JSON.stringify({ offer: ["read", "confirm"] }),
-      role: "sscConfirmOnly",
-    },
-  ]);
-  for (const { id, role } of FIXTURE_MEMBERS) {
-    await db.insert(user).values({ email: `${id}@example.com`, id, name: id });
-    await db.insert(member).values({
-      id: `${id}_membership`,
-      organizationId: ORG,
-      role,
-      userId: id,
-    });
-  }
-  const groupId = `${ORG}_recruiting_group`;
-  await db.insert(recruitingGroup).values({
-    id: groupId,
-    name: "SSC 可见范围测试组",
-    organizationId: ORG,
-  });
-  // Both custom roles can see the creator's candidate through the real group
-  // hierarchy; neither relies on owner/admin visibility or an ODC source map.
-  await db.insert(recruitingGroupMember).values([
-    { groupId, id: `${groupId}_creator`, organizationId: ORG, role: "hr", userId: FIRST_SSC },
-    {
-      groupId,
-      id: `${groupId}_receiver`,
-      organizationId: ORG,
-      role: "recruitingLead",
-      userId: RECEIVE_ONLY_SSC,
-    },
-    {
-      groupId,
-      id: `${groupId}_confirmer`,
-      organizationId: ORG,
-      role: "recruitingLead",
-      userId: CONFIRM_ONLY_SSC,
-    },
-  ]);
-  await db.insert(studioInterview).values({
-    candidateName: "SSC 候选人",
-    createdBy: FIRST_SSC,
-    id: CANDIDATE,
-    organizationId: ORG,
-    pipelineStage: "offer",
-  });
-});
-afterAll(cleanup);
+setupOfferSscFixture();
 afterEach(() => vi.unstubAllEnvs());
 beforeEach(async () => {
   notificationMocks.enqueue.mockReset().mockImplementation(() => Promise.resolve());
@@ -142,42 +66,6 @@ beforeEach(async () => {
     .set({ createdBy: FIRST_SSC, outcome: "in_pipeline", pipelineStage: "offer" })
     .where(eq(studioInterview.id, CANDIDATE));
 });
-
-function makeApp(actorId = FIRST_SSC) {
-  return factory
-    .createApp()
-    .use("*", async (c, next) => {
-      c.set("activeOrg", { id: ORG } as never);
-      c.set("user", { id: actorId } as never);
-      // Deliberately spoof the request role for restricted fixture users. The shared
-      // service must read the actual membership rather than trust this value.
-      c.set("member", { role: "owner" } as never);
-      await next();
-    })
-    .route("/:id/offer-drafts", offerDraftsRouter);
-}
-
-function requestAction(
-  draftId: string,
-  action: "receive" | "complete",
-  revision = 1,
-  actorId = FIRST_SSC,
-  recordId = CANDIDATE,
-) {
-  return makeApp(actorId).request(`/${recordId}/offer-drafts/${draftId}/ssc/${action}`, {
-    body: JSON.stringify({ revision }),
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
-  });
-}
-
-async function newOffer() {
-  return await createOfferDraft({
-    input: INPUT,
-    interviewRecordId: CANDIDATE,
-    organizationId: ORG,
-  });
-}
 
 describe("Offer SSC notification events", () => {
   it("enqueues pending after inserting a new Offer in the same transaction", async () => {
@@ -383,6 +271,216 @@ describe("current Offer SSC state", () => {
 });
 
 describe("Offer SSC confirmation", () => {
+  it("requires an explicit internal approval declaration before completion", async () => {
+    const offer = await newOffer();
+    await requestAction(offer.id, "receive");
+    for (const internalApprovalConfirmed of [undefined, false]) {
+      const response = await makeApp().request(
+        `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/complete`,
+        {
+          body: JSON.stringify({ internalApprovalConfirmed, revision: 1 }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        },
+      );
+      expect(response.status).toBe(400);
+    }
+    const [stored] = await db
+      .select()
+      .from(studioOfferDraft)
+      .where(eq(studioOfferDraft.id, offer.id));
+    expect(stored.sscConfirmationStatus).toBe("confirming");
+  });
+
+  it("enforces the internal approval declaration inside the shared DAO", async () => {
+    const offer = await newOffer();
+    await requestAction(offer.id, "receive");
+    await expect(
+      completeOfferSscConfirmation({
+        actor: { id: FIRST_SSC, role: "owner" },
+        draftId: offer.id,
+        internalApprovalConfirmed: false,
+        interviewRecordId: CANDIDATE,
+        organizationId: ORG,
+        revision: 1,
+      } as never),
+    ).rejects.toThrow("内部审批");
+  });
+
+  it("stores completion proof separately, strips storage keys, and preserves the first completion", async () => {
+    const offer = await newOffer();
+    await requestAction(offer.id, "receive");
+    const completionAttachment = {
+      filename: "approved.png",
+      mediaType: "image/png",
+      revision: 1,
+      size: 68,
+      storageKey: "private/first.png",
+    };
+    const input = {
+      actor: { id: FIRST_SSC, role: "owner" },
+      completionAttachment,
+      draftId: offer.id,
+      internalApprovalConfirmed: true,
+      interviewRecordId: CANDIDATE,
+      organizationId: ORG,
+      revision: 1,
+    };
+    const completed = await completeOfferSscConfirmation(input as never);
+    expect(completed).toHaveProperty("sscCompletionAttachment", {
+      filename: "approved.png",
+      mediaType: "image/png",
+      revision: 1,
+      size: 68,
+    });
+    expect(JSON.stringify(completed)).not.toContain("private/first.png");
+    const repeated = await completeOfferSscConfirmation({
+      ...input,
+      completionAttachment: {
+        ...completionAttachment,
+        filename: "other.png",
+        storageKey: "private/other.png",
+      },
+    } as never);
+    expect(repeated).toEqual(completed);
+    const [activity] = await db
+      .select()
+      .from(interviewAuditLog)
+      .where(eq(interviewAuditLog.action, "offer_ssc_completed"));
+    expect(activity.detail).toMatchObject({
+      hasApprovalScreenshot: true,
+      internalApprovalConfirmed: true,
+    });
+    expect(JSON.stringify(activity.detail)).not.toContain("private/first.png");
+    const edited = await editOfferDraft({
+      draftId: offer.id,
+      input: { baseSalary: 33_000 },
+      organizationId: ORG,
+    });
+    expect(edited).toMatchObject({
+      sscCompletionAttachment: null,
+      sscConfirmationStatus: "pending",
+      sscRevision: 2,
+    });
+  });
+
+  it("rejects completion proof belonging to an older revision", async () => {
+    const offer = await newOffer();
+    await requestAction(offer.id, "receive");
+    await expect(
+      completeOfferSscConfirmation({
+        actor: { id: FIRST_SSC, role: "owner" },
+        completionAttachment: {
+          filename: "approved.png",
+          mediaType: "image/png",
+          revision: 2,
+          size: 68,
+          storageKey: "private/proof.png",
+        },
+        draftId: offer.id,
+        internalApprovalConfirmed: true,
+        interviewRecordId: CANDIDATE,
+        organizationId: ORG,
+        revision: 1,
+      } as never),
+    ).rejects.toThrow();
+  });
+
+  it("streams completion proof privately only for its authorized candidate and current revision", async () => {
+    const offer = await newOffer();
+    await requestAction(offer.id, "receive");
+    await completeOfferSscConfirmation({
+      actor: { id: FIRST_SSC, role: "owner" },
+      completionAttachment: {
+        filename: "approved.png",
+        mediaType: "image/png",
+        revision: 1,
+        size: 5,
+        storageKey: "private/proof.png",
+      },
+      draftId: offer.id,
+      internalApprovalConfirmed: true,
+      interviewRecordId: CANDIDATE,
+      organizationId: ORG,
+      revision: 1,
+    } as never);
+    vi.mocked(getObjectStream).mockResolvedValue({ body: "proof" as never, contentLength: 5 });
+    const path = `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/completion-attachment`;
+    const response = await makeApp().request(path);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await response.text()).toBe("proof");
+    const forbidden = await makeApp(FORBIDDEN_USER).request(path);
+    expect(forbidden.status).toBe(403);
+    const wrongCandidate = await makeApp().request(
+      `/other-candidate/offer-drafts/${offer.id}/ssc/completion-attachment`,
+    );
+    expect(wrongCandidate.status).toBe(404);
+    await editOfferDraft({ draftId: offer.id, input: { baseSalary: 32_000 }, organizationId: ORG });
+    const stale = await makeApp().request(path);
+    expect(stale.status).toBe(404);
+  });
+
+  it.each([false, true])(
+    "supports optional screenshots through the multipart completion endpoint: %s",
+    async (withScreenshot) => {
+      const offer = await newOffer();
+      await requestAction(offer.id, "receive");
+      vi.mocked(buildOfferApprovalAttachmentKey).mockResolvedValue("private/multipart.png");
+      const form = new FormData();
+      form.set("revision", "1");
+      form.set("internalApprovalConfirmed", "true");
+      if (withScreenshot) {
+        form.set(
+          "file",
+          new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "approved.png", {
+            type: "image/png",
+          }),
+        );
+      }
+      const response = await makeApp().request(
+        `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/complete-with-attachment`,
+        { body: form, method: "POST" },
+      );
+      expect(response.status).toBe(200);
+      const completed = await response.json();
+      expect(completed.sscConfirmationStatus).toBe("completed");
+      expect(completed.sscCompletionAttachment).toEqual(
+        withScreenshot
+          ? { filename: "approved.png", mediaType: "image/png", revision: 1, size: 8 }
+          : null,
+      );
+      expect(JSON.stringify(completed)).not.toContain("private/multipart.png");
+    },
+  );
+
+  it.each(["false", "duplicate", "invalid"])(
+    "rejects invalid multipart completion input without storing screenshots: %s",
+    async (mode) => {
+      const offer = await newOffer();
+      await requestAction(offer.id, "receive");
+      vi.mocked(putObjectBytes).mockClear();
+      const form = new FormData();
+      form.set("revision", "1");
+      form.set("internalApprovalConfirmed", mode === "false" ? "false" : "true");
+      form.append("file", new File(["fake PNG"], "approved.png", { type: "image/png" }));
+      if (mode === "duplicate") {
+        form.append("file", new File(["second"], "second.png", { type: "image/png" }));
+      }
+      const response = await makeApp().request(
+        `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/complete-with-attachment`,
+        { body: form, method: "POST" },
+      );
+      expect(response.status).toBe(400);
+      expect(putObjectBytes).not.toHaveBeenCalled();
+      const [stored] = await db
+        .select()
+        .from(studioOfferDraft)
+        .where(eq(studioOfferDraft.id, offer.id));
+      expect(stored.sscConfirmationStatus).toBe("confirming");
+    },
+  );
+
   it("creates a pending internal Offer", async () => {
     const offer = await newOffer();
     expect(offer).toMatchObject({

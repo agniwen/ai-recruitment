@@ -60,6 +60,33 @@ export function buildTelegramOfferCard(
   }
   return Card({
     children: actions.length > 0 ? [fields, Actions(actions)] : [fields],
-    title: options.title ?? "Offer SSC 确认",
+    title: options.title ?? (status === "pending" ? "Offer新增" : "Offer SSC 确认"),
+  });
+}
+
+export function buildTelegramOfferCompletionCard(context: TelegramOfferCardContext, token: string) {
+  return Card({
+    children: [
+      Fields([
+        Field({ label: "候选人", value: context.candidateName }),
+        Field({ label: "岗位", value: context.draft.position || "未填写" }),
+        Field({ label: "Offer 版本", value: String(context.draft.version) }),
+        Field({
+          label: "内部审批",
+          value: "请确认该 Offer 的内部审批已完成。确认后系统将记录操作人和完成时间。",
+        }),
+        Field({
+          label: "审批截图（选填）",
+          value:
+            "可点击上传截图并回复指定提示消息发送一张 JPEG、PNG 或 WebP 图片（最多 10 MB），也可直接完成确认。发送截图不会自动完成确认。本次操作 30 分钟内有效。",
+        }),
+      ]),
+      Actions([
+        Button({ id: "osf", label: "确认内部审批已完成，并完成确认", value: token }),
+        Button({ id: "osu", label: "上传审批截图（选填）", value: token }),
+        Button({ id: "osx", label: "取消", value: token }),
+      ]),
+    ],
+    title: "确认完成 SSC 审核",
   });
 }

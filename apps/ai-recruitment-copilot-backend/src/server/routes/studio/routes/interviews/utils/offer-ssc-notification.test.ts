@@ -28,6 +28,9 @@ vi.mock("../dao/offer-drafts", () => ({
   },
   loadAuthorizedOfferSscContext: mocks.context,
 }));
+vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-recipients", () => ({
+  listSourceSscTelegramRecipients: mocks.members,
+}));
 
 const draftId = "550e8400-e29b-41d4-a716-446655440000";
 const compactDraftId = "550e8400e29b41d4a716446655440000";
