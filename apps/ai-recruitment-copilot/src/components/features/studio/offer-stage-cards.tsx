@@ -493,7 +493,7 @@ export function OfferCard({
           <OfferSscNotice draft={draft} error={ssc.error} />
 
           {disabled ? null : (
-            <div className="flex flex-wrap items-center justify-end gap-2 border-border/60 border-t pt-3">
+            <div className="flex flex-wrap items-start justify-end gap-2 border-border/60 border-t pt-3">
               <OfferSscActions confirmation={ssc} isBusy={isBusy} />
               <OfferCardActions
                 canDelete={canDelete}
