@@ -37,6 +37,7 @@ import {
   loadHumanInterviewRoundReadiness,
 } from "./human-interview-rounds";
 import { notifyCandidateStageChange } from "../utils/candidate-stage-notification";
+import { enqueueOfferSscNotification } from "./offer-ssc-notification-outbox";
 
 export type { OfferDraftRecord };
 
@@ -366,6 +367,13 @@ async function transitionOfferSscConfirmation(
       organizationId: input.organizationId,
       source: input.source === "telegram" ? "api" : "manual",
     });
+    await enqueueOfferSscNotification(tx, {
+      draftId: updated.id,
+      event: action === "receive" ? "received" : "completed",
+      interviewRecordId: input.interviewRecordId,
+      organizationId: input.organizationId,
+      revision: updated.sscRevision,
+    });
     return { changed: true, draft: toRecord(updated) };
   });
   if (result.changed) {
@@ -479,6 +487,15 @@ export function removeOfferApprovalAttachment(
       .update(studioOfferDraft)
       .set({ ...resetSscConfirmation(row), approvalAttachment: null, updatedAt: new Date() })
       .where(eq(studioOfferDraft.id, draftId));
+    if (row.sscConfirmationStatus !== null) {
+      await enqueueOfferSscNotification(tx, {
+        draftId,
+        event: "pending",
+        interviewRecordId,
+        organizationId,
+        revision: row.sscRevision + 1,
+      });
+    }
     return row.approvalAttachment;
   });
 }
@@ -579,6 +596,13 @@ export async function createOfferDraft({
     if (!created) {
       throw new Error("创建后查询失败");
     }
+    await enqueueOfferSscNotification(tx, {
+      draftId: created.id,
+      event: "pending",
+      interviewRecordId,
+      organizationId,
+      revision: created.sscRevision,
+    });
     return toRecord(created);
   });
 }
@@ -663,6 +687,15 @@ export function editOfferDraftWithAttachment({
       .returning();
     if (!updated) {
       throw new Error("更新后查询失败");
+    }
+    if (changed && existing.sscConfirmationStatus !== null) {
+      await enqueueOfferSscNotification(tx, {
+        draftId: updated.id,
+        event: "pending",
+        interviewRecordId: updated.interviewRecordId,
+        organizationId,
+        revision: updated.sscRevision,
+      });
     }
     return {
       previousAttachment: approvalAttachment === undefined ? null : existing.approvalAttachment,

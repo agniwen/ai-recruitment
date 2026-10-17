@@ -22,6 +22,11 @@ import {
 } from "../dao/offer-drafts";
 import { offerDraftsRouter } from "../routes/offer-drafts/route";
 
+const notificationMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
+vi.mock("../dao/offer-ssc-notification-outbox", () => ({
+  enqueueOfferSscNotification: notificationMocks.enqueue,
+}));
+
 // The real DAO, permission snapshot and database stay in this suite. Only external
 // delivery/storage and the request middleware are replaced; the shared SSC action
 // must enforce current membership and permissions even without HTTP middleware.
@@ -129,6 +134,7 @@ beforeAll(async () => {
 afterAll(cleanup);
 afterEach(() => vi.unstubAllEnvs());
 beforeEach(async () => {
+  notificationMocks.enqueue.mockReset().mockImplementation(() => Promise.resolve());
   await db.delete(interviewAuditLog).where(eq(interviewAuditLog.organizationId, ORG));
   await db.delete(studioOfferDraft).where(eq(studioOfferDraft.organizationId, ORG));
   await db
@@ -172,6 +178,127 @@ async function newOffer() {
     organizationId: ORG,
   });
 }
+
+describe("Offer SSC notification events", () => {
+  it("enqueues pending after inserting a new Offer in the same transaction", async () => {
+    const offer = await newOffer();
+    expect(notificationMocks.enqueue).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+      draftId: offer.id,
+      event: "pending",
+      interviewRecordId: CANDIDATE,
+      organizationId: ORG,
+      revision: 1,
+    });
+  });
+
+  it.each(["receive", "complete"] as const)(
+    "enqueues %s only on the first transition",
+    async (action) => {
+      const offer = await newOffer();
+      if (action === "complete") {
+        await expect(requestAction(offer.id, "receive")).resolves.toHaveProperty("status", 200);
+      }
+      notificationMocks.enqueue.mockClear();
+      await expect(requestAction(offer.id, action)).resolves.toHaveProperty("status", 200);
+      await expect(requestAction(offer.id, action, 1, SECOND_SSC)).resolves.toHaveProperty(
+        "status",
+        200,
+      );
+      expect(notificationMocks.enqueue).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+        draftId: offer.id,
+        event: action === "receive" ? "received" : "completed",
+        interviewRecordId: CANDIDATE,
+        organizationId: ORG,
+        revision: 1,
+      });
+    },
+  );
+
+  it("enqueues a fresh revision for changed terms but not an unchanged save", async () => {
+    const offer = await newOffer();
+    notificationMocks.enqueue.mockClear();
+    await editOfferDraft({ draftId: offer.id, input: { baseSalary: 35_000 }, organizationId: ORG });
+    await editOfferDraft({ draftId: offer.id, input: { baseSalary: 35_000 }, organizationId: ORG });
+    expect(notificationMocks.enqueue).toHaveBeenCalledTimes(1);
+    expect(notificationMocks.enqueue).toHaveBeenLastCalledWith(expect.anything(), {
+      draftId: offer.id,
+      event: "pending",
+      interviewRecordId: CANDIDATE,
+      organizationId: ORG,
+      revision: 2,
+    });
+  });
+
+  it("enqueues pending for review attachment replacement and removal, not a missing attachment", async () => {
+    const offer = await newOffer();
+    notificationMocks.enqueue.mockClear();
+    await editOfferDraftWithAttachment({
+      approvalAttachment: {
+        filename: "review.png",
+        mediaType: "image/png",
+        size: 3,
+        storageKey: "ssc/review.png",
+      },
+      draftId: offer.id,
+      input: {},
+      organizationId: ORG,
+    });
+    await removeOfferApprovalAttachment(offer.id, CANDIDATE, ORG);
+    await removeOfferApprovalAttachment(offer.id, CANDIDATE, ORG);
+    expect(notificationMocks.enqueue.mock.calls.map((call) => call[1])).toEqual([
+      {
+        draftId: offer.id,
+        event: "pending",
+        interviewRecordId: CANDIDATE,
+        organizationId: ORG,
+        revision: 2,
+      },
+      {
+        draftId: offer.id,
+        event: "pending",
+        interviewRecordId: CANDIDATE,
+        organizationId: ORG,
+        revision: 3,
+      },
+    ]);
+  });
+
+  it("does not enqueue historical NULL Offer edits", async () => {
+    const offer = await newOffer();
+    await db
+      .update(studioOfferDraft)
+      .set({ sscConfirmationStatus: null })
+      .where(eq(studioOfferDraft.id, offer.id));
+    notificationMocks.enqueue.mockClear();
+    await editOfferDraft({ draftId: offer.id, input: { baseSalary: 35_000 }, organizationId: ORG });
+    expect(notificationMocks.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("rolls back Offer creation if its durable event cannot be saved", async () => {
+    notificationMocks.enqueue.mockRejectedValueOnce(new Error("outbox unavailable"));
+    await expect(newOffer()).rejects.toThrow("outbox unavailable");
+    expect(
+      await db.select().from(studioOfferDraft).where(eq(studioOfferDraft.organizationId, ORG)),
+    ).toHaveLength(0);
+  });
+
+  it("rolls back changed terms when the corresponding notification event fails", async () => {
+    const offer = await newOffer();
+    notificationMocks.enqueue.mockRejectedValueOnce(new Error("outbox unavailable"));
+    await expect(
+      editOfferDraft({ draftId: offer.id, input: { baseSalary: 35_000 }, organizationId: ORG }),
+    ).rejects.toThrow("outbox unavailable");
+    const [stored] = await db
+      .select()
+      .from(studioOfferDraft)
+      .where(eq(studioOfferDraft.id, offer.id));
+    expect(stored).toMatchObject({
+      baseSalary: 30_000,
+      sscConfirmationStatus: "pending",
+      sscRevision: 1,
+    });
+  });
+});
 
 describe("current Offer SSC state", () => {
   const path = `/${CANDIDATE}/offer-drafts/ssc/current`;

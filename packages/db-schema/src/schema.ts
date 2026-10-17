@@ -1849,6 +1849,63 @@ export const studioOfferDraft = pgTable(
   ],
 );
 
+export const studioOfferSscNotificationOutbox = pgTable(
+  "studio_offer_ssc_notification_outbox",
+  {
+    attempts: integer("attempts").notNull().default(0),
+    availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    draftId: text("draft_id")
+      .notNull()
+      .references(() => studioOfferDraft.id, { onDelete: "cascade" }),
+    event: text("event").$type<"pending" | "received" | "completed">().notNull(),
+    id: text("id").primaryKey(),
+    interviewRecordId: text("interview_record_id")
+      .notNull()
+      .references(() => studioInterview.id, { onDelete: "cascade" }),
+    lastError: text("last_error"),
+    leaseToken: text("lease_token"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    recipientUserIds: jsonb("recipient_user_ids").$type<string[]>(),
+    revision: integer("revision").notNull(),
+    sentUserIds: jsonb("sent_user_ids").$type<string[]>().notNull().default([]),
+    status: text("status")
+      .$type<"pending" | "processing" | "completed" | "failed">()
+      .notNull()
+      .default("pending"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("offer_ssc_outbox_event_uniq").on(table.draftId, table.revision, table.event),
+    index("offer_ssc_outbox_pending_idx")
+      .on(table.availableAt)
+      .where(sql`${table.status} = 'pending'`),
+    index("offer_ssc_outbox_lease_idx")
+      .on(table.leaseUntil)
+      .where(sql`${table.status} = 'processing'`),
+    index("offer_ssc_outbox_org_idx").on(table.organizationId),
+    check(
+      "offer_ssc_outbox_event_check",
+      sql`${table.event} IN ('pending', 'received', 'completed')`,
+    ),
+    check("offer_ssc_outbox_revision_check", sql`${table.revision} > 0`),
+    check("offer_ssc_outbox_attempts_check", sql`${table.attempts} >= 0`),
+    check(
+      "offer_ssc_outbox_status_check",
+      sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`,
+    ),
+    check(
+      "offer_ssc_outbox_lease_check",
+      sql`(${table.status} = 'processing' AND ${table.leaseToken} IS NOT NULL AND ${table.leaseUntil} IS NOT NULL)
+        OR (${table.status} <> 'processing' AND ${table.leaseToken} IS NULL AND ${table.leaseUntil} IS NULL)`,
+    ),
+  ],
+);
+
 export type ResumePoolScope = "private" | "public";
 export type ResumePoolStatus = "active" | "archived";
 export type ResumePoolSourceChannel = "historical_import" | "mail_ingest" | "referral";

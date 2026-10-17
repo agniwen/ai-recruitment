@@ -1,7 +1,5 @@
-import { Actions, Button, Card, Field, Fields } from "chat";
 import type { ActionEvent, SlashCommandEvent } from "chat";
 import { z } from "zod";
-import { getOfferSscConfirmationMeta } from "@arc/db-schema/studio-interviews";
 import {
   completeOfferSscConfirmation,
   loadAuthorizedOfferSscContext,
@@ -9,6 +7,7 @@ import {
   receiveOfferSscConfirmation,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
+import { buildTelegramOfferCard } from "./offer-ssc-card";
 
 const telegramSender = z.object({
   id: z.number().int().positive(),
@@ -22,13 +21,6 @@ const callbackQuery = z.object({
 });
 const MAX_REVISION = 2_147_483_647;
 const bindingRequired = "请先在系统填写本人 TG 用户名，再私聊机器人发送 /start 完成绑定后重试。";
-
-type OfferContext = Awaited<ReturnType<typeof loadAuthorizedOfferSscContext>>;
-
-function callbackValue(draftId: string, revision: number): string {
-  // Chat SDK adds a JSON envelope; compact values keep even PG integer revisions below 64 bytes.
-  return `${draftId.replaceAll("-", "")}:${revision.toString(36)}`;
-}
 
 function parseCallback(value: string | undefined) {
   const match = /^([0-9a-f]{32}):([1-9a-z][0-9a-z]{0,5})$/u.exec(value ?? "");
@@ -47,39 +39,6 @@ function parseCallback(value: string | undefined) {
     return null;
   }
   return { draftId, revision };
-}
-
-function offerCard(context: OfferContext) {
-  const { draft } = context;
-  const status = draft.sscConfirmationStatus;
-  const canOperate = draft.status === "draft" && context.pipelineStage !== "closed";
-  const fields = Fields([
-    Field({ label: "候选人", value: context.candidateName }),
-    Field({ label: "岗位", value: draft.position || "未填写" }),
-    Field({ label: "Offer 版本", value: String(draft.version) }),
-    Field({
-      label: "SSC 状态",
-      value: status ? getOfferSscConfirmationMeta(status).label : "历史 Offer，无 SSC 确认记录",
-    }),
-  ]);
-  let button: ReturnType<typeof Button> | null = null;
-  if (canOperate && status === "pending" && context.canReceive) {
-    button = Button({
-      id: "osr",
-      label: "接收确认",
-      value: callbackValue(draft.id, draft.sscRevision ?? 1),
-    });
-  } else if (canOperate && status === "confirming" && context.canConfirm) {
-    button = Button({
-      id: "osc",
-      label: "完成确认",
-      value: callbackValue(draft.id, draft.sscRevision ?? 1),
-    });
-  }
-  return Card({
-    children: button ? [fields, Actions([button])] : [fields],
-    title: "Offer SSC 确认",
-  });
 }
 
 function errorReply(error: unknown): string {
@@ -108,7 +67,7 @@ export async function openTelegramOffer(event: SlashCommandEvent, draftId: strin
       return;
     }
     const context = await loadAuthorizedOfferSscContext({ actorUserId, draftId });
-    await event.channel.post(offerCard(context));
+    await event.channel.post(buildTelegramOfferCard(context));
   } catch (error) {
     await event.channel.post(errorReply(error));
   }
@@ -149,7 +108,7 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       revision: parsed.revision,
       source: "telegram",
     });
-    await event.thread.post(offerCard({ ...context, draft }));
+    await event.thread.post(buildTelegramOfferCard({ ...context, draft }));
   } catch (error) {
     await event.thread.post(errorReply(error));
   }

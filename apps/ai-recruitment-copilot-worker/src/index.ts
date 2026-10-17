@@ -25,6 +25,7 @@ import {
 import { createWorkerApp } from "./app";
 import { startInterviewTelemetryRetention } from "./interview-telemetry-retention";
 import { startHumanInterviewReminders } from "./human-interview-reminders";
+import { startOfferSscNotifications } from "./offer-ssc-notifications";
 import { resolveLegacyParseConfig, resolveWorkerServerConfig } from "./config";
 import { getWorkerConnectionSummary, loadWorkerEnv } from "./env";
 import { getResumeParseConfigSummary } from "./parse-config";
@@ -162,6 +163,7 @@ async function main() {
   }
   const stopTelemetryRetention = startInterviewTelemetryRetention();
   const stopHumanInterviewReminders = await startHumanInterviewReminders();
+  const stopOfferSscNotifications = await startOfferSscNotifications();
   const legacyParseConfig = resolveLegacyParseConfig();
   const { hostname, port } = resolveWorkerServerConfig();
   const app = createWorkerApp();
@@ -322,6 +324,7 @@ async function main() {
         stopTelemetryRetention();
         await stopInterviewMedia?.();
         await stopHumanInterviewReminders();
+        await stopOfferSscNotifications();
         if (historicalMaintenanceTimer) {
           clearInterval(historicalMaintenanceTimer);
         }
