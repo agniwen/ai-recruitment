@@ -11,9 +11,12 @@ import { STUDIO_PAGE_PATHS } from "@/lib/start/studio-page-paths";
 import { enableReactActEnvironment, renderInAct, unmountInAct } from "@/test-utils/react-act";
 import { StudioSidebarSlots } from "./studio-sidebar-slots";
 
-const mocks = vi.hoisted(() => ({ permissions: {} as WorkspacePermissionStatements }));
+const mocks = vi.hoisted(() => ({
+  memberRole: "04-odc",
+  permissions: {} as WorkspacePermissionStatements,
+}));
 vi.mock("@/lib/client/workspace-context", () => ({
-  useWorkspaceMemberRole: () => "04-odc",
+  useWorkspaceMemberRole: () => mocks.memberRole,
   useWorkspacePermissions: () => mocks.permissions,
   useWorkspaceSlug: () => "work",
 }));
@@ -42,6 +45,7 @@ vi.mock("@/components/ui/sidebar", () => ({
 enableReactActEnvironment();
 let rendered: Awaited<ReturnType<typeof renderInAct>>;
 beforeEach(() => {
+  mocks.memberRole = "04-odc";
   mocks.permissions = clonePermissionStatements(normalizePermissionStatements(statement));
 });
 afterEach(async () => {
@@ -55,6 +59,16 @@ async function links() {
 }
 
 describe("Studio sidebar page visibility", () => {
+  it.each([
+    ["owner", true],
+    ["admin", true],
+    ["member", false],
+    ["custom-ssc", false],
+  ] as const)("limits the SSC responsibility menu for %s", async (role, visible) => {
+    mocks.memberRole = role;
+    const visibleLinks = await links();
+    expect(visibleLinks.includes("/w/work/studio/ssc-responsibilities")).toBe(visible);
+  });
   it.each(STUDIO_PAGE_PATHS)(
     "hides $path without its page permission",
     async ({ action, path }) => {
@@ -112,6 +126,7 @@ describe("Studio sidebar page visibility", () => {
     ]);
   });
   it("shows the resume pool with permissions while keeping the dashboard hidden", async () => {
+    mocks.memberRole = "admin";
     const visibleLinks = await links();
     expect(visibleLinks).toContain("/w/work/studio/resume-pool");
     expect(visibleLinks).not.toContain("/w/work/studio/dashboard");

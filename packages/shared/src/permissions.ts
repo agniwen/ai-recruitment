@@ -37,6 +37,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "permissions",
   "preRegistrations",
   "odcResponsibilities",
+  "sscResponsibilities",
   "globalConfig",
 ] as const;
 
@@ -64,6 +65,7 @@ export const STUDIO_PAGE_PERMISSION_LABELS = {
   preRegistrations: "预录入信息",
   resumePool: "简历池",
   resumes: "候选人管理",
+  sscResponsibilities: "SSC 负责组织",
 } as const;
 
 const memberStudioPagePermissions = [

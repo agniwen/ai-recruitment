@@ -219,6 +219,14 @@ const navGroups: NavGroup[] = [
         title: "ODC 负责范围",
       },
       {
+        action: "sscResponsibilities",
+        adminOnly: true,
+        icon: UserCogIcon,
+        path: "/studio/ssc-responsibilities",
+        resource: "page",
+        title: "SSC 负责组织",
+      },
+      {
         action: "permissions",
         icon: ShieldCheckIcon,
         path: "/studio/permissions",

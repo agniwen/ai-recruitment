@@ -19,6 +19,14 @@ const permissionsSectionSource = readFileSync(
 );
 
 describe("workspace role permission helpers", () => {
+  it("explains the SSC pre-entry page permission", () => {
+    expect(
+      buildPermissionItems().find((item) => item.key === "page:sscResponsibilities"),
+    ).toMatchObject({
+      actionLabel: "SSC 负责组织",
+      description: expect.stringContaining("预录入"),
+    });
+  });
   it("offers independent SSC receive and complete permissions when configuring a role", () => {
     const permissions = buildPermissionItems().filter((item) =>
       ["offer:receive", "offer:confirm"].includes(item.key),

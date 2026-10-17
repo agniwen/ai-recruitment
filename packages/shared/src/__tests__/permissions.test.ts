@@ -11,6 +11,12 @@ import {
 } from "@arc/shared/permissions";
 
 describe("permissions matrix", () => {
+  it("grants SSC responsibility pre-entry access only to administrators by default", () => {
+    expect(STUDIO_PAGE_PERMISSION_ACTIONS).toContain("sscResponsibilities");
+    expect(roles.owner.statements.page).toContain("sscResponsibilities");
+    expect(roles.admin.statements.page).toContain("sscResponsibilities");
+    expect(roles.member.statements.page).not.toContain("sscResponsibilities");
+  });
   it("grants viewing job recommendations only to administrators by default", () => {
     expect(statement.jd).toContain("viewRecommendations");
     expect(roles.admin.statements.jd).toContain("viewRecommendations");

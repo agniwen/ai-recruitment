@@ -383,6 +383,38 @@ export const platformPreRegistration = pgTable(
   ],
 );
 
+export const sscResponsibility = pgTable(
+  "ssc_responsibility",
+  {
+    centerName: text("center_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    demandOwner: text("demand_owner").notNull().default(""),
+    email: text("email").notNull(),
+    id: text("id").primaryKey(),
+    notes: text("notes").notNull().default(""),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    sscName: text("ssc_name").notNull(),
+    telegram: text("telegram").notNull().default(""),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("ssc_responsibility_workspace_center_email_uq").on(
+      table.organizationId,
+      sql`lower(btrim(${table.centerName}))`,
+      sql`lower(btrim(${table.email}))`,
+    ),
+    index("ssc_responsibility_org_center_idx").on(table.organizationId, table.centerName),
+    check("ssc_responsibility_center_check", sql`length(btrim(${table.centerName})) > 0`),
+    check("ssc_responsibility_name_check", sql`length(btrim(${table.sscName})) > 0`),
+    check("ssc_responsibility_email_check", sql`length(btrim(${table.email})) > 0`),
+  ],
+);
+
 export const recruitingGroup = pgTable(
   "recruiting_group",
   {

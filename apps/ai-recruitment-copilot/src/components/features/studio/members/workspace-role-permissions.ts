@@ -243,6 +243,8 @@ const PAGE_PERMISSION_DESCRIPTIONS: Partial<Record<string, string>> = {
     "控制是否能在侧边栏看到并访问「简历池」页面；用于收集和查看尚未进入正式招聘流程的公共、私有简历。未勾选时直接访问会进入 404。页面内数据接口仍受「简历池」业务权限控制。",
   resumes:
     "控制是否能在侧边栏看到并访问「候选人管理」页面；用于管理已正式入库候选人的筛选、面试、Offer 及结案进度。未勾选时直接访问会进入 404。候选人数据接口仍受「候选人管理」业务权限控制，上传批次有独立权限。面试日程 hovercard 的「查看候选人」也依赖该权限。",
+  sscResponsibilities:
+    "仅工作区管理员和所有者可访问，用于预录入 SSC 的联系方式及其负责的中心/部门。",
 };
 
 const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<string, string>>> = {
