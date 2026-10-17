@@ -22,6 +22,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import { interviewConversation, minimaxVoicePreview, studioInterview } from "@arc/db-schema/schema";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
+import { guardSscPublicSurface } from "@arc/ai-recruitment-copilot-backend/server/middlewares/ssc-access";
 import { createInternalErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/error-handler";
 import { buildTokenErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/routes/interview/utils";
 import { loadSubmissionsByInterview } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/forms/dao/submissions";
@@ -59,6 +60,7 @@ import {
 
 export const publicRouter = factory
   .createApp()
+  .use("*", guardSscPublicSurface())
   .route("/interview-telemetry", interviewTelemetryRouter)
   .route("/human-interview-meetings/:inviteToken/entry-credentials", entryCredentialsRouter)
   .route("/human-interview-meetings", humanInterviewChatRouter)

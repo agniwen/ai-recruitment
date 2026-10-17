@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getHumanInterviewOfferReadinessError: vi.fn(),
   getObjectStream: vi.fn(),
   invalidateStudioInterviewCaches: vi.fn(),
+  isSscCandidateVisible: vi.fn(),
   limit: vi.fn(),
   listOfferDrafts: vi.fn(),
   loadAuthorizedOfferSscContext: vi.fn(),
@@ -27,8 +28,14 @@ const mocks = vi.hoisted(() => ({
   receiveOfferSscConfirmation: vi.fn(),
   recordCandidateActivity: vi.fn(),
   removeOfferApprovalAttachment: vi.fn(),
+  resolveSscAccessActor: vi.fn(),
   respondOfferDraft: vi.fn(),
   sendOfferDraft: vi.fn(),
+}));
+
+vi.mock("@arc/ai-recruitment-copilot-backend/server/access/ssc-access", () => ({
+  isSscCandidateVisible: mocks.isSscCandidateVisible,
+  resolveSscAccessActor: mocks.resolveSscAccessActor,
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
@@ -122,6 +129,8 @@ function makeApp() {
 describe("offerDraftsRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveSscAccessActor.mockResolvedValue(null);
+    mocks.isSscCandidateVisible.mockResolvedValue(false);
     mocks.buildOfferApprovalAttachmentKey.mockResolvedValue("offer-approval-attachments/file.png");
     mocks.getHumanInterviewOfferReadinessError.mockReturnValue(null);
     mocks.loadHumanInterviewRoundReadiness.mockResolvedValue({
@@ -131,6 +140,34 @@ describe("offerDraftsRouter", () => {
       pendingRounds: 0,
       totalRounds: 1,
     });
+  });
+
+  it("does not reveal Offer versions to an SSC outside the current source/Offer gate", async () => {
+    mocks.resolveSscAccessActor.mockResolvedValue({ organizationId: ORG_ID, userId: "operator-1" });
+    mocks.listOfferDrafts.mockResolvedValue([{ id: "sensitive-offer" }]);
+    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts`);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "候选人记录不存在。" });
+  });
+
+  it("checks the attachment draft's parent instead of trusting an allowed candidate URL", async () => {
+    mocks.resolveSscAccessActor.mockResolvedValue({ organizationId: ORG_ID, userId: "operator-1" });
+    mocks.isSscCandidateVisible.mockImplementation(({ draftId }: { draftId?: string }) =>
+      Promise.resolve(draftId !== "foreign-draft"),
+    );
+    mocks.loadOfferApprovalAttachment.mockResolvedValue({
+      filename: "offer.pdf",
+      mediaType: "application/pdf",
+      storageKey: "sensitive",
+    });
+    mocks.getObjectStream.mockResolvedValue({
+      body: "sensitive bytes",
+      contentType: "application/pdf",
+    });
+    const response = await makeApp().request(
+      `/${RECORD_ID}/offer-drafts/foreign-draft/approval-attachment`,
+    );
+    expect(response.status).toBe(404);
   });
 
   it("declares CRUD-specific offer permissions", () => {

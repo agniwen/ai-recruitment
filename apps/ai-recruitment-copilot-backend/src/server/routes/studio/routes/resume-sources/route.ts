@@ -1,12 +1,29 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { hiringUnit, jobDescription, resumeSource } from "@arc/db-schema/schema";
+import { hiringUnit, jobDescription, resumeSource, sscResponsibility } from "@arc/db-schema/schema";
 import { resumeSourceFormSchema } from "@arc/shared/resume-sources";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { listResumeSources } from "./dao";
 import { resumeSourceOdcRouter } from "./routes/odc/route";
+
+function isSscScopeIdentityConflict(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const detail = error as {
+    code?: unknown;
+    constraint?: unknown;
+    constraint_name?: unknown;
+    cause?: unknown;
+  };
+  const constraint = detail.constraint_name ?? detail.constraint;
+  if (detail.code === "23505" && constraint === "ssc_responsibility_workspace_scope_identity_uq") {
+    return true;
+  }
+  return detail.cause !== error && isSscScopeIdentityConflict(detail.cause);
+}
 
 // 部门/中心（来源）与用人组织共用招聘组织管理权限。
 export const resumeSourcesRouter = factory
@@ -85,43 +102,70 @@ export const resumeSourcesRouter = factory
       return c.json({ message: "Unauthorized" }, 401);
     }
     const id = c.req.param("id");
-    const result = await db.transaction(async (tx) => {
-      const [source] = await tx
-        .select({ id: resumeSource.id })
-        .from(resumeSource)
-        .where(and(eq(resumeSource.id, id), eq(resumeSource.organizationId, activeOrg.id)))
-        .for("update");
-      if (!source) {
-        return "missing";
-      }
-      const [unit] = await tx
-        .select({ id: hiringUnit.id })
-        .from(hiringUnit)
-        .where(and(eq(hiringUnit.resumeSourceId, id), eq(hiringUnit.organizationId, activeOrg.id)))
-        .limit(1);
-      const [job] = await tx
-        .select({ id: jobDescription.id })
-        .from(jobDescription)
-        .where(
-          and(
-            eq(jobDescription.resumeSourceId, id),
-            eq(jobDescription.organizationId, activeOrg.id),
-          ),
-        )
-        .limit(1);
-      if (unit || job) {
-        return "in_use";
-      }
-      await tx
-        .delete(resumeSource)
-        .where(and(eq(resumeSource.id, id), eq(resumeSource.organizationId, activeOrg.id)));
-      return "deleted";
-    });
+    const result = await db
+      .transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`ssc-responsibilities:${activeOrg.id}`}, 0))`,
+        );
+        const [source] = await tx
+          .select({ id: resumeSource.id })
+          .from(resumeSource)
+          .where(and(eq(resumeSource.id, id), eq(resumeSource.organizationId, activeOrg.id)))
+          .for("update");
+        if (!source) {
+          return "missing";
+        }
+        const [unit] = await tx
+          .select({ id: hiringUnit.id })
+          .from(hiringUnit)
+          .where(
+            and(eq(hiringUnit.resumeSourceId, id), eq(hiringUnit.organizationId, activeOrg.id)),
+          )
+          .limit(1);
+        const [job] = await tx
+          .select({ id: jobDescription.id })
+          .from(jobDescription)
+          .where(
+            and(
+              eq(jobDescription.resumeSourceId, id),
+              eq(jobDescription.organizationId, activeOrg.id),
+            ),
+          )
+          .limit(1);
+        if (unit || job) {
+          return "in_use";
+        }
+        await tx
+          .update(sscResponsibility)
+          .set({ resumeSourceId: null })
+          .where(
+            and(
+              eq(sscResponsibility.organizationId, activeOrg.id),
+              eq(sscResponsibility.resumeSourceId, id),
+            ),
+          );
+        await tx
+          .delete(resumeSource)
+          .where(and(eq(resumeSource.id, id), eq(resumeSource.organizationId, activeOrg.id)));
+        return "deleted";
+      })
+      .catch((error: unknown) => {
+        if (isSscScopeIdentityConflict(error)) {
+          return "ssc_conflict";
+        }
+        throw error;
+      });
     if (result === "missing") {
       return c.json({ error: "部门/中心（来源）不存在。" }, 404);
     }
     if (result === "in_use") {
       return c.json({ error: "请先调整关联岗位和下属用人组织的部门/中心（来源），再删除。" }, 409);
+    }
+    if (result === "ssc_conflict") {
+      return c.json(
+        { error: "请先调整该部门/中心对应的 SSC 关系，避免与未关联记录重复，再删除。" },
+        409,
+      );
     }
     return c.json({ success: true }, 200);
   })

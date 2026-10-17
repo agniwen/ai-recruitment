@@ -24,6 +24,7 @@ import { z } from "zod";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { createInternalErrorResponse } from "@arc/ai-recruitment-copilot-backend/server/error-handler";
 import { authMiddleware } from "@arc/ai-recruitment-copilot-backend/server/middlewares/auth";
+import { guardSscPublicSurface } from "@arc/ai-recruitment-copilot-backend/server/middlewares/ssc-access";
 import { resumeProfileSchema } from "@arc/db-schema/interview/types";
 import {
   listAllJobDescriptions,
@@ -51,6 +52,7 @@ import { candidateInterviewFeedbackRouter } from "./routes/feedback/route";
 
 export const interviewRouter = factory
   .createApp()
+  .use("*", guardSscPublicSurface())
   .route("/", candidateInterviewFeedbackRouter)
   .post("/parse-resume", authMiddleware, async (c) => {
     const formData = await c.req.formData();

@@ -60,9 +60,9 @@ describe("workspace role permission helpers", () => {
   });
 
   it("treats ODC as a role form setting instead of a permission-table checkbox", () => {
-    expect(permissionsSectionSource).toContain(
-      "additionalFields: { isOdc: input.isOdc, name: input.name }",
-    );
+    expect(permissionsSectionSource).toContain("isOdc: input.isOdc");
+    expect(permissionsSectionSource).toContain("isSsc: input.isSsc");
+    expect(permissionsSectionSource).toContain("是否 SSC 审核");
     expect(permissionsSectionSource).toContain("是否为 ODC");
     expect(permissionsSectionSource).toContain("计入 ODC 分析");
     expect(permissionsSectionSource).toContain("isOdc: input.isOdc");

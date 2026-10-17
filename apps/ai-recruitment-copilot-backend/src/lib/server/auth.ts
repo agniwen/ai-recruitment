@@ -9,7 +9,11 @@ import { uniq } from "lodash-es";
 import { getAuthRequestHeaders } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-request-context";
 import { AUTH_RATE_LIMIT } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-rate-limit";
 import { getAuthTransportOptions } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-transport";
-import { attemptsDynamicRoleIdentifierUpdate } from "@arc/ai-recruitment-copilot-backend/lib/server/auth-role-policy";
+import {
+  attemptsDynamicRoleIdentifierUpdate,
+  hasConflictingRoleClassifications,
+} from "@arc/ai-recruitment-copilot-backend/lib/server/auth-role-policy";
+import { provisionSscUserOnSignIn } from "@arc/ai-recruitment-copilot-backend/lib/server/ssc-provisioning";
 import { getRequiredEnv } from "@arc/ai-recruitment-copilot-backend/lib/server/env";
 import { getFeishuTenantAccessToken } from "@arc/ai-recruitment-copilot-backend/lib/server/feishu-access-token";
 import {
@@ -22,7 +26,7 @@ import {
   ensureDefaultRecruitingGroupForWorkspace,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/workspace/dao";
 import { provisionPreRegisteredUser } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/pre-registrations/provisioning";
-import { ac, roles } from "@arc/shared/permissions";
+import { ac, isWorkspaceAdministratorRole, roles } from "@arc/shared/permissions";
 import { optionalUserTelegramSchema } from "@arc/shared/user-profile";
 import { db } from "./db";
 import * as schema from "@arc/db-schema/schema";
@@ -196,6 +200,139 @@ const advanced = getAuthTransportOptions({
   nodeEnv: process.env.NODE_ENV,
 });
 
+type RolePolicyGetSession = (headers: Headers) => Promise<{
+  session: { activeOrganizationId?: string | null };
+  user: { id: string };
+} | null>;
+
+const ROLE_POLICY_ACTIONS: Record<string, "create" | "update" | "delete" | undefined> = {
+  "/organization/create-role": "create",
+  "/organization/delete-role": "delete",
+  "/organization/update-role": "update",
+};
+
+function isRoleClassificationPatch(patch: unknown): boolean {
+  return Boolean(patch && typeof patch === "object" && ("isOdc" in patch || "isSsc" in patch));
+}
+
+function readDynamicRolePolicyRequest(path: string, body: unknown) {
+  const action = ROLE_POLICY_ACTIONS[path];
+  if (!action || !body || typeof body !== "object") {
+    return null;
+  }
+  const fields = body as Record<string, unknown>;
+  if (action === "update" && !isRoleClassificationPatch(fields.data)) {
+    return null;
+  }
+  return { action, fields };
+}
+
+async function requireRolePolicyOrganization(
+  fields: Record<string, unknown>,
+  getSession: RolePolicyGetSession,
+): Promise<string> {
+  const headers = getAuthRequestHeaders();
+  if (!headers) {
+    throw new APIError("UNAUTHORIZED", { message: "未登录。" });
+  }
+  const session = await getSession(headers);
+  if (!session?.user) {
+    throw new APIError("UNAUTHORIZED", { message: "未登录。" });
+  }
+  const organizationId =
+    typeof fields.organizationId === "string"
+      ? fields.organizationId
+      : session.session.activeOrganizationId;
+  if (typeof organizationId !== "string" || !organizationId) {
+    throw new APIError("BAD_REQUEST", { message: "请选择工作区。" });
+  }
+  const [invoker] = await db
+    .select({ role: schema.member.role })
+    .from(schema.member)
+    .innerJoin(schema.user, eq(schema.user.id, schema.member.userId))
+    .where(
+      and(
+        eq(schema.member.organizationId, organizationId),
+        eq(schema.member.userId, session.user.id),
+        eq(schema.user.banned, false),
+      ),
+    )
+    .limit(1);
+  if (!isWorkspaceAdministratorRole(invoker?.role)) {
+    throw new APIError("FORBIDDEN", { message: "只有工作区管理员可以管理角色。" });
+  }
+  return organizationId;
+}
+
+async function loadRolePolicyTarget(fields: Record<string, unknown>, organizationId: string) {
+  const roleId = typeof fields.roleId === "string" ? fields.roleId : null;
+  const roleName = typeof fields.roleName === "string" ? fields.roleName : null;
+  if (!roleId && !roleName) {
+    throw new APIError("BAD_REQUEST", { message: "请选择角色。" });
+  }
+  const [current] = await db
+    .select({
+      isOdc: schema.organizationRole.isOdc,
+      isSsc: schema.organizationRole.isSsc,
+      role: schema.organizationRole.role,
+    })
+    .from(schema.organizationRole)
+    .where(
+      and(
+        eq(schema.organizationRole.organizationId, organizationId),
+        roleId ? eq(schema.organizationRole.id, roleId) : undefined,
+        roleName ? eq(schema.organizationRole.role, roleName) : undefined,
+      ),
+    )
+    .limit(1);
+  if (!current) {
+    throw new APIError("BAD_REQUEST", { message: "角色不存在或不属于当前工作区。" });
+  }
+  return current;
+}
+
+async function assertRoleNotReferencedBySsc(organizationId: string, role: string) {
+  const [reference] = await db
+    .select({ id: schema.sscResponsibility.id })
+    .from(schema.sscResponsibility)
+    .where(
+      and(
+        eq(schema.sscResponsibility.organizationId, organizationId),
+        eq(schema.sscResponsibility.workspaceRole, role),
+      ),
+    )
+    .limit(1);
+  if (reference) {
+    throw new APIError("CONFLICT", { message: "该角色仍被 SSC 负责组织引用，请先调整对应关系。" });
+  }
+}
+
+async function validateDynamicRoleClassification(
+  path: string,
+  body: unknown,
+  getSession: RolePolicyGetSession,
+): Promise<void> {
+  const request = readDynamicRolePolicyRequest(path, body);
+  if (!request) {
+    return;
+  }
+  const { action, fields } = request;
+  if (action === "create") {
+    if (hasConflictingRoleClassifications(fields.additionalFields)) {
+      throw new APIError("BAD_REQUEST", { message: "同一角色不能同时设为 ODC 和 SSC 审核。" });
+    }
+    return;
+  }
+  const organizationId = await requireRolePolicyOrganization(fields, getSession);
+  const current = await loadRolePolicyTarget(fields, organizationId);
+  if (action === "update" && hasConflictingRoleClassifications(fields.data, current)) {
+    throw new APIError("BAD_REQUEST", { message: "同一角色不能同时设为 ODC 和 SSC 审核。" });
+  }
+  if (action === "delete") {
+    await assertRoleNotReferencedBySsc(organizationId, current.role);
+  }
+}
+
 export const auth = betterAuth({
   advanced,
   appName: "招聘 AI 协同工作台",
@@ -229,6 +366,14 @@ export const auth = betterAuth({
               .where(eq(schema.user.id, newSession.userId))
               .limit(1);
             if (sessionUser) {
+              try {
+                await provisionSscUserOnSignIn({
+                  email: sessionUser.email,
+                  userId: newSession.userId,
+                });
+              } catch (error) {
+                console.warn("[auth] failed to apply SSC pre-entry", error);
+              }
               await provisionPreRegisteredUser({
                 email: sessionUser.email,
                 userId: newSession.userId,
@@ -269,13 +414,15 @@ export const auth = betterAuth({
     minPasswordLength: 8,
   },
   hooks: {
-    // oxlint-disable-next-line require-await -- middleware contract requires async
     before: createAuthMiddleware(async (ctx) => {
       if (attemptsDynamicRoleIdentifierUpdate(ctx.path, ctx.body)) {
         throw new APIError("BAD_REQUEST", {
           message: "角色标识创建后不可更改。",
         });
       }
+      await validateDynamicRoleClassification(ctx.path, ctx.body, (headers) =>
+        auth.api.getSession({ headers }),
+      );
     }),
   },
   // 被封禁用户走 OAuth 回调时 better-auth 会重定向到 `${errorURL}?error=banned&...`。
@@ -437,6 +584,11 @@ export const auth = betterAuth({
         organizationRole: {
           additionalFields: {
             isOdc: {
+              defaultValue: false,
+              required: false,
+              type: "boolean",
+            },
+            isSsc: {
               defaultValue: false,
               required: false,
               type: "boolean",

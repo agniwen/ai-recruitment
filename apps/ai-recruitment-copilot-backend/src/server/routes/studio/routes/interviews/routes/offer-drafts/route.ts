@@ -9,6 +9,7 @@ import { MAX_OFFER_APPROVAL_ATTACHMENT_BYTES } from "@arc/shared/studio-pipeline
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
+import { requireSscCandidateAccess } from "@arc/ai-recruitment-copilot-backend/server/middlewares/ssc-access";
 import {
   getHumanInterviewOfferReadinessError,
   loadHumanInterviewRoundReadiness,
@@ -151,6 +152,7 @@ async function createOfferVersion({
 
 export const offerDraftsRouter = factory
   .createApp()
+  .use("*", requireSscCandidateAccess())
   .get("/", requirePermission("offer", "read"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {

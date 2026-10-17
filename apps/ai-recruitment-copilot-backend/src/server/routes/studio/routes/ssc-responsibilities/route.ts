@@ -6,10 +6,17 @@ import {
   createSscResponsibility,
   deleteSscResponsibility,
   loadSscResponsibilityAdministrator,
+  listSscResponsibilityOptions,
   queryPaginatedSscResponsibilities,
   updateSscResponsibility,
 } from "./dao";
 import { sscResponsibilitiesQuerySchema, sscResponsibilityInputSchema } from "./schema";
+
+const SAVE_VALIDATION_MESSAGES = {
+  invalid_role: "请选择当前工作区中标记为 SSC 的工作区角色。",
+  invalid_source: "请选择当前工作区的部门/中心；未关联的历史记录仅可保留原名称。",
+  role_conflict: "该邮箱对应的 SSC 工作区角色存在冲突，或账号已被限制，请先核对成员和负责关系。",
+};
 
 export const sscResponsibilitiesRouter = factory
   .createApp()
@@ -26,6 +33,9 @@ export const sscResponsibilitiesRouter = factory
     return await next();
   })
   .use("*", requirePermission("page", "sscResponsibilities"))
+  .get("/options", async (c) =>
+    c.json(await listSscResponsibilityOptions(getWorkspaceRequestContext(c).organization.id), 200),
+  )
   .get(
     "/",
     zValidator("query", sscResponsibilitiesQuerySchema, jsonValidatorError("查询参数无效。")),
@@ -48,6 +58,9 @@ export const sscResponsibilitiesRouter = factory
       if (result === "duplicate") {
         return c.json({ error: "该中心/部门与 SSC 人员的对应关系已存在。" }, 409);
       }
+      if (result === "invalid_role" || result === "invalid_source" || result === "role_conflict") {
+        return c.json({ error: SAVE_VALIDATION_MESSAGES[result] }, 400);
+      }
       return c.json(result, 201);
     },
   )
@@ -65,6 +78,9 @@ export const sscResponsibilitiesRouter = factory
       }
       if (result === "duplicate") {
         return c.json({ error: "该中心/部门与 SSC 人员的对应关系已存在。" }, 409);
+      }
+      if (result === "invalid_role" || result === "invalid_source" || result === "role_conflict") {
+        return c.json({ error: SAVE_VALIDATION_MESSAGES[result] }, 400);
       }
       return c.json(result, 200);
     },

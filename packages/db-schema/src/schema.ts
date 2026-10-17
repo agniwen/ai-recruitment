@@ -319,6 +319,7 @@ export const organizationRole = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     id: text("id").primaryKey(),
     isOdc: boolean("is_odc").default(false).notNull(),
+    isSsc: boolean("is_ssc").default(false).notNull(),
     name: text("name").notNull(),
     organizationId: text("organization_id")
       .notNull()
@@ -332,6 +333,10 @@ export const organizationRole = pgTable(
   },
   (table) => [
     uniqueIndex("organization_role_org_role_uq").on(table.organizationId, table.role),
+    check(
+      "organization_role_exclusive_business_kind",
+      sql`NOT (${table.isOdc} AND ${table.isSsc})`,
+    ),
     index("organization_role_organization_idx").on(table.organizationId),
   ],
 );
@@ -380,41 +385,6 @@ export const platformPreRegistration = pgTable(
       table.workspaceSlug,
       table.displayName,
     ),
-  ],
-);
-
-export const sscResponsibility = pgTable(
-  "ssc_responsibility",
-  {
-    centerName: text("center_name").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    demandOwner: text("demand_owner").notNull().default(""),
-    email: text("email").notNull(),
-    id: text("id").primaryKey(),
-    notes: text("notes").notNull().default(""),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    sscName: text("ssc_name").notNull(),
-    telegram: text("telegram").notNull().default(""),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .$onUpdate(() => /* @__PURE__ */ new Date())
-      .notNull(),
-  },
-  (table) => [
-    uniqueIndex("ssc_responsibility_workspace_center_identity_uq").on(
-      table.organizationId,
-      sql`lower(btrim(${table.centerName}))`,
-      sql`(CASE
-        WHEN btrim(${table.email}) <> '' THEN 'email:' || lower(btrim(${table.email}))
-        WHEN btrim(${table.telegram}) <> '' THEN 'telegram:' || lower(btrim(${table.telegram}))
-        WHEN btrim(${table.sscName}) <> '' THEN 'name:' || lower(btrim(${table.sscName}))
-        ELSE 'unassigned'
-      END)`,
-    ),
-    index("ssc_responsibility_org_center_idx").on(table.organizationId, table.centerName),
-    check("ssc_responsibility_center_check", sql`length(btrim(${table.centerName})) > 0`),
   ],
 );
 
@@ -798,6 +768,60 @@ export const resumeSource = pgTable(
     index("resume_source_created_at_idx").on(table.createdAt),
     index("resume_source_organization_idx").on(table.organizationId),
     uniqueIndex("resume_source_organization_id_id_uq").on(table.organizationId, table.id),
+  ],
+);
+
+export const sscResponsibility = pgTable(
+  "ssc_responsibility",
+  {
+    centerName: text("center_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    demandOwner: text("demand_owner").notNull().default(""),
+    email: text("email").notNull(),
+    id: text("id").primaryKey(),
+    notes: text("notes").notNull().default(""),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    resumeSourceId: text("resume_source_id"),
+    sscName: text("ssc_name").notNull(),
+    telegram: text("telegram").notNull().default(""),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    workspaceRole: text("workspace_role"),
+  },
+  (table) => [
+    uniqueIndex("ssc_responsibility_workspace_scope_identity_uq").on(
+      table.organizationId,
+      sql`coalesce('source:' || ${table.resumeSourceId}, 'name:' || lower(btrim(${table.centerName})))`,
+      sql`(CASE
+        WHEN btrim(${table.email}) <> '' THEN 'email:' || lower(btrim(${table.email}))
+        WHEN btrim(${table.telegram}) <> '' THEN 'telegram:' || lower(btrim(${table.telegram}))
+        WHEN btrim(${table.sscName}) <> '' THEN 'name:' || lower(btrim(${table.sscName}))
+        ELSE 'unassigned'
+      END)`,
+    ),
+    index("ssc_responsibility_org_center_idx").on(table.organizationId, table.centerName),
+    index("ssc_responsibility_org_source_idx").on(table.organizationId, table.resumeSourceId),
+    index("ssc_responsibility_role_email_idx").on(
+      table.organizationId,
+      table.workspaceRole,
+      sql`lower(btrim(${table.email}))`,
+    ),
+    index("ssc_responsibility_email_idx").on(sql`lower(btrim(${table.email}))`),
+    foreignKey({
+      columns: [table.organizationId, table.resumeSourceId],
+      foreignColumns: [resumeSource.organizationId, resumeSource.id],
+      name: "ssc_responsibility_source_workspace_fk",
+    }).onDelete("no action"),
+    foreignKey({
+      columns: [table.organizationId, table.workspaceRole],
+      foreignColumns: [organizationRole.organizationId, organizationRole.role],
+      name: "ssc_responsibility_role_workspace_fk",
+    }).onDelete("no action"),
+    check("ssc_responsibility_center_check", sql`length(btrim(${table.centerName})) > 0`),
   ],
 );
 

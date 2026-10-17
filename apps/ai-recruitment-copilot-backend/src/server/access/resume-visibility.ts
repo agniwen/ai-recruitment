@@ -2,6 +2,8 @@ import type { SQL } from "drizzle-orm";
 import { and, eq, exists, inArray, isNull, not, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { createRequestWorkspaceAuthorizer } from "./workspace-access-policy";
+import { buildSscCandidateVisibilityCondition, resolveSscAccessActor } from "./ssc-access";
+import type { SscAccessActor } from "./ssc-access";
 import { resolveRecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import type { RecruitingVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/recruiting-visibility";
 import {
@@ -21,6 +23,7 @@ import {
 } from "@arc/db-schema/schema";
 
 export interface ResumeVisibilityScope {
+  sscActor?: SscAccessActor;
   actor?: { organizationId: string; userId: string };
   aiReviewOrganizationId?: string;
   odc: OdcAccessScope;
@@ -41,6 +44,11 @@ export async function resolveResumeVisibilityScope({
 }): Promise<ResumeVisibilityScope> {
   if (currentRole === "owner" || currentRole === "admin") {
     return { odc: EMPTY_ODC_ACCESS_SCOPE, recruiting: { kind: "all" } };
+  }
+
+  const sscActor = await resolveSscAccessActor({ currentRole, organizationId, userId });
+  if (sscActor) {
+    return { odc: EMPTY_ODC_ACCESS_SCOPE, recruiting: { kind: "none" }, sscActor };
   }
 
   const authorize = createRequestWorkspaceAuthorizer({
@@ -186,13 +194,7 @@ function buildOdcApprovalRestriction(
   );
 }
 
-export function buildResumeVisibilityCondition(
-  scope: CompatibleResumeVisibilityScope | undefined,
-): SQL | undefined {
-  if (!scope) {
-    return;
-  }
-  const normalized = normalizeScope(scope);
+function buildNonSscResumeVisibilityCondition(normalized: ResumeVisibilityScope): SQL | undefined {
   const actor = normalized.actor ?? normalized.odcActor;
   const approvalRestriction = buildOdcApprovalRestriction(actor, normalized.aiReviewOrganizationId);
   if (normalized.recruiting.kind === "all") {
@@ -256,4 +258,17 @@ export function buildResumeVisibilityCondition(
     return sql`false`;
   }
   return and(or(recruitingCondition, odcCondition, aiReviewCondition), approvalRestriction);
+}
+
+export function buildResumeVisibilityCondition(
+  scope: CompatibleResumeVisibilityScope | undefined,
+): SQL | undefined {
+  if (!scope) {
+    return;
+  }
+  const normalized = normalizeScope(scope);
+  if (normalized.sscActor) {
+    return buildSscCandidateVisibilityCondition(normalized.sscActor);
+  }
+  return buildNonSscResumeVisibilityCondition(normalized);
 }

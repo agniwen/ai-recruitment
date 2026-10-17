@@ -10,8 +10,15 @@ export const sscResponsibilityInputSchema = z.object({
     .toLowerCase()
     .pipe(z.union([z.literal(""), z.string().email("请输入有效的 SSC 邮箱。")])),
   notes: z.string().trim().max(4000),
+  resumeSourceId: z.string().trim().min(1).max(200).nullable(),
   sscName: z.string().trim().max(100),
   telegram: z.string().trim().max(120),
+  workspaceRole: z
+    .string()
+    .trim()
+    .min(1, "请选择 SSC 工作区角色。")
+    .max(100)
+    .refine((role) => !role.includes(","), "请选择一个 SSC 工作区角色。"),
 });
 
 export const sscResponsibilitiesQuerySchema = z.object({

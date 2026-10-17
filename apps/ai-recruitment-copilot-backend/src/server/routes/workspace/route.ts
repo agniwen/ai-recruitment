@@ -1,6 +1,7 @@
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { authMiddleware } from "@arc/ai-recruitment-copilot-backend/server/middlewares/auth";
 import { workspaceMiddleware } from "@arc/ai-recruitment-copilot-backend/server/middlewares/workspace";
+import { guardSscWorkspaceSurface } from "@arc/ai-recruitment-copilot-backend/server/middlewares/ssc-access";
 import { chatRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/chat/route";
 import { interviewAnalysisRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/interview/routes/analysis/route";
 import { resumeChatRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/resume/routes/chat/route";
@@ -10,7 +11,7 @@ import { studioRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/
 // resolved organization/member values live only in this Hono request context.
 export const workspaceRouter = factory
   .createApp()
-  .use("*", authMiddleware, workspaceMiddleware)
+  .use("*", authMiddleware, workspaceMiddleware, guardSscWorkspaceSurface())
   .route("/studio", studioRouter)
   .route("/chat", chatRouter)
   .route("/interview", interviewAnalysisRouter)

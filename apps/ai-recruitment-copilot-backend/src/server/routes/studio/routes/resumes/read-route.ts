@@ -22,6 +22,7 @@ import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import { getWorkspaceRequestContext } from "@arc/ai-recruitment-copilot-backend/server/context/workspace-request-context";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
+import { requireSscCandidateAccess } from "@arc/ai-recruitment-copilot-backend/server/middlewares/ssc-access";
 import {
   loadResumeDetailForAuthenticatedReviewer,
   loadResumeDetail,
@@ -121,6 +122,8 @@ async function notifyFailedResumeEvaluationIfNeeded(input: {
 
 export const resumeLibraryReadRouter = factory
   .createApp()
+  .use("/:id/review", requireSscCandidateAccess())
+  .use("/:id/review/*", requireSscCandidateAccess())
   .get(
     "/",
     requirePermission("resumeLibrary", "read"),

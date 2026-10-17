@@ -3,7 +3,14 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
-import { member, organization, user } from "@arc/db-schema/schema";
+import {
+  member,
+  organization,
+  organizationRole,
+  resumeSource,
+  sscResponsibility,
+  user,
+} from "@arc/db-schema/schema";
 import { sscResponsibilitiesRouter } from "./route";
 
 const INPUT = {
@@ -19,15 +26,54 @@ const organizationIds: string[] = [];
 let organizationId: string;
 let actorId: string;
 let membershipId: string;
+const sourceIds = new Map<string, Promise<string>>();
+
+function source(name: string, scope = organizationId) {
+  const key = `${scope}:${name.trim().toLowerCase()}`;
+  const existing = sourceIds.get(key);
+  if (existing) {
+    return existing;
+  }
+  const id = randomUUID();
+  const created = db
+    .insert(resumeSource)
+    .values({ id, name: name.trim(), organizationId: scope })
+    .then(() => id);
+  sourceIds.set(key, created);
+  return created;
+}
 
 async function createWorkspace() {
   const id = `test_ssc_relationship_${randomUUID()}`;
   organizationIds.push(id);
   await db.insert(organization).values({ id, name: id, slug: id });
+  await db.insert(organizationRole).values({
+    id: randomUUID(),
+    isSsc: true,
+    name: "SSC 角色",
+    organizationId: id,
+    permission: "{}",
+    role: "custom-ssc",
+  });
   return id;
 }
 
-function request(path = "", method = "GET", body?: unknown, scope = organizationId) {
+async function request(path = "", method = "GET", body?: unknown, scope = organizationId) {
+  let payload = body;
+  if ((method === "POST" || method === "PATCH") && body && typeof body === "object") {
+    const fields = body as Record<string, unknown>;
+    const validCenter =
+      typeof fields.centerName === "string" &&
+      fields.centerName.trim().length > 0 &&
+      fields.centerName.length <= 200;
+    payload = {
+      resumeSourceId: validCenter
+        ? await source(fields.centerName as string, scope)
+        : await source("Default Center", scope),
+      workspaceRole: "custom-ssc",
+      ...fields,
+    };
+  }
   return factory
     .createApp()
     .use("*", async (c, next) => {
@@ -39,13 +85,16 @@ function request(path = "", method = "GET", body?: unknown, scope = organization
     })
     .route("/ssc-responsibilities", sscResponsibilitiesRouter)
     .request(`/ssc-responsibilities${path}`, {
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: payload === undefined ? undefined : JSON.stringify(payload),
       headers: { "content-type": "application/json" },
       method,
     });
 }
 
-async function create(input = INPUT, scope = organizationId): Promise<string> {
+async function create(
+  input: typeof INPUT & { resumeSourceId?: string | null; workspaceRole?: string } = INPUT,
+  scope = organizationId,
+): Promise<string> {
   const response = await request("", "POST", input, scope);
   expect(response.status).toBe(201);
   const result = await response.json();
@@ -84,7 +133,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
     });
 
     it.each(["owner", "admin"])(
-      "lets a real %s save six normalized fields for an unregistered SSC and unknown center",
+      "lets a real %s save normalized fields for an unregistered SSC and linked center",
       async (role) => {
         await db.update(member).set({ role }).where(eq(member.id, membershipId));
         const email = `future_ssc_${randomUUID()}@example.com`;
@@ -97,7 +146,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
           telegram: "  @pending_ssc  ",
         });
         const result = await list();
-        expect(result).toEqual({
+        expect(result).toMatchObject({
           page: 1,
           pageSize: 20,
           records: [
@@ -108,9 +157,13 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
               email,
               id,
               notes: "备注",
+              resumeSourceId: expect.any(String),
+              resumeSourceName: "未建立目录的中心",
               sscName: "花名",
               telegram: "@pending_ssc",
               updatedAt: expect.any(String),
+              workspaceRole: "custom-ssc",
+              workspaceRoleName: "SSC 角色",
             },
           ],
           total: 1,
@@ -128,6 +181,183 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       await expect(list()).resolves.toMatchObject({
         records: [{ demandOwner: "", notes: "", telegram: "" }],
       });
+    });
+
+    it("lists only current-workspace SSC roles and sources as options", async () => {
+      const localSource = await source("Local Center");
+      const otherOrg = await createWorkspace();
+      await source("Foreign Center", otherOrg);
+      await db.insert(organizationRole).values({
+        id: randomUUID(),
+        isOdc: true,
+        name: "ODC Role",
+        organizationId,
+        permission: "{}",
+        role: "odc-only",
+      });
+      const response = await request("/options");
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        resumeSources: [{ id: localSource, name: "Local Center" }],
+        roles: [{ label: "SSC 角色", value: "custom-ssc" }],
+      });
+    });
+
+    it.each([null, "missing"])("rejects an unlinked new center: %s", async (resumeSourceId) => {
+      await expect(request("", "POST", { ...INPUT, resumeSourceId })).resolves.toHaveProperty(
+        "status",
+        400,
+      );
+      await expect(list()).resolves.toHaveProperty("total", 0);
+    });
+
+    it.each(["admin", "owner", "member", "unknown", "odc-only"])(
+      "rejects non-SSC or unknown role %s",
+      async (workspaceRole) => {
+        await db.insert(organizationRole).values({
+          id: randomUUID(),
+          isOdc: true,
+          name: "ODC Role",
+          organizationId,
+          permission: "{}",
+          role: "odc-only",
+        });
+        await expect(request("", "POST", { ...INPUT, workspaceRole })).resolves.toHaveProperty(
+          "status",
+          400,
+        );
+        await expect(list()).resolves.toHaveProperty("total", 0);
+      },
+    );
+
+    it("rejects a role or source belonging to another workspace", async () => {
+      const otherOrg = await createWorkspace();
+      const foreignSource = await source("Foreign Center", otherOrg);
+      await db.insert(organizationRole).values({
+        id: randomUUID(),
+        isSsc: true,
+        name: "Foreign SSC",
+        organizationId: otherOrg,
+        permission: "{}",
+        role: "foreign-ssc",
+      });
+      await expect(
+        request("", "POST", { ...INPUT, resumeSourceId: foreignSource }),
+      ).resolves.toHaveProperty("status", 400);
+      await expect(
+        request("", "POST", { ...INPUT, workspaceRole: "foreign-ssc" }),
+      ).resolves.toHaveProperty("status", 400);
+    });
+
+    it("uses the selected source name and shows a source rename immediately", async () => {
+      const resumeSourceId = await source("Real Center");
+      const id = await create({ ...INPUT, centerName: "Spoofed Center", resumeSourceId });
+      await expect(list()).resolves.toMatchObject({
+        records: [{ centerName: "Real Center", id, resumeSourceName: "Real Center" }],
+      });
+      await db
+        .update(resumeSource)
+        .set({ name: "Renamed Center" })
+        .where(eq(resumeSource.id, resumeSourceId));
+      await expect(list("?search=Renamed")).resolves.toMatchObject({
+        records: [{ id, resumeSourceId, resumeSourceName: "Renamed Center" }],
+        total: 1,
+      });
+      await expect(
+        request("", "POST", { ...INPUT, centerName: "Different Text", resumeSourceId }),
+      ).resolves.toHaveProperty("status", 409);
+      await expect(
+        request(`/${id}`, "PATCH", { ...INPUT, resumeSourceId: null }),
+      ).resolves.toHaveProperty("status", 400);
+    });
+
+    it("preserves legacy unlinked rows and their raw center until explicitly linked", async () => {
+      const id = randomUUID();
+      await db.insert(sscResponsibility).values({ ...INPUT, id, organizationId });
+      await expect(list()).resolves.toMatchObject({
+        records: [{ id, resumeSourceId: null, resumeSourceName: null, workspaceRole: null }],
+      });
+      await expect(
+        request(`/${id}`, "PATCH", { ...INPUT, notes: "Updated", resumeSourceId: null }),
+      ).resolves.toHaveProperty("status", 200);
+      await expect(
+        request(`/${id}`, "PATCH", { ...INPUT, centerName: "Invented", resumeSourceId: null }),
+      ).resolves.toHaveProperty("status", 400);
+      await expect(list()).resolves.toMatchObject({
+        records: [{ centerName: INPUT.centerName, id, notes: "Updated", resumeSourceId: null }],
+      });
+    });
+
+    it("rejects different SSC role assignments for the same email without partial changes", async () => {
+      const id = await create();
+      await db.insert(organizationRole).values({
+        id: randomUUID(),
+        isSsc: true,
+        name: "Second SSC Role",
+        organizationId,
+        permission: "{}",
+        role: "ssc-second",
+      });
+      await expect(
+        request("", "POST", { ...INPUT, centerName: "Other", workspaceRole: "ssc-second" }),
+      ).resolves.toHaveProperty("status", 400);
+      await expect(list()).resolves.toMatchObject({
+        records: [{ id, workspaceRole: "custom-ssc" }],
+        total: 1,
+      });
+    });
+
+    it("syncs an existing ordinary member role without changing their profile", async () => {
+      const userId = `test_ssc_target_${randomUUID()}`;
+      const targetMemberId = randomUUID();
+      const email = `${userId}@example.com`;
+      try {
+        await db
+          .insert(user)
+          .values({ email, id: userId, name: "Existing Name", telegram: "@existing" });
+        await db
+          .insert(member)
+          .values({ id: targetMemberId, organizationId, role: "member", userId });
+        await create({ ...INPUT, email });
+        const [target] = await db.select().from(member).where(eq(member.id, targetMemberId));
+        expect(target.role).toBe("custom-ssc");
+        const [profile] = await db.select().from(user).where(eq(user.id, userId));
+        expect(profile).toMatchObject({ email, name: "Existing Name", telegram: "@existing" });
+      } finally {
+        await db.delete(user).where(eq(user.id, userId));
+      }
+    });
+
+    it("preserves an administrator membership when their email appears in SSC pre-entry", async () => {
+      await create({ ...INPUT, email: `${actorId}@example.com` });
+      const [administrator] = await db.select().from(member).where(eq(member.id, membershipId));
+      expect(administrator.role).toBe("owner");
+    });
+
+    it("rolls back the record when the target member is explicitly restricted", async () => {
+      const userId = `test_ssc_restricted_${randomUUID()}`;
+      try {
+        const email = `${userId}@example.com`;
+        await db.insert(user).values({ email, id: userId, name: "Restricted" });
+        await db
+          .insert(member)
+          .values({ id: randomUUID(), organizationId, role: "noAccess", userId });
+        await expect(request("", "POST", { ...INPUT, email })).resolves.toHaveProperty(
+          "status",
+          400,
+        );
+        await expect(list()).resolves.toHaveProperty("total", 0);
+        const id = await create();
+        await expect(
+          request(`/${id}`, "PATCH", { ...INPUT, email, notes: "Must roll back" }),
+        ).resolves.toHaveProperty("status", 400);
+        await expect(list()).resolves.toMatchObject({
+          records: [{ email: INPUT.email, id, notes: INPUT.notes }],
+          total: 1,
+        });
+      } finally {
+        await db.delete(user).where(eq(user.id, userId));
+      }
     });
 
     it.each([{ sscName: "" }, { email: "" }])(
@@ -463,6 +693,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         await db.update(member).set({ role }).where(eq(member.id, membershipId));
         for (const [path, method] of [
           ["", "GET"],
+          ["/options", "GET"],
           ["", "POST"],
           ["/any", "PATCH"],
           ["/any", "DELETE"],

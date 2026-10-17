@@ -512,6 +512,8 @@ describe("hiring unit recruiting-group scope", () => {
     });
     await db.insert(studioInterview).values([
       {
+        aiReviewApprovalStatus: "approved",
+        aiReviewAssignedOdcUserId: NO_GROUP_MEMBER,
         candidateName: "候选人A",
         createdBy: OWNER,
         id: "source_candidate_a",
@@ -519,6 +521,8 @@ describe("hiring unit recruiting-group scope", () => {
         organizationId: ORG,
       },
       {
+        aiReviewApprovalStatus: "approved",
+        aiReviewAssignedOdcUserId: NO_GROUP_MEMBER,
         candidateName: "候选人B",
         createdBy: OWNER,
         id: "source_candidate_b",

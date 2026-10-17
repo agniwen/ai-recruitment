@@ -34,6 +34,11 @@ export const authClient = createAuthClient({
               required: false,
               type: "boolean",
             },
+            isSsc: {
+              defaultValue: false,
+              required: false,
+              type: "boolean",
+            },
             name: {
               required: true,
               type: "string",
