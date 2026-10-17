@@ -141,7 +141,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SSC current Offer and source access"
     });
   });
 
-  it.each(["ssc-01,member", "member, ssc-01", "ssc-01,"])(
+  it.each(["ssc-01,member", "member, ssc-01", "ssc-01,", " ssc-01 ", "\tssc-01\n"])(
     "classifies mixed role %s as SSC and fails closed even without assignments",
     async (role) => {
       await rolledBack(async () => {

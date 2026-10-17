@@ -28,3 +28,5 @@
 ## Verified implementation
 
 2026-10-17: isolated database migrations succeeded; 340 backend tests and 32 web tests passed with no skipped cases in the final focused suites. All seven package typechecks and targeted lint passed. Independent review found and verified repairs for revoked-intention provisioning, mixed SSC role bypass, and source-deletion uniqueness conflicts. Deployment and the precise 69-row backfill follow these checks.
+
+Final hardening also covers single SSC roles with surrounding spaces or tabs/newlines, which Better Auth preserves in invitations. Both new cases failed before the repair; all 108 affected access/route tests, targeted lint, and the backend typecheck passed afterward.

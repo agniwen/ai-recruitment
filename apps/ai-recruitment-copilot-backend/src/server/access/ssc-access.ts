@@ -129,7 +129,7 @@ async function hasAssignedSscRole(
       ?.split(",")
       .map((role) => role.trim())
       .filter(Boolean) ?? [];
-  if (!memberRole?.includes(",") || assignedRoles.length === 0) {
+  if (assignedRoles.length === 0 || memberRole === assignedRoles[0]) {
     return false;
   }
   const [sscRole] = await executor
@@ -183,9 +183,9 @@ export async function resolveSscAccessActor(
   if (profile?.isSsc) {
     return { organizationId: input.organizationId, userId: input.userId };
   }
-  // Better Auth invitations can contain multiple comma-separated roles. Any
-  // live SSC role must retain the SSC boundary; mixed roles deliberately do
-  // not match the single-role grant predicate and therefore receive no data.
+  // Better Auth invitations preserve comma-separated roles and surrounding
+  // whitespace. Any live SSC token retains the SSC boundary; noncanonical
+  // roles do not match the exact grant predicate and therefore receive no data.
   if (await hasAssignedSscRole(input.organizationId, profile?.role, executor)) {
     return { organizationId: input.organizationId, userId: input.userId };
   }
