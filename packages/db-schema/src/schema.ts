@@ -46,6 +46,7 @@ import type {
   HumanInterviewRoundOutcome,
   HumanInterviewRoundStatus,
   OfferDraftStatus,
+  OfferSscConfirmationStatus,
   PipelineStage,
   ResumeEvaluationStatus,
   ResumeParseStatus,
@@ -1808,6 +1809,13 @@ export const studioOfferDraft = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }),
     sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
     sentByRole: text("sent_by_role"),
+    sscCompletedAt: timestamp("ssc_completed_at", { withTimezone: true }),
+    sscCompletedBy: text("ssc_completed_by").references(() => user.id, { onDelete: "set null" }),
+    // NULL preserves historical Offers; every newly created Offer starts pending.
+    sscConfirmationStatus: text("ssc_confirmation_status").$type<OfferSscConfirmationStatus>(),
+    sscReceivedAt: timestamp("ssc_received_at", { withTimezone: true }),
+    sscReceivedBy: text("ssc_received_by").references(() => user.id, { onDelete: "set null" }),
+    sscRevision: integer("ssc_revision").notNull().default(1),
     status: text("status").$type<OfferDraftStatus>().notNull().default("draft"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -1820,6 +1828,11 @@ export const studioOfferDraft = pgTable(
       table.interviewRecordId,
       table.version,
     ),
+    check(
+      "studio_offer_draft_ssc_status_check",
+      sql`${table.sscConfirmationStatus} IS NULL OR ${table.sscConfirmationStatus} IN ('pending', 'confirming', 'completed')`,
+    ),
+    check("studio_offer_draft_ssc_revision_check", sql`${table.sscRevision} > 0`),
     index("studio_offer_draft_record_idx").on(table.interviewRecordId),
     index("studio_offer_draft_org_idx").on(table.organizationId),
     index("studio_offer_draft_status_idx").on(table.status),

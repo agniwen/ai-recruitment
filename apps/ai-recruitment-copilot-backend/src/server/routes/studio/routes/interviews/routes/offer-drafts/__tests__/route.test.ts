@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
+import { OfferDraftError } from "../../../dao/offer-drafts";
 
 const mocks = vi.hoisted(() => ({
   buildOfferApprovalAttachmentKey: vi.fn(),
   cancelOfferDraft: vi.fn(),
+  completeOfferSscConfirmation: vi.fn(),
   createOfferDraft: vi.fn(),
   deleteObject: vi.fn(),
   deleteOfferDraft: vi.fn(),
@@ -14,12 +16,14 @@ const mocks = vi.hoisted(() => ({
   invalidateStudioInterviewCaches: vi.fn(),
   limit: vi.fn(),
   listOfferDrafts: vi.fn(),
+  loadAuthorizedOfferSscContext: vi.fn(),
   loadDraftById: vi.fn(),
   loadHumanInterviewRoundReadiness: vi.fn(),
   loadOfferApprovalAttachment: vi.fn(),
   maybeAdvanceToOffer: vi.fn(),
   permissionCalls: [] as [string, string][],
   putObjectBytes: vi.fn(),
+  receiveOfferSscConfirmation: vi.fn(),
   recordCandidateActivity: vi.fn(),
   removeOfferApprovalAttachment: vi.fn(),
   respondOfferDraft: vi.fn(),
@@ -61,18 +65,26 @@ vi.mock(
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts",
   () => ({
-    OfferDraftError: class OfferDraftError extends Error {
-      override name = "OfferDraftError";
+    OfferDraftError: class MockOfferDraftError extends Error {
+      override name = "MockOfferDraftError";
+      readonly status: 400 | 404;
+      constructor(message: string, status: 400 | 404) {
+        super(message);
+        this.status = status;
+      }
     },
     cancelOfferDraft: mocks.cancelOfferDraft,
+    completeOfferSscConfirmation: mocks.completeOfferSscConfirmation,
     createOfferDraft: mocks.createOfferDraft,
     deleteOfferDraft: mocks.deleteOfferDraft,
     editOfferDraft: mocks.editOfferDraft,
     editOfferDraftWithAttachment: mocks.editOfferDraftWithAttachment,
     listOfferDrafts: mocks.listOfferDrafts,
+    loadAuthorizedOfferSscContext: mocks.loadAuthorizedOfferSscContext,
     loadDraftById: mocks.loadDraftById,
     loadOfferApprovalAttachment: mocks.loadOfferApprovalAttachment,
     maybeAdvanceToOffer: mocks.maybeAdvanceToOffer,
+    receiveOfferSscConfirmation: mocks.receiveOfferSscConfirmation,
     removeOfferApprovalAttachment: mocks.removeOfferApprovalAttachment,
     respondOfferDraft: mocks.respondOfferDraft,
     sendOfferDraft: mocks.sendOfferDraft,
@@ -128,6 +140,9 @@ describe("offerDraftsRouter", () => {
       ["offer", "update"],
       ["offer", "update"],
       ["offer", "update"],
+      ["offer", "read"],
+      ["offer", "receive"],
+      ["offer", "confirm"],
       ["offer", "update"],
       ["offer", "update"],
       ["offer", "delete"],
@@ -159,6 +174,54 @@ describe("offerDraftsRouter", () => {
     expect(await response.json()).toEqual({ error: "请先补全面试评价" });
     expect(mocks.createOfferDraft).not.toHaveBeenCalled();
   });
+
+  it.each([false, true])(
+    "rejects immediate sending before saving an Offer (attachment=%s)",
+    async (withAttachment) => {
+      const input = { baseSalary: 30_000, position: "工程师", sendImmediately: true };
+      const form = new FormData();
+      form.set("offer", JSON.stringify(input));
+      form.set("file", new File(["image"], "approval.png", { type: "image/png" }));
+      const response = await makeApp().request(
+        `/${RECORD_ID}/offer-drafts${withAttachment ? "/with-attachment" : ""}`,
+        {
+          body: withAttachment ? form : JSON.stringify(input),
+          headers: withAttachment ? undefined : { "Content-Type": "application/json" },
+          method: "POST",
+        },
+      );
+      expect(response.status).toBe(400);
+      expect(mocks.createOfferDraft).not.toHaveBeenCalled();
+      expect(mocks.putObjectBytes).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])(
+    "returns a DAO validation error when a candidate closes after HTTP preflight (attachment=%s)",
+    async (withAttachment) => {
+      mocks.limit.mockResolvedValue([{ id: RECORD_ID, pipelineStage: "offer" }]);
+      mocks.createOfferDraft.mockRejectedValue(
+        new OfferDraftError("已结案候选人不能创建 Offer。", 400),
+      );
+      const input = { baseSalary: 30_000, position: "工程师" };
+      const form = new FormData();
+      form.set("offer", JSON.stringify(input));
+      form.set("file", new File(["image"], "approval.png", { type: "image/png" }));
+      const response = await makeApp().request(
+        `/${RECORD_ID}/offer-drafts${withAttachment ? "/with-attachment" : ""}`,
+        {
+          body: withAttachment ? form : JSON.stringify(input),
+          headers: withAttachment ? undefined : { "Content-Type": "application/json" },
+          method: "POST",
+        },
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "已结案候选人不能创建 Offer。" });
+      if (withAttachment) {
+        expect(mocks.deleteObject).toHaveBeenCalledWith("offer-approval-attachments/file.png");
+      }
+    },
+  );
 
   it("stores a selected image on the created Offer and serves it to readers", async () => {
     const offer = {

@@ -332,6 +332,23 @@ export const offerDraftStatusValues = [
 export const offerDraftStatusSchema = z.enum(offerDraftStatusValues);
 export type OfferDraftStatus = z.infer<typeof offerDraftStatusSchema>;
 
+export const offerSscConfirmationStatusValues = ["pending", "confirming", "completed"] as const;
+export const offerSscConfirmationStatusSchema = z.enum(offerSscConfirmationStatusValues);
+export type OfferSscConfirmationStatus = z.infer<typeof offerSscConfirmationStatusSchema>;
+
+const offerSscConfirmationMeta: Record<
+  OfferSscConfirmationStatus,
+  { label: string; tone: "success" | "warning" | "info" | "outline" }
+> = {
+  completed: { label: "已完成确认", tone: "success" },
+  confirming: { label: "确认中", tone: "info" },
+  pending: { label: "Offer新增", tone: "outline" },
+};
+
+export function getOfferSscConfirmationMeta(status: OfferSscConfirmationStatus) {
+  return offerSscConfirmationMeta[status];
+}
+
 export const offerDraftStatusMeta: Record<
   OfferDraftStatus,
   { label: string; tone: "success" | "warning" | "info" | "outline" }

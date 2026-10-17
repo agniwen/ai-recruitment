@@ -27,7 +27,11 @@ import {
   removeOfferApprovalAttachment,
   respondOfferDraft,
   sendOfferDraft,
+  receiveOfferSscConfirmation,
+  completeOfferSscConfirmation,
+  loadAuthorizedOfferSscContext,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
+import { buildTelegramOfferLink } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-link";
 import { recordCandidateActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
 import { notifyCandidateStageChange } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-notification";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
@@ -40,6 +44,7 @@ import {
 const createOfferInputSchema = offerDraftInputSchema.extend({
   sendImmediately: z.boolean().optional(),
 });
+const offerSscActionInputSchema = z.object({ revision: z.number().int().min(1) });
 
 async function createOfferVersion({
   actorId,
@@ -56,6 +61,9 @@ async function createOfferVersion({
   organizationId: string;
   recordId: string;
 }): Promise<{ created: OfferDraftRecord } | { error: string; status: 400 | 404 }> {
+  if (input.sendImmediately) {
+    return { error: "新建 Offer 必须先完成 SSC 确认，不能立即发送。", status: 400 };
+  }
   const [candidate] = await db
     .select({
       id: studioInterview.id,
@@ -106,6 +114,9 @@ async function createOfferVersion({
       } catch (cleanupError) {
         console.error("Failed to clean up unsaved Offer approval attachment", cleanupError);
       }
+    }
+    if (error instanceof OfferDraftError && (error.status === 400 || error.status === 404)) {
+      return { error: error.message, status: error.status };
     }
     throw error;
   }
@@ -264,7 +275,15 @@ export const offerDraftsRouter = factory
       return c.json({ error: "候选人记录不存在。" }, 404);
     }
     const draftId = c.req.param("draftId");
-    const removed = await removeOfferApprovalAttachment(draftId, recordId, activeOrg.id);
+    let removed;
+    try {
+      removed = await removeOfferApprovalAttachment(draftId, recordId, activeOrg.id);
+    } catch (error) {
+      if (error instanceof OfferDraftError) {
+        return c.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
     if (!removed) {
       return c.json({ error: "附件不存在。" }, 404);
     }
@@ -395,6 +414,99 @@ export const offerDraftsRouter = factory
         });
         invalidateStudioInterviewCaches(activeOrg.id);
         return c.json(updated, 200);
+      } catch (error) {
+        if (error instanceof OfferDraftError) {
+          return c.json({ error: error.message }, error.status);
+        }
+        throw error;
+      }
+    },
+  )
+  .get("/:draftId/ssc/telegram-link", requirePermission("offer", "read"), async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const interviewRecordId = c.req.param("id");
+    if (!interviewRecordId) {
+      return c.json({ error: "候选人记录不存在。" }, 404);
+    }
+    try {
+      const context = await loadAuthorizedOfferSscContext({
+        actorUserId: user.id,
+        draftId: c.req.param("draftId"),
+        interviewRecordId,
+        organizationId: activeOrg.id,
+      });
+      if (context.draft.status === "deleted" || context.draft.status === "superseded") {
+        return c.json({ error: "此 Offer 已不可操作。" }, 409);
+      }
+      return c.json({ url: buildTelegramOfferLink(context.draft.id) }, 200);
+    } catch (error) {
+      if (error instanceof OfferDraftError) {
+        return c.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
+  })
+  .post(
+    "/:draftId/ssc/receive",
+    requirePermission("offer", "receive"),
+    zValidator("json", offerSscActionInputSchema, jsonValidatorError("SSC 确认参数无效。")),
+    async (c) => {
+      const { activeOrg, user } = c.var;
+      if (!activeOrg || !user) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const interviewRecordId = c.req.param("id");
+      if (!interviewRecordId) {
+        return c.json({ error: "候选人记录不存在。" }, 404);
+      }
+      try {
+        return c.json(
+          await receiveOfferSscConfirmation({
+            actor: { id: user.id, role: c.var.member?.role ?? null },
+            draftId: c.req.param("draftId"),
+            interviewRecordId,
+            organizationId: activeOrg.id,
+            revision: c.req.valid("json").revision,
+            source: "manual",
+          }),
+          200,
+        );
+      } catch (error) {
+        if (error instanceof OfferDraftError) {
+          return c.json({ error: error.message }, error.status);
+        }
+        throw error;
+      }
+    },
+  )
+  .post(
+    "/:draftId/ssc/complete",
+    requirePermission("offer", "confirm"),
+    zValidator("json", offerSscActionInputSchema, jsonValidatorError("SSC 确认参数无效。")),
+    async (c) => {
+      const { activeOrg, user } = c.var;
+      if (!activeOrg || !user) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const interviewRecordId = c.req.param("id");
+      if (!interviewRecordId) {
+        return c.json({ error: "候选人记录不存在。" }, 404);
+      }
+      try {
+        return c.json(
+          await completeOfferSscConfirmation({
+            actor: { id: user.id, role: c.var.member?.role ?? null },
+            draftId: c.req.param("draftId"),
+            interviewRecordId,
+            organizationId: activeOrg.id,
+            revision: c.req.valid("json").revision,
+            source: "manual",
+          }),
+          200,
+        );
       } catch (error) {
         if (error instanceof OfferDraftError) {
           return c.json({ error: error.message }, error.status);

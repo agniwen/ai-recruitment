@@ -19,6 +19,17 @@ const permissionsSectionSource = readFileSync(
 );
 
 describe("workspace role permission helpers", () => {
+  it("offers independent SSC receive and complete permissions when configuring a role", () => {
+    const permissions = buildPermissionItems().filter((item) =>
+      ["offer:receive", "offer:confirm"].includes(item.key),
+    );
+    expect(permissions).toMatchObject([
+      { actionLabel: "SSC接收确认", key: "offer:receive", resource: "offer" },
+      { actionLabel: "SSC完成确认", key: "offer:confirm", resource: "offer" },
+    ]);
+    expect(permissions[0]?.description).toContain("确认中");
+    expect(permissions[1]?.description).toContain("已完成确认");
+  });
   it("exposes a dedicated export action under job permissions", () => {
     expect(buildPermissionItems().find((item) => item.key === "jd:export")).toMatchObject({
       actionLabel: "导出",
@@ -194,7 +205,7 @@ describe("workspace role permission helpers", () => {
       "一键重试失败",
     ]);
     expect(groups.find((group) => group.resource === "humanInterview")?.items).toHaveLength(4);
-    expect(groups.find((group) => group.resource === "offer")?.items).toHaveLength(4);
+    expect(groups.find((group) => group.resource === "offer")?.items).toHaveLength(6);
     expect(groups.flatMap((group) => group.items).map((item) => item.key)).toEqual(
       buildPermissionItems().map((item) => item.key),
     );

@@ -102,7 +102,7 @@ export const statement = {
   interviewer: ["create", "read", "update", "delete"],
   jd: ["create", "read", "update", "delete", "export", "viewRecommendations"],
   mailIngestAccount: ["create", "read", "update", "delete", "manage"],
-  offer: ["create", "read", "update", "delete"],
+  offer: ["create", "read", "update", "delete", "receive", "confirm"],
   page: STUDIO_PAGE_PERMISSION_ACTIONS,
   questionTemplate: ["create", "read", "update", "delete"],
   resumeLibrary: ["create", "read", "update", "delete"],

@@ -90,7 +90,7 @@ export const WORKSPACE_PERMISSION_GROUPS = [
         label: "真人面试管理",
       },
       {
-        actions: ["create", "read", "update", "delete"] as const,
+        actions: ["create", "read", "update", "delete", "receive", "confirm"] as const,
         key: "offer",
         label: "Offer 管理",
       },
@@ -198,6 +198,8 @@ const PERMISSION_ITEM_ACTION_LABELS: Record<string, string> = {
   "candidateClose:create": "允许",
   "disableResumeEvaluation:create": "启用",
   "jd:viewRecommendations": "查看推荐",
+  "offer:confirm": "SSC完成确认",
+  "offer:receive": "SSC接收确认",
   "resumePool:create": "上传",
   "resumePool:retryFailed": "一键重试失败",
 };
@@ -332,9 +334,11 @@ const RESOURCE_ACTION_DESCRIPTIONS: Partial<Record<PermissionResource, Record<st
       "允许调整成员角色，并管理招聘组、组成员、组内角色和成员所属组；实际可调整范围仍受服务端角色规则限制。",
   },
   offer: {
+    confirm: "允许将当前版本的 Offer 从「确认中」推进为「已完成确认」，完成 SSC 审核。",
     create: "允许将候选人推进到 Offer，并新建 Offer 草稿。",
     delete: "允许撤回已创建或已发送的 Offer，或将 Offer 版本标记为已删除。",
     read: "允许查看 Offer 阶段页签和 Offer 版本记录。",
+    receive: "允许接收当前版本的 Offer，将「Offer新增」推进为「确认中」。",
     update: "允许编辑 Offer 草稿、发送 Offer，并记录候选人响应。",
   },
   organization: {

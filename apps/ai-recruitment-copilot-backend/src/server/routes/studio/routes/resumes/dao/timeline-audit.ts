@@ -277,6 +277,10 @@ export function auditDescription(detail: Record<string, unknown>, action: string
     const label = typeof detail.roundLabel === "string" ? detail.roundLabel : "真人复面";
     return label;
   }
+  if (action === "offer_ssc_received" || action === "offer_ssc_completed") {
+    const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
+    return `Offer${version}：${action === "offer_ssc_received" ? "SSC 已接收，确认中" : "SSC 已完成确认"}`;
+  }
   if (action.startsWith("offer_draft_")) {
     const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
     if (action === "offer_draft_created") {
@@ -340,6 +344,8 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
     offer_draft_restored: "Offer 已恢复",
     offer_draft_sent: "Offer 已发送",
     offer_draft_updated: "更新 Offer",
+    offer_ssc_completed: "SSC 已完成确认",
+    offer_ssc_received: "SSC 已接收",
     resume_evaluation_reset_for_job_change: "简历评估已重置",
     resume_evaluation_submitted: "简历评估已提交",
     resume_evaluation_updated: "简历评估状态变更",
@@ -364,7 +370,8 @@ export function auditTone(action: string): CandidateTimelineEventTone {
   if (
     action === "agent_report_received" ||
     action === "interview_questions_drafted" ||
-    action === "human_interview_round_completed"
+    action === "human_interview_round_completed" ||
+    action === "offer_ssc_completed"
   ) {
     return "success";
   }
@@ -388,6 +395,7 @@ export function auditTone(action: string): CandidateTimelineEventTone {
     action === "human_interview_evaluation_updated" ||
     action.startsWith("human_interview_round_") ||
     action.startsWith("offer_draft_") ||
+    action === "offer_ssc_received" ||
     action === "context_snapshot_refresh"
   ) {
     return "info";

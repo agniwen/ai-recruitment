@@ -39,6 +39,8 @@ interface PanelProps {
   candidateEmail: string | null;
   canCreate?: boolean;
   canDelete?: boolean;
+  canConfirm?: boolean;
+  canReceive?: boolean;
   canUpdate?: boolean;
   disabled?: boolean;
   // 父级在「候选人接受 Offer」二次确认后，开「标记结案 + outcome=hired」dialog。
@@ -52,6 +54,8 @@ export function OfferStagePanel({
   candidateName,
   canCreate = true,
   canDelete = true,
+  canConfirm = false,
+  canReceive = false,
   canUpdate = true,
   disabled,
   onRequestCloseAsHired,
@@ -63,9 +67,11 @@ export function OfferStagePanel({
     queryKey: ["offer-drafts", slug, candidateId],
   });
 
-  function invalidateDrafts() {
-    void queryClient.invalidateQueries({ queryKey: ["offer-drafts", slug, candidateId] });
-    void queryClient.invalidateQueries({ queryKey: ["studio-resumes"] });
+  async function invalidateDrafts() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["offer-drafts", slug, candidateId] }),
+      queryClient.invalidateQueries({ queryKey: ["studio-resumes"] }),
+    ]);
   }
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -107,7 +113,9 @@ export function OfferStagePanel({
       <div className="space-y-3">
         {drafts.map((draft) => (
           <OfferCard
+            canConfirm={canConfirm}
             canDelete={canDelete}
+            canReceive={canReceive}
             canUpdate={canUpdate}
             candidateId={candidateId}
             disabled={disabled}
@@ -136,7 +144,7 @@ export function OfferStagePanel({
         </div>
         <div className="flex w-full items-center justify-between gap-3 @2xl:ml-auto @2xl:w-auto @2xl:justify-end">
           <p className="text-left text-destructive text-xs @2xl:text-right">
-            该 Offer，需要SSC已完成审核确认的Offer
+            新版 Offer 须由 SSC 接收并完成确认后，方可发送或标记入职。
           </p>
           {disabled || !canCreate ? null : (
             <Button onClick={() => setCreateOpen(true)} size="sm">

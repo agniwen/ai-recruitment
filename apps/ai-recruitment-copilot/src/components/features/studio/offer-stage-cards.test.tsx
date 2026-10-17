@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { setTimeout as delay } from "node:timers/promises";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -9,18 +10,28 @@ import { OfferCard } from "./offer-stage-cards";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const mocks = vi.hoisted(() => ({ patchOfferDraftWithAttachment: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  completeOfferSscConfirmation: vi.fn(),
+  getOfferSscTelegramLink: vi.fn(),
+  patchOfferDraftWithAttachment: vi.fn(),
+  receiveOfferSscConfirmation: vi.fn(),
+}));
 
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "demo" }));
 vi.mock("@/lib/client/api", () => ({
+  completeOfferSscConfirmation: mocks.completeOfferSscConfirmation,
+  getOfferSscTelegramLink: mocks.getOfferSscTelegramLink,
   offerApprovalAttachmentUrl: (_slug: string, _candidateId: string, draftId: string) =>
     `/offer-attachments/${draftId}`,
   patchOfferDraftWithAttachment: mocks.patchOfferDraftWithAttachment,
+  receiveOfferSscConfirmation: mocks.receiveOfferSscConfirmation,
 }));
 
 const roots: ReturnType<typeof createRoot>[] = [];
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.getOfferSscTelegramLink.mockResolvedValue({ url: null });
   vi.stubGlobal(
     "matchMedia",
     vi.fn(() => ({
@@ -52,7 +63,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderCard(mediaType: string, filename: string, canUpdate = false, currency = "CNY") {
+function renderCard(
+  mediaType: string,
+  filename: string,
+  canUpdate = false,
+  currency = "CNY",
+  options: {
+    canConfirm?: boolean;
+    canReceive?: boolean;
+    disabled?: boolean;
+    draft?: Partial<OfferDraftRecord>;
+  } = {},
+) {
   const onSaved = vi.fn();
   const draft: OfferDraftRecord = {
     approvalAttachment: { filename, mediaType, size: 3 },
@@ -71,9 +93,16 @@ function renderCard(mediaType: string, filename: string, canUpdate = false, curr
     position: "工程师",
     responseAt: null,
     sentAt: null,
+    sscCompletedAt: null,
+    sscCompletedBy: null,
+    sscConfirmationStatus: null,
+    sscReceivedAt: null,
+    sscReceivedBy: null,
+    sscRevision: 3,
     status: "draft",
     updatedAt: "2026-09-23T00:00:00.000Z",
     version: 1,
+    ...options.draft,
   };
   const host = document.createElement("div");
   document.body.append(host);
@@ -84,9 +113,11 @@ function renderCard(mediaType: string, filename: string, canUpdate = false, curr
       <QueryClientProvider client={new QueryClient()}>
         <OfferCard
           canDelete={false}
+          canConfirm={options.canConfirm ?? false}
+          canReceive={options.canReceive ?? false}
           canUpdate={canUpdate}
           candidateId="candidate-1"
-          disabled={!canUpdate}
+          disabled={options.disabled ?? !canUpdate}
           draft={draft}
           onCancelled={vi.fn()}
           onDeleted={vi.fn()}
@@ -238,5 +269,147 @@ describe("OfferCard approval attachment", () => {
       expect.objectContaining({ position: "工程师" }),
       replacement,
     );
+  });
+});
+
+function findButton(host: HTMLElement, label: string) {
+  return [...host.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === label,
+  );
+}
+
+async function flushMutation() {
+  await act(async () => {
+    await delay(0);
+    await delay(0);
+  });
+}
+
+describe("OfferCard SSC confirmation", () => {
+  it("shows the SSC workflow state instead of draft for a completed new offer", () => {
+    const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+      draft: { sscConfirmationStatus: "completed" },
+    });
+    expect(host.textContent).toContain("已完成确认");
+    expect(host.textContent).not.toContain("草稿");
+  });
+  it.each(["https://t.me/recruiting_bot?start=offer_offer-1", null])(
+    "shows only an available Telegram confirmation link: %s",
+    async (url) => {
+      mocks.getOfferSscTelegramLink.mockResolvedValue({ url });
+      const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+        canReceive: true,
+        disabled: false,
+        draft: { sscConfirmationStatus: "pending" },
+      });
+      await flushMutation();
+      const link = [...host.querySelectorAll("a")].find((item) =>
+        item.textContent?.includes("Telegram"),
+      );
+      expect(link?.getAttribute("href") ?? null).toBe(url);
+      if (url) {
+        expect(link?.getAttribute("target")).toBe("_blank");
+        expect(link?.getAttribute("rel")).toContain("noopener");
+      }
+    },
+  );
+  it.each([
+    ["pending", "Offer新增"],
+    ["confirming", "确认中"],
+    ["completed", "已完成确认"],
+  ] as const)("shows %s independently from candidate acceptance", (status, label) => {
+    const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+      draft: { sscConfirmationStatus: status, status: "accepted" },
+    });
+    expect(host.textContent).toContain(label);
+    expect(host.textContent).toContain("已接受");
+  });
+
+  it.each([
+    ["pending", true, false, "SSC接收确认"],
+    ["pending", false, true, null],
+    ["confirming", true, false, null],
+    ["confirming", false, true, "SSC完成确认"],
+    ["completed", true, true, null],
+    [null, true, true, null],
+  ] as const)(
+    "gates %s actions by their dedicated permission",
+    async (status, canReceive, canConfirm, label) => {
+      const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+        canConfirm,
+        canReceive,
+        disabled: false,
+        draft: { sscConfirmationStatus: status },
+      });
+      await flushMutation();
+      const sscButtons = [...host.querySelectorAll("button")].filter((button) =>
+        button.textContent?.includes("SSC"),
+      );
+      expect(sscButtons.map((button) => button.textContent?.trim())).toEqual(label ? [label] : []);
+      expect(findButton(host, "编辑")).toBeUndefined();
+    },
+  );
+
+  it.each(["pending", "confirming"] as const)(
+    "explains why %s cannot be sent or hired",
+    (status) => {
+      const { host } = renderCard("image/png", "ssc.png", true, "CNY", {
+        draft: { sscConfirmationStatus: status },
+      });
+      expect(host.textContent).toContain("SSC完成确认后方可发送 Offer 或标记入职");
+    },
+  );
+
+  it.each([
+    ["pending", "SSC接收确认", "接收中…", "receiveOfferSscConfirmation"],
+    ["confirming", "SSC完成确认", "确认中…", "completeOfferSscConfirmation"],
+  ] as const)(
+    "submits %s with the displayed revision and disables actions until refreshed",
+    async (status, label, pendingLabel, api) => {
+      const pending = Promise.withResolvers<null>();
+      mocks[api].mockReturnValue(pending.promise);
+      const { host, onSaved } = renderCard("image/png", "ssc.png", true, "CNY", {
+        canConfirm: true,
+        canReceive: true,
+        draft: { sscConfirmationStatus: status },
+      });
+      const button = findButton(host, label);
+      expect(button).toBeDefined();
+      await act(() => {
+        button?.click();
+      });
+      await flushMutation();
+      expect(mocks[api]).toHaveBeenCalledExactlyOnceWith("demo", "candidate-1", "offer-1", {
+        revision: 3,
+      });
+      expect(findButton(host, pendingLabel)?.disabled).toBe(true);
+      expect(findButton(host, "编辑")?.disabled).toBe(true);
+      expect(onSaved).not.toHaveBeenCalled();
+      await act(() => {
+        pending.resolve(null);
+      });
+      await flushMutation();
+      expect(onSaved).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("keeps the failed action available and shows a stale-revision error", async () => {
+    mocks.receiveOfferSscConfirmation.mockRejectedValue(new Error("Offer 已更新，请刷新后重试"));
+    const { host, onSaved } = renderCard("image/png", "ssc.png", false, "CNY", {
+      canReceive: true,
+      disabled: false,
+      draft: { sscConfirmationStatus: "pending" },
+    });
+    const button = findButton(host, "SSC接收确认");
+    expect(button).toBeDefined();
+    await act(() => {
+      button?.click();
+    });
+    await flushMutation();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+      "Offer 已更新，请刷新后重试",
+    );
+    expect(findButton(host, "SSC接收确认")?.disabled).toBe(false);
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

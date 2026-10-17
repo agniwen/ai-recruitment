@@ -11,6 +11,7 @@ import type {
   HumanInterviewRoundOutcome,
   HumanInterviewRoundStatus,
   OfferDraftStatus,
+  OfferSscConfirmationStatus,
 } from "@arc/db-schema/studio-interviews";
 
 /**
@@ -178,6 +179,13 @@ export interface OfferDraftRecord {
   organizationId: string;
   version: number;
   status: OfferDraftStatus;
+  // Optional for older clients/fixtures; new API responses include every SSC field.
+  sscConfirmationStatus?: OfferSscConfirmationStatus | null;
+  sscRevision?: number;
+  sscReceivedBy?: string | null;
+  sscReceivedAt?: string | null;
+  sscCompletedBy?: string | null;
+  sscCompletedAt?: string | null;
   baseSalary: number;
   currency: string;
   bonus: number | null;

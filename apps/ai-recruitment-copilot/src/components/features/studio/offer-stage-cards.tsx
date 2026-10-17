@@ -17,7 +17,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { ClipboardEvent } from "react";
 import { toast } from "sonner";
-import { getOfferDraftStatusMeta } from "@arc/db-schema/studio-interviews";
 import { MAX_OFFER_APPROVAL_ATTACHMENT_BYTES } from "@arc/shared/studio-pipeline-stages";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import {
@@ -31,7 +30,6 @@ import {
 } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { DatePicker } from "@/components/date-time-picker";
-import { Badge } from "@/components/ui/badge";
 import { EmptyValue } from "@/components/features/display/empty-value";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +52,12 @@ import {
 } from "./offer-currency";
 import { EntityDeleteDialog } from "./entity-delete-dialog";
 import { OfferAttachmentPreview } from "./offer-attachment-preview";
+import {
+  OfferSscActions,
+  OfferSscNotice,
+  OfferStatusBadges,
+  useOfferSscConfirmation,
+} from "./offer-ssc-confirmation";
 import {
   OfferDraftFormFields,
   buildOfferDraftPayload,
@@ -261,7 +265,9 @@ function ExpectationField({ label, value }: { label: string; value: string | nul
 
 export function OfferCard({
   draft,
+  canConfirm,
   canDelete,
+  canReceive,
   canUpdate,
   candidateId,
   disabled,
@@ -271,17 +277,27 @@ export function OfferCard({
   onDeleted,
 }: {
   draft: OfferDraftRecord;
+  canConfirm?: boolean;
   canDelete: boolean;
+  canReceive?: boolean;
   canUpdate: boolean;
   candidateId: string;
   disabled?: boolean;
   onRespond: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
   onCancelled: () => void;
   onDeleted: () => void;
 }) {
   const slug = useWorkspaceSlug();
-  const meta = getOfferDraftStatusMeta(draft.status);
+  const ssc = useOfferSscConfirmation({
+    canConfirm,
+    canReceive,
+    candidateId,
+    disabled,
+    draft,
+    onSaved,
+    slug,
+  });
   const [editing, setEditing] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [removeAttachment, setRemoveAttachment] = useState(false);
@@ -365,6 +381,12 @@ export function OfferCard({
       onDeleted();
     },
   });
+  const isBusy = [
+    ssc.isPending,
+    cancelMutation.isPending,
+    deleteMutation.isPending,
+    saveMutation.isPending,
+  ].includes(true);
   function cancelEditing() {
     setForm(offerFormStateFromDraft(draft));
     clearNewAttachment();
@@ -379,7 +401,7 @@ export function OfferCard({
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="font-medium text-sm">v{draft.version} · 编辑 Offer 草稿</span>
-              <Badge variant={meta.tone}>{meta.label}</Badge>
+              <OfferStatusBadges draft={draft} editing />
             </div>
           </div>
 
@@ -391,7 +413,7 @@ export function OfferCard({
 
           <div className="mt-3 grid gap-1.5">
             <Label className="text-sm" htmlFor={`offer-${draft.id}-approval-attachment`}>
-              SSC 已审核截图 / 附件（可选）
+              SSC审核材料 / 附件（可选）
             </Label>
             {draft.approvalAttachment && !removeAttachment && !newAttachment ? (
               <OfferApprovalAttachment
@@ -460,7 +482,7 @@ export function OfferCard({
             <span className="font-medium text-sm">
               v{draft.version} · {draft.position}
             </span>
-            <Badge variant={meta.tone}>{meta.label}</Badge>
+            <OfferStatusBadges draft={draft} />
             {draft.approvalAttachment ? (
               <OfferApprovalAttachment candidateId={candidateId} draft={draft} slug={slug} />
             ) : null}
@@ -468,13 +490,17 @@ export function OfferCard({
 
           <OfferDraftReadonlyFields draft={draft} />
 
+          <OfferSscNotice draft={draft} error={ssc.error} />
+
           {disabled ? null : (
-            <div className="border-border/60 border-t pt-3">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-border/60 border-t pt-3">
+              <OfferSscActions confirmation={ssc} isBusy={isBusy} />
               <OfferCardActions
                 canDelete={canDelete}
                 canUpdate={canUpdate}
                 cancelMutation={cancelMutation}
                 draft={draft}
+                isPending={isBusy}
                 onEdit={() => setEditing(true)}
                 onDelete={() => setDeleteConfirmOpen(true)}
                 onRespond={onRespond}
@@ -593,6 +619,7 @@ function OfferCardActions({
   onDelete,
   onRespond,
   cancelMutation,
+  isPending,
 }: {
   draft: OfferDraftRecord;
   canDelete: boolean;
@@ -601,6 +628,7 @@ function OfferCardActions({
   onDelete: () => void;
   onRespond: () => void;
   cancelMutation: { mutate: () => void; isPending: boolean };
+  isPending: boolean;
 }) {
   if (draft.status === "draft") {
     if (!(canUpdate || canDelete)) {
@@ -610,13 +638,13 @@ function OfferCardActions({
     return (
       <div className="flex flex-wrap justify-end gap-2">
         {canDelete ? (
-          <Button onClick={onDelete} size="sm" variant="ghost">
+          <Button disabled={isPending} onClick={onDelete} size="sm" variant="ghost">
             <IconTrash className="size-4" />
             删除
           </Button>
         ) : null}
         {canUpdate ? (
-          <Button onClick={onEdit} size="sm" variant="ghost">
+          <Button disabled={isPending} onClick={onEdit} size="sm" variant="ghost">
             <IconPencil className="size-4" />
             编辑
           </Button>
@@ -632,20 +660,20 @@ function OfferCardActions({
     return (
       <div className="flex flex-wrap justify-end gap-2">
         {canUpdate ? (
-          <Button onClick={onRespond} size="sm">
+          <Button disabled={isPending} onClick={onRespond} size="sm">
             <IconCircleCheck className="size-4" />
             记录响应
           </Button>
         ) : null}
         {canDelete ? (
-          <Button onClick={onDelete} size="sm" variant="ghost">
+          <Button disabled={isPending} onClick={onDelete} size="sm" variant="ghost">
             <IconTrash className="size-4" />
             删除
           </Button>
         ) : null}
         {canDelete ? (
           <Button
-            disabled={cancelMutation.isPending}
+            disabled={isPending}
             onClick={() => cancelMutation.mutate()}
             size="sm"
             variant="outline"
@@ -659,7 +687,7 @@ function OfferCardActions({
   }
   return canDelete ? (
     <div className="flex flex-wrap justify-end gap-2">
-      <Button onClick={onDelete} size="sm" variant="ghost">
+      <Button disabled={isPending} onClick={onDelete} size="sm" variant="ghost">
         <IconTrash className="size-4" />
         删除
       </Button>

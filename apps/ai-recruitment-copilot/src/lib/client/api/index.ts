@@ -28,6 +28,7 @@ export { extractResumeDedupConflictMatches } from "./resume-dedup-conflict";
 export * from "./endpoints/chat";
 export * from "./endpoints/public-interview";
 export * from "./endpoints/studio-interviews";
+export * from "./endpoints/offer-ssc";
 export * from "./endpoints/studio-calendar";
 export * from "./endpoints/resume";
 export * from "./endpoints/studio-resumes";

@@ -179,6 +179,8 @@ export function useStudioPersonDetailController({
   const hasCreateOfferPermission = useHasPermission("offer", "create");
   const hasUpdateOfferPermission = useHasPermission("offer", "update");
   const hasDeleteOfferPermission = useHasPermission("offer", "delete");
+  const hasReceiveOfferPermission = useHasPermission("offer", "receive");
+  const hasConfirmOfferPermission = useHasPermission("offer", "confirm");
   const hasCreateCandidateClosePermission = useHasPermission("candidateClose", "create");
   const memberRole = useOptionalWorkspaceMemberRole();
   const workspacePermissions = useOptionalWorkspacePermissions();
@@ -195,6 +197,8 @@ export function useStudioPersonDetailController({
   const canCreateOffer = canUseManagementActions && hasCreateOfferPermission;
   const canUpdateOffer = canUseManagementActions && hasUpdateOfferPermission;
   const canDeleteOffer = canUseManagementActions && hasDeleteOfferPermission;
+  const canReceiveOffer = canUseManagementActions && hasReceiveOfferPermission;
+  const canConfirmOffer = canUseManagementActions && hasConfirmOfferPermission;
   const canCloseCandidate = canUseManagementActions && hasCreateCandidateClosePermission;
   // Deny flag on custom roles; owner/admin always evaluate (see isResumeEvaluationDisabled).
   const canEvaluateResume =
@@ -993,12 +997,14 @@ export function useStudioPersonDetailController({
     activeTab,
     bodyLayoutClassName,
     canCloseCandidate,
+    canConfirmOffer,
     canCreateHumanInterview,
     canCreateOffer,
     canDeleteHumanInterview,
     canDeleteOffer,
     canReadHumanInterview,
     canReadOffer,
+    canReceiveOffer,
     canResetAiRound,
     canUpdateHumanInterview,
     canUpdateOffer,

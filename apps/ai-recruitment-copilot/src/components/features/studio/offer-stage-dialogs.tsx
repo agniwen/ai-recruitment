@@ -175,7 +175,9 @@ export function CreateOrEditOfferDialog({
             {mode === "edit" ? "草稿状态可编辑。" : "新建版本会自动 supersede 已发出未结的旧版本。"}
           </DialogDescription>
           {mode === "create" ? (
-            <p className="text-muted-foreground text-xs">该 Offer，需要SSC已完成审核确认的Offer</p>
+            <p className="text-muted-foreground text-xs">
+              新增后等待 SSC 接收并完成确认；确认完成前不可发送 Offer 或标记入职。
+            </p>
           ) : null}
         </DialogHeader>
 
@@ -184,7 +186,7 @@ export function CreateOrEditOfferDialog({
         {mode === "create" ? (
           <div className="grid gap-1.5">
             <Label className="text-sm" htmlFor="offer-approval-attachment">
-              SSC 已审核截图 / 附件（可选）
+              SSC审核材料 / 附件（可选）
             </Label>
             <Input
               id="offer-approval-attachment"
@@ -359,20 +361,24 @@ export function AcceptedConfirmDialog({
   onOpenChange: (open: boolean) => void;
   onProceed: () => void;
 }) {
+  const sscPending =
+    draft?.sscConfirmationStatus === "pending" || draft?.sscConfirmationStatus === "confirming";
   return (
     <Dialog onOpenChange={onOpenChange} open={draft !== null}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>候选人已接受 Offer</DialogTitle>
           <DialogDescription>
-            是否立刻标记为「已到岗」并结案？你也可以稍后在 action bar 里手动标记。
+            {sscPending
+              ? "SSC完成确认后方可标记为「已到岗」。请先完成当前版本的 SSC 确认。"
+              : "是否立刻标记为「已到岗」并结案？你也可以稍后在 action bar 里手动标记。"}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} variant="outline">
             稍后
           </Button>
-          <Button onClick={onProceed}>
+          <Button disabled={sscPending} onClick={onProceed}>
             <IconArrowUpRight className="size-4" />
             标记为已到岗
           </Button>
