@@ -59,7 +59,7 @@ export function useOfferSscConfirmation({
     error: mutation.error,
     isPending: mutation.isPending,
     mutate: mutation.mutate,
-    telegramUrl: telegramLink?.url ?? null,
+    telegramUrl: canReceiveCurrent || canConfirmCurrent ? (telegramLink?.url ?? null) : null,
   };
 }
 

@@ -461,13 +461,16 @@ describe("Offer SSC confirmation", () => {
     await expect(makeApp(FORBIDDEN_USER).request(path)).resolves.toHaveProperty("status", 403);
   });
 
-  it("returns no bot entry link when the bot username is not configured", async () => {
-    vi.stubEnv("TELEGRAM_BOT_USERNAME", "");
-    const offer = await newOffer();
-    const response = await makeApp().request(
-      `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/telegram-link`,
-    );
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ url: null });
-  });
+  it.each(["", "undefined", "null", "@undefined", "NULL"])(
+    "returns no bot entry link when the bot username is not configured: %s",
+    async (username) => {
+      vi.stubEnv("TELEGRAM_BOT_USERNAME", username);
+      const offer = await newOffer();
+      const response = await makeApp().request(
+        `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/telegram-link`,
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ url: null });
+    },
+  );
 });

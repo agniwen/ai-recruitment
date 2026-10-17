@@ -107,27 +107,32 @@ function renderCard(
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
+  const queryClient = new QueryClient();
   roots.push(root);
-  act(() => {
-    root.render(
-      <QueryClientProvider client={new QueryClient()}>
-        <OfferCard
-          canDelete={false}
-          canConfirm={options.canConfirm ?? false}
-          canReceive={options.canReceive ?? false}
-          canUpdate={canUpdate}
-          candidateId="candidate-1"
-          disabled={options.disabled ?? !canUpdate}
-          draft={draft}
-          onCancelled={vi.fn()}
-          onDeleted={vi.fn()}
-          onRespond={vi.fn()}
-          onSaved={onSaved}
-        />
-      </QueryClientProvider>,
-    );
-  });
-  return { host, onSaved };
+  function rerender(nextOptions: typeof options = options) {
+    const current = { ...options, ...nextOptions };
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <OfferCard
+            canDelete={false}
+            canConfirm={current.canConfirm ?? false}
+            canReceive={current.canReceive ?? false}
+            canUpdate={canUpdate}
+            candidateId="candidate-1"
+            disabled={current.disabled ?? !canUpdate}
+            draft={{ ...draft, ...current.draft }}
+            onCancelled={vi.fn()}
+            onDeleted={vi.fn()}
+            onRespond={vi.fn()}
+            onSaved={onSaved}
+          />
+        </QueryClientProvider>,
+      );
+    });
+  }
+  rerender();
+  return { host, onSaved, rerender };
 }
 
 describe("OfferCard approval attachment", () => {
@@ -286,6 +291,27 @@ async function flushMutation() {
 }
 
 describe("OfferCard SSC confirmation", () => {
+  it.each([
+    { canReceive: true, status: "completed" },
+    { canReceive: false, status: "pending" },
+  ] as const)(
+    "hides a cached Telegram link after eligibility changes to $status, receive=$canReceive",
+    async ({ canReceive, status }) => {
+      const url = "https://t.me/recruiting_bot?start=offer_offer-1";
+      mocks.getOfferSscTelegramLink.mockResolvedValue({ url });
+      const { host, rerender } = renderCard("image/png", "ssc.png", false, "CNY", {
+        canReceive: true,
+        disabled: false,
+        draft: { sscConfirmationStatus: "pending" },
+      });
+      await flushMutation();
+      expect(host.querySelector(`a[href="${url}"]`)).not.toBeNull();
+      rerender({ canReceive, draft: { sscConfirmationStatus: status } });
+      await flushMutation();
+      expect(host.querySelector(`a[href="${url}"]`)).toBeNull();
+      expect(host.textContent).not.toContain("在 Telegram 中确认");
+    },
+  );
   it("shows the SSC workflow state instead of draft for a completed new offer", () => {
     const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
       draft: { sscConfirmationStatus: "completed" },

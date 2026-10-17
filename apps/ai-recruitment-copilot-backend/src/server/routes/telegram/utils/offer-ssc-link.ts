@@ -5,6 +5,7 @@ export function buildTelegramOfferLink(draftId: string): string | null {
   const username = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/u, "");
   if (
     !username ||
+    /^(?:undefined|null)$/iu.test(username) ||
     !/^[a-zA-Z0-9_]{5,32}$/u.test(username) ||
     !z.uuid().safeParse(draftId).success
   ) {
