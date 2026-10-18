@@ -714,6 +714,7 @@ async function loadResumeDerivedFields(
         interviewRecordId: studioOfferDraft.interviewRecordId,
         responseAt: studioOfferDraft.responseAt,
         sentAt: studioOfferDraft.sentAt,
+        sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
         status: studioOfferDraft.status,
         version: studioOfferDraft.version,
       })
@@ -841,6 +842,7 @@ async function loadResumeDerivedFields(
             id: latestDraft.id,
             responseAt: serializeStageProgressTimestamp(latestDraft.responseAt),
             sentAt: serializeStageProgressTimestamp(latestDraft.sentAt),
+            sscConfirmationStatus: latestDraft.sscConfirmationStatus,
             status: latestDraft.status,
             version: latestDraft.version,
           }

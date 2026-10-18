@@ -5,6 +5,7 @@ import type { ResumeRecruitmentSource } from "@arc/db-schema/resume-recruitment-
 import type { ResumeReview, ResumeReviewAction } from "@arc/db-schema/resume-review";
 import type { ResumeDuplicateMatchSummary } from "./resume-duplicates";
 import {
+  getOfferSscConfirmationMeta,
   resumeEvaluationStatusMeta,
   resumeEvaluationStatusSchema,
   resumeParseStatusMeta,
@@ -17,6 +18,7 @@ import type {
   HumanInterviewRoundOutcome,
   HumanInterviewRoundStatus,
   OfferDraftStatus,
+  OfferSscConfirmationStatus,
   PipelineStage,
   ResumeEvaluationStatus,
   ResumeParseStatus,
@@ -89,6 +91,7 @@ export interface OfferProgress {
     id: string;
     version: number;
     status: OfferDraftStatus;
+    sscConfirmationStatus?: OfferSscConfirmationStatus | null;
     sentAt: string | null;
     responseAt: string | null;
   } | null;
@@ -333,6 +336,10 @@ function describeOffer(p: OfferProgress | null): Description {
   const versionSuffix = p.totalVersions > 1 ? ` v${latestDraft.version}` : "";
   switch (latestDraft.status) {
     case "draft": {
+      if (latestDraft.sscConfirmationStatus) {
+        const { label, tone } = getOfferSscConfirmationMeta(latestDraft.sscConfirmationStatus);
+        return { label: `Offer${versionSuffix} · ${label}`, tone };
+      }
       return { label: `Offer${versionSuffix} · 草稿`, tone: "outline" };
     }
     case "sent": {

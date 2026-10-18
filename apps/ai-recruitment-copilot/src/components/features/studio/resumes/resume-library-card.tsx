@@ -9,6 +9,7 @@ import {
 import AvvvatarsModule from "avvvatars-react";
 import { memo, useRef } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { getOfferSscConfirmationMeta } from "@arc/db-schema/studio-interviews";
 
 import { TimeDisplay } from "@/components/features/display/time-display";
 import { ResumeDuplicateMatchBadge } from "@/components/features/resume/resume-duplicate-match-badge";
@@ -96,7 +97,10 @@ function describeCompactOfferLifecycle(record: ResumeLibraryListRecord): string 
   const version = progress.totalVersions > 1 ? `v${draft.version} ` : "";
   switch (draft.status) {
     case "draft": {
-      return `${version}草稿`;
+      const label = draft.sscConfirmationStatus
+        ? getOfferSscConfirmationMeta(draft.sscConfirmationStatus).label
+        : "草稿";
+      return `${version}${label}`;
     }
     case "sent": {
       return `${version}已发待回复`;

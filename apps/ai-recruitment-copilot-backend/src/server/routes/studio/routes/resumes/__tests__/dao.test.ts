@@ -689,6 +689,7 @@ describe("queryPaginatedResumeRecords", () => {
           id: "od_li_v2",
           responseAt: null,
           sentAt: "2026-05-13T10:00:00.000Z",
+          sscConfirmationStatus: null,
           status: "sent",
           version: 2,
         },
@@ -700,4 +701,49 @@ describe("queryPaginatedResumeRecords", () => {
         .where(eq(studioOfferDraft.interviewRecordId, "ri_test_a_2"));
     }
   });
+
+  it.each([null, "pending", "confirming", "completed"] as const)(
+    "projects the newest Offer SSC confirmation state without changing legacy null: %s",
+    async (sscConfirmationStatus) => {
+      const latestId = `od_ssc_current_${sscConfirmationStatus ?? "legacy"}`;
+      await db.insert(studioOfferDraft).values([
+        {
+          baseSalary: 30_000,
+          currency: "CNY",
+          id: `od_ssc_previous_${sscConfirmationStatus ?? "legacy"}`,
+          interviewRecordId: "ri_test_a_2",
+          organizationId: ORG_A,
+          position: "高级前端",
+          sscConfirmationStatus: "completed",
+          status: "accepted",
+          version: 1,
+        },
+        {
+          baseSalary: 32_000,
+          currency: "CNY",
+          id: latestId,
+          interviewRecordId: "ri_test_a_2",
+          organizationId: ORG_A,
+          position: "高级前端",
+          sscConfirmationStatus,
+          status: "draft",
+          version: 2,
+        },
+      ]);
+      try {
+        const result = await queryPaginatedResumeRecords(ORG_A);
+        const candidate = result.records.find((record) => record.id === "ri_test_a_2");
+        expect(candidate?.stageProgress.offer?.latestDraft).toMatchObject({
+          id: latestId,
+          sscConfirmationStatus,
+          status: "draft",
+          version: 2,
+        });
+      } finally {
+        await db
+          .delete(studioOfferDraft)
+          .where(eq(studioOfferDraft.interviewRecordId, "ri_test_a_2"));
+      }
+    },
+  );
 });
