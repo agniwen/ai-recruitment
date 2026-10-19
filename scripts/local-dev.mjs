@@ -170,6 +170,10 @@ export function readBundle(directory) {
 
 function exportDatabase() {
   const env = checkLocal();
+  // ZIP deliveries have no Git metadata; database export still works there.
+  const hasGit = existsSync(resolve(root, ".git"));
+  const gitHead = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf-8" });
+  const gitStatus = spawnSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf-8" });
   const directory = resolve(
     root,
     ".devtools/handoff",
@@ -194,9 +198,9 @@ function exportDatabase() {
   const manifest = {
     createdAt: new Date().toISOString(),
     database: "ai_recruitment",
-    dirtyWorktree: Boolean(capture("git", ["status", "--porcelain"])),
+    dirtyWorktree: hasGit && gitStatus.status === 0 ? Boolean(gitStatus.stdout.trim()) : null,
     excludes: ["MinIO 文件", "Qdrant 索引", "Redis 队列", "模型 API Key", "OAuth 应用凭据"],
-    gitHead: capture("git", ["rev-parse", "HEAD"]),
+    gitHead: hasGit && gitHead.status === 0 ? gitHead.stdout.trim() : null,
     postgresVersion: sql("SHOW server_version;"),
     sha256: Object.fromEntries(
       ["database.dump", "data-keys.env"].map((file) => [file, digest(resolve(directory, file))]),
