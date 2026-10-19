@@ -8,6 +8,7 @@ import {
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
 import { buildTelegramOfferCard } from "./offer-ssc-card";
 import { handleTelegramOfferCompletionAction } from "./offer-ssc-completion";
+import { updateTelegramOfferMessages } from "./offer-ssc-message";
 export { handleTelegramOfferScreenshot } from "./offer-ssc-completion";
 
 const telegramSender = z.object({
@@ -128,7 +129,7 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       revision: parsed.revision,
       source: "telegram",
     });
-    await event.thread.post(buildTelegramOfferCard({ ...context, draft }));
+    await updateTelegramOfferMessages(event, buildTelegramOfferCard({ ...context, draft }));
   } catch (error) {
     await event.thread.post(errorReply(error));
   }

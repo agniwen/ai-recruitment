@@ -8,6 +8,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
 import { buildTelegramOfferCard, buildTelegramOfferCompletionCard } from "./offer-ssc-card";
+import { updateTelegramOfferMessages } from "./offer-ssc-message";
 import { downloadTelegramOfferScreenshot } from "./offer-ssc-screenshot";
 import {
   MAX_TELEGRAM_SCREENSHOT_BYTES,
@@ -135,6 +136,7 @@ export async function handleTelegramOfferCompletionAction(
         expiresAt: Date.now() + TELEGRAM_COMPLETION_TTL_MS,
         interviewRecordId: context.draft.interviewRecordId,
         organizationId: context.draft.organizationId,
+        originMessageId: identity.messageId,
         promptMessageId: sentMessageId(prompt.id, identity.chatId),
         revision: initial.revision,
         status: "pending",
@@ -181,6 +183,7 @@ export async function handleTelegramOfferCompletionAction(
     current.status = "completing";
     return { ...current };
   });
+  let draft: Awaited<ReturnType<typeof completeOfferSscWithScreenshot>>;
   try {
     let file: File | undefined;
     if (claimed.screenshot) {
@@ -190,7 +193,7 @@ export async function handleTelegramOfferCompletionAction(
         throw new OfferDraftError("审批截图下载失败或超过 10 MB，请重新上传后重试。", 400);
       }
     }
-    const draft = await completeOfferSscWithScreenshot({
+    draft = await completeOfferSscWithScreenshot({
       actor: { id: identity.actorUserId, role: context.actorRole },
       draftId: claimed.draftId,
       internalApprovalConfirmed: true,
@@ -200,8 +203,6 @@ export async function handleTelegramOfferCompletionAction(
       source: "telegram",
       ...(file ? { file } : {}),
     });
-    await removePending(thread, identity.chatId, token);
-    await thread.post(buildTelegramOfferCard({ ...context, draft }));
   } catch (error) {
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       const current = pending[token];
@@ -211,6 +212,16 @@ export async function handleTelegramOfferCompletionAction(
     });
     throw error;
   }
+  try {
+    await removePending(thread, identity.chatId, token);
+  } catch {
+    // The Offer already committed. Keep the durable "completing" claim until expiry.
+    console.warn("[telegram-offer-ssc] Offer completed but confirmation state cleanup failed");
+  }
+  await updateTelegramOfferMessages(event, buildTelegramOfferCard({ ...context, draft }), [
+    event.messageId,
+    ...(claimed.originMessageId ? [`${identity.chatId}:${claimed.originMessageId}`] : []),
+  ]);
 }
 
 function imageReference(

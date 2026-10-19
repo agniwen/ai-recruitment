@@ -19,6 +19,7 @@ const pendingSchema = z.object({
   expiresAt: z.number().finite(),
   interviewRecordId: z.string().min(1),
   organizationId: z.string().min(1),
+  originMessageId: z.number().int().positive().optional(),
   promptMessageId: z.number().int().positive(),
   revision: z.number().int().positive(),
   screenshot: screenshotSchema.optional(),

@@ -10,8 +10,10 @@ const mocks = vi.hoisted(() => ({
   completion: vi.fn(),
   context: vi.fn(),
   direct: vi.fn(),
+  edit: vi.fn(),
   receive: vi.fn(),
   slash: new Map<string, (event: unknown) => Promise<void>>(),
+  stateWrite: vi.fn(),
   users: vi.fn(),
 }));
 
@@ -106,6 +108,7 @@ function thread() {
     id: "telegram:12345",
     post,
     setState(value: Record<string, unknown>, options?: { replace?: boolean }) {
+      mocks.stateWrite(value);
       threadState = options?.replace ? value : { ...threadState, ...value };
       return Promise.resolve();
     },
@@ -132,6 +135,7 @@ beforeEach(() => {
   mocks.receive.mockResolvedValue({ ...draft, sscConfirmationStatus: "confirming" });
   mocks.complete.mockResolvedValue({ ...draft, sscConfirmationStatus: "completed" });
   mocks.completion.mockResolvedValue({ ...draft, sscConfirmationStatus: "completed" });
+  mocks.edit.mockResolvedValue({ id: "12345:7" });
   threadState = null;
   nextMessageId = 100;
   vi.stubEnv("DATABASE_URL", "postgres://unused/test");
@@ -168,12 +172,22 @@ async function command(name: string, event: ReturnType<typeof message>) {
   return event.post;
 }
 
-async function action(id: string, value: string, overrides: Record<string, unknown> = {}) {
+async function action(
+  id: string,
+  value: string,
+  overrides: Record<string, unknown> = {},
+  options: { postError?: Error } = {},
+) {
   const currentThread = thread();
+  if (options.postError) {
+    currentThread.post.mockRejectedValue(options.postError);
+  }
   const handler = mocks.actions.get(id);
   expect(handler, `${id} action handler`).toBeTypeOf("function");
   await handler?.({
     actionId: id,
+    adapter: { editMessage: mocks.edit },
+    messageId: `12345:${(overrides.message as { message_id: number } | undefined)?.message_id ?? 7}`,
     raw: {
       data: "ignored",
       from: { id: 12_345, username: "SscAlice" },
@@ -182,6 +196,7 @@ async function action(id: string, value: string, overrides: Record<string, unkno
       ...overrides,
     },
     thread: currentThread,
+    threadId: currentThread.id,
     user: { userId: "forged-system-user" },
     value,
   });
@@ -285,6 +300,28 @@ describe("self-service Telegram Offer SSC actions", () => {
     });
   });
 
+  it("updates the clicked Offer card to confirming and replaces receive with complete", async () => {
+    const post = await action("osr", `${callbackDraftId}:3`);
+    expect(mocks.edit).toHaveBeenCalledTimes(1);
+    expect(mocks.edit).toHaveBeenCalledWith("telegram:12345", "12345:7", expect.anything());
+    const edited = JSON.stringify(mocks.edit.mock.calls[0][2]);
+    expect(edited).toContain("确认中");
+    expect(edited).toContain('"id":"osc"');
+    expect(edited).not.toContain('"id":"osr"');
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("posts the updated card when editing fails after receive has already succeeded", async () => {
+    mocks.edit.mockRejectedValue(new Error("message can't be edited"));
+    const post = await action("osr", `${callbackDraftId}:3`);
+    expect(mocks.receive).toHaveBeenCalledTimes(1);
+    expect(mocks.edit).toHaveBeenCalledTimes(1);
+    const sent = JSON.stringify(post.mock.calls);
+    expect(sent).toContain("确认中");
+    expect(sent).toContain('"id":"osc"');
+    expect(sent).not.toContain("暂时无法处理");
+  });
+
   it.each([
     ["unbound", []],
     [
@@ -321,6 +358,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     mocks.context.mockRejectedValue(new OfferDraftError("无权访问此 Offer。", 404));
     const post = await action("osr", `${callbackDraftId}:3`);
     expect(mocks.receive).not.toHaveBeenCalled();
+    expect(mocks.edit).not.toHaveBeenCalled();
     expect(JSON.stringify(post.mock.calls)).not.toContain("候选人甲");
   });
 
@@ -358,7 +396,117 @@ describe("self-service Telegram Offer SSC actions", () => {
       revision: 3,
       source: "telegram",
     });
+    expect(post).not.toHaveBeenCalled();
+    expect(mocks.edit.mock.calls.map((call) => call[1])).toEqual([
+      `12345:${prompt.sentIds[0]}`,
+      "12345:7",
+    ]);
+    for (const call of mocks.edit.mock.calls) {
+      const updated = JSON.stringify(call[2]);
+      expect(updated).toContain("已完成确认");
+      expect(updated).not.toContain('"id":"osf"');
+      expect(updated).not.toContain('"id":"osc"');
+    }
+  });
+
+  it("completes legacy pending prompts that do not record the original Offer message", async () => {
+    const prompt = await beginCompletion();
+    const pending = threadState?.offerSscCompletions as Record<string, Record<string, unknown>>;
+    for (const record of Object.values(pending)) {
+      Reflect.deleteProperty(record, "originMessageId");
+    }
+    await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+    expect(mocks.edit.mock.calls.map((call) => call[1])).toEqual([`12345:${prompt.sentIds[0]}`]);
+  });
+
+  it("does not show completed cards when the business transition fails", async () => {
+    const prompt = await beginCompletion();
+    mocks.completion.mockRejectedValue(new OfferDraftError("审批截图保存失败，请重试。", 400));
+    const post = await action(
+      "osf",
+      buttonValue(prompt, "osf"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    expect(mocks.edit).not.toHaveBeenCalled();
+    expect(JSON.stringify(post.mock.calls)).toContain("保存失败");
+    expect(JSON.stringify(post.mock.calls)).not.toContain("已完成确认");
+  });
+
+  it("preserves completion success if editing either completed card fails", async () => {
+    const prompt = await beginCompletion();
+    mocks.edit.mockRejectedValue(new Error("message can't be edited"));
+    const post = await action(
+      "osf",
+      buttonValue(prompt, "osf"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+    expect(mocks.edit).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(post.mock.calls)).toContain("已完成确认");
+    expect(JSON.stringify(post.mock.calls)).not.toContain("暂时无法处理");
+    await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates both completed cards and sends just one fallback if only one edit fails", async () => {
+    const prompt = await beginCompletion();
+    mocks.edit.mockRejectedValueOnce(new Error("prompt unavailable"));
+    const post = await action(
+      "osf",
+      buttonValue(prompt, "osf"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+    expect(mocks.edit.mock.calls.map((call) => call[1])).toEqual([
+      `12345:${prompt.sentIds[0]}`,
+      "12345:7",
+    ]);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(post.mock.calls)).toContain("已完成确认");
+  });
+
+  it("keeps committed completion successful and claimed when pending cleanup cannot persist", async () => {
+    const prompt = await beginCompletion();
+    let cleanupFailed = false;
+    mocks.stateWrite.mockImplementation((value: Record<string, unknown>) => {
+      const pending = value.offerSscCompletions as Record<string, unknown>;
+      if (!cleanupFailed && Object.keys(pending).length === 0) {
+        cleanupFailed = true;
+        throw new Error("state cleanup unavailable");
+      }
+    });
+    const post = await action(
+      "osf",
+      buttonValue(prompt, "osf"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    expect(cleanupFailed).toBe(true);
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+    expect(mocks.edit).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(mocks.edit.mock.calls)).toContain("已完成确认");
+    expect(JSON.stringify(post.mock.calls)).not.toContain("暂时无法处理");
+    const pending = threadState?.offerSscCompletions as Record<string, { status: string }>;
+    expect(Object.values(pending).map((record) => record.status)).toEqual(["completing"]);
+    await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+    expect(Object.values(pending).map((record) => record.status)).toEqual(["completing"]);
+  });
+
+  it("does not report an approval failure or reopen a completed operation when all delivery fails", async () => {
+    const prompt = await beginCompletion();
+    mocks.edit.mockRejectedValue(new Error("edit unavailable"));
+    const post = await action(
+      "osf",
+      buttonValue(prompt, "osf"),
+      callbackMessage(prompt.sentIds[0]),
+      { postError: new Error("send unavailable") },
+    );
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(post.mock.calls)).toContain("已完成确认");
+    expect(JSON.stringify(post.mock.calls)).not.toContain("暂时无法处理");
+    await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
   });
 
   it("rejects final buttons copied to another message and rejects replay after completion", async () => {
@@ -376,6 +524,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     await action("osx", buttonValue(prompt, "osx"), callbackMessage(prompt.sentIds[0]));
     await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
     expect(mocks.completion).not.toHaveBeenCalled();
+    expect(mocks.edit).not.toHaveBeenCalled();
   });
 
   it.each(["revision", "permission", "expiry", "binding"])(
@@ -401,12 +550,13 @@ describe("self-service Telegram Offer SSC actions", () => {
       }
       await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
       expect(mocks.completion).not.toHaveBeenCalled();
+      expect(mocks.edit).not.toHaveBeenCalled();
     },
   );
 
   it("ignores arbitrary images and requires a reply to the specific upload prompt", async () => {
     const prompt = await beginCompletion();
-    const fetchData = vi.fn(() => Promise.resolve(Buffer.from([0xFF, 0xD8, 0xFF, 0xD9])));
+    const fetchData = vi.fn(() => Promise.resolve(Buffer.from("ffd8ffd9", "hex")));
     await directMessage(undefined, {
       attachments: [{ fetchData, mimeType: "image/jpeg", type: "image" }],
     });
@@ -424,7 +574,7 @@ describe("self-service Telegram Offer SSC actions", () => {
       buttonValue(prompt, "osu"),
       callbackMessage(prompt.sentIds[0]),
     );
-    const screenshot = Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]);
+    const screenshot = Buffer.from("ffd8ffd9", "hex");
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(
@@ -488,7 +638,7 @@ describe("self-service Telegram Offer SSC actions", () => {
             : context;
         });
       }
-      const screenshot = Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]);
+      const screenshot = Buffer.from("ffd8ffd9", "hex");
       vi.stubGlobal(
         "fetch",
         vi
