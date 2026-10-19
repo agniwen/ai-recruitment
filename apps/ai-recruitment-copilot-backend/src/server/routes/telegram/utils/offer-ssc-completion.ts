@@ -7,7 +7,8 @@ import {
   OfferDraftError,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
-import { buildTelegramOfferCard, buildTelegramOfferCompletionCard } from "./offer-ssc-card";
+import { buildTelegramOfferCompletionCard } from "./offer-ssc-card";
+import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { updateTelegramOfferMessages } from "./offer-ssc-message";
 import { downloadTelegramOfferScreenshot } from "./offer-ssc-screenshot";
 import {
@@ -218,10 +219,14 @@ export async function handleTelegramOfferCompletionAction(
     // The Offer already committed. Keep the durable "completing" claim until expiry.
     console.warn("[telegram-offer-ssc] Offer completed but confirmation state cleanup failed");
   }
-  await updateTelegramOfferMessages(event, buildTelegramOfferCard({ ...context, draft }), [
-    event.messageId,
-    ...(claimed.originMessageId ? [`${identity.chatId}:${claimed.originMessageId}`] : []),
-  ]);
+  await updateTelegramOfferMessages(
+    event,
+    buildTelegramOfferPublicCard({ ...context, draft }, identity.actorUserId),
+    [
+      event.messageId,
+      ...(claimed.originMessageId ? [`${identity.chatId}:${claimed.originMessageId}`] : []),
+    ],
+  );
 }
 
 function imageReference(

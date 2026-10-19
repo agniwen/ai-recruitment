@@ -141,6 +141,8 @@ beforeEach(() => {
   vi.stubEnv("DATABASE_URL", "postgres://unused/test");
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   vi.stubEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN", "test-secret");
+  vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://ats.example.test");
+  vi.stubEnv("BETTER_AUTH_SECRET", "offer-preview-test-secret-never-used-outside-tests");
   getTelegramBot();
 });
 
@@ -233,7 +235,6 @@ function buttonValue(post: ReturnType<typeof thread>["post"], id: string): strin
 function callbackMessage(messageId: number) {
   return { message: { chat: { id: 12_345, type: "private" }, message_id: messageId } };
 }
-
 async function beginCompletion(targetDraft = draft) {
   mocks.context.mockResolvedValue({
     actorRole: "ssc-reviewer",
@@ -283,6 +284,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(mocks.bind).not.toHaveBeenCalled();
     expect(JSON.stringify(post.mock.calls)).toContain("候选人甲");
     expect(JSON.stringify(post.mock.calls)).toContain("Offer新增");
+    expect(JSON.stringify(post.mock.calls)).toContain("https://ats.example.test/offer-candidate/");
   });
 
   it("checks the actual Telegram sender rather than a supplied system user", async () => {
@@ -308,6 +310,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(edited).toContain("确认中");
     expect(edited).toContain('"id":"osc"');
     expect(edited).not.toContain('"id":"osr"');
+    expect(edited).toContain("https://ats.example.test/offer-candidate/");
     expect(post).not.toHaveBeenCalled();
   });
 
@@ -406,6 +409,7 @@ describe("self-service Telegram Offer SSC actions", () => {
       expect(updated).toContain("已完成确认");
       expect(updated).not.toContain('"id":"osf"');
       expect(updated).not.toContain('"id":"osc"');
+      expect(updated).toContain("https://ats.example.test/offer-candidate/");
     }
   });
 

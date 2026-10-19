@@ -53,6 +53,7 @@ import { interviewTelemetryRouter } from "./routes/interview-telemetry/route";
 import { readInterviewTrace } from "./routes/interview-telemetry/utils";
 import { recordServerTelemetrySafely } from "./routes/interview-telemetry/dao";
 import { entryCredentialsRouter } from "./routes/entry-credentials/route";
+import { offerCandidatesRouter } from "./routes/offer-candidates/route";
 import {
   checkCandidateEntryProof,
   getCandidateEntryPolicy,
@@ -61,6 +62,7 @@ import {
 export const publicRouter = factory
   .createApp()
   .use("*", guardSscPublicSurface())
+  .route("/offer-candidates/:token", offerCandidatesRouter)
   .route("/interview-telemetry", interviewTelemetryRouter)
   .route("/human-interview-meetings/:inviteToken/entry-credentials", entryCredentialsRouter)
   .route("/human-interview-meetings", humanInterviewChatRouter)
