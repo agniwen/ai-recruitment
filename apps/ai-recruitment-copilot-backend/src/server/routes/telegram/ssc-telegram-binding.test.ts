@@ -74,5 +74,21 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         expect(await pinSscTelegramIdentity({ ...input, userId })).toBe(false);
       }
     });
+
+    it("does not move one pinned username to another user and numeric chat", async () => {
+      const first = await account();
+      const second = await account();
+      const chatId = `${Date.now()}${Math.floor(Math.random() * 100_000)}`;
+      expect(await pinSscTelegramIdentity({ chatId, userId: first, username: "ssc_owner" })).toBe(
+        true,
+      );
+      expect(
+        await pinSscTelegramIdentity({
+          chatId: `${chatId}1`,
+          userId: second,
+          username: "ssc_owner",
+        }),
+      ).toBe(false);
+    });
   },
 );

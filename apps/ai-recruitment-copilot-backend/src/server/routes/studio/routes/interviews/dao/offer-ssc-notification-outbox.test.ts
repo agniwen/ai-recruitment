@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { organization, studioInterview, studioOfferDraft } from "@arc/db-schema/schema";
+import {
+  organization,
+  studioInterview,
+  studioOfferDraft,
+  studioOfferSscNotificationOutbox,
+} from "@arc/db-schema/schema";
 import type * as TelegramBot from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot";
 import {
   dispatchOfferSscNotifications,
@@ -95,6 +100,107 @@ afterEach(async () => {
 describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
   "Offer SSC notification transactional outbox",
   () => {
+    it("preserves microsecond timestamps when paging a backlog during local testing", async () => {
+      vi.stubEnv("OFFER_SSC_NOTIFICATION_TEST_CHAT_ID", "111");
+      const input = await fixture();
+      const prefix = randomUUID();
+      await db.insert(studioOfferSscNotificationOutbox).values(
+        Array.from({ length: 101 }, (_, index) => ({
+          ...input,
+          id: `${prefix}_${String(index).padStart(3, "0")}`,
+          revision: index + 1,
+        })),
+      );
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({
+          availableAt: sql`'2020-01-01T00:00:00.123456Z'::timestamptz`,
+          createdAt: sql`'2020-01-01T00:00:00.123456Z'::timestamptz`,
+        })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, input.draftId));
+      let resolutions = 0;
+      mocks.targets.mockImplementation((job: OfferSscNotificationInput) => {
+        resolutions += 1;
+        if (resolutions > 250) {
+          throw new Error("Pagination repeated a previous page");
+        }
+        return Promise.resolve(job.revision === 101 ? [TARGET_A] : [TARGET_B]);
+      });
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(mocks.post.mock.calls).toEqual([["111", "SSC notification A"]]);
+      const remaining = await jobs(input);
+      expect(
+        remaining.filter((row) => row.status === "pending" && row.attempts === 0),
+      ).toHaveLength(100);
+    });
+
+    it("finds an authorized local test notification beyond 100 unrelated pending jobs", async () => {
+      vi.stubEnv("OFFER_SSC_NOTIFICATION_TEST_CHAT_ID", "111");
+      const input = await fixture();
+      await db.insert(studioOfferSscNotificationOutbox).values(
+        Array.from({ length: 101 }, (_, index) => ({
+          ...input,
+          availableAt: new Date(Date.now() - 200_000 + index),
+          id: randomUUID(),
+          revision: index + 1,
+        })),
+      );
+      mocks.targets.mockImplementation((job: OfferSscNotificationInput) =>
+        Promise.resolve(job.revision === 101 ? [TARGET_A] : [TARGET_B]),
+      );
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      const rows = await jobs(input);
+      expect(rows.filter((row) => row.status === "completed")).toHaveLength(1);
+      expect(rows.filter((row) => row.status === "pending" && row.attempts === 0)).toHaveLength(
+        100,
+      );
+      expect(mocks.post.mock.calls).toEqual([["111", "SSC notification A"]]);
+    });
+
+    it("keeps other recipients and historical feedback untouched in recipient-scoped local testing", async () => {
+      vi.stubEnv("OFFER_SSC_NOTIFICATION_TEST_CHAT_ID", "111");
+      const allowed = await fixture();
+      const unrelated = await fixture();
+      const feedback = { ...(await fixture()), event: "received" as const };
+      await enqueue(allowed);
+      await enqueue(unrelated);
+      await enqueue(feedback);
+      mocks.targets.mockImplementation((input: OfferSscNotificationInput) =>
+        Promise.resolve(input.draftId === unrelated.draftId ? [TARGET_B] : [TARGET_A]),
+      );
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(await jobs(allowed)).toMatchObject([{ sentUserIds: ["ssc-a"], status: "completed" }]);
+      expect(await jobs(unrelated)).toMatchObject([
+        { attempts: 0, recipientUserIds: null, status: "pending" },
+      ]);
+      expect(await jobs(feedback)).toMatchObject([
+        { attempts: 0, recipientUserIds: null, status: "pending" },
+      ]);
+      expect(mocks.post.mock.calls).toEqual([["111", "SSC notification A"]]);
+    });
+
+    it("does not consume a multi-recipient Offer when only one TG account is authorized for testing", async () => {
+      vi.stubEnv("OFFER_SSC_NOTIFICATION_TEST_CHAT_ID", "111");
+      const input = await fixture();
+      await enqueue(input);
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+      expect(await jobs(input)).toMatchObject([
+        { attempts: 0, recipientUserIds: null, status: "pending" },
+      ]);
+      expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("fails closed on an invalid local test chat configuration", async () => {
+      vi.stubEnv("OFFER_SSC_NOTIFICATION_TEST_CHAT_ID", "@someone");
+      const input = await fixture();
+      await enqueue(input);
+      await expect(dispatchOfferSscNotifications()).rejects.toThrow(
+        "OFFER_SSC_NOTIFICATION_TEST_CHAT_ID",
+      );
+      expect(await jobs(input)).toMatchObject([{ attempts: 0, status: "pending" }]);
+      expect(mocks.post).not.toHaveBeenCalled();
+    });
+
     it("deduplicates repeated business events while retaining different revisions and events", async () => {
       const input = await fixture();
       await db.transaction(async (tx) => {

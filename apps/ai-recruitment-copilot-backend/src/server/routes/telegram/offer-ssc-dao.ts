@@ -40,5 +40,17 @@ export async function resolveBoundTelegramOfferActor(input: {
   ) {
     return null;
   }
+  const pins = await db.query.sscTelegramIdentity.findMany({
+    limit: 2,
+    where: { OR: [{ userId: user.id }, { chatId: input.telegramUserId }, { username }] },
+  });
+  if (
+    pins.some(
+      (pin) =>
+        pin.userId !== user.id || pin.chatId !== input.telegramUserId || pin.username !== username,
+    )
+  ) {
+    return null;
+  }
   return user.id;
 }

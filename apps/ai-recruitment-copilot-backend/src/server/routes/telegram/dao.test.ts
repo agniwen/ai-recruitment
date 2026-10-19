@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { telegramRecipientBinding, telegramRequesterBinding, user } from "@arc/db-schema/schema";
 import { bindTelegramUser } from "./dao";
+vi.mock("./ssc-telegram-provisioning", () => ({
+  provisionSscTelegramFollower: () => Promise.resolve(null),
+}));
 
 const mocks = vi.hoisted(() => ({
   insert: vi.fn(),

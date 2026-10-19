@@ -22,7 +22,8 @@ const callbackQuery = z.object({
   message: z.object({ chat: privateChat, message_id: z.number().int().positive() }),
 });
 const MAX_REVISION = 2_147_483_647;
-const bindingRequired = "请先在系统填写本人 TG 用户名，再私聊机器人发送 /start 完成绑定后重试。";
+const bindingRequired =
+  "请确认已在 SSC 负责组织中登记本人 TG 用户名，再私聊机器人发送 /start 完成绑定后重试；无需关联邮箱。";
 
 function parseCallback(value: string | undefined) {
   const match = /^([0-9a-f]{32}):([1-9a-z][0-9a-z]{0,5})$/u.exec(value ?? "");

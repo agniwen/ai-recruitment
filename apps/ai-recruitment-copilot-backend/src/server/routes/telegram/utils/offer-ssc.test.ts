@@ -11,24 +11,23 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   direct: vi.fn(),
   edit: vi.fn(),
+  pins: vi.fn(),
   receive: vi.fn(),
   slash: new Map<string, (event: unknown) => Promise<void>>(),
   stateWrite: vi.fn(),
   users: vi.fn(),
 }));
-
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-completion",
   () => ({ completeOfferSscWithScreenshot: mocks.completion }),
 );
-
 vi.mock("../dao", () => ({ bindTelegramUser: mocks.bind }));
 vi.mock("../ssc-recipients", () => ({
   resolveLedgerTelegramOfferActor: () => Promise.resolve(null),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
-    query: { user: { findMany: mocks.users } },
+    query: { sscTelegramIdentity: { findMany: mocks.pins }, user: { findMany: mocks.users } },
     transaction: async (operation: (tx: { execute: () => Promise<void> }) => Promise<unknown>) =>
       await operation({ execute: () => Promise.resolve() }),
   },
@@ -123,6 +122,7 @@ beforeEach(() => {
   mocks.actions.clear();
   mocks.slash.clear();
   mocks.users.mockResolvedValue([boundUser]);
+  mocks.pins.mockResolvedValue([]);
   mocks.bind.mockResolvedValue({ kind: "registered", memberAmbiguous: false });
   mocks.context.mockResolvedValue({
     actorRole: "ssc-reviewer",

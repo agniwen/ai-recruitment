@@ -36,16 +36,20 @@ export async function enqueueOfferSscNotification(
   }
 }
 
-async function claimNotification() {
+function claimableNotifications() {
+  return or(
+    and(eq(outbox.status, "pending"), lte(outbox.availableAt, sql`CURRENT_TIMESTAMP`)),
+    and(eq(outbox.status, "processing"), lte(outbox.leaseUntil, sql`CURRENT_TIMESTAMP`)),
+  );
+}
+
+async function claimNotification(notificationId?: string) {
   return await db.transaction(async (tx) => {
     const [row] = await tx
       .select()
       .from(outbox)
       .where(
-        or(
-          and(eq(outbox.status, "pending"), lte(outbox.availableAt, sql`CURRENT_TIMESTAMP`)),
-          and(eq(outbox.status, "processing"), lte(outbox.leaseUntil, sql`CURRENT_TIMESTAMP`)),
-        ),
+        and(claimableNotifications(), notificationId ? eq(outbox.id, notificationId) : undefined),
       )
       .orderBy(asc(outbox.availableAt), asc(outbox.createdAt))
       .limit(1)
@@ -243,6 +247,47 @@ async function deliverNotification(
   }
 }
 
+async function findNotificationForTestChat(testChat: string, resolveTargets: ResolveTargets) {
+  let cursor: { id: string; availableAt: string; createdAt: string } | undefined;
+  while (true) {
+    const candidates = await db
+      .select({
+        // Preserve PostgreSQL microseconds; JS Date cursors can repeat a page.
+        cursorAvailableAt: sql<string>`${outbox.availableAt}::text`,
+        cursorCreatedAt: sql<string>`${outbox.createdAt}::text`,
+        draftId: outbox.draftId,
+        event: outbox.event,
+        id: outbox.id,
+        interviewRecordId: outbox.interviewRecordId,
+        organizationId: outbox.organizationId,
+        revision: outbox.revision,
+      })
+      .from(outbox)
+      .where(
+        and(
+          claimableNotifications(),
+          eq(outbox.event, "pending"),
+          cursor
+            ? sql`(${outbox.availableAt}, ${outbox.createdAt}, ${outbox.id}) > (${cursor.availableAt}::timestamptz, ${cursor.createdAt}::timestamptz, ${cursor.id})`
+            : undefined,
+        ),
+      )
+      .orderBy(asc(outbox.availableAt), asc(outbox.createdAt), asc(outbox.id))
+      .limit(100);
+    for (const candidate of candidates) {
+      const targets = await resolveTargets(candidate);
+      if (targets.length > 0 && targets.every((target) => target.chatId === testChat)) {
+        return candidate.id;
+      }
+    }
+    const last = candidates.at(-1);
+    if (candidates.length < 100 || !last) {
+      return;
+    }
+    cursor = { availableAt: last.cursorAvailableAt, createdAt: last.cursorCreatedAt, id: last.id };
+  }
+}
+
 export async function dispatchOfferSscNotifications(): Promise<number> {
   const { isTelegramBotConfigured, postTelegramDirectMessage } =
     await import("@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot");
@@ -250,19 +295,43 @@ export async function dispatchOfferSscNotifications(): Promise<number> {
     return 0;
   }
   const { getOfferSscNotificationTargets } = await import("../utils/offer-ssc-notification");
+  const configuredChat = process.env.OFFER_SSC_NOTIFICATION_TEST_CHAT_ID;
+  const testChat = configuredChat?.trim();
+  if (configuredChat !== undefined && !/^[1-9]\d*$/u.test(testChat ?? "")) {
+    throw new Error("Invalid OFFER_SSC_NOTIFICATION_TEST_CHAT_ID");
+  }
+  const resolveTargets: ResolveTargets = async (input) => {
+    const targets = await getOfferSscNotificationTargets(input);
+    if (
+      testChat &&
+      (input.event !== "pending" || targets.some((target) => target.chatId !== testChat))
+    ) {
+      throw new Error("Notification is outside the local test recipient scope");
+    }
+    return targets;
+  };
+  const sendMessage: SendMessage = async (chatId, message) => {
+    if (testChat && chatId !== testChat) {
+      throw new Error("Notification recipient changed during local testing");
+    }
+    await postTelegramDirectMessage(chatId, message);
+  };
   let processed = 0;
   while (processed < 20 && isTelegramBotConfigured()) {
-    const claim = await claimNotification();
+    let notificationId: string | undefined;
+    if (testChat) {
+      notificationId = await findNotificationForTestChat(testChat, getOfferSscNotificationTargets);
+      if (!notificationId) {
+        break;
+      }
+    }
+    const claim = await claimNotification(notificationId);
     if (!claim) {
       break;
     }
     processed += 1;
     if (claim.job) {
-      await deliverNotification(
-        claim.job,
-        getOfferSscNotificationTargets,
-        postTelegramDirectMessage,
-      );
+      await deliverNotification(claim.job, resolveTargets, sendMessage);
     }
   }
   return processed;
