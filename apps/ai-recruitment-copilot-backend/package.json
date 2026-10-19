@@ -35,6 +35,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "security:backfill-ips": "tsx src/scripts/backfill-encrypted-ips.ts",
+    "security:backfill-media-locations": "tsx src/scripts/backfill-encrypted-media-locations.ts",
     "security:reset-mfa": "tsx src/scripts/reset-platform-mfa.ts"
   },
   "dependencies": {
