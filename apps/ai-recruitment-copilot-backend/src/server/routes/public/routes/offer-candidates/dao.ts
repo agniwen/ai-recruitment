@@ -7,14 +7,18 @@ import {
   studioOfferDraft,
 } from "@arc/db-schema/schema";
 import { resumeProfileSchema } from "@arc/db-schema/interview/types";
+import { resumeReviewLooseSchema } from "@arc/db-schema/resume-review";
 import type {
   OfferCandidatePreview,
   OfferCandidateResumeProfile,
+  OfferCandidateScreeningResult,
 } from "@arc/shared/offer-candidate-preview";
+import { resumeScreeningResultSchema } from "@arc/shared/resume-screening";
 import {
   loadAuthorizedOfferSscContext,
   OfferDraftError,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
+import { listHumanInterviewRounds } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds";
 import { verifyOfferCandidatePreviewToken } from "./access";
 
 function publicProfile(value: unknown): OfferCandidateResumeProfile | null {
@@ -40,6 +44,36 @@ function publicProfile(value: unknown): OfferCandidateResumeProfile | null {
     targetRoles: profile.targetRoles,
     workExperiences: profile.workExperiences,
     workYears: profile.workYears,
+  };
+}
+
+function publicDate(value: Date | null | undefined) {
+  return value?.toISOString() ?? null;
+}
+
+function publicReview(value: unknown) {
+  const parsed = resumeReviewLooseSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function publicScreeningResult(value: unknown): OfferCandidateScreeningResult | null {
+  const parsed = resumeScreeningResultSchema.safeParse(value);
+  if (!parsed.success) {
+    return null;
+  }
+  return {
+    policyEmpty: parsed.data.policyEmpty,
+    recommendation: parsed.data.recommendation,
+    ruleResults: parsed.data.ruleResults.map((rule) => ({
+      evidence: rule.evidence.map((evidence) => ({
+        explanation: evidence.explanation,
+        ...(evidence.quote === undefined ? {} : { quote: evidence.quote }),
+      })),
+      label: rule.label,
+      reason: rule.reason,
+      severity: rule.severity,
+      status: rule.status,
+    })),
   };
 }
 
@@ -101,6 +135,12 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
       jobName: jobDescription.name,
       resumeFileName: studioInterview.resumeFileName,
       resumeProfile: studioInterview.resumeProfile,
+      resumeReview: studioInterview.resumeReview,
+      resumeReviewGeneratedAt: studioInterview.resumeReviewGeneratedAt,
+      resumeReviewStatus: studioInterview.resumeReviewStatus,
+      resumeScreeningEvaluatedAt: studioInterview.resumeScreeningEvaluatedAt,
+      resumeScreeningResult: studioInterview.resumeScreeningResult,
+      resumeScreeningStatus: studioInterview.resumeScreeningStatus,
       resumeStorageKey: studioInterview.resumeStorageKey,
     })
     .from(studioInterview)
@@ -128,14 +168,37 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
   if (!candidate) {
     return null;
   }
+  const review = publicReview(candidate.resumeReview);
+  const humanRounds = await listHumanInterviewRounds(access.candidateId, access.organizationId);
   return {
     preview: {
+      aiReview: {
+        generatedAt: publicDate(candidate.resumeReviewGeneratedAt),
+        review,
+        status: candidate.resumeReviewStatus,
+      },
       candidate: {
         hasResumeFile: Boolean(candidate.resumeStorageKey),
         name: candidate.candidateName,
         profile: publicProfile(candidate.resumeProfile),
         resumeFileName: candidate.resumeFileName,
       },
+      humanInterviews: humanRounds.map((round) => ({
+        cancelledAt: round.cancelledAt,
+        completedAt: round.completedAt,
+        feedback: round.feedback,
+        format: round.format,
+        interviewers: [
+          ...round.interviewers.map(({ name }) => ({ name })),
+          ...(round.externalInterviewers ?? []).map(({ name }) => ({ name })),
+        ],
+        label: round.label,
+        outcome: round.outcome,
+        scheduledAt: round.scheduledAt,
+        score: round.score,
+        sortOrder: round.sortOrder,
+        status: round.status,
+      })),
       job: {
         departmentName: candidate.departmentName,
         description: candidate.jobDescription,
@@ -156,6 +219,11 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
         sscConfirmationStatus: draft.sscConfirmationStatus,
         sscReceivedAt: draft.sscReceivedAt ?? null,
         version: draft.version,
+      },
+      screening: {
+        evaluatedAt: publicDate(candidate.resumeScreeningEvaluatedAt),
+        result: publicScreeningResult(candidate.resumeScreeningResult),
+        status: candidate.resumeScreeningStatus,
       },
     },
     resumeStorageKey: candidate.resumeStorageKey,

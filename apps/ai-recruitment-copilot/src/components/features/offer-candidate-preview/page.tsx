@@ -9,49 +9,12 @@ import { ResumeDocumentPreviewModal } from "@/components/features/resume/resume-
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   fetchOfferCandidatePreview,
   offerCandidateResumeUrl,
 } from "@/lib/client/api/endpoints/offer-candidate-preview";
-
-const SSC_STATUS_LABELS = {
-  completed: "已完成 SSC 确认",
-  confirming: "确认中",
-  pending: "待 SSC 接收",
-} as const;
-
-function salary(value: number | null, currency: string) {
-  return value === null ? null : `${currency} ${value.toLocaleString("zh-CN")}`;
-}
-
-function OfferDetails({ offer }: { offer: OfferCandidatePreview["offer"] }) {
-  return (
-    <section aria-labelledby="offer-title" className="rounded-xl border bg-card p-5 sm:p-6">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-semibold text-lg" id="offer-title">
-          本次 Offer · v{offer.version}
-        </h2>
-        <Badge variant="outline">{SSC_STATUS_LABELS[offer.sscConfirmationStatus]}</Badge>
-      </div>
-      <DataFields columns={2}>
-        <DataField label="Offer 职位" value={offer.position} />
-        <DataField label="Base 月薪" value={salary(offer.baseSalary, offer.currency)} />
-        <DataField label="年度奖金" value={salary(offer.bonus, offer.currency)} />
-        <DataField label="股权" value={offer.equity} />
-        <DataField kind="date" label="预计入职日期" value={offer.joiningDate} />
-        <DataField kind="datetime" label="Offer 有效期至" value={offer.expiresAt} />
-        <DataField kind="datetime" label="SSC 接收时间" value={offer.sscReceivedAt} />
-        <DataField kind="datetime" label="SSC 完成时间" value={offer.sscCompletedAt} />
-        <DataField
-          label="备注"
-          span="full"
-          value={offer.notes}
-          valueClassName="whitespace-pre-wrap"
-        />
-      </DataFields>
-    </section>
-  );
-}
+import { AiReviewDetails, HumanInterviewDetails, OfferDetails } from "./sections";
 
 function CandidateDetails({ data, token }: { data: OfferCandidatePreview; token: string }) {
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -100,63 +63,87 @@ function CandidateDetails({ data, token }: { data: OfferCandidatePreview; token:
       <header className="space-y-3">
         <Badge variant="outline">候选人资料 · 只读</Badge>
         <h1 className="wrap-break-word font-semibold text-2xl">{candidate.name}</h1>
-        <p className="text-muted-foreground text-sm">候选人简历、应聘岗位与本次 Offer 信息</p>
+        <p className="text-muted-foreground text-sm">{job.name ?? "待识别岗位"}</p>
       </header>
 
-      <section aria-labelledby="job-title" className="rounded-xl border bg-card p-5 sm:p-6">
-        <h2 className="mb-5 font-semibold text-lg" id="job-title">
-          应聘岗位
-        </h2>
-        <DataFields columns={2}>
-          <DataField label="岗位名称" value={job.name} />
-          <DataField label="部门 / 中心" value={job.departmentName} />
-          <DataField
-            label="岗位说明"
-            span="full"
-            value={job.description}
-            valueClassName="whitespace-pre-wrap"
-          />
-        </DataFields>
-      </section>
-
-      <OfferDetails offer={data.offer} />
-
-      <section aria-labelledby="resume-title" className="rounded-xl border bg-card p-5 sm:p-6">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold text-lg" id="resume-title">
-            候选人简历
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {resumeAction}
-            {candidate.hasResumeFile ? (
-              <Button
-                nativeButton={false}
-                render={
-                  <a
-                    download={candidate.resumeFileName ?? "简历"}
-                    href={resumeUrl}
-                    referrerPolicy="no-referrer"
-                  >
-                    下载简历
-                  </a>
-                }
-                size="sm"
-                variant="outline"
+      <Tabs className="gap-6" defaultValue="overview">
+        <TabsList aria-label="候选人详情" className="grid w-full grid-cols-4 sm:flex sm:w-fit">
+          <TabsTrigger className="min-w-0 px-2 text-sm sm:min-w-[6em]" value="overview">
+            概览
+          </TabsTrigger>
+          <TabsTrigger className="min-w-0 px-2 text-sm sm:min-w-[6em]" value="ai-review">
+            AI评分
+          </TabsTrigger>
+          <TabsTrigger className="min-w-0 px-2 text-sm sm:min-w-[6em]" value="human-interview">
+            真人复面
+          </TabsTrigger>
+          <TabsTrigger className="min-w-0 px-2 text-sm sm:min-w-[6em]" value="offer">
+            Offer
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent className="space-y-6" value="overview">
+          <section aria-labelledby="job-title" className="rounded-xl border bg-card p-5 sm:p-6">
+            <h2 className="mb-5 font-semibold text-lg" id="job-title">
+              应聘岗位
+            </h2>
+            <DataFields columns={2}>
+              <DataField label="岗位名称" value={job.name} />
+              <DataField label="部门 / 中心" value={job.departmentName} />
+              <DataField
+                label="岗位说明"
+                span="full"
+                value={job.description}
+                valueClassName="whitespace-pre-wrap"
               />
-            ) : null}
-          </div>
-        </div>
-        {candidate.hasResumeFile ? null : (
-          <p className="mb-3 text-muted-foreground text-sm">未上传原始简历</p>
-        )}
-        {candidate.hasResumeFile && !candidate.profile ? (
-          <p className="text-muted-foreground text-sm">
-            已上传原始简历，点击“打开简历”查看具体内容。
-          </p>
-        ) : (
-          <ResumeProfileView profile={candidate.profile} />
-        )}
-      </section>
+            </DataFields>
+          </section>
+          <section aria-labelledby="resume-title" className="rounded-xl border bg-card p-5 sm:p-6">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-semibold text-lg" id="resume-title">
+                候选人简历
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {resumeAction}
+                {candidate.hasResumeFile ? (
+                  <Button
+                    nativeButton={false}
+                    render={
+                      <a
+                        download={candidate.resumeFileName ?? "简历"}
+                        href={resumeUrl}
+                        referrerPolicy="no-referrer"
+                      >
+                        下载简历
+                      </a>
+                    }
+                    size="sm"
+                    variant="outline"
+                  />
+                ) : null}
+              </div>
+            </div>
+            {candidate.hasResumeFile ? null : (
+              <p className="mb-3 text-muted-foreground text-sm">原始简历暂不可用</p>
+            )}
+            {candidate.hasResumeFile && !candidate.profile ? (
+              <p className="text-muted-foreground text-sm">
+                已上传原始简历，点击“打开简历”查看具体内容。
+              </p>
+            ) : (
+              <ResumeProfileView profile={candidate.profile} />
+            )}
+          </section>
+        </TabsContent>
+        <TabsContent value="ai-review">
+          <AiReviewDetails data={data} />
+        </TabsContent>
+        <TabsContent value="human-interview">
+          <HumanInterviewDetails rounds={data.humanInterviews} />
+        </TabsContent>
+        <TabsContent value="offer">
+          <OfferDetails offer={data.offer} />
+        </TabsContent>
+      </Tabs>
 
       <div className="text-muted-foreground text-xs">
         <DataFields columns={1}>

@@ -5,6 +5,7 @@ import { offerCandidatesRouter } from "./route";
 
 const mocks = vi.hoisted(() => ({
   context: vi.fn(),
+  humanRounds: vi.fn(),
   results: [] as unknown[],
   stream: vi.fn(),
 }));
@@ -39,6 +40,60 @@ vi.mock(
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   getObjectStream: mocks.stream,
 }));
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds",
+  () => ({ listHumanInterviewRounds: mocks.humanRounds }),
+);
+
+const dimension = { basis: "job", rationale: "匹配岗位要求", score: 82 };
+const review = {
+  detailedOverall: {
+    judgment: "建议进入下一轮",
+    matchingEvidence: "具备相关开发经验",
+    risks: "需进一步核实项目职责",
+  },
+  dimensions: {
+    educationBackground: dimension,
+    experienceRelevance: dimension,
+    potential: dimension,
+    projectMatch: dimension,
+    skillMatch: { ...dimension, internalPrompt: "private AI prompt" },
+    stability: dimension,
+  },
+  internalPrompt: "private AI prompt",
+  levelRecommendation: null,
+  nextStep: {
+    action: "interview",
+    disclaimer: "以上为初步结论",
+    interviewFocus: ["核实项目职责"],
+    rationale: "符合岗位核心要求",
+  },
+  overall: { baseScore: 82, conclusion: "建议面试", scoreRationale: "经验相关" },
+  schemaVersion: 5,
+  teamPositioning: null,
+  version: 5,
+};
+
+const humanRound = {
+  cancelReason: "private cancellation notes",
+  cancelledAt: null,
+  completedAt: "2026-10-18T08:30:00.000Z",
+  externalInterviewers: [{ email: "private-interviewer@example.test", name: "外部面试官" }],
+  feedback: "项目经验扎实，面试通过。",
+  format: "online",
+  id: "private-round-id",
+  interviewRecordId: "candidate-a",
+  interviewers: [{ id: "private-interviewer-id", image: "private-avatar-url", name: "王面试官" }],
+  label: "技术复面",
+  meetingUrl: "https://private-meeting.example.test/invite-secret",
+  notes: "private interview notes",
+  organizationId: "org-a",
+  outcome: "pass",
+  scheduledAt: "2026-10-18T08:00:00.000Z",
+  score: 85,
+  sortOrder: 1,
+  status: "completed",
+};
 
 const draft = {
   baseSalary: 30_000,
@@ -84,6 +139,36 @@ const candidate = {
     workExperiences: [],
     workYears: 5,
   },
+  resumeReview: review,
+  resumeReviewGeneratedAt: new Date("2026-10-17T08:00:00.000Z"),
+  resumeReviewStatus: "ready",
+  resumeScreeningEvaluatedAt: new Date("2026-10-17T08:00:00.000Z"),
+  resumeScreeningResult: {
+    policyEmpty: false,
+    policyEnabled: true,
+    policyHash: "private-policy-hash",
+    policyVersion: 1,
+    recommendation: "pass",
+    ruleResults: [
+      {
+        evidence: [
+          {
+            explanation: "有五年开发经验",
+            fieldPath: "private-profile-path",
+            quote: "后端开发五年",
+            source: "resume_profile",
+          },
+        ],
+        label: "最低工作年限：3 年",
+        reason: "工作年限满足要求。",
+        ruleId: "private-policy-rule-id",
+        severity: "warning",
+        status: "pass",
+        type: "field",
+      },
+    ],
+  },
+  resumeScreeningStatus: "ready",
   resumeStorageKey: "private/candidate.pdf",
 };
 
@@ -117,6 +202,7 @@ describe("Anonymous Offer candidate preview", () => {
       .mockReset()
       .mockResolvedValue({ canConfirm: true, canReceive: true, draft, pipelineStage: "offer" });
     mocks.results = [[{ id: "550e8400-e29b-41d4-a716-446655440000" }], [candidate]];
+    mocks.humanRounds.mockReset().mockResolvedValue([humanRound]);
     mocks.stream.mockReset().mockImplementation((key: string) => {
       if (key !== "private/candidate.pdf") {
         throw new Error("Unexpected unscoped storage key");
@@ -186,6 +272,96 @@ describe("Anonymous Offer candidate preview", () => {
     expect(body.offer.sscConfirmationStatus).toBe("completed");
   });
 
+  it("returns the stored AI review and real human interview feedback for the signed candidate", async () => {
+    const response = await app().request(`/api/public/offer-candidates/${token()}`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.aiReview).toMatchObject({
+      generatedAt: "2026-10-17T08:00:00.000Z",
+      review: { overall: { baseScore: 82, conclusion: "建议面试" }, schemaVersion: 5 },
+      status: "ready",
+    });
+    expect(body.humanInterviews).toEqual([
+      {
+        cancelledAt: null,
+        completedAt: "2026-10-18T08:30:00.000Z",
+        feedback: "项目经验扎实，面试通过。",
+        format: "online",
+        interviewers: [{ name: "王面试官" }, { name: "外部面试官" }],
+        label: "技术复面",
+        outcome: "pass",
+        scheduledAt: "2026-10-18T08:00:00.000Z",
+        score: 85,
+        sortOrder: 1,
+        status: "completed",
+      },
+    ]);
+    expect(mocks.humanRounds).toHaveBeenCalledExactlyOnceWith("candidate-a", "org-a");
+    expect(body.screening).toEqual({
+      evaluatedAt: "2026-10-17T08:00:00.000Z",
+      result: {
+        policyEmpty: false,
+        recommendation: "pass",
+        ruleResults: [
+          {
+            evidence: [{ explanation: "有五年开发经验", quote: "后端开发五年" }],
+            label: "最低工作年限：3 年",
+            reason: "工作年限满足要求。",
+            severity: "warning",
+            status: "pass",
+          },
+        ],
+      },
+      status: "ready",
+    });
+    const serialized = JSON.stringify(body);
+    for (const forbidden of [
+      "internalPrompt",
+      "private AI prompt",
+      "private cancellation notes",
+      "private interview notes",
+      "private-interviewer@example.test",
+      "private-round-id",
+      "private-interviewer-id",
+      "private-avatar-url",
+      "invite-secret",
+      "private-policy-hash",
+      "private-policy-rule-id",
+      "private-profile-path",
+      "policyHash",
+      "policyVersion",
+      "ruleId",
+      "fieldPath",
+    ]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  it("returns empty sections for a candidate without a valid AI review or human interview", async () => {
+    mocks.results = [
+      [{ id: draft.id }],
+      [
+        {
+          ...candidate,
+          resumeReview: { internalPrompt: "private AI prompt" },
+          resumeReviewGeneratedAt: null,
+          resumeReviewStatus: "idle",
+          resumeScreeningEvaluatedAt: null,
+          resumeScreeningResult: { policyHash: "private-policy-hash" },
+          resumeScreeningStatus: "idle",
+        },
+      ],
+    ];
+    mocks.humanRounds.mockResolvedValue([]);
+    const response = await app().request(`/api/public/offer-candidates/${token()}`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.aiReview).toEqual({ generatedAt: null, review: null, status: "idle" });
+    expect(body.humanInterviews).toEqual([]);
+    expect(body.screening).toEqual({ evaluatedAt: null, result: null, status: "idle" });
+    expect(JSON.stringify(body)).not.toContain("private AI prompt");
+  });
+
   it.each([
     { id: "different-offer" },
     { organizationId: "different-org" },
@@ -201,6 +377,7 @@ describe("Anonymous Offer candidate preview", () => {
     mocks.context.mockResolvedValue({ draft: { ...draft, ...override } });
     const response = await app().request(`/api/public/offer-candidates/${credential}`);
     expect(response.status).toBe(404);
+    expect(mocks.humanRounds).not.toHaveBeenCalled();
   });
 
   it("does not revive an old link when a newer Offer is a deleted tombstone", async () => {
@@ -217,11 +394,13 @@ describe("Anonymous Offer candidate preview", () => {
     const response = await app().request(`/api/public/offer-candidates/${credential}`);
     expect(response.status).toBe(404);
     expect(await response.text()).not.toContain("No access");
+    expect(mocks.humanRounds).not.toHaveBeenCalled();
   });
 
   it("returns a uniform unavailable result for malformed credentials", async () => {
     const response = await app().request("/api/public/offer-candidates/invalid-token");
     expect(response.status).toBe(404);
+    expect(mocks.humanRounds).not.toHaveBeenCalled();
   });
 
   it("streams the bound candidate resume without exposing a storage address", async () => {

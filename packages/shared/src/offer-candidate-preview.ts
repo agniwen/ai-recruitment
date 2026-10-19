@@ -1,5 +1,18 @@
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
-import type { OfferSscConfirmationStatus } from "@arc/db-schema/studio-interviews";
+import type { ResumeReviewLoose } from "@arc/db-schema/resume-review";
+import type {
+  HumanInterviewFormat,
+  HumanInterviewRoundOutcome,
+  HumanInterviewRoundStatus,
+  OfferSscConfirmationStatus,
+  ResumeReviewStatus,
+  ResumeScreeningStatus,
+} from "@arc/db-schema/studio-interviews";
+import type {
+  ResumeScreeningRecommendation,
+  ResumeScreeningRuleSeverity,
+  ResumeScreeningRuleStatus,
+} from "./resume-screening";
 
 export type OfferCandidateResumeProfile = Pick<
   ResumeProfile,
@@ -18,6 +31,32 @@ export type OfferCandidateResumeProfile = Pick<
   | "workYears"
 >;
 
+export interface OfferCandidateHumanInterview {
+  label: string;
+  sortOrder: number;
+  format: HumanInterviewFormat;
+  status: HumanInterviewRoundStatus;
+  outcome: HumanInterviewRoundOutcome | null;
+  score: number | null;
+  feedback: string | null;
+  scheduledAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  interviewers: { name: string }[];
+}
+
+export interface OfferCandidateScreeningResult {
+  policyEmpty: boolean;
+  recommendation: ResumeScreeningRecommendation;
+  ruleResults: {
+    label: string;
+    reason: string;
+    severity: ResumeScreeningRuleSeverity;
+    status: ResumeScreeningRuleStatus;
+    evidence: { explanation: string; quote?: string }[];
+  }[];
+}
+
 export interface OfferCandidatePreview {
   candidate: {
     name: string;
@@ -30,6 +69,17 @@ export interface OfferCandidatePreview {
     departmentName: string | null;
     description: string | null;
   };
+  aiReview: {
+    status: ResumeReviewStatus;
+    generatedAt: string | null;
+    review: ResumeReviewLoose | null;
+  };
+  screening: {
+    status: ResumeScreeningStatus;
+    evaluatedAt: string | null;
+    result: OfferCandidateScreeningResult | null;
+  };
+  humanInterviews: OfferCandidateHumanInterview[];
   offer: {
     id: string;
     version: number;
