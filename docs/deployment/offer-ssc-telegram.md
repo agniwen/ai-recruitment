@@ -24,6 +24,27 @@ Web/Backend 与发消息的 Worker 需要使用相同的 `BETTER_AUTH_SECRET`，
 
 只读页面及文件接口禁止缓存、搜索索引和 Referer 传递，请求日志隐藏签名令牌。仅 PDF 和受控图片允许直接展示；HTML、SVG、Office 及其他原文件以隔离的附件方式提供。
 
+### 正式环境的公网详情链接
+
+正式部署后，外部人员应能直接通过公网 HTTPS 链接查看资料，无需安装 Tailscale、连接公司内网或登录 ATS。以现有正式域名为例，Web 构建、Web/Backend 运行和发卡 Worker 的生效配置应保持一致：
+
+```dotenv
+BETTER_AUTH_URL=https://recruitment.hirecopilot.bar
+NEXT_PUBLIC_BASE_URL=https://recruitment.hirecopilot.bar
+NEXT_PUBLIC_BETTER_AUTH_URL=https://recruitment.hirecopilot.bar
+```
+
+正式 TG 卡片中的详情地址应为 `https://recruitment.hirecopilot.bar/offer-candidate/<签名令牌>`。同一环境继续使用现有的 `BETTER_AUTH_SECRET`，不要为发布此功能重新生成认证密钥。仓库的 Docker Compose 为 Web 和 Worker 注入同一根目录 `.env`，并将公开域名传入 Web 构建；修改域名后重建 Web 镜像并重建使用新配置的服务容器。
+
+公网 DNS、HTTPS 和反向代理需要将以下路径转发到同一套正式应用，访问网关不能对这两个入口额外要求系统登录或内网身份认证：
+
+- `/offer-candidate/*`：只读详情页面。
+- `/api/public/offer-candidates/*`：详情数据及其 `/resume` 简历文件读取路径。
+
+页面的 JS、CSS 等应用静态资源也需能从公网正常加载。原始简历通过上述签名文件接口读取，文件存储桶无需改为公开。工作区管理页面继续使用原有登录与权限校验。
+
+本地与正式环境的数据库、人员权限和签名密钥可能不同，应从正式系统的 Offer 重新生成或刷新卡片，不能只替换本地链接中的域名。发布后，使用未连接 Tailscale 或公司 VPN 的设备，通过移动网络和无痕浏览器打开正式系统生成的有效链接，确认无需登录即可看到候选人简历、应聘岗位和本次 Offer（含薪资）；篡改或失效的链接应显示不可用。此验收独立于 TG 审批回调联调。
+
 ## 环境配置
 
 Web/Backend 与独立 Worker 必须连接同一环境的数据库，并使用同一个机器人配置：
