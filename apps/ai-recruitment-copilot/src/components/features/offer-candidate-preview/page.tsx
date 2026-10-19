@@ -5,9 +5,16 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { DataField } from "@/components/features/display/data-field";
 import { DataFields } from "@/components/features/display/data-fields";
+import {
+  isPreviewableResumeDocumentInput,
+  ResumeDocumentPreviewButton,
+} from "@/components/features/resume/resume-document-preview-button";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchOfferCandidatePreview } from "@/lib/client/api/endpoints/offer-candidate-preview";
+import {
+  fetchOfferCandidatePreview,
+  offerCandidateResumeUrl,
+} from "@/lib/client/api/endpoints/offer-candidate-preview";
 import { CandidateOverview } from "./overview";
 import { AiReviewDetails, HumanInterviewDetails, OfferDetails } from "./sections";
 
@@ -47,10 +54,21 @@ function CandidateDetails({
               Offer
             </TabsTrigger>
           </TabsList>
-          <Button disabled={refreshing} onClick={onRefresh} size="sm" variant="ghost">
-            <IconRefresh className={refreshing ? "size-4 animate-spin" : "size-4"} />
-            刷新
-          </Button>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button disabled={refreshing} onClick={onRefresh} size="sm" variant="ghost">
+              <IconRefresh className={refreshing ? "size-4 animate-spin" : "size-4"} />
+              刷新
+            </Button>
+            {data.candidate.hasResumeFile &&
+            data.candidate.resumeFileName &&
+            isPreviewableResumeDocumentInput({ fileName: data.candidate.resumeFileName }) ? (
+              <ResumeDocumentPreviewButton
+                filename={data.candidate.resumeFileName}
+                label="预览简历"
+                url={offerCandidateResumeUrl(token)}
+              />
+            ) : null}
+          </div>
         </div>
         <TabsContent value="overview">
           <CandidateOverview
