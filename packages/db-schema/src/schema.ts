@@ -46,6 +46,7 @@ import type {
   HumanInterviewRoundOutcome,
   HumanInterviewRoundStatus,
   OfferDraftStatus,
+  OfferSscConfirmationStatus,
   PipelineStage,
   ResumeEvaluationStatus,
   ResumeParseStatus,
@@ -364,6 +365,7 @@ export const organizationRole = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     id: text("id").primaryKey(),
     isOdc: boolean("is_odc").default(false).notNull(),
+    isSsc: boolean("is_ssc").default(false).notNull(),
     name: text("name").notNull(),
     organizationId: text("organization_id")
       .notNull()
@@ -377,6 +379,10 @@ export const organizationRole = pgTable(
   },
   (table) => [
     uniqueIndex("organization_role_org_role_uq").on(table.organizationId, table.role),
+    check(
+      "organization_role_exclusive_business_kind",
+      sql`NOT (${table.isOdc} AND ${table.isSsc})`,
+    ),
     index("organization_role_organization_idx").on(table.organizationId),
   ],
 );
@@ -811,6 +817,60 @@ export const resumeSource = pgTable(
   ],
 );
 
+export const sscResponsibility = pgTable(
+  "ssc_responsibility",
+  {
+    centerName: text("center_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    demandOwner: text("demand_owner").notNull().default(""),
+    email: text("email").notNull(),
+    id: text("id").primaryKey(),
+    notes: text("notes").notNull().default(""),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    resumeSourceId: text("resume_source_id"),
+    sscName: text("ssc_name").notNull(),
+    telegram: text("telegram").notNull().default(""),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    workspaceRole: text("workspace_role"),
+  },
+  (table) => [
+    uniqueIndex("ssc_responsibility_workspace_scope_identity_uq").on(
+      table.organizationId,
+      sql`coalesce('source:' || ${table.resumeSourceId}, 'name:' || lower(btrim(${table.centerName})))`,
+      sql`(CASE
+        WHEN btrim(${table.email}) <> '' THEN 'email:' || lower(btrim(${table.email}))
+        WHEN btrim(${table.telegram}) <> '' THEN 'telegram:' || lower(btrim(${table.telegram}))
+        WHEN btrim(${table.sscName}) <> '' THEN 'name:' || lower(btrim(${table.sscName}))
+        ELSE 'unassigned'
+      END)`,
+    ),
+    index("ssc_responsibility_org_center_idx").on(table.organizationId, table.centerName),
+    index("ssc_responsibility_org_source_idx").on(table.organizationId, table.resumeSourceId),
+    index("ssc_responsibility_role_email_idx").on(
+      table.organizationId,
+      table.workspaceRole,
+      sql`lower(btrim(${table.email}))`,
+    ),
+    index("ssc_responsibility_email_idx").on(sql`lower(btrim(${table.email}))`),
+    foreignKey({
+      columns: [table.organizationId, table.resumeSourceId],
+      foreignColumns: [resumeSource.organizationId, resumeSource.id],
+      name: "ssc_responsibility_source_workspace_fk",
+    }).onDelete("no action"),
+    foreignKey({
+      columns: [table.organizationId, table.workspaceRole],
+      foreignColumns: [organizationRole.organizationId, organizationRole.role],
+      name: "ssc_responsibility_role_workspace_fk",
+    }).onDelete("no action"),
+    check("ssc_responsibility_center_check", sql`length(btrim(${table.centerName})) > 0`),
+  ],
+);
+
 export const resumeSourceOdcMember = pgTable(
   "resume_source_odc_member",
   {
@@ -1098,6 +1158,16 @@ export const telegramRecipientBinding = pgTable("telegram_recipient_binding", {
   chatId: text("chat_id").primaryKey(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   username: text("username").unique(),
+});
+
+// Approval identities keep a numeric Telegram account pinned independently of mutable handles.
+export const sscTelegramIdentity = pgTable("ssc_telegram_identity", {
+  chatId: text("chat_id").notNull().unique("ssc_telegram_identity_chat_id_uq"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  username: text("username").notNull(),
 });
 
 // External requesters can receive bot messages without a login account.
@@ -1856,6 +1926,20 @@ export const studioOfferDraft = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }),
     sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
     sentByRole: text("sent_by_role"),
+    sscCompletedAt: timestamp("ssc_completed_at", { withTimezone: true }),
+    sscCompletedBy: text("ssc_completed_by").references(() => user.id, { onDelete: "set null" }),
+    sscCompletionAttachment: jsonb("ssc_completion_attachment").$type<{
+      filename: string;
+      mediaType: string;
+      revision: number;
+      size: number;
+      storageKey: string;
+    } | null>(),
+    // NULL preserves historical Offers; every newly created Offer starts pending.
+    sscConfirmationStatus: text("ssc_confirmation_status").$type<OfferSscConfirmationStatus>(),
+    sscReceivedAt: timestamp("ssc_received_at", { withTimezone: true }),
+    sscReceivedBy: text("ssc_received_by").references(() => user.id, { onDelete: "set null" }),
+    sscRevision: integer("ssc_revision").notNull().default(1),
     status: text("status").$type<OfferDraftStatus>().notNull().default("draft"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -1868,6 +1952,11 @@ export const studioOfferDraft = pgTable(
       table.interviewRecordId,
       table.version,
     ),
+    check(
+      "studio_offer_draft_ssc_status_check",
+      sql`${table.sscConfirmationStatus} IS NULL OR ${table.sscConfirmationStatus} IN ('pending', 'confirming', 'completed')`,
+    ),
+    check("studio_offer_draft_ssc_revision_check", sql`${table.sscRevision} > 0`),
     index("studio_offer_draft_record_idx").on(table.interviewRecordId),
     index("studio_offer_draft_org_idx").on(table.organizationId),
     index("studio_offer_draft_status_idx").on(table.status),
@@ -1880,6 +1969,63 @@ export const studioOfferDraft = pgTable(
       table.organizationId,
       table.joiningDate,
       table.status,
+    ),
+  ],
+);
+
+export const studioOfferSscNotificationOutbox = pgTable(
+  "studio_offer_ssc_notification_outbox",
+  {
+    attempts: integer("attempts").notNull().default(0),
+    availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    draftId: text("draft_id")
+      .notNull()
+      .references(() => studioOfferDraft.id, { onDelete: "cascade" }),
+    event: text("event").$type<"pending" | "received" | "completed">().notNull(),
+    id: text("id").primaryKey(),
+    interviewRecordId: text("interview_record_id")
+      .notNull()
+      .references(() => studioInterview.id, { onDelete: "cascade" }),
+    lastError: text("last_error"),
+    leaseToken: text("lease_token"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    recipientUserIds: jsonb("recipient_user_ids").$type<string[]>(),
+    revision: integer("revision").notNull(),
+    sentUserIds: jsonb("sent_user_ids").$type<string[]>().notNull().default([]),
+    status: text("status")
+      .$type<"pending" | "processing" | "completed" | "failed">()
+      .notNull()
+      .default("pending"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("offer_ssc_outbox_event_uniq").on(table.draftId, table.revision, table.event),
+    index("offer_ssc_outbox_pending_idx")
+      .on(table.availableAt)
+      .where(sql`${table.status} = 'pending'`),
+    index("offer_ssc_outbox_lease_idx")
+      .on(table.leaseUntil)
+      .where(sql`${table.status} = 'processing'`),
+    index("offer_ssc_outbox_org_idx").on(table.organizationId),
+    check(
+      "offer_ssc_outbox_event_check",
+      sql`${table.event} IN ('pending', 'received', 'completed')`,
+    ),
+    check("offer_ssc_outbox_revision_check", sql`${table.revision} > 0`),
+    check("offer_ssc_outbox_attempts_check", sql`${table.attempts} >= 0`),
+    check(
+      "offer_ssc_outbox_status_check",
+      sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`,
+    ),
+    check(
+      "offer_ssc_outbox_lease_check",
+      sql`(${table.status} = 'processing' AND ${table.leaseToken} IS NOT NULL AND ${table.leaseUntil} IS NOT NULL)
+        OR (${table.status} <> 'processing' AND ${table.leaseToken} IS NULL AND ${table.leaseUntil} IS NULL)`,
     ),
   ],
 );

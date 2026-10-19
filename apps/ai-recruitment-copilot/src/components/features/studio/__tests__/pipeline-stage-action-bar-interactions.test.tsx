@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
+import type { OfferSscState } from "@arc/shared/studio-pipeline-stages";
 import { act } from "react";
 import { setTimeout as delay } from "node:timers/promises";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ vi.mock("@/lib/client/rpc", () => ({
                         {
                           email: "odc@example.com",
                           name: "ODC甲",
+                          resumeSourceNames: [],
                           telegramBound: true,
                           userId: "notify-a",
                         },
@@ -104,6 +106,7 @@ function renderActionBar({
   missingJobAction,
   onAdvance = vi.fn(),
   pipelineStage = "ai_interview",
+  offerSscState,
   primaryAction,
   resumeEvaluationPassed,
 }: {
@@ -116,6 +119,7 @@ function renderActionBar({
   missingJobAction?: ReactNode;
   onAdvance?: (target: PipelineStage) => void | Promise<void>;
   pipelineStage?: PipelineStage;
+  offerSscState?: OfferSscState | null;
   primaryAction?: ReactNode;
   resumeEvaluationPassed?: boolean;
 } = {}) {
@@ -143,6 +147,7 @@ function renderActionBar({
           onRequestReactivate={vi.fn()}
           onViewCurrentStage={vi.fn()}
           pipelineStage={pipelineStage}
+          offerSscState={offerSscState}
           primaryAction={primaryAction}
           resumeEvaluationPassed={resumeEvaluationPassed}
         />
@@ -175,6 +180,52 @@ afterEach(() => {
 });
 
 describe("PipelineStageActionBar interactions", () => {
+  it.each([
+    ["pending", "Offer新增"],
+    ["confirming", "确认中"],
+    ["completed", "已完成确认"],
+  ] as const)("shows the current SSC substage for Offer: %s", (offerSscStatus, label) => {
+    const host = renderActionBar({
+      offerSscState: {
+        id: "draft-1",
+        sscConfirmationStatus: offerSscStatus,
+        status: "draft",
+        version: 1,
+      },
+      pipelineStage: "offer",
+    });
+    const control = host.querySelector('[aria-label^="查看当前阶段："]');
+    expect(control?.textContent).toContain(`当前阶段：Offer · ${label}`);
+  });
+
+  it.each(["deleted", "superseded"] as const)(
+    "does not claim completion for the retired current version: %s",
+    (status) => {
+      const host = renderActionBar({
+        offerSscState: { id: "draft-2", sscConfirmationStatus: "completed", status, version: 2 },
+        pipelineStage: "offer",
+      });
+      const control = host.querySelector('[aria-label^="查看当前阶段："]');
+      expect(control?.textContent).toContain("待新增有效版本");
+      expect(control?.textContent).not.toContain("已完成确认");
+    },
+  );
+
+  it("does not show a stale SSC status outside the Offer stage", () => {
+    const host = renderActionBar({
+      offerSscState: {
+        id: "draft-1",
+        sscConfirmationStatus: "completed",
+        status: "draft",
+        version: 1,
+      },
+      pipelineStage: "screening",
+    });
+    const control = host.querySelector('[aria-label^="查看当前阶段："]');
+    expect(control?.textContent).toContain("当前阶段：简历筛选");
+    expect(control?.textContent).not.toContain("已完成确认");
+  });
+
   it("only offers AI approval to members with role approval permission", async () => {
     const unauthorized = renderActionBar({ aiReviewReady: true, pipelineStage: "ai_review" });
     expect(unauthorized.textContent).toContain("等待有审批权限的成员");

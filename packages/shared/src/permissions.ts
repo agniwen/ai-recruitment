@@ -37,6 +37,7 @@ export const STUDIO_PAGE_PERMISSION_ACTIONS = [
   "permissions",
   "preRegistrations",
   "odcResponsibilities",
+  "sscResponsibilities",
   "globalConfig",
 ] as const;
 
@@ -64,6 +65,7 @@ export const STUDIO_PAGE_PERMISSION_LABELS = {
   preRegistrations: "预录入信息",
   resumePool: "简历池",
   resumes: "候选人管理",
+  sscResponsibilities: "SSC 负责组织",
 } as const;
 
 const memberStudioPagePermissions = [
@@ -102,7 +104,7 @@ export const statement = {
   interviewer: ["create", "read", "update", "delete"],
   jd: ["create", "read", "update", "delete", "export", "viewRecommendations"],
   mailIngestAccount: ["create", "read", "update", "delete", "manage"],
-  offer: ["create", "read", "update", "delete"],
+  offer: ["create", "read", "update", "delete", "receive", "confirm"],
   page: STUDIO_PAGE_PERMISSION_ACTIONS,
   questionTemplate: ["create", "read", "update", "delete"],
   resumeLibrary: ["create", "read", "update", "delete"],

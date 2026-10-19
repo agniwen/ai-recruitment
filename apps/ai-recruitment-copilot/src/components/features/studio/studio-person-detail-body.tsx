@@ -710,12 +710,14 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
   const {
     bodyLayoutClassName,
     canCloseCandidate,
+    canConfirmOffer,
     canCreateHumanInterview,
     canCreateOffer,
     canDeleteHumanInterview,
     canDeleteOffer,
     canReadHumanInterview,
     canReadOffer,
+    canReceiveOffer,
     canUpdateHumanInterview,
     canUpdateOffer,
     canUseManagementActions,
@@ -888,8 +890,10 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
           {mode === "resume" && shouldShowOfferTab(tabVisibilityRecord, canReadOffer) ? (
             <TabsContent value="offer">
               <OfferStagePanel
+                canConfirm={canConfirmOffer}
                 canCreate={canCreateOffer}
                 canDelete={canDeleteOffer}
+                canReceive={canReceiveOffer}
                 canUpdate={canUpdateOffer}
                 candidateEmail={record.candidateEmail}
                 candidateId={record.id}

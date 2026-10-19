@@ -6,26 +6,39 @@
 // Offer draft DAO. Each new version auto-increments and supersedes any
 // existing non-terminal (draft/sent) drafts so HR's offer history stays
 // linear without manual cleanup.
+/* oxlint-disable max-lines -- versioned Offer mutations and shared SSC authorization use one lifecycle boundary */
 
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { deleteObject } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
   studioHumanInterviewRound,
   studioInterview,
   studioInterviewSchedule,
   studioOfferDraft,
+  member,
+  user,
 } from "@arc/db-schema/schema";
+import { computeWorkspacePermissionSnapshot } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-permission-snapshot";
+import {
+  buildResumeVisibilityCondition,
+  resolveResumeVisibilityScope,
+} from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
+import { hasPermissionInStatements } from "@arc/shared/permission-statements";
+import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
+import { recordCandidateActivityInTransaction } from "../utils/candidate-activity";
 import type {
   OfferDraftInput,
   OfferDraftStatus,
   PipelineStage,
 } from "@arc/db-schema/studio-interviews";
-import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import type { OfferDraftRecord, OfferSscState } from "@arc/shared/studio-pipeline-stages";
 import {
   getHumanInterviewOfferReadinessError,
   loadHumanInterviewRoundReadiness,
 } from "./human-interview-rounds";
 import { notifyCandidateStageChange } from "../utils/candidate-stage-notification";
+import { enqueueOfferSscNotification } from "./offer-ssc-notification-outbox";
 
 export type { OfferDraftRecord };
 
@@ -70,6 +83,21 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
     position: row.position,
     responseAt: serializeDate(row.responseAt),
     sentAt: serializeDate(row.sentAt),
+    sscCompletedAt: serializeDate(row.sscCompletedAt),
+    sscCompletedBy: row.sscCompletedBy,
+    sscCompletionAttachment:
+      row.sscCompletionAttachment?.revision === row.sscRevision
+        ? {
+            filename: row.sscCompletionAttachment.filename,
+            mediaType: row.sscCompletionAttachment.mediaType,
+            revision: row.sscCompletionAttachment.revision,
+            size: row.sscCompletionAttachment.size,
+          }
+        : null,
+    sscConfirmationStatus: row.sscConfirmationStatus,
+    sscReceivedAt: serializeDate(row.sscReceivedAt),
+    sscReceivedBy: row.sscReceivedBy,
+    sscRevision: row.sscRevision,
     status: row.status,
     updatedAt: serializeDate(row.updatedAt) ?? new Date().toISOString(),
     version: row.version,
@@ -77,11 +105,370 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
 }
 
 export class OfferDraftError extends Error {
-  readonly status: 400 | 404;
-  constructor(message: string, status: 400 | 404) {
+  readonly status: 400 | 403 | 404 | 409;
+  constructor(message: string, status: 400 | 403 | 404 | 409) {
     super(message);
     this.name = "OfferDraftError";
     this.status = status;
+  }
+}
+
+type OfferTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function lockCandidateForOffer(
+  tx: OfferTransaction,
+  interviewRecordId: string,
+  organizationId: string,
+) {
+  const [candidate] = await tx
+    .select({ pipelineStage: studioInterview.pipelineStage })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, interviewRecordId),
+        eq(studioInterview.organizationId, organizationId),
+      ),
+    )
+    .for("update")
+    .limit(1);
+  if (!candidate) {
+    throw new OfferDraftError("候选人记录不存在。", 404);
+  }
+  return candidate;
+}
+
+async function lockDraftCandidate(tx: OfferTransaction, draftId: string, organizationId: string) {
+  const [locator] = await tx
+    .select({ interviewRecordId: studioOfferDraft.interviewRecordId })
+    .from(studioOfferDraft)
+    .where(
+      and(eq(studioOfferDraft.id, draftId), eq(studioOfferDraft.organizationId, organizationId)),
+    )
+    .limit(1);
+  if (!locator) {
+    throw new OfferDraftError("Offer 草稿不存在", 404);
+  }
+  return await lockCandidateForOffer(tx, locator.interviewRecordId, organizationId);
+}
+
+function resetSscConfirmation(row: typeof studioOfferDraft.$inferSelect) {
+  return row.sscConfirmationStatus === null
+    ? {}
+    : {
+        sscCompletedAt: null,
+        sscCompletedBy: null,
+        sscCompletionAttachment: null,
+        sscConfirmationStatus: "pending" as const,
+        sscReceivedAt: null,
+        sscReceivedBy: null,
+        sscRevision: row.sscRevision + 1,
+      };
+}
+
+async function loadAuthorizedOfferCandidateContext(input: {
+  actorUserId: string;
+  organizationId: string;
+  interviewRecordId: string;
+}) {
+  const [membership] = await db
+    .select({ role: member.role })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(
+      and(
+        eq(member.organizationId, input.organizationId),
+        eq(member.userId, input.actorUserId),
+        eq(user.banned, false),
+      ),
+    )
+    .limit(1);
+  if (!membership) {
+    throw new OfferDraftError("没有权限访问此 Offer。", 403);
+  }
+  const snapshot = await computeWorkspacePermissionSnapshot({
+    memberRole: membership.role,
+    organizationId: input.organizationId,
+    userId: input.actorUserId,
+  });
+  if (!hasPermissionInStatements(snapshot.statements, "offer", "read")) {
+    throw new OfferDraftError("没有权限查看 Offer。", 403);
+  }
+  const visibility = await resolveResumeVisibilityScope({
+    currentRole: membership.role,
+    organizationId: input.organizationId,
+    userId: input.actorUserId,
+  });
+  const [candidate] = await db
+    .select({
+      candidateName: studioInterview.candidateName,
+      pipelineStage: studioInterview.pipelineStage,
+    })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, input.interviewRecordId),
+        eq(studioInterview.organizationId, input.organizationId),
+        buildResumeVisibilityCondition(visibility),
+      ),
+    )
+    .limit(1);
+  if (!candidate) {
+    throw new OfferDraftError("候选人记录不存在。", 404);
+  }
+  return {
+    actorRole: membership.role,
+    canConfirm: hasPermissionInStatements(snapshot.statements, "offer", "confirm"),
+    canReceive: hasPermissionInStatements(snapshot.statements, "offer", "receive"),
+    candidateName: candidate.candidateName,
+    pipelineStage: candidate.pipelineStage,
+  };
+}
+
+export async function loadAuthorizedOfferSscContext(input: {
+  draftId: string;
+  actorUserId: string;
+  organizationId?: string;
+  interviewRecordId?: string;
+}) {
+  const [draft] = await db
+    .select()
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.id, input.draftId),
+        input.organizationId
+          ? eq(studioOfferDraft.organizationId, input.organizationId)
+          : undefined,
+        input.interviewRecordId
+          ? eq(studioOfferDraft.interviewRecordId, input.interviewRecordId)
+          : undefined,
+      ),
+    )
+    .limit(1);
+  if (!draft) {
+    throw new OfferDraftError("Offer 不存在。", 404);
+  }
+  const context = await loadAuthorizedOfferCandidateContext({
+    actorUserId: input.actorUserId,
+    interviewRecordId: draft.interviewRecordId,
+    organizationId: draft.organizationId,
+  });
+  return { ...context, draft: toRecord(draft) };
+}
+
+export async function loadCurrentOfferSscState(input: {
+  actorUserId: string;
+  organizationId: string;
+  interviewRecordId: string;
+}): Promise<OfferSscState | null> {
+  await loadAuthorizedOfferCandidateContext(input);
+  const [state] = await db
+    .select({
+      id: studioOfferDraft.id,
+      sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
+      status: studioOfferDraft.status,
+      version: studioOfferDraft.version,
+    })
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.interviewRecordId, input.interviewRecordId),
+        eq(studioOfferDraft.organizationId, input.organizationId),
+      ),
+    )
+    .orderBy(desc(studioOfferDraft.version))
+    .limit(1);
+  return state ?? null;
+}
+
+export interface OfferSscActionInput {
+  draftId: string;
+  interviewRecordId: string;
+  organizationId: string;
+  revision: number;
+  actor: { id: string; role: string | null };
+  source?: "manual" | "telegram";
+}
+
+export interface OfferSscCompletionInput extends OfferSscActionInput {
+  internalApprovalConfirmed: true;
+  completionAttachment?: NonNullable<
+    (typeof studioOfferDraft.$inferInsert)["sscCompletionAttachment"]
+  >;
+}
+
+async function transitionOfferSscConfirmation(
+  input: OfferSscActionInput & Partial<Pick<OfferSscCompletionInput, "completionAttachment">>,
+  action: "receive" | "complete",
+) {
+  const context = await loadAuthorizedOfferSscContext({ ...input, actorUserId: input.actor.id });
+  if (!(action === "receive" ? context.canReceive : context.canConfirm)) {
+    throw new OfferDraftError(
+      action === "receive" ? "没有 SSC 接收确认权限。" : "没有 SSC 完成确认权限。",
+      403,
+    );
+  }
+  const result = await db.transaction(async (tx) => {
+    const candidate = await lockCandidateForOffer(
+      tx,
+      input.interviewRecordId,
+      input.organizationId,
+    );
+    const [existing] = await tx
+      .select()
+      .from(studioOfferDraft)
+      .where(
+        and(
+          eq(studioOfferDraft.id, input.draftId),
+          eq(studioOfferDraft.interviewRecordId, input.interviewRecordId),
+          eq(studioOfferDraft.organizationId, input.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!existing) {
+      throw new OfferDraftError("Offer 不存在。", 404);
+    }
+    if (
+      candidate.pipelineStage === "closed" ||
+      existing.status !== "draft" ||
+      existing.sscConfirmationStatus === null
+    ) {
+      throw new OfferDraftError("该 Offer 当前不能进行 SSC 确认。", 409);
+    }
+    if (existing.sscRevision !== input.revision) {
+      throw new OfferDraftError("Offer 内容已更新，请刷新后重新确认。", 409);
+    }
+    if (
+      existing.sscConfirmationStatus === "completed" ||
+      (action === "receive" && existing.sscConfirmationStatus === "confirming")
+    ) {
+      return { changed: false, draft: toRecord(existing) };
+    }
+    if (action === "complete" && existing.sscConfirmationStatus !== "confirming") {
+      throw new OfferDraftError("请先由 SSC 接收确认。", 409);
+    }
+    const now = new Date();
+    const [updated] = await tx
+      .update(studioOfferDraft)
+      .set(
+        action === "receive"
+          ? {
+              sscConfirmationStatus: "confirming",
+              sscReceivedAt: now,
+              sscReceivedBy: input.actor.id,
+              updatedAt: now,
+            }
+          : {
+              sscCompletedAt: now,
+              sscCompletedBy: input.actor.id,
+              sscCompletionAttachment: input.completionAttachment ?? null,
+              sscConfirmationStatus: "completed",
+              updatedAt: now,
+            },
+      )
+      .where(eq(studioOfferDraft.id, existing.id))
+      .returning();
+    if (!updated) {
+      throw new Error("SSC 确认后查询失败");
+    }
+    await recordCandidateActivityInTransaction(tx, {
+      action: action === "receive" ? "offer_ssc_received" : "offer_ssc_completed",
+      detail: {
+        ...(action === "complete" && {
+          hasApprovalScreenshot: Boolean(input.completionAttachment),
+          internalApprovalConfirmed: true,
+        }),
+        channel: input.source ?? "manual",
+        draftId: existing.id,
+        revision: existing.sscRevision,
+        version: existing.version,
+      },
+      interviewRecordId: input.interviewRecordId,
+      operatorId: input.actor.id,
+      operatorRole: context.actorRole,
+      organizationId: input.organizationId,
+      source: input.source === "telegram" ? "api" : "manual",
+    });
+    await enqueueOfferSscNotification(tx, {
+      draftId: updated.id,
+      event: action === "receive" ? "received" : "completed",
+      interviewRecordId: input.interviewRecordId,
+      organizationId: input.organizationId,
+      revision: updated.sscRevision,
+    });
+    return { changed: true, draft: toRecord(updated) };
+  });
+  if (result.changed) {
+    invalidateStudioInterviewCaches(input.organizationId);
+  }
+  return result;
+}
+
+export async function receiveOfferSscConfirmation(
+  input: OfferSscActionInput,
+): Promise<OfferDraftRecord> {
+  const result = await transitionOfferSscConfirmation(input, "receive");
+  return result.draft;
+}
+
+export async function completeOfferSscConfirmationWithEvidence(input: OfferSscCompletionInput) {
+  if (input.internalApprovalConfirmed !== true) {
+    throw new OfferDraftError("请确认已经完成内部审批。", 400);
+  }
+  if (input.completionAttachment && input.completionAttachment.revision !== input.revision) {
+    throw new OfferDraftError("审批截图与当前 Offer 修订不一致，请重新上传。", 409);
+  }
+  const result = await transitionOfferSscConfirmation(input, "complete");
+  return {
+    attachmentUsed: result.changed && Boolean(input.completionAttachment),
+    draft: result.draft,
+  };
+}
+
+export async function completeOfferSscConfirmation(
+  input: OfferSscCompletionInput,
+): Promise<OfferDraftRecord> {
+  const result = await completeOfferSscConfirmationWithEvidence(input);
+  return result.draft;
+}
+
+export async function loadOfferSscCompletionAttachment(input: {
+  actorUserId: string;
+  draftId: string;
+  interviewRecordId: string;
+  organizationId: string;
+}) {
+  const context = await loadAuthorizedOfferSscContext(input);
+  if (["deleted", "superseded"].includes(context.draft.status)) {
+    return null;
+  }
+  const [row] = await db
+    .select({
+      attachment: studioOfferDraft.sscCompletionAttachment,
+      revision: studioOfferDraft.sscRevision,
+    })
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.id, input.draftId),
+        eq(studioOfferDraft.organizationId, input.organizationId),
+        eq(studioOfferDraft.interviewRecordId, input.interviewRecordId),
+        eq(studioOfferDraft.sscConfirmationStatus, "completed"),
+      ),
+    )
+    .limit(1);
+  return row?.attachment && row.attachment.revision === row.revision ? row.attachment : null;
+}
+
+async function cleanupCompletionAttachment(storageKey: string | null | undefined) {
+  if (!storageKey) {
+    return;
+  }
+  try {
+    await deleteObject(storageKey);
+  } catch (error) {
+    console.error("Failed to delete obsolete SSC completion screenshot", error);
   }
 }
 
@@ -145,14 +532,15 @@ export async function loadOfferApprovalAttachment(
   return row?.approvalAttachment ?? null;
 }
 
-export function removeOfferApprovalAttachment(
+export async function removeOfferApprovalAttachment(
   draftId: string,
   interviewRecordId: string,
   organizationId: string,
 ) {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
+    const candidate = await lockCandidateForOffer(tx, interviewRecordId, organizationId);
     const [row] = await tx
-      .select({ approvalAttachment: studioOfferDraft.approvalAttachment })
+      .select()
       .from(studioOfferDraft)
       .where(
         and(
@@ -167,12 +555,32 @@ export function removeOfferApprovalAttachment(
     if (!row?.approvalAttachment) {
       return null;
     }
+    if (
+      row.sscConfirmationStatus !== null &&
+      (row.status !== "draft" || candidate.pipelineStage === "closed")
+    ) {
+      throw new OfferDraftError("已发送的 Offer 不能修改审核附件，请新建版本。", 400);
+    }
     await tx
       .update(studioOfferDraft)
-      .set({ approvalAttachment: null, updatedAt: new Date() })
+      .set({ ...resetSscConfirmation(row), approvalAttachment: null, updatedAt: new Date() })
       .where(eq(studioOfferDraft.id, draftId));
-    return row.approvalAttachment;
+    if (row.sscConfirmationStatus !== null) {
+      await enqueueOfferSscNotification(tx, {
+        draftId,
+        event: "pending",
+        interviewRecordId,
+        organizationId,
+        revision: row.sscRevision + 1,
+      });
+    }
+    return {
+      attachment: row.approvalAttachment,
+      obsoleteCompletionKey: row.sscCompletionAttachment?.storageKey,
+    };
   });
+  await cleanupCompletionAttachment(result?.obsoleteCompletionKey);
+  return result?.attachment ?? null;
 }
 
 export interface CreateDraftOptions {
@@ -201,10 +609,17 @@ export async function createOfferDraft({
   input,
   sendImmediately,
 }: CreateDraftOptions): Promise<OfferDraftRecord> {
+  if (sendImmediately) {
+    throw new OfferDraftError("新建 Offer 必须先完成 SSC 确认，不能立即发送。", 400);
+  }
   const id = crypto.randomUUID();
   const now = new Date();
 
   return await db.transaction(async (tx) => {
+    const candidate = await lockCandidateForOffer(tx, interviewRecordId, organizationId);
+    if (candidate.pipelineStage === "closed") {
+      throw new OfferDraftError("已结案候选人不能创建 Offer。", 400);
+    }
     // 锁同候选人下的所有 draft，串行化新建版本流程。
     // Lock all drafts for this candidate to serialize version creation.
     const existing = await tx
@@ -249,10 +664,9 @@ export async function createOfferDraft({
       notes: input.notes ?? null,
       organizationId,
       position: input.position,
-      sentAt: sendImmediately ? now : null,
-      sentBy: sendImmediately ? actorId : null,
-      sentByRole: sendImmediately ? actorRole : null,
-      status: sendImmediately ? "sent" : "draft",
+      sscConfirmationStatus: "pending",
+      sscRevision: 1,
+      status: "draft",
       updatedAt: now,
       version: nextVersion,
     });
@@ -265,6 +679,13 @@ export async function createOfferDraft({
     if (!created) {
       throw new Error("创建后查询失败");
     }
+    await enqueueOfferSscNotification(tx, {
+      draftId: created.id,
+      event: "pending",
+      interviewRecordId,
+      organizationId,
+      revision: created.sscRevision,
+    });
     return toRecord(created);
   });
 }
@@ -278,7 +699,7 @@ export interface EditDraftOptions {
   approvalAttachment?: (typeof studioOfferDraft.$inferInsert)["approvalAttachment"];
 }
 
-export function editOfferDraftWithAttachment({
+export async function editOfferDraftWithAttachment({
   draftId,
   organizationId,
   input,
@@ -293,7 +714,8 @@ export function editOfferDraftWithAttachment({
   // 防止两名 HR 同时编辑同一份草稿造成 (input ?? existing) merge 字段相互覆盖。
   // Transaction + FOR UPDATE: serialize read → validate → merge → write so
   // concurrent edits to the same draft can't lose each other's writes.
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
+    const candidate = await lockDraftCandidate(tx, draftId, organizationId);
     const [existing] = await tx
       .select()
       .from(studioOfferDraft)
@@ -312,34 +734,60 @@ export function editOfferDraftWithAttachment({
     if (existing.status !== "draft") {
       throw new OfferDraftError("只有草稿状态的 Offer 可以编辑", 400);
     }
+    if (existing.sscConfirmationStatus !== null && candidate.pipelineStage === "closed") {
+      throw new OfferDraftError("已结案候选人的 Offer 不能编辑。", 400);
+    }
     // existing.expiresAt / joiningDate 是 Date，resolveDateField 期待 string | null。
     // existing.expiresAt / joiningDate are Date columns; resolveDateField wants strings.
     const existingExpiresAtIso = existing.expiresAt ? existing.expiresAt.toISOString() : null;
     const existingJoiningDateIso = existing.joiningDate ? existing.joiningDate.toISOString() : null;
+    const patch = {
+      ...(approvalAttachment !== undefined && { approvalAttachment }),
+      baseSalary: input.baseSalary ?? existing.baseSalary,
+      bonus: input.bonus ?? existing.bonus,
+      currency: input.currency ?? existing.currency,
+      equity: input.equity ?? existing.equity,
+      expiresAt: resolveDateField(input.expiresAt, existingExpiresAtIso),
+      joiningDate: resolveDateField(input.joiningDate, existingJoiningDateIso),
+      notes: input.notes ?? existing.notes,
+      position: input.position ?? existing.position,
+      updatedAt: now,
+    };
+    const changed = Object.entries(patch).some(([key, value]) => {
+      if (key === "updatedAt") {
+        return false;
+      }
+      const previous = existing[key as keyof typeof existing];
+      return value instanceof Date || previous instanceof Date
+        ? (value instanceof Date ? value.getTime() : value) !==
+            (previous instanceof Date ? previous.getTime() : previous)
+        : JSON.stringify(value) !== JSON.stringify(previous);
+    });
     const [updated] = await tx
       .update(studioOfferDraft)
-      .set({
-        ...(approvalAttachment !== undefined && { approvalAttachment }),
-        baseSalary: input.baseSalary ?? existing.baseSalary,
-        bonus: input.bonus ?? existing.bonus,
-        currency: input.currency ?? existing.currency,
-        equity: input.equity ?? existing.equity,
-        expiresAt: resolveDateField(input.expiresAt, existingExpiresAtIso),
-        joiningDate: resolveDateField(input.joiningDate, existingJoiningDateIso),
-        notes: input.notes ?? existing.notes,
-        position: input.position ?? existing.position,
-        updatedAt: now,
-      })
+      .set({ ...patch, ...(changed ? resetSscConfirmation(existing) : {}) })
       .where(eq(studioOfferDraft.id, draftId))
       .returning();
     if (!updated) {
       throw new Error("更新后查询失败");
     }
+    if (changed && existing.sscConfirmationStatus !== null) {
+      await enqueueOfferSscNotification(tx, {
+        draftId: updated.id,
+        event: "pending",
+        interviewRecordId: updated.interviewRecordId,
+        organizationId,
+        revision: updated.sscRevision,
+      });
+    }
     return {
+      obsoleteCompletionAttachment: changed ? existing.sscCompletionAttachment : null,
       previousAttachment: approvalAttachment === undefined ? null : existing.approvalAttachment,
       updated: toRecord(updated),
     };
   });
+  await cleanupCompletionAttachment(result.obsoleteCompletionAttachment?.storageKey);
+  return { previousAttachment: result.previousAttachment, updated: result.updated };
 }
 
 export async function editOfferDraft(options: EditDraftOptions): Promise<OfferDraftRecord> {
@@ -354,29 +802,48 @@ export async function sendOfferDraft(
   organizationId: string,
   actor?: { id: string | null; role: string | null },
 ): Promise<OfferDraftRecord> {
-  const existing = await loadDraftById(draftId, organizationId);
-  if (!existing) {
-    throw new OfferDraftError("Offer 草稿不存在", 404);
-  }
-  if (existing.status !== "draft") {
-    throw new OfferDraftError("只有草稿状态的 Offer 可以发出", 400);
-  }
-  const now = new Date();
-  await db
-    .update(studioOfferDraft)
-    .set({
-      sentAt: now,
-      sentBy: actor?.id ?? null,
-      sentByRole: actor?.role ?? null,
-      status: "sent",
-      updatedAt: now,
-    })
-    .where(eq(studioOfferDraft.id, draftId));
-  const updated = await loadDraftById(draftId, organizationId);
-  if (!updated) {
-    throw new Error("发出后查询失败");
-  }
-  return updated;
+  return await db.transaction(async (tx) => {
+    const candidate = await lockDraftCandidate(tx, draftId, organizationId);
+    const [existing] = await tx
+      .select()
+      .from(studioOfferDraft)
+      .where(
+        and(eq(studioOfferDraft.id, draftId), eq(studioOfferDraft.organizationId, organizationId)),
+      )
+      .for("update")
+      .limit(1);
+    if (!existing || existing.status === "deleted") {
+      throw new OfferDraftError("Offer 草稿不存在", 404);
+    }
+    if (existing.status !== "draft") {
+      throw new OfferDraftError("只有草稿状态的 Offer 可以发出", 400);
+    }
+    if (
+      existing.sscConfirmationStatus !== null &&
+      (existing.sscConfirmationStatus !== "completed" || candidate.pipelineStage === "closed")
+    ) {
+      throw new OfferDraftError(
+        "Offer 必须先完成 SSC 确认，且候选人流程仍在进行中，才能发送。",
+        409,
+      );
+    }
+    const now = new Date();
+    const [updated] = await tx
+      .update(studioOfferDraft)
+      .set({
+        sentAt: now,
+        sentBy: actor?.id ?? null,
+        sentByRole: actor?.role ?? null,
+        status: "sent",
+        updatedAt: now,
+      })
+      .where(eq(studioOfferDraft.id, draftId))
+      .returning();
+    if (!updated) {
+      throw new Error("发出后查询失败");
+    }
+    return toRecord(updated);
+  });
 }
 
 // sent → accepted/declined/counter（counter 不改变 status，只记 candidateCounter；
@@ -440,6 +907,7 @@ export async function cancelOfferDraft(
   const now = new Date();
 
   const stageChange = await db.transaction(async (tx) => {
+    await lockDraftCandidate(tx, draftId, organizationId);
     // 1. 锁住草稿行 + 校验。
     // 1. Lock the draft row + validate.
     const [existing] = await tx
@@ -562,6 +1030,7 @@ export async function deleteOfferDraft(
   organizationId: string,
 ): Promise<{ draft: OfferDraftRecord; previousStatus: OfferDraftStatus }> {
   return await db.transaction(async (tx) => {
+    await lockDraftCandidate(tx, draftId, organizationId);
     const [existing] = await tx
       .select()
       .from(studioOfferDraft)

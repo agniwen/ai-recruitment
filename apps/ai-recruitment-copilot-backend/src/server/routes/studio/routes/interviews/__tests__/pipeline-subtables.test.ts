@@ -175,6 +175,16 @@ async function clearSubtables() {
   await db.delete(studioOfferDraft).where(eq(studioOfferDraft.interviewRecordId, RECORD_ID));
 }
 
+// These pre-existing tests exercise the version/response lifecycle. Historical
+// null-SSC fixtures keep that purpose independent of the new SSC workflow suite.
+async function sendHistoricalOffer(draftId: string) {
+  await db
+    .update(studioOfferDraft)
+    .set({ sscConfirmationStatus: null })
+    .where(eq(studioOfferDraft.id, draftId));
+  return await sendOfferDraft(draftId, ORG);
+}
+
 describe("human interview rounds DAO", () => {
   it("createHumanInterviewRound 写入 round + interviewer junction，sortOrder 自增", async () => {
     await clearSubtables();
@@ -717,22 +727,22 @@ describe("offer drafts DAO", () => {
     await clearSubtables();
     await resetCandidateStage("human_interview");
 
-    const v1 = await createOfferDraft({
+    const firstDraft = await createOfferDraft({
       input: { baseSalary: 30_000, position: "高级前端" },
       interviewRecordId: RECORD_ID,
       organizationId: ORG,
-      sendImmediately: true,
     });
+    const v1 = await sendHistoricalOffer(firstDraft.id);
     expect(v1.version).toBe(1);
     expect(v1.status).toBe("sent");
 
     // 新建 v2 应该把 v1 supersede。
-    const v2 = await createOfferDraft({
+    const secondDraft = await createOfferDraft({
       input: { baseSalary: 32_000, position: "高级前端" },
       interviewRecordId: RECORD_ID,
       organizationId: ORG,
-      sendImmediately: true,
     });
+    const v2 = await sendHistoricalOffer(secondDraft.id);
     expect(v2.version).toBe(2);
 
     const drafts = await listOfferDrafts(RECORD_ID, ORG);
@@ -844,7 +854,7 @@ describe("offer drafts DAO", () => {
     });
     expect(edited.baseSalary).toBe(27_000);
 
-    await sendOfferDraft(draft.id, ORG);
+    await sendHistoricalOffer(draft.id);
     await expect(
       editOfferDraft({
         draftId: draft.id,
@@ -860,8 +870,8 @@ describe("offer drafts DAO", () => {
       input: { baseSalary: 30_000, position: "议价岗" },
       interviewRecordId: RECORD_ID,
       organizationId: ORG,
-      sendImmediately: true,
     });
+    await sendHistoricalOffer(draft.id);
 
     // counter 不改 status。
     const counter = await respondOfferDraft({
@@ -898,8 +908,8 @@ describe("offer drafts DAO", () => {
       input: { baseSalary: 30_000, position: "撤回测试岗" },
       interviewRecordId: RECORD_ID,
       organizationId: ORG,
-      sendImmediately: true,
     });
+    await sendHistoricalOffer(draft.id);
     const cancelled = await cancelOfferDraft(draft.id, ORG);
     expect(cancelled.status).toBe("expired");
 
@@ -930,12 +940,12 @@ describe("offer drafts DAO", () => {
 
   it("deleteOfferDraft 允许删除 superseded 历史版本", async () => {
     await clearSubtables();
-    const v1 = await createOfferDraft({
+    const previousDraft = await createOfferDraft({
       input: { baseSalary: 30_000, position: "历史版本测试岗" },
       interviewRecordId: RECORD_ID,
       organizationId: ORG,
-      sendImmediately: true,
     });
+    const v1 = await sendHistoricalOffer(previousDraft.id);
     const v2 = await createOfferDraft({
       input: { baseSalary: 31_000, position: "历史版本测试岗" },
       interviewRecordId: RECORD_ID,

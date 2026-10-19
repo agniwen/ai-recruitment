@@ -36,6 +36,33 @@ vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "work
 enableReactActEnvironment();
 
 describe("Studio permission denial navigation", () => {
+  it("denies direct SSC responsibility navigation without its page permission", async () => {
+    const root = createRootRoute();
+    const workspace = createRoute({
+      getParentRoute: () => root,
+      loader: () => ({ permissions: { page: ["me"] }, status: "ready" }),
+      path: "/w/$slug",
+    });
+    const studio = createRoute({
+      getParentRoute: () => workspace,
+      loader: (context) => {
+        const { loader } = StudioRoute.options;
+        if (typeof loader === "function") {
+          return loader(context as never);
+        }
+      },
+      path: "studio",
+    });
+    const page = createRoute({ getParentRoute: () => studio, path: "ssc-responsibilities" });
+    const router = createRouter({
+      history: createMemoryHistory({ initialEntries: ["/w/work/studio/ssc-responsibilities"] }),
+      routeTree: root.addChildren([workspace.addChildren([studio.addChildren([page])])]),
+    });
+    await router.load();
+    expect(router.state.matches.find((match) => match.routeId === studio.id)?.status).toBe(
+      "notFound",
+    );
+  });
   it.each([
     { allowed: false, label: "page only", permissions: { page: ["resumePool"] } },
     { allowed: false, label: "read only", permissions: { resumePool: ["read"] } },

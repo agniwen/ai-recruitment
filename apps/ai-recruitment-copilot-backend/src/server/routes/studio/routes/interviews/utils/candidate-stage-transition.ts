@@ -1,6 +1,6 @@
 import { listAiReviewNotificationRecipients } from "../../ai-review/dao";
 import { canApproveCandidateAiReview } from "../dao/ai-review-approval";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { WorkspaceAuthorizer } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-access-policy";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -16,6 +16,7 @@ import {
   jobDescription,
   studioInterview,
   studioInterviewOdcAssignment,
+  studioOfferDraft,
 } from "@arc/db-schema/schema";
 import {
   getCandidateHiredDetailsError,
@@ -292,6 +293,40 @@ export async function transitionCandidateStage(command: {
         kind: "invalid",
         message: "该候选人已结束流程，不能再次标记录用。",
       } as const;
+    }
+
+    if (isHiringCandidate) {
+      // The candidate lock also serializes Offer creation, edits and SSC actions.
+      // Include tombstones when detecting the new flow so deletion cannot turn
+      // an unconfirmed Offer into the historical compatibility path.
+      const offers = await tx
+        .select({
+          sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
+          status: studioOfferDraft.status,
+          version: studioOfferDraft.version,
+        })
+        .from(studioOfferDraft)
+        .where(
+          and(
+            eq(studioOfferDraft.interviewRecordId, command.candidateId),
+            eq(studioOfferDraft.organizationId, command.organizationId),
+          ),
+        )
+        .orderBy(desc(studioOfferDraft.version))
+        .for("update");
+      const hasSscFlow = offers.some((offer) => offer.sscConfirmationStatus !== null);
+      const [currentOffer] = offers;
+      if (
+        hasSscFlow &&
+        (currentOffer?.sscConfirmationStatus !== "completed" ||
+          currentOffer.status === "deleted" ||
+          currentOffer.status === "superseded")
+      ) {
+        return {
+          kind: "invalid",
+          message: "最新 Offer 尚未完成 SSC 确认，不能标记已到岗。",
+        } as const;
+      }
     }
 
     const transition = resolveCandidateTransitionPatch({

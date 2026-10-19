@@ -11,6 +11,7 @@ import type {
   HumanInterviewRoundOutcome,
   HumanInterviewRoundStatus,
   OfferDraftStatus,
+  OfferSscConfirmationStatus,
 } from "@arc/db-schema/studio-interviews";
 
 /**
@@ -161,6 +162,14 @@ export interface PublicHumanInterviewInterviewerPreview {
   title: string;
 }
 
+/** Current SSC state uses the highest persisted version, including deleted versions. */
+export interface OfferSscState {
+  id: string;
+  version: number;
+  status: OfferDraftStatus;
+  sscConfirmationStatus: OfferSscConfirmationStatus | null;
+}
+
 /**
  * Offer 草稿单版本 DTO（DAO 返回 + 客户端消费）。
  *
@@ -178,6 +187,19 @@ export interface OfferDraftRecord {
   organizationId: string;
   version: number;
   status: OfferDraftStatus;
+  // Optional for older clients/fixtures; new API responses include every SSC field.
+  sscConfirmationStatus?: OfferSscConfirmationStatus | null;
+  sscRevision?: number;
+  sscReceivedBy?: string | null;
+  sscReceivedAt?: string | null;
+  sscCompletedBy?: string | null;
+  sscCompletedAt?: string | null;
+  sscCompletionAttachment?: {
+    filename: string;
+    mediaType: string;
+    revision: number;
+    size: number;
+  } | null;
   baseSalary: number;
   currency: string;
   bonus: number | null;
@@ -194,3 +216,4 @@ export interface OfferDraftRecord {
 }
 
 export const MAX_OFFER_APPROVAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const MAX_SSC_COMPLETION_SCREENSHOT_BYTES = 10 * 1024 * 1024;

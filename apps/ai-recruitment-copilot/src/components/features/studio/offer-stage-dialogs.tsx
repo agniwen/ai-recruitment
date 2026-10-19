@@ -13,20 +13,12 @@ import { IconArrowUpRight } from "@tabler/icons-react";
 // the caller to launch the close flow.
 
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import type { ClipboardEvent } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { MAX_OFFER_APPROVAL_ATTACHMENT_BYTES } from "@arc/shared/studio-pipeline-stages";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
-import {
-  createOfferDraft,
-  createOfferDraftWithAttachment,
-  patchOfferDraft,
-  respondOfferDraft,
-} from "@/lib/client/api";
+import { createOfferDraft, patchOfferDraft, respondOfferDraft } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -48,7 +40,6 @@ import {
   saveSuccessMessage,
 } from "./offer-stage-form";
 import type { OfferFormState } from "./offer-stage-form";
-import { OfferAttachmentPreview } from "./offer-attachment-preview";
 
 interface OfferDialogProps {
   open: boolean;
@@ -71,63 +62,7 @@ export function CreateOrEditOfferDialog({
 }: OfferDialogProps) {
   const slug = useWorkspaceSlug();
   const [form, setForm] = useState<OfferFormState>(() => createBlankOfferFormState());
-  const [attachment, setAttachment] = useState<File | null>(null);
-  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState<string | null>(null);
-  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const setFormField = createOfferFormFieldSetter(setForm);
-
-  useEffect(() => {
-    if (!attachment) {
-      setAttachmentPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(attachment);
-    setAttachmentPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [attachment]);
-
-  function clearAttachment() {
-    setAttachment(null);
-    if (attachmentInputRef.current) {
-      attachmentInputRef.current.value = "";
-    }
-  }
-
-  function selectAttachment(file: File | null) {
-    if (file && (file.size === 0 || file.size > MAX_OFFER_APPROVAL_ATTACHMENT_BYTES)) {
-      toast.error(file.size === 0 ? "请选择非空附件。" : "附件不能超过 20 MB。");
-      clearAttachment();
-      return;
-    }
-    setAttachment(file);
-  }
-
-  function handleAttachmentPaste(event: ClipboardEvent<HTMLDivElement>) {
-    const pastedFile = [...event.clipboardData.files].find((file) =>
-      file.type.startsWith("image/"),
-    );
-    if (!pastedFile) {
-      return;
-    }
-    event.preventDefault();
-    if (attachmentInputRef.current) {
-      attachmentInputRef.current.value = "";
-    }
-    const extension =
-      {
-        "image/avif": "avif",
-        "image/bmp": "bmp",
-        "image/gif": "gif",
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-      }[pastedFile.type] ?? "png";
-    selectAttachment(
-      pastedFile.name
-        ? pastedFile
-        : new File([pastedFile], `ssc-review.${extension}`, { type: pastedFile.type }),
-    );
-  }
 
   // 编辑模式打开时同步现值；新建模式打开时清空。
   // Sync form on open: prefill in edit mode, blank in create mode.
@@ -140,7 +75,6 @@ export function CreateOrEditOfferDialog({
     } else {
       setForm(createBlankOfferFormState());
     }
-    clearAttachment();
   }, [open, mode, existingDraft]);
 
   const mutation = useMutation({
@@ -151,9 +85,7 @@ export function CreateOrEditOfferDialog({
       }
       // Always save as draft — send UI is currently hidden on the offer stage.
       const input = { ...payload, sendImmediately: false };
-      return attachment
-        ? createOfferDraftWithAttachment(slug, candidateId, input, attachment)
-        : createOfferDraft(slug, candidateId, input);
+      return createOfferDraft(slug, candidateId, input);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "保存失败"),
     onSuccess: () => {
@@ -165,54 +97,20 @@ export function CreateOrEditOfferDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent
-        className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
-        onPaste={mode === "create" ? handleAttachmentPaste : undefined}
-      >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{mode === "edit" ? "编辑 Offer 草稿" : "新建 Offer"}</DialogTitle>
           <DialogDescription>
             {mode === "edit" ? "草稿状态可编辑。" : "新建版本会自动 supersede 已发出未结的旧版本。"}
           </DialogDescription>
           {mode === "create" ? (
-            <p className="text-muted-foreground text-xs">该 Offer，需要SSC已完成审核确认的Offer</p>
+            <p className="text-muted-foreground text-xs">
+              新增后等待 SSC 接收并完成确认；确认完成前不可发送 Offer 或标记入职。
+            </p>
           ) : null}
         </DialogHeader>
 
         <OfferDraftFormFields form={form} idPrefix="offer" onFieldChange={setFormField} />
-
-        {mode === "create" ? (
-          <div className="grid gap-1.5">
-            <Label className="text-sm" htmlFor="offer-approval-attachment">
-              SSC 已审核截图 / 附件（可选）
-            </Label>
-            <Input
-              id="offer-approval-attachment"
-              onChange={(event) => selectAttachment(event.target.files?.[0] ?? null)}
-              ref={attachmentInputRef}
-              type="file"
-            />
-            <p className="text-muted-foreground text-xs">
-              支持图片、文档、压缩包等文件，也可直接粘贴截图；最大 20 MB。
-            </p>
-            {attachment ? (
-              <OfferAttachmentPreview
-                filename={attachment.name}
-                url={attachmentPreviewUrl ?? ""}
-                imageUrl={
-                  /^image\/(avif|bmp|gif|jpeg|png|webp)$/.test(attachment.type)
-                    ? attachmentPreviewUrl
-                    : null
-                }
-                imageAlt={`待上传附件预览：${attachment.name}`}
-                label="已选择："
-                deleteLabel={`移除附件 ${attachment.name}`}
-                disabled={mutation.isPending}
-                onDelete={clearAttachment}
-              />
-            ) : null}
-          </div>
-        ) : null}
 
         <DialogFooter>
           <Button
@@ -359,20 +257,24 @@ export function AcceptedConfirmDialog({
   onOpenChange: (open: boolean) => void;
   onProceed: () => void;
 }) {
+  const sscPending =
+    draft?.sscConfirmationStatus === "pending" || draft?.sscConfirmationStatus === "confirming";
   return (
     <Dialog onOpenChange={onOpenChange} open={draft !== null}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>候选人已接受 Offer</DialogTitle>
           <DialogDescription>
-            是否立刻标记为「已到岗」并结案？你也可以稍后在 action bar 里手动标记。
+            {sscPending
+              ? "SSC完成确认后方可标记为「已到岗」。请先完成当前版本的 SSC 确认。"
+              : "是否立刻标记为「已到岗」并结案？你也可以稍后在 action bar 里手动标记。"}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button onClick={() => onOpenChange(false)} variant="outline">
             稍后
           </Button>
-          <Button onClick={onProceed}>
+          <Button disabled={sscPending} onClick={onProceed}>
             <IconArrowUpRight className="size-4" />
             标记为已到岗
           </Button>

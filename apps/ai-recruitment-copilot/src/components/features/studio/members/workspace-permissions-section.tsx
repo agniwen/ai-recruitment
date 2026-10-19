@@ -62,6 +62,7 @@ interface DynamicWorkspaceRole {
   createdAt: Date | string;
   id: string;
   isOdc: boolean;
+  isSsc: boolean;
   name: string;
   role: string;
   permission: PermissionRecord;
@@ -71,6 +72,7 @@ interface PermissionRoleRow {
   builtIn: boolean;
   id: string;
   isOdc: boolean;
+  isSsc: boolean;
   name: string;
   permission: PermissionRecord;
   role: string;
@@ -90,6 +92,7 @@ interface RoleFormState {
 
 interface RoleFormSubmit {
   isOdc: boolean;
+  isSsc: boolean;
   name: string;
   permission: PermissionRecord;
   role: string;
@@ -98,6 +101,7 @@ interface RoleFormSubmit {
 interface UpdateRoleInput {
   id: string;
   isOdc?: boolean;
+  isSsc?: boolean;
   name?: string;
   permission?: PermissionRecord;
 }
@@ -178,6 +182,7 @@ function RoleFormDialog({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isOdc, setIsOdc] = useState(false);
+  const [isSsc, setIsSsc] = useState(false);
   const [roleIdentifier, setRoleIdentifier] = useState("");
   const [roleName, setRoleName] = useState("");
 
@@ -192,6 +197,7 @@ function RoleFormDialog({
     const defaultRole = state.mode === "copy" ? `${sourceRole}-copy` : sourceRole;
     setError(null);
     setIsOdc(state.role?.isOdc ?? false);
+    setIsSsc(state.role?.isSsc ?? false);
     setRoleName(defaultName);
     setRoleIdentifier(defaultRole);
   }, [state]);
@@ -218,10 +224,15 @@ function RoleFormDialog({
       setError("不能使用系统内置角色名。");
       return;
     }
+    if (isOdc && isSsc) {
+      setError("同一角色不能同时设为 ODC 和 SSC 审核。");
+      return;
+    }
 
     setError(null);
     onSubmit({
       isOdc,
+      isSsc,
       name,
       permission: copyPermission(state.permission),
       role,
@@ -265,13 +276,38 @@ function RoleFormDialog({
                 checked={isOdc}
                 disabled={submitting}
                 id="workspace-role-is-odc"
-                onCheckedChange={setIsOdc}
+                onCheckedChange={(checked) => {
+                  setIsOdc(checked);
+                  if (checked) {
+                    setIsSsc(false);
+                  }
+                }}
               />
               <FieldContent className="min-w-0">
                 <FieldLabel htmlFor="workspace-role-is-odc">是否为 ODC</FieldLabel>
                 <FieldDescription>
                   勾选后，该角色成员按招聘组及其 ODC 挂靠的组织、部门、序列和服务单位查看招聘数据，
                   并计入 ODC 分析。
+                </FieldDescription>
+              </FieldContent>
+            </Field>
+            <Field className="items-start rounded-lg border p-3" orientation="horizontal">
+              <Checkbox
+                checked={isSsc}
+                disabled={submitting}
+                id="workspace-role-is-ssc"
+                onCheckedChange={(checked) => {
+                  setIsSsc(checked);
+                  if (checked) {
+                    setIsOdc(false);
+                  }
+                }}
+              />
+              <FieldContent className="min-w-0">
+                <FieldLabel htmlFor="workspace-role-is-ssc">是否 SSC 审核</FieldLabel>
+                <FieldDescription>
+                  勾选后，可用于 SSC 负责组织配置，成员按负责的部门/中心查看候选人；SSC
+                  接收和完成确认需分别配置操作权限。
                 </FieldDescription>
               </FieldContent>
             </Field>
@@ -346,7 +382,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
         throw new Error("不能使用系统内置角色名。");
       }
       const { error } = await authClient.organization.createRole({
-        additionalFields: { isOdc: input.isOdc, name: input.name },
+        additionalFields: { isOdc: input.isOdc, isSsc: input.isSsc, name: input.name },
         organizationId: workspaceId,
         permission: input.permission,
         role,
@@ -363,6 +399,10 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       await Promise.all([
         queryClient.invalidateQueries({ queryKey }),
         queryClient.invalidateQueries({ queryKey: ["odc-analysis", workspaceSlug] }),
+        queryClient.invalidateQueries({
+          queryKey: ["studio-ssc-responsibility-options", workspaceSlug],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["studio-ssc-responsibilities", workspaceSlug] }),
         queryClient.invalidateQueries({ queryKey: workspaceAccessKeys.bySlug(workspaceSlug) }),
       ]);
       toast.success("角色已创建");
@@ -373,11 +413,15 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
     mutationFn: async (input: UpdateRoleInput) => {
       const data: {
         isOdc?: boolean;
+        isSsc?: boolean;
         name?: string;
         permission?: PermissionRecord;
       } = {};
       if (input.isOdc !== undefined) {
         data.isOdc = input.isOdc;
+      }
+      if (input.isSsc !== undefined) {
+        data.isSsc = input.isSsc;
       }
       if (input.permission) {
         data.permission = input.permission;
@@ -402,6 +446,10 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       await Promise.all([
         queryClient.invalidateQueries({ queryKey }),
         queryClient.invalidateQueries({ queryKey: ["odc-analysis", workspaceSlug] }),
+        queryClient.invalidateQueries({
+          queryKey: ["studio-ssc-responsibility-options", workspaceSlug],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["studio-ssc-responsibilities", workspaceSlug] }),
         queryClient.invalidateQueries({ queryKey: workspaceAccessKeys.bySlug(workspaceSlug) }),
       ]);
       toast.success("角色设置已保存");
@@ -426,6 +474,10 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       await Promise.all([
         queryClient.invalidateQueries({ queryKey }),
         queryClient.invalidateQueries({ queryKey: ["odc-analysis", workspaceSlug] }),
+        queryClient.invalidateQueries({
+          queryKey: ["studio-ssc-responsibility-options", workspaceSlug],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["studio-ssc-responsibilities", workspaceSlug] }),
         queryClient.invalidateQueries({ queryKey: workspaceAccessKeys.bySlug(workspaceSlug) }),
       ]);
       toast.success("角色已删除");
@@ -463,6 +515,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       builtIn: true,
       id: `builtin:${role}`,
       isOdc: false,
+      isSsc: false,
       name: getWorkspaceRoleLabel(role),
       permission: getBuiltInPermission(role),
       role,
@@ -471,6 +524,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
       builtIn: false,
       id: role.id,
       isOdc: role.isOdc,
+      isSsc: role.isSsc,
       name: role.name,
       permission: draftByRoleId[role.id] ?? copyPermissionRecord(role.permission),
       role: role.role,
@@ -541,6 +595,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
                                   {row.builtIn ? "内置" : "自定义"}
                                 </Badge>
                                 {row.isOdc ? <Badge variant="secondary">ODC</Badge> : null}
+                                {row.isSsc ? <Badge variant="secondary">SSC 审核</Badge> : null}
                               </div>
                               <span className="block truncate text-muted-foreground text-xs">
                                 {row.role}
@@ -679,6 +734,7 @@ export function WorkspacePermissionsSection({ headerRender }: WorkspacePermissio
             updateRole.mutate({
               id: roleFormState.role.id,
               isOdc: input.isOdc,
+              isSsc: input.isSsc,
               name: input.name,
               permission: input.permission,
             });

@@ -1,6 +1,7 @@
 import { ResumeSourceChildrenModal } from "./resume-source-children-modal";
 import type { SourceChildKind } from "./resume-source-children-modal";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { isWorkspaceAdministratorRole } from "@arc/shared/permissions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ResumeSourceRecord } from "@arc/shared/resume-sources";
 import { IconPlus } from "@tabler/icons-react";
@@ -22,7 +23,8 @@ import { Button } from "@/components/ui/button";
 import { useHasPermission } from "@/hooks/use-has-permission";
 import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
-import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { useWorkspaceMemberRole, useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { ResumeSourceSscManagementModal } from "./resume-source-ssc-management-modal";
 import { ListAccessDenied } from "@/components/data-grid/list-load-error";
 
 function ResumeSourceManagementContent() {
@@ -31,6 +33,14 @@ function ResumeSourceManagementContent() {
   const canCreate = useHasPermission("hiringUnit", "create");
   const canUpdate = useHasPermission("hiringUnit", "update");
   const canDelete = useHasPermission("hiringUnit", "delete");
+  const canAccessSsc = useHasPermission("page", "sscResponsibilities");
+  const canManageSsc = isWorkspaceAdministratorRole(useWorkspaceMemberRole()) && canAccessSsc;
+  const [sscSource, setSscSource] = useState<ResumeSourceRecord | null>(null);
+  useEffect(() => {
+    if (!canManageSsc) {
+      setSscSource(null);
+    }
+  }, [canManageSsc]);
   const canReadUnits = useHasPermission("hiringUnit", "read");
   const canReadDepartments = useHasPermission("department", "read");
   const canReadJobs = useHasPermission("jd", "read");
@@ -141,6 +151,7 @@ function ResumeSourceManagementContent() {
     actionsColumn<ResumeSourceRecord>({
       inline: [
         { label: "管理 ODC", onClick: setManagedSource, show: () => canUpdate },
+        { label: "管理 SSC", onClick: setSscSource, show: () => canManageSsc },
         { label: "编辑", onClick: (row) => void crud.openEdit(row), show: () => canUpdate },
       ],
       menu: [
@@ -215,6 +226,19 @@ function ResumeSourceManagementContent() {
         target={managedSource ? { ...managedSource, rowType: "resumeSource" } : null}
         onSaved={invalidate}
       />
+      {canManageSsc && sscSource ? (
+        <ResumeSourceSscManagementModal
+          key={sscSource.id}
+          open
+          target={sscSource}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSscSource(null);
+            }
+          }}
+          onSaved={invalidate}
+        />
+      ) : null}
       {childrenTarget ? (
         <ResumeSourceChildrenModal
           key={`${childrenTarget.kind}:${childrenTarget.source.id}`}

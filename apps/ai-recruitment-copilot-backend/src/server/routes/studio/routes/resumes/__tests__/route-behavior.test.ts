@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   generateResumeScreeningBestEffort: vi.fn(),
   insertedValues: [] as Record<string, unknown>[],
   invalidateStudioInterviewCaches: vi.fn(),
+  isSscCandidateVisible: vi.fn(),
   jobDescriptionIdsExist: vi.fn(),
   listCandidateRounds: vi.fn(),
   listDuplicateMatchesForSource: vi.fn(),
@@ -40,12 +41,18 @@ const mocks = vi.hoisted(() => ({
   replaceDuplicateMatchesForSource: vi.fn(),
   resolveResumeUploadStorage: vi.fn(),
   resolveResumeVisibilityScope: vi.fn(),
+  resolveSscAccessActor: vi.fn(),
   retryFailedResumeParse: vi.fn(),
   submitResumeEvaluation: vi.fn(),
   transaction: vi.fn(),
   updatePatches: [] as Record<string, unknown>[],
   updateResumeEvaluationStatus: vi.fn(),
   updateResumeEvaluationStatusInTransaction: vi.fn(),
+}));
+
+vi.mock("@arc/ai-recruitment-copilot-backend/server/access/ssc-access", () => ({
+  isSscCandidateVisible: mocks.isSscCandidateVisible,
+  resolveSscAccessActor: mocks.resolveSscAccessActor,
 }));
 
 vi.mock("../utils/ai-review-notification", () => ({
@@ -295,6 +302,8 @@ function makeApp() {
 describe("resumeLibraryRouter behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveSscAccessActor.mockResolvedValue(null);
+    mocks.isSscCandidateVisible.mockResolvedValue(false);
     mocks.insertedValues.length = 0;
     mocks.permissionChecks.length = 0;
     mocks.updatePatches.length = 0;
@@ -353,6 +362,16 @@ describe("resumeLibraryRouter behavior", () => {
       // oxlint-disable-next-line promise/prefer-await-to-callbacks -- invoke the supplied transaction callback.
       return callback(tx);
     });
+  });
+
+  it("keeps the authenticated review link inside the SSC current Offer boundary", async () => {
+    mocks.resolveSscAccessActor.mockResolvedValue({
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
+    });
+    mocks.loadResumeDetailForAuthenticatedReviewer.mockResolvedValue(EXISTING_RECORD);
+    const response = await makeApp().request(`/resumes/${RECORD_ID}/review`);
+    expect(response.status).toBe(404);
   });
 
   it("passes atomic filters together with the existing workspace visibility scope", async () => {

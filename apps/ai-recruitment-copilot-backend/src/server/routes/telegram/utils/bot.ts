@@ -65,6 +65,12 @@ export function getTelegramBot(): TelegramBot {
   });
 
   bot.onSlashCommand("/start", async (event) => {
+    const startPayload = event.text?.trim();
+    if (startPayload?.startsWith("offer_")) {
+      const { openTelegramOffer } = await import("./offer-ssc");
+      await openTelegramOffer(event, startPayload.slice("offer_".length));
+      return;
+    }
     const message = event.raw as TelegramMessage;
     if (message.chat.type !== "private") {
       await event.channel.post("请私聊机器人并发送 /start 完成通知绑定。");
@@ -77,7 +83,21 @@ export function getTelegramBot(): TelegramBot {
     await event.channel.post(bindingReply(result));
   });
 
-  bot.onDirectMessage(async (thread) => {
+  bot.onSlashCommand("/offer", async (event) => {
+    const { openTelegramOffer } = await import("./offer-ssc");
+    await openTelegramOffer(event, event.text?.trim() ?? "");
+  });
+
+  bot.onAction(["osr", "osc", "osf", "osu", "osx"], async (event) => {
+    const { handleTelegramOfferAction } = await import("./offer-ssc");
+    await handleTelegramOfferAction(event);
+  });
+
+  bot.onDirectMessage(async (thread, message) => {
+    const { handleTelegramOfferScreenshot } = await import("./offer-ssc");
+    if (await handleTelegramOfferScreenshot(thread, message)) {
+      return;
+    }
     await thread.post("发送 /start 即可关注并接收通知。");
   });
 

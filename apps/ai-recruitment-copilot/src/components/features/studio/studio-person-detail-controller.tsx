@@ -30,6 +30,7 @@ import {
   fetchStudioResumeReviewRounds,
   fetchStudioResumeReviewTimeline,
   fetchStudioResumeTimeline,
+  getCurrentOfferSscState,
   resolvePublicInterviewRecordId,
   resolveStudioInterviewRecordId,
 } from "@/lib/client/api";
@@ -179,6 +180,8 @@ export function useStudioPersonDetailController({
   const hasCreateOfferPermission = useHasPermission("offer", "create");
   const hasUpdateOfferPermission = useHasPermission("offer", "update");
   const hasDeleteOfferPermission = useHasPermission("offer", "delete");
+  const hasReceiveOfferPermission = useHasPermission("offer", "receive");
+  const hasConfirmOfferPermission = useHasPermission("offer", "confirm");
   const hasCreateCandidateClosePermission = useHasPermission("candidateClose", "create");
   const memberRole = useOptionalWorkspaceMemberRole();
   const workspacePermissions = useOptionalWorkspacePermissions();
@@ -195,6 +198,8 @@ export function useStudioPersonDetailController({
   const canCreateOffer = canUseManagementActions && hasCreateOfferPermission;
   const canUpdateOffer = canUseManagementActions && hasUpdateOfferPermission;
   const canDeleteOffer = canUseManagementActions && hasDeleteOfferPermission;
+  const canReceiveOffer = canUseManagementActions && hasReceiveOfferPermission;
+  const canConfirmOffer = canUseManagementActions && hasConfirmOfferPermission;
   const canCloseCandidate = canUseManagementActions && hasCreateCandidateClosePermission;
   // Deny flag on custom roles; owner/admin always evaluate (see isResumeEvaluationDisabled).
   const canEvaluateResume =
@@ -521,6 +526,18 @@ export function useStudioPersonDetailController({
     }
   }, [optimisticPipelineStage, record?.pipelineStage]);
   const visiblePipelineStage = optimisticPipelineStage ?? record?.pipelineStage;
+  const { data: currentOfferSscState } = useQuery({
+    enabled:
+      enabled &&
+      canReadOffer &&
+      !!effectiveRecordId &&
+      mode === "resume" &&
+      visiblePipelineStage === "offer",
+    queryFn: () => getCurrentOfferSscState(slug, effectiveRecordId as string),
+    queryKey: ["offer-ssc-state", slug, effectiveRecordId],
+  });
+  // Disabled queries retain cached data; hide the summary after read permission is revoked.
+  const visibleOfferSscState = canReadOffer ? currentOfferSscState : null;
   const hasRecord = record !== null;
   const tabVisibilityRecord = hasRecord
     ? {
@@ -772,6 +789,7 @@ export function useStudioPersonDetailController({
     record.outcome ? (
       <PipelineStageActionBar
         recordId={record.id}
+        offerSscState={visibleOfferSscState}
         aiInterviewDisabled={record.jobDescriptionAiInterviewDisabled}
         humanInterviewDone={Boolean(
           resumeRecord?.stageProgress.humanInterview &&
@@ -993,12 +1011,14 @@ export function useStudioPersonDetailController({
     activeTab,
     bodyLayoutClassName,
     canCloseCandidate,
+    canConfirmOffer,
     canCreateHumanInterview,
     canCreateOffer,
     canDeleteHumanInterview,
     canDeleteOffer,
     canReadHumanInterview,
     canReadOffer,
+    canReceiveOffer,
     canResetAiRound,
     canUpdateHumanInterview,
     canUpdateOffer,

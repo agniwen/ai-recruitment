@@ -76,6 +76,7 @@ import { Route as WSlugStudioPreRegistrationsRouteImport } from './routes/w.$slu
 import { Route as WSlugStudioResumePoolRouteImport } from './routes/w.$slug.studio.resume-pool'
 import { Route as WSlugStudioResumeSourcesRouteImport } from './routes/w.$slug.studio.resume-sources'
 import { Route as WSlugStudioResumesRouteImport } from './routes/w.$slug.studio.resumes'
+import { Route as WSlugStudioSscResponsibilitiesRouteImport } from './routes/w.$slug.studio.ssc-responsibilities'
 import { Route as WSlugStudioInterviewsRoundIdRouteImport } from './routes/w.$slug.studio.interviews.$roundId'
 import { Route as WSlugStudioMailIngestAccountsIdRouteImport } from './routes/w.$slug.studio.mail-ingest-accounts.$id'
 import { Route as WSlugStudioResumesRecordIdRouteImport } from './routes/w.$slug.studio.resumes.$recordId'
@@ -428,6 +429,12 @@ const WSlugStudioResumesRoute = WSlugStudioResumesRouteImport.update({
   path: '/resumes',
   getParentRoute: () => WSlugStudioRoute,
 } as any)
+const WSlugStudioSscResponsibilitiesRoute =
+  WSlugStudioSscResponsibilitiesRouteImport.update({
+    id: '/ssc-responsibilities',
+    path: '/ssc-responsibilities',
+    getParentRoute: () => WSlugStudioRoute,
+  } as any)
 const WSlugStudioInterviewsRoundIdRoute =
   WSlugStudioInterviewsRoundIdRouteImport.update({
     id: '/$roundId',
@@ -519,6 +526,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resume-sources': typeof WSlugStudioResumeSourcesRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
+  '/w/$slug/studio/ssc-responsibilities': typeof WSlugStudioSscResponsibilitiesRoute
   '/w/$slug/agent/': typeof WSlugAgentIndexRoute
   '/w/$slug/chat/': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
@@ -589,6 +597,7 @@ export interface FileRoutesByTo {
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resume-sources': typeof WSlugStudioResumeSourcesRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
+  '/w/$slug/studio/ssc-responsibilities': typeof WSlugStudioSscResponsibilitiesRoute
   '/w/$slug/agent': typeof WSlugAgentIndexRoute
   '/w/$slug/chat': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
@@ -663,6 +672,7 @@ export interface FileRoutesById {
   '/w/$slug/studio/resume-pool': typeof WSlugStudioResumePoolRoute
   '/w/$slug/studio/resume-sources': typeof WSlugStudioResumeSourcesRoute
   '/w/$slug/studio/resumes': typeof WSlugStudioResumesRouteWithChildren
+  '/w/$slug/studio/ssc-responsibilities': typeof WSlugStudioSscResponsibilitiesRoute
   '/w/$slug/agent/': typeof WSlugAgentIndexRoute
   '/w/$slug/chat/': typeof WSlugChatIndexRoute
   '/w/$slug/studio/interviews/$roundId': typeof WSlugStudioInterviewsRoundIdRoute
@@ -738,6 +748,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resume-sources'
     | '/w/$slug/studio/resumes'
+    | '/w/$slug/studio/ssc-responsibilities'
     | '/w/$slug/agent/'
     | '/w/$slug/chat/'
     | '/w/$slug/studio/interviews/$roundId'
@@ -808,6 +819,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resume-sources'
     | '/w/$slug/studio/resumes'
+    | '/w/$slug/studio/ssc-responsibilities'
     | '/w/$slug/agent'
     | '/w/$slug/chat'
     | '/w/$slug/studio/interviews/$roundId'
@@ -881,6 +893,7 @@ export interface FileRouteTypes {
     | '/w/$slug/studio/resume-pool'
     | '/w/$slug/studio/resume-sources'
     | '/w/$slug/studio/resumes'
+    | '/w/$slug/studio/ssc-responsibilities'
     | '/w/$slug/agent/'
     | '/w/$slug/chat/'
     | '/w/$slug/studio/interviews/$roundId'
@@ -1380,6 +1393,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugStudioResumesRouteImport
       parentRoute: typeof WSlugStudioRoute
     }
+    '/w/$slug/studio/ssc-responsibilities': {
+      id: '/w/$slug/studio/ssc-responsibilities'
+      path: '/ssc-responsibilities'
+      fullPath: '/w/$slug/studio/ssc-responsibilities'
+      preLoaderRoute: typeof WSlugStudioSscResponsibilitiesRouteImport
+      parentRoute: typeof WSlugStudioRoute
+    }
     '/w/$slug/studio/interviews/$roundId': {
       id: '/w/$slug/studio/interviews/$roundId'
       path: '/$roundId'
@@ -1594,6 +1614,7 @@ interface WSlugStudioRouteChildren {
   WSlugStudioResumePoolRoute: typeof WSlugStudioResumePoolRoute
   WSlugStudioResumeSourcesRoute: typeof WSlugStudioResumeSourcesRoute
   WSlugStudioResumesRoute: typeof WSlugStudioResumesRouteWithChildren
+  WSlugStudioSscResponsibilitiesRoute: typeof WSlugStudioSscResponsibilitiesRoute
 }
 
 const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
@@ -1620,6 +1641,7 @@ const WSlugStudioRouteChildren: WSlugStudioRouteChildren = {
   WSlugStudioResumePoolRoute: WSlugStudioResumePoolRoute,
   WSlugStudioResumeSourcesRoute: WSlugStudioResumeSourcesRoute,
   WSlugStudioResumesRoute: WSlugStudioResumesRouteWithChildren,
+  WSlugStudioSscResponsibilitiesRoute: WSlugStudioSscResponsibilitiesRoute,
 }
 
 const WSlugStudioRouteWithChildren = WSlugStudioRoute._addFileChildren(

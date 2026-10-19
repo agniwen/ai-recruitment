@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines -- candidate transition coverage keeps the full stage matrix in one suite */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { transitionCandidateStage } from "./candidate-stage-transition";
+import { studioOfferDraft } from "@arc/db-schema/schema";
 
 // oxlint-disable promise/prefer-await-to-callbacks -- the fake transaction must execute Drizzle's callback.
 
@@ -61,38 +62,57 @@ vi.mock(
   }),
 );
 
-function createTransaction(existing: {
-  aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
-  candidateName?: string;
-  closedMeta: null | { previousStage: "ai_review" | "human_interview" };
-  jobDescriptionAiInterviewDisabled?: boolean;
-  jobDescriptionId: string | null;
-  outcome: "archived" | "hired" | "in_pipeline";
-  pipelineStage: "ai_review" | "closed" | "human_interview" | "screening";
-  resumeReviewStatus?: "ready" | "processing";
-  resumeSourcePoolItemId?: string | null;
-  resumeSourceType?: "direct_upload" | "private_pool" | "public_pool" | null;
-}) {
+function createTransaction(
+  existing: {
+    aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
+    candidateName?: string;
+    closedMeta: null | { previousStage: "ai_review" | "human_interview" };
+    jobDescriptionAiInterviewDisabled?: boolean;
+    jobDescriptionId: string | null;
+    outcome: "archived" | "hired" | "in_pipeline";
+    pipelineStage: "ai_review" | "closed" | "human_interview" | "screening" | "offer";
+    resumeReviewStatus?: "ready" | "processing";
+    resumeSourcePoolItemId?: string | null;
+    resumeSourceType?: "direct_upload" | "private_pool" | "public_pool" | null;
+  },
+  offers: {
+    sscConfirmationStatus: "pending" | "confirming" | "completed" | null;
+    status: "draft" | "sent" | "accepted" | "deleted" | "superseded";
+    version: number;
+  }[] = [],
+) {
   const insertedValues = vi.fn(async (_value: unknown) => {});
   const updatedWhere = vi.fn(async (_value: unknown) => {});
   const tx = {
     delete: vi.fn(() => ({ where: vi.fn().mockResolvedValue(null) })),
     execute: vi.fn(() => Promise.resolve()),
     insert: vi.fn(() => ({ values: insertedValues })),
-    select: vi.fn(() => ({
-      for: vi.fn().mockReturnThis(),
-      from: vi.fn().mockReturnThis(),
-      leftJoin: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockResolvedValue([
+    select: vi.fn(() => {
+      let rows: unknown[] = [
         {
           candidateName: "候选人甲",
           resumeSourcePoolItemId: null,
           resumeSourceType: "direct_upload",
           ...existing,
         },
-      ]),
-      where: vi.fn().mockReturnThis(),
-    })),
+      ];
+      const query = {
+        for: vi.fn().mockReturnThis(),
+        from(table: unknown) {
+          if (table === studioOfferDraft) {
+            rows = offers;
+          }
+          return this;
+        },
+        leftJoin: vi.fn().mockReturnThis(),
+        limit: vi.fn((size: number) => Promise.resolve(rows.slice(0, size))),
+        orderBy: vi.fn().mockReturnThis(),
+        // oxlint-disable-next-line unicorn/no-thenable -- Drizzle queries are awaitable; this DB fake preserves that contract.
+        then: (resolve: (value: unknown[]) => unknown) => Promise.resolve(rows).then(resolve),
+        where: vi.fn().mockReturnThis(),
+      };
+      return query;
+    }),
     update: vi.fn(() => ({
       set: vi.fn(() => ({ where: updatedWhere })),
     })),
@@ -521,6 +541,133 @@ describe("transitionCandidateStage", () => {
     expect(authorize).toHaveBeenCalledWith({ action: "create", resource: "candidateClose" });
     expect(mocks.refreshDirectUploadDuplicateMatchesBeforeHire).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it.each(["pending", "confirming"] as const)(
+    "rejects hiring before the latest Offer completes SSC (%s), including Agent execution",
+    async (sscConfirmationStatus) => {
+      const { tx, updatedWhere, insertedValues } = createTransaction(
+        {
+          closedMeta: null,
+          jobDescriptionId: "jd-a",
+          outcome: "in_pipeline",
+          pipelineStage: "offer",
+        },
+        [
+          { sscConfirmationStatus, status: "draft", version: 2 },
+          { sscConfirmationStatus: "completed", status: "draft", version: 1 },
+        ],
+      );
+      mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+      const result = await transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: {
+          closedMeta: { hiredDetails: { preOnboardingTelegram: "@candidate" } },
+          outcome: "hired",
+          pipelineStage: "closed",
+        },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: {
+          kind: "workspace_recruiting_copilot",
+          proposalId: "hire",
+          proposalTitle: "标记入职",
+        },
+      });
+      expect(result.kind).toBe("invalid");
+      expect(updatedWhere).not.toHaveBeenCalled();
+      expect(insertedValues).not.toHaveBeenCalled();
+      expect(mocks.adjustJobDescriptionOnboardedCount).not.toHaveBeenCalled();
+      expect(mocks.autoCloseRelatedCandidatesAfterHire).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([null, "completed"] as const)(
+    "allows historical or SSC-completed Offers to hire (%s)",
+    async (sscConfirmationStatus) => {
+      const { tx, updatedWhere } = createTransaction(
+        {
+          closedMeta: null,
+          jobDescriptionId: "jd-a",
+          outcome: "in_pipeline",
+          pipelineStage: "offer",
+        },
+        [{ sscConfirmationStatus, status: "draft", version: 1 }],
+      );
+      mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+      const result = await transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: {
+          closedMeta: { hiredDetails: { preOnboardingTelegram: "@candidate" } },
+          outcome: "hired",
+          pipelineStage: "closed",
+        },
+        operatorId: "user-a",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      });
+      expect(result.kind).toBe("ok");
+      expect(updatedWhere).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("does not bypass hiring confirmation by deleting the new-flow Offer", async () => {
+    const { tx, updatedWhere } = createTransaction(
+      {
+        closedMeta: null,
+        jobDescriptionId: "jd-a",
+        outcome: "in_pipeline",
+        pipelineStage: "offer",
+      },
+      [{ sscConfirmationStatus: "pending", status: "deleted", version: 1 }],
+    );
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    const result = await transitionCandidateStage({
+      authorize: vi.fn().mockResolvedValue(true),
+      candidateId: "candidate-a",
+      input: {
+        closedMeta: { hiredDetails: { preOnboardingTelegram: "@candidate" } },
+        outcome: "hired",
+        pipelineStage: "closed",
+      },
+      operatorId: "user-a",
+      organizationId: "org-a",
+      provenance: { kind: "manual" },
+    });
+    expect(result.kind).toBe("invalid");
+    expect(updatedWhere).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back to an accepted old Offer after deleting the newer unconfirmed version", async () => {
+    const { tx, updatedWhere } = createTransaction(
+      {
+        closedMeta: null,
+        jobDescriptionId: "jd-a",
+        outcome: "in_pipeline",
+        pipelineStage: "offer",
+      },
+      [
+        { sscConfirmationStatus: "pending", status: "deleted", version: 2 },
+        { sscConfirmationStatus: "completed", status: "accepted", version: 1 },
+      ],
+    );
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    const result = await transitionCandidateStage({
+      authorize: vi.fn().mockResolvedValue(true),
+      candidateId: "candidate-a",
+      input: {
+        closedMeta: { hiredDetails: { preOnboardingTelegram: "@candidate" } },
+        outcome: "hired",
+        pipelineStage: "closed",
+      },
+      operatorId: "user-a",
+      organizationId: "org-a",
+      provenance: { kind: "manual" },
+    });
+    expect(result.kind).toBe("invalid");
+    expect(updatedWhere).not.toHaveBeenCalled();
   });
 
   it("automatically closes related in-pipeline candidates when this candidate is hired", async () => {

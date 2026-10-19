@@ -21,6 +21,20 @@ describe("当前 tab 刷新范围", () => {
       expect(matches("offer", key)).toBe(false);
     }
   });
+  it.each([
+    "overview",
+    "ai-analysis",
+    "rounds",
+    "human-interview",
+    "offer",
+    "experience",
+    "instructions",
+    "transcript",
+  ] as const)("%s 刷新底部 SSC 摘要且隔离其他候选人与工作区", (tab) => {
+    expect(matches(tab, ["offer-ssc-state", "workspace", "candidate"])).toBe(true);
+    expect(matches(tab, ["offer-ssc-state", "workspace", "other"])).toBe(false);
+    expect(matches(tab, ["offer-ssc-state", "other", "candidate"])).toBe(false);
+  });
   it("AI tab 刷新轮次和报告且隔离其他轮次", () => {
     expect(matches("rounds", ["studio-resume-rounds", "workspace", "candidate"])).toBe(true);
     expect(

@@ -11,6 +11,12 @@ import {
 } from "@arc/shared/permissions";
 
 describe("permissions matrix", () => {
+  it("grants SSC responsibility pre-entry access only to administrators by default", () => {
+    expect(STUDIO_PAGE_PERMISSION_ACTIONS).toContain("sscResponsibilities");
+    expect(roles.owner.statements.page).toContain("sscResponsibilities");
+    expect(roles.admin.statements.page).toContain("sscResponsibilities");
+    expect(roles.member.statements.page).not.toContain("sscResponsibilities");
+  });
   it("grants viewing job recommendations only to administrators by default", () => {
     expect(statement.jd).toContain("viewRecommendations");
     expect(roles.admin.statements.jd).toContain("viewRecommendations");
@@ -277,10 +283,18 @@ describe("permission matrix cross-cut", () => {
     ["admin", "offer", "read", true],
     ["admin", "offer", "update", true],
     ["admin", "offer", "delete", true],
+    ["owner", "offer", "receive", true],
+    ["admin", "offer", "receive", true],
+    ["admin", "offer", "confirm", true],
+    ["owner", "offer", "confirm", true],
     ["member", "offer", "create", true],
     ["member", "offer", "read", true],
     ["member", "offer", "update", true],
     ["member", "offer", "delete", true],
+    ["member", "offer", "receive", false],
+    ["member", "offer", "confirm", false],
+    ["noAccess", "offer", "receive", false],
+    ["noAccess", "offer", "confirm", false],
     ["noAccess", "offer", "read", false],
     // candidateClose — dedicated 标记结案 permission
     ["owner", "candidateClose", "create", true],

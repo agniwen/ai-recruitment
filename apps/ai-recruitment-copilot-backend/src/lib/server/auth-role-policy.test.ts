@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { attemptsDynamicRoleIdentifierUpdate } from "./auth-role-policy";
+import {
+  attemptsDynamicRoleIdentifierUpdate,
+  hasConflictingRoleClassifications,
+} from "./auth-role-policy";
 
 describe("dynamic role update policy", () => {
   it("rejects attempts to rename an existing role identifier", () => {
@@ -26,5 +29,19 @@ describe("dynamic role update policy", () => {
         data: { roleName: "odc" },
       }),
     ).toBe(false);
+  });
+});
+
+describe("dynamic role classifications", () => {
+  it.each([
+    [{ isOdc: true, isSsc: true }, {}, true],
+    [{ isSsc: true }, { isOdc: true, isSsc: false }, true],
+    [{ isOdc: true }, { isOdc: false, isSsc: true }, true],
+    [{ isOdc: false, isSsc: true }, { isOdc: true, isSsc: false }, false],
+    [{ isOdc: true, isSsc: false }, { isOdc: false, isSsc: true }, false],
+    [{ name: "Renamed" }, { isOdc: false, isSsc: true }, false],
+    [{ isOdc: false, isSsc: false }, {}, false],
+  ])("checks the merged classification flags for %j", (patch, current, expected) => {
+    expect(hasConflictingRoleClassifications(patch, current)).toBe(expected);
   });
 });

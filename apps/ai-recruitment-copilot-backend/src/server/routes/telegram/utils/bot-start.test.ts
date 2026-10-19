@@ -8,6 +8,7 @@ vi.mock("@chat-adapter/telegram", () => ({ createTelegramAdapter: vi.fn() }));
 vi.mock("chat", () => ({
   Chat: class {
     onSlashCommand = mocks.slash;
+    onAction = vi.fn();
     onDirectMessage = vi.fn();
     shutdown = vi.fn();
   },

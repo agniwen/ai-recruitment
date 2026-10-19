@@ -3,6 +3,7 @@ import { smartResumeTasksRouter } from "./routes/smart-resume-tasks/route";
 import { odcResponsibilitiesRouter } from "./routes/odc-responsibilities/route";
 import { resumeSourcesRouter } from "./routes/resume-sources/route";
 import { studioPreRegistrationsRouter } from "./routes/pre-registrations/route";
+import { sscResponsibilitiesRouter } from "./routes/ssc-responsibilities/route";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { departmentsRouter } from "./routes/departments/route";
 import { studioCalendarRouter } from "./routes/calendar/route";
@@ -27,6 +28,7 @@ export const studioRouter = factory
   .route("/ai-review", aiReviewRouter)
   .route("/odc-responsibilities", odcResponsibilitiesRouter)
   .route("/pre-registrations", studioPreRegistrationsRouter)
+  .route("/ssc-responsibilities", sscResponsibilitiesRouter)
   .route("/calendar", studioCalendarRouter)
   .route("/interviews", studioInterviewsRouter)
   .route("/resume-pool", resumePoolRouter)

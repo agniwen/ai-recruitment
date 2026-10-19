@@ -11,6 +11,7 @@ vi.mock("../workspace-access-policy", () => ({
   createRequestWorkspaceAuthorizer: mocks.authorizer,
 }));
 vi.mock("../recruiting-visibility", () => ({ resolveRecruitingVisibilityScope: mocks.recruiting }));
+vi.mock("../ssc-access", () => ({ resolveSscAccessActor: () => Promise.resolve(null) }));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/utils/hiring-unit-scope",
   async (importOriginal) => ({
@@ -106,6 +107,7 @@ it("still restricts approved records when an ODC inherits unrestricted recruitin
   expect(query.sql).toContain('"organization_role"."is_odc"');
   expect(query.sql).toContain('"studio_interview_odc_assignment"."user_id" =');
   expect(query.sql).toContain('"studio_interview"."ai_review_assigned_odc_user_id" =');
-  expect(query.sql).toContain('"studio_interview"."ai_review_approval_status" <>');
+  expect(query.sql).toContain('"studio_interview"."ai_review_approval_status" =');
+  expect(query.params).toContain("approved");
   expect(query.params).toContain("reviewer");
 });
