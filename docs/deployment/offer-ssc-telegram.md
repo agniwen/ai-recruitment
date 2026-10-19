@@ -1,0 +1,97 @@
+# Offer 的 Telegram SSC 确认
+
+Telegram 与系统页面操作同一条 Offer，使用相同的身份、组织范围、权限和版本校验。按钮按当前 SSC 的节点权限显示：只有接收权限的成员不能代替拥有完成权限的成员完成审核。
+
+本次功能范围、SSC 组织导入用法和验证记录见 [2026-10-19 更新说明](../releases/2026-10-19-ssc-offer.md)。
+
+## 操作流程
+
+| Offer SSC 状态 | Telegram 操作 | 结果 |
+| --- | --- | --- |
+| 待接收 | 接收确认 | 写入接收人、接收时间与审计，原消息更新为确认中 |
+| 确认中 | 完成确认 | 打开内部审批二次确认卡，尚不完成 Offer |
+| 内部审批确认卡 | 可选上传截图，再确认内部审批已完成 | 写入完成人、完成时间与可选截图，原 Offer 卡和确认卡更新为已完成确认 |
+
+完成卡移除接收、完成按钮。取消、过期、失去权限以及旧版本按钮不能推进 Offer。截图仍是选填，格式为 JPEG、PNG 或 WebP，最多 10 MB。
+
+Telegram 编辑消息失败时，系统尝试补发一张最新状态卡。消息发送或会话清理失败不会撤销已提交的业务状态，也不会将成功审核重新开放；以系统中的 Offer 状态为准。
+
+## 免登录查看候选人
+
+卡片的“查看候选人详情”打开独立只读页面，访问者无需注册或登录 ATS。页面展示候选人简历、应聘岗位和当前 Offer（包括薪资），不提供审批或编辑入口；接收和完成确认仍在 Telegram 或已登录的系统中进行。
+
+链接通过 `BETTER_AUTH_SECRET` 按独立用途签名，默认有效 7 天，绑定原收件人、工作区、候选人、Offer 及 SSC 修订号。每次查看或读取原始简历都会重新验证原收件人的现有权限；人员禁用、负责关系解除、Offer 修改、替代、撤销或到期后，旧链接不可用。接收、完成确认不改变该修订号，页面重新读取时显示实时状态。
+
+Web/Backend 与发消息的 Worker 需要使用相同的 `BETTER_AUTH_SECRET`，并配置可供访问者连接的 `NEXT_PUBLIC_BASE_URL`（或 `BETTER_AUTH_URL`）。本地私网地址仍需具备对应网络连接，部署到公网环境后使用该环境的公网域名。
+
+只读页面及文件接口禁止缓存、搜索索引和 Referer 传递，请求日志隐藏签名令牌。仅 PDF 和受控图片允许直接展示；HTML、SVG、Office 及其他原文件以隔离的附件方式提供。
+
+### 正式环境的公网详情链接
+
+正式部署后，外部人员应能直接通过公网 HTTPS 链接查看资料，无需安装 Tailscale、连接公司内网或登录 ATS。以现有正式域名为例，Web 构建、Web/Backend 运行和发卡 Worker 的生效配置应保持一致：
+
+```dotenv
+BETTER_AUTH_URL=https://recruitment.hirecopilot.bar
+NEXT_PUBLIC_BASE_URL=https://recruitment.hirecopilot.bar
+NEXT_PUBLIC_BETTER_AUTH_URL=https://recruitment.hirecopilot.bar
+```
+
+正式 TG 卡片中的详情地址应为 `https://recruitment.hirecopilot.bar/offer-candidate/<签名令牌>`。同一环境继续使用现有的 `BETTER_AUTH_SECRET`，不要为发布此功能重新生成认证密钥。仓库的 Docker Compose 为 Web 和 Worker 注入同一根目录 `.env`，并将公开域名传入 Web 构建；修改域名后重建 Web 镜像并重建使用新配置的服务容器。
+
+公网 DNS、HTTPS 和反向代理需要将以下路径转发到同一套正式应用，访问网关不能对这两个入口额外要求系统登录或内网身份认证：
+
+- `/offer-candidate/*`：只读详情页面。
+- `/api/public/offer-candidates/*`：详情数据及其 `/resume` 简历文件读取路径。
+
+页面的 JS、CSS 等应用静态资源也需能从公网正常加载。原始简历通过上述签名文件接口读取，文件存储桶无需改为公开。工作区管理页面继续使用原有登录与权限校验。
+
+本地与正式环境的数据库、人员权限和签名密钥可能不同，应从正式系统的 Offer 重新生成或刷新卡片，不能只替换本地链接中的域名。发布后，使用未连接 Tailscale 或公司 VPN 的设备，通过移动网络和无痕浏览器打开正式系统生成的有效链接，确认无需登录即可看到候选人简历、应聘岗位和本次 Offer（含薪资）；篡改或失效的链接应显示不可用。此验收独立于 TG 审批回调联调。
+
+## 环境配置
+
+Web/Backend 与独立 Worker 必须连接同一环境的数据库，并使用同一个机器人配置：
+
+```dotenv
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_USERNAME=
+TELEGRAM_WEBHOOK_SECRET_TOKEN=
+```
+
+Token 和 Webhook Secret 必须非空。真实值放在部署环境的私密配置中，不提交到 Git。
+
+Worker 先加载 Web 的 `.env.local`、`.env`，再加载 Worker 的 `.env.local`、`.env`，已有进程变量优先，后加载文件不覆盖已存在的键。因此不要在 Web 中保留空值、只在 Worker 文件中填写 Token；应统一维护实际生效的配置。修改文件后重启相关进程，运行中的 Worker 不会自动重新读取配置。
+
+机器人入站地址应是当前环境对 Telegram 可达的 HTTPS URL：
+
+```text
+https://<当前环境域名>/api/telegram/webhook
+```
+
+注册 Webhook 的 `secret_token` 必须与当前环境的 `TELEGRAM_WEBHOOK_SECRET_TOKEN` 一致，更新类型需要包含消息及 `callback_query`。一个机器人同时只有一个 Webhook；测试环境应使用独立机器人，避免覆盖其他环境的回调。
+
+单向发送成功只证明 Bot Token、出站网络和目标私聊可用，不能证明点击回调已经接入同一数据库。
+
+## SSC 身份与负责范围
+
+1. 在“角色与权限”中设置独立 SSC 审核角色，分别授予接收确认、完成确认权限。
+2. 在“SSC 负责组织”或来源的“管理 SSC”中维护邮箱、实际 SSC 角色、负责的部门/中心和 SSC TG 用户名。
+3. SSC 使用对应邮箱登录，成为当前工作区成员；仅预录入而尚未成为成员的人员不能直接审核。
+4. SSC 在本环境机器人中私聊 `/start`，建立已验证的用户名与数字私聊 ID 绑定。其他环境的绑定不会自动复制过来。
+5. 新建或有效修改负责来源的 Offer，确认同一版本进入待接收状态。
+
+数字 Chat ID 仅表示消息地址，不能替代 SSC 的系统身份、来源范围或审核权限。每次点击仍会校验当前实际成员、角色、负责来源、Offer 版本及状态。
+
+## 发布验证
+
+- 确认 Web/Backend、Worker、数据库迁移和机器人配置属于同一环境。
+- 新建测试 Offer 后，从通知发件箱检查该 Offer 当前 revision 的 `pending` 事件；不要仅凭历史草稿显示待接收判断已产生通知。
+- 使用系统生成的 Offer 卡片验证按钮，不要用普通 `sendMessage` 文字测试代替审核卡片。
+- 在 Telegram 接收后，从系统重新读取同一 Offer，检查状态为确认中、接收人正确；原卡应更新且不再显示接收按钮。
+- 打开完成确认时，系统状态仍为确认中；最终明确确认后才变为已完成确认，原卡和确认卡均显示完成状态。
+- 验证无完成权限的成员不能完成、非负责来源不能操作，旧按钮和重复点击不能重复写入操作记录或通知。
+
+自动通知依赖独立 Worker。未配置 Token/Secret 时任务保留待处理；缺少收件人的任务与已发送任务应结合收件人数、已发送人数核查，不能仅依据任务的 `completed` 判断有人收到消息。历史状态迁移不回填历史通知。
+
+## 隔离数据库集成测试
+
+`offer-ssc-integration.test.ts` 使用真实 TG 身份解析、SSC 来源权限、Offer 服务、审计及事务发件箱，只替代 Telegram 出站传输与会话存储。必须显式设置 `SSC_TELEGRAM_TEST_DATABASE_URL`，与 `DATABASE_URL` 一致，且数据库路径为 `/ai_recruitment_ssc_test`，避免在业务库写入测试数据。未显式启用时跳过这组测试。

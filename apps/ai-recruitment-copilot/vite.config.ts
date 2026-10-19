@@ -115,9 +115,19 @@ export default defineConfig(({ command }) => {
               "cache-control": "no-store",
             },
           },
+          "/api/public/offer-candidates/**": {
+            headers: {
+              "cache-control": "no-store",
+            },
+          },
           "/assets/**": {
             headers: {
               "cache-control": "public, max-age=31536000, immutable",
+            },
+          },
+          "/offer-candidate/**": {
+            headers: {
+              "cache-control": "no-store",
             },
           },
         },

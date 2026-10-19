@@ -51,3 +51,27 @@ export type SscSourceAssignmentInput = z.infer<typeof sscSourceAssignmentInputSc
 
 export type SscResponsibilityInput = z.infer<typeof sscResponsibilityInputSchema>;
 export type SscResponsibilitiesQuery = z.infer<typeof sscResponsibilitiesQuerySchema>;
+
+export const sscResponsibilityImportSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        centerName: z.string().max(10_000),
+        demandOwner: z.string().max(10_000),
+        email: z.string().max(10_000),
+        notes: z.string().max(10_000),
+        row: z.number().int().min(2).max(100_000),
+        sscName: z.string().max(10_000),
+        telegram: z.string().max(10_000),
+      }),
+    )
+    .min(1)
+    .max(500),
+  workspaceRole: z.string().trim().min(1).max(100),
+});
+
+export type SscResponsibilityImport = z.infer<typeof sscResponsibilityImportSchema>;
+export const sscResponsibilityImportCommitSchema = sscResponsibilityImportSchema.extend({
+  previewHash: z.string().regex(/^[a-f0-9]{64}$/u),
+});
+export type SscResponsibilityImportCommit = z.infer<typeof sscResponsibilityImportCommitSchema>;

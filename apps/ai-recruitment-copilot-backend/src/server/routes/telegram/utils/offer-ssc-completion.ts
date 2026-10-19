@@ -7,7 +7,9 @@ import {
   OfferDraftError,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
-import { buildTelegramOfferCard, buildTelegramOfferCompletionCard } from "./offer-ssc-card";
+import { buildTelegramOfferCompletionCard } from "./offer-ssc-card";
+import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
+import { updateTelegramOfferMessages } from "./offer-ssc-message";
 import { downloadTelegramOfferScreenshot } from "./offer-ssc-screenshot";
 import {
   MAX_TELEGRAM_SCREENSHOT_BYTES,
@@ -135,6 +137,7 @@ export async function handleTelegramOfferCompletionAction(
         expiresAt: Date.now() + TELEGRAM_COMPLETION_TTL_MS,
         interviewRecordId: context.draft.interviewRecordId,
         organizationId: context.draft.organizationId,
+        originMessageId: identity.messageId,
         promptMessageId: sentMessageId(prompt.id, identity.chatId),
         revision: initial.revision,
         status: "pending",
@@ -163,7 +166,7 @@ export async function handleTelegramOfferCompletionAction(
   }
   if (event.actionId === "osu") {
     const prompt = await thread.post(
-      `请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，发送后仍需点击原确认卡片的“确认内部审批已完成，并完成确认”。`,
+      `请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，发送后仍需点击原确认卡片的“确认完成”。`,
     );
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       pendingFor(pending, token, identity).uploadPromptMessageId = sentMessageId(
@@ -181,6 +184,7 @@ export async function handleTelegramOfferCompletionAction(
     current.status = "completing";
     return { ...current };
   });
+  let draft: Awaited<ReturnType<typeof completeOfferSscWithScreenshot>>;
   try {
     let file: File | undefined;
     if (claimed.screenshot) {
@@ -190,7 +194,7 @@ export async function handleTelegramOfferCompletionAction(
         throw new OfferDraftError("审批截图下载失败或超过 10 MB，请重新上传后重试。", 400);
       }
     }
-    const draft = await completeOfferSscWithScreenshot({
+    draft = await completeOfferSscWithScreenshot({
       actor: { id: identity.actorUserId, role: context.actorRole },
       draftId: claimed.draftId,
       internalApprovalConfirmed: true,
@@ -200,8 +204,6 @@ export async function handleTelegramOfferCompletionAction(
       source: "telegram",
       ...(file ? { file } : {}),
     });
-    await removePending(thread, identity.chatId, token);
-    await thread.post(buildTelegramOfferCard({ ...context, draft }));
   } catch (error) {
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       const current = pending[token];
@@ -211,6 +213,20 @@ export async function handleTelegramOfferCompletionAction(
     });
     throw error;
   }
+  try {
+    await removePending(thread, identity.chatId, token);
+  } catch {
+    // The Offer already committed. Keep the durable "completing" claim until expiry.
+    console.warn("[telegram-offer-ssc] Offer completed but confirmation state cleanup failed");
+  }
+  await updateTelegramOfferMessages(
+    event,
+    buildTelegramOfferPublicCard({ ...context, draft }, identity.actorUserId),
+    [
+      event.messageId,
+      ...(claimed.originMessageId ? [`${identity.chatId}:${claimed.originMessageId}`] : []),
+    ],
+  );
 }
 
 function imageReference(
@@ -351,7 +367,7 @@ export async function handleTelegramOfferScreenshot(
       return true;
     }
     await thread.post(
-      "已选择审批截图，确认时将保存到对应 Offer。请点击原确认卡片的“确认内部审批已完成，并完成确认”；发送截图不会自动完成确认。",
+      "已选择审批截图，确认时将保存到对应 Offer。请点击原确认卡片的“确认完成”；发送截图不会自动完成确认。",
     );
   } catch (error) {
     await reportScreenshotError(thread, chatId, selectedToken, error);

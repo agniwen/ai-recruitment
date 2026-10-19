@@ -152,11 +152,11 @@ function OverviewDimensionRadar({
   );
 }
 
-function ResumeOverviewAiScoreSection({
+export function ResumeOverviewAiScoreSection({
   detail,
   onViewAiScore,
 }: {
-  detail: ResumeLibraryDetail;
+  detail: { resumeReview: ResumeReviewLoose | null };
   onViewAiScore?: () => void;
 }) {
   const review = detail.resumeReview;

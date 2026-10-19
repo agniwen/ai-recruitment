@@ -23,6 +23,7 @@ import { Route as HumanInterviewInviteTokenRouteImport } from './routes/human-in
 import { Route as InterviewIdRouteImport } from './routes/interview.$id'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as JoinCodeRouteImport } from './routes/join.$code'
+import { Route as OfferCandidateTokenRouteImport } from './routes/offer-candidate.$token'
 import { Route as PlatformAgentTestsRouteImport } from './routes/platform.agent-tests'
 import { Route as PlatformHistoricalResumeImportsRouteImport } from './routes/platform.historical-resume-imports'
 import { Route as PlatformInterviewLogsRouteImport } from './routes/platform.interview-logs'
@@ -151,6 +152,11 @@ const InviteTokenRoute = InviteTokenRouteImport.update({
 const JoinCodeRoute = JoinCodeRouteImport.update({
   id: '/join/$code',
   path: '/join/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OfferCandidateTokenRoute = OfferCandidateTokenRouteImport.update({
+  id: '/offer-candidate/$token',
+  path: '/offer-candidate/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlatformAgentTestsRoute = PlatformAgentTestsRouteImport.update({
@@ -475,6 +481,7 @@ export interface FileRoutesByFullPath {
   '/interview/$id': typeof InterviewIdRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
+  '/offer-candidate/$token': typeof OfferCandidateTokenRoute
   '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
   '/platform/interview-logs': typeof PlatformInterviewLogsRoute
@@ -549,6 +556,7 @@ export interface FileRoutesByTo {
   '/interview/$id': typeof InterviewIdRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
+  '/offer-candidate/$token': typeof OfferCandidateTokenRoute
   '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
   '/platform/interview-logs': typeof PlatformInterviewLogsRoute
@@ -621,6 +629,7 @@ export interface FileRoutesById {
   '/interview/$id': typeof InterviewIdRouteWithChildren
   '/invite/$token': typeof InviteTokenRoute
   '/join/$code': typeof JoinCodeRoute
+  '/offer-candidate/$token': typeof OfferCandidateTokenRoute
   '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
   '/platform/interview-logs': typeof PlatformInterviewLogsRoute
@@ -697,6 +706,7 @@ export interface FileRouteTypes {
     | '/interview/$id'
     | '/invite/$token'
     | '/join/$code'
+    | '/offer-candidate/$token'
     | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
     | '/platform/interview-logs'
@@ -771,6 +781,7 @@ export interface FileRouteTypes {
     | '/interview/$id'
     | '/invite/$token'
     | '/join/$code'
+    | '/offer-candidate/$token'
     | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
     | '/platform/interview-logs'
@@ -842,6 +853,7 @@ export interface FileRouteTypes {
     | '/interview/$id'
     | '/invite/$token'
     | '/join/$code'
+    | '/offer-candidate/$token'
     | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
     | '/platform/interview-logs'
@@ -916,6 +928,7 @@ export interface RootRouteChildren {
   HumanInterviewInviteTokenRoute: typeof HumanInterviewInviteTokenRoute
   InviteTokenRoute: typeof InviteTokenRoute
   JoinCodeRoute: typeof JoinCodeRoute
+  OfferCandidateTokenRoute: typeof OfferCandidateTokenRoute
   RRoundIdRoute: typeof RRoundIdRoute
   WSlugRoute: typeof WSlugRouteWithChildren
   HumanInterviewInterviewerInviteTokenRoute: typeof HumanInterviewInterviewerInviteTokenRoute
@@ -1020,6 +1033,13 @@ declare module '@tanstack/react-router' {
       path: '/join/$code'
       fullPath: '/join/$code'
       preLoaderRoute: typeof JoinCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/offer-candidate/$token': {
+      id: '/offer-candidate/$token'
+      path: '/offer-candidate/$token'
+      fullPath: '/offer-candidate/$token'
+      preLoaderRoute: typeof OfferCandidateTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/platform/agent-tests': {
@@ -1676,6 +1696,7 @@ const rootRouteChildren: RootRouteChildren = {
   HumanInterviewInviteTokenRoute: HumanInterviewInviteTokenRoute,
   InviteTokenRoute: InviteTokenRoute,
   JoinCodeRoute: JoinCodeRoute,
+  OfferCandidateTokenRoute: OfferCandidateTokenRoute,
   RRoundIdRoute: RRoundIdRoute,
   WSlugRoute: WSlugRouteWithChildren,
   HumanInterviewInterviewerInviteTokenRoute:

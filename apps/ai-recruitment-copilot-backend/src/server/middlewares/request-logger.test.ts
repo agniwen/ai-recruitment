@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 import { redactInterviewLogLine } from "./request-logger";
 
 describe("interview access log redaction", () => {
+  it("keeps Offer preview credentials and query values out of page and file access logs", () => {
+    for (const path of ["offer-candidate", "api/public/offer-candidates"]) {
+      for (const suffix of ["", "/resume"]) {
+        expect(
+          redactInterviewLogLine(
+            `--> GET /${path}/private-preview-token${suffix}?secret=hidden 200 2ms`,
+          ),
+        ).toBe(`--> GET /${path}/[REDACTED]${suffix} 200 2ms`);
+      }
+    }
+  });
+
   it("removes candidate and interviewer credentials and log search criteria", () => {
     for (const path of ["human-interview", "api/public/human-interview-meetings"]) {
       for (const role of ["", "interviewer/"]) {

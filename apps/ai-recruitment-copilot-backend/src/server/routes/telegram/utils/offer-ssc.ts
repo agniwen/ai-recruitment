@@ -6,8 +6,9 @@ import {
   receiveOfferSscConfirmation,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
-import { buildTelegramOfferCard } from "./offer-ssc-card";
+import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { handleTelegramOfferCompletionAction } from "./offer-ssc-completion";
+import { updateTelegramOfferMessages } from "./offer-ssc-message";
 export { handleTelegramOfferScreenshot } from "./offer-ssc-completion";
 
 const telegramSender = z.object({
@@ -68,7 +69,7 @@ export async function openTelegramOffer(event: SlashCommandEvent, draftId: strin
       return;
     }
     const context = await loadAuthorizedOfferSscContext({ actorUserId, draftId });
-    await event.channel.post(buildTelegramOfferCard(context));
+    await event.channel.post(buildTelegramOfferPublicCard(context, actorUserId));
   } catch (error) {
     await event.channel.post(errorReply(error));
   }
@@ -128,7 +129,10 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       revision: parsed.revision,
       source: "telegram",
     });
-    await event.thread.post(buildTelegramOfferCard({ ...context, draft }));
+    await updateTelegramOfferMessages(
+      event,
+      buildTelegramOfferPublicCard({ ...context, draft }, actorUserId),
+    );
   } catch (error) {
     await event.thread.post(errorReply(error));
   }

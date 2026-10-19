@@ -27,9 +27,11 @@ import type { SscResponsibilityRecord } from "./ssc-responsibilities-grid";
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   error: vi.fn(),
+  importRows: vi.fn(),
   list: vi.fn(),
   options: vi.fn(),
   patch: vi.fn(),
+  preview: vi.fn(),
   remove: vi.fn(),
 }));
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "work" }));
@@ -44,7 +46,9 @@ vi.mock("@/lib/client/rpc", () => ({
               $get: mocks.list,
               $post: mocks.create,
               ":id": { $delete: mocks.remove, $patch: mocks.patch },
+              import: { $post: mocks.importRows },
               options: { $get: mocks.options },
+              preview: { $post: mocks.preview },
             },
           },
         },
@@ -89,6 +93,19 @@ beforeEach(() => {
   );
   mocks.patch.mockImplementation(() => Promise.resolve(Response.json({ id: "ssc-1" })));
   mocks.remove.mockImplementation(() => Promise.resolve(Response.json({ success: true })));
+  mocks.preview.mockImplementation(() =>
+    Promise.resolve(
+      Response.json({
+        previewHash: "a".repeat(64),
+        rows: [
+          { error: null, input: { ...record, resumeSourceId: "source-1" }, row: 2, status: "new" },
+        ],
+      }),
+    ),
+  );
+  mocks.importRows.mockImplementation(() =>
+    Promise.resolve(Response.json({ added: 1, skipped: 0 })),
+  );
   mocks.options.mockImplementation(() =>
     Promise.resolve(
       Response.json({
@@ -176,6 +193,82 @@ async function pick(id: string, label: string) {
 }
 
 describe("SSC responsibility editor", () => {
+  it("offers a data import action next to creating a responsibility", async () => {
+    await mountGrid();
+    await waitForUi(() => expect(button("数据导入")).toBeDefined());
+    await act(() => button("数据导入")?.click());
+    await waitForUi(() =>
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain("导入 SSC 负责组织"),
+    );
+  });
+
+  it("previews before importing and refreshes responsibilities after explicit confirmation", async () => {
+    await mountGrid();
+    await act(() => button("数据导入")?.click());
+    await waitForUi(() =>
+      expect(document.querySelector<HTMLInputElement>("#ssc-import-file")?.disabled).toBe(false),
+    );
+    const input = document.querySelector<HTMLInputElement>("#ssc-import-file");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [
+        {
+          name: "ssc.tsv",
+          size: 80,
+          text: () => Promise.resolve("中心/部门\tSSC 邮箱\n实际业务中心\tSSC@EXAMPLE.COM"),
+        },
+      ],
+    });
+    await act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    await waitForUi(() => expect(document.body.textContent).toContain("待新增 1 条"));
+    expect(mocks.importRows).not.toHaveBeenCalled();
+    expect(mocks.preview).toHaveBeenCalledWith({
+      json: {
+        rows: [
+          {
+            centerName: "实际业务中心",
+            demandOwner: "",
+            email: "SSC@EXAMPLE.COM",
+            notes: "",
+            row: 2,
+            sscName: "",
+            telegram: "",
+          },
+        ],
+        workspaceRole: "ssc-01",
+      },
+      param: { slug: "work" },
+    });
+    await act(() => button("确认导入")?.click());
+    await waitForUi(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect(mocks.importRows).toHaveBeenCalledOnce();
+    expect(mocks.list.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("blocks confirmation when the preview contains an invalid row", async () => {
+    mocks.preview.mockResolvedValue(
+      Response.json({
+        rows: [{ error: "邮箱格式无效", input: record, row: 2, status: "invalid" }],
+      }),
+    );
+    await mountGrid();
+    await act(() => button("数据导入")?.click());
+    await waitForUi(() =>
+      expect(document.querySelector<HTMLInputElement>("#ssc-import-file")?.disabled).toBe(false),
+    );
+    const input = document.querySelector<HTMLInputElement>("#ssc-import-file");
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [
+        { name: "ssc.tsv", size: 40, text: () => Promise.resolve("中心/部门\tSSC邮箱\n中心\tbad") },
+      ],
+    });
+    await act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    await waitForUi(() => expect(document.body.textContent).toContain("邮箱格式无效"));
+    expect(button("确认导入")?.disabled).toBe(true);
+    expect(mocks.importRows).not.toHaveBeenCalled();
+  });
+
   it("fixes the source when launched from source management and invalidates SSC and member caches", async () => {
     const saved = vi.fn();
     await mount(

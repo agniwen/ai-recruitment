@@ -14,9 +14,12 @@ import {
   sscAssignmentCandidatesQuerySchema,
   sscResponsibilitiesQuerySchema,
   sscResponsibilityInputSchema,
+  sscResponsibilityImportSchema,
+  sscResponsibilityImportCommitSchema,
   sscSourceAssignmentInputSchema,
 } from "./schema";
 import { assignSscSourceCandidates, listSscAssignmentCandidates } from "./source-assignment-dao";
+import { importSscResponsibilities, previewSscResponsibilityImport } from "./import-dao";
 
 const SAVE_VALIDATION_MESSAGES = {
   invalid_role: "请选择当前工作区中标记为 SSC 的工作区角色。",
@@ -39,6 +42,40 @@ export const sscResponsibilitiesRouter = factory
     return await next();
   })
   .use("*", requirePermission("page", "sscResponsibilities"))
+  .post(
+    "/preview",
+    zValidator(
+      "json",
+      sscResponsibilityImportSchema,
+      jsonValidatorError("请检查导入内容，最多 500 行。"),
+    ),
+    async (c) =>
+      c.json(
+        await previewSscResponsibilityImport(
+          getWorkspaceRequestContext(c).organization.id,
+          c.req.valid("json"),
+        ),
+        200,
+      ),
+  )
+  .post(
+    "/import",
+    zValidator(
+      "json",
+      sscResponsibilityImportCommitSchema,
+      jsonValidatorError("请检查导入内容，最多 500 行。"),
+    ),
+    async (c) => {
+      const result = await importSscResponsibilities(
+        getWorkspaceRequestContext(c).organization.id,
+        c.req.valid("json"),
+      );
+      if (!result.ok) {
+        return c.json({ error: result.error, rows: result.rows }, 409);
+      }
+      return c.json({ added: result.added, skipped: result.skipped }, 200);
+    },
+  )
   .get("/options", async (c) =>
     c.json(await listSscResponsibilityOptions(getWorkspaceRequestContext(c).organization.id), 200),
   )

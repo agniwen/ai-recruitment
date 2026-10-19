@@ -74,6 +74,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-10-17T08:00:00Z"));
   vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://ats.example.test/");
   vi.stubEnv("BETTER_AUTH_URL", "");
+  vi.stubEnv("BETTER_AUTH_SECRET", "offer-preview-test-secret-never-used-outside-tests");
   mocks.current.mockResolvedValue([draft]);
   mocks.members.mockResolvedValue([recipient()]);
   mocks.organization.mockResolvedValue({ id: "org-a", slug: "work" });
@@ -227,7 +228,8 @@ describe("SSC notification recipients and cards", () => {
       expect(target?.message).toMatchObject({ title });
       const message = JSON.stringify(target?.message);
       expect(message).toContain(label);
-      expect(message).toContain("https://ats.example.test/w/work/studio/resumes/candidate-a");
+      expect(message).toContain("https://ats.example.test/offer-candidate/");
+      expect(message).not.toContain("/w/work/studio/resumes/");
       expect(message).not.toContain('"id":"osr"');
       expect(message).not.toContain('"id":"osc"');
     },

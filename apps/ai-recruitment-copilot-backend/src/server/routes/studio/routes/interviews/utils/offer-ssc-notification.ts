@@ -4,9 +4,8 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { member, studioOfferDraft, user } from "@arc/db-schema/schema";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import { loadAuthorizedOfferSscContext, OfferDraftError } from "../dao/offer-drafts";
-import { buildTelegramOfferCard } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-card";
+import { buildTelegramOfferPublicCard } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-public-card";
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
-import { buildCandidateDetailUrl } from "./candidate-stage-notification";
 import type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
 import { listSourceSscTelegramRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-recipients";
 
@@ -88,7 +87,6 @@ async function getAuthorizedNotificationTarget(
   input: OfferSscNotificationInput,
   profile: NotificationProfile,
   createdBy: string | null,
-  detailUrl: string,
 ): Promise<OfferSscNotificationTarget | null> {
   if (
     profile.organizationId !== input.organizationId ||
@@ -124,13 +122,13 @@ async function getAuthorizedNotificationTarget(
   }
   const cardContext =
     input.event === "pending" ? context : { ...context, canConfirm: false, canReceive: false };
+  const message = buildTelegramOfferPublicCard(cardContext, profile.userId, {
+    feedbackLabel: feedbackLabels[input.event],
+    title: notificationTitles[input.event],
+  });
   return {
     chatId,
-    message: buildTelegramOfferCard(cardContext, {
-      detailUrl,
-      feedbackLabel: feedbackLabels[input.event],
-      title: notificationTitles[input.event],
-    }),
+    message,
     userId: profile.userId,
   };
 }
@@ -197,19 +195,10 @@ export async function getOfferSscNotificationTargets(
   if (!organization) {
     return [];
   }
-  const detailUrl = buildCandidateDetailUrl(input.interviewRecordId, organization.slug);
-  if (!detailUrl) {
-    throw new Error("Public application URL is required for Offer SSC notifications");
-  }
   const targets: OfferSscNotificationTarget[] = [];
   const chats = new Set<string>();
   for (const profile of profiles) {
-    const target = await getAuthorizedNotificationTarget(
-      input,
-      profile,
-      offer.createdBy,
-      detailUrl,
-    );
+    const target = await getAuthorizedNotificationTarget(input, profile, offer.createdBy);
     if (target && !chats.has(target.chatId)) {
       chats.add(target.chatId);
       targets.push(target);

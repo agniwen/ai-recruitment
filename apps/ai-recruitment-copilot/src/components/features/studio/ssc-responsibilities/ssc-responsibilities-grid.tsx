@@ -1,6 +1,6 @@
 "use client";
 
-import { IconArrowsSort, IconPlus } from "@tabler/icons-react";
+import { IconArrowsSort, IconFileImport, IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -41,6 +41,7 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { EntityDeleteDialog } from "../entity-delete-dialog";
 import { PageHeader } from "../page-header";
 import { invalidateSscResponsibilityQueries } from "./ssc-responsibility-queries";
+import { SscResponsibilityImportDialog } from "./import-dialog";
 
 export interface SscResponsibilitySource {
   id: string;
@@ -467,6 +468,7 @@ export function SscResponsibilitiesGrid() {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<SscResponsibilityRecord | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<SscResponsibilityRecord | null>(null);
   const grid = useDataGridState<SscResponsibilityRecord, Record<string, never>>({
@@ -553,15 +555,21 @@ export function SscResponsibilitiesGrid() {
           },
         ]}
         toolbarRight={
-          <Button
-            onClick={() => {
-              setEditingRecord(null);
-              setEditorOpen(true);
-            }}
-          >
-            <IconPlus data-icon="inline-start" />
-            新增 SSC 负责组织
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <IconFileImport data-icon="inline-start" />
+              数据导入
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingRecord(null);
+                setEditorOpen(true);
+              }}
+            >
+              <IconPlus data-icon="inline-start" />
+              新增 SSC 负责组织
+            </Button>
+          </div>
         }
         empty={
           <Empty className="border-border">
@@ -576,6 +584,7 @@ export function SscResponsibilitiesGrid() {
           </Empty>
         }
       />
+      {importOpen ? <SscResponsibilityImportDialog onClose={() => setImportOpen(false)} /> : null}
       {editorOpen ? (
         <SscResponsibilityEditorDialog
           key={editingRecord?.id ?? "new"}

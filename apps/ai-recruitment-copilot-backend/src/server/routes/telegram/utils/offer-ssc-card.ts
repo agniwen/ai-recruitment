@@ -81,9 +81,9 @@ export function buildTelegramOfferCompletionCard(context: TelegramOfferCardConte
             "可点击上传截图并回复指定提示消息发送一张 JPEG、PNG 或 WebP 图片（最多 10 MB），也可直接完成确认。发送截图不会自动完成确认。本次操作 30 分钟内有效。",
         }),
       ]),
+      Actions([Button({ id: "osf", label: "确认完成", value: token })]),
       Actions([
-        Button({ id: "osf", label: "确认内部审批已完成，并完成确认", value: token }),
-        Button({ id: "osu", label: "上传审批截图（选填）", value: token }),
+        Button({ id: "osu", label: "上传截图（选填）", value: token }),
         Button({ id: "osx", label: "取消", value: token }),
       ]),
     ],
