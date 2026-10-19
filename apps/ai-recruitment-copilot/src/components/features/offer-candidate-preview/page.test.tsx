@@ -172,6 +172,33 @@ afterEach(async () => {
 });
 
 describe("public Offer candidate preview", () => {
+  it("prefers the corrected candidate name over the parsed resume name", async () => {
+    vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+      ...preview,
+      candidate: {
+        ...preview.candidate,
+        name: "校正后的姓名",
+        profile: {
+          age: null,
+          educationExperiences: [],
+          email: null,
+          gender: null,
+          name: "简历解析旧姓名",
+          personalStrengths: [],
+          phone: null,
+          projectExperiences: [],
+          schools: [],
+          skills: [],
+          targetRoles: [],
+          workExperiences: [],
+          workYears: null,
+        },
+      },
+    });
+    await renderPage();
+    await waitForUi(() => expect(document.body.textContent).toContain("校正后的姓名"));
+    expect(document.body.textContent).not.toContain("简历解析旧姓名");
+  });
   it("shows this candidate, job and Offer salary without login or approval controls", async () => {
     await renderPage();
     await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
@@ -250,6 +277,27 @@ describe("public Offer candidate preview", () => {
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+
+  it("shows the original overview score and lets readers open the AI score details", async () => {
+    await renderPage();
+    await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+    expect(document.body.textContent).toContain("综合评分");
+    expect(document.body.textContent).toContain("评分雷达图");
+    expect(document.body.textContent).toContain("岗位匹配良好");
+    expect(document.body.textContent).toContain("候选人信息");
+    expect(document.body.textContent).toContain("活动记录");
+    const details = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (node) => node.textContent === "查看详情",
+    );
+    expect(details).toBeDefined();
+    await act(() => details?.click());
+    await waitForUi(() =>
+      expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(
+        "AI评分",
+      ),
+    );
+    expectReadOnly();
   });
 
   it("keeps empty review and interview sections visible with accurate empty states", async () => {

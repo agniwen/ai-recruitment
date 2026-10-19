@@ -2,6 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   department,
+  hiringUnit,
   jobDescription,
   studioInterview,
   studioOfferDraft,
@@ -14,6 +15,9 @@ import type {
   OfferCandidateScreeningResult,
 } from "@arc/shared/offer-candidate-preview";
 import { resumeScreeningResultSchema } from "@arc/shared/resume-screening";
+import { describeResumeRecruitmentSource } from "@arc/shared/bulk-resume-upload";
+import { describeResumeEvaluationStatus } from "@arc/shared/studio-resumes";
+import { loadCandidateTimeline } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/timeline";
 import {
   loadAuthorizedOfferSscContext,
   OfferDraftError,
@@ -77,7 +81,62 @@ function publicScreeningResult(value: unknown): OfferCandidateScreeningResult | 
   };
 }
 
-export async function loadOfferCandidatePreview(token: string): Promise<{
+const publicTimelineLabels = new Set([
+  "轮次",
+  "状态",
+  "岗位",
+  "结论",
+  "前一阶段",
+  "原阶段",
+  "新阶段",
+  "版本",
+]);
+
+function publicCandidateInfo(
+  candidate: Pick<
+    typeof studioInterview.$inferSelect,
+    | "candidateEmail"
+    | "candidatePhone"
+    | "targetRole"
+    | "recommendationText"
+    | "recruitmentSource"
+    | "recruitmentSourceDetail"
+    | "resumeEvaluationStatus"
+  > & { hiringUnitName: string | null },
+) {
+  return {
+    email: candidate.candidateEmail ?? null,
+    hiringUnitName: candidate.hiringUnitName ?? null,
+    phone: candidate.candidatePhone ?? null,
+    recommendationText: candidate.recommendationText ?? null,
+    recruitmentSourceLabel: describeResumeRecruitmentSource(
+      candidate.recruitmentSource,
+      candidate.recruitmentSourceDetail,
+    ),
+    resumeEvaluationLabel: describeResumeEvaluationStatus(candidate.resumeEvaluationStatus).label,
+    targetRole: candidate.targetRole ?? null,
+  };
+}
+
+async function publicTimeline(candidateId: string, organizationId: string) {
+  // The caller has already checked live membership and this candidate's visibility.
+  const timeline = await loadCandidateTimeline(candidateId, organizationId, { kind: "all" });
+  return (timeline?.events ?? []).map((event) => ({
+    actorName: event.actorName,
+    kind: event.kind,
+    metadata: event.metadata
+      .filter((entry) => publicTimelineLabels.has(entry.label))
+      .map(({ label, value }) => ({ label, value })),
+    occurredAt: event.occurredAt,
+    title: event.title,
+    tone: event.tone,
+  }));
+}
+
+export async function loadOfferCandidatePreview(
+  token: string,
+  includeTimeline = false,
+): Promise<{
   preview: OfferCandidatePreview;
   resumeStorageKey: string | null;
 } | null> {
@@ -129,10 +188,17 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
   }
   const [candidate] = await db
     .select({
+      candidateEmail: studioInterview.candidateEmail,
       candidateName: studioInterview.candidateName,
+      candidatePhone: studioInterview.candidatePhone,
       departmentName: department.name,
+      hiringUnitName: hiringUnit.name,
       jobDescription: jobDescription.description,
       jobName: jobDescription.name,
+      recommendationText: studioInterview.recommendationText,
+      recruitmentSource: studioInterview.recruitmentSource,
+      recruitmentSourceDetail: studioInterview.recruitmentSourceDetail,
+      resumeEvaluationStatus: studioInterview.resumeEvaluationStatus,
       resumeFileName: studioInterview.resumeFileName,
       resumeProfile: studioInterview.resumeProfile,
       resumeReview: studioInterview.resumeReview,
@@ -142,6 +208,7 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
       resumeScreeningResult: studioInterview.resumeScreeningResult,
       resumeScreeningStatus: studioInterview.resumeScreeningStatus,
       resumeStorageKey: studioInterview.resumeStorageKey,
+      targetRole: studioInterview.targetRole,
     })
     .from(studioInterview)
     .leftJoin(
@@ -149,6 +216,13 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
       and(
         eq(jobDescription.id, studioInterview.jobDescriptionId),
         eq(jobDescription.organizationId, studioInterview.organizationId),
+      ),
+    )
+    .leftJoin(
+      hiringUnit,
+      and(
+        eq(hiringUnit.id, studioInterview.hiringUnitId),
+        eq(hiringUnit.organizationId, studioInterview.organizationId),
       ),
     )
     .leftJoin(
@@ -179,6 +253,7 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
       },
       candidate: {
         hasResumeFile: Boolean(candidate.resumeStorageKey),
+        info: publicCandidateInfo(candidate),
         name: candidate.candidateName,
         profile: publicProfile(candidate.resumeProfile),
         resumeFileName: candidate.resumeFileName,
@@ -225,6 +300,9 @@ export async function loadOfferCandidatePreview(token: string): Promise<{
         result: publicScreeningResult(candidate.resumeScreeningResult),
         status: candidate.resumeScreeningStatus,
       },
+      timeline: includeTimeline
+        ? await publicTimeline(access.candidateId, access.organizationId)
+        : [],
     },
     resumeStorageKey: candidate.resumeStorageKey,
   };

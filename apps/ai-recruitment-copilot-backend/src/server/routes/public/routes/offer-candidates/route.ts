@@ -22,7 +22,7 @@ export const offerCandidatesRouter = factory
     await next();
   })
   .get("/", async (c) => {
-    const result = await loadOfferCandidatePreview(c.req.param("token") ?? "");
+    const result = await loadOfferCandidatePreview(c.req.param("token") ?? "", true);
     return result ? c.json(result.preview, 200) : c.json(unavailable, 404);
   })
   .get("/resume", async (c) => {

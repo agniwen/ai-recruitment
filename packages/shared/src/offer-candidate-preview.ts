@@ -13,6 +13,12 @@ import type {
   ResumeScreeningRuleSeverity,
   ResumeScreeningRuleStatus,
 } from "./resume-screening";
+import type { CandidateTimelineEvent } from "./studio-resumes";
+
+export type OfferCandidateActivity = Pick<
+  CandidateTimelineEvent,
+  "kind" | "tone" | "title" | "occurredAt" | "actorName" | "metadata"
+>;
 
 export type OfferCandidateResumeProfile = Pick<
   ResumeProfile,
@@ -59,6 +65,15 @@ export interface OfferCandidateScreeningResult {
 
 export interface OfferCandidatePreview {
   candidate: {
+    info?: {
+      email: string | null;
+      phone: string | null;
+      targetRole: string | null;
+      hiringUnitName: string | null;
+      recruitmentSourceLabel: string | null;
+      resumeEvaluationLabel: string | null;
+      recommendationText: string | null;
+    };
     name: string;
     profile: OfferCandidateResumeProfile | null;
     resumeFileName: string | null;
@@ -80,6 +95,7 @@ export interface OfferCandidatePreview {
     result: OfferCandidateScreeningResult | null;
   };
   humanInterviews: OfferCandidateHumanInterview[];
+  timeline?: OfferCandidateActivity[];
   offer: {
     id: string;
     version: number;

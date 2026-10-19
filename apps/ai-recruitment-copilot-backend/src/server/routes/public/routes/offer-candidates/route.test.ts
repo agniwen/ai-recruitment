@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   humanRounds: vi.fn(),
   results: [] as unknown[],
   stream: vi.fn(),
+  timeline: vi.fn(),
 }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
@@ -43,6 +44,10 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds",
   () => ({ listHumanInterviewRounds: mocks.humanRounds }),
+);
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/timeline",
+  () => ({ loadCandidateTimeline: mocks.timeline }),
 );
 
 const dimension = { basis: "job", rationale: "匹配岗位要求", score: 82 };
@@ -116,12 +121,19 @@ const draft = {
   version: 1,
 };
 const candidate = {
+  candidateEmail: "manual@example.test",
   candidateName: "测试候选人",
+  candidatePhone: "13800000000",
   createdBy: "private-user-id",
   departmentName: "工程部",
+  hiringUnitName: "研发组织",
   hrResumeAssessment: "private HR assessment",
   jobDescription: "负责系统开发",
   jobName: "后端开发",
+  recommendationText: "项目交付经验丰富",
+  recruitmentSource: null,
+  recruitmentSourceDetail: null,
+  resumeEvaluationStatus: "pass",
   resumeFileName: "candidate.pdf",
   resumeProfile: {
     age: 28,
@@ -170,6 +182,7 @@ const candidate = {
   },
   resumeScreeningStatus: "ready",
   resumeStorageKey: "private/candidate.pdf",
+  targetRole: "高级工程师",
 };
 
 function token() {
@@ -203,6 +216,26 @@ describe("Anonymous Offer candidate preview", () => {
       .mockResolvedValue({ canConfirm: true, canReceive: true, draft, pipelineStage: "offer" });
     mocks.results = [[{ id: "550e8400-e29b-41d4-a716-446655440000" }], [candidate]];
     mocks.humanRounds.mockReset().mockResolvedValue([humanRound]);
+    mocks.timeline.mockReset().mockResolvedValue({
+      events: [
+        {
+          action: "private-action",
+          actorImage: "https://private-avatar.example.test",
+          actorName: "招聘负责人",
+          availableTimeSlots: [{ endAt: "private-slot", startAt: "private-slot" }],
+          description: "private audit notes and meeting credentials",
+          id: "private-audit-id",
+          kind: "stage",
+          metadata: [
+            { label: "状态", value: "Offer" },
+            { label: "入职密码", value: "private-entry-secret" },
+          ],
+          occurredAt: "2026-10-18T08:00:00.000Z",
+          title: "候选人阶段流转",
+          tone: "info",
+        },
+      ],
+    });
     mocks.stream.mockReset().mockImplementation((key: string) => {
       if (key !== "private/candidate.pdf") {
         throw new Error("Unexpected unscoped storage key");
@@ -270,6 +303,47 @@ describe("Anonymous Offer candidate preview", () => {
     const response = await app().request(`/api/public/offer-candidates/${credential}`);
     const body = await response.json();
     expect(body.offer.sscConfirmationStatus).toBe("completed");
+  });
+
+  it("shares the original candidate identity and a scoped, redacted activity rail", async () => {
+    const response = await app().request(`/api/public/offer-candidates/${token()}`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.candidate.info).toMatchObject({
+      email: "manual@example.test",
+      hiringUnitName: "研发组织",
+      phone: "13800000000",
+      recommendationText: "项目交付经验丰富",
+      resumeEvaluationLabel: "通过",
+      targetRole: "高级工程师",
+    });
+    expect(body.timeline).toEqual([
+      {
+        actorName: "招聘负责人",
+        kind: "stage",
+        metadata: [{ label: "状态", value: "Offer" }],
+        occurredAt: "2026-10-18T08:00:00.000Z",
+        title: "候选人阶段流转",
+        tone: "info",
+      },
+    ]);
+    expect(mocks.timeline).toHaveBeenCalledExactlyOnceWith("candidate-a", "org-a", { kind: "all" });
+    for (const value of [
+      "private-audit-id",
+      "private-avatar.example.test",
+      "private audit notes",
+      "private-action",
+      "private-entry-secret",
+      "private-slot",
+    ]) {
+      expect(JSON.stringify(body)).not.toContain(value);
+    }
+  });
+
+  it("does not load the activity rail while opening the original resume file", async () => {
+    const response = await app().request(`/api/public/offer-candidates/${token()}/resume`);
+    expect(response.status).toBe(200);
+    expect(mocks.timeline).not.toHaveBeenCalled();
   });
 
   it("returns the stored AI review and real human interview feedback for the signed candidate", async () => {
