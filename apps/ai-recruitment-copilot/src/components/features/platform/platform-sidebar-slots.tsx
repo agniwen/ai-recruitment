@@ -86,6 +86,11 @@ const manageNavSections: NavSection[] = [
         path: "/platform/security",
         title: "后台两步验证",
       },
+      {
+        icon: IconListCheck,
+        path: "/platform/interview-config",
+        title: "面试参数",
+      },
     ],
     title: "平台管理",
   },

@@ -26,6 +26,11 @@ import type {
 import type { HumanInterviewRoundRecord } from "@arc/shared/studio-pipeline-stages";
 import { recordCandidateActivityInTransaction } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity";
 import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
+import { loadPlatformInterviewConfig } from "@arc/ai-recruitment-copilot-backend/server/routes/platform/routes/interview-config/dao";
+import {
+  assertHumanInterviewCandidateUnlocked,
+  lockHumanInterviewScheduling,
+} from "./human-interview-candidate-lock";
 
 export type { HumanInterviewRoundRecord };
 
@@ -319,6 +324,9 @@ export async function createHumanInterviewRound({
   const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
 
   await db.transaction(async (tx) => {
+    await lockHumanInterviewScheduling(tx, organizationId);
+    await assertHumanInterviewCandidateUnlocked(tx, interviewRecordId, organizationId);
+    const { humanInterviewLockHours } = await loadPlatformInterviewConfig(tx);
     const sortOrder = input.sortOrder ?? (await nextSortOrder(tx, interviewRecordId));
     await tx.insert(studioHumanInterviewRound).values({
       createdAt: now,
@@ -330,6 +338,7 @@ export async function createHumanInterviewRound({
       interviewRecordId,
       label: input.label,
       location: input.location ?? null,
+      lockHours: humanInterviewLockHours,
       meetingUrl: input.meetingUrl ?? null,
       notes: input.notes ?? null,
       organizationId,
@@ -574,6 +583,7 @@ export async function editHumanInterviewRound({
   // concurrent HR edits can't lose each other's writes.
   // oxlint-disable-next-line complexity -- the transaction enforces distinct pending/completed policies atomically.
   await db.transaction(async (tx) => {
+    await lockHumanInterviewScheduling(tx, organizationId);
     const [existing] = await tx
       .select()
       .from(studioHumanInterviewRound)
@@ -664,6 +674,9 @@ export async function editHumanInterviewRound({
     // input.scheduledAt (string) → Date; undefined preserves existing,
     // null/"" clears it.
     const nextScheduledAt = resolveScheduledAtInput(input.scheduledAt, existing.scheduledAt);
+    if (input.scheduledAt !== undefined || input.validUntil !== undefined) {
+      await assertHumanInterviewCandidateUnlocked(tx, existing.interviewRecordId, organizationId);
+    }
     if (
       input.scheduledAt !== undefined ||
       input.validUntil !== undefined ||

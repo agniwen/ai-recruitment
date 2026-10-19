@@ -12,6 +12,7 @@ import type {
   HumanInterviewRoundRecord,
 } from "@arc/shared/studio-pipeline-stages";
 import {
+  checkHumanInterviewCandidateLock,
   createHumanInterviewMeeting,
   endHumanInterviewMeeting,
   listHumanInterviewMeetings,
@@ -165,6 +166,18 @@ export function HumanInterviewStagePanel({
 
   const [dialogState, dispatchDialog] = useReducer(dialogReducer, initialDialogState);
   const { cancelTarget, completeTarget, endTarget, linksTarget, scheduleOpen } = dialogState;
+  const scheduleCheck = useMutation({
+    mutationFn: () => checkHumanInterviewCandidateLock(slug, candidateId),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "检查候选人约面状态失败，请重试"),
+    onSuccess: ({ lock }) => {
+      if (lock) {
+        toast.error(lock.message);
+        return;
+      }
+      dispatchDialog({ open: true, type: "scheduleOpenChanged" });
+    },
+  });
   const endMeetingMutation = useMutation({
     mutationFn: (meetingId: string) => endHumanInterviewMeeting(slug, meetingId),
     onError: (e) => toast.error(e instanceof Error ? e.message : "结束会议失败"),
@@ -280,13 +293,13 @@ export function HumanInterviewStagePanel({
       {disabled || !canCreate ? null : (
         <div className="flex justify-end w-full">
           <Button
-            disabled={createMeetingMutation.isPending}
-            onClick={() => dispatchDialog({ open: true, type: "scheduleOpenChanged" })}
+            disabled={createMeetingMutation.isPending || scheduleCheck.isPending}
+            onClick={() => scheduleCheck.mutate()}
             size="lg"
             className="w-full"
           >
             <IconPlus className="size-4" />
-            安排真人复面
+            {scheduleCheck.isPending ? "检查中…" : "安排真人复面"}
           </Button>
         </div>
       )}

@@ -45,6 +45,7 @@ import { platformHistoricalResumeImportsRouter } from "./routes/historical-resum
 import { platformLiveKitRouter } from "./routes/livekit/route";
 import { interviewLogsRouter } from "./routes/interview-logs/route";
 import { platformResumeParseCacheRouter } from "./routes/resume-parse-cache/route";
+import { platformInterviewConfigRouter } from "./routes/interview-config/route";
 
 // --- Organizations list ---
 const orgQuerySchema = z.object({
@@ -604,6 +605,7 @@ export const platformRouter = factory
   .createApp()
   .use(adminMiddleware)
   .use(platformMfaMiddleware)
+  .route("/interview-config", platformInterviewConfigRouter)
   .route("/agent-tests", platformAgentTestsRouter)
   .route("/livekit", platformLiveKitRouter)
   .route("/interview-logs", interviewLogsRouter)

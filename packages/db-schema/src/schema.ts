@@ -1574,6 +1574,7 @@ export const studioHumanInterviewRound = pgTable(
       .references(() => studioInterview.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
     location: text("location"),
+    lockHours: integer("lock_hours").notNull().default(48),
     meetingUrl: text("meeting_url"),
     notes: text("notes"),
     organizationId: text("organization_id")
@@ -3236,6 +3237,23 @@ export const studioRoundEmailLog = pgTable(
   (table) => [
     index("studio_round_email_log_organization_idx").on(table.organizationId),
     index("studio_round_email_log_round_created_idx").on(table.roundId, table.createdAt),
+  ],
+);
+
+// Platform-wide scheduling policy; each human round snapshots the effective hours.
+export const platformInterviewConfig = pgTable(
+  "platform_interview_config",
+  {
+    humanInterviewLockHours: integer("human_interview_lock_hours").notNull().default(48),
+    id: text("id").primaryKey(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check("platform_interview_config_singleton", sql`${table.id} = 'singleton'`),
+    check(
+      "platform_interview_config_lock_hours",
+      sql`${table.humanInterviewLockHours} BETWEEN 1 AND 8760`,
+    ),
   ],
 );
 

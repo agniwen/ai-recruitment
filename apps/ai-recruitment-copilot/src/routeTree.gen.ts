@@ -26,6 +26,7 @@ import { Route as JoinCodeRouteImport } from './routes/join.$code'
 import { Route as OfferCandidateTokenRouteImport } from './routes/offer-candidate.$token'
 import { Route as PlatformAgentTestsRouteImport } from './routes/platform.agent-tests'
 import { Route as PlatformHistoricalResumeImportsRouteImport } from './routes/platform.historical-resume-imports'
+import { Route as PlatformInterviewConfigRouteImport } from './routes/platform.interview-config'
 import { Route as PlatformInterviewLogsRouteImport } from './routes/platform.interview-logs'
 import { Route as PlatformLivekitRouteImport } from './routes/platform.livekit'
 import { Route as PlatformMailIngestAccountsRouteImport } from './routes/platform.mail-ingest-accounts'
@@ -170,6 +171,11 @@ const PlatformHistoricalResumeImportsRoute =
     path: '/historical-resume-imports',
     getParentRoute: () => PlatformRoute,
   } as any)
+const PlatformInterviewConfigRoute = PlatformInterviewConfigRouteImport.update({
+  id: '/interview-config',
+  path: '/interview-config',
+  getParentRoute: () => PlatformRoute,
+} as any)
 const PlatformInterviewLogsRoute = PlatformInterviewLogsRouteImport.update({
   id: '/interview-logs',
   path: '/interview-logs',
@@ -484,6 +490,7 @@ export interface FileRoutesByFullPath {
   '/offer-candidate/$token': typeof OfferCandidateTokenRoute
   '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
+  '/platform/interview-config': typeof PlatformInterviewConfigRoute
   '/platform/interview-logs': typeof PlatformInterviewLogsRoute
   '/platform/livekit': typeof PlatformLivekitRouteWithChildren
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
@@ -559,6 +566,7 @@ export interface FileRoutesByTo {
   '/offer-candidate/$token': typeof OfferCandidateTokenRoute
   '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
+  '/platform/interview-config': typeof PlatformInterviewConfigRoute
   '/platform/interview-logs': typeof PlatformInterviewLogsRoute
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
   '/platform/organizations': typeof PlatformOrganizationsRoute
@@ -632,6 +640,7 @@ export interface FileRoutesById {
   '/offer-candidate/$token': typeof OfferCandidateTokenRoute
   '/platform/agent-tests': typeof PlatformAgentTestsRoute
   '/platform/historical-resume-imports': typeof PlatformHistoricalResumeImportsRoute
+  '/platform/interview-config': typeof PlatformInterviewConfigRoute
   '/platform/interview-logs': typeof PlatformInterviewLogsRoute
   '/platform/livekit': typeof PlatformLivekitRouteWithChildren
   '/platform/mail-ingest-accounts': typeof PlatformMailIngestAccountsRoute
@@ -709,6 +718,7 @@ export interface FileRouteTypes {
     | '/offer-candidate/$token'
     | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
+    | '/platform/interview-config'
     | '/platform/interview-logs'
     | '/platform/livekit'
     | '/platform/mail-ingest-accounts'
@@ -784,6 +794,7 @@ export interface FileRouteTypes {
     | '/offer-candidate/$token'
     | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
+    | '/platform/interview-config'
     | '/platform/interview-logs'
     | '/platform/mail-ingest-accounts'
     | '/platform/organizations'
@@ -856,6 +867,7 @@ export interface FileRouteTypes {
     | '/offer-candidate/$token'
     | '/platform/agent-tests'
     | '/platform/historical-resume-imports'
+    | '/platform/interview-config'
     | '/platform/interview-logs'
     | '/platform/livekit'
     | '/platform/mail-ingest-accounts'
@@ -1054,6 +1066,13 @@ declare module '@tanstack/react-router' {
       path: '/historical-resume-imports'
       fullPath: '/platform/historical-resume-imports'
       preLoaderRoute: typeof PlatformHistoricalResumeImportsRouteImport
+      parentRoute: typeof PlatformRoute
+    }
+    '/platform/interview-config': {
+      id: '/platform/interview-config'
+      path: '/interview-config'
+      fullPath: '/platform/interview-config'
+      preLoaderRoute: typeof PlatformInterviewConfigRouteImport
       parentRoute: typeof PlatformRoute
     }
     '/platform/interview-logs': {
@@ -1496,6 +1515,7 @@ const PlatformLivekitRouteWithChildren = PlatformLivekitRoute._addFileChildren(
 interface PlatformRouteChildren {
   PlatformAgentTestsRoute: typeof PlatformAgentTestsRoute
   PlatformHistoricalResumeImportsRoute: typeof PlatformHistoricalResumeImportsRoute
+  PlatformInterviewConfigRoute: typeof PlatformInterviewConfigRoute
   PlatformInterviewLogsRoute: typeof PlatformInterviewLogsRoute
   PlatformLivekitRoute: typeof PlatformLivekitRouteWithChildren
   PlatformMailIngestAccountsRoute: typeof PlatformMailIngestAccountsRoute
@@ -1510,6 +1530,7 @@ interface PlatformRouteChildren {
 const PlatformRouteChildren: PlatformRouteChildren = {
   PlatformAgentTestsRoute: PlatformAgentTestsRoute,
   PlatformHistoricalResumeImportsRoute: PlatformHistoricalResumeImportsRoute,
+  PlatformInterviewConfigRoute: PlatformInterviewConfigRoute,
   PlatformInterviewLogsRoute: PlatformInterviewLogsRoute,
   PlatformLivekitRoute: PlatformLivekitRouteWithChildren,
   PlatformMailIngestAccountsRoute: PlatformMailIngestAccountsRoute,
