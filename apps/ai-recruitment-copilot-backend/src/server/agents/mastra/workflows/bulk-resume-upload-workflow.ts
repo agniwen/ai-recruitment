@@ -30,6 +30,10 @@ export function createBulkResumeUploadWorkflow(deps: BulkResumeUploadWorkflowDep
         bypassCache: inputData.bypassCache,
         retryParseFailure: inputData.retryParseFailure,
       });
+      // The final attempt persists the business failure before failing the queue job.
+      if (result?.item?.status === "failed") {
+        throw new Error(result.item.errorMessage || "简历解析失败，请重试。");
+      }
       return {
         batch: result?.batch ?? null,
         done: Boolean(result?.done),

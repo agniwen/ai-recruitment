@@ -9,6 +9,7 @@ const queueMocks = vi.hoisted(() => ({
   getResumeParseQueueOverview: vi.fn(),
   listResumeParseQueueJobs: vi.fn(),
   requireRecentMfa: vi.fn(),
+  retry: vi.fn(),
 }));
 
 vi.mock("../../security/mfa/service", async (importOriginal) => ({
@@ -19,6 +20,7 @@ afterAll(() => vi.unstubAllEnvs());
 const writeHeaders = { origin: "https://arc.example.invalid" };
 
 vi.mock("../queue-clear", () => ({ clearPendingParseJobs: queueMocks.clear }));
+vi.mock("../queue-retry", () => ({ retryFailedParseJobs: queueMocks.retry }));
 
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({ db: {} }));
 
@@ -71,6 +73,43 @@ const app = factory
   .route("/platform", platformRouter);
 
 describe("platform queue routes", () => {
+  it("retries specified failed jobs as the current admin", async () => {
+    queueMocks.retry.mockResolvedValue({
+      failed: 0,
+      queued: 1,
+      skipped: 0,
+      status: "done",
+      total: 1,
+    });
+    const response = await app.request("/platform/queues/resume-parse/jobs/retry", {
+      body: JSON.stringify({ jobIds: ["item-1"] }),
+      headers: { ...writeHeaders, "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(200);
+    expect(queueMocks.retry).toHaveBeenCalledWith({ jobIds: ["item-1"], requestedBy: "admin_1" });
+  });
+  it("rejects empty retry requests instead of retrying everything", async () => {
+    const response = await app.request("/platform/queues/resume-parse/jobs/retry", {
+      body: "{}",
+      headers: { ...writeHeaders, "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(400);
+    expect(queueMocks.retry).not.toHaveBeenCalled();
+  });
+  it("requires recent MFA for retrying jobs", async () => {
+    queueMocks.requireRecentMfa.mockRejectedValueOnce(
+      new SecurityError("MFA_REQUIRED", "请先验证"),
+    );
+    const response = await app.request("/platform/queues/resume-parse/jobs/retry", {
+      body: JSON.stringify({ jobIds: ["item-1"] }),
+      headers: { ...writeHeaders, "content-type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(403);
+    expect(queueMocks.retry).not.toHaveBeenCalled();
+  });
   it("clears the parse queue for admins", async () => {
     queueMocks.clear.mockResolvedValue({ removed: 12 });
     const response = await app.request("/platform/queues/resume-parse/jobs", {

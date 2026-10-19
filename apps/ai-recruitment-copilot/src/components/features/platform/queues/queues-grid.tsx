@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -56,6 +56,8 @@ import {
   stateVariant,
   uploadItemStatusMeta,
 } from "./queues-grid-model";
+
+import type { QueueJobRecord, QueueJobsResult, QueuesOverviewResult } from "./queues-grid-model";
 
 const DEFAULT_QUEUE_NAME = "resume-parse";
 const PLATFORM_QUEUE_OPTIONS = [
@@ -136,83 +138,6 @@ interface QueueOverviewRecord {
     name?: string;
   }[];
   workersCount: number;
-}
-
-interface QueuesOverviewResult {
-  records: QueueOverviewRecord[];
-  total: number;
-}
-
-interface QueueJobRecord {
-  attemptsMade: number;
-  attemptsStarted: number | null;
-  data: unknown;
-  failedReason: string | null;
-  finishedOn: string | null;
-  id: string;
-  name: string;
-  organization: {
-    id: string;
-    name: string;
-    slug: string;
-  } | null;
-  processedBy: string | null;
-  processedOn: string | null;
-  progress: unknown;
-  resumeDetail: {
-    attemptCount: number;
-    batch: {
-      failedCount: number;
-      processedCount: number;
-      status: string;
-      succeededCount: number;
-      target: string;
-      totalCount: number;
-    };
-    batchId: string;
-    candidateEmail: string | null;
-    candidateName: string | null;
-    errorMessage: string | null;
-    fileSize: number;
-    finishedAt: string | null;
-    itemId: string;
-    itemStatus: string;
-    organizationId: string;
-    organizationName: string;
-    organizationSlug: string;
-    originalFileName: string;
-    poolItemId: string | null;
-    poolScope: string | null;
-    poolStatus: string | null;
-    queuedAt: string | null;
-    resumeParseError: string | null;
-    resumeParseStatus: string | null;
-    resumeRecordId: string | null;
-    startedAt: string | null;
-    targetRole: string | null;
-    userEmail: string | null;
-    userId: string;
-    userImage: string | null;
-    userName: string | null;
-  } | null;
-  returnvalue: unknown;
-  state: string;
-  timestamp: string | null;
-  triggeredBy: {
-    email: string | null;
-    id: string;
-    image: string | null;
-    name: string | null;
-  } | null;
-}
-
-interface QueueJobsResult {
-  page: number;
-  pageSize: number;
-  records: QueueJobRecord[];
-  state: string;
-  total: number;
-  totalPages: number;
 }
 
 function QueueOrganizationCell({ organization }: { organization: QueueJobRecord["organization"] }) {
@@ -565,6 +490,48 @@ export function QueuesGrid() {
     void queryClient.invalidateQueries({ queryKey: ["platform-queues"] });
   }
 
+  const retryMutation = useMutation({
+    mutationFn: ({ jobId }: { jobId?: string }) =>
+      rpcFetch<{
+        failed: number;
+        queued: number;
+        skipped: number;
+        total: number;
+      }>(
+        rpc.api.platform.queues[":queueName"].jobs.retry.$post({
+          json: jobId
+            ? { jobIds: [jobId] }
+            : {
+                filters: {
+                  parseStatus: normalizeParseStatusFilter(grid.filters.parseStatus),
+                  state: normalizeStateFilter(grid.filters.state),
+                  uploadStatus: normalizeUploadStatusFilter(grid.filters.uploadStatus),
+                  ...(grid.search ? { search: grid.search } : {}),
+                },
+              },
+          param: { queueName: selectedQueueName },
+        }),
+        "重跑失败",
+      ),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "重跑失败"),
+    onSettled: () => refreshAll(),
+    onSuccess: (result) => {
+      if (result.total === 0) {
+        toast.info("当前范围内没有可重跑的失败任务");
+      } else {
+        const message = `已重跑 ${result.queued} 条，跳过 ${result.skipped} 条，入队失败 ${result.failed} 条`;
+        if (result.failed > 0) {
+          toast.error(message);
+        } else {
+          toast.success(message);
+        }
+      }
+      setDetailJob(null);
+    },
+  });
+
+  const { isPending: retrying, mutate: retryJobs } = retryMutation;
+
   async function clearQueue() {
     if (clearing) {
       return;
@@ -641,6 +608,24 @@ export function QueuesGrid() {
               key: "resumeParseStatus",
               title: "解析状态",
             }),
+            customColumn<QueueJobRecord>({
+              cell: (record) => {
+                const reason =
+                  record.resumeDetail?.errorMessage ||
+                  record.resumeDetail?.resumeParseError ||
+                  record.failedReason;
+                return (
+                  <span
+                    className="block max-w-80 truncate text-destructive text-sm"
+                    title={reason ?? undefined}
+                  >
+                    {reason || "—"}
+                  </span>
+                );
+              },
+              key: "failureReason",
+              title: "失败原因",
+            }),
           ]
         : []),
       customColumn<QueueJobRecord>({
@@ -697,10 +682,19 @@ export function QueuesGrid() {
             label: "详情",
             onClick: (record) => setDetailJob(record),
           },
+          {
+            disabled: () => retrying || clearing,
+            label: "重跑",
+            onClick: (record) => retryJobs({ jobId: record.id }),
+            show: (record) =>
+              isResumeParseQueue &&
+              record.resumeDetail?.itemStatus === "failed" &&
+              (record.state === "failed" || record.state === "completed"),
+          },
         ],
       }),
     ],
-    [isResumeParseQueue],
+    [clearing, isResumeParseQueue, retrying, retryJobs],
   );
 
   return (
@@ -775,14 +769,24 @@ export function QueuesGrid() {
         onRefresh={refreshAll}
         toolbarRight={
           isResumeParseQueue ? (
-            <Button
-              disabled={clearing || !selectedQueue?.redis}
-              onClick={() => void clearQueue()}
-              variant="destructive"
-              title="移除简历解析队列中所有尚未开始的任务，正在处理的任务继续完成"
-            >
-              {clearing ? "清空中…" : "清空队列"}
-            </Button>
+            <>
+              <Button
+                disabled={clearing || retrying || !selectedQueue?.redis}
+                onClick={() => void clearQueue()}
+                variant="destructive"
+                title="移除简历解析队列中所有尚未开始的任务，正在处理的任务继续完成"
+              >
+                {clearing ? "清空中…" : "清空队列"}
+              </Button>
+              <Button
+                disabled={clearing || retrying || !selectedQueue?.redis}
+                onClick={() => retryJobs({})}
+                title="重跑当前筛选范围内所有失败任务，包含其他分页"
+                variant="outline"
+              >
+                {retrying ? "重跑中…" : "重跑全部失败"}
+              </Button>
+            </>
           ) : null
         }
       />

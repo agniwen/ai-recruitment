@@ -32,6 +32,7 @@ export type ResumeForceReparseClaim =
 
 export type ResumeParseRetryRequest = ResumeParseRetryTarget & {
   allowExhaustedRetries?: boolean;
+  itemId?: string;
   organizationId: string;
   requestedBy: string;
 };
@@ -185,6 +186,7 @@ export async function claimFailedResumeParseRetry(
       .where(
         and(
           targetCondition,
+          input.itemId ? eq(resumeUploadBatchItem.id, input.itemId) : undefined,
           eq(resumeUploadBatch.organizationId, input.organizationId),
           eq(resumeUploadBatch.target, targetsResumeRecord ? "resume_library" : "resume_pool"),
         ),
@@ -193,6 +195,9 @@ export async function claimFailedResumeParseRetry(
       .limit(1)
       .for("update");
     if (!row) {
+      if (input.itemId) {
+        return { status: "not_found" };
+      }
       return claimUntrackedFailedResumeParseRetry(tx, input);
     }
     if (row.item.status !== "failed") {
