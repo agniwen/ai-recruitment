@@ -166,7 +166,7 @@ export async function handleTelegramOfferCompletionAction(
   }
   if (event.actionId === "osu") {
     const prompt = await thread.post(
-      `请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，发送后仍需点击原确认卡片的“确认内部审批已完成，并完成确认”。`,
+      `请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，发送后仍需点击原确认卡片的“确认完成”。`,
     );
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       pendingFor(pending, token, identity).uploadPromptMessageId = sentMessageId(
@@ -367,7 +367,7 @@ export async function handleTelegramOfferScreenshot(
       return true;
     }
     await thread.post(
-      "已选择审批截图，确认时将保存到对应 Offer。请点击原确认卡片的“确认内部审批已完成，并完成确认”；发送截图不会自动完成确认。",
+      "已选择审批截图，确认时将保存到对应 Offer。请点击原确认卡片的“确认完成”；发送截图不会自动完成确认。",
     );
   } catch (error) {
     await reportScreenshotError(thread, chatId, selectedToken, error);
