@@ -63,6 +63,37 @@ function CandidateDetails({ data, token }: { data: OfferCandidatePreview; token:
     resumeKind === "image" ||
     resumeKind === "docx" ||
     resumeKind === "xlsx";
+  let resumeAction: ReactNode;
+  if (!candidate.hasResumeFile) {
+    resumeAction = (
+      <Button disabled size="sm" variant="outline">
+        打开简历
+      </Button>
+    );
+  } else if (canPreview) {
+    resumeAction = (
+      <Button onClick={() => setPreviewOpen(true)} size="sm" variant="outline">
+        打开简历
+      </Button>
+    );
+  } else {
+    resumeAction = (
+      <Button
+        nativeButton={false}
+        render={
+          <a
+            download={candidate.resumeFileName ?? "简历"}
+            href={resumeUrl}
+            referrerPolicy="no-referrer"
+          >
+            打开简历
+          </a>
+        }
+        size="sm"
+        variant="outline"
+      />
+    );
+  }
 
   return (
     <>
@@ -95,13 +126,9 @@ function CandidateDetails({ data, token }: { data: OfferCandidatePreview; token:
           <h2 className="font-semibold text-lg" id="resume-title">
             候选人简历
           </h2>
-          {candidate.hasResumeFile ? (
-            <div className="flex flex-wrap gap-2">
-              {canPreview ? (
-                <Button onClick={() => setPreviewOpen(true)} size="sm" variant="outline">
-                  查看原始简历
-                </Button>
-              ) : null}
+          <div className="flex flex-wrap gap-2">
+            {resumeAction}
+            {candidate.hasResumeFile ? (
               <Button
                 nativeButton={false}
                 render={
@@ -116,10 +143,19 @@ function CandidateDetails({ data, token }: { data: OfferCandidatePreview; token:
                 size="sm"
                 variant="outline"
               />
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
-        <ResumeProfileView profile={candidate.profile} />
+        {candidate.hasResumeFile ? null : (
+          <p className="mb-3 text-muted-foreground text-sm">未上传原始简历</p>
+        )}
+        {candidate.hasResumeFile && !candidate.profile ? (
+          <p className="text-muted-foreground text-sm">
+            已上传原始简历，点击“打开简历”查看具体内容。
+          </p>
+        ) : (
+          <ResumeProfileView profile={candidate.profile} />
+        )}
       </section>
 
       <div className="text-muted-foreground text-xs">

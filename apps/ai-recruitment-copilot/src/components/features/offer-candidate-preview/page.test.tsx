@@ -103,9 +103,9 @@ describe("public Offer candidate preview", () => {
 
   it("opens the original resume through the token-scoped binary endpoint", async () => {
     await renderPage();
-    await waitForUi(() => expect(document.body.textContent).toContain("查看原始简历"));
+    await waitForUi(() => expect(document.body.textContent).toContain("打开简历"));
     const button = [...document.querySelectorAll("button")].find((node) =>
-      node.textContent?.includes("查看原始简历"),
+      node.textContent?.includes("打开简历"),
     );
     if (!button) {
       throw new Error("Missing resume preview button");
@@ -117,16 +117,42 @@ describe("public Offer candidate preview", () => {
     });
   });
 
-  it("keeps a usable empty state when the candidate has no resume file or profile", async () => {
+  it.each([null, "original-resume", "candidate.html"])(
+    "keeps an original resume entry when the file name cannot select a preview: %s",
+    async (resumeFileName) => {
+      vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+        ...preview,
+        candidate: { ...preview.candidate, resumeFileName },
+      });
+      await renderPage();
+      await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+      const link = [...document.querySelectorAll("a")].find((node) =>
+        node.textContent?.includes("打开简历"),
+      );
+      expect(link?.getAttribute("href")).toBe("/api/public/offer-candidates/test-token/resume");
+      expect(link?.hasAttribute("download")).toBe(true);
+      expect(document.body.textContent).toContain("已上传原始简历");
+      expect(document.body.textContent).not.toContain("暂无结构化简历");
+      expect(vi.mocked(ResumeDocumentPreviewModal).mock.calls).toHaveLength(0);
+    },
+  );
+
+  it("shows an inactive open entry when the candidate has no original resume", async () => {
     vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
       ...preview,
       candidate: { ...preview.candidate, hasResumeFile: false, resumeFileName: null },
     });
     await renderPage();
     await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+    const button = [...document.querySelectorAll("button")].find((node) =>
+      node.textContent?.includes("打开简历"),
+    );
+    expect(button?.disabled).toBe(true);
+    expect(document.body.textContent).toContain("未上传原始简历");
     expect(document.body.textContent).toContain("暂无结构化简历");
-    expect(document.body.textContent).not.toContain("查看原始简历");
     expect(document.querySelector('a[href$="/resume"]')).toBeNull();
+    await act(() => button?.click());
+    expect(vi.mocked(ResumeDocumentPreviewModal).mock.calls).toHaveLength(0);
   });
 
   it.each([null, new Error("private backend details")])(
