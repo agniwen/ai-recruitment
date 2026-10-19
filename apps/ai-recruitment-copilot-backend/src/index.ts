@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { resolveStandaloneServerConfig } from "./standalone/config";
 import { loadStandaloneEnv } from "./standalone/env";
 import { RuntimeCloseStack } from "./standalone/runtime-lifecycle";
+import { createNodeRequestHandler } from "./standalone/request-handler";
 
 async function startFeishuBotsIfEnabled(): Promise<(() => Promise<void>) | null> {
   if (process.env.FEISHU_BOT_ENABLED !== "true") {
@@ -35,7 +36,7 @@ async function main() {
 
     const app = createServerApp();
     const server = serve({
-      fetch: app.fetch,
+      fetch: createNodeRequestHandler(app.fetch),
       hostname,
       port,
     });

@@ -59,14 +59,18 @@ Hono 请求日志对真人面试邀请路径脱敏，并去除诊断查询的参
 
 1. 在目标库的发布流程中执行现有 `pnpm --filter @arc/ai-recruitment-copilot db:migrate`，使用运维提供的目标 `DATABASE_URL`。先迁移再发布 Web/Backend/Worker；迁移仅新增表与索引。
 2. 发布含采集代码和 Platform 页面的 Web、相应 Backend 及 Worker。独立 Backend 和集成 Web 挂载复用同一 Hono router。
-3. 2026-10-16 起无需配置 `INTERVIEW_TELEMETRY_IP_HEADER`：默认优先读取有效的 `X-Real-IP`，缺失或无效时取 `X-Forwarded-For` 第一个地址。生产入口代理必须**覆盖**这两个请求头并禁止绕过代理直连应用：
+3. Web（Nitro/srvx）与独立 Node Backend 都传入实际连接 IP，本地 Vite 则在进入 Nitro 开发 Worker 前保存原始连接地址。2026-10-19 起设置 `INTERVIEW_TELEMETRY_TRUSTED_PROXIES`（逗号分隔的 IP/CIDR）指定应用实际看到的反代对端，来自这些地址的请求才优先读取有效的 `X-Real-IP`，再尝试 `X-Forwarded-For` 第一个地址。代理必须**覆盖**这两个请求头：
 
    ```nginx
    proxy_set_header X-Real-IP $remote_addr;
    proxy_set_header X-Forwarded-For $remote_addr;
    ```
 
-   多级代理/CDN 须先正确配置 Nginx 的可信 real_ip 来源；不要直接透传浏览器提交的 X-Forwarded-For。两个头都没有有效地址时 UI 会明确显示 IP 未采集，本地直连不会自动取得底层连接 IP。
+   例如同机代理可配置 `127.0.0.1/32,::1/128`；Docker 需以应用实际看到的代理连接地址为准，不能照抄宿主机回环地址，也不要将候选人网段加入可信代理。多级代理/CDN 须先正确配置 Nginx 的可信 real_ip 来源，不要透传浏览器提交的 X-Forwarded-For。
+
+   未配置可信代理时默认按直连处理，忽略客户端提供的代理头。代理头缺失/无效时回退实际连接 IP，来源为 `direct-connection`；有效代理头来源为 `trusted-proxy:x-real-ip` 或 `trusted-proxy:x-forwarded-for`。这里记录的是连接对端，代理漏传头时只能看到代理本身的地址，不能还原访问者地址。仅在运行时也没有有效连接地址时记录 `unavailable`。通过 localhost 直连通常得到 `::1` 或 `127.0.0.1`，无法据此推导公网出口或其他网卡地址。IP 继续加密入库，既有缺失记录不按当前 IP 补写。
+
+   发布此版本前必须为现有反代环境配置可信代理；否则会按直连记录代理的连接地址。`INTERVIEW_TELEMETRY_IP_HEADER` 已不再使用。开发专用连接头只由 Vite 覆盖并在开发 Web 入口读取，生产入口不会采信它。
 
 4. 给 Worker 配置 `INTERVIEW_TELEMETRY_RETENTION_DAYS=90`（或约定的 7–365 天值），确认 Worker 正常运行。
 5. 自托管 LiveKit 的 `webhook` 配置示例：

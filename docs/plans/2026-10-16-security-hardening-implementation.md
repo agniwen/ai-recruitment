@@ -142,7 +142,7 @@ Web 挂载后端和 standalone Hono 都使用相同实现。负责 API 的运行
 | `ADMIN_MFA_KEY` | 另一份独立随机 32 字节，Base64；AES-256-GCM 保护 TOTP 密钥 |
 | `BETTER_AUTH_URL` | 真实外部 origin，供登录与新增 POST 接口来源检查 |
 
-IP 采集不再依赖 `INTERVIEW_TELEMETRY_IP_HEADER` 配置：默认优先读取有效的 `X-Real-IP`，缺失或无效时读取 `X-Forwarded-For` 的第一个地址；两者均无有效 IP 时记录为未采集。生产代理必须覆盖这两个请求头，并限制绕过代理直接访问后端；本地直连且没有代理请求头时不会自动取得底层连接 IP。采集后的 IP 继续加密入库。
+IP 采集不再依赖 `INTERVIEW_TELEMETRY_IP_HEADER` 配置。2026-10-19 补齐反代/直连处理：Web、独立 Backend 与本地 Vite 均传入实际连接 IP，只有连接来自 `INTERVIEW_TELEMETRY_TRUSTED_PROXIES` 配置的 IP/CIDR 时才优先读取有效 `X-Real-IP`，再尝试 `X-Forwarded-For` 第一个地址。其余情况回退实际连接 IP，运行时没有连接信息才记录未采集。可信代理必须覆盖这两个头；发布前须配置反代对端，详见 ADR 0020。IP 继续加密入库，历史缺失值不以当前 IP 补写。
 
 验证器密钥、IP 私钥、索引密钥和 Better Auth 登录密钥分开保存。不能从密码或其他字段派生这些密钥。测试生成的密钥只在内存存在，不可用于部署。
 

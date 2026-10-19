@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { generate } from "otplib";
 import { eq } from "drizzle-orm";
 import { installSecurityTestKeys } from "../../../../test-utils/security-keys";
+import { runWithRequestPeerIp } from "../../../../lib/server/request-ip-context";
 import { createSecurityTestDatabase } from "../../../../test-utils/security-database";
 import {
   interviewTelemetryEvent as events,
@@ -530,47 +531,55 @@ describe("platform MFA and explicit IP reveal in isolated PostgreSQL", () => {
     expect(storedSession.ipAddress).toBeNull();
     expect(storedSession.ipCiphertext).toMatch(/^ip:v1:/);
   });
-  it("encrypts IPs in both public client events and server-generated events before storage", async () => {
-    const headers = new Headers({ "x-real-ip": "203.0.113.55" });
-    const scope = {
-      meetingId: "writer-meeting",
-      meetingTitle: "Writer test",
-      organizationId: "writer-org",
-      participantIdentity: "candidate",
-      participantName: "Candidate",
-      participantRole: "candidate",
-      roomName: "writer-room",
-    };
-    await saveClientEvents(
-      scope,
-      [
-        {
-          clientSequence: 1,
-          details: {},
-          id: randomUUID(),
-          occurredAt: new Date().toISOString(),
-          tabId: randomUUID(),
-          type: "page_opened",
-          visitId: randomUUID(),
-        },
-      ],
-      headers,
-    );
-    // The late-server-event path deliberately resolves the retained, encrypted telemetry scope.
-    await recordServerTelemetry({ headers, roomName: scope.roomName, type: "token_issued" });
-    const stored = await getDatabase()
-      .db.select()
-      .from(events)
-      .where(eq(events.meetingId, scope.meetingId));
-    expect(stored).toHaveLength(2);
-    expect(new Set(stored.map((row) => row.source))).toEqual(new Set(["client", "server"]));
-    for (const row of stored) {
-      expect(row.ip).toMatch(/^ip:v1:/);
-      expect(row.ipLookupHash).toBe(ipLookupHash("203.0.113.55"));
-      expect(
-        await decryptIp(row.ip ?? "", ipContext("telemetry", scope.organizationId, row.id)),
-      ).toBe("203.0.113.55");
-    }
-    expect(JSON.stringify(stored)).not.toContain("203.0.113.55");
-  });
+  it.each([false, true])(
+    "encrypts client and server event IPs with proxy trust=%s",
+    async (trusted) => {
+      vi.stubEnv("INTERVIEW_TELEMETRY_TRUSTED_PROXIES", trusted ? "127.0.0.1" : "");
+      const expectedIp = trusted ? "203.0.113.55" : "192.0.2.55";
+      const headers = new Headers({ "x-real-ip": "203.0.113.55" });
+      const scope = {
+        meetingId: randomUUID(),
+        meetingTitle: "Writer test",
+        organizationId: "writer-org",
+        participantIdentity: "candidate",
+        participantName: "Candidate",
+        participantRole: "candidate",
+        roomName: randomUUID(),
+      };
+      await runWithRequestPeerIp(trusted ? "127.0.0.1" : expectedIp, async () => {
+        await saveClientEvents(
+          scope,
+          [
+            {
+              clientSequence: 1,
+              details: {},
+              id: randomUUID(),
+              occurredAt: new Date().toISOString(),
+              tabId: randomUUID(),
+              type: "page_opened",
+              visitId: randomUUID(),
+            },
+          ],
+          headers,
+        );
+        // The late-server-event path deliberately resolves the retained, encrypted telemetry scope.
+        await recordServerTelemetry({ headers, roomName: scope.roomName, type: "token_issued" });
+      });
+      const stored = await getDatabase()
+        .db.select()
+        .from(events)
+        .where(eq(events.meetingId, scope.meetingId));
+      expect(stored).toHaveLength(2);
+      expect(new Set(stored.map((row) => row.source))).toEqual(new Set(["client", "server"]));
+      for (const row of stored) {
+        expect(row.ip).toMatch(/^ip:v1:/);
+        expect(row.ipSource).toBe(trusted ? "trusted-proxy:x-real-ip" : "direct-connection");
+        expect(row.ipLookupHash).toBe(ipLookupHash(expectedIp));
+        expect(
+          await decryptIp(row.ip ?? "", ipContext("telemetry", scope.organizationId, row.id)),
+        ).toBe(expectedIp);
+      }
+      expect(JSON.stringify(stored)).not.toContain(expectedIp);
+    },
+  );
 });

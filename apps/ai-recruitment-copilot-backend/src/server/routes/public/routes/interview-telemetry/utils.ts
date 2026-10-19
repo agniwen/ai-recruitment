@@ -1,18 +1,48 @@
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 import { createHash } from "node:crypto";
 import type { InterviewTrace } from "@arc/shared/interview-telemetry";
 import { interviewTraceSchema } from "@arc/shared/interview-telemetry";
+import { getRequestPeerIp } from "../../../../../lib/server/request-ip-context";
 
-export function requestEvidence(headers: Headers) {
-  // The reverse proxy must overwrite these headers and block direct backend access.
+function isTrustedProxy(ip: string) {
+  const proxies = new BlockList();
+  const entries = (process.env.INTERVIEW_TELEMETRY_TRUSTED_PROXIES ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  for (const entry of entries) {
+    const [address, prefix, extra] = entry.split("/");
+    const family = isIP(address);
+    if (!family || extra !== undefined) {
+      throw new Error("Invalid INTERVIEW_TELEMETRY_TRUSTED_PROXIES configuration");
+    }
+    const type = family === 6 ? "ipv6" : "ipv4";
+    if (prefix === undefined) {
+      proxies.addAddress(address, type);
+    } else {
+      const bits = Number(prefix);
+      if (!/^\d+$/.test(prefix) || bits > (family === 6 ? 128 : 32)) {
+        throw new Error("Invalid INTERVIEW_TELEMETRY_TRUSTED_PROXIES configuration");
+      }
+      proxies.addSubnet(address, bits, type);
+    }
+  }
+  return proxies.check(ip, isIP(ip) === 6 ? "ipv6" : "ipv4");
+}
+
+export function requestEvidence(headers: Headers, peerIp = getRequestPeerIp()) {
+  const peer = peerIp && isIP(peerIp) ? peerIp : null;
+  // Only configured transport peers may assert a client's address through headers.
   const candidates = [
     ["x-real-ip", headers.get("x-real-ip")?.trim()],
     ["x-forwarded-for", headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim()],
   ] as const;
-  const evidence = candidates.find(([, value]) => value && isIP(value));
+  const evidence =
+    peer && isTrustedProxy(peer) ? candidates.find(([, value]) => value && isIP(value)) : undefined;
+  const ipSource = peer ? "direct-connection" : "unavailable";
   return {
-    ip: evidence?.[1] ?? null,
-    ipSource: evidence ? `trusted-proxy:${evidence[0]}` : "unavailable",
+    ip: evidence?.[1] ?? peer,
+    ipSource: evidence ? `trusted-proxy:${evidence[0]}` : ipSource,
     userAgent: headers.get("user-agent")?.slice(0, 512) ?? null,
   };
 }

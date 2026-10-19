@@ -6,6 +6,7 @@ import babel from "@rolldown/plugin-babel";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
+import { captureDevRequestIp } from "./src/lib/server/request-ip";
 
 const tslibEsmDependencyPathPattern =
   /[/\\]node_modules[/\\](?:bullmq|tsyringe|@peculiar[/\\][^/\\]+)[/\\]/;
@@ -59,6 +60,12 @@ export default defineConfig(({ command }) => {
       ],
     },
     plugins: [
+      {
+        configureServer(server) {
+          server.middlewares.use(captureDevRequestIp);
+        },
+        name: "arc-dev-request-ip",
+      },
       {
         enforce: "pre",
         name: "arc-server-tslib-esm",
