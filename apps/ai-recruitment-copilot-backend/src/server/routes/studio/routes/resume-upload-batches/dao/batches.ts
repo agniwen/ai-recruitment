@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines -- Batch lifecycle and recovery mutations share one transactional DAO. */
-import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   resumePoolEvent,
@@ -414,10 +414,9 @@ function resumeParseStaleThresholdSeconds(): number {
 function staleProcessingCondition(thresholdSeconds = resumeParseStaleThresholdSeconds()) {
   return and(
     eq(resumeUploadBatchItem.status, "processing"),
-    lt(
-      resumeUploadBatchItem.startedAt,
-      sql`now() - interval '${sql.raw(String(thresholdSeconds))} seconds'`,
-    ),
+    // Legacy timestamp columns store UTC without an offset. Comparing epochs
+    // also works for timestamptz without applying the session timezone to them.
+    sql`extract(epoch from ${resumeUploadBatchItem.startedAt}) < extract(epoch from now()) - ${thresholdSeconds}`,
   );
 }
 

@@ -201,7 +201,7 @@ describe("POST /:id/bind", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "所选在招岗位不存在。" });
+    expect(await response.json()).toEqual({ error: "所选在招岗位不存在或已失效。" });
   });
 
   it("returns 400 when the job description belongs to another organization", async () => {
@@ -213,7 +213,7 @@ describe("POST /:id/bind", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "所选在招岗位不存在。" });
+    expect(await response.json()).toEqual({ error: "所选在招岗位不存在或已失效。" });
   });
 
   it("returns 400 when the job description is outside the recruiter's hiring-unit scope", async () => {
@@ -226,7 +226,7 @@ describe("POST /:id/bind", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "所选在招岗位不存在。" });
+    expect(await response.json()).toEqual({ error: "所选在招岗位不存在或已失效。" });
   });
 
   it("binds an unbound pool item to a job description in the same organization", async () => {

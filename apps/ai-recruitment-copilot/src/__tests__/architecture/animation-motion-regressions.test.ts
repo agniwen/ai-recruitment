@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const repoRoot = path.resolve(import.meta.dirname, "../../../../..");
 
 function readSource(relativePath: string) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf-8");
+  return readFileSync(path.join(repoRoot, relativePath), "utf-8").replaceAll("\r\n", "\n");
 }
 
 describe("animation motion regressions", () => {

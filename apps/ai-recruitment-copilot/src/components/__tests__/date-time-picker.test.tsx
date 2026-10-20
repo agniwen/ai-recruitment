@@ -56,13 +56,19 @@ describe("date and time pickers", () => {
     });
 
     expect(
-      document.querySelector<HTMLButtonElement>('button[data-day="7/22/2026"]')?.disabled,
+      document.querySelector<HTMLButtonElement>(
+        `button[data-day="${new Date(2026, 6, 22).toLocaleDateString()}"]`,
+      )?.disabled,
     ).toBe(true);
     expect(
-      document.querySelector<HTMLButtonElement>('button[data-day="7/24/2026"]')?.disabled,
+      document.querySelector<HTMLButtonElement>(
+        `button[data-day="${new Date(2026, 6, 24).toLocaleDateString()}"]`,
+      )?.disabled,
     ).toBe(false);
     expect(
-      document.querySelector<HTMLButtonElement>('button[data-day="7/26/2026"]')?.disabled,
+      document.querySelector<HTMLButtonElement>(
+        `button[data-day="${new Date(2026, 6, 26).toLocaleDateString()}"]`,
+      )?.disabled,
     ).toBe(true);
   });
 

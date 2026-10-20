@@ -25,6 +25,7 @@ const pendingSchema = z.object({
   screenshot: screenshotSchema.optional(),
   status: z.enum(["pending", "completing"]),
   uploadPromptMessageId: z.number().int().positive().optional(),
+  uploadSelectionId: z.uuid().optional(),
 });
 
 export type TelegramScreenshotReference = z.infer<typeof screenshotSchema>;

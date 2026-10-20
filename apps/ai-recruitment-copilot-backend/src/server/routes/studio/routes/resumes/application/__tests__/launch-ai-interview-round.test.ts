@@ -9,6 +9,7 @@ const candidate = {
   jobDescriptionId: "jd_1",
   jobDescriptionInterviewers: [{ id: "iv_1" }],
   pipelineStage: "screening" as const,
+  resumeEvaluationStatus: "pass" as const,
   resumeParseStatus: "ready" as const,
 };
 
@@ -70,6 +71,17 @@ describe("launchAiInterviewRound", () => {
 
     expect(result).toEqual({ ok: false, reason: "job_disables_ai_interview" });
     expect(deps.commit).not.toHaveBeenCalled();
+  });
+
+  it.each([null, "fail"])("rejects an unapproved resume evaluation: %s", async (status) => {
+    deps.loadCandidate.mockResolvedValue({ ...candidate, resumeEvaluationStatus: status });
+
+    const result = await createLaunchAiInterviewRound(deps)(command);
+
+    expect(result).toMatchObject({ ok: false, reason: "resume_evaluation_required" });
+    expect(deps.buildSchedule).not.toHaveBeenCalled();
+    expect(deps.commit).not.toHaveBeenCalled();
+    expect(deps.createSnapshot).not.toHaveBeenCalled();
   });
 
   it("rejects a candidate whose job has no AI interviewers", async () => {

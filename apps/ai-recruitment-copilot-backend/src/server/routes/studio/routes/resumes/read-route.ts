@@ -662,6 +662,9 @@ export const resumeLibraryReadRouter = factory
           case "resume_not_ready": {
             return c.json({ error: "简历解析完成后才能发起 AI 面试。" }, 409);
           }
+          case "resume_evaluation_required": {
+            return c.json({ error: result.message }, 409);
+          }
           case "job_disables_ai_interview": {
             return c.json({ error: "当前关联岗位已禁用 AI 面试。" }, 409);
           }
@@ -675,7 +678,7 @@ export const resumeLibraryReadRouter = factory
             return c.json({ error: "未生成面试轮次。" }, 400);
           }
           default: {
-            throw new Error(`Unhandled launch failure: ${result.reason satisfies never}`);
+            throw new Error(`Unhandled launch failure: ${JSON.stringify(result satisfies never)}`);
           }
         }
       }

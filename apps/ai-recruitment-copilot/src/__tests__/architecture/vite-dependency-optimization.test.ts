@@ -27,7 +27,10 @@ describe("Vite dependency optimization", () => {
   });
 
   it("uses the cached dev command from the default Make target", () => {
-    const makefile = readFileSync(path.join(repoRoot, "Makefile"), "utf-8");
+    const makefile = readFileSync(path.join(repoRoot, "Makefile"), "utf-8").replaceAll(
+      "\r\n",
+      "\n",
+    );
     const webDevRecipe = makefile.match(/web-dev:[^\n]*\n\t([^\n]+)/u)?.[1];
 
     expect(webDevRecipe).toBe("pnpm --filter @arc/ai-recruitment-copilot dev");

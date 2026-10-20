@@ -1,12 +1,12 @@
-import { readFileSync } from "node:fs";
+import { readTestSource } from "../../../../../../test-utils/source";
 import { describe, expect, it } from "vitest";
 
-const collectionRouteSource = readFileSync(
+const collectionRouteSource = readTestSource(
   new URL("../collection-route.ts", import.meta.url),
   "utf-8",
 );
-const detailRouteSource = readFileSync(new URL("../detail-route.ts", import.meta.url), "utf-8");
-const humanRouteSource = readFileSync(new URL("../human-route.ts", import.meta.url), "utf-8");
+const detailRouteSource = readTestSource(new URL("../detail-route.ts", import.meta.url), "utf-8");
+const humanRouteSource = readTestSource(new URL("../human-route.ts", import.meta.url), "utf-8");
 const routeSource = `${collectionRouteSource}\n${detailRouteSource}\n${humanRouteSource}`;
 
 describe("late-stage route permissions", () => {

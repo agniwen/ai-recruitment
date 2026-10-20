@@ -14,7 +14,7 @@ describe("真人面试链接发送文案", () => {
         companyName: "示例科技",
         jobDescriptionName: "前端工程师",
         roundLabel: "业务一面",
-        scheduledAt: new Date(2026, 7, 5, 17, 30).toISOString(),
+        scheduledAt: "2026-08-05T09:30:00.000Z",
         url: "https://example.test/human-interview/candidate-token",
       }),
     ).toBe(

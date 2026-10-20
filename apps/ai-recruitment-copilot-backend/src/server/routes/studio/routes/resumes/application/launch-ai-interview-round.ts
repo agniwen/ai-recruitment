@@ -1,7 +1,14 @@
 import type { ResumeAnalysisResult } from "@arc/db-schema/interview/types";
-import type { PipelineStage, ResumeParseStatus } from "@arc/db-schema/studio-interviews";
+import type {
+  PipelineStage,
+  ResumeEvaluationStatus,
+  ResumeParseStatus,
+} from "@arc/db-schema/studio-interviews";
 import { canApplyCandidatePipelineEvent } from "@arc/shared/candidate-pipeline-machine";
-import { canLaunchInterviewFromResume } from "@arc/shared/studio-resumes";
+import {
+  canLaunchInterviewFromResume,
+  getResumeInterviewGateReason,
+} from "@arc/shared/studio-resumes";
 import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 
 interface LaunchCandidate {
@@ -10,6 +17,7 @@ interface LaunchCandidate {
   jobDescriptionInterviewers?: { id: string }[] | null;
   pipelineStage: PipelineStage;
   resumeParseStatus: ResumeParseStatus;
+  resumeEvaluationStatus: ResumeEvaluationStatus | null;
 }
 
 interface LaunchSchedule {
@@ -67,6 +75,7 @@ interface LaunchAiInterviewRoundDependencies<TSchedule extends LaunchSchedule> {
 
 export type LaunchAiInterviewRoundResult =
   | { ok: true; roundId: string }
+  | { ok: false; reason: "resume_evaluation_required"; message: string }
   | {
       ok: false;
       reason:
@@ -116,6 +125,10 @@ export function createLaunchAiInterviewRound<TSchedule extends LaunchSchedule>(
     }
     if (!canLaunchInterviewFromResume(candidate.resumeParseStatus)) {
       return { ok: false, reason: "resume_not_ready" };
+    }
+    const evaluationGateReason = getResumeInterviewGateReason(candidate.resumeEvaluationStatus);
+    if (evaluationGateReason) {
+      return { message: evaluationGateReason, ok: false, reason: "resume_evaluation_required" };
     }
     if (candidate.jobDescriptionAiInterviewDisabled) {
       return { ok: false, reason: "job_disables_ai_interview" };

@@ -203,7 +203,6 @@ const advanced = getAuthTransportOptions({
 });
 
 type RolePolicyGetSession = (headers: Headers) => Promise<{
-  session: { activeOrganizationId?: string | null };
   user: { id: string };
 } | null>;
 
@@ -241,10 +240,7 @@ async function requireRolePolicyOrganization(
   if (!session?.user) {
     throw new APIError("UNAUTHORIZED", { message: "未登录。" });
   }
-  const organizationId =
-    typeof fields.organizationId === "string"
-      ? fields.organizationId
-      : session.session.activeOrganizationId;
+  const { organizationId } = fields;
   if (typeof organizationId !== "string" || !organizationId) {
     throw new APIError("BAD_REQUEST", { message: "请选择工作区。" });
   }

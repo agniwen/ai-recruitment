@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Shared thread state fixtures cover the full Offer approval lifecycle. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ChatSdk from "chat";
 import { getTelegramBot, shutdownTelegramBot } from "./bot";
@@ -11,24 +12,29 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   direct: vi.fn(),
   edit: vi.fn(),
+  pins: vi.fn(),
+  post: vi.fn(),
   receive: vi.fn(),
+  sentEdit: vi.fn(),
   slash: new Map<string, (event: unknown) => Promise<void>>(),
   stateWrite: vi.fn(),
+  uploadPrompt: vi.fn(),
   users: vi.fn(),
 }));
-
+vi.mock("./offer-ssc-upload-prompt", () => ({
+  postTelegramOfferScreenshotPrompt: mocks.uploadPrompt,
+}));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-completion",
   () => ({ completeOfferSscWithScreenshot: mocks.completion }),
 );
-
 vi.mock("../dao", () => ({ bindTelegramUser: mocks.bind }));
 vi.mock("../ssc-recipients", () => ({
   resolveLedgerTelegramOfferActor: () => Promise.resolve(null),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
-    query: { user: { findMany: mocks.users } },
+    query: { sscTelegramIdentity: { findMany: mocks.pins }, user: { findMany: mocks.users } },
     transaction: async (operation: (tx: { execute: () => Promise<void> }) => Promise<unknown>) =>
       await operation({ execute: () => Promise.resolve() }),
   },
@@ -54,6 +60,9 @@ vi.mock("chat", async (importOriginal) => ({
   ...(await importOriginal<typeof ChatSdk>()),
   Chat: function MockChat() {
     return {
+      getAdapter() {
+        return { editMessage: mocks.edit };
+      },
       onAction(ids: string | string[], handler: (event: unknown) => Promise<void>) {
         for (const id of Array.isArray(ids) ? ids : [ids]) {
           mocks.actions.set(id, handler);
@@ -96,11 +105,12 @@ let nextMessageId = 100;
 function thread() {
   const sentIds: number[] = [];
   const post = Object.assign(
-    vi.fn(() => {
+    vi.fn(async (content: unknown) => {
       nextMessageId += 1;
       const id = nextMessageId;
       sentIds.push(id);
-      return Promise.resolve({ id: `12345:${id}` });
+      await mocks.post(content);
+      return { edit: mocks.sentEdit, id: `12345:${id}` };
     }),
     { sentIds },
   );
@@ -123,6 +133,7 @@ beforeEach(() => {
   mocks.actions.clear();
   mocks.slash.clear();
   mocks.users.mockResolvedValue([boundUser]);
+  mocks.pins.mockResolvedValue([]);
   mocks.bind.mockResolvedValue({ kind: "registered", memberAmbiguous: false });
   mocks.context.mockResolvedValue({
     actorRole: "ssc-reviewer",
@@ -136,6 +147,13 @@ beforeEach(() => {
   mocks.complete.mockResolvedValue({ ...draft, sscConfirmationStatus: "completed" });
   mocks.completion.mockResolvedValue({ ...draft, sscConfirmationStatus: "completed" });
   mocks.edit.mockResolvedValue({ id: "12345:7" });
+  mocks.sentEdit.mockResolvedValue({ id: "12345:8" });
+  mocks.uploadPrompt.mockImplementation(
+    async (targetThread: ReturnType<typeof thread>, text: string) => {
+      const posted = await targetThread.post(text);
+      return posted.id;
+    },
+  );
   threadState = null;
   nextMessageId = 100;
   vi.stubEnv("DATABASE_URL", "postgres://unused/test");
@@ -558,7 +576,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     },
   );
 
-  it("ignores arbitrary images and requires a reply to the specific upload prompt", async () => {
+  it("ignores arbitrary images until an Offer upload prompt is selected", async () => {
     const prompt = await beginCompletion();
     const fetchData = vi.fn(() => Promise.resolve(Buffer.from("ffd8ffd9", "hex")));
     await directMessage(undefined, {
@@ -571,48 +589,271 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(mocks.completion).not.toHaveBeenCalled();
   });
 
-  it("accepts a correlated optional photo then passes its bytes only on explicit final confirmation", async () => {
+  it.each([true, false])(
+    "accepts the selected optional photo and only saves it on explicit confirmation (reply=%s)",
+    async (withReply) => {
+      const prompt = await beginCompletion();
+      const upload = await action(
+        "osu",
+        buttonValue(prompt, "osu"),
+        callbackMessage(prompt.sentIds[0]),
+      );
+      expect(mocks.uploadPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "telegram:12345" }),
+        expect.stringContaining("审批截图"),
+      );
+      const screenshot = Buffer.from("ffd8ffd9", "hex");
+      const fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({
+            ok: true,
+            result: { file_path: "photos/proof.jpg", file_size: screenshot.length },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(screenshot, {
+            headers: { "content-length": String(screenshot.length), "content-type": "image/jpeg" },
+          }),
+        );
+      vi.stubGlobal("fetch", fetch);
+      const receipt = await directMessage(withReply ? upload.sentIds[0] : undefined, {
+        raw: {
+          photo: [{ file_id: "photo-one", file_size: screenshot.length, height: 100, width: 100 }],
+        },
+      });
+      expect(mocks.completion).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+      expect(JSON.stringify(receipt.mock.calls)).toContain("截图");
+      expect(JSON.stringify(receipt.mock.calls)).toContain("截图已收到");
+      expect(buttonValue(receipt, "osf")).toBe(buttonValue(prompt, "osf"));
+      expect(mocks.edit).toHaveBeenCalledWith(
+        "telegram:12345",
+        `12345:${prompt.sentIds[0]}`,
+        expect.any(String),
+      );
+      await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
+      expect(mocks.completion).not.toHaveBeenCalled();
+      await action("osf", buttonValue(receipt, "osf"), callbackMessage(receipt.sentIds[0]));
+      expect(mocks.completion).toHaveBeenCalledTimes(1);
+      const [[input]] = mocks.completion.mock.calls;
+      expect(input).toMatchObject({
+        draftId,
+        internalApprovalConfirmed: true,
+        revision: 3,
+        source: "telegram",
+      });
+      expect(input.file).toBeInstanceOf(File);
+      expect(Buffer.from(await input.file.arrayBuffer())).toEqual(screenshot);
+      expect(fetch.mock.calls.every((call) => call[1]?.signal instanceof AbortSignal)).toBe(true);
+    },
+  );
+
+  it("does not bind a direct photo to an earlier Offer if selecting another upload fails", async () => {
+    const first = await beginCompletion();
+    await action("osu", buttonValue(first, "osu"), callbackMessage(first.sentIds[0]));
+    const second = await beginCompletion({
+      ...draft,
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      interviewRecordId: "candidate-b",
+    });
+    mocks.uploadPrompt.mockRejectedValueOnce(new Error("Temporary prompt delivery failure"));
+    await action("osu", buttonValue(second, "osu"), callbackMessage(second.sentIds[0]));
+    await directMessage(undefined, {
+      raw: { photo: [{ file_id: "intended-for-second", file_size: 4 }] },
+    });
+    const pending = threadState?.offerSscCompletions as Record<string, { screenshot?: unknown }>;
+    expect(Object.values(pending).every((record) => !record.screenshot)).toBe(true);
+    expect(mocks.completion).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])(
+    "keeps the latest upload selection when an earlier prompt is delivered last (same Offer=%s)",
+    async (sameOffer) => {
+      const first = await beginCompletion();
+      const started = Promise.withResolvers<boolean>();
+      const delivery = Promise.withResolvers<string>();
+      mocks.uploadPrompt.mockImplementationOnce(async () => {
+        started.resolve(true);
+        return await delivery.promise;
+      });
+      const earlier = action("osu", buttonValue(first, "osu"), callbackMessage(first.sentIds[0]));
+      await started.promise;
+      const latest = sameOffer
+        ? first
+        : await beginCompletion({
+            ...draft,
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            interviewRecordId: "candidate-b",
+          });
+      const uploaded = await action(
+        "osu",
+        buttonValue(latest, "osu"),
+        callbackMessage(latest.sentIds[0]),
+      );
+      delivery.resolve("12345:500");
+      await earlier;
+      await directMessage(undefined, {
+        raw: { photo: [{ file_id: "latest-selection-photo", file_size: 4 }] },
+      });
+      const pending = threadState?.offerSscCompletions as Record<
+        string,
+        { screenshot?: { fileId: string }; uploadPromptMessageId?: number }
+      >;
+      const selected = pending[buttonValue(latest, "osu")];
+      expect(selected.uploadPromptMessageId).toBe(uploaded.sentIds[0]);
+      expect(selected.screenshot?.fileId).toBe("latest-selection-photo");
+      if (!sameOffer) {
+        expect(pending[buttonValue(first, "osu")].screenshot).toBeUndefined();
+      }
+    },
+  );
+
+  it.each([false, true])(
+    "keeps the original confirmation and screenshot if registering the new card fails (write committed=%s)",
+    async (committed) => {
+      const prompt = await beginCompletion();
+      const upload = await action(
+        "osu",
+        buttonValue(prompt, "osu"),
+        callbackMessage(prompt.sentIds[0]),
+      );
+      mocks.stateWrite
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce((value: Record<string, unknown>) => {
+          if (committed) {
+            threadState = { ...threadState, ...value };
+          }
+          throw new Error("Temporary confirmation state write failure");
+        });
+      await directMessage(upload.sentIds[0], {
+        raw: { photo: [{ file_id: "photo-one", file_size: 4 }] },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            Response.json({ ok: true, result: { file_path: "photos/proof.jpg", file_size: 4 } }),
+          )
+          .mockResolvedValueOnce(new Response(Buffer.from("ffd8ffd9", "hex"))),
+      );
+      await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
+      expect(mocks.completion).toHaveBeenCalledWith(
+        expect.objectContaining({ file: expect.any(File) }),
+      );
+    },
+  );
+
+  it.each(["recovery failure", "newer screenshot"])(
+    "retains the new card when its registration committed but recovery encounters %s",
+    async (reason) => {
+      const prompt = await beginCompletion();
+      const upload = await action(
+        "osu",
+        buttonValue(prompt, "osu"),
+        callbackMessage(prompt.sentIds[0]),
+      );
+      mocks.stateWrite
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce((value: Record<string, unknown>) => {
+          threadState = { ...threadState, ...value };
+          if (reason === "newer screenshot") {
+            const pending = value.offerSscCompletions as Record<
+              string,
+              { screenshot: { fileId: string } }
+            >;
+            pending[buttonValue(prompt, "osu")].screenshot.fileId = "newer-photo";
+          }
+          throw new Error("Confirmation registration acknowledgement failed");
+        });
+      if (reason === "recovery failure") {
+        mocks.stateWrite.mockImplementationOnce(() => {
+          throw new Error("Recovery state temporarily unavailable");
+        });
+      }
+      const receipt = await directMessage(upload.sentIds[0], {
+        raw: { photo: [{ file_id: "photo-one", file_size: 4 }] },
+      });
+      expect(mocks.sentEdit).not.toHaveBeenCalled();
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            Response.json({ ok: true, result: { file_path: "photos/proof.jpg", file_size: 4 } }),
+          )
+          .mockResolvedValueOnce(new Response(Buffer.from("ffd8ffd9", "hex"))),
+      );
+      await action("osf", buttonValue(receipt, "osf"), callbackMessage(receipt.sentIds[0]));
+      expect(mocks.completion).toHaveBeenCalledWith(
+        expect.objectContaining({ file: expect.any(File) }),
+      );
+    },
+  );
+
+  it("keeps the screenshot and original confirmation usable if the new card cannot be delivered", async () => {
     const prompt = await beginCompletion();
     const upload = await action(
       "osu",
       buttonValue(prompt, "osu"),
       callbackMessage(prompt.sentIds[0]),
     );
-    const screenshot = Buffer.from("ffd8ffd9", "hex");
-    const fetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        Response.json({
-          ok: true,
-          result: { file_path: "photos/proof.jpg", file_size: screenshot.length },
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(screenshot, {
-          headers: { "content-length": String(screenshot.length), "content-type": "image/jpeg" },
-        }),
-      );
-    vi.stubGlobal("fetch", fetch);
-    const receipt = await directMessage(upload.sentIds[0], {
-      raw: {
-        photo: [{ file_id: "photo-one", file_size: screenshot.length, height: 100, width: 100 }],
-      },
+    mocks.post.mockRejectedValueOnce(new Error("Temporary Telegram delivery failure"));
+    await directMessage(upload.sentIds[0], {
+      raw: { photo: [{ file_id: "photo-one", file_size: 4 }] },
     });
-    expect(mocks.completion).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
-    expect(JSON.stringify(receipt.mock.calls)).toContain("截图");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ ok: true, result: { file_path: "photos/proof.jpg", file_size: 4 } }),
+        )
+        .mockResolvedValueOnce(new Response(Buffer.from("ffd8ffd9", "hex"))),
+    );
     await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
-    expect(mocks.completion).toHaveBeenCalledTimes(1);
-    const [[input]] = mocks.completion.mock.calls;
-    expect(input).toMatchObject({
-      draftId,
-      internalApprovalConfirmed: true,
-      revision: 3,
-      source: "telegram",
+    expect(mocks.completion).toHaveBeenCalledWith(
+      expect.objectContaining({ file: expect.any(File) }),
+    );
+  });
+
+  it("removes the new card actions if the Offer completes while that card is being delivered", async () => {
+    const prompt = await beginCompletion();
+    const upload = await action(
+      "osu",
+      buttonValue(prompt, "osu"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    const posting = Promise.withResolvers<boolean>();
+    const resume = Promise.withResolvers<boolean>();
+    mocks.post.mockImplementationOnce(async () => {
+      posting.resolve(true);
+      await resume.promise;
     });
-    expect(input.file).toBeInstanceOf(File);
-    expect(Buffer.from(await input.file.arrayBuffer())).toEqual(screenshot);
-    expect(fetch.mock.calls.every((call) => call[1]?.signal instanceof AbortSignal)).toBe(true);
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({ ok: true, result: { file_path: "photos/proof.jpg", file_size: 4 } }),
+        )
+        .mockResolvedValueOnce(new Response(Buffer.from("ffd8ffd9", "hex"))),
+    );
+    const incoming = directMessage(upload.sentIds[0], {
+      raw: { photo: [{ file_id: "photo-one", file_size: 4 }] },
+    });
+    await posting.promise;
+    try {
+      await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
+    } finally {
+      resume.resolve(true);
+      await incoming;
+    }
+    expect(mocks.completion).toHaveBeenCalledTimes(1);
+    expect(mocks.sentEdit).toHaveBeenCalledWith(expect.stringContaining("已失效"));
   });
 
   it.each(["binding", "authorization", "completed"])(

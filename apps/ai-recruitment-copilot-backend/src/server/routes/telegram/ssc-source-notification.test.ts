@@ -12,11 +12,18 @@ import {
   sscResponsibility,
   studioInterview,
   studioOfferDraft,
+  sscTelegramIdentity,
   telegramRecipientBinding,
   user,
 } from "@arc/db-schema/schema";
 import { getOfferSscNotificationTargets } from "../studio/routes/interviews/utils/offer-ssc-notification";
 import { resolveBoundTelegramOfferActor } from "./offer-ssc-dao";
+import { bindTelegramUser } from "./dao";
+import {
+  completeOfferSscConfirmation,
+  loadAuthorizedOfferSscContext,
+  receiveOfferSscConfirmation,
+} from "../studio/routes/interviews/dao/offer-drafts";
 
 const databaseUrl = process.env.SSC_RESPONSIBILITIES_TEST_DATABASE_URL;
 
@@ -106,6 +113,11 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
 
     afterEach(async () => {
       vi.unstubAllEnvs();
+      const identities = await db
+        .select()
+        .from(sscTelegramIdentity)
+        .where(inArray(sscTelegramIdentity.chatId, chatIds));
+      userIds.push(...identities.map((entry) => entry.userId));
       await db.delete(studioInterview).where(eq(studioInterview.organizationId, orgId));
       await db.delete(jobDescription).where(eq(jobDescription.organizationId, orgId));
       await db.delete(department).where(eq(department.organizationId, orgId));
@@ -128,6 +140,138 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
     function actor(handle = username) {
       return resolveBoundTelegramOfferActor({ telegramUserId: chatId, username: handle });
     }
+
+    it("lets an unregistered follower receive and complete an assigned Offer without an email", async () => {
+      await db
+        .update(sscResponsibility)
+        .set({ email: "" })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      await db.delete(member).where(eq(member.userId, sscId));
+      await db.delete(user).where(eq(user.id, sscId));
+      const binding = await bindTelegramUser({ chatId, username });
+      expect(binding.kind).toBe("bound");
+      const notifications = await targets();
+      expect(notifications.map((entry) => entry.chatId)).toEqual([chatId]);
+      const actorId = await actor();
+      expect(actorId).toBe(notifications[0].userId);
+      if (!actorId) {
+        throw new Error("Expected a provisioned SSC audit identity");
+      }
+      const [profile] = await db.select().from(user).where(eq(user.id, actorId));
+      expect(profile.emailVerified).toBe(false);
+      const [relation] = await db
+        .select()
+        .from(sscResponsibility)
+        .where(eq(sscResponsibility.organizationId, orgId));
+      expect(relation.email).toBe("");
+      const input = {
+        actor: { id: actorId, role: "ssc-tg" },
+        draftId,
+        interviewRecordId: candidateId,
+        organizationId: orgId,
+        revision: 1,
+        source: "telegram" as const,
+      };
+      const received = await receiveOfferSscConfirmation(input);
+      expect(received.sscConfirmationStatus).toBe("confirming");
+      const completed = await completeOfferSscConfirmation({
+        ...input,
+        internalApprovalConfirmed: true,
+      });
+      expect(completed.sscConfirmationStatus).toBe("completed");
+      expect(completed.sscCompletedBy).toBe(actorId);
+    });
+
+    it("uses a pinned follower for a blank-email assignment in another responsible source", async () => {
+      expect(await actor()).toBe(sscId);
+      await db
+        .update(sscResponsibility)
+        .set({ email: "" })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      const notifications = await targets();
+      expect(notifications.map((entry) => entry.userId)).toEqual([sscId]);
+      expect(await actor()).toBe(sscId);
+      const context = await loadAuthorizedOfferSscContext({ actorUserId: sscId, draftId });
+      expect(context.canReceive).toBe(true);
+      await db
+        .update(sscResponsibility)
+        .set({ resumeSourceId: null })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      await expect(
+        loadAuthorizedOfferSscContext({ actorUserId: sscId, draftId }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("provisions one audit identity and membership when the same follower is resolved concurrently", async () => {
+      await db
+        .update(sscResponsibility)
+        .set({ email: "" })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      await db.delete(member).where(eq(member.userId, sscId));
+      await db.delete(user).where(eq(user.id, sscId));
+      const actors = await Promise.all([actor(), actor(), actor()]);
+      expect(actors[0]).toBeTruthy();
+      expect(new Set(actors).size).toBe(1);
+      expect(
+        await db.select().from(sscTelegramIdentity).where(eq(sscTelegramIdentity.chatId, chatId)),
+      ).toHaveLength(1);
+      expect(await db.select().from(member).where(eq(member.organizationId, orgId))).toHaveLength(
+        1,
+      );
+      const notifications = await targets();
+      expect(notifications.map((entry) => entry.userId)).toEqual([actors[0]]);
+    });
+
+    it("revokes a pinned TG actor's candidate access when the responsibility belongs to another registered person", async () => {
+      expect(await actor()).toBe(sscId);
+      const otherId = randomUUID();
+      userIds.push(otherId);
+      const otherEmail = `${otherId}@example.com`;
+      await db.insert(user).values({ email: otherEmail, id: otherId, name: "Reassigned SSC" });
+      await db
+        .insert(member)
+        .values({ id: randomUUID(), organizationId: orgId, role: "ssc-tg", userId: otherId });
+      await db
+        .update(sscResponsibility)
+        .set({ email: otherEmail })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      expect(await targets()).toEqual([]);
+      await expect(
+        loadAuthorizedOfferSscContext({ actorUserId: sscId, draftId }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("does not create an approval identity for an unverified follower or unlinked source", async () => {
+      await db
+        .update(sscResponsibility)
+        .set({ email: "" })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      await db.delete(telegramRecipientBinding).where(eq(telegramRecipientBinding.chatId, chatId));
+      expect(await targets()).toEqual([]);
+      expect(await actor()).toBeNull();
+      expect(
+        await db.select().from(sscTelegramIdentity).where(eq(sscTelegramIdentity.chatId, chatId)),
+      ).toEqual([]);
+    });
+
+    it("keeps blank-email access bound to the pinned numeric TG account after a username transfer", async () => {
+      expect(await actor()).toBe(sscId);
+      await db
+        .update(sscResponsibility)
+        .set({ email: "" })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      const otherChat = String(randomInt(1_000_000, 999_999_999_999));
+      chatIds.push(otherChat);
+      await db.delete(telegramRecipientBinding).where(eq(telegramRecipientBinding.chatId, chatId));
+      await db.insert(telegramRecipientBinding).values({ chatId: otherChat, username });
+      expect(
+        await resolveBoundTelegramOfferActor({ telegramUserId: otherChat, username }),
+      ).toBeNull();
+      expect(await targets()).toEqual([]);
+      await expect(
+        loadAuthorizedOfferSscContext({ actorUserId: sscId, draftId }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
 
     it("routes source-assigned SSC through ledger username plus verified bot start without changing global profile", async () => {
       const notifications = await targets();
@@ -299,6 +443,21 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
           ),
         );
       expect(relation.email.trim().toLowerCase()).toBe(email);
+    });
+
+    it("does not move a pinned personal SSC actor when a new numeric account starts the bot with its old username", async () => {
+      await db
+        .update(user)
+        .set({ telegram: `@${username}`, telegramBoundUsername: username, telegramChatId: chatId })
+        .where(eq(user.id, sscId));
+      expect(await targets()).toHaveLength(1);
+      const movedChat = String(randomInt(1_000_000, 999_999_999_999));
+      chatIds.push(movedChat);
+      await bindTelegramUser({ chatId: movedChat, username });
+      expect(
+        await resolveBoundTelegramOfferActor({ telegramUserId: movedChat, username }),
+      ).toBeNull();
+      expect(await targets()).toEqual([]);
     });
   },
 );

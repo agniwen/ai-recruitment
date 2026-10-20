@@ -7,6 +7,7 @@ import {
   user,
 } from "@arc/db-schema/schema";
 import { extractRequesterTelegramUsernames, normalizeTelegramUsername } from "./utils/identity";
+import { provisionSscTelegramFollower } from "./ssc-telegram-provisioning";
 
 export type TelegramBindingResult =
   | { kind: "bound"; userName: string }
@@ -89,6 +90,10 @@ export async function bindTelegramUser(input: {
         });
     }
   });
+  const ssc =
+    username && matches.length <= 1
+      ? await provisionSscTelegramFollower({ chatId: input.chatId, username })
+      : null;
   if (organizationIds.length > 0) {
     return {
       kind: "requester_bound",
@@ -98,6 +103,9 @@ export async function bindTelegramUser(input: {
   }
   if (matched) {
     return { kind: "bound", userName: matched.name };
+  }
+  if (ssc) {
+    return { kind: "bound", userName: ssc.name };
   }
   return { kind: "registered", memberAmbiguous: matches.length > 1 };
 }

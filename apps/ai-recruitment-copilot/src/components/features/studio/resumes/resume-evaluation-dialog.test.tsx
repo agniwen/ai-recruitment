@@ -379,8 +379,8 @@ describe("ResumeEvaluationDialog", () => {
     expect(apiMocks.submitResumeReviewEvaluation).toHaveBeenCalledWith("workspace-1", "resume-1", {
       availableTimeSlots: [
         {
-          endAt: new Date("2026-07-29T11:00").toISOString(),
-          startAt: new Date("2026-07-29T10:00").toISOString(),
+          endAt: "2026-07-29T03:00:00.000Z",
+          startAt: "2026-07-29T02:00:00.000Z",
         },
       ],
       reason: "符合岗位要求",

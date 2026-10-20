@@ -209,7 +209,7 @@ describe("queryPaginatedResumeRecords", () => {
     expect(result.records.some((r) => r.candidateName === "王五")).toBe(false);
   });
 
-  it("returns records without interview-only fields", async () => {
+  it("returns card summaries without full interview or resume JSON", async () => {
     const result = await queryPaginatedResumeRecords(ORG_A);
     const [sample] = result.records;
     if (!sample) {
@@ -217,8 +217,10 @@ describe("queryPaginatedResumeRecords", () => {
     }
     expect(sample).not.toHaveProperty("interviewQuestions");
     expect(sample).not.toHaveProperty("scheduleEntries");
-    expect(sample).not.toHaveProperty("resumeScreeningResult");
-    expect(sample).not.toHaveProperty("hrResumeAssessment");
+    expect(sample).not.toHaveProperty("resumeProfile");
+    expect(sample).not.toHaveProperty("resumeReview");
+    expect(sample.resumeScreeningResult).toBeNull();
+    expect(sample.hrResumeAssessment).toBeNull();
     expect(sample.pipelineStage).toBeTypeOf("string");
     expect(sample.outcome).toBeTypeOf("string");
     expect(sample.hasResumeFile).toBeTypeOf("boolean");
@@ -627,6 +629,7 @@ describe("queryPaginatedResumeRecords", () => {
           status: "pending",
         },
         completedRounds: 2,
+        completedRoundsMissingFeedback: 2,
         failedRounds: 1,
         passedRounds: 1,
         totalRounds: 3,

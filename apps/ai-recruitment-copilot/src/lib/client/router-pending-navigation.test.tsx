@@ -12,7 +12,7 @@ import {
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { enableReactActEnvironment, unmountInAct } from "@/test-utils/react-act";
+import { enableReactActEnvironment, unmountInAct, waitForUi } from "@/test-utils/react-act";
 
 enableReactActEnvironment();
 
@@ -139,18 +139,20 @@ describe("platform/workspace navigation", () => {
       router._tx = completedTransition;
 
       for (let round = 0; round < 3; round += 1) {
-        await act(async () => {
+        await act(() => {
           void router.navigate({ to: "/platform" });
-          await delay(60);
         });
-        expect(router.state.location.pathname).toBe("/platform/organizations");
-        expect(container.textContent).toContain("管理后台内容");
-        await act(async () => {
+        await waitForUi(() => {
+          expect(router.state.location.pathname).toBe("/platform/organizations");
+          expect(container.textContent).toContain("管理后台内容");
+        });
+        await act(() => {
           void router.navigate({ to: "/studio" });
-          await delay(60);
         });
-        expect(router.state.location.pathname).toBe("/w/work/studio/resumes");
-        expect(container.textContent).toContain("工作台内容");
+        await waitForUi(() => {
+          expect(router.state.location.pathname).toBe("/w/work/studio/resumes");
+          expect(container.textContent).toContain("工作台内容");
+        });
       }
       expect(onUncaughtError).not.toHaveBeenCalled();
     } finally {

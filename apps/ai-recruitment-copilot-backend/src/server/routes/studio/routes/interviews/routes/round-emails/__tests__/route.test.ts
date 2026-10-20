@@ -133,20 +133,24 @@ beforeAll(async () => {
 
   // 候选人 A：有邮箱 / Candidate A: has email
   await db.insert(studioInterview).values({
+    aiReviewApprovalStatus: "approved",
     candidateEmail: "candidate@example.com",
     candidateName: "郭靖",
     createdAt: NOW,
     id: INTERVIEW_WITH_EMAIL,
     organizationId: ORG,
+    pipelineStage: "screening",
     updatedAt: NOW,
   });
 
   // 候选人 B：无邮箱 / Candidate B: no email
   await db.insert(studioInterview).values({
+    aiReviewApprovalStatus: "approved",
     candidateName: "李四",
     createdAt: NOW,
     id: INTERVIEW_NO_EMAIL,
     organizationId: ORG,
+    pipelineStage: "screening",
     updatedAt: NOW,
   });
 
@@ -189,6 +193,47 @@ beforeEach(() => {
 });
 
 describe("POST /:roundId/send", () => {
+  it("requires an active workspace before sending or writing a log", async () => {
+    const app = new Hono<Env>().route("/", roundEmailsRouter);
+
+    const response = await app.request(`/${ROUND_WITH_EMAIL}/send`, { method: "POST" });
+
+    expect(response.status).toBe(401);
+    expect(mocks.sendMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["ai_review", "human_interview", "offer"] as const)(
+    "rejects invitations while the candidate is in %s",
+    async (pipelineStage) => {
+      const before = await db
+        .select()
+        .from(studioRoundEmailLog)
+        .where(eq(studioRoundEmailLog.roundId, ROUND_WITH_EMAIL));
+      await db
+        .update(studioInterview)
+        .set({ pipelineStage })
+        .where(eq(studioInterview.id, INTERVIEW_WITH_EMAIL));
+      try {
+        const response = await buildTestApp().request(`/${ROUND_WITH_EMAIL}/send`, {
+          method: "POST",
+        });
+
+        expect(response.status).toBe(409);
+        expect(mocks.sendMock).not.toHaveBeenCalled();
+        const after = await db
+          .select()
+          .from(studioRoundEmailLog)
+          .where(eq(studioRoundEmailLog.roundId, ROUND_WITH_EMAIL));
+        expect(after).toEqual(before);
+      } finally {
+        await db
+          .update(studioInterview)
+          .set({ pipelineStage: "screening" })
+          .where(eq(studioInterview.id, INTERVIEW_WITH_EMAIL));
+      }
+    },
+  );
+
   it("returns 400 when candidate email is missing; send not called", async () => {
     const app = buildTestApp();
     const res = await app.request(`/${ROUND_NO_EMAIL}/send`, { method: "POST" });

@@ -52,6 +52,13 @@ describe.skipIf(!process.env.DATABASE_URL)("SSC current Offer and source access"
         ('on','a','no-jd',1,'draft','pending'),
         ('ov1','a','old-completed-new-pending',1,'superseded','completed'),
         ('ov2','a','old-completed-new-pending',2,'draft','pending');
+      ALTER TABLE ssc_responsibility ADD COLUMN telegram text NOT NULL DEFAULT '';
+      ALTER TABLE organization_role ADD COLUMN is_odc boolean NOT NULL DEFAULT false;
+      ALTER TABLE "user" ADD COLUMN telegram text;
+      ALTER TABLE "user" ADD COLUMN telegram_bound_username text;
+      ALTER TABLE "user" ADD COLUMN telegram_chat_id text;
+      CREATE TEMP TABLE ssc_telegram_identity (user_id text, chat_id text, username text);
+      CREATE TEMP TABLE telegram_recipient_binding (chat_id text, username text);
     `);
   });
 
@@ -84,6 +91,44 @@ describe.skipIf(!process.env.DATABASE_URL)("SSC current Offer and source access"
       "old-completed-new-pending",
       "pending",
     ]);
+  });
+
+  it("grants blank-email SSC only through its pinned, currently verified TG identity", async () => {
+    await rolledBack(async () => {
+      await client.unsafe(
+        "UPDATE ssc_responsibility SET email='',telegram='@ssc_verified' WHERE id='ra'",
+      );
+      await client.unsafe(
+        "INSERT INTO ssc_telegram_identity VALUES ('ssc','123456789','ssc_verified')",
+      );
+      expect(await visible()).toEqual([]);
+      await client.unsafe(
+        "INSERT INTO telegram_recipient_binding VALUES ('123456789','ssc_verified')",
+      );
+      expect(await visible()).toEqual([
+        "completed",
+        "confirming",
+        "old-completed-new-pending",
+        "pending",
+      ]);
+      await client.unsafe("UPDATE telegram_recipient_binding SET chat_id='999999999'");
+      expect(await visible()).toEqual([]);
+    });
+  });
+
+  it("does not let a pinned handle override a source assigned to another registered email", async () => {
+    await rolledBack(async () => {
+      await client.unsafe(
+        "UPDATE ssc_responsibility SET email='regular@example.com',telegram='@ssc_verified' WHERE id='ra'",
+      );
+      await client.unsafe(
+        "INSERT INTO ssc_telegram_identity VALUES ('ssc','123456789','ssc_verified')",
+      );
+      await client.unsafe(
+        "INSERT INTO telegram_recipient_binding VALUES ('123456789','ssc_verified')",
+      );
+      expect(await visible()).toEqual([]);
+    });
   });
 
   it("does not let recruiting-all or AI approval bypass the SSC gate", async () => {
@@ -121,7 +166,9 @@ describe.skipIf(!process.env.DATABASE_URL)("SSC current Offer and source access"
 
   it("keeps the strict SSC gate when switching between SSC roles without matching assignments", async () => {
     await rolledBack(async () => {
-      await client.unsafe("INSERT INTO organization_role VALUES ('a','ssc-02',true)");
+      await client.unsafe(
+        "INSERT INTO organization_role (organization_id, role, is_ssc) VALUES ('a','ssc-02',true)",
+      );
       await client.unsafe(
         "UPDATE member SET role='ssc-02' WHERE organization_id='a' AND user_id='ssc'",
       );
@@ -184,7 +231,9 @@ describe.skipIf(!process.env.DATABASE_URL)("SSC current Offer and source access"
 
   it("fails closed when multiple accounts share the normalized SSC email", async () => {
     await rolledBack(async () => {
-      await client.unsafe("INSERT INTO \"user\" VALUES ('collision','ssc@example.com',false)");
+      await client.unsafe(
+        "INSERT INTO \"user\" (id, email, banned) VALUES ('collision','ssc@example.com',false)",
+      );
       expect(await visible()).toEqual([]);
     });
   });

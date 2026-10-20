@@ -1,7 +1,9 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterAll } from "vitest";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { platformRouter } from "@arc/ai-recruitment-copilot-backend/server/routes/platform/route";
 import { mailIngestRouter } from "../route";
+import type * as MfaService from "@arc/ai-recruitment-copilot-backend/server/routes/security/mfa/service";
+import type * as ResumeParseQueue from "@arc/resume-parse-queue/resume-parse";
 
 const mocks = vi.hoisted(() => ({
   MailIngestValidationError: class MailIngestValidationError extends Error {
@@ -16,9 +18,18 @@ const mocks = vi.hoisted(() => ({
   isWorkspaceMember: vi.fn(),
   listAccountMailMessages: vi.fn(),
   mailIngestAccountExistsInOrg: vi.fn(),
+  requireRecentMfa: vi.fn(),
   updateWorkspaceMailIngestAccount: vi.fn(),
   validateMailIngestAccountLogin: vi.fn(),
 }));
+
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/security/mfa/service",
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof MfaService>()),
+    requireRecentMfa: mocks.requireRecentMfa,
+  }),
+);
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/mail-ingest/dao", () => ({
   createMailIngestAccount: mocks.createMailIngestAccount,
@@ -56,9 +67,9 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () 
   requirePermission: () => (_c: unknown, next: () => Promise<void>) => next(),
 }));
 
-vi.mock("@arc/resume-parse-queue/resume-parse", () => ({
-  RESUME_PARSE_JOB_LIST_STATES: ["all", "waiting", "active", "completed", "failed"],
-  RESUME_PARSE_QUEUE_NAME: "resume-parse",
+vi.mock("@arc/resume-parse-queue/resume-parse", async (importOriginal) => ({
+  ...(await importOriginal<typeof ResumeParseQueue>()),
+  enqueueResumeParseJobs: vi.fn(),
   getResumeParseQueueOverview: vi.fn(),
   listResumeParseQueueJobs: vi.fn(),
 }));
@@ -94,13 +105,22 @@ const platformApp = factory
   .createApp()
   .use(async (c, next) => {
     c.set("user", { id: "superadmin_1", role: "admin" } as never);
+    c.set("session", { id: "superadmin_session" } as never);
     await next();
   })
   .route("/platform", platformRouter);
 
+const platformWriteHeaders = {
+  "content-type": "application/json",
+  origin: "https://arc.example.invalid",
+};
+afterAll(() => vi.unstubAllEnvs());
+
 describe("mailIngestRouter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("BETTER_AUTH_URL", "https://arc.example.invalid");
+    mocks.requireRecentMfa.mockResolvedValue(new Date(Date.now() + 900_000).toISOString());
     mocks.getMailIngestAccountLoginConfig.mockResolvedValue({
       imapHost: "imap.example.com",
       imapPort: 993,
@@ -162,7 +182,7 @@ describe("mailIngestRouter", () => {
         ...makePayload(),
         organizationId: "org_1",
       }),
-      headers: { "content-type": "application/json" },
+      headers: platformWriteHeaders,
       method: "POST",
     });
 
@@ -178,7 +198,7 @@ describe("mailIngestRouter", () => {
         organizationId: "org_1",
         username: "changed@example.com",
       }),
-      headers: { "content-type": "application/json" },
+      headers: platformWriteHeaders,
       method: "PATCH",
     });
 

@@ -158,7 +158,7 @@ describe("dark theme palette", () => {
   });
 
   it("derives touch and selection feedback from the active theme", () => {
-    const globalStyles = readFileSync(GLOBAL_STYLES_PATH, "utf-8");
+    const globalStyles = readFileSync(GLOBAL_STYLES_PATH, "utf-8").replaceAll("\r\n", "\n");
 
     expect(globalStyles).toContain(
       ".dark body {\n    -webkit-tap-highlight-color: color-mix(in oklab, var(--primary) 14%, transparent)",

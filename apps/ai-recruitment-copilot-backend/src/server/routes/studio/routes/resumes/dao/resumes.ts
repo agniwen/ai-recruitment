@@ -1,4 +1,5 @@
 import { buildResumeAtomicSearch } from "./atomic-search";
+import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
 import {
   and,
@@ -632,7 +633,7 @@ function serializeStageProgressTimestamp(value: Date | string | null): string | 
   if (value instanceof Date) {
     return value.toISOString();
   }
-  const date = new Date(value);
+  const date = parseDatabaseTimestamp(value);
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }
 

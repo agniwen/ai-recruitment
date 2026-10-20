@@ -12,6 +12,8 @@ import {
 } from "@arc/db-schema/schema";
 import { normalizeTelegramUsername } from "./utils/identity";
 import { pinSscTelegramIdentity } from "./ssc-telegram-binding";
+import { provisionSscTelegramFollower } from "./ssc-telegram-provisioning";
+import { verifiedSscTelegramGrant } from "@arc/ai-recruitment-copilot-backend/server/access/ssc-telegram-grant";
 
 interface RecipientFilter {
   chatId?: string;
@@ -42,6 +44,31 @@ async function loadSscRecipients(filter: RecipientFilter) {
           ),
       )
     : undefined;
+  const followers = await db
+    .selectDistinct({
+      chatId: telegramRecipientBinding.chatId,
+      username: telegramRecipientBinding.username,
+    })
+    .from(sscResponsibility)
+    .innerJoin(
+      telegramRecipientBinding,
+      sql`lower(btrim(trim(leading '@' from btrim(${sscResponsibility.telegram})))) = ${telegramRecipientBinding.username}`,
+    )
+    .where(
+      and(
+        filter.organizationId
+          ? eq(sscResponsibility.organizationId, filter.organizationId)
+          : undefined,
+        filter.chatId ? eq(telegramRecipientBinding.chatId, filter.chatId) : undefined,
+        filter.usernames ? inArray(telegramRecipientBinding.username, filter.usernames) : undefined,
+        candidateSource,
+      ),
+    );
+  for (const follower of followers) {
+    if (follower.username) {
+      await provisionSscTelegramFollower({ chatId: follower.chatId, username: follower.username });
+    }
+  }
   const rows = await db
     .select({
       banned: user.banned,
@@ -67,7 +94,13 @@ async function loadSscRecipients(filter: RecipientFilter) {
       user,
       and(
         eq(user.id, member.userId),
-        sql`lower(btrim(${user.email})) = lower(btrim(${sscResponsibility.email}))`,
+        or(
+          and(
+            sql`btrim(${sscResponsibility.email}) <> ''`,
+            sql`lower(btrim(${user.email})) = lower(btrim(${sscResponsibility.email}))`,
+          ),
+          verifiedSscTelegramGrant(sscResponsibility.telegram, user.id),
+        ),
       ),
     )
     .innerJoin(

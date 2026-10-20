@@ -1,4 +1,4 @@
-import { and, eq, exists, gt, inArray, ne, notExists, notInArray, sql } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, ne, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -12,6 +12,7 @@ import {
   studioOfferDraft,
   user,
 } from "@arc/db-schema/schema";
+import { verifiedSscTelegramGrant } from "./ssc-telegram-grant";
 
 export interface SscAccessActor {
   organizationId: string;
@@ -50,8 +51,24 @@ export function buildSscCandidateVisibilityCondition(actor: SscAccessActor) {
           and(
             eq(responsibility.organizationId, sscMember.organizationId),
             eq(responsibility.workspaceRole, sscMember.role),
-            sql`btrim(${responsibility.email}) <> ''`,
-            sql`lower(btrim(${responsibility.email})) = lower(btrim(${sscUser.email}))`,
+            or(
+              and(
+                sql`btrim(${responsibility.email}) <> ''`,
+                sql`lower(btrim(${responsibility.email})) = lower(btrim(${sscUser.email}))`,
+                notExists(
+                  db
+                    .select({ value: sql`1` })
+                    .from(otherUser)
+                    .where(
+                      and(
+                        ne(otherUser.id, sscUser.id),
+                        sql`lower(btrim(${otherUser.email})) = lower(btrim(${sscUser.email}))`,
+                      ),
+                    ),
+                ),
+              ),
+              verifiedSscTelegramGrant(responsibility.telegram, sscUser.id),
+            ),
           ),
         )
         .innerJoin(
@@ -74,17 +91,6 @@ export function buildSscCandidateVisibilityCondition(actor: SscAccessActor) {
             eq(sscMember.organizationId, actor.organizationId),
             eq(sscMember.userId, actor.userId),
             eq(sscUser.banned, false),
-            notExists(
-              db
-                .select({ value: sql`1` })
-                .from(otherUser)
-                .where(
-                  and(
-                    ne(otherUser.id, sscUser.id),
-                    sql`lower(btrim(${otherUser.email})) = lower(btrim(${sscUser.email}))`,
-                  ),
-                ),
-            ),
           ),
         ),
     ),
@@ -196,8 +202,13 @@ export async function resolveSscAccessActor(
       .where(
         and(
           eq(sscResponsibility.organizationId, input.organizationId),
-          sql`btrim(${sscResponsibility.email}) <> ''`,
-          sql`lower(btrim(${sscResponsibility.email})) = lower(btrim(${profile.email}))`,
+          or(
+            and(
+              sql`btrim(${sscResponsibility.email}) <> ''`,
+              sql`lower(btrim(${sscResponsibility.email})) = lower(btrim(${profile.email}))`,
+            ),
+            verifiedSscTelegramGrant(sscResponsibility.telegram, input.userId),
+          ),
         ),
       )
       .limit(1);

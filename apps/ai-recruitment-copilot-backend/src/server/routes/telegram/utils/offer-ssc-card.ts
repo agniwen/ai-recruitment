@@ -64,7 +64,11 @@ export function buildTelegramOfferCard(
   });
 }
 
-export function buildTelegramOfferCompletionCard(context: TelegramOfferCardContext, token: string) {
+export function buildTelegramOfferCompletionCard(
+  context: TelegramOfferCardContext,
+  token: string,
+  options: { screenshotReceived?: boolean } = {},
+) {
   return Card({
     children: [
       Fields([
@@ -77,16 +81,21 @@ export function buildTelegramOfferCompletionCard(context: TelegramOfferCardConte
         }),
         Field({
           label: "审批截图（选填）",
-          value:
-            "可点击上传截图并回复指定提示消息发送一张 JPEG、PNG 或 WebP 图片（最多 10 MB），也可直接完成确认。发送截图不会自动完成确认。本次操作 30 分钟内有效。",
+          value: options.screenshotReceived
+            ? "审批截图已收到，确认完成后将保存到本次 Offer。请确认内部审批已完成，再点击下方“确认完成”。"
+            : "可点击上传截图发送一张 JPEG、PNG 或 WebP 图片（最多 10 MB），也可直接完成确认。上传后会显示新的确认卡片。本次操作 30 分钟内有效。",
         }),
       ]),
       Actions([Button({ id: "osf", label: "确认完成", value: token })]),
       Actions([
-        Button({ id: "osu", label: "上传截图（选填）", value: token }),
+        Button({
+          id: "osu",
+          label: options.screenshotReceived ? "重新上传截图" : "上传截图（选填）",
+          value: token,
+        }),
         Button({ id: "osx", label: "取消", value: token }),
       ]),
     ],
-    title: "确认完成 SSC 审核",
+    title: options.screenshotReceived ? "审批截图已收到，请确认完成" : "确认完成 SSC 审核",
   });
 }

@@ -1024,7 +1024,7 @@ describe("deleteOwnPoolItem", () => {
     expect(poolRows).toHaveLength(0);
   });
 
-  it("rejects deleting another user's items", async () => {
+  it("rejects a regular member deleting another user's items", async () => {
     const otherPublicId = await createResumePoolItem(
       basePoolInput({ createdBy: USER_B, organizationId: ORG_A, scope: "public" }),
     );
@@ -1032,19 +1032,51 @@ describe("deleteOwnPoolItem", () => {
       basePoolInput({ createdBy: USER_B, organizationId: ORG_A }),
     );
 
+    await db
+      .update(member)
+      .set({ role: "member" })
+      .where(and(eq(member.organizationId, ORG_A), eq(member.userId, USER_A)));
+    try {
+      for (const poolItemId of [otherPublicId, otherPrivateId]) {
+        await expect(
+          deleteOwnPoolItem({ organizationId: ORG_A, poolItemId, userId: USER_A }),
+        ).rejects.toThrow("简历不存在或无权删除");
+      }
+      const rows = await db
+        .select({ id: resumePoolItem.id })
+        .from(resumePoolItem)
+        .where(inArray(resumePoolItem.id, [otherPublicId, otherPrivateId]));
+      expect(rows).toHaveLength(2);
+    } finally {
+      await db
+        .update(member)
+        .set({ role: "owner" })
+        .where(and(eq(member.organizationId, ORG_A), eq(member.userId, USER_A)));
+    }
+  });
+
+  it.each(["private", "public"] as const)(
+    "allows a workspace administrator to delete another user's %s item",
+    async (scope) => {
+      const poolItemId = await createResumePoolItem(basePoolInput({ createdBy: USER_B, scope }));
+
+      await deleteOwnPoolItem({ organizationId: ORG_A, poolItemId, userId: USER_A });
+
+      const rows = await db.select().from(resumePoolItem).where(eq(resumePoolItem.id, poolItemId));
+      expect(rows).toHaveLength(0);
+    },
+  );
+
+  it("does not let a workspace administrator delete another organization's item", async () => {
+    const poolItemId = await createResumePoolItem(
+      basePoolInput({ createdBy: USER_B, organizationId: ORG_B, scope: "public" }),
+    );
+
     await expect(
-      deleteOwnPoolItem({
-        organizationId: ORG_A,
-        poolItemId: otherPublicId,
-        userId: USER_A,
-      }),
+      deleteOwnPoolItem({ organizationId: ORG_A, poolItemId, userId: USER_A }),
     ).rejects.toThrow("简历不存在或无权删除");
-    await expect(
-      deleteOwnPoolItem({
-        organizationId: ORG_A,
-        poolItemId: otherPrivateId,
-        userId: USER_A,
-      }),
-    ).rejects.toThrow("简历不存在或无权删除");
+
+    const rows = await db.select().from(resumePoolItem).where(eq(resumePoolItem.id, poolItemId));
+    expect(rows).toHaveLength(1);
   });
 });

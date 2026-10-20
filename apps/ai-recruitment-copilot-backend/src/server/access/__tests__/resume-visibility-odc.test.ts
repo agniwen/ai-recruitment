@@ -16,13 +16,13 @@ describe.skipIf(!process.env.DATABASE_URL)("ODC approval recipient visibility", 
     await client.unsafe(`
       CREATE TEMP TABLE "user" (id text PRIMARY KEY);
       INSERT INTO "user" VALUES ('a'), ('b'), ('c'), ('r');
-      CREATE TEMP TABLE member (id text, organization_id text, user_id text, role text);
+      CREATE TEMP TABLE member (id text, organization_id text, user_id text, role text, odc_scope_mode text NOT NULL DEFAULT 'selected');
       CREATE TEMP TABLE organization_role (organization_id text, role text, is_odc boolean);
       CREATE TEMP TABLE resume_source_odc_member (organization_id text, member_id text, resume_source_id text, job_series text, service_unit text);
       CREATE TEMP TABLE job_description (id text, organization_id text, resume_source_id text, job_series text, service_unit text);
       CREATE TEMP TABLE studio_interview (id text PRIMARY KEY, organization_id text, job_description_id text, created_by text, pipeline_stage text, ai_review_approval_status text, ai_review_assigned_odc_user_id text REFERENCES "user"(id) ON DELETE SET NULL);
       INSERT INTO organization_role VALUES ('org', 'odc', true), ('org', 'recruiter', false);
-      INSERT INTO member VALUES ('a', 'org', 'a', 'odc'), ('b', 'org', 'b', 'odc'), ('c', 'org', 'c', 'odc'), ('r', 'org', 'r', 'recruiter');
+      INSERT INTO member (id, organization_id, user_id, role) VALUES ('a', 'org', 'a', 'odc'), ('b', 'org', 'b', 'odc'), ('c', 'org', 'c', 'odc'), ('r', 'org', 'r', 'recruiter');
       INSERT INTO resume_source_odc_member VALUES ('org', 'a', 'source', NULL, NULL), ('org', 'b', 'source', NULL, NULL), ('org', 'c', 'source', NULL, NULL);
       INSERT INTO job_description VALUES ('jd', 'org', 'source', NULL, NULL), ('outside-jd', 'org', 'other-source', NULL, NULL);
       INSERT INTO studio_interview VALUES
@@ -84,19 +84,19 @@ describe.skipIf(!process.env.DATABASE_URL)("ODC approval recipient visibility", 
   }
 
   it("allows the designated ODC through the shared source, including subsequent stages", async () => {
-    expect(await visible("a")).toEqual(["assigned-a", "assigned-many", "later-stage", "pending"]);
+    expect(await visible("a")).toEqual(["assigned-a", "assigned-many", "later-stage"]);
   });
   it("denies another ODC on the same source even if they created the record or share the recruiting group", async () => {
-    expect(await visible("b")).toEqual(["assigned-many", "pending"]);
+    expect(await visible("b")).toEqual(["assigned-many"]);
   });
   it("does not let inherited unrestricted recruiting access bypass assignment", async () => {
-    expect(await visible("b", true)).toEqual(["assigned-many", "outside-review", "pending"]);
+    expect(await visible("b", true)).toEqual(["assigned-many"]);
   });
   it("allows cross-source review for approvers but never a cross-source offer or assignment", async () => {
     expect(await visible("b", false, true)).toEqual(["assigned-many", "outside-review", "pending"]);
   });
   it("does not grant unselected ODCs access to a multi-assigned candidate", async () => {
-    expect(await visible("c")).toEqual(["pending"]);
+    expect(await visible("c")).toEqual([]);
   });
   it("reads historical assignments directly from the retained legacy column", async () => {
     const rows = await client.unsafe(
@@ -117,6 +117,14 @@ describe.skipIf(!process.env.DATABASE_URL)("ODC approval recipient visibility", 
       await client.unsafe("ROLLBACK");
     }
   }
+
+  it("keeps approval and recipient restrictions when the ODC can access all sources", async () => {
+    await withRollback(async () => {
+      await client.unsafe("UPDATE member SET odc_scope_mode = 'all' WHERE user_id = 'b'");
+
+      expect(await visible("b", true)).toEqual(["assigned-many", "outside-assigned"]);
+    });
+  });
 
   it("recognizes approvals written by the old version after migration", async () => {
     await withRollback(async () => {

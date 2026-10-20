@@ -7,10 +7,12 @@ import {
   OfferDraftError,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
+import { getTelegramBot } from "./bot";
 import { buildTelegramOfferCompletionCard } from "./offer-ssc-card";
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { updateTelegramOfferMessages } from "./offer-ssc-message";
 import { downloadTelegramOfferScreenshot } from "./offer-ssc-screenshot";
+import { postTelegramOfferScreenshotPrompt } from "./offer-ssc-upload-prompt";
 import {
   MAX_TELEGRAM_SCREENSHOT_BYTES,
   TELEGRAM_COMPLETION_TTL_MS,
@@ -165,14 +167,28 @@ export async function handleTelegramOfferCompletionAction(
     throw error;
   }
   if (event.actionId === "osu") {
-    const prompt = await thread.post(
-      `请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，发送后仍需点击原确认卡片的“确认完成”。`,
+    const selectionId = randomUUID();
+    await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
+      const selected = pendingFor(pending, token, identity);
+      for (const current of Object.values(pending)) {
+        if (current.chatId === identity.chatId) {
+          Reflect.deleteProperty(current, "uploadPromptMessageId");
+          Reflect.deleteProperty(current, "uploadSelectionId");
+        }
+      }
+      selected.uploadSelectionId = selectionId;
+    });
+    const promptId = await postTelegramOfferScreenshotPrompt(
+      thread,
+      `请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，上传后会自动发送新的确认卡片，请点击其中的“确认完成”。`,
     );
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
-      pendingFor(pending, token, identity).uploadPromptMessageId = sentMessageId(
-        prompt.id,
-        identity.chatId,
-      );
+      if (pending[token]?.uploadSelectionId !== selectionId) {
+        return;
+      }
+      const selected = pendingFor(pending, token, identity);
+      selected.uploadPromptMessageId = sentMessageId(promptId, identity.chatId);
+      Reflect.deleteProperty(selected, "uploadSelectionId");
     });
     return;
   }
@@ -266,8 +282,11 @@ function imageReference(
 function screenshotReply(raw: z.infer<typeof privateImageMessage>, message: Message) {
   const chatId = String(raw.chat.id);
   const replyId = raw.reply_to_message?.message_id;
-  if (!replyId || message.replyTo?.id !== `${chatId}:${replyId}`) {
-    throw unavailable();
+  if (
+    (replyId && message.replyTo?.id !== `${chatId}:${replyId}`) ||
+    (!replyId && message.replyTo)
+  ) {
+    throw new OfferDraftError("请回复机器人最新的截图提示消息，再发送审批截图。", 400);
   }
   const screenshot = imageReference(raw);
   if (!screenshot) {
@@ -282,18 +301,19 @@ function screenshotReply(raw: z.infer<typeof privateImageMessage>, message: Mess
 async function bindScreenshotReply(
   thread: CompletionThread,
   chatId: string,
-  replyId: number,
+  replyId: number | undefined,
   screenshot: TelegramScreenshotReference,
 ) {
   return await withTelegramOfferCompletionState(thread, chatId, (pending) => {
     const matched = Object.entries(pending).filter(
       ([, current]) =>
         current.chatId === chatId &&
-        current.uploadPromptMessageId === replyId &&
+        current.uploadPromptMessageId !== undefined &&
+        (replyId === undefined || current.uploadPromptMessageId === replyId) &&
         current.status === "pending",
     );
     if (matched.length !== 1) {
-      throw unavailable();
+      throw new OfferDraftError("请先点击目标 Offer 的“上传截图”，再发送审批截图。", 400);
     }
     const [[token, current]] = matched;
     current.screenshot = screenshot;
@@ -322,6 +342,95 @@ async function reportScreenshotError(
   await thread.post(
     error instanceof OfferDraftError ? error.message : "暂时无法处理审批截图，请稍后重试。",
   );
+}
+
+async function postScreenshotConfirmation(
+  thread: CompletionThread,
+  context: Awaited<ReturnType<typeof authorizedContext>>,
+  token: string,
+  record: TelegramOfferCompletionPending,
+) {
+  let prompt: Awaited<ReturnType<CompletionThread["post"]>>;
+  try {
+    prompt = await thread.post(
+      buildTelegramOfferCompletionCard(context, token, { screenshotReceived: true }),
+    );
+  } catch {
+    await thread
+      .post("审批截图已收到，新的确认按钮暂时发送失败，请点击原确认卡片的“确认完成”。")
+      .catch(() =>
+        console.warn(
+          "[telegram-offer-ssc] Screenshot received but confirmation card delivery failed",
+        ),
+      );
+    return;
+  }
+  let registered = false;
+  try {
+    registered = await withTelegramOfferCompletionState(thread, record.chatId, (pending) => {
+      const current = pending[token];
+      if (
+        current?.status !== "pending" ||
+        current.screenshot?.fileId !== record.screenshot?.fileId ||
+        current.promptMessageId !== record.promptMessageId
+      ) {
+        return false;
+      }
+      current.promptMessageId = sentMessageId(prompt.id, record.chatId);
+      return true;
+    });
+  } catch {
+    // The state write may have committed before its acknowledgement failed.
+    // Restore only this card's pointer without undoing a newer upload or final approval.
+    const promptMayBeActive = await withTelegramOfferCompletionState(
+      thread,
+      record.chatId,
+      (pending) => {
+        const current = pending[token];
+        if (
+          current?.status === "pending" &&
+          current.screenshot?.fileId === record.screenshot?.fileId &&
+          current.promptMessageId === sentMessageId(prompt.id, record.chatId)
+        ) {
+          current.promptMessageId = record.promptMessageId;
+        }
+        return current?.promptMessageId === sentMessageId(prompt.id, record.chatId);
+      },
+    ).catch(() => {
+      console.warn("[telegram-offer-ssc] Could not restore the previous confirmation card");
+      return true;
+    });
+    if (promptMayBeActive) {
+      return;
+    }
+    await thread
+      .post(
+        "审批截图已收到，确认卡片暂时更新失败，请从原确认卡片继续；如仍不可用，请从 Offer 重新打开。",
+      )
+      .catch(() =>
+        console.warn("[telegram-offer-ssc] Could not deliver confirmation recovery guidance"),
+      );
+  }
+  if (!registered) {
+    await prompt
+      .edit("本次截图确认提示已失效，请查看原 Offer 卡片的最新状态。")
+      .catch(() =>
+        console.warn(
+          "[telegram-offer-ssc] Could not clear an inactive screenshot confirmation card",
+        ),
+      );
+    return;
+  }
+  await getTelegramBot()
+    .getAdapter("telegram")
+    .editMessage(
+      thread.id,
+      `${record.chatId}:${record.promptMessageId}`,
+      "审批截图已收到，请使用下方最新确认卡片的“确认完成”按钮。",
+    )
+    .catch(() =>
+      console.warn("[telegram-offer-ssc] Could not clear the previous confirmation card"),
+    );
 }
 
 export async function handleTelegramOfferScreenshot(
@@ -355,7 +464,7 @@ export async function handleTelegramOfferScreenshot(
     if (!actorUserId || actorUserId !== record.actorUserId) {
       throw new OfferDraftError("请先绑定本人 TG 账号后重试。", 403);
     }
-    await authorizedContext(record);
+    const context = await authorizedContext(record);
     const awaitingConfirmation = await withTelegramOfferCompletionState(
       thread,
       chatId,
@@ -366,9 +475,7 @@ export async function handleTelegramOfferScreenshot(
     if (!awaitingConfirmation) {
       return true;
     }
-    await thread.post(
-      "已选择审批截图，确认时将保存到对应 Offer。请点击原确认卡片的“确认完成”；发送截图不会自动完成确认。",
-    );
+    await postScreenshotConfirmation(thread, context, token, record);
   } catch (error) {
     await reportScreenshotError(thread, chatId, selectedToken, error);
   }
