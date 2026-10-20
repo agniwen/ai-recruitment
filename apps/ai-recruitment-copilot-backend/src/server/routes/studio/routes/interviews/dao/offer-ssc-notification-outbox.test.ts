@@ -66,6 +66,7 @@ async function jobs(input: OfferSscNotificationInput) {
   return await db.execute(sql`
     SELECT id, status, attempts, lease_token AS "leaseToken",
       recipient_user_ids AS "recipientUserIds", sent_user_ids AS "sentUserIds",
+      last_error AS "lastError", completed_at AS "completedAt",
       available_at > CURRENT_TIMESTAMP AS "scheduledForLater"
     FROM studio_offer_ssc_notification_outbox
     WHERE draft_id = ${input.draftId}
@@ -100,6 +101,184 @@ afterEach(async () => {
 describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
   "Offer SSC notification transactional outbox",
   () => {
+    it("waits for SSC permissions and a verified TG binding instead of completing an empty delivery", async () => {
+      const input = await fixture();
+      await enqueue(input);
+      mocks.targets.mockResolvedValue([]);
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(await jobs(input)).toMatchObject([
+        {
+          attempts: 0,
+          completedAt: null,
+          lastError: "ssc_recipient_unavailable",
+          recipientUserIds: null,
+          scheduledForLater: true,
+          sentUserIds: [],
+          status: "pending",
+        },
+      ]);
+      expect(mocks.post).not.toHaveBeenCalled();
+      mocks.targets.mockResolvedValue([TARGET_A]);
+      await makeDue(input);
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(await jobs(input)).toMatchObject([
+        { attempts: 1, sentUserIds: ["ssc-a"], status: "completed" },
+      ]);
+      expect(mocks.post.mock.calls).toEqual([["111", "SSC notification A"]]);
+    });
+
+    it.each([TARGET_A, TARGET_B])(
+      "waits when the initial SSC loses eligibility before transport and resolves the current assignee: $userId",
+      async (target) => {
+        const input = await fixture();
+        await enqueue(input);
+        mocks.targets.mockResolvedValueOnce([TARGET_A]).mockResolvedValue([]);
+        expect(await dispatchOfferSscNotifications()).toBe(1);
+        expect(mocks.post).not.toHaveBeenCalled();
+        expect(await jobs(input)).toMatchObject([
+          {
+            attempts: 0,
+            completedAt: null,
+            lastError: "ssc_recipient_unavailable",
+            recipientUserIds: null,
+            sentUserIds: [],
+            status: "pending",
+          },
+        ]);
+        mocks.targets.mockResolvedValue([target]);
+        await makeDue(input);
+        expect(await dispatchOfferSscNotifications()).toBe(1);
+        expect(mocks.post.mock.calls).toEqual([[target.chatId, target.message]]);
+        expect(await jobs(input)).toMatchObject([
+          { sentUserIds: [target.userId], status: "completed" },
+        ]);
+      },
+    );
+
+    it("does not exhaust delivery attempts while waiting for an eligible SSC", async () => {
+      const input = await fixture();
+      await enqueue(input);
+      mocks.targets.mockResolvedValue([]);
+      for (let attempt = 0; attempt < 7; attempt += 1) {
+        await makeDue(input);
+        expect(await dispatchOfferSscNotifications()).toBe(1);
+      }
+      expect(await jobs(input)).toMatchObject([{ attempts: 0, status: "pending" }]);
+      expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("recovers a current Offer that older code completed without any recipients", async () => {
+      const input = await fixture();
+      await enqueue(input);
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({
+          attempts: 1,
+          completedAt: new Date(),
+          recipientUserIds: [],
+          status: "completed",
+        })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, input.draftId));
+      mocks.targets.mockResolvedValue([TARGET_A]);
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(mocks.post.mock.calls).toEqual([["111", "SSC notification A"]]);
+      expect(await jobs(input)).toMatchObject([{ sentUserIds: ["ssc-a"], status: "completed" }]);
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+    });
+
+    it.each(["superseded", "deleted", "declined", "expired"] as const)(
+      "does not keep retrying an empty notification for a %s Offer",
+      async (status) => {
+        const input = await fixture();
+        await enqueue(input);
+        await db
+          .update(studioOfferDraft)
+          .set({ status })
+          .where(eq(studioOfferDraft.id, input.draftId));
+        mocks.targets.mockResolvedValue([]);
+        expect(await dispatchOfferSscNotifications()).toBe(1);
+        expect(await jobs(input)).toMatchObject([{ status: "completed" }]);
+        expect(await dispatchOfferSscNotifications()).toBe(0);
+        expect(mocks.post).not.toHaveBeenCalled();
+      },
+    );
+
+    it("does not revive an older empty notification when the newer Offer is a tombstone", async () => {
+      const input = await fixture();
+      await enqueue(input);
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({ recipientUserIds: [], status: "completed" })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, input.draftId));
+      await db.insert(studioOfferDraft).values({
+        baseSalary: 100,
+        id: randomUUID(),
+        interviewRecordId: input.interviewRecordId,
+        organizationId: input.organizationId,
+        position: "Deleted newer version",
+        sscConfirmationStatus: "pending",
+        status: "deleted",
+        version: 2,
+      });
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+      expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("does not resend an already delivered notification during legacy empty-recipient recovery", async () => {
+      const input = await fixture();
+      await enqueue(input);
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({ recipientUserIds: ["ssc-a"], sentUserIds: ["ssc-a"], status: "completed" })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, input.draftId));
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+      expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it("does not recover historical empty notifications during recipient-scoped local testing", async () => {
+      vi.stubEnv("OFFER_SSC_NOTIFICATION_TEST_CHAT_ID", "111");
+      const input = await fixture();
+      await enqueue(input);
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({ recipientUserIds: [], status: "completed" })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, input.draftId));
+      mocks.targets.mockResolvedValue([TARGET_A]);
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+      expect(mocks.post).not.toHaveBeenCalled();
+    });
+
+    it.each(["closed", "expired", "old-revision"])(
+      "finishes an empty notification for %s data without retaining a retry",
+      async (state) => {
+        const input = await fixture();
+        await enqueue(input);
+        if (state === "closed") {
+          await db
+            .update(studioInterview)
+            .set({ outcome: "withdrawn", pipelineStage: "closed" })
+            .where(eq(studioInterview.id, input.interviewRecordId));
+        }
+        if (state === "expired") {
+          await db
+            .update(studioOfferDraft)
+            .set({ expiresAt: new Date(Date.now() - 60_000) })
+            .where(eq(studioOfferDraft.id, input.draftId));
+        }
+        if (state === "old-revision") {
+          await db
+            .update(studioOfferDraft)
+            .set({ sscRevision: 2 })
+            .where(eq(studioOfferDraft.id, input.draftId));
+        }
+        mocks.targets.mockResolvedValue([]);
+        expect(await dispatchOfferSscNotifications()).toBe(1);
+        expect(await jobs(input)).toMatchObject([{ status: "completed" }]);
+        expect(await dispatchOfferSscNotifications()).toBe(0);
+        expect(mocks.post).not.toHaveBeenCalled();
+      },
+    );
+
     it("preserves microsecond timestamps when paging a backlog during local testing", async () => {
       vi.stubEnv("OFFER_SSC_NOTIFICATION_TEST_CHAT_ID", "111");
       const input = await fixture();
@@ -279,6 +458,36 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         { attempts: 2, sentUserIds: ["ssc-a", "ssc-b"], status: "completed" },
       ]);
       expect(await dispatchOfferSscNotifications()).toBe(0);
+    });
+
+    it("does not reset frozen recipients after an earlier transport failure when they lose eligibility", async () => {
+      const input = await fixture();
+      await enqueue(input);
+      mocks.targets.mockResolvedValue([TARGET_A]);
+      mocks.post.mockRejectedValueOnce(new Error("Telegram unavailable"));
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(await jobs(input)).toMatchObject([
+        {
+          lastError: "notification_delivery_failed",
+          recipientUserIds: [TARGET_A.userId],
+          sentUserIds: [],
+          status: "pending",
+        },
+      ]);
+      mocks.targets.mockResolvedValue([]);
+      await makeDue(input);
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(await jobs(input)).toMatchObject([
+        {
+          recipientUserIds: [TARGET_A.userId],
+          sentUserIds: [],
+          status: "completed",
+        },
+      ]);
+      mocks.targets.mockResolvedValue([TARGET_B]);
+      await makeDue(input);
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+      expect(mocks.post.mock.calls).toEqual([[TARGET_A.chatId, TARGET_A.message]]);
     });
 
     it("rechecks each frozen recipient before sending and uses their current binding", async () => {
