@@ -98,7 +98,7 @@ export function ScheduleRoundDialog({
 
   function handleScheduledAtChange(value: string) {
     setScheduledAt(value);
-    if (!validUntil) {
+    if (!validUntil || validUntil === addOneHourToDateTimeLocalInputValue(scheduledAt)) {
       setValidUntil(addOneHourToDateTimeLocalInputValue(value));
     }
   }

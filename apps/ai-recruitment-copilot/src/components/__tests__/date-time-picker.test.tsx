@@ -29,6 +29,7 @@ describe("date and time pickers", () => {
       root.unmount();
     });
     container.remove();
+    vi.useRealTimers();
   });
 
   it("renders a local date in Chinese without a native date input", () => {
@@ -122,9 +123,10 @@ describe("date and time pickers", () => {
     expect(onValueChange).toHaveBeenCalledWith(formatDatePickerValue(today));
   });
 
-  it("defaults newly selected dates to midnight and applies them after confirmation", async () => {
+  it("defaults an empty picker to the current China time and applies it after confirmation", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T07:23:45.000Z"));
     const onValueChange = vi.fn();
-    const today = new Date();
 
     act(() => {
       root.render(<DateTimePicker onValueChange={onValueChange} value="" />);
@@ -135,20 +137,74 @@ describe("date and time pickers", () => {
       await Promise.resolve();
     });
 
-    const todayButton = document.querySelector<HTMLButtonElement>(
-      `button[data-day="${today.toLocaleDateString()}"]`,
-    );
-    expect(todayButton).not.toBeNull();
-
-    act(() => {
-      todayButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    const timeControls = [...document.querySelectorAll<HTMLButtonElement>('[role="combobox"]')];
+    expect(
+      timeControls.map((control) =>
+        control.querySelector('[data-slot="select-value"]')?.textContent?.trim(),
+      ),
+    ).toEqual(["15", "23"]);
+    expect(timeControls.every((control) => !control.disabled)).toBe(true);
+    expect(container.querySelector("button")?.textContent).toContain("选择日期和时间");
     expect(onValueChange).not.toHaveBeenCalled();
 
     act(() => {
       getButton("确定")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(onValueChange).toHaveBeenCalledWith(`${formatDatePickerValue(today)}T00:00`);
+    expect(onValueChange).toHaveBeenCalledWith("2026-10-19T15:23");
+  });
+
+  it("leaves an empty field unchanged on cancel and uses fresh current time when reopened", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T07:23:00.000Z"));
+    const onValueChange = vi.fn();
+    act(() => root.render(<DateTimePicker onValueChange={onValueChange} value="" />));
+    await act(async () => {
+      container.querySelector("button")?.click();
+      await Promise.resolve();
+    });
+    act(() => getButton("取消")?.click());
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(container.querySelector("button")?.textContent).toContain("选择日期和时间");
+    vi.setSystemTime(new Date("2026-10-19T07:26:00.000Z"));
+    await act(async () => {
+      container.querySelector("button")?.click();
+      await Promise.resolve();
+    });
+    act(() => getButton("确定")?.click());
+    expect(onValueChange).toHaveBeenCalledWith("2026-10-19T15:26");
+  });
+
+  it("selects the latest current time with 此刻 while keeping changes cancellable", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T07:23:45.000Z"));
+    const onValueChange = vi.fn();
+    act(() =>
+      root.render(<DateTimePicker onValueChange={onValueChange} value="2026-07-24T09:05" />),
+    );
+    await act(async () => {
+      container.querySelector("button")?.click();
+      await Promise.resolve();
+    });
+    expect(document.querySelector('[data-slot="calendar"]')?.textContent).toContain("2026年7月");
+    vi.setSystemTime(new Date("2026-10-19T07:25:00.000Z"));
+    act(() => getButton("此刻")?.click());
+    expect(document.querySelector('[data-slot="calendar"]')?.textContent).toContain("2026年10月");
+    expect(onValueChange).not.toHaveBeenCalled();
+    act(() => getButton("确定")?.click());
+    expect(onValueChange).toHaveBeenCalledWith("2026-10-19T15:25");
+  });
+
+  it("preserves an existing time when reopened and confirmed", async () => {
+    const onValueChange = vi.fn();
+    act(() =>
+      root.render(<DateTimePicker onValueChange={onValueChange} value="2026-07-24T09:05" />),
+    );
+    await act(async () => {
+      container.querySelector("button")?.click();
+      await Promise.resolve();
+    });
+    act(() => getButton("确定")?.click());
+    expect(onValueChange).toHaveBeenCalledWith("2026-07-24T09:05");
   });
 
   it("discards date-time edits when cancelled", async () => {

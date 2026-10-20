@@ -8,6 +8,7 @@ import { HumanInterviewStagePanel } from "./human-interview-stage-panel";
 import { ScheduleRoundDialog } from "./human-interview-stage-dialogs";
 
 const mocks = vi.hoisted(() => ({
+  candidateLock: vi.fn(),
   check: vi.fn(),
   createMeeting: vi.fn(),
   createRound: vi.fn(),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/client/api", () => ({
   cancelHumanInterviewRound: vi.fn(),
+  checkHumanInterviewCandidateLock: mocks.candidateLock,
   checkHumanInterviewConflicts: mocks.check,
   completeHumanInterviewRound: vi.fn(),
   createHumanInterviewMeeting: mocks.createMeeting,
@@ -35,6 +37,9 @@ vi.mock("@/lib/client/api/endpoints/external-interviewers", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { error: mocks.error, success: mocks.success } }));
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
+vi.mock("./candidate-entry-credential-setting", () => ({
+  CandidateEntryCredentialSetting: () => null,
+}));
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "world" }));
 vi.mock("@/lib/client/api/query-keys", () => ({
   humanInterviewKeys: {
@@ -115,7 +120,7 @@ async function click(text: string) {
   });
   await flush();
 }
-async function renderDialog(interviewerIds = defaultInterviewerIds) {
+async function renderDialog(interviewerIds = defaultInterviewerIds, selectTime = true) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -142,10 +147,15 @@ async function renderDialog(interviewerIds = defaultInterviewerIds) {
     );
   });
   await flush();
-  await click("scheduled-at:");
+  if (selectTime) {
+    await click("scheduled-at:");
+  }
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-18T01:00:00.000Z"));
+  mocks.candidateLock.mockResolvedValue({ lock: null });
   mocks.externalDefaults.mockResolvedValue([]);
   mocks.externalCheck.mockResolvedValue([]);
   mocks.check.mockResolvedValue({ conflicts: [] });
@@ -174,6 +184,70 @@ afterEach(() => {
 });
 
 describe("human interview scheduling conflict confirmation", () => {
+  it("leaves times empty until the operator confirms a selection", async () => {
+    await renderDialog(defaultInterviewerIds, false);
+    expect(
+      [...document.querySelectorAll("button")].some(
+        (button) => button.textContent === "scheduled-at:",
+      ),
+    ).toBe(true);
+    expect(
+      [...document.querySelectorAll("button")].some(
+        (button) => button.textContent === "valid-until:",
+      ),
+    ).toBe(true);
+    await click("scheduled-at:");
+    expect(document.body.textContent).toContain("scheduled-at:2026-09-18T09:00");
+    expect(document.body.textContent).toContain("valid-until:2026-09-18T10:00");
+  });
+  async function renderScheduleEntry() {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const client = new QueryClient({
+      defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+    });
+    act(() =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <HumanInterviewStagePanel candidateId="candidate" candidateName="候选人" />
+        </QueryClientProvider>,
+      ),
+    );
+    await flush();
+    return client;
+  }
+
+  it("checks at the entry button and does not open or load the form for a locked candidate", async () => {
+    const message = "该候选人已被A用工单位约面，还需等待24小时";
+    mocks.candidateLock.mockResolvedValue({ lock: { message } });
+    const client = await renderScheduleEntry();
+    await click("安排真人复面");
+    expect(mocks.candidateLock).toHaveBeenCalledWith("world", "candidate");
+    expect(mocks.error).toHaveBeenCalledWith(message);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(mocks.externalDefaults).not.toHaveBeenCalled();
+    expect(mocks.createRound).not.toHaveBeenCalled();
+    client.clear();
+  });
+
+  it("opens the scheduling form when the candidate is available", async () => {
+    const client = await renderScheduleEntry();
+    await click("安排真人复面");
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(mocks.externalDefaults).toHaveBeenCalled();
+    client.clear();
+  });
+
+  it("keeps the form closed when the entry check fails", async () => {
+    mocks.candidateLock.mockRejectedValue(new Error("检查失败，请重试"));
+    const client = await renderScheduleEntry();
+    await click("安排真人复面");
+    expect(mocks.error).toHaveBeenCalledWith("检查失败，请重试");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    client.clear();
+  });
   it("separates the progress summary and available times into a responsive row", async () => {
     const container = document.createElement("div");
     document.body.append(container);
@@ -312,7 +386,7 @@ describe("human interview scheduling conflict confirmation", () => {
     await click("保存");
     await click("取消，修改时间");
     await click("scheduled-at:2026-09-18T09:00");
-    await click("valid-until:2026-09-18T10:00");
+    expect(document.body.textContent).toContain("valid-until:2026-09-20T10:00");
     await click("保存");
     expect(mocks.check).toHaveBeenCalledTimes(2);
     expect(mocks.check.mock.calls[1][1].scheduledAt).toBe("2026-09-20T01:00:00.000Z");

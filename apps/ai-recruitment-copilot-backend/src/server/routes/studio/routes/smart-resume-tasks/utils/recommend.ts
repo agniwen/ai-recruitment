@@ -191,7 +191,7 @@ export async function recommendSmartJobs(
   );
   const recommendations = ranked.results
     .filter((result) => result.relevance_score >= 0.15)
-    .slice(0, 5)
+    .slice(0, 3)
     .flatMap((rank) => {
       const entry = candidates[rank.index];
       if (!entry) {

@@ -14,6 +14,7 @@ import type { ResumeEvaluationStatus, ResumeLibraryDetail } from "@arc/shared/st
 import { cn } from "@arc/shared/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  checkHumanInterviewCandidateLock,
   fetchPublicInterviewRound,
   fetchPublicInterviewRoundFormSubmissions,
   fetchPublicInterviewRoundReport,
@@ -838,6 +839,20 @@ export function useStudioPersonDetailController({
         missingJobAction={missingJobAction}
         resumeEvaluationPassed={canProgressResumeRecordToInterview}
         onAdvance={async (target, approvalNote, notificationUserIds) => {
+          if (target === "human_interview") {
+            try {
+              const { lock } = await checkHumanInterviewCandidateLock(slug, record.id);
+              if (lock) {
+                toast.error(lock.message);
+                return;
+              }
+            } catch (error) {
+              toast.error(
+                error instanceof Error ? error.message : "检查候选人约面状态失败，请重试",
+              );
+              return;
+            }
+          }
           const error = await advancePipelineStage({
             approvalNote,
             notificationUserIds,

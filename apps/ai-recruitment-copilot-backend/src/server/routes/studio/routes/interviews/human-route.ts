@@ -30,6 +30,7 @@ import { notifyCandidateStageChange } from "@arc/ai-recruitment-copilot-backend/
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { humanInterviewFeedbackSchema } from "./utils/human-interview-readiness";
+import { humanInterviewLockRouter } from "./routes/human-interview-lock/route";
 
 // 候选人阶段流转输入。强制 outcome 与 pipelineStage 的不变量：
 //   pipelineStage='closed' ⇔ outcome ∈ {hired,rejected,withdrawn,archived}
@@ -54,6 +55,7 @@ const cancelHumanRoundSchema = z.object({
 
 export const studioInterviewHumanRouter = factory
   .createApp()
+  .route("/:id/human-interview-lock", humanInterviewLockRouter)
   .get("/:id/human-interview-rounds", requirePermission("humanInterview", "read"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {

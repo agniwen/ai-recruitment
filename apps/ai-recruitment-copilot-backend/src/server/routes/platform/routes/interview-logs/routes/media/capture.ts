@@ -14,6 +14,7 @@ import {
 import type { InterviewMediaEnvironment } from "@arc/db-schema/interview-media";
 import { interviewTraceSchema } from "@arc/shared/interview-telemetry";
 import { mediaStorageBackend, writeMedia } from "./storage";
+import { encryptMediaStorageKey } from "./encryption";
 
 export const MEDIA_RECORDER_IDENTITY = "arc_interview_media_recorder";
 export const MEDIA_NOTIFY_CHANNEL = "interview_media_changed";
@@ -211,6 +212,18 @@ export async function reserveMediaSample(input: {
     room.organizationId,
   );
   const backend = input.skipReason ? null : mediaStorageBackend();
+  const uploadKey = backend
+    ? `human-interview-samples/${randomUUID()}.${input.kind === "audio" ? "wav" : "jpg"}`
+    : null;
+  const storageKey =
+    backend && uploadKey
+      ? await encryptMediaStorageKey(uploadKey, {
+          id,
+          meetingId: room.meetingId,
+          organizationId: room.organizationId,
+          storageBackend: backend,
+        })
+      : null;
   const [row] = await db
     .insert(asset)
     .values({
@@ -228,22 +241,22 @@ export async function reserveMediaSample(input: {
       slot: input.slot,
       status: input.skipReason ? "skipped" : "pending",
       storageBackend: backend,
-      storageKey: backend
-        ? `human-interview-samples/${id}.${input.kind === "audio" ? "wav" : "jpg"}`
-        : null,
+      storageKey,
       trackSid: input.trackSid,
     })
     .onConflictDoNothing()
     .returning();
-  return row ?? null;
+  // Only this in-memory reservation carries the upload key. The worker does not
+  // need a private key, and an interrupted upload remains cleanable via the DB.
+  return row ? { ...row, uploadKey } : null;
 }
 
 export async function finishMediaSample(
-  row: typeof asset.$inferSelect,
+  row: typeof asset.$inferSelect & { uploadKey: string | null },
   owner: string,
   result: { bytes: Uint8Array; contentType: string; durationMs?: number },
 ) {
-  if (!row.storageKey || !row.storageBackend) {
+  if (!row.storageKey || !row.storageBackend || !row.uploadKey) {
     throw new Error("Media reservation has no storage");
   }
   if (result.bytes.length > 2_000_000) {
@@ -254,7 +267,7 @@ export async function finishMediaSample(
     throw new Error("Media lease lost");
   }
   // The key is already durable. An interrupted upload remains manually cleanable.
-  await writeMedia(row.storageBackend, row.storageKey, result.bytes, result.contentType);
+  await writeMedia(row.storageBackend, row.uploadKey, result.bytes, result.contentType);
   await db
     .update(asset)
     .set({

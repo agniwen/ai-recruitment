@@ -8,6 +8,7 @@ import {
 } from "@arc/db-schema/schema";
 import { readMedia, removeMedia } from "./storage";
 import { hideStoredIp } from "@arc/ai-recruitment-copilot-backend/lib/server/ip-encryption";
+import { decryptMediaStorageKey } from "./encryption";
 
 export async function listMediaArchives({ page, search }: { page: number; search?: string }) {
   const where = search
@@ -92,20 +93,40 @@ export async function loadMeetingMedia(
   };
 }
 export async function loadMediaContent(id: string, actorId: string) {
-  const [row] = await db
-    .select()
+  const [stored] = await db
+    .select({ organizationId: archive.organizationId, record: asset })
     .from(asset)
+    .innerJoin(
+      archive,
+      and(eq(archive.roomSid, asset.roomSid), eq(archive.meetingId, asset.meetingId)),
+    )
     .where(and(eq(asset.id, id), eq(asset.status, "ready")));
+  const row = stored?.record;
   if (!row?.storageKey || !row.storageBackend || !row.contentType) {
     return null;
   }
-  const bytes = await readMedia(row.storageBackend, row.storageKey);
+  const storageKey = await decryptMediaStorageKey(row.storageKey, {
+    id: row.id,
+    meetingId: row.meetingId,
+    organizationId: stored.organizationId,
+    storageBackend: row.storageBackend,
+  });
+  const bytes = await readMedia(row.storageBackend, storageKey);
   await db.insert(access).values({ action: "view", actorId, assetId: id, id: randomUUID() });
   return { bytes, contentType: row.contentType };
 }
 export function deleteMediaAsset(id: string, actorId: string) {
   return db.transaction(async (tx) => {
-    const [row] = await tx.select().from(asset).where(eq(asset.id, id)).for("update");
+    const [stored] = await tx
+      .select({ organizationId: archive.organizationId, record: asset })
+      .from(asset)
+      .innerJoin(
+        archive,
+        and(eq(archive.roomSid, asset.roomSid), eq(archive.meetingId, asset.meetingId)),
+      )
+      .where(eq(asset.id, id))
+      .for("update");
+    const row = stored?.record;
     if (!row) {
       return "missing" as const;
     }
@@ -117,7 +138,13 @@ export function deleteMediaAsset(id: string, actorId: string) {
     }
     // A failed object delete leaves the record retryable; never report cleanup before storage succeeds.
     if (row.storageKey && row.storageBackend) {
-      await removeMedia(row.storageBackend, row.storageKey);
+      const storageKey = await decryptMediaStorageKey(row.storageKey, {
+        id: row.id,
+        meetingId: row.meetingId,
+        organizationId: stored.organizationId,
+        storageBackend: row.storageBackend,
+      });
+      await removeMedia(row.storageBackend, storageKey);
     }
     await tx
       .update(asset)

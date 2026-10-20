@@ -7,7 +7,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -25,6 +25,7 @@ import {
   parseDateTimePickerValue,
 } from "@/lib/client/date-picker-value";
 import { cn } from "@arc/shared/utils";
+import { isoStringToDateTimeLocalInput } from "@/lib/client/datetime-local";
 
 const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
@@ -183,9 +184,13 @@ function getMinuteOptions(step: number, selectedMinute: string | undefined): str
   return minutes;
 }
 
+function currentDateTime() {
+  return parseDateTimePickerValue(isoStringToDateTimeLocalInput(new Date().toISOString()));
+}
+
 export function DateTimePicker({
   className,
-  defaultTime = "00:00",
+  defaultTime,
   disabled,
   minuteStep = 1,
   onValueChange,
@@ -196,6 +201,7 @@ export function DateTimePicker({
   const [open, setOpen] = React.useState(false);
   const selected = parseDateTimePickerValue(value);
   const [draft, setDraft] = React.useState<Date | undefined>(selected);
+  const [month, setMonth] = React.useState<Date | undefined>(selected);
   const hour = draft ? String(draft.getHours()).padStart(2, "0") : undefined;
   const minute = draft ? String(draft.getMinutes()).padStart(2, "0") : undefined;
   const minuteOptions = getMinuteOptions(minuteStep, minute);
@@ -205,7 +211,13 @@ export function DateTimePicker({
 
   function handleOpenChange(nextOpen: boolean) {
     if (nextOpen) {
-      setDraft(parseDateTimePickerValue(value));
+      const nextDraft = parseDateTimePickerValue(value) ?? currentDateTime();
+      if (!value && nextDraft && defaultTime) {
+        const [defaultHour = 0, defaultMinute = 0] = defaultTime.split(":").map(Number);
+        nextDraft.setHours(defaultHour, defaultMinute, 0, 0);
+      }
+      setDraft(nextDraft);
+      setMonth(nextDraft);
     }
     setOpen(nextOpen);
   }
@@ -216,7 +228,9 @@ export function DateTimePicker({
       return;
     }
 
-    const [defaultHour = 0, defaultMinute = 0] = defaultTime.split(":").map(Number);
+    const current = currentDateTime();
+    const [defaultHour = current?.getHours() ?? 0, defaultMinute = current?.getMinutes() ?? 0] =
+      defaultTime?.split(":").map(Number) ?? [];
     const nextValue = new Date(date);
     nextValue.setHours(
       draft?.getHours() ?? defaultHour,
@@ -253,54 +267,82 @@ export function DateTimePicker({
           />
         }
       />
-      <PopoverContent align="start" className="w-auto overflow-hidden bg-background p-0">
-        <Calendar autoFocus locale={zhCN} mode="single" onSelect={updateDate} selected={draft} />
-        <Separator />
-        <div className="flex items-end gap-2 p-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={hourId}>小时</Label>
-            <Select
-              disabled={!draft}
-              onValueChange={(nextHour) => updateTime(nextHour ?? "00", minute ?? "00")}
-              value={hour}
+      <PopoverContent
+        align="start"
+        className="w-auto max-w-[calc(100vw-2rem)] overflow-hidden bg-background p-0"
+      >
+        <div className="flex flex-col min-[520px]:flex-row">
+          <Calendar
+            autoFocus
+            className="shrink-0"
+            locale={zhCN}
+            mode="single"
+            month={month}
+            onMonthChange={setMonth}
+            onSelect={updateDate}
+            selected={draft}
+          />
+          <div className="flex flex-col gap-4 border-t p-3 min-[520px]:w-52 min-[520px]:shrink-0 min-[520px]:border-s min-[520px]:border-t-0">
+            <p className="text-sm font-medium">时间</p>
+            <FieldGroup className="w-auto flex-row items-end gap-2">
+              <Field className="w-20 shrink-0 gap-1.5">
+                <FieldLabel htmlFor={hourId}>小时</FieldLabel>
+                <Select
+                  disabled={!draft}
+                  onValueChange={(nextHour) => updateTime(nextHour ?? "00", minute ?? "00")}
+                  value={hour}
+                >
+                  <SelectTrigger aria-label="小时" className="w-full" id={hourId}>
+                    <SelectValue placeholder="时" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {HOURS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <span aria-hidden="true" className="pb-2 text-muted-foreground">
+                :
+              </span>
+              <Field className="w-20 shrink-0 gap-1.5">
+                <FieldLabel htmlFor={minuteId}>分钟</FieldLabel>
+                <Select
+                  disabled={!draft}
+                  onValueChange={(nextMinute) => updateTime(hour ?? "00", nextMinute ?? "00")}
+                  value={minute}
+                >
+                  <SelectTrigger aria-label="分钟" className="w-full" id={minuteId}>
+                    <SelectValue placeholder="分" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {minuteOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </FieldGroup>
+            <Button
+              onClick={() => {
+                const current = currentDateTime();
+                setDraft(current);
+                setMonth(current);
+              }}
+              size="sm"
+              type="button"
+              variant="outline"
             >
-              <SelectTrigger aria-label="小时" className="w-24" id={hourId}>
-                <SelectValue placeholder="时" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {HOURS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <span aria-hidden="true" className="pb-2 text-muted-foreground">
-            :
-          </span>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={minuteId}>分钟</Label>
-            <Select
-              disabled={!draft}
-              onValueChange={(nextMinute) => updateTime(hour ?? "00", nextMinute ?? "00")}
-              value={minute}
-            >
-              <SelectTrigger aria-label="分钟" className="w-24" id={minuteId}>
-                <SelectValue placeholder="分" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {minuteOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              此刻
+            </Button>
           </div>
         </div>
         <Separator />

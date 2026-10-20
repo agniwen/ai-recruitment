@@ -29,6 +29,7 @@ export * from "./endpoints/chat";
 export * from "./endpoints/public-interview";
 export * from "./endpoints/studio-interviews";
 export * from "./endpoints/offer-ssc";
+export { checkHumanInterviewCandidateLock } from "./endpoints/human-interview-lock";
 export * from "./endpoints/studio-calendar";
 export * from "./endpoints/resume";
 export * from "./endpoints/studio-resumes";

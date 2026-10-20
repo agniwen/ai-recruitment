@@ -1,4 +1,5 @@
 import { clearPendingParseJobs } from "./queue-clear";
+import { retryFailedParseJobs } from "./queue-retry";
 import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
 import { buildListTextFilterWhere } from "@arc/ai-recruitment-copilot-backend/lib/server/db/list-text-filters";
 import { listTextFiltersSchema } from "@arc/shared/list-text-filters";
@@ -45,6 +46,7 @@ import { platformHistoricalResumeImportsRouter } from "./routes/historical-resum
 import { platformLiveKitRouter } from "./routes/livekit/route";
 import { interviewLogsRouter } from "./routes/interview-logs/route";
 import { platformResumeParseCacheRouter } from "./routes/resume-parse-cache/route";
+import { platformInterviewConfigRouter } from "./routes/interview-config/route";
 
 // --- Organizations list ---
 const orgQuerySchema = z.object({
@@ -568,6 +570,34 @@ async function listResumeReviewGenerationQueueJobsWithDetails(
 
 const platformQueues = factory
   .createApp()
+  .post(
+    "/queues/:queueName/jobs/retry",
+    zValidator(
+      "json",
+      z.union([
+        z.object({ jobIds: z.array(z.string().trim().min(1)).min(1).max(100) }),
+        z.object({ filters: queueJobsQuerySchema.omit({ page: true, pageSize: true }) }),
+      ]),
+      jsonValidatorError("重跑参数无效。"),
+    ),
+    async (c) => {
+      if (c.req.param("queueName") !== RESUME_PARSE_QUEUE_NAME) {
+        return c.json({ error: "不支持重跑此队列" }, 404);
+      }
+      const { user: currentUser } = c.var;
+      if (!currentUser) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const result = await retryFailedParseJobs({
+        ...c.req.valid("json"),
+        requestedBy: currentUser.id,
+      });
+      if (result.status === "queue_unavailable") {
+        return c.json({ error: "简历解析队列暂不可用，请稍后重试。" }, 503);
+      }
+      return c.json(result, 200);
+    },
+  )
   .delete("/queues/:queueName/jobs", async (c) => {
     if (c.req.param("queueName") !== RESUME_PARSE_QUEUE_NAME) {
       return c.json({ error: "不支持清空此队列" }, 404);
@@ -604,6 +634,7 @@ export const platformRouter = factory
   .createApp()
   .use(adminMiddleware)
   .use(platformMfaMiddleware)
+  .route("/interview-config", platformInterviewConfigRouter)
   .route("/agent-tests", platformAgentTestsRouter)
   .route("/livekit", platformLiveKitRouter)
   .route("/interview-logs", interviewLogsRouter)

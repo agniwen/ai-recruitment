@@ -1,5 +1,7 @@
 import type { ServerEntry } from "@tanstack/react-start/server-entry";
 import { applyServerEnv } from "./env/server";
+import { getWebRequestPeerIp } from "./lib/server/request-ip";
+import { runWithRequestPeerIp } from "@arc/ai-recruitment-copilot-backend/lib/server/request-ip-context";
 
 const SYSTEM_TIME_ZONE = "Asia/Shanghai";
 process.env.TZ = SYSTEM_TIME_ZONE;
@@ -117,7 +119,7 @@ export default {
 
     if (isApiRequest(request)) {
       const honoApp = await getHonoApp();
-      return honoApp.fetch(request);
+      return runWithRequestPeerIp(getWebRequestPeerIp(request), () => honoApp.fetch(request));
     }
 
     return fetchStart(request, options);

@@ -101,6 +101,15 @@ export function getUploadTaskInboxPage(
   );
 }
 
+export function retryUploadTask(slug: string, itemId: string) {
+  return rpcFetch<{ status: "queued" }>(
+    rpc.api.w[":slug"].studio["resume-upload-batches"].inbox[":itemId"].retry.$post({
+      param: { itemId, slug },
+    }),
+    "重试失败",
+  );
+}
+
 export function getHistoricalResumeImportPage(
   slug: string,
   page: number,

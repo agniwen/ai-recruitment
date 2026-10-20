@@ -7,6 +7,10 @@ import {
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { uniq } from "lodash-es";
 import { assertWorkspaceInterviewers } from "./human-interview-interviewers";
+import {
+  assertHumanInterviewCandidateUnlocked,
+  lockHumanInterviewScheduling,
+} from "./human-interview-candidate-lock";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   department,
@@ -271,6 +275,7 @@ export async function createHumanInterviewMeeting({
   const rounds = await db
     .select({
       id: studioHumanInterviewRound.id,
+      interviewRecordId: studioHumanInterviewRound.interviewRecordId,
       status: studioHumanInterviewRound.status,
     })
     .from(studioHumanInterviewRound)
@@ -327,6 +332,10 @@ export async function createHumanInterviewMeeting({
     validUntil: input.validUntil,
   });
   await db.transaction(async (tx) => {
+    await lockHumanInterviewScheduling(tx, organizationId);
+    for (const interviewRecordId of uniq(rounds.map((round) => round.interviewRecordId))) {
+      await assertHumanInterviewCandidateUnlocked(tx, interviewRecordId, organizationId);
+    }
     await tx.insert(studioHumanInterviewMeeting).values({
       createdAt: now,
       createdBy,

@@ -1,30 +1,37 @@
 /* oxlint-disable promise/prefer-await-to-callbacks -- implements the Drizzle transaction test double. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { claimFailedResumeParseRetry } from "./retry";
-const mocks = vi.hoisted(() => ({ patches: [] as Record<string, unknown>[], status: "failed" }));
+const mocks = vi.hoisted(() => ({
+  found: true,
+  patches: [] as Record<string, unknown>[],
+  status: "failed",
+}));
 vi.mock("./batches", () => ({ reconcileBatchProgress: vi.fn() }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
     transaction: (callback: (tx: unknown) => unknown) => {
       const query = {
-        for: () => [
-          {
-            batch: {
-              createdBy: "user-1",
-              failedCount: 2,
-              id: "batch-1",
-              organizationId: "org-1",
-              processedCount: 2,
-              status: "completed",
-            },
-            item: {
-              attemptCount: 4,
-              errorMessage: "invalid output",
-              id: "item-1",
-              status: mocks.status,
-            },
-          },
-        ],
+        for: () =>
+          mocks.found
+            ? [
+                {
+                  batch: {
+                    createdBy: "user-1",
+                    failedCount: 2,
+                    id: "batch-1",
+                    organizationId: "org-1",
+                    processedCount: 2,
+                    status: "completed",
+                  },
+                  item: {
+                    attemptCount: 4,
+                    errorMessage: "invalid output",
+                    id: "item-1",
+                    status: mocks.status,
+                  },
+                },
+              ]
+            : [],
         from: () => query,
         innerJoin: () => query,
         limit: () => query,
@@ -46,9 +53,21 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 const input = { organizationId: "org-1", poolItemId: "pool-1", requestedBy: "user-1" };
 beforeEach(() => {
   mocks.status = "failed";
+  mocks.found = true;
   mocks.patches.length = 0;
 });
 describe("bulk retry claims", () => {
+  it("does not create a replacement batch when a specified upload item no longer exists", async () => {
+    mocks.found = false;
+    expect(
+      await claimFailedResumeParseRetry({
+        ...input,
+        allowExhaustedRetries: true,
+        itemId: "deleted-item",
+      }),
+    ).toEqual({ status: "not_found" });
+    expect(mocks.patches).toEqual([]);
+  });
   it("keeps the existing retry limit for ordinary single retries", async () => {
     expect(await claimFailedResumeParseRetry(input)).toEqual({ status: "retry_exhausted" });
     expect(mocks.patches).toEqual([]);

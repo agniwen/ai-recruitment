@@ -7,7 +7,8 @@ import {
   IconRefresh,
   IconTable,
 } from "@tabler/icons-react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { UploadTaskInboxPage, UploadTaskInboxRecord } from "@arc/shared/upload-task-inbox";
 import { formatRelativeTime } from "@arc/shared/utils/time";
@@ -28,7 +29,10 @@ import {
 } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import { useHasPermission } from "@/hooks/use-has-permission";
-import { getUploadTaskInboxPage } from "@/lib/client/api/endpoints/bulk-resume-upload";
+import {
+  getUploadTaskInboxPage,
+  retryUploadTask,
+} from "@/lib/client/api/endpoints/bulk-resume-upload";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import { getUploadTaskPreviewTarget, getUploadTaskStatusMeta } from "./upload-task-inbox-model";
 import { HistoricalResumeImportTableDialog } from "./historical-resume-import-table-dialog";
@@ -46,13 +50,19 @@ const statusVariants = {
   processing: "info",
 } as const;
 
-function UploadTaskRow({
+export function UploadTaskRow({
   canPreview,
+  canRetry,
+  retrying,
   onPreview,
+  onRetry,
   record,
 }: {
   canPreview: boolean;
+  canRetry: boolean;
+  retrying: boolean;
   onPreview: (record: UploadTaskInboxRecord) => void;
+  onRetry: (record: UploadTaskInboxRecord) => void;
   record: UploadTaskInboxRecord;
 }) {
   const status = getUploadTaskStatusMeta(record.queueState);
@@ -64,59 +74,68 @@ function UploadTaskRow({
   });
 
   return (
-    <button
-      className="w-full border-border/60 border-b px-3 py-2.5 text-left transition-colors enabled:hover:bg-muted/40 disabled:cursor-default last:border-b-0"
-      disabled={!previewTarget}
-      onClick={() => onPreview(record)}
-      title={previewTarget ? "点击预览简历" : undefined}
-      type="button"
-    >
-      <div className="flex items-start gap-2.5">
-        <ResumeDocumentFileIcon className="mt-0.5 size-6 shrink-0" kind={fileKind} />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <p
-              className="min-w-0 flex-1 truncate font-medium text-sm"
-              title={record.originalFileName}
-            >
-              {record.originalFileName}
-            </p>
-            <Badge className="shrink-0" variant={statusVariants[status.tone]}>
-              {status.label}
-            </Badge>
-          </div>
-          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
-            {record.candidateName ? (
-              <>
-                <span className="max-w-28 truncate">{record.candidateName}</span>
-                <span aria-hidden>·</span>
-              </>
-            ) : null}
-            <span>{record.target === "resume_pool" ? "简历池" : "候选人管理"}</span>
-            {record.attemptCount > 1 ? (
-              <>
-                <span aria-hidden>·</span>
-                <span>重试 {record.attemptCount - 1} 次</span>
-              </>
-            ) : null}
-            <span className="ml-auto shrink-0">{formatRelativeTime(time)}</span>
-          </div>
-          {record.queueState === "active" ? (
-            <div className="mt-1.5 flex items-center gap-2">
-              <Progress className="h-1" value={progress} />
-              <span className="w-8 shrink-0 text-right text-[11px] text-muted-foreground">
-                {progress === null ? "处理中" : `${Math.round(progress)}%`}
-              </span>
+    <div className="border-border/60 border-b last:border-b-0">
+      <button
+        className="w-full px-3 py-2.5 text-left transition-colors enabled:hover:bg-muted/40 disabled:cursor-default"
+        disabled={!previewTarget}
+        onClick={() => onPreview(record)}
+        title={previewTarget ? "点击预览简历" : undefined}
+        type="button"
+      >
+        <div className="flex items-start gap-2.5">
+          <ResumeDocumentFileIcon className="mt-0.5 size-6 shrink-0" kind={fileKind} />
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <p
+                className="min-w-0 flex-1 truncate font-medium text-sm"
+                title={record.originalFileName}
+              >
+                {record.originalFileName}
+              </p>
+              <Badge className="shrink-0" variant={statusVariants[status.tone]}>
+                {status.label}
+              </Badge>
             </div>
-          ) : null}
-          {record.queueState === "failed" && record.errorMessage ? (
-            <p className="mt-1 line-clamp-1 text-rose-600 text-xs dark:text-rose-300">
-              {record.errorMessage}
-            </p>
+            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+              {record.candidateName ? (
+                <>
+                  <span className="max-w-28 truncate">{record.candidateName}</span>
+                  <span aria-hidden>·</span>
+                </>
+              ) : null}
+              <span>{record.target === "resume_pool" ? "简历池" : "候选人管理"}</span>
+              {record.attemptCount > 1 ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>重试 {record.attemptCount - 1} 次</span>
+                </>
+              ) : null}
+              <span className="ml-auto shrink-0">{formatRelativeTime(time)}</span>
+            </div>
+            {record.queueState === "active" ? (
+              <div className="mt-1.5 flex items-center gap-2">
+                <Progress className="h-1" value={progress} />
+                <span className="w-8 shrink-0 text-right text-[11px] text-muted-foreground">
+                  {progress === null ? "处理中" : `${Math.round(progress)}%`}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </button>
+      {record.queueState === "failed" ? (
+        <div className="flex items-start gap-2 px-3 pb-2.5 pl-12">
+          <p className="min-w-0 flex-1 wrap-break-word text-rose-600 text-xs dark:text-rose-300">
+            {record.errorMessage || "简历解析失败，请重试。"}
+          </p>
+          {canRetry ? (
+            <Button disabled={retrying} onClick={() => onRetry(record)} size="sm" variant="outline">
+              {retrying ? "重试中…" : "重试"}
+            </Button>
           ) : null}
         </div>
-      </div>
-    </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -125,6 +144,14 @@ export function UploadTaskInbox() {
   const canReadUploadTasks = useHasPermission("resumeUploadBatch", "read");
   const canReadResumeLibrary = useHasPermission("resumeLibrary", "read");
   const canReadResumePool = useHasPermission("resumePool", "read");
+  const canRetry = useHasPermission("resumeUploadBatch", "process");
+  const queryClient = useQueryClient();
+  const retryMutation = useMutation({
+    mutationFn: (record: UploadTaskInboxRecord) => retryUploadTask(slug, record.id),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "重试失败"),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["upload-task-inbox", slug] }),
+    onSuccess: () => toast.success("已重新加入解析队列"),
+  });
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [previewRecord, setPreviewRecord] = useState<UploadTaskInboxRecord | null>(null);
@@ -236,6 +263,9 @@ export function UploadTaskInbox() {
                 >
                   {record ? (
                     <UploadTaskRow
+                      canRetry={canRetry}
+                      retrying={retryMutation.isPending}
+                      onRetry={(task) => retryMutation.mutate(task)}
                       canPreview={
                         record.target === "resume_pool" ? canReadResumePool : canReadResumeLibrary
                       }

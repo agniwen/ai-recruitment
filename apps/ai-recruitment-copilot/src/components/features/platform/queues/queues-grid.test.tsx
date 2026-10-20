@@ -93,6 +93,8 @@ const capturedGridOptions = vi.hoisted(() => ({
 }));
 
 const rpcQueueJobsGetMock = vi.hoisted(() => vi.fn());
+const rpcQueueJobsRetryMock = vi.hoisted(() => vi.fn());
+const redisAvailable = vi.hoisted(() => ({ value: false }));
 const setFilterMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/hooks/use-mobile", () => ({
@@ -159,6 +161,7 @@ vi.mock("@/lib/client/rpc", () => ({
           ":queueName": {
             jobs: {
               $get: rpcQueueJobsGetMock,
+              retry: { $post: rpcQueueJobsRetryMock },
             },
           },
         },
@@ -168,46 +171,50 @@ vi.mock("@/lib/client/rpc", () => ({
 }));
 
 vi.mock("@/lib/client/api", () => ({
-  rpcFetch: vi.fn(() =>
-    Promise.resolve({
-      records: [
-        {
-          counts: {
-            active: 1,
-            completed: 0,
-            delayed: 0,
-            failed: 0,
-            paused: 0,
-            prioritized: 0,
-            waiting: 0,
-            "waiting-children": 0,
+  rpcFetch: vi.fn((_call, fallback) =>
+    Promise.resolve(
+      fallback === "重跑失败"
+        ? { failed: 0, queued: 1, skipped: 0, total: 1 }
+        : {
+            records: [
+              {
+                counts: {
+                  active: 1,
+                  completed: 0,
+                  delayed: 0,
+                  failed: 0,
+                  paused: 0,
+                  prioritized: 0,
+                  waiting: 0,
+                  "waiting-children": 0,
+                },
+                displayName: "简历解析",
+                name: "resume-parse",
+                redis: redisAvailable.value ? { db: 0, host: "localhost", port: 6379 } : null,
+                workers: [],
+                workersCount: 0,
+              },
+              {
+                counts: {
+                  active: 0,
+                  completed: 0,
+                  delayed: 0,
+                  failed: 0,
+                  paused: 0,
+                  prioritized: 0,
+                  waiting: 2,
+                  "waiting-children": 0,
+                },
+                displayName: "AI分析",
+                name: "resume-review-generation",
+                redis: null,
+                workers: [],
+                workersCount: 0,
+              },
+            ],
+            total: 2,
           },
-          displayName: "简历解析",
-          name: "resume-parse",
-          redis: null,
-          workers: [],
-          workersCount: 0,
-        },
-        {
-          counts: {
-            active: 0,
-            completed: 0,
-            delayed: 0,
-            failed: 0,
-            paused: 0,
-            prioritized: 0,
-            waiting: 2,
-            "waiting-children": 0,
-          },
-          displayName: "AI分析",
-          name: "resume-review-generation",
-          redis: null,
-          workers: [],
-          workersCount: 0,
-        },
-      ],
-      total: 2,
-    }),
+    ),
   ),
 }));
 
@@ -215,9 +222,59 @@ afterEach(() => {
   document.body.innerHTML = "";
   capturedGridOptions.current = null;
   vi.clearAllMocks();
+  redisAvailable.value = false;
+  matchedUploadQueueJob.state = "active";
+  matchedUploadQueueJob.resumeDetail.itemStatus = "processing";
+  matchedUploadQueueJob.resumeDetail.resumeParseStatus = "processing";
 });
 
 describe("QueuesGrid", () => {
+  it("retries a legacy completed job with business failure and retries all filtered failures", async () => {
+    matchedUploadQueueJob.state = "completed";
+    matchedUploadQueueJob.resumeDetail.itemStatus = "failed";
+    matchedUploadQueueJob.resumeDetail.resumeParseStatus = "failed";
+    redisAvailable.value = true;
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <QueuesGrid />
+          </TooltipProvider>
+        </QueryClientProvider>,
+      );
+      await Promise.resolve();
+    });
+    const retry = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "重跑",
+    );
+    expect(retry).toBeDefined();
+    await act(async () => {
+      retry?.click();
+      await Promise.resolve();
+    });
+    expect(rpcQueueJobsRetryMock).toHaveBeenCalledWith({
+      json: { jobIds: ["item-1"] },
+      param: { queueName: "resume-parse" },
+    });
+    const bulk = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "重跑全部失败",
+    );
+    expect(bulk?.disabled).toBe(false);
+    await act(async () => {
+      bulk?.click();
+      await Promise.resolve();
+    });
+    expect(rpcQueueJobsRetryMock).toHaveBeenLastCalledWith({
+      json: { filters: { parseStatus: "all", state: "all", uploadStatus: "all" } },
+      param: { queueName: "resume-parse" },
+    });
+    act(() => root.unmount());
+    queryClient.clear();
+  });
   it("shows upload task fields in the list and keeps actions pinned to the logical end", async () => {
     const container = document.createElement("div");
     document.body.append(container);

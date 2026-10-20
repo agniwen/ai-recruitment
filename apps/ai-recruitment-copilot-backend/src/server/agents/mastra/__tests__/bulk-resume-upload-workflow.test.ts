@@ -15,6 +15,16 @@ vi.mock(
 import { runBulkResumeUploadWorkflow } from "@arc/ai-recruitment-copilot-backend/server/agents/mastra/workflows/bulk-resume-upload-workflow";
 
 describe("runBulkResumeUploadWorkflow", () => {
+  it("marks the queue job failed after the final parse attempt persists its reason", async () => {
+    mocks.processBatchItem.mockResolvedValueOnce({
+      batch: { id: "batch-1" },
+      done: true,
+      item: { errorMessage: "OCR 服务超时", id: "item-1", status: "failed" },
+    });
+    await expect(
+      runBulkResumeUploadWorkflow({ itemId: "item-1", retryParseFailure: false }),
+    ).rejects.toThrow("OCR 服务超时");
+  });
   it("processes one upload item through the workflow runner", async () => {
     mocks.processBatchItem.mockResolvedValue({
       batch: { id: "batch-1" },
