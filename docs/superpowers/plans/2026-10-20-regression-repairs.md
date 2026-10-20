@@ -53,4 +53,4 @@
 - [x] Verify false positives and moved route/DAO implementations before updating source checks.
 - [x] Add regression examples for safe 400 responses versus unsafe 500 responses, and retain explicit-workspace checks.
 - [x] Run affected tests, all six JS package suites, backend/Web typechecks, and changed-file lint.
-- [ ] Review the final diff, update validation/release notes, push to PR #3, and verify the remote head.
+- [x] Review the final diff, update validation/release notes, push to PR #3, and verify the remote head.
