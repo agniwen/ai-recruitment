@@ -1,8 +1,26 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gt, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type { Database } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { studioOfferSscNotificationOutbox as outbox } from "@arc/db-schema/schema";
+import {
+  studioInterview,
+  studioOfferDraft,
+  studioOfferSscNotificationOutbox as outbox,
+} from "@arc/db-schema/schema";
 import type * as TelegramBot from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot";
 import type { OfferSscNotificationTarget } from "../utils/offer-ssc-notification";
 
@@ -100,6 +118,116 @@ function ownsLease(job: ClaimedNotification) {
   );
 }
 
+function currentPendingOffer() {
+  const newer = alias(studioOfferDraft, "ssc_notification_newer_offer");
+  return exists(
+    db
+      .select({ id: studioOfferDraft.id })
+      .from(studioOfferDraft)
+      .innerJoin(
+        studioInterview,
+        and(
+          eq(studioInterview.id, studioOfferDraft.interviewRecordId),
+          eq(studioInterview.organizationId, studioOfferDraft.organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(studioOfferDraft.id, outbox.draftId),
+          eq(studioOfferDraft.organizationId, outbox.organizationId),
+          eq(studioOfferDraft.interviewRecordId, outbox.interviewRecordId),
+          eq(studioOfferDraft.sscRevision, outbox.revision),
+          eq(studioOfferDraft.status, "draft"),
+          eq(studioOfferDraft.sscConfirmationStatus, "pending"),
+          ne(studioInterview.pipelineStage, "closed"),
+          or(
+            isNull(studioOfferDraft.expiresAt),
+            sql`EXTRACT(EPOCH FROM ${studioOfferDraft.expiresAt}) > EXTRACT(EPOCH FROM CURRENT_TIMESTAMP)`,
+          ),
+          notExists(
+            db
+              .select({ id: newer.id })
+              .from(newer)
+              .where(
+                and(
+                  eq(newer.organizationId, studioOfferDraft.organizationId),
+                  eq(newer.interviewRecordId, studioOfferDraft.interviewRecordId),
+                  gt(newer.version, studioOfferDraft.version),
+                ),
+              ),
+          ),
+        ),
+      ),
+  );
+}
+
+function completedWithoutRecipients() {
+  return and(
+    eq(outbox.event, "pending"),
+    eq(outbox.status, "completed"),
+    isNull(outbox.lastError),
+    sql`${outbox.recipientUserIds} = '[]'::jsonb`,
+    sql`${outbox.sentUserIds} = '[]'::jsonb`,
+    currentPendingOffer(),
+  );
+}
+
+async function recoverEmptyNotifications() {
+  // Older releases acknowledged an empty recipient list. Reopen only live,
+  // never-delivered pending Offers; every actual recipient is resolved again.
+  const candidates = await db
+    .select({ id: outbox.id })
+    .from(outbox)
+    .where(completedWithoutRecipients())
+    .orderBy(asc(outbox.createdAt))
+    .limit(20);
+  if (candidates.length === 0) {
+    return;
+  }
+  await db
+    .update(outbox)
+    .set({
+      attempts: 0,
+      availableAt: sql`CURRENT_TIMESTAMP`,
+      completedAt: null,
+      lastError: "ssc_recipient_unavailable",
+      leaseToken: null,
+      leaseUntil: null,
+      recipientUserIds: null,
+      status: "pending",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        inArray(
+          outbox.id,
+          candidates.map((candidate) => candidate.id),
+        ),
+        completedWithoutRecipients(),
+      ),
+    );
+}
+
+async function waitForRecipient(job: ClaimedNotification) {
+  const updated = await db
+    .update(outbox)
+    .set({
+      // Waiting for configuration is not a failed Telegram delivery attempt.
+      attempts: Math.max(0, job.attempts - 1),
+      availableAt: sql`CURRENT_TIMESTAMP + INTERVAL '60 seconds'`,
+      completedAt: null,
+      lastError: "ssc_recipient_unavailable",
+      leaseToken: null,
+      leaseUntil: null,
+      recipientUserIds: null,
+      status: "pending",
+      updatedAt: new Date(),
+    })
+    .where(and(ownsLease(job), currentPendingOffer()))
+    .returning({ id: outbox.id });
+  return updated.length > 0;
+}
+
 async function renewLease(job: ClaimedNotification) {
   const updated = await db
     .update(outbox)
@@ -165,6 +293,14 @@ async function deliverRecipients(
   let recipientIds = job.recipientUserIds;
   if (recipientIds === null) {
     const targets = await resolveTargets(job);
+    if (
+      targets.length === 0 &&
+      job.event === "pending" &&
+      job.sentUserIds.length === 0 &&
+      (await waitForRecipient(job))
+    ) {
+      return "waiting";
+    }
     recipientIds = [...new Set(targets.map((target) => target.userId))];
     await saveProgress(job, { recipientUserIds: recipientIds });
   }
@@ -189,6 +325,15 @@ async function deliverRecipients(
     }
     sentUserIds.push(userId);
     await saveProgress(job, { sentUserIds });
+  }
+  if (
+    !failed &&
+    job.lastError !== "notification_delivery_failed" &&
+    sentUserIds.length === 0 &&
+    job.event === "pending" &&
+    (await waitForRecipient(job))
+  ) {
+    return "waiting";
   }
   return failed;
 }
@@ -228,7 +373,11 @@ async function deliverNotification(
   const lease = maintainLease(job);
   let failed = false;
   try {
-    failed = await deliverRecipients(job, resolveTargets, sendMessage, lease);
+    const result = await deliverRecipients(job, resolveTargets, sendMessage, lease);
+    if (result === "waiting") {
+      return;
+    }
+    failed = result;
   } catch (error) {
     if (error instanceof NotificationLeaseLostError) {
       return;
@@ -299,6 +448,9 @@ export async function dispatchOfferSscNotifications(): Promise<number> {
   const testChat = configuredChat?.trim();
   if (configuredChat !== undefined && !/^[1-9]\d*$/u.test(testChat ?? "")) {
     throw new Error("Invalid OFFER_SSC_NOTIFICATION_TEST_CHAT_ID");
+  }
+  if (!testChat) {
+    await recoverEmptyNotifications();
   }
   const resolveTargets: ResolveTargets = async (input) => {
     const targets = await getOfferSscNotificationTargets(input);

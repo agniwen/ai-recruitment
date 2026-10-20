@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -12,6 +12,7 @@ import {
   sscResponsibility,
   studioInterview,
   studioOfferDraft,
+  studioOfferSscNotificationOutbox,
   sscTelegramIdentity,
   telegramRecipientBinding,
   user,
@@ -21,9 +22,19 @@ import { resolveBoundTelegramOfferActor } from "./offer-ssc-dao";
 import { bindTelegramUser } from "./dao";
 import {
   completeOfferSscConfirmation,
+  createOfferDraft,
   loadAuthorizedOfferSscContext,
   receiveOfferSscConfirmation,
 } from "../studio/routes/interviews/dao/offer-drafts";
+import { dispatchOfferSscNotifications } from "../studio/routes/interviews/dao/offer-ssc-notification-outbox";
+import { verifyOfferCandidatePreviewToken } from "../public/routes/offer-candidates/access";
+import type * as TelegramBot from "./utils/bot";
+
+const transport = vi.hoisted(() => ({ send: vi.fn() }));
+vi.mock("./utils/bot", async (importOriginal) => ({
+  ...(await importOriginal<typeof TelegramBot>()),
+  postTelegramDirectMessage: transport.send,
+}));
 
 const databaseUrl = process.env.SSC_RESPONSIBILITIES_TEST_DATABASE_URL;
 
@@ -109,6 +120,9 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       });
       await db.insert(telegramRecipientBinding).values({ chatId, username });
       vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://ats.example.test");
+      vi.stubEnv("TELEGRAM_BOT_TOKEN", "notification-test-token");
+      vi.stubEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN", "notification-test-secret");
+      transport.send.mockReset().mockImplementation(() => Promise.resolve());
     });
 
     afterEach(async () => {
@@ -140,6 +154,64 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
     function actor(handle = username) {
       return resolveBoundTelegramOfferActor({ telegramUserId: chatId, username: handle });
     }
+
+    it("automatically sends the actual newly created Offer after its source SSC permissions are enabled", async () => {
+      await db
+        .update(sscResponsibility)
+        .set({ email: "" })
+        .where(eq(sscResponsibility.organizationId, orgId));
+      await db
+        .update(organizationRole)
+        .set({ permission: JSON.stringify({ offer: ["read"] }) })
+        .where(eq(organizationRole.organizationId, orgId));
+      const created = await createOfferDraft({
+        actorId: sscId,
+        actorRole: "owner",
+        input: { baseSalary: 23_456, currency: "CNY", position: "Current system Offer" },
+        interviewRecordId: candidateId,
+        organizationId: orgId,
+      });
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(transport.send).not.toHaveBeenCalled();
+      await db
+        .update(organizationRole)
+        .set({ permission: JSON.stringify({ offer: ["read", "receive", "confirm"] }) })
+        .where(eq(organizationRole.organizationId, orgId));
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({ availableAt: sql`CURRENT_TIMESTAMP - INTERVAL '1 second'` })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, created.id));
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(transport.send).toHaveBeenCalledTimes(1);
+      const [[recipient, card]] = transport.send.mock.calls;
+      expect(recipient).toBe(chatId);
+      const serialized = JSON.stringify(card);
+      expect(serialized).toContain("Candidate");
+      expect(serialized).toContain("Current system Offer");
+      expect(serialized).toContain('"id":"osr"');
+      const token =
+        /https:\/\/ats\.example\.test\/offer-candidate\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/u.exec(
+          serialized,
+        )?.[1];
+      expect(token).toBeDefined();
+      if (!token) {
+        throw new Error("Missing current Offer preview token");
+      }
+      expect(verifyOfferCandidatePreviewToken(token)).toMatchObject({
+        candidateId,
+        draftId: created.id,
+        organizationId: orgId,
+        revision: 1,
+      });
+      const [job] = await db
+        .select()
+        .from(studioOfferSscNotificationOutbox)
+        .where(eq(studioOfferSscNotificationOutbox.draftId, created.id));
+      expect(job.status).toBe("completed");
+      expect(job.sentUserIds).toHaveLength(1);
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+      expect(transport.send).toHaveBeenCalledTimes(1);
+    });
 
     it("lets an unregistered follower receive and complete an assigned Offer without an email", async () => {
       await db

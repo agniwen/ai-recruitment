@@ -7,6 +7,9 @@ export async function startOfferSscNotifications() {
   }
   const { dispatchOfferSscNotifications, listenForOfferSscNotifications } =
     await import("@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-notification-outbox");
+  const { ensureTelegramOfferWebhook } =
+    await import("@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-webhook");
+  let webhookReadyUntil = 0;
   let closed = false;
   let requested = false;
   let pending: Promise<void> | null = null;
@@ -25,6 +28,15 @@ export async function startOfferSscNotifications() {
             break;
           }
           requested = false;
+          if (Date.now() >= webhookReadyUntil) {
+            if (!(await ensureTelegramOfferWebhook())) {
+              return;
+            }
+            webhookReadyUntil = Date.now() + 5 * 60_000;
+          }
+          if (closed) {
+            break;
+          }
           if ((await dispatchOfferSscNotifications()) > 0) {
             requested = true;
           }
