@@ -1,6 +1,6 @@
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildTelegramOfferCard } from "./offer-ssc-card";
+import { buildTelegramOfferCard, buildTelegramOfferCompletionCard } from "./offer-ssc-card";
 
 interface EditRequest {
   chat_id: string | number;
@@ -107,5 +107,45 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
   it("explicitly clears the old inline keyboard when SSC confirmation completes", async () => {
     const payload = await editedCard("completed");
     expect(payload.reply_markup).toEqual({ inline_keyboard: [] });
+  });
+
+  it("shows a complete final button after screenshot upload and clears actions from the old prompt", async () => {
+    const adapter = createTelegramAdapter({
+      botToken: "999999:fake-transport-test-token",
+      mode: "webhook",
+      secretToken: "fake-transport-test-secret",
+      userName: botUser.username,
+    });
+    const card = buildTelegramOfferCompletionCard(
+      {
+        canConfirm: true,
+        canReceive: true,
+        candidateName: "Transport test candidate",
+        draft: {
+          id: draftId,
+          position: "Transport test role",
+          sscConfirmationStatus: "confirming",
+          sscRevision: 1,
+          status: "draft",
+          version: 3,
+        },
+        pipelineStage: "offer",
+      },
+      "a".repeat(32),
+      { screenshotReceived: true },
+    );
+    await adapter.editMessage(`telegram:${chatId}`, `${chatId}:${messageId}`, card);
+    expect(requests[0].text).toContain("截图已收到");
+    const [primary] = requests[0].reply_markup.inline_keyboard;
+    expect(primary).toHaveLength(1);
+    expect(primary[0].text).toBe("确认完成");
+    expect(primary[0].callback_data).toContain('"a":"osf"');
+    expect(Buffer.byteLength(primary[0].callback_data ?? "", "utf-8")).toBeLessThanOrEqual(64);
+    await adapter.editMessage(
+      `telegram:${chatId}`,
+      `${chatId}:${messageId}`,
+      "审批截图已收到，请使用下方最新确认卡片。",
+    );
+    expect(requests[1].reply_markup.inline_keyboard).toEqual([]);
   });
 });
