@@ -9,10 +9,11 @@ import {
 import { extractRequesterTelegramUsernames, normalizeTelegramUsername } from "./utils/identity";
 import { provisionSscTelegramFollower } from "./ssc-telegram-provisioning";
 
-export type TelegramBindingResult =
+export type TelegramBindingResult = (
   | { kind: "bound"; userName: string }
   | { kind: "requester_bound"; memberName: string | null; memberAmbiguous: boolean }
-  | { kind: "registered"; memberAmbiguous: boolean };
+  | { kind: "registered"; memberAmbiguous: boolean }
+) & { sscProvisioningPending?: true };
 
 export async function bindTelegramUser(input: {
   chatId: string;
@@ -90,22 +91,30 @@ export async function bindTelegramUser(input: {
         });
     }
   });
-  const ssc =
-    username && matches.length <= 1
-      ? await provisionSscTelegramFollower({ chatId: input.chatId, username })
-      : null;
+  let ssc: Awaited<ReturnType<typeof provisionSscTelegramFollower>> = null;
+  const sync: { sscProvisioningPending?: true } = {};
+  if (username && matches.length <= 1) {
+    try {
+      ssc = await provisionSscTelegramFollower({ chatId: input.chatId, username });
+    } catch {
+      // The opt-in above has committed; the outbox will retry SSC provisioning.
+      sync.sscProvisioningPending = true;
+      console.error("[telegram-binding] ssc_provisioning_failed");
+    }
+  }
   if (organizationIds.length > 0) {
     return {
+      ...sync,
       kind: "requester_bound",
       memberAmbiguous: matches.length > 1,
       memberName: matched?.name ?? null,
     };
   }
   if (matched) {
-    return { kind: "bound", userName: matched.name };
+    return { ...sync, kind: "bound", userName: matched.name };
   }
   if (ssc) {
     return { kind: "bound", userName: ssc.name };
   }
-  return { kind: "registered", memberAmbiguous: matches.length > 1 };
+  return { ...sync, kind: "registered", memberAmbiguous: matches.length > 1 };
 }

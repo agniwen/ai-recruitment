@@ -76,11 +76,21 @@ export function getTelegramBot(): TelegramBot {
       await event.channel.post("请私聊机器人并发送 /start 完成通知绑定。");
       return;
     }
-    const result = await bindTelegramUser({
-      chatId: String(message.chat.id),
-      username: message.from?.username,
-    });
-    await event.channel.post(bindingReply(result));
+    let result: Awaited<ReturnType<typeof bindTelegramUser>>;
+    try {
+      result = await bindTelegramUser({
+        chatId: String(message.chat.id),
+        username: message.from?.username,
+      });
+    } catch {
+      console.error("[telegram-binding] binding_failed");
+      await event.channel.post("通知绑定暂未成功，请稍后重新发送 /start；如仍失败，请联系管理员。");
+      return;
+    }
+    const pendingReply = result.sscProvisioningPending
+      ? "SSC 身份同步暂未完成，系统会在通知任务中重试；如持续未收到 Offer，请联系管理员。"
+      : "";
+    await event.channel.post(bindingReply(result) + pendingReply);
   });
 
   bot.onSlashCommand("/offer", async (event) => {
