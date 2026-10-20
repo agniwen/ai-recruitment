@@ -1,13 +1,13 @@
-import { readFileSync } from "node:fs";
+import { readTestSource } from "../../../../../../test-utils/source";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(join(import.meta.dirname, "..", "route.ts"), "utf-8");
-const odcRouteSource = readFileSync(
+const routeSource = readTestSource(join(import.meta.dirname, "..", "route.ts"), "utf-8");
+const odcRouteSource = readTestSource(
   join(import.meta.dirname, "..", "routes", "odc", "route.ts"),
   "utf-8",
 );
-const daoSource = readFileSync(join(import.meta.dirname, "..", "dao.ts"), "utf-8");
+const daoSource = readTestSource(join(import.meta.dirname, "..", "dao.ts"), "utf-8");
 
 describe("hiring units route permissions", () => {
   it("allows any authenticated workspace member to read selectable hiring units", () => {

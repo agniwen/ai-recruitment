@@ -1,4 +1,5 @@
 import { buildListTextFilterWhere } from "@arc/ai-recruitment-copilot-backend/lib/server/db/list-text-filters";
+import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
 // Round-keyed DAO for AI 面试 列表与详情。
 // 主查询：FROM studio_interview_schedule LEFT JOIN studio_interview
 // LEFT JOIN job_description LEFT JOIN user LEFT JOIN (conversations 是否存在) AS hasReport。
@@ -132,7 +133,7 @@ function serializeRoundDerivedTimestamp(value: Date | string | null): string | n
   if (value instanceof Date) {
     return value.toISOString();
   }
-  const parsed = new Date(value);
+  const parsed = parseDatabaseTimestamp(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 

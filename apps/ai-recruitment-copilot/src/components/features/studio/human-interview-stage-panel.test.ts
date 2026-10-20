@@ -18,7 +18,9 @@ describe("human interview editing gates", () => {
   it("initializes scheduling from the configured interviewers and requires a selection", () => {
     expect(dialogSource).toContain("setInterviewerIds([...defaultInterviewerIds])");
     expect(dialogSource).toContain("interviewerIds,");
-    expect(dialogSource).toContain("disabled={mutation.isPending || interviewerIds.length === 0}");
+    expect(dialogSource).toMatch(
+      /disabled=\{\s*mutation\.isPending \|\|\s*external\.loading \|\|\s*!external\.valid \|\|\s*\(interviewerIds\.length === 0 && external\.count === 0\)\s*\}/u,
+    );
   });
 
   it("validates and trims feedback before submitting completion", () => {

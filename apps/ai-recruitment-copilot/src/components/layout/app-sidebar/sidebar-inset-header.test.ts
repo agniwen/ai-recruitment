@@ -22,7 +22,11 @@ function expectHeaderInsideScrollArea(source: string, header: string) {
 
   expect(scrollAreaIndex).toBeLessThan(headerIndex);
   expect(headerIndex).toBeLessThan(contentIndex);
-  expect(source).toContain('className="@container/main min-h-0 flex-1 bg-background"');
+  const scrollAreaSource = source.slice(scrollAreaIndex, headerIndex);
+  const scrollAreaClasses = scrollAreaSource.match(/className="([^"]*)"/u)?.[1].split(/\s+/u);
+  expect(scrollAreaClasses).toEqual(
+    expect.arrayContaining(["@container/main", "min-h-0", "flex-1", "bg-background"]),
+  );
 }
 
 describe("SidebarInsetHeader translucent sticky layout", () => {

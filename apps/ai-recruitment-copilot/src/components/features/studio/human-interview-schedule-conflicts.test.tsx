@@ -385,6 +385,12 @@ describe("human interview scheduling conflict confirmation", () => {
     await renderDialog();
     await click("保存");
     await click("取消，修改时间");
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await delay(0);
+      });
+      expect(document.querySelector("fieldset")?.disabled).toBe(false);
+    });
     await click("scheduled-at:2026-09-18T09:00");
     expect(document.body.textContent).toContain("valid-until:2026-09-20T10:00");
     await click("保存");

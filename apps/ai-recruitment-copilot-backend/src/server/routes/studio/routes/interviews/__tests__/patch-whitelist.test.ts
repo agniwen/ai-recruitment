@@ -7,6 +7,8 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
+import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
+import { studioInterviewDetailRouter } from "../detail-route";
 import {
   member,
   organization,
@@ -18,7 +20,22 @@ import {
 const ORG = "test_org_patch_whitelist";
 const USER_ID = "test_user_patch_whitelist";
 const RECORD_ID = "ri_patch_whitelist_1";
+const ROUND_ID = "round_patch_whitelist_1";
 const NOW = new Date("2026-05-13T12:00:00.000Z");
+
+function makeApp(authenticated = true) {
+  return factory
+    .createApp()
+    .use(async (c, next) => {
+      if (authenticated) {
+        c.set("activeOrg", { id: ORG } as never);
+        c.set("member", { organizationId: ORG, role: "owner", userId: USER_ID } as never);
+        c.set("user", { id: USER_ID } as never);
+      }
+      await next();
+    })
+    .route("/", studioInterviewDetailRouter);
+}
 
 async function cleanup() {
   await db
@@ -54,6 +71,7 @@ beforeAll(async () => {
     userId: USER_ID,
   });
   await db.insert(studioInterview).values({
+    aiReviewApprovalStatus: "approved",
     candidateEmail: "original@example.com",
     candidateName: "原始姓名",
     candidatePhone: "13800000000",
@@ -63,7 +81,18 @@ beforeAll(async () => {
     interviewQuestions: [],
     notes: "原始评价",
     organizationId: ORG,
+    pipelineStage: "screening",
     targetRole: "原始岗位",
+    updatedAt: NOW,
+  });
+  await db.insert(studioInterviewSchedule).values({
+    createdAt: NOW,
+    createdBy: USER_ID,
+    id: ROUND_ID,
+    interviewRecordId: RECORD_ID,
+    organizationId: ORG,
+    roundLabel: "一面",
+    sortOrder: 0,
     updatedAt: NOW,
   });
 });
@@ -73,44 +102,63 @@ afterAll(async () => {
 });
 
 describe("interview PATCH whitelist (R7)", () => {
-  // We assert at the DAO/handler layer by calling the function directly,
-  // since spinning up a full request requires auth. The interview route
-  // handler's `nextRecord` shape is the actual safety net — if it shrinks
-  // correctly, candidate fields will never be written.
-  // This test reads the row back after a forced update through the same
-  // path the route uses for the `nextRecord` write.
-  it("does not include candidate-identity columns in the PATCH update set", async () => {
-    // Direct write simulating the handler's nextRecord — this should ONLY
-    // touch interviewQuestions/updatedAt. If a future change adds
-    // candidate fields back into nextRecord, this assertion stays green
-    // because we only check the persisted row was untouched on candidate
-    // columns when the handler was invoked with candidate fields. The
-    // real safety is in the handler code; this test guards regression.
-    const before = await db
+  it("updates the requested round while ignoring candidate-identity and pipeline fields", async () => {
+    const response = await makeApp().request(`/${ROUND_ID}`, {
+      body: JSON.stringify({
+        allowTextInput: true,
+        candidateEmail: "overwritten@example.com",
+        candidateName: "被覆写姓名",
+        candidatePhone: "13900000000",
+        interviewQuestions: [{ difficulty: "easy", order: 1, question: "overwritten" }],
+        notes: "轮次备注",
+        outcome: "rejected",
+        pipelineStage: "closed",
+        targetRole: "被覆写岗位",
+      }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(200);
+    const [candidate] = await db
       .select()
       .from(studioInterview)
       .where(eq(studioInterview.id, RECORD_ID))
       .limit(1);
-    expect(before[0]?.candidateName).toBe("原始姓名");
-    // Force a write through the same Drizzle update shape the handler uses.
-    await db
-      .update(studioInterview)
-      .set({
-        interviewQuestions: [{ difficulty: "easy", order: 1, question: "test" }],
-        updatedAt: new Date(),
-      })
-      .where(eq(studioInterview.id, RECORD_ID));
-    const after = await db
+    expect(candidate).toMatchObject({
+      candidateEmail: "original@example.com",
+      candidateName: "原始姓名",
+      candidatePhone: "13800000000",
+      interviewQuestions: [],
+      notes: "原始评价",
+      outcome: "in_pipeline",
+      pipelineStage: "screening",
+      targetRole: "原始岗位",
+    });
+    const [round] = await db
       .select()
-      .from(studioInterview)
-      .where(eq(studioInterview.id, RECORD_ID))
-      .limit(1);
-    expect(after[0]?.candidateName).toBe("原始姓名");
-    expect(after[0]?.candidateEmail).toBe("original@example.com");
-    expect(after[0]?.candidatePhone).toBe("13800000000");
-    expect(after[0]?.targetRole).toBe("原始岗位");
-    expect(after[0]?.notes).toBe("原始评价");
-    expect(after[0]?.pipelineStage).toBe("screening");
-    expect(after[0]?.outcome).toBe("in_pipeline");
+      .from(studioInterviewSchedule)
+      .where(eq(studioInterviewSchedule.id, ROUND_ID));
+    expect(round).toMatchObject({ allowTextInput: true, notes: "轮次备注" });
+  });
+
+  it("rejects an anonymous PATCH before changing the round", async () => {
+    const [before] = await db
+      .select()
+      .from(studioInterviewSchedule)
+      .where(eq(studioInterviewSchedule.id, ROUND_ID));
+
+    const response = await makeApp(false).request(`/${ROUND_ID}`, {
+      body: JSON.stringify({ notes: "anonymous overwrite" }),
+      headers: { "content-type": "application/json" },
+      method: "PATCH",
+    });
+
+    expect(response.status).toBe(403);
+    const [after] = await db
+      .select()
+      .from(studioInterviewSchedule)
+      .where(eq(studioInterviewSchedule.id, ROUND_ID));
+    expect(after).toEqual(before);
   });
 });

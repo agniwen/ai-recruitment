@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { factory } from "../../../../factory";
 import { entryCredentialsRouter } from "./route";
+import { EntryRegistrationLimitError } from "./service";
+import type * as EntryCredentialService from "./service";
 
 const mocks = vi.hoisted(() => ({
   event: vi.fn(),
@@ -19,7 +21,8 @@ vi.mock("./policy", () => ({
   }),
   getCandidateEntryPolicy: mocks.policy,
 }));
-vi.mock("./service", () => ({
+vi.mock("./service", async (importOriginal) => ({
+  ...(await importOriginal<typeof EntryCredentialService>()),
   createEntryOptions: mocks.options,
   recordCredentialEvent: mocks.event,
   verifyEntryCredential: mocks.verify,
@@ -80,6 +83,19 @@ describe("public credential request boundary", () => {
     expect(mocks.options).toHaveBeenCalledOnce();
     const huge = await request("verify", { unexpected: "x".repeat(100_001) });
     expect(huge.status).toBe(413);
+  });
+  it("returns the registration limit without leaking an internal failure", async () => {
+    const registration = { canCreate: false, createdCount: 2, limit: 2 };
+    mocks.options.mockRejectedValueOnce(new EntryRegistrationLimitError(registration));
+
+    const response = await request("options", { kind: "register" });
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({
+      code: "entry_credential_registration_limit",
+      registration,
+    });
   });
   it("validates a credential response and sanitizes verifier failures", async () => {
     const input = {

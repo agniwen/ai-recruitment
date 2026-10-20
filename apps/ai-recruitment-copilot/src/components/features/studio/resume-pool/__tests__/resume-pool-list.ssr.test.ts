@@ -3,6 +3,16 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/start/auth-session", () => ({
+  getWorkspaceAccessState: () => {
+    throw new Error("SSR list rendering must not request a workspace access refresh");
+  },
+}));
+
+vi.mock("../resume-pool-masonry", () => {
+  throw new Error("SSR list rendering must not evaluate the client-only masonry module");
+});
+
 vi.mock("../resume-pool-details", () => ({
   ResumePoolCard: ({ record }: { record: { id: string } }) =>
     createElement("article", { "data-record-id": record.id }),
@@ -50,6 +60,7 @@ describe("resume pool list SSR boundary", () => {
       }),
     );
 
+    expect(markup).toContain('data-record-id="resume-1"');
     expect(markup).not.toContain("opacity-60");
   });
 });

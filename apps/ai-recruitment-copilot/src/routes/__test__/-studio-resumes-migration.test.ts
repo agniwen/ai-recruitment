@@ -62,7 +62,7 @@ describe("TanStack Start studio resumes migration", () => {
     expect(source).toContain("UnsupportedResumeDocumentPreviewTooltip");
   });
 
-  it("adds a permission-scoped copy detail link action to resume-library rows", () => {
+  it("wires visible resume-library rows to the review link and its sharing reminder", () => {
     const routeSource = readSource("routes/w.$slug.studio.resumes.tsx");
     const cardSource = readSource("components/features/studio/resumes/resume-library-card.tsx");
     const cardActionsSource = readSource(
@@ -88,8 +88,9 @@ describe("TanStack Start studio resumes migration", () => {
     expect(source).toContain("复制详情链接");
     expect(source).toMatch(/`\/resume-review\/\$\{slug\}\/\$\{record\.id\}`/u);
     expect(source).not.toMatch(/`\/w\/\$\{slug\}\/studio\/resumes\/\$\{record\.id\}`/u);
-    expect(source).toContain("record.createdBy === currentUserId");
-    expect(source).toContain("canCopyResumeDetailLink");
+    expect(cardActionsSource).toContain("onClick={() => onCopyDetailLink(record)}");
+    expect(cardSource).toContain("onCopyDetailLink={onCopyDetailLink}");
+    expect(pageSource).toContain("const copied = await copyResumeDetailLink(slug, record)");
     expect(source).toContain("ResumeLibraryDetailLinkReminderDialog");
     expect(source).toContain("setDetailLinkReminderOpen(true)");
     expect(source).toContain("《招聘需求表》");

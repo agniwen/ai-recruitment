@@ -57,7 +57,7 @@ function SmartUploadButton({
         <Badge
           aria-hidden="true"
           variant="destructive"
-          className="pointer-events-none absolute -top-2 -right-2 h-5 min-w-5 rounded-full border-background bg-destructive px-1 text-[10px] font-medium text-white tabular-nums dark:bg-destructive"
+          className="pointer-events-none absolute -top-2 -right-2 border-background bg-destructive text-white tabular-nums dark:bg-destructive"
         >
           {count}
         </Badge>

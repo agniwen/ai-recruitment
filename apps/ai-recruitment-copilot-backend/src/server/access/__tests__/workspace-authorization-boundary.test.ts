@@ -75,7 +75,9 @@ describe("request-scoped workspace authorization boundary", () => {
     );
     const app = readFileSync(path.join(backendRoot, "server/app.ts"), "utf-8");
 
-    expect(workspaceRouter).toContain('.use("*", authMiddleware, workspaceMiddleware)');
+    expect(workspaceRouter).toContain(
+      '.use("*", authMiddleware, workspaceMiddleware, guardSscWorkspaceSurface())',
+    );
     expect(workspaceRouter).toContain('.route("/studio", studioRouter)');
     expect(workspaceRouter).toContain('.route("/chat", chatRouter)');
     expect(workspaceRouter).toContain('.route("/interview", interviewAnalysisRouter)');

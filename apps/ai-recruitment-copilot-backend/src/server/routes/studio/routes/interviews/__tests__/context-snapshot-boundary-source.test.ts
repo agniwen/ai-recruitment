@@ -1,20 +1,20 @@
-import { readFileSync } from "node:fs";
+import { readTestSource } from "../../../../../../test-utils/source";
 import { describe, expect, it } from "vitest";
 
-const agentEvidenceSource = readFileSync(
+const agentEvidenceSource = readTestSource(
   new URL("../../../../agent/utils/evidence-snapshot.ts", import.meta.url),
   "utf-8",
 );
-const resumesReadRouteSource = readFileSync(
+const resumesReadRouteSource = readTestSource(
   new URL("../../resumes/read-route.ts", import.meta.url),
   "utf-8",
 );
-const interviewsRouteSource = readFileSync(new URL("../route.ts", import.meta.url), "utf-8");
-const interviewsCollectionRouteSource = readFileSync(
+const interviewsRouteSource = readTestSource(new URL("../route.ts", import.meta.url), "utf-8");
+const interviewsCollectionRouteSource = readTestSource(
   new URL("../collection-route.ts", import.meta.url),
   "utf-8",
 );
-const interviewsDetailRouteSource = readFileSync(
+const interviewsDetailRouteSource = readTestSource(
   new URL("../detail-route.ts", import.meta.url),
   "utf-8",
 );

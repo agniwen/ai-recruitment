@@ -119,18 +119,25 @@ describe("TanStack Start studio CRUD route migration", () => {
     );
     const importDialogIndex = resumePoolSource.indexOf("function ImportResumePoolDialog");
     const importDialogSource = resumePoolSource.slice(importDialogIndex);
+    const destinationSource = readSource(
+      "components/features/studio/resume-pool/resume-pool-import-destinations.tsx",
+    );
+    const endpointSource = readSource("lib/client/api/endpoints/resume-pool.ts");
     const jobDescriptionIndex = importDialogSource.indexOf("<FieldLabel>关联岗位</FieldLabel>");
-    const hiringUnitIndex = importDialogSource.indexOf('htmlFor="resume-pool-import-hiring-unit"');
+    const hiringUnitIndex = importDialogSource.indexOf("<ResumePoolImportDestinations");
 
-    expect(resumePoolSource).toContain('["hiring-units"].selectable.$get');
-    expect(importDialogSource).toContain("入库组织");
+    expect(importDialogSource).toContain("fetchResumePoolImportOptions(slug)");
+    expect(endpointSource).toContain('["resume-pool"]["import-options"].$get');
+    expect(destinationSource).toContain('htmlFor="resume-pool-import-hiring-unit"');
+    expect(destinationSource).toContain("入库组织");
     expect(importDialogSource).toContain("推荐理由");
     expect(importDialogSource).toContain("recommendationText");
-    expect(importDialogSource).not.toContain("入库组织（可选）");
+    expect(destinationSource).not.toContain("入库组织（可选）");
     expect(jobDescriptionIndex).toBeGreaterThanOrEqual(0);
     expect(hiringUnitIndex).toBeGreaterThanOrEqual(0);
     expect(jobDescriptionIndex).toBeLessThan(hiringUnitIndex);
     expect(importDialogSource).toContain("hiringUnitInvalid");
-    expect(resumePoolSource).toContain("hiringUnitId,");
+    expect(importDialogSource).toContain("destinations: activeDestinations");
+    expect(importDialogSource).toContain("if (activeDestinations.length === 0)");
   });
 });

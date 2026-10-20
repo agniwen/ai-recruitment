@@ -2,7 +2,7 @@
 // Integration tests for the bulk-resume-upload batch DAO — hit the real Postgres
 // dev database; no mocking per project convention.
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -561,12 +561,16 @@ describe("reviveOrphans", () => {
 
       expect(oldItemId).not.toBeNull();
       expect(freshItemId).not.toBeNull();
+      if (!oldItemId || !freshItemId) {
+        throw new Error("expected both processing items to be claimed");
+      }
 
       // 手动把第一个 item 的 started_at 设为 120 秒前（超过阈值）。
       // Backdate the first item so it looks stale.
-      await db.execute(
-        sql`update resume_upload_batch_item set started_at = now() - interval '120 seconds' where id = ${oldItemId}`,
-      );
+      await db
+        .update(resumeUploadBatchItem)
+        .set({ startedAt: new Date(Date.now() - 120_000) })
+        .where(eq(resumeUploadBatchItem.id, oldItemId));
 
       await reviveOrphans(batchId, ORG_A, USER_A, 60);
 
@@ -676,9 +680,13 @@ describe("recoverIncompleteBatchItems", () => {
         staleItemId = item?.id ?? null;
       });
       expect(staleItemId).not.toBeNull();
-      await db.execute(
-        sql`update resume_upload_batch_item set started_at = now() - interval '120 seconds' where id = ${staleItemId}`,
-      );
+      if (!staleItemId) {
+        throw new Error("expected a processing item to be claimed");
+      }
+      await db
+        .update(resumeUploadBatchItem)
+        .set({ startedAt: new Date(Date.now() - 120_000) })
+        .where(eq(resumeUploadBatchItem.id, staleItemId));
 
       const jobs = await recoverIncompleteBatchItems(60);
 
@@ -716,9 +724,13 @@ describe("recoverIncompleteBatchItems", () => {
         itemId = item?.id ?? null;
       });
       expect(itemId).not.toBeNull();
-      await db.execute(
-        sql`update resume_upload_batch_item set started_at = now() - interval '1200 seconds' where id = ${itemId}`,
-      );
+      if (!itemId) {
+        throw new Error("expected a processing item to be claimed");
+      }
+      await db
+        .update(resumeUploadBatchItem)
+        .set({ startedAt: new Date(Date.now() - 1_200_000) })
+        .where(eq(resumeUploadBatchItem.id, itemId));
 
       const reclaimed = await db.transaction((tx) => claimPendingItemById(tx, itemId ?? ""));
 

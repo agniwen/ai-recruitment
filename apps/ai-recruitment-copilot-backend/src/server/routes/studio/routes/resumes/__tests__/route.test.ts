@@ -5,7 +5,7 @@
 // PATCH whitelist (no interview field bleed) and that the detail DTO drops
 // interview-only properties even when the underlying row has them.
 
-import { readFileSync } from "node:fs";
+import { readTestSource } from "../../../../../../test-utils/source";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ResumeAnalysisResult } from "@arc/db-schema/interview/types";
@@ -19,51 +19,67 @@ import type {
 import type { loadResumeDetail as loadResumeDetailFn } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/resumes";
 import type { parseResumeLibraryEditFormInput as parseResumeLibraryEditFormInputFn } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/route";
 
-const routeSource = readFileSync(new URL("../route.ts", import.meta.url), "utf-8");
-const resumeDaoSource = readFileSync(new URL("../dao/resumes.ts", import.meta.url), "utf-8");
-const createFromStorageSource = readFileSync(
+const routeSource = readTestSource(new URL("../route.ts", import.meta.url), "utf-8");
+const readRouteSource = readTestSource(new URL("../read-route.ts", import.meta.url));
+const launchCommandSource = readTestSource(
+  new URL("../application/launch-ai-interview-round.ts", import.meta.url),
+);
+const launchAdapterSource = readTestSource(
+  new URL("../application/default-launch-ai-interview-round.ts", import.meta.url),
+);
+const resumeDaoSource = readTestSource(new URL("../dao/resumes.ts", import.meta.url), "utf-8");
+const profileSnapshotSource = readTestSource(
+  new URL("../dao/resume-profile-snapshot.ts", import.meta.url),
+);
+const createFromStorageSource = readTestSource(
   new URL("../utils/create-from-storage.ts", import.meta.url),
   "utf-8",
 );
-const evaluationDaoSource = readFileSync(new URL("../dao/evaluation.ts", import.meta.url), "utf-8");
-const timelineDaoSource = readFileSync(new URL("../dao/timeline.ts", import.meta.url), "utf-8");
-const timelineAuditDaoSource = readFileSync(
+const evaluationDaoSource = readTestSource(
+  new URL("../dao/evaluation.ts", import.meta.url),
+  "utf-8",
+);
+const timelineDaoSource = readTestSource(new URL("../dao/timeline.ts", import.meta.url), "utf-8");
+const timelineAuditDaoSource = readTestSource(
   new URL("../dao/timeline-audit.ts", import.meta.url),
   "utf-8",
 );
-const resumePoolDaoSource = readFileSync(
+const resumePoolDaoSource = readTestSource(
   new URL("../../resume-pool/dao.ts", import.meta.url),
   "utf-8",
 );
-const resumePoolRouteSource = readFileSync(
+const resumePoolRouteSource = readTestSource(
   new URL("../../resume-pool/route.ts", import.meta.url),
   "utf-8",
 );
-const resumeReviewWorkerSource = readFileSync(
+const resumeReviewWorkerSource = readTestSource(
   new URL("../utils/review-worker.ts", import.meta.url),
   "utf-8",
 );
-const resumeAgentToolsSource = readFileSync(
+const resumeReviewLifecycleSource = readTestSource(
+  new URL("../utils/review-lifecycle.ts", import.meta.url),
+);
+const resumeAgentToolsSource = readTestSource(
   new URL("../../../../resume/utils/agent-tools.ts", import.meta.url),
   "utf-8",
 );
-const batchProcessorSource = readFileSync(
+const batchProcessorSource = readTestSource(
   new URL("../../resume-upload-batches/utils/processor.ts", import.meta.url),
   "utf-8",
 );
-const dbSchemaSource = readFileSync(
+const dbSchemaSource = readTestSource(
   new URL("../../../../../../../../../packages/db-schema/src/schema.ts", import.meta.url),
   "utf-8",
 );
-const sharedStudioResumesSource = readFileSync(
+const sharedStudioResumesSource = readTestSource(
   new URL("../../../../../../../../../packages/shared/src/studio-resumes.ts", import.meta.url),
   "utf-8",
 );
-const sharedResumePoolSource = readFileSync(
+const sharedResumePoolSource = readTestSource(
   new URL("../../../../../../../../../packages/shared/src/resume-pool.ts", import.meta.url),
   "utf-8",
 );
-const resumeTextMigrationSource = readFileSync(
+const resumeTextMigrationSource = readTestSource(
   new URL(
     "../../../../../../../../../apps/ai-recruitment-copilot/drizzle/20260625160000_add_resume_text/migration.sql",
     import.meta.url,
@@ -98,37 +114,27 @@ const RESUME_PAYLOAD: ResumeAnalysisResult = {
 
 describe("resume launch interview route source", () => {
   it("uses the shared candidate pipeline rule before launching AI interview", () => {
-    const launchInterviewSource = routeSource.slice(
-      routeSource.indexOf('.post(\n    "/:id/launch-interview"'),
-      routeSource.indexOf(
-        "const { interviewQuestions }",
-        routeSource.indexOf("/:id/launch-interview"),
-      ),
-    );
-
-    expect(routeSource).toContain("canApplyCandidatePipelineEvent");
-    expect(launchInterviewSource).toContain('type: "START_AI_INTERVIEW"');
-    expect(launchInterviewSource).toContain("humanInterviewReadyForOffer: false");
-    expect(launchInterviewSource).toContain("stage: existing.pipelineStage");
-    expect(launchInterviewSource).toContain("候选人已进入后续招聘阶段，不能再发起 AI 面试。");
-    expect(launchInterviewSource).toContain("getResumeInterviewGateReason");
-    expect(launchInterviewSource).toContain("existing.resumeEvaluationStatus");
+    expect(routeSource).toContain('.route("/", resumeLibraryReadRouter)');
+    expect(readRouteSource).toContain('"/:id/launch-interview"');
+    expect(readRouteSource).toContain("result = await launchAiInterviewRound({");
+    expect(launchAdapterSource).toContain("createLaunchAiInterviewRound({");
+    expect(launchCommandSource).toContain("canApplyCandidatePipelineEvent");
+    expect(launchCommandSource).toContain('type: "START_AI_INTERVIEW"');
+    expect(launchCommandSource).toContain("humanInterviewReadyForOffer: false");
+    expect(launchCommandSource).toContain("stage: candidate.pipelineStage");
+    expect(readRouteSource).toContain("候选人已进入后续招聘阶段，不能再发起 AI 面试。");
+    expect(launchCommandSource).toContain("getResumeInterviewGateReason");
+    expect(launchCommandSource).toContain("candidate.resumeEvaluationStatus");
   });
 
   it("creates the interview context snapshot when launching AI interview", () => {
-    const launchInterviewSource = routeSource.slice(
-      routeSource.indexOf('.post(\n    "/:id/launch-interview"'),
-      routeSource.indexOf(
-        "return c.json(detail, 201);",
-        routeSource.indexOf("/:id/launch-interview"),
-      ),
-    );
-
-    expect(routeSource).toContain("loadOrCreateActiveInterviewContextSnapshot");
-    expect(launchInterviewSource).toContain("loadOrCreateActiveInterviewContextSnapshot({");
-    expect(launchInterviewSource).toContain("interviewRecordId: id");
-    expect(launchInterviewSource).toContain('reason: "create"');
-    expect(launchInterviewSource).toContain("scheduleEntryId: scheduleRow.id");
+    expect(launchCommandSource).toContain("await deps.createSnapshot({");
+    expect(launchCommandSource).toContain("interviewRecordId: command.interviewRecordId");
+    expect(launchCommandSource).toContain("scheduleEntryId: schedule.id");
+    expect(launchAdapterSource).toContain("loadOrCreateActiveInterviewContextSnapshot({");
+    expect(launchAdapterSource).toContain("interviewRecordId,");
+    expect(launchAdapterSource).toContain('reason: "create"');
+    expect(launchAdapterSource).toContain("scheduleEntryId,");
   });
 });
 
@@ -150,7 +156,9 @@ describe("resume review generation queue source", () => {
 
   it("keeps review worker idempotent and status-driven", () => {
     expect(resumeReviewWorkerSource).toContain('resumeReviewStatus: "processing"');
-    expect(resumeReviewWorkerSource).toContain("if (record.resumeReview)");
+    expect(resumeReviewWorkerSource).toContain("runResumeAssessmentLifecycle");
+    expect(resumeReviewLifecycleSource).toContain("!input.record.resumeReview");
+    expect(resumeReviewLifecycleSource).toContain('reason: "already_ready"');
     expect(resumeReviewWorkerSource).toContain('resumeReviewStatus: "ready"');
     expect(resumeReviewWorkerSource).toContain('resumeReviewStatus: "failed"');
     expect(resumeReviewWorkerSource).toContain("generateResumeReviewBestEffort");
@@ -220,6 +228,7 @@ describeWithDatabase("resume detail route database behavior", () => {
           { difficulty: "easy", order: 1, question: "Should never leak through detail DTO" },
         ],
         organizationId: ORG,
+        pipelineStage: "screening",
         updatedAt: NOW,
       });
 
@@ -289,8 +298,8 @@ describeWithDatabase("resume detail route database behavior", () => {
 
 describe("resume duplicate match details route", () => {
   it("exposes duplicate match details for badge clicks", () => {
-    expect(routeSource).toContain('"/:id/duplicate-matches"');
-    expect(routeSource).toContain("listDuplicateMatchesForSource");
+    expect(readRouteSource).toContain('"/:id/duplicate-matches"');
+    expect(readRouteSource).toContain("listDuplicateMatchesForSource");
   });
 });
 
@@ -363,7 +372,7 @@ describe("resume OCR text persistence", () => {
     expect(batchProcessorSource).toContain("resumeText,");
     expect(resumePoolRouteSource).toContain("resumeText = parsed.parsedText");
     expect(resumePoolDaoSource).toContain("resumeText: input.resumeText");
-    expect(resumePoolDaoSource).toContain("resumeText: poolItem.resumeText");
+    expect(resumePoolDaoSource).toContain("resumeText: source.resumeText");
   });
 
   it("does not expose resumeText through frontend-facing list or detail DTOs", () => {
@@ -405,12 +414,14 @@ describe("resume library list DTO", () => {
     expect(resumeDaoSource).toContain("resumeEducationExperiences");
     expect(resumeDaoSource).toContain("resumeWorkExperiences");
     expect(resumeDaoSource).toContain("->>'educationLevel'");
-    expect(resumeDaoSource).toContain("formatResumeEducationSchoolWithLevel");
+    expect(resumeDaoSource).toContain("resumeProfileSnapshot: buildResumeProfileSnapshot(row)");
+    expect(profileSnapshotSource).toContain("formatResumeEducationSchoolWithLevel");
     expect(resumeDaoSource).not.toContain("->>'level'");
-    expect(resumeDaoSource).toContain("sortResumeProfileSnapshotLines");
-    expect(resumeDaoSource).toContain("workHasMore:");
-    expect(resumeDaoSource).toContain("educationHasMore:");
-    expect(resumeDaoSource).toContain(".slice(0, RESUME_PROFILE_SNAPSHOT_LIMIT)");
+    expect(profileSnapshotSource).toContain("sortRecentFirst");
+    expect(profileSnapshotSource).toContain("workHasMore:");
+    expect(profileSnapshotSource).toContain("educationHasMore:");
+    expect(profileSnapshotSource).toContain("items: lines.slice(0, limit)");
+    expect(profileSnapshotSource).toContain("work: LIBRARY_SNAPSHOT_LIMIT");
     expect(resumeDaoSource).toContain("function createEmptyPeopleFields");
     expect(resumeDaoSource).toContain("result.set(row.id, createEmptyPeopleFields())");
     expect(resumeDaoSource).toContain('ne(studioHumanInterviewRound.status, "cancelled")');
@@ -426,14 +437,14 @@ describe("resume library list DTO", () => {
 
 describe("resume review detail route", () => {
   it("exposes authenticated review endpoints without relaxing the existing library detail route", () => {
-    expect(routeSource).toContain('"/:id/review"');
-    expect(routeSource).toContain('"/:id/review/timeline"');
-    expect(routeSource).toContain('"/:id/review/rounds"');
-    expect(routeSource).toContain('"/:id/review/resume"');
-    expect(routeSource).toContain('"/:id/review/evaluation"');
-    expect(routeSource).toContain("loadResumeDetailForAuthenticatedReviewer");
-    expect(routeSource).not.toContain("loadResumeDetailForWorkspaceMember");
-    expect(routeSource).toContain("submitResumeEvaluation");
+    expect(readRouteSource).toContain('"/:id/review"');
+    expect(readRouteSource).toContain('"/:id/review/timeline"');
+    expect(readRouteSource).toContain('"/:id/review/rounds"');
+    expect(readRouteSource).toContain('"/:id/review/resume"');
+    expect(readRouteSource).toContain('"/:id/review/evaluation"');
+    expect(readRouteSource).toContain("loadResumeDetailForAuthenticatedReviewer");
+    expect(readRouteSource).not.toContain("loadResumeDetailForWorkspaceMember");
+    expect(readRouteSource).toContain("submitResumeEvaluation");
   });
 
   it("records audit logs for reviewer submission and admin edits", () => {
@@ -462,7 +473,8 @@ describe("resume review detail route", () => {
   it("shows reactivation reason from candidate transition audit logs", () => {
     expect(timelineDaoSource).toContain("reactivationReason");
     expect(timelineDaoSource).toContain("重新激活原因");
-    expect(timelineDaoSource).toContain("，原因：");
+    expect(timelineDaoSource).toContain("auditDescription(log.detail ?? {}, log.action)");
+    expect(timelineAuditDaoSource).toContain("，原因：");
   });
 });
 
@@ -473,7 +485,8 @@ describe("candidate timeline audit deduplication", () => {
     expect(timelineDaoSource).toContain(
       '!hasOperatorAuditedAction(operatorAuditedActionKeys, "candidate_transition", "closed")',
     );
-    expect(timelineDaoSource).toContain('detail.toStage === "closed"');
+    expect(timelineDaoSource).toContain("auditTitle(log.action, log.detail ?? {})");
+    expect(timelineAuditDaoSource).toContain('detail.toStage === "closed"');
     expect(timelineDaoSource).toContain("候选人结案");
     expect(timelineDaoSource).toContain('"human_interview_round_created"');
     expect(timelineDaoSource).toContain('"offer_draft_created"');
@@ -490,7 +503,7 @@ describe("resume review v3 chain coverage", () => {
   it("does not generate structured resume review synchronously for resume-pool imports", () => {
     expect(resumePoolDaoSource).not.toContain("generateResumeReview");
     expect(resumePoolDaoSource).not.toContain("reviewResult?.structuredReview");
-    expect(resumePoolDaoSource).toContain("notes: poolItem.notes");
+    expect(resumePoolDaoSource).toContain("notes: source.notes");
   });
 
   it("generates a V3 resume review on create when the client did not provide one", () => {

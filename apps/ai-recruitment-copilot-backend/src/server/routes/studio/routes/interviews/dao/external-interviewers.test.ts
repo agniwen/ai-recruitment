@@ -12,6 +12,7 @@ describe("external interviewer Telegram bindings", () => {
   it("accepts a system user's binding without a requester binding", async () => {
     mocks.rows
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ boundUsername: "tester1", chatId: "123", telegram: "@Tester1" }]);
     expect(
       await resolveExternalInterviewerBindings("org", [{ name: "外部", telegram: " @TESTER1 " }]),
@@ -19,10 +20,13 @@ describe("external interviewer Telegram bindings", () => {
   });
 
   it("rejects missing chat ids and bindings for an old profile username", async () => {
-    mocks.rows.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      { boundUsername: "tester1", chatId: null, telegram: "@tester1" },
-      { boundUsername: "oldname", chatId: "456", telegram: "@tester2" },
-    ]);
+    mocks.rows
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { boundUsername: "tester1", chatId: null, telegram: "@tester1" },
+        { boundUsername: "oldname", chatId: "456", telegram: "@tester2" },
+      ]);
     expect(
       await resolveExternalInterviewerBindings("org", [
         { name: "A", telegram: "@tester1" },
@@ -37,6 +41,7 @@ describe("external interviewer Telegram bindings", () => {
   it("preserves requester bindings and adds system user recipients", async () => {
     mocks.rows
       .mockResolvedValueOnce([{ chatId: "123", username: "tester1" }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { boundUsername: "tester1", chatId: "123", telegram: "@tester1" },
         { boundUsername: "tester2", chatId: "456", telegram: "@tester2" },
@@ -52,6 +57,19 @@ describe("external interviewer Telegram bindings", () => {
       { chatId: "456", name: "B", telegram: "@tester2" },
       { chatId: null, name: "C", telegram: "@unknown" },
     ]);
+  });
+
+  it("uses registered recipient bindings before requester and system profile bindings", async () => {
+    mocks.rows
+      .mockResolvedValueOnce([{ chatId: "requester-chat", username: "tester1" }])
+      .mockResolvedValueOnce([{ chatId: "registered-chat", username: "tester1" }])
+      .mockResolvedValueOnce([
+        { boundUsername: "tester1", chatId: "profile-chat", telegram: "@tester1" },
+      ]);
+
+    expect(
+      await resolveExternalInterviewerBindings("org", [{ name: "A", telegram: "@Tester1" }]),
+    ).toEqual([{ chatId: "registered-chat", name: "A", telegram: "@Tester1" }]);
   });
 
   it("leaves empty or invalid handles unbound without querying", async () => {
