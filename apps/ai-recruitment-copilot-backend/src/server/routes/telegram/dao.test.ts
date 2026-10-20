@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { telegramRecipientBinding, telegramRequesterBinding, user } from "@arc/db-schema/schema";
 import { bindTelegramUser } from "./dao";
-vi.mock("./ssc-telegram-provisioning", () => ({
-  provisionSscTelegramFollower: () => Promise.resolve(null),
-}));
-
 const mocks = vi.hoisted(() => ({
   insert: vi.fn(),
   members: vi.fn(),
+  provision: vi.fn(),
   requesters: vi.fn(),
   set: vi.fn(),
   transaction: vi.fn(),
   update: vi.fn(),
   upsert: vi.fn(),
   values: vi.fn(),
+}));
+vi.mock("./ssc-telegram-provisioning", () => ({
+  provisionSscTelegramFollower: (...args: unknown[]) => mocks.provision(...args),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: {
@@ -26,6 +26,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.members.mockResolvedValue([]);
+  mocks.provision.mockResolvedValue(null);
   mocks.requesters.mockResolvedValue([]);
   mocks.update.mockReturnValue({ set: mocks.set });
   mocks.set.mockReturnValue({ where: vi.fn().mockResolvedValue(null) });
@@ -138,5 +139,21 @@ describe("Telegram member and external requester binding", () => {
     mocks.requesters.mockResolvedValue([{ organizationId: "org", requester: "@JackLil" }]);
     mocks.upsert.mockRejectedValue(new Error("database unavailable"));
     await expect(bindTelegramUser(input)).rejects.toThrow("database unavailable");
+  });
+
+  it("preserves the committed follower binding and reports SSC synchronization pending on provisioning failure", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.provision.mockRejectedValue(new Error("private database details"));
+    try {
+      expect(await bindTelegramUser(input)).toEqual({
+        kind: "registered",
+        memberAmbiguous: false,
+        sscProvisioningPending: true,
+      });
+      expect(mocks.values).toHaveBeenCalledWith({ chatId: "12345", username: "jacklil" });
+      expect(log.mock.calls.flat().join(" ")).not.toContain("private database details");
+    } finally {
+      log.mockRestore();
+    }
   });
 });

@@ -8,6 +8,8 @@ Telegram 与系统页面操作同一条 Offer，使用相同的身份、组织�
 
 正式环境自动通知、空收件人重试及回调初始化修复见 [正式通知更新说明](../releases/2026-10-20-ssc-production-notifications.md)。
 
+升级前已验证的外部面试官/需求发起人 TG 绑定兼容，以及 `/start` 错误回复修复见 [已有 TG 绑定兼容说明](../releases/2026-10-20-ssc-legacy-telegram-bindings.md)。
+
 ## 操作流程
 
 | Offer SSC 状态 | Telegram 操作                      | 结果                                                                |

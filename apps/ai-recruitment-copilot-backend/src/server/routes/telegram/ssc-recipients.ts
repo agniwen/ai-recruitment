@@ -1,4 +1,4 @@
-import { and, eq, exists, inArray, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, notExists, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   jobDescription,
@@ -13,6 +13,7 @@ import {
 import { normalizeTelegramUsername } from "./utils/identity";
 import { pinSscTelegramIdentity } from "./ssc-telegram-binding";
 import { provisionSscTelegramFollower } from "./ssc-telegram-provisioning";
+import { promoteLegacySscTelegramBindings } from "./ssc-legacy-telegram-bindings";
 import { verifiedSscTelegramGrant } from "@arc/ai-recruitment-copilot-backend/server/access/ssc-telegram-grant";
 
 interface RecipientFilter {
@@ -44,6 +45,60 @@ async function loadSscRecipients(filter: RecipientFilter) {
           ),
       )
     : undefined;
+  const assignments = await db
+    .selectDistinct({
+      organizationId: sscResponsibility.organizationId,
+      telegram: sscResponsibility.telegram,
+    })
+    .from(sscResponsibility)
+    .innerJoin(
+      resumeSource,
+      and(
+        eq(resumeSource.id, sscResponsibility.resumeSourceId),
+        eq(resumeSource.organizationId, sscResponsibility.organizationId),
+      ),
+    )
+    .innerJoin(
+      organizationRole,
+      and(
+        eq(organizationRole.organizationId, sscResponsibility.organizationId),
+        eq(organizationRole.role, sscResponsibility.workspaceRole),
+        eq(organizationRole.isSsc, true),
+        eq(organizationRole.isOdc, false),
+        notInArray(organizationRole.role, ["owner", "admin", "member", "noAccess"]),
+      ),
+    )
+    .where(
+      and(
+        filter.organizationId
+          ? eq(sscResponsibility.organizationId, filter.organizationId)
+          : undefined,
+        filter.usernames
+          ? inArray(
+              sql<string>`lower(btrim(trim(leading '@' from btrim(${sscResponsibility.telegram}))))`,
+              filter.usernames,
+            )
+          : undefined,
+        notExists(
+          db
+            .select({ chatId: telegramRecipientBinding.chatId })
+            .from(telegramRecipientBinding)
+            .where(
+              sql`${telegramRecipientBinding.username} = lower(btrim(trim(leading '@' from btrim(${sscResponsibility.telegram}))))`,
+            ),
+        ),
+        candidateSource,
+      ),
+    );
+  const byOrganization = new Map<string, string[]>();
+  for (const assignment of assignments) {
+    const names = byOrganization.get(assignment.organizationId) ?? [];
+    names.push(assignment.telegram);
+    byOrganization.set(assignment.organizationId, names);
+  }
+  for (const [organizationId, usernames] of byOrganization) {
+    await promoteLegacySscTelegramBindings({ chatId: filter.chatId, organizationId, usernames });
+  }
   const followers = await db
     .selectDistinct({
       chatId: telegramRecipientBinding.chatId,

@@ -15,9 +15,11 @@ import {
   studioOfferSscNotificationOutbox,
   sscTelegramIdentity,
   telegramRecipientBinding,
+  telegramRequesterBinding,
   user,
 } from "@arc/db-schema/schema";
 import { getOfferSscNotificationTargets } from "../studio/routes/interviews/utils/offer-ssc-notification";
+import { resolveExternalInterviewerBindings } from "../studio/routes/interviews/dao/external-interviewers";
 import { resolveBoundTelegramOfferActor } from "./offer-ssc-dao";
 import { bindTelegramUser } from "./dao";
 import {
@@ -51,6 +53,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
     let chatId: string;
     const userIds: string[] = [];
     const chatIds: string[] = [];
+    const extraOrganizationIds: string[] = [];
 
     beforeEach(async () => {
       orgId = `test_ssc_tg_${randomUUID()}`;
@@ -136,6 +139,11 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       await db.delete(jobDescription).where(eq(jobDescription.organizationId, orgId));
       await db.delete(department).where(eq(department.organizationId, orgId));
       await db.delete(organization).where(eq(organization.id, orgId));
+      if (extraOrganizationIds.length) {
+        await db
+          .delete(organization)
+          .where(inArray(organization.id, extraOrganizationIds.splice(0)));
+      }
       await db.delete(user).where(inArray(user.id, userIds.splice(0)));
       await db
         .delete(telegramRecipientBinding)
@@ -154,6 +162,235 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
     function actor(handle = username) {
       return resolveBoundTelegramOfferActor({ telegramUserId: chatId, username: handle });
     }
+
+    describe("legacy verified Telegram bindings", () => {
+      beforeEach(async () => {
+        await db
+          .update(sscResponsibility)
+          .set({ email: "" })
+          .where(eq(sscResponsibility.organizationId, orgId));
+        await db
+          .delete(telegramRecipientBinding)
+          .where(eq(telegramRecipientBinding.chatId, chatId));
+      });
+
+      async function addRequesterBinding(organizationId = orgId, recipientChatId = chatId) {
+        await db.insert(telegramRequesterBinding).values({
+          chatId: recipientChatId,
+          organizationId,
+          username,
+        });
+      }
+
+      async function addOtherOrganization() {
+        const id = `test_ssc_legacy_${randomUUID()}`;
+        extraOrganizationIds.push(id);
+        await db.insert(organization).values({ id, name: "Other workspace", slug: id });
+        return id;
+      }
+
+      async function externalBinding(organizationId = orgId) {
+        const [result] = await resolveExternalInterviewerBindings(organizationId, [
+          { name: "Legacy SSC", telegram: `@${username}` },
+        ]);
+        return result.chatId;
+      }
+
+      async function removeSystemAccount() {
+        await db.delete(member).where(eq(member.userId, sscId));
+        await db.delete(user).where(eq(user.id, sscId));
+      }
+
+      it.each(["same-workspace requester without an account", "verified personal profile"])(
+        "dispatches and completes a blank-email Offer from a %s",
+        async (bindingKind) => {
+          if (bindingKind === "same-workspace requester without an account") {
+            await removeSystemAccount();
+            await addRequesterBinding();
+          } else {
+            await db
+              .update(user)
+              .set({
+                telegram: `@${username}`,
+                telegramBoundUsername: username,
+                telegramChatId: chatId,
+              })
+              .where(eq(user.id, sscId));
+          }
+          expect(await externalBinding()).toBe(chatId);
+          expect(
+            await db
+              .select()
+              .from(telegramRecipientBinding)
+              .where(eq(telegramRecipientBinding.chatId, chatId)),
+          ).toEqual([]);
+
+          const created = await createOfferDraft({
+            input: { baseSalary: 23_456, position: "Legacy-bound SSC Offer" },
+            interviewRecordId: candidateId,
+            organizationId: orgId,
+          });
+          draftId = created.id;
+          expect(await dispatchOfferSscNotifications()).toBe(1);
+          expect(transport.send).toHaveBeenCalledTimes(1);
+          expect(transport.send.mock.calls[0][0]).toBe(chatId);
+
+          const [job] = await db
+            .select()
+            .from(studioOfferSscNotificationOutbox)
+            .where(eq(studioOfferSscNotificationOutbox.draftId, draftId));
+          expect(job.status).toBe("completed");
+          expect(job.sentUserIds).toHaveLength(1);
+          const actorId = await actor();
+          expect(actorId).toBe(job.sentUserIds[0]);
+          if (!actorId) {
+            throw new Error("Expected a pinned SSC actor for the verified legacy recipient");
+          }
+          const [pin] = await db
+            .select()
+            .from(sscTelegramIdentity)
+            .where(eq(sscTelegramIdentity.chatId, chatId));
+          expect(pin).toMatchObject({ chatId, userId: actorId, username });
+          const input = {
+            actor: { id: actorId, role: "ssc-tg" },
+            draftId,
+            interviewRecordId: candidateId,
+            organizationId: orgId,
+            revision: 1,
+            source: "telegram" as const,
+          };
+          const received = await receiveOfferSscConfirmation(input);
+          expect(received.sscConfirmationStatus).toBe("confirming");
+          const completed = await completeOfferSscConfirmation({
+            ...input,
+            internalApprovalConfirmed: true,
+          });
+          expect(completed.sscConfirmationStatus).toBe("completed");
+          expect(completed.sscCompletedBy).toBe(actorId);
+          const [relation] = await db
+            .select()
+            .from(sscResponsibility)
+            .where(eq(sscResponsibility.organizationId, orgId));
+          expect(relation.email).toBe("");
+        },
+      );
+
+      it("does not promote a requester binding from another workspace", async () => {
+        const otherOrganizationId = await addOtherOrganization();
+        await addRequesterBinding(otherOrganizationId);
+        expect(await externalBinding(otherOrganizationId)).toBe(chatId);
+        expect(await externalBinding()).toBeNull();
+        expect(await targets()).toEqual([]);
+        expect(await actor()).toBeNull();
+        expect(
+          await db
+            .select()
+            .from(telegramRecipientBinding)
+            .where(eq(telegramRecipientBinding.chatId, chatId)),
+        ).toEqual([]);
+      });
+
+      it.each([null, "renamed_legacy_owner"])(
+        "does not resurrect a legacy binding when the canonical chat username is %s",
+        async (currentUsername) => {
+          await addRequesterBinding();
+          await db.insert(telegramRecipientBinding).values({ chatId, username: currentUsername });
+          expect(await externalBinding()).toBe(chatId);
+          expect(await targets()).toEqual([]);
+          const [binding] = await db
+            .select()
+            .from(telegramRecipientBinding)
+            .where(eq(telegramRecipientBinding.chatId, chatId));
+          expect(binding.username).toBe(currentUsername);
+          expect(
+            await db
+              .select()
+              .from(sscTelegramIdentity)
+              .where(eq(sscTelegramIdentity.chatId, chatId)),
+          ).toEqual([]);
+        },
+      );
+
+      it("keeps the current canonical chat ahead of a stale requester binding", async () => {
+        const currentChatId = String(randomInt(1_000_000, 999_999_999_999));
+        chatIds.push(currentChatId);
+        await removeSystemAccount();
+        await addRequesterBinding();
+        await db.insert(telegramRecipientBinding).values({ chatId: currentChatId, username });
+        expect(await externalBinding()).toBe(currentChatId);
+        const notifications = await targets();
+        expect(notifications.map((target) => target.chatId)).toEqual([currentChatId]);
+        expect(
+          await db
+            .select()
+            .from(telegramRecipientBinding)
+            .where(eq(telegramRecipientBinding.chatId, chatId)),
+        ).toEqual([]);
+      });
+
+      it.each(["another workspace requester", "verified profile"])(
+        "does not promote legacy proof that conflicts with a %s",
+        async (conflictKind) => {
+          const otherChatId = String(randomInt(1_000_000, 999_999_999_999));
+          chatIds.push(otherChatId);
+          await addRequesterBinding();
+          await (conflictKind === "another workspace requester"
+            ? addRequesterBinding(await addOtherOrganization(), otherChatId)
+            : db
+                .update(user)
+                .set({
+                  telegram: `@${username}`,
+                  telegramBoundUsername: username,
+                  telegramChatId: otherChatId,
+                })
+                .where(eq(user.id, sscId)));
+          expect(await externalBinding()).toBe(chatId);
+          expect(await targets()).toEqual([]);
+          expect(
+            await db
+              .select()
+              .from(telegramRecipientBinding)
+              .where(eq(telegramRecipientBinding.username, username)),
+          ).toEqual([]);
+          expect(
+            await db
+              .select()
+              .from(sscTelegramIdentity)
+              .where(eq(sscTelegramIdentity.username, username)),
+          ).toEqual([]);
+        },
+      );
+
+      it("promotes one canonical binding and audit identity under concurrent legacy resolution", async () => {
+        await removeSystemAccount();
+        await addRequesterBinding();
+        expect(await externalBinding()).toBe(chatId);
+        const results = await Promise.all([targets(), targets(), targets()]);
+        for (const result of results) {
+          expect(result).toHaveLength(1);
+          expect(result[0].chatId).toBe(chatId);
+        }
+        expect(new Set(results.map((result) => result[0].userId)).size).toBe(1);
+        expect(await actor()).toBe(results[0][0].userId);
+        expect(
+          await db
+            .select()
+            .from(telegramRecipientBinding)
+            .where(eq(telegramRecipientBinding.username, username)),
+        ).toHaveLength(1);
+        expect(
+          await db
+            .select()
+            .from(sscTelegramIdentity)
+            .where(eq(sscTelegramIdentity.username, username)),
+        ).toHaveLength(1);
+        expect(await db.select().from(member).where(eq(member.organizationId, orgId))).toHaveLength(
+          1,
+        );
+        const repeated = await targets();
+        expect(repeated.map((target) => target.userId)).toEqual([results[0][0].userId]);
+      });
+    });
 
     it("automatically sends the actual newly created Offer after its source SSC permissions are enabled", async () => {
       await db

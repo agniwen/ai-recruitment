@@ -87,4 +87,26 @@ describe("Telegram /start binding", () => {
     const post = await start();
     expect(post).toHaveBeenCalledWith("关注成功，你可以在这里接收通知。");
   });
+  it("explains a pending SSC sync after the notification binding has committed", async () => {
+    mocks.bind.mockResolvedValue({
+      kind: "registered",
+      memberAmbiguous: false,
+      sscProvisioningPending: true,
+    });
+    const post = await start();
+    expect(post).toHaveBeenCalledWith(expect.stringContaining("关注成功"));
+    expect(post).toHaveBeenCalledWith(expect.stringContaining("SSC 身份同步暂未完成"));
+  });
+  it("replies with a retry instruction when binding persistence fails", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.bind.mockRejectedValue(new Error("private database details"));
+    try {
+      const post = await start();
+      expect(post).toHaveBeenCalledWith(expect.stringContaining("绑定暂未成功"));
+      expect(post).toHaveBeenCalledWith(expect.stringContaining("/start"));
+      expect(log.mock.calls.flat().join(" ")).not.toContain("private database details");
+    } finally {
+      log.mockRestore();
+    }
+  });
 });
