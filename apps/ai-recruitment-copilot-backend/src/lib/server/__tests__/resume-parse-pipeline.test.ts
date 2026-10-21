@@ -737,7 +737,7 @@ describe("resume parser input enrichment", () => {
     mocks.qwenVlOcr.mockResolvedValue("示例公司 前端工程师");
   });
 
-  it("supplements OCR omissions with dated PDF text and uses higher resolution", async () => {
+  it("supplements OCR omissions with dated PDF text and uses adaptive resolution", async () => {
     mocks.extractPdfTextPages.mockResolvedValue({
       pageCount: 1,
       pages: ["示例公司\n2022-01 至 2024-08\n前端工程师"],
@@ -747,8 +747,8 @@ describe("resume parser input enrichment", () => {
     expect(result.text).toContain("PDF 文本层补充信息");
     expect(mocks.processPdfPagesWithMeta.mock.calls[0]?.[1]).toMatchObject({
       maxPages: 6,
-      scale: 4,
     });
+    expect(mocks.processPdfPagesWithMeta.mock.calls[0]?.[1]).not.toHaveProperty("scale");
   });
 
   it("keeps successful OCR when the PDF text layer cannot be read", async () => {

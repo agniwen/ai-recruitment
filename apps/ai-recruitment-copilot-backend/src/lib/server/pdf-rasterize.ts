@@ -7,6 +7,10 @@ import type * as MupdfModuleNs from "mupdf";
 
 type MupdfModule = typeof MupdfModuleNs;
 
+// Stay below qwen-vl-ocr's default 6,422,528-pixel budget before allocating WASM memory.
+const MAX_RENDER_DIMENSION = 3200;
+const MAX_RENDER_PIXELS = 6_000_000;
+
 let mupdfModulePromise: Promise<MupdfModule> | null = null;
 
 function loadMupdf(): Promise<MupdfModule> {
@@ -15,7 +19,7 @@ function loadMupdf(): Promise<MupdfModule> {
 }
 
 export interface RasterizeOptions {
-  /** Render scale relative to PDF default (72 DPI). 2 ≈ 144 DPI. */
+  /** Optional preferred scale (72 DPI = 1), capped by the per-page pixel limits. */
   scale?: number;
   maxPages?: number;
 }
@@ -41,11 +45,24 @@ export interface ProcessPdfPagesResult<T> {
 function renderPdfPage(
   mupdf: MupdfModule,
   doc: MupdfModuleNs.Document,
-  matrix: MupdfModuleNs.Matrix,
+  scale: number | undefined,
   index: number,
 ): Buffer {
   const page = doc.loadPage(index);
   try {
+    const [x0, y0, x1, y1] = page.getBounds();
+    const width = x1 - x0;
+    const height = y1 - y0;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      throw new Error(`PDF 第 ${index + 1} 页尺寸无效，无法转换为图片。`);
+    }
+    // MuPDF rounds bounds outward; reserve two pixels per edge, including shifted pages.
+    const renderScale = Math.min(
+      scale ?? Number.POSITIVE_INFINITY,
+      (MAX_RENDER_DIMENSION - 2) / Math.max(width, height),
+      Math.sqrt((MAX_RENDER_PIXELS - 4 * MAX_RENDER_DIMENSION) / (width * height)),
+    );
+    const matrix = mupdf.Matrix.scale(renderScale, renderScale);
     const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false);
     try {
       return Buffer.from(pixmap.asPNG());
@@ -59,7 +76,7 @@ function renderPdfPage(
 
 export async function processPdfPagesWithMeta<T>(
   bytes: Uint8Array,
-  { concurrency = 1, maxPages = 6, onReady, scale = 2 }: ProcessPdfPagesOptions,
+  { concurrency = 1, maxPages = 6, onReady, scale }: ProcessPdfPagesOptions,
   processPage: (png: Buffer, index: number) => Promise<T>,
 ): Promise<ProcessPdfPagesResult<T>> {
   const mupdf = await loadMupdf();
@@ -71,7 +88,6 @@ export async function processPdfPagesWithMeta<T>(
   try {
     const pageCount = doc.countPages();
     const total = Math.min(pageCount, maxPages);
-    const matrix = mupdf.Matrix.scale(scale, scale);
     const renderedSizes = Array.from<number>({ length: total });
     const results = Array.from<T>({ length: total });
     const requestedConcurrency =
@@ -91,7 +107,7 @@ export async function processPdfPagesWithMeta<T>(
         nextPage += 1;
 
         try {
-          const png = renderPdfPage(mupdf, doc, matrix, index);
+          const png = renderPdfPage(mupdf, doc, scale, index);
           renderedSizes[index] = png.byteLength;
           results[index] = await processPage(png, index);
         } catch (error) {
@@ -116,7 +132,7 @@ export async function processPdfPagesWithMeta<T>(
 
 export async function rasterizePdfWithMeta(
   bytes: Uint8Array,
-  { scale = 2, maxPages = 6 }: RasterizeOptions = {},
+  { scale, maxPages = 6 }: RasterizeOptions = {},
 ): Promise<RasterizeResult> {
   const { pageCount, results } = await processPdfPagesWithMeta(
     bytes,

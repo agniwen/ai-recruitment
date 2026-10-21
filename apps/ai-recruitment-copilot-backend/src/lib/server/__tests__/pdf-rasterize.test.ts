@@ -3,11 +3,11 @@ import * as mupdf from "mupdf";
 import { describe, expect, it } from "vitest";
 import { extractPdfTextPages, processPdfPagesWithMeta } from "../pdf-rasterize";
 
-function createPdf(pageCount: number): Buffer {
+function createPdf(pageCount: number, bounds: mupdf.Rect = [0, 0, 100, 100]): Buffer {
   const document = new mupdf.PDFDocument();
   try {
     for (let index = 0; index < pageCount; index += 1) {
-      const page = document.addPage([0, 0, 100, 100], 0, {}, Buffer.from("q\nQ\n"));
+      const page = document.addPage(bounds, 0, {}, Buffer.from("q\nQ\n"));
       document.insertPage(-1, page);
     }
     const saved = document.saveToBuffer();
@@ -22,6 +22,27 @@ function createPdf(pageCount: number): Buffer {
 }
 
 describe("processPdfPagesWithMeta", () => {
+  it.each<{ name: string; bounds: mupdf.Rect }>([
+    { bounds: [0, 0, 595, 842], name: "A4" },
+    { bounds: [0, 0, 8000, 4500], name: "oversized landscape resume" },
+    { bounds: [0, 0, 8000, 8000], name: "oversized square" },
+    { bounds: [0, 0, 100, 8000], name: "long narrow page" },
+    { bounds: [-4000.5, 200.25, 3999.5, 8200.25], name: "shifted fractional page" },
+  ])("renders $name inside both pixel limits while preserving aspect ratio", async ({ bounds }) => {
+    const result = await processPdfPagesWithMeta(createPdf(1, bounds), {}, (png) =>
+      Promise.resolve({
+        height: png.readUInt32BE(20),
+        width: png.readUInt32BE(16),
+      }),
+    );
+    const [{ width, height }] = result.results;
+    expect(Math.max(width, height)).toBeLessThanOrEqual(3200);
+    expect(width * height).toBeLessThanOrEqual(6_000_000);
+    expect(width / height).toBeCloseTo((bounds[2] - bounds[0]) / (bounds[3] - bounds[1]), 2);
+    // Normal-sized text pages should still be rendered at OCR-quality resolution.
+    expect(Math.max(width, height)).toBeGreaterThanOrEqual(2400);
+  });
+
   it("processes pages through a bounded pool and preserves page order", async () => {
     const pdf = createPdf(6);
     const originalPdf = Buffer.from(pdf);
