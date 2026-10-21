@@ -1,5 +1,6 @@
 import type { ResumeAnalysisResult } from "./interview/types";
 import { z } from "zod";
+import { offerConfirmationDetailsSchema } from "./offer-confirmation";
 
 export const candidateInterviewFeedbackCategoryValues = [
   "audio",
@@ -382,6 +383,7 @@ export const offerDraftInputSchema = z.object({
   baseSalary: z.number().int().min(0, "Base salary 不能为负"),
   bonus: z.number().int().min(0).nullable().optional(),
   candidateCounter: z.string().trim().max(2000).nullable().optional(),
+  confirmationInfo: offerConfirmationDetailsSchema.nullable().optional(),
   currency: offerCurrencySchema.optional(),
   equity: z.string().trim().max(500).nullable().optional(),
   expiresAt: z.string().trim().nullable().optional(),

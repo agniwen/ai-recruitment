@@ -1,5 +1,6 @@
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import type { ResumeReviewLoose } from "@arc/db-schema/resume-review";
+import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
 import type {
   HumanInterviewFormat,
   HumanInterviewRoundOutcome,
@@ -97,6 +98,7 @@ export interface OfferCandidatePreview {
   humanInterviews: OfferCandidateHumanInterview[];
   timeline?: OfferCandidateActivity[];
   offer: {
+    confirmationInfo?: OfferConfirmationDetails | null;
     id: string;
     version: number;
     position: string;

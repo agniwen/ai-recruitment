@@ -31,6 +31,7 @@ import { notifyCandidateStageChange } from "@arc/ai-recruitment-copilot-backend/
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { isPreviewImage } from "./utils";
 import { offerSscRouter } from "./routes/ssc/route";
+import { loadOfferCreationContext } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-creation-context";
 
 const createOfferInputSchema = offerDraftInputSchema.extend({
   sendImmediately: z.boolean().optional(),
@@ -128,6 +129,23 @@ async function createOfferVersion({
 export const offerDraftsRouter = factory
   .createApp()
   .use("*", requireSscCandidateAccess())
+  .get("/creation-context", requirePermission("offer", "create"), async (c) => {
+    const { activeOrg, user, member } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const interviewRecordId = c.req.param("id");
+    if (!interviewRecordId) {
+      return c.json({ error: "候选人记录不存在。" }, 404);
+    }
+    const context = await loadOfferCreationContext({
+      actorRole: member?.role,
+      actorUserId: user.id,
+      interviewRecordId,
+      organizationId: activeOrg.id,
+    });
+    return context ? c.json(context, 200) : c.json({ error: "候选人记录不存在。" }, 404);
+  })
   .get("/", requirePermission("offer", "read"), async (c) => {
     const { activeOrg } = c.var;
     if (!activeOrg) {

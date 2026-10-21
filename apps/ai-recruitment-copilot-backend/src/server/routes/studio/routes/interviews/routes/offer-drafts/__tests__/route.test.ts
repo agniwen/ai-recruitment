@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   loadDraftById: vi.fn(),
   loadHumanInterviewRoundReadiness: vi.fn(),
   loadOfferApprovalAttachment: vi.fn(),
+  loadOfferCreationContext: vi.fn(),
   maybeAdvanceToOffer: vi.fn(),
   permissionCalls: [] as [string, string][],
   putObjectBytes: vi.fn(),
@@ -44,6 +45,13 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   getObjectStream: mocks.getObjectStream,
   putObjectBytes: mocks.putObjectBytes,
 }));
+
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-creation-context",
+  () => ({
+    loadOfferCreationContext: mocks.loadOfferCreationContext,
+  }),
+);
 
 vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () => ({
   requirePermission: (resource: string, action: string) => {
@@ -176,7 +184,37 @@ describe("offerDraftsRouter", () => {
     for (const [, action] of mocks.permissionCalls) {
       counts[action] = (counts[action] ?? 0) + 1;
     }
-    expect(counts).toEqual({ confirm: 2, create: 2, delete: 2, read: 5, receive: 1, update: 5 });
+    expect(counts).toEqual({ confirm: 2, create: 3, delete: 2, read: 5, receive: 1, update: 5 });
+  });
+
+  it("loads creation defaults without creating an Offer or advancing its stage", async () => {
+    const context = {
+      defaults: { candidateName: "候选人" },
+      interviewRounds: [],
+      resume: { available: false, filename: null, mediaType: null },
+    };
+    mocks.loadOfferCreationContext.mockResolvedValue(context);
+    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts/creation-context`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(context);
+    expect(mocks.loadOfferCreationContext).toHaveBeenCalledWith({
+      actorRole: undefined,
+      actorUserId: "operator-1",
+      interviewRecordId: RECORD_ID,
+      organizationId: ORG_ID,
+    });
+    expect(mocks.createOfferDraft).not.toHaveBeenCalled();
+    expect(mocks.maybeAdvanceToOffer).not.toHaveBeenCalled();
+    expect(mocks.recordCandidateActivity).not.toHaveBeenCalled();
+    expect(mocks.putObjectBytes).not.toHaveBeenCalled();
+  });
+
+  it("returns an unavailable candidate for a creation context outside the actor's scope", async () => {
+    mocks.loadOfferCreationContext.mockResolvedValue(null);
+    const response = await makeApp().request("/other-candidate/offer-drafts/creation-context");
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "候选人记录不存在。" });
+    expect(mocks.createOfferDraft).not.toHaveBeenCalled();
   });
 
   it("lists drafts through the mounted candidate path", async () => {

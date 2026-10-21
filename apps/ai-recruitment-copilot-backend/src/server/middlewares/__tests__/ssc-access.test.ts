@@ -91,6 +91,19 @@ describe("SSC workspace boundary", () => {
     expect(reviewResponse.status).toBe(200);
   });
 
+  it("keeps creation-context as a candidate collection read instead of an Offer id", async () => {
+    mocks.visible.mockImplementation(({ draftId }: { draftId?: string }) =>
+      Promise.resolve(draftId === undefined),
+    );
+    const response = await makeApp().request(
+      "/api/w/work/studio/interviews/allowed/offer-drafts/creation-context",
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.visible).toHaveBeenCalledWith(
+      expect.objectContaining({ candidateId: "allowed", draftId: undefined }),
+    );
+  });
+
   it("keeps ordinary static job/source metadata and candidate lists on their own permissions", async () => {
     const jobResponse = await makeApp().request("/api/w/work/studio/job-descriptions");
     expect(jobResponse.status).toBe(200);

@@ -63,6 +63,7 @@ import {
   offerFormStateFromDraft,
 } from "./offer-stage-form";
 import type { OfferFormState } from "./offer-stage-form";
+import { OfferConfirmationFields, OfferInformationDialog } from "./offer-creation-confirmation";
 
 export function CandidateExpectationsBlock({
   candidateId,
@@ -296,6 +297,7 @@ export function OfferCard({
   });
   const [editing, setEditing] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [informationOpen, setInformationOpen] = useState(false);
   const [form, setForm] = useState<OfferFormState>(() => offerFormStateFromDraft(draft));
   const setFormField = createOfferFormFieldSetter(setForm);
 
@@ -361,6 +363,14 @@ export function OfferCard({
             idPrefix={`offer-${draft.id}`}
             onFieldChange={setFormField}
           />
+          {form.confirmationInfo ? (
+            <OfferConfirmationFields
+              info={form.confirmationInfo}
+              idPrefix={`offer-${draft.id}-confirm`}
+              onChange={(info) => setFormField("confirmationInfo", info)}
+              disabled={saveMutation.isPending}
+            />
+          ) : null}
 
           <div className="mt-3 flex justify-end gap-2">
             <Button
@@ -397,6 +407,12 @@ export function OfferCard({
 
           <OfferDraftReadonlyFields draft={draft} />
 
+          {draft.confirmationInfo ? (
+            <Button onClick={() => setInformationOpen(true)} size="sm" variant="outline">
+              查看 Offer 信息
+            </Button>
+          ) : null}
+
           <OfferSscCompletionAttachment candidateId={candidateId} draft={draft} slug={slug} />
 
           <OfferSscNotice draft={draft} error={ssc.error} />
@@ -425,6 +441,11 @@ export function OfferCard({
           onConfirm={() => deleteMutation.mutate()}
           record={deleteConfirmOpen ? draft : null}
           title="删除这条 Offer？"
+        />
+        <OfferInformationDialog
+          draft={draft}
+          open={informationOpen}
+          onOpenChange={setInformationOpen}
         />
       </CardContent>
     </Card>

@@ -22,6 +22,7 @@ import {
   loadAuthorizedOfferSscContext,
   OfferDraftError,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
+import type { OfferDraftRecord } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { listHumanInterviewRounds } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/human-interview-rounds";
 import { verifyOfferCandidatePreviewToken } from "./access";
 
@@ -131,6 +132,28 @@ async function publicTimeline(candidateId: string, organizationId: string) {
     title: event.title,
     tone: event.tone,
   }));
+}
+
+function publicOffer(
+  draft: OfferDraftRecord,
+  sscConfirmationStatus: OfferCandidatePreview["offer"]["sscConfirmationStatus"],
+): OfferCandidatePreview["offer"] {
+  return {
+    baseSalary: draft.baseSalary,
+    bonus: draft.bonus,
+    confirmationInfo: draft.confirmationInfo ?? null,
+    currency: draft.currency,
+    equity: draft.equity,
+    expiresAt: draft.expiresAt,
+    id: draft.id,
+    joiningDate: draft.joiningDate,
+    notes: draft.notes,
+    position: draft.position,
+    sscCompletedAt: draft.sscCompletedAt ?? null,
+    sscConfirmationStatus,
+    sscReceivedAt: draft.sscReceivedAt ?? null,
+    version: draft.version,
+  };
 }
 
 export async function loadOfferCandidatePreview(
@@ -280,21 +303,7 @@ export async function loadOfferCandidatePreview(
         name: candidate.jobName,
       },
       linkExpiresAt: new Date(access.exp).toISOString(),
-      offer: {
-        baseSalary: draft.baseSalary,
-        bonus: draft.bonus,
-        currency: draft.currency,
-        equity: draft.equity,
-        expiresAt: draft.expiresAt,
-        id: draft.id,
-        joiningDate: draft.joiningDate,
-        notes: draft.notes,
-        position: draft.position,
-        sscCompletedAt: draft.sscCompletedAt ?? null,
-        sscConfirmationStatus: draft.sscConfirmationStatus,
-        sscReceivedAt: draft.sscReceivedAt ?? null,
-        version: draft.version,
-      },
+      offer: publicOffer(draft, draft.sscConfirmationStatus),
       screening: {
         evaluatedAt: publicDate(candidate.resumeScreeningEvaluatedAt),
         result: publicScreeningResult(candidate.resumeScreeningResult),

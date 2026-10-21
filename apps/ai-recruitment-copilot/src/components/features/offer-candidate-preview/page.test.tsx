@@ -31,6 +31,8 @@ vi.mock("@/components/ui/chart-radar", () => ({
   DimensionRadarChart: () => <div>评分雷达图</div>,
 }));
 vi.mock("@/lib/client/api", () => ({}));
+// Vitest does not apply Start's server-function transform to the shared review UI imports.
+vi.mock("@/lib/start/auth-session", () => ({ getWorkspaceAccessState: vi.fn() }));
 enableReactActEnvironment();
 
 const dimension = { basis: "both", rationale: "项目实践与岗位要求相符", score: 82 };
@@ -220,6 +222,44 @@ describe("public Offer candidate preview", () => {
     expect(document.body.textContent).not.toContain("登录");
     expect(document.body.textContent).not.toContain("完成确认");
     expect(document.body.textContent).not.toContain("接收确认");
+  });
+
+  it("shows the Offer version snapshot with the completed approval text", async () => {
+    vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+      ...preview,
+      offer: {
+        ...preview.offer,
+        confirmationInfo: {
+          candidateCode: "PUBLIC-001",
+          candidateName: "保存时的姓名",
+          departmentName: "保存时的部门",
+          directManager: null,
+          gender: "女",
+          hiringUnitName: "保存时的编制组织",
+          interviewFeedback: "保存时确认的面试评价",
+          interviewRoundId: null,
+          jobLevel: "P6",
+          jobType: null,
+          mainInterviewerName: "保存的面试官",
+          managementSequence: null,
+          personnelType: null,
+          probationPeriod: "3个月",
+          probationSalary: 16_000,
+          serviceUnit: null,
+          workLocation: "上海",
+          workMode: null,
+        },
+        sscConfirmationStatus: "completed",
+      },
+    });
+    await renderPage();
+    await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+    await selectTab("Offer");
+    expect(document.body.textContent).toContain("PUBLIC-001");
+    expect(document.body.textContent).toContain("保存时的编制组织");
+    expect(document.body.textContent).toContain("保存时确认的面试评价");
+    expect(document.body.textContent).toContain("offer审批已通过");
+    expect(document.body.textContent).not.toContain("待 SSC 确认");
   });
 
   it("shows the four original sections and their real review and interview records without auth requests", async () => {

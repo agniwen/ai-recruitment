@@ -14,6 +14,7 @@
  */
 
 import type { CandidateFormSubmissionWithSnapshot } from "@arc/db-schema/candidate-forms";
+import type { OfferCreationContext } from "@arc/shared/offer-confirmation";
 import type {
   HumanInterviewConflict,
   HumanInterviewConflictInput,
@@ -598,6 +599,19 @@ export function listOfferDrafts(slug: string, candidateId: string): Promise<Offe
       param: { id: candidateId, slug },
     }),
     "加载 Offer 列表失败",
+  );
+}
+
+/** Read the defaults and source records before an Offer is created. */
+export function getOfferCreationContext(
+  slug: string,
+  candidateId: string,
+): Promise<OfferCreationContext> {
+  return rpcFetch<OfferCreationContext>(
+    rpc.api.w[":slug"].studio.interviews[":id"]["offer-drafts"]["creation-context"].$get({
+      param: { id: candidateId, slug },
+    }),
+    "加载 Offer 确认信息失败",
   );
 }
 

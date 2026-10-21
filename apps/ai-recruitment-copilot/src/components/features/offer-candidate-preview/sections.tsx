@@ -6,6 +6,7 @@ import type { OfferCandidatePreview } from "@arc/shared/offer-candidate-preview"
 import { DataField } from "@/components/features/display/data-field";
 import { DataFields } from "@/components/features/display/data-fields";
 import { ResumeReviewStructuredView } from "@/components/features/studio/resumes/resume-overview-panel";
+import { OfferConfirmationText } from "@/components/features/studio/offer-creation-confirmation";
 import { Badge } from "@/components/ui/badge";
 
 const SSC_STATUS_LABELS = {
@@ -60,6 +61,17 @@ export function OfferDetails({ offer }: { offer: OfferCandidatePreview["offer"] 
           valueClassName="whitespace-pre-wrap"
         />
       </DataFields>
+      {offer.confirmationInfo ? (
+        <div className="mt-5 min-w-0">
+          <OfferConfirmationText
+            info={offer.confirmationInfo}
+            position={offer.position}
+            baseSalary={offer.baseSalary}
+            currency={offer.currency}
+            sscConfirmationStatus={offer.sscConfirmationStatus}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }

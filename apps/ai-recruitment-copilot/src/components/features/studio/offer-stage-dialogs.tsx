@@ -13,11 +13,19 @@ import { IconArrowUpRight } from "@tabler/icons-react";
 // the caller to launch the close flow.
 
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { OfferDraftInput } from "@arc/db-schema/studio-interviews";
+import type { OfferCreationContext } from "@arc/shared/offer-confirmation";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
-import { createOfferDraft, patchOfferDraft, respondOfferDraft } from "@/lib/client/api";
+import {
+  createOfferDraft,
+  getOfferCreationContext,
+  patchOfferDraft,
+  respondOfferDraft,
+} from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
+import { ResumeDocumentPreviewButton } from "@/components/features/resume/resume-document-preview-button";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,6 +48,7 @@ import {
   saveSuccessMessage,
 } from "./offer-stage-form";
 import type { OfferFormState } from "./offer-stage-form";
+import { OfferConfirmationFields, OfferConfirmationText } from "./offer-creation-confirmation";
 
 interface OfferDialogProps {
   open: boolean;
@@ -49,6 +58,34 @@ interface OfferDialogProps {
   mode: "create" | "edit";
   existingDraft?: OfferDraftRecord | null;
   onSaved: () => void;
+}
+
+function getOfferDialogLabels({
+  mode,
+  confirmingCreation,
+  isPending,
+  loadingContext,
+}: {
+  mode: OfferDialogProps["mode"];
+  confirmingCreation: boolean;
+  isPending: boolean;
+  loadingContext: boolean;
+}) {
+  let dialogTitle = "新建 Offer";
+  if (mode === "edit") {
+    dialogTitle = "编辑 Offer 草稿";
+  } else if (confirmingCreation) {
+    dialogTitle = "确认 Offer 信息";
+  }
+  let primaryText = mode === "edit" ? "保存" : "下一步：确认信息";
+  if (isPending) {
+    primaryText = mode === "create" ? "创建中…" : "保存中…";
+  } else if (loadingContext) {
+    primaryText = "加载确认信息…";
+  } else if (confirmingCreation) {
+    primaryText = "确认创建";
+  }
+  return { dialogTitle, primaryText };
 }
 
 export function CreateOrEditOfferDialog({
@@ -63,45 +100,174 @@ export function CreateOrEditOfferDialog({
   const slug = useWorkspaceSlug();
   const [form, setForm] = useState<OfferFormState>(() => createBlankOfferFormState());
   const setFormField = createOfferFormFieldSetter(setForm);
-
-  // 编辑模式打开时同步现值；新建模式打开时清空。
-  // Sync form on open: prefill in edit mode, blank in create mode.
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    if (mode === "edit" && existingDraft) {
-      setForm(offerFormStateFromDraft(existingDraft));
-    } else {
-      setForm(createBlankOfferFormState());
-    }
-  }, [open, mode, existingDraft]);
+  const [context, setContext] = useState<OfferCreationContext | null>(null);
+  const [step, setStep] = useState<"terms" | "confirmation">("terms");
+  const [loadingContext, setLoadingContext] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const session = useRef(0);
+  const submitting = useRef(false);
+  const contextLoading = useRef(false);
 
   const mutation = useMutation({
-    mutationFn: () => {
-      const payload = buildOfferDraftPayload(form);
-      if (mode === "edit" && existingDraft) {
-        return patchOfferDraft(slug, candidateId, existingDraft.id, payload);
+    mutationFn: ({
+      payload,
+      targetSlug,
+      targetCandidateId,
+      draftId,
+    }: {
+      payload: OfferDraftInput;
+      sessionId: number;
+      targetSlug: string;
+      targetCandidateId: string;
+      draftId: string | null;
+    }) => {
+      if (draftId) {
+        return patchOfferDraft(targetSlug, targetCandidateId, draftId, payload);
       }
-      // Always save as draft — send UI is currently hidden on the offer stage.
-      const input = { ...payload, sendImmediately: false };
-      return createOfferDraft(slug, candidateId, input);
+      return createOfferDraft(targetSlug, targetCandidateId, {
+        ...payload,
+        sendImmediately: false,
+      });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "保存失败"),
-    onSuccess: () => {
-      toast.success(saveSuccessMessage(mode, false));
+    onError: (error, variables) => {
+      if (variables.sessionId !== session.current) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "保存失败";
+      setErrorMessage(message);
+      toast.error(message);
+    },
+    onSuccess: (_saved, variables) => {
+      if (variables.sessionId !== session.current) {
+        return;
+      }
+      toast.success(saveSuccessMessage(variables.draftId ? "edit" : "create", false));
       onSaved();
       onOpenChange(false);
     },
   });
 
+  // 编辑模式打开时同步现值；新建模式打开时清空。
+  // Sync form on open: prefill in edit mode, blank in create mode.
+  useEffect(() => {
+    session.current += 1;
+    submitting.current = false;
+    contextLoading.current = false;
+    setContext(null);
+    setStep("terms");
+    setErrorMessage(null);
+    setLoadingContext(false);
+    if (open) {
+      if (mode === "edit" && existingDraft) {
+        setForm(offerFormStateFromDraft(existingDraft));
+      } else {
+        setForm(createBlankOfferFormState());
+      }
+    }
+    return () => {
+      session.current += 1;
+    };
+  }, [open, mode, existingDraft, candidateId, slug]);
+
+  function changeOpen(next: boolean) {
+    if (submitting.current) {
+      return;
+    }
+    if (!next) {
+      session.current += 1;
+      contextLoading.current = false;
+    }
+    onOpenChange(next);
+  }
+
+  async function showConfirmation() {
+    if (contextLoading.current || submitting.current) {
+      return;
+    }
+    setErrorMessage(null);
+    try {
+      buildOfferDraftPayload({ ...form, confirmationInfo: null });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "请检查 Offer 条件");
+      return;
+    }
+    if (context) {
+      setStep("confirmation");
+      return;
+    }
+    const sessionId = session.current;
+    contextLoading.current = true;
+    setLoadingContext(true);
+    try {
+      const loaded = await getOfferCreationContext(slug, candidateId);
+      if (session.current !== sessionId) {
+        return;
+      }
+      setContext(loaded);
+      setForm((current) => ({
+        ...current,
+        confirmationInfo: current.confirmationInfo ?? loaded.defaults,
+      }));
+      setStep("confirmation");
+    } catch (error) {
+      if (session.current === sessionId) {
+        setErrorMessage(error instanceof Error ? error.message : "加载 Offer 确认信息失败");
+      }
+    } finally {
+      if (session.current === sessionId) {
+        contextLoading.current = false;
+        setLoadingContext(false);
+      }
+    }
+  }
+
+  async function save() {
+    if (submitting.current || contextLoading.current) {
+      return;
+    }
+    const sessionId = session.current;
+    try {
+      const payload = buildOfferDraftPayload(form);
+      submitting.current = true;
+      setErrorMessage(null);
+      await mutation.mutateAsync({
+        draftId: mode === "edit" ? (existingDraft?.id ?? null) : null,
+        payload,
+        sessionId,
+        targetCandidateId: candidateId,
+        targetSlug: slug,
+      });
+    } catch (error) {
+      if (session.current === sessionId) {
+        setErrorMessage(error instanceof Error ? error.message : "保存失败");
+      }
+    } finally {
+      if (session.current === sessionId) {
+        submitting.current = false;
+      }
+    }
+  }
+  const confirmingCreation = mode === "create" && step === "confirmation" && form.confirmationInfo;
+  const resumeUrl = `/api/w/${encodeURIComponent(slug)}/studio/resumes/${encodeURIComponent(candidateId)}/resume`;
+  const { dialogTitle, primaryText } = getOfferDialogLabels({
+    confirmingCreation: Boolean(confirmingCreation),
+    isPending: mutation.isPending,
+    loadingContext,
+    mode,
+  });
+
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+    <Dialog onOpenChange={changeOpen} open={open}>
+      <DialogContent
+        showCloseButton={!mutation.isPending}
+        className={`max-h-[90vh] overflow-y-auto ${confirmingCreation ? "sm:max-w-3xl" : "sm:max-w-lg"}`}
+      >
         <DialogHeader>
-          <DialogTitle>{mode === "edit" ? "编辑 Offer 草稿" : "新建 Offer"}</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
-            {mode === "edit" ? "草稿状态可编辑。" : "新建版本会自动 supersede 已发出未结的旧版本。"}
+            {mode === "edit"
+              ? "草稿状态可编辑，修改后需重新完成 SSC 确认。"
+              : "确认创建后生成新版本，并等待 SSC 接收和确认。"}
           </DialogDescription>
           {mode === "create" ? (
             <p className="text-muted-foreground text-xs">
@@ -110,21 +276,100 @@ export function CreateOrEditOfferDialog({
           ) : null}
         </DialogHeader>
 
-        <OfferDraftFormFields form={form} idPrefix="offer" onFieldChange={setFormField} />
+        {confirmingCreation ? (
+          <div className="min-w-0 space-y-5">
+            <div className="break-words rounded-lg border bg-muted/30 p-3 text-sm">
+              <p>职位：{form.position}</p>
+              <p>
+                转正月薪：{form.currency} {Number(form.baseSalary).toLocaleString("zh-CN")}
+              </p>
+            </div>
+            <OfferConfirmationFields
+              info={confirmingCreation}
+              context={context}
+              idPrefix="offer-confirm"
+              onChange={(info) => setFormField("confirmationInfo", info)}
+              disabled={mutation.isPending}
+            />
+            <section className="space-y-2">
+              <h3 className="font-medium text-sm">原始简历</h3>
+              {context?.resume.available ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 break-all text-sm">{context.resume.filename}</span>
+                  <ResumeDocumentPreviewButton
+                    filename={context.resume.filename}
+                    mediaType={context.resume.mediaType}
+                    label="预览原始简历"
+                    disabled={mutation.isPending}
+                    url={resumeUrl}
+                  />
+                  <a
+                    className="text-primary text-sm underline underline-offset-4"
+                    href={resumeUrl}
+                    download={context.resume.filename ?? undefined}
+                  >
+                    下载
+                  </a>
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">暂无原始简历附件。</p>
+              )}
+            </section>
+            <section className="space-y-2">
+              <h3 className="font-medium text-sm">完整确认内容</h3>
+              <OfferConfirmationText
+                info={confirmingCreation}
+                position={form.position}
+                baseSalary={Number(form.baseSalary)}
+                currency={form.currency}
+                sscConfirmationStatus="pending"
+              />
+            </section>
+          </div>
+        ) : (
+          <>
+            <OfferDraftFormFields form={form} idPrefix="offer" onFieldChange={setFormField} />
+            {mode === "edit" && form.confirmationInfo ? (
+              <OfferConfirmationFields
+                info={form.confirmationInfo}
+                idPrefix="offer-confirm"
+                onChange={(info) => setFormField("confirmationInfo", info)}
+                disabled={mutation.isPending}
+              />
+            ) : null}
+          </>
+        )}
+        {errorMessage ? (
+          <p role="alert" className="text-destructive text-sm">
+            {errorMessage}
+          </p>
+        ) : null}
 
         <DialogFooter>
-          <Button
-            disabled={mutation.isPending}
-            onClick={() => onOpenChange(false)}
-            variant="outline"
-          >
+          <Button disabled={mutation.isPending} onClick={() => changeOpen(false)} variant="outline">
             取消
           </Button>
+          {confirmingCreation ? (
+            <Button
+              disabled={mutation.isPending}
+              onClick={() => {
+                setErrorMessage(null);
+                setStep("terms");
+              }}
+              variant="outline"
+            >
+              返回修改
+            </Button>
+          ) : null}
           <Button
-            disabled={mutation.isPending || !form.position.trim() || !form.baseSalary}
-            onClick={() => mutation.mutate()}
+            disabled={
+              mutation.isPending || loadingContext || !form.position.trim() || !form.baseSalary
+            }
+            onClick={() => {
+              void (confirmingCreation || mode === "edit" ? save() : showConfirmation());
+            }}
           >
-            {mutation.isPending ? "保存中…" : "保存"}
+            {primaryText}
           </Button>
         </DialogFooter>
       </DialogContent>

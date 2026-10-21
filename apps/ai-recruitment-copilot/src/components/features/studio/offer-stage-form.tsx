@@ -13,6 +13,8 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import type { OfferDraftInput } from "@arc/db-schema/studio-interviews";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
+import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import { formatDate as formatChinaDate } from "@arc/shared/utils/time";
 import { DatePicker } from "@/components/date-time-picker";
@@ -57,12 +59,14 @@ export interface OfferFormState {
   joiningDate: string;
   expiresAt: string;
   notes: string;
+  confirmationInfo: OfferConfirmationDetails | null;
 }
 
 export function createBlankOfferFormState(): OfferFormState {
   return {
     baseSalary: "",
     bonus: "",
+    confirmationInfo: null,
     currency: "CNY",
     equity: "",
     expiresAt: "",
@@ -76,6 +80,7 @@ export function offerFormStateFromDraft(draft: OfferDraftRecord): OfferFormState
   return {
     baseSalary: String(draft.baseSalary),
     bonus: draft.bonus === null ? "" : String(draft.bonus),
+    confirmationInfo: draft.confirmationInfo ?? null,
     currency: draft.currency || "CNY",
     equity: draft.equity ?? "",
     expiresAt: draft.expiresAt ? formatIsoDateOnly(draft.expiresAt) : "",
@@ -100,9 +105,16 @@ export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
   if (parsedBonus !== null && (Number.isNaN(parsedBonus) || parsedBonus < 0)) {
     throw new Error("奖金需为非负整数");
   }
+  const confirmation = form.confirmationInfo
+    ? offerConfirmationDetailsSchema.safeParse(form.confirmationInfo)
+    : null;
+  if (confirmation && !confirmation.success) {
+    throw new Error(confirmation.error.issues[0]?.message ?? "请检查 Offer 确认信息");
+  }
   return {
     baseSalary: parsedBase,
     bonus: parsedBonus,
+    confirmationInfo: confirmation?.success ? confirmation.data : null,
     currency: parseOfferCurrency(form.currency),
     equity: form.equity.trim() || null,
     expiresAt: form.expiresAt || null,
