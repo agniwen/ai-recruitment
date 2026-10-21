@@ -276,6 +276,7 @@ export async function loadOfferCandidatePreview(
       },
       candidate: {
         hasResumeFile: Boolean(candidate.resumeStorageKey),
+        id: access.candidateId,
         info: publicCandidateInfo(candidate),
         name: candidate.candidateName,
         profile: publicProfile(candidate.resumeProfile),

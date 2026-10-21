@@ -150,7 +150,10 @@ export async function getOfferSscNotificationTargets(
   // Include deleted and superseded versions: a tombstone must never revive an older Offer.
   const [offer] = await db
     .select({
+      baseSalary: studioOfferDraft.baseSalary,
+      confirmationInfo: studioOfferDraft.confirmationInfo,
       createdBy: studioOfferDraft.createdBy,
+      currency: studioOfferDraft.currency,
       expiresAt: studioOfferDraft.expiresAt,
       id: studioOfferDraft.id,
       interviewRecordId: studioOfferDraft.interviewRecordId,

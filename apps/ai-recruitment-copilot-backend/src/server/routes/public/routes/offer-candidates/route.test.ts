@@ -262,6 +262,7 @@ describe("Anonymous Offer candidate preview", () => {
     const response = await app().request(`/api/public/offer-candidates/${token()}`);
     expect(response.status).toBe(200);
     const body = await response.json();
+    expect(body.candidate.id).toBe(draft.interviewRecordId);
     expect(body.candidate.name).toBe("测试候选人");
     expect(body.candidate.profile.skills).toEqual(["TypeScript"]);
     expect(body.candidate.hasResumeFile).toBe(true);

@@ -1,5 +1,16 @@
-import { Actions, Button, Card, Field, Fields, LinkButton } from "chat";
+import {
+  Actions,
+  Button,
+  Card,
+  Field,
+  Fields,
+  LinkButton,
+  CardText,
+  cardChildToFallbackText,
+} from "chat";
 import type { ActionsElement } from "chat";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
+import { buildOfferConfirmationText } from "@arc/shared/offer-confirmation";
 import { getOfferSscConfirmationMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import type { OfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
@@ -9,12 +20,83 @@ export interface TelegramOfferCardContext {
   draft: Pick<
     OfferDraftRecord,
     "id" | "position" | "version" | "sscConfirmationStatus" | "sscRevision" | "status"
-  >;
+  > &
+    Partial<
+      Pick<OfferDraftRecord, "baseSalary" | "confirmationInfo" | "currency" | "interviewRecordId">
+    >;
   candidateName: string;
   pipelineStage: PipelineStage;
   canReceive: boolean;
   canConfirm: boolean;
   activity?: OfferSscActivity[];
+}
+
+const blankConfirmationInfo = offerConfirmationDetailsSchema.parse({});
+
+function offerConfirmationText(context: TelegramOfferCardContext) {
+  const { draft } = context;
+  if (draft.baseSalary === undefined || draft.currency === undefined) {
+    return null;
+  }
+  return buildOfferConfirmationText({
+    baseSalary: draft.baseSalary,
+    candidateRecordId: draft.interviewRecordId,
+    currency: draft.currency,
+    info: draft.confirmationInfo ?? {
+      ...blankConfirmationInfo,
+      candidateName: context.candidateName,
+    },
+    position: draft.position,
+    sscConfirmationStatus: draft.sscConfirmationStatus,
+  });
+}
+
+function fencedCopyText(text: string) {
+  let fenceLength = 3;
+  for (const match of text.matchAll(/`+/gu)) {
+    fenceLength = Math.max(fenceLength, match[0].length + 1);
+  }
+  const fence = "`".repeat(fenceLength);
+  return `${fence}\n${text}\n${fence}`;
+}
+
+function copyInformationActions(detailUrl: string | null | undefined) {
+  if (!detailUrl) {
+    return [];
+  }
+  const url = new URL(detailUrl);
+  url.hash = "offer-confirmation-info";
+  return [Actions([LinkButton({ label: "复制完整 Offer 信息", url: url.href })])];
+}
+
+function offerCopySections(
+  context: TelegramOfferCardContext,
+  header: string,
+  detailUrl: string | null | undefined,
+) {
+  const text = offerConfirmationText(context);
+  if (text === null) {
+    return [];
+  }
+  const hint = CardText(
+    detailUrl
+      ? "完整 Offer 信息：可使用客户端的代码块复制功能，或点击下方按钮复制全文。"
+      : "完整 Offer 信息：可使用客户端的代码块复制功能复制全文。",
+  );
+  // MarkdownV2 escaping can double the non-code text. Code only escapes backslashes/backticks.
+  // Reserve separators and the explanatory line before the adapter's 4096-character limit.
+  const escapedCodeLength = text.length + (text.match(/[\\`]/gu)?.length ?? 0);
+  const budget = header.length * 2 + escapedCodeLength + 256;
+  if (budget > 4096) {
+    return [
+      CardText(
+        detailUrl
+          ? "Offer 信息较长，请打开“复制完整 Offer 信息”查看并复制全文。"
+          : "Offer 信息较长，未配置可用详情地址，请在系统中查看并复制全文。",
+      ),
+    ];
+  }
+  return [hint, CardText(fencedCopyText(text))];
 }
 
 const activityTime = new Intl.DateTimeFormat("zh-CN", {
@@ -93,9 +175,19 @@ export function buildTelegramOfferCard(
       LinkButton({ label: options.detailLabel ?? "查看候选人详情", url: options.detailUrl }),
     );
   }
+  const title = options.title ?? (status === "pending" ? "Offer新增" : "Offer SSC 确认");
   return Card({
-    children: actions.length > 0 ? [fields, Actions(actions)] : [fields],
-    title: options.title ?? (status === "pending" ? "Offer新增" : "Offer SSC 确认"),
+    children: [
+      ...offerCopySections(
+        context,
+        `${title}\n${cardChildToFallbackText(fields) ?? ""}`,
+        options.detailUrl,
+      ),
+      fields,
+      ...(actions.length > 0 ? [Actions(actions)] : []),
+      ...copyInformationActions(options.detailUrl),
+    ],
+    title,
   });
 }
 
@@ -146,6 +238,7 @@ export function buildTelegramOfferCompletionCard(
       ...(options.detailUrl
         ? [Actions([LinkButton({ label: "查看候选人详情", url: options.detailUrl })])]
         : []),
+      ...copyInformationActions(options.detailUrl),
     ],
     title: options.screenshotReceived ? "审批截图已收到，请确认完成" : "确认完成 SSC 审核",
   });

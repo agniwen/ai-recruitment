@@ -66,6 +66,7 @@ export interface OfferCandidateScreeningResult {
 
 export interface OfferCandidatePreview {
   candidate: {
+    id?: string;
     info?: {
       email: string | null;
       phone: string | null;

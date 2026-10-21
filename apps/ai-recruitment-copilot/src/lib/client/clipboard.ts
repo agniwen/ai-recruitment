@@ -6,23 +6,31 @@
 /**
  * 复制文本到剪贴板，并返回三态结果以便 UI 给出对应反馈：
  *   - `copied`：复制成功；
- *   - `manual`：剪贴板 API 不可用，已弹出 prompt 让用户手动复制；
+ *   - `manual`：剪贴板 API 不可用，已调用手动复制回调或弹出 prompt；
  *   - `failed`：彻底失败（例如 SSR 环境）。
  *
  * Copy text to the clipboard, returning a tri-state result so callers can react:
  *   - `copied` — succeeded;
- *   - `manual` — clipboard API unavailable, fell back to `window.prompt`;
+ *   - `manual` — clipboard API unavailable, used the callback or `window.prompt`;
  *   - `failed` — gave up (e.g. SSR / non-browser environment).
  */
-export async function copyTextToClipboard(text: string): Promise<"copied" | "manual" | "failed"> {
+export async function copyTextToClipboard(
+  text: string,
+  manualFallback?: (text: string) => void,
+): Promise<"copied" | "manual" | "failed"> {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(text);
       return "copied";
     } catch {
       // Fall through to a manual fallback for insecure contexts or blocked clipboard APIs.
-      // 在非安全上下文 / 剪贴板被拒绝时，降级到下面的 prompt 路径。
+      // 在非安全上下文 / 剪贴板被拒绝时，降级到下面的手动复制路径。
     }
+  }
+
+  if (manualFallback) {
+    manualFallback(text);
+    return "manual";
   }
 
   if (typeof window !== "undefined" && typeof window.prompt === "function") {

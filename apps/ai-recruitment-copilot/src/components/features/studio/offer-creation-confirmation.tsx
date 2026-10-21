@@ -6,8 +6,9 @@ import type {
   OfferCreationContext,
 } from "@arc/shared/offer-confirmation";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
-import { Fragment } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ResumeDocumentPreviewButton } from "@/components/features/resume/resume-document-preview-button";
 import {
@@ -20,6 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { copyTextToClipboard } from "@/lib/client/clipboard";
 
 type TextField = Exclude<keyof OfferConfirmationDetails, "probationSalary">;
 interface TextFieldConfig {
@@ -123,13 +126,89 @@ export function OfferConfirmationFields({
 }
 
 export function OfferConfirmationText(props: Parameters<typeof buildOfferConfirmationText>[0]) {
+  const text = buildOfferConfirmationText(props);
+  const copyingRef = useRef(false);
+  const [copying, setCopying] = useState(false);
+  const [manualCopyText, setManualCopyText] = useState<string | null>(null);
+  const manualTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  async function copy() {
+    if (copyingRef.current) {
+      return;
+    }
+    copyingRef.current = true;
+    setCopying(true);
+    try {
+      const result = await copyTextToClipboard(text, setManualCopyText);
+      if (result === "copied") {
+        toast.success("Offer 信息已复制");
+      } else if (result === "manual") {
+        toast.info("请在弹窗中全选并复制 Offer 信息");
+      } else {
+        toast.error("复制失败，请手动选择并复制 Offer 信息");
+      }
+    } catch {
+      toast.error("复制失败，请手动选择并复制 Offer 信息");
+    } finally {
+      copyingRef.current = false;
+      setCopying(false);
+    }
+  }
+
   return (
-    <pre
-      aria-label="Offer 确认内容"
-      className="min-w-0 whitespace-pre-wrap break-words rounded-lg border bg-muted/30 p-4 font-sans text-sm leading-6"
-    >
-      {buildOfferConfirmationText(props)}
-    </pre>
+    <div className="min-w-0 space-y-2">
+      <div className="flex justify-end">
+        <Button disabled={copying} onClick={copy} size="sm" type="button" variant="outline">
+          {copying ? "复制中…" : "复制 Offer 信息"}
+        </Button>
+      </div>
+      <pre
+        aria-label="Offer 确认内容"
+        className="min-w-0 whitespace-pre-wrap break-words rounded-lg border bg-muted/30 p-4 font-sans text-sm leading-6"
+      >
+        {text}
+      </pre>
+      {manualCopyText === null ? null : (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setManualCopyText(null);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>手动复制 Offer 信息</DialogTitle>
+              <DialogDescription>请选择下方全文后复制，换行会完整保留。</DialogDescription>
+            </DialogHeader>
+            <Textarea
+              aria-label="完整 Offer 信息"
+              className="max-h-[50vh] resize-y font-mono text-xs"
+              readOnly
+              ref={manualTextareaRef}
+              rows={16}
+              value={manualCopyText}
+            />
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  manualTextareaRef.current?.focus();
+                  manualTextareaRef.current?.select();
+                }}
+                type="button"
+                variant="outline"
+              >
+                全选内容
+              </Button>
+              <Button onClick={() => setManualCopyText(null)} type="button" variant="outline">
+                关闭
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   );
 }
 
