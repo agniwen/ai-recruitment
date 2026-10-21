@@ -103,6 +103,7 @@ export function CreateOrEditOfferDialog({
   const [step, setStep] = useState<"terms" | "confirmation">("terms");
   const [loadingContext, setLoadingContext] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
   const session = useRef(0);
   const submitting = useRef(false);
   const contextLoading = useRef(false);
@@ -184,6 +185,7 @@ export function CreateOrEditOfferDialog({
     contextLoading.current = false;
     setContext(null);
     setStep("terms");
+    setShowValidationErrors(false);
     setErrorMessage(null);
     setLoadingContext(false);
     if (open) {
@@ -215,11 +217,14 @@ export function CreateOrEditOfferDialog({
       return;
     }
     setErrorMessage(null);
+    setShowValidationErrors(true);
     try {
       buildOfferDraftPayload(form);
       setStep("confirmation");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "请检查 Offer 信息");
+      const message = error instanceof Error ? error.message : "请检查 Offer 信息";
+      setErrorMessage(message);
+      toast.error(message);
     }
   }
 
@@ -228,6 +233,7 @@ export function CreateOrEditOfferDialog({
       return;
     }
     const sessionId = session.current;
+    setShowValidationErrors(true);
     try {
       const payload = buildOfferDraftPayload(form);
       submitting.current = true;
@@ -300,7 +306,11 @@ export function CreateOrEditOfferDialog({
               candidateId={candidateId}
               form={form}
               idPrefix="offer"
-              onFieldChange={setFormField}
+              onFieldChange={(field, value) => {
+                setFormField(field, value);
+                setErrorMessage(null);
+              }}
+              showValidationErrors={showValidationErrors}
               disabled={mutation.isPending || contextUnavailable || loadingContext}
             />
           </>
@@ -338,13 +348,7 @@ export function CreateOrEditOfferDialog({
             </Button>
           ) : null}
           <Button
-            disabled={
-              mutation.isPending ||
-              loadingContext ||
-              contextUnavailable ||
-              !form.position.trim() ||
-              !form.baseSalary
-            }
+            disabled={mutation.isPending || loadingContext || contextUnavailable}
             onClick={() => {
               void (confirmingCreation || mode === "edit" ? save() : showConfirmation());
             }}

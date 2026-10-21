@@ -329,6 +329,47 @@ async function next() {
 }
 
 describe("Offer creation confirmation", () => {
+  it("lists missing required terms on click and clears their field errors as they are filled", async () => {
+    renderDialog();
+    await ready();
+    fill("offer-position", "");
+    fill("offer-base", "");
+    expect(button("下一步：确认信息")?.disabled).toBe(false);
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    await click("下一步：确认信息");
+    const alert = document.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("职位");
+    expect(alert?.textContent).toContain("转正薪资");
+    expect(document.querySelector("#offer-position")?.getAttribute("aria-invalid")).toBe("true");
+    expect(document.querySelector("#offer-base")?.getAttribute("aria-invalid")).toBe("true");
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(button("确认创建")).toBeUndefined();
+    fill("offer-position", "前端工程师");
+    expect(document.querySelector("#offer-position")?.getAttribute("aria-invalid")).not.toBe(
+      "true",
+    );
+    await click("下一步：确认信息");
+    expect(document.querySelector('[role="alert"]')?.textContent).not.toContain("职位");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("转正薪资");
+    fill("offer-base", "32000");
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    await next();
+    expect(button("确认创建")?.disabled).toBe(false);
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it.each(["-1", "1.5"])("names invalid regular salary %s when continuing", async (value) => {
+    renderDialog();
+    await ready();
+    fill("offer-base", value);
+    await click("下一步：确认信息");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("转正薪资");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("正整数");
+    expect(document.querySelector("#offer-base")?.getAttribute("aria-invalid")).toBe("true");
+    expect(button("确认创建")).toBeUndefined();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
   it("uses only the new information format while keeping the system Offer expiry field", () => {
     renderDialog();
     for (const field of ["bonus", "equity", "joining", "notes"]) {

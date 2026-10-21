@@ -96,10 +96,24 @@ export function createOfferFormFieldSetter(setForm: Dispatch<SetStateAction<Offe
   };
 }
 
+export function getOfferRequiredFieldErrors(form: OfferFormState) {
+  const errors: { position?: string; baseSalary?: string } = {};
+  if (!form.position.trim()) {
+    errors.position = "请填写职位";
+  }
+  if (!form.baseSalary.trim()) {
+    errors.baseSalary = "请填写转正薪资（月薪）";
+  } else if (!Number.isInteger(Number(form.baseSalary)) || Number(form.baseSalary) <= 0) {
+    errors.baseSalary = "转正薪资（月薪）需为正整数";
+  }
+  return errors;
+}
+
 export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
   const parsedBase = Number(form.baseSalary);
-  if (Number.isNaN(parsedBase) || parsedBase <= 0) {
-    throw new Error("Base salary 需为正整数");
+  const errors = Object.values(getOfferRequiredFieldErrors(form));
+  if (errors.length > 0) {
+    throw new Error(errors.join("；"));
   }
   const confirmation = form.confirmationInfo
     ? offerConfirmationDetailsSchema.safeParse(form.confirmationInfo)
@@ -121,6 +135,7 @@ export function OfferDraftFormFields({
   form,
   idPrefix,
   onFieldChange,
+  showValidationErrors = false,
   disabled = false,
 }: {
   candidateId: string;
@@ -128,7 +143,9 @@ export function OfferDraftFormFields({
   idPrefix: string;
   onFieldChange: <K extends keyof OfferFormState>(field: K, value: OfferFormState[K]) => void;
   disabled?: boolean;
+  showValidationErrors?: boolean;
 }) {
+  const errors = getOfferRequiredFieldErrors(form);
   const symbol = offerCurrencySymbol(form.currency);
   const info = form.confirmationInfo ?? offerConfirmationDetailsSchema.parse({});
   function setProbationField<K extends "probationPeriod" | "probationSalary">(
@@ -148,14 +165,19 @@ export function OfferDraftFormFields({
         onChange={(value) => onFieldChange("confirmationInfo", value)}
         positionField={
           <div className="grid min-w-0 gap-1.5">
-            <Label htmlFor={`${idPrefix}-position`}>职位</Label>
+            <Label htmlFor={`${idPrefix}-position`}>职位（必填）</Label>
             <Input
+              aria-invalid={showValidationErrors && Boolean(errors.position)}
+              aria-required
               id={`${idPrefix}-position`}
               maxLength={200}
               onChange={(event) => onFieldChange("position", event.target.value)}
               placeholder="例如 高级前端工程师（L4）"
               value={form.position}
             />
+            {showValidationErrors && errors.position ? (
+              <p className="text-destructive text-xs">{errors.position}</p>
+            ) : null}
           </div>
         }
         salaryFields={
@@ -169,8 +191,10 @@ export function OfferDraftFormFields({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor={`${idPrefix}-base`}>转正薪资（月薪，{symbol}）</Label>
+              <Label htmlFor={`${idPrefix}-base`}>转正薪资（月薪，{symbol}，必填）</Label>
               <Input
+                aria-invalid={showValidationErrors && Boolean(errors.baseSalary)}
+                aria-required
                 id={`${idPrefix}-base`}
                 inputMode="numeric"
                 min={0}
@@ -179,6 +203,9 @@ export function OfferDraftFormFields({
                 type="number"
                 value={form.baseSalary}
               />
+              {showValidationErrors && errors.baseSalary ? (
+                <p className="text-destructive text-xs">{errors.baseSalary}</p>
+              ) : null}
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor={`${idPrefix}-confirm-probationSalary`}>
