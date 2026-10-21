@@ -450,7 +450,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       expect(serialized).toContain("Current system Offer");
       expect(serialized).toContain("登录系统查看并审核");
       expect(serialized).toContain(`/w/${orgId}/studio/resumes/${candidateId}?stage=offer`);
-      expect(serialized).not.toContain('"id":"osr"');
+      expect(serialized).toContain('"id":"osr"');
       expect(serialized).not.toContain("/offer-candidate/");
       const [job] = await db
         .select()

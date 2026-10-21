@@ -136,7 +136,7 @@ describe("SSC notification recipients and cards", () => {
     expect(mocks.members).not.toHaveBeenCalled();
   });
 
-  it("sends one login-to-review card per chat without an approval identity or public bearer link", async () => {
+  it("keeps the original receive callback and system link without requiring an approval identity to send", async () => {
     mocks.recipients.mockResolvedValue([
       { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
       { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
@@ -146,7 +146,9 @@ describe("SSC notification recipients and cards", () => {
     const [target] = targets;
     expect(target?.message).toMatchObject({ title: "Offer待SSC接收确认" });
     const message = JSON.stringify(target?.message);
-    expect(message).not.toContain('"id":"osr"');
+    expect(message).toContain('"id":"osr"');
+    expect(message).toContain("接收确认");
+    expect(message).toContain("550e8400e29b41d4a716446655440000:z");
     expect(message).not.toContain('"id":"osc"');
     expect(message).toContain("登录系统查看并审核");
     expect(message).toContain(

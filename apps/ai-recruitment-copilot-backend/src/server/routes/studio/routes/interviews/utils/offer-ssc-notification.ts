@@ -196,7 +196,7 @@ export async function getOfferSscNotificationTargets(
             {
               ...recipient,
               canConfirm: false,
-              canReceive: false,
+              canReceive: true,
               draft: offer,
             },
             {

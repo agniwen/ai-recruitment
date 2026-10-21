@@ -105,6 +105,8 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       const message = JSON.stringify(transport.send.mock.calls[0][1]);
       expect(message).toContain("Jon fixture");
       expect(message).toContain("登录系统查看并审核");
+      expect(message).toContain('"id":"osr"');
+      expect(message).toContain(`${created.id.replaceAll("-", "")}:1`);
       expect(message).toContain(`/w/${orgId}/studio/resumes/${candidateId}?stage=offer`);
       const [job] = await db
         .select()
