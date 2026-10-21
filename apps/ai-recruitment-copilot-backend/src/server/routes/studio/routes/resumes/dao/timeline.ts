@@ -725,7 +725,7 @@ export async function loadCandidateTimeline(
       actorImage: log.actorImage,
       actorName:
         log.actorName ??
-        ((log.action === "offer_ssc_received" || log.action === "offer_ssc_completed") &&
+        (log.action.startsWith("offer_ssc_") &&
         log.detail?.channel === "telegram" &&
         typeof log.detail.sscName === "string"
           ? log.detail.sscName

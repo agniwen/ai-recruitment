@@ -120,10 +120,7 @@ export function auditMetadata(
       return [{ label: "通知人员", value: names.map((name) => name.trim()).join("、") }];
     }
   }
-  if (
-    (action === "offer_ssc_received" || action === "offer_ssc_completed") &&
-    detail.channel === "telegram"
-  ) {
+  if (action.startsWith("offer_ssc_") && detail.channel === "telegram") {
     return [
       ...(typeof detail.sscName === "string" ? [{ label: "SSC 花名", value: detail.sscName }] : []),
       ...(typeof detail.sscTelegram === "string"
@@ -288,9 +285,17 @@ export function auditDescription(detail: Record<string, unknown>, action: string
     const label = typeof detail.roundLabel === "string" ? detail.roundLabel : "真人复面";
     return label;
   }
-  if (action === "offer_ssc_received" || action === "offer_ssc_completed") {
+  if (action.startsWith("offer_ssc_")) {
+    const labels: Record<string, string> = {
+      offer_ssc_completed: "SSC 已完成确认",
+      offer_ssc_confirmation_cancelled: "SSC 已取消本次确认，Offer 状态未改变",
+      offer_ssc_confirmation_opened: "SSC 已打开二次确认",
+      offer_ssc_received: "SSC 已接收，确认中",
+      offer_ssc_screenshot_uploaded: "SSC 已上传审批截图，待最终确认",
+      offer_ssc_upload_requested: "SSC 已选择上传审批截图",
+    };
     const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
-    return `Offer${version}：${action === "offer_ssc_received" ? "SSC 已接收，确认中" : "SSC 已完成确认"}`;
+    return labels[action] ? `Offer${version}：${labels[action]}` : null;
   }
   if (action.startsWith("offer_draft_")) {
     const version = typeof detail.version === "number" ? ` v${detail.version}` : "";
@@ -356,7 +361,11 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
     offer_draft_sent: "Offer 已发送",
     offer_draft_updated: "更新 Offer",
     offer_ssc_completed: "SSC 已完成确认",
+    offer_ssc_confirmation_cancelled: "SSC 已取消本次确认",
+    offer_ssc_confirmation_opened: "SSC 已打开二次确认",
     offer_ssc_received: "SSC 已接收",
+    offer_ssc_screenshot_uploaded: "SSC 已上传审批截图",
+    offer_ssc_upload_requested: "SSC 已选择上传截图",
     resume_evaluation_reset_for_job_change: "简历评估已重置",
     resume_evaluation_submitted: "简历评估已提交",
     resume_evaluation_updated: "简历评估状态变更",

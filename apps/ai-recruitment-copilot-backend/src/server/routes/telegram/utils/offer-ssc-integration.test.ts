@@ -184,7 +184,13 @@ async function systemState() {
 }
 
 async function auditActions() {
-  return await db.select().from(interviewAuditLog).where(eq(interviewAuditLog.organizationId, ORG));
+  const logs = await db
+    .select()
+    .from(interviewAuditLog)
+    .where(eq(interviewAuditLog.organizationId, ORG));
+  return logs.filter(
+    (log) => log.action === "offer_ssc_received" || log.action === "offer_ssc_completed",
+  );
 }
 
 async function outboxEvents() {
@@ -465,6 +471,7 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
       expect(transport.send).toHaveBeenCalledTimes(2);
       for (const call of transport.send.mock.calls) {
         expect(JSON.stringify(call[1])).toContain(identities.confirmer.username);
+        expect(JSON.stringify(call[1])).toContain(identities.receiver.username);
         expect(JSON.stringify(call[1])).toContain("已完成确认");
         expect(findButton(call[1], "osf")).toBeUndefined();
         expect(findButton(call[1], "osc")).toBeUndefined();
@@ -479,6 +486,51 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
         },
       });
       expect(await outboxEvents()).toEqual(["completed", "pending", "received"]);
+    });
+
+    it("records every private interaction and preserves the receiver and completer in local feedback", async () => {
+      const draft = await newOffer();
+      const receiver = fakeTelegram(identities.receiver);
+      const confirmer = fakeTelegram(identities.confirmer);
+      const value = `${draft.id.replaceAll("-", "")}:1`;
+      await click(receiver, "osr", value);
+      await click(confirmer, "osc", value);
+      expect(JSON.stringify(confirmer.post.mock.calls.at(-1))).toContain(
+        `@${identities.confirmer.username}`,
+      );
+      await click(confirmer, "osu", button(confirmer, "osu"), confirmer.sentIds.at(-1));
+      // Cancelling the private session must preserve the Offer and retain who cancelled it.
+      await click(confirmer, "osx", button(confirmer, "osx"), confirmer.sentIds[0]);
+      expect(await systemState()).toMatchObject({ sscConfirmationStatus: "confirming" });
+      await click(confirmer, "osc", value);
+      const finalToken = findButton(confirmer.post.mock.calls.at(-1)?.[0], "osf");
+      await click(confirmer, "osf", finalToken ?? "", confirmer.sentIds.at(-1));
+      const finalLocalCard = JSON.stringify(confirmer.adapter.editMessage.mock.calls.at(-1)?.[2]);
+      expect(finalLocalCard).toContain(`@${identities.receiver.username}`);
+      expect(finalLocalCard).toContain(`@${identities.confirmer.username}`);
+      const logs = await db
+        .select()
+        .from(interviewAuditLog)
+        .where(eq(interviewAuditLog.organizationId, ORG));
+      expect(logs.map((log) => log.action)).toEqual(
+        expect.arrayContaining([
+          "offer_ssc_received",
+          "offer_ssc_confirmation_opened",
+          "offer_ssc_upload_requested",
+          "offer_ssc_confirmation_cancelled",
+          "offer_ssc_completed",
+        ]),
+      );
+      for (const log of logs) {
+        expect(log.operatorId).toBeNull();
+        expect(log.detail).toMatchObject({
+          draftId: draft.id,
+          revision: 1,
+          sscName: expect.any(String),
+          sscTelegram: expect.stringMatching(/^@/u),
+          telegramChatId: expect.any(String),
+        });
+      }
     });
 
     it("records only one completion when two responsible SSCs confirm broadcast cards concurrently", async () => {
@@ -581,6 +633,21 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
         expect(JSON.stringify(telegram.post.mock.calls.at(-1))).toContain("审批截图已收到");
         await click(telegram, "osf", button(telegram, "osf"), telegram.sentIds.at(-1));
         expect(await systemState()).toMatchObject({ sscConfirmationStatus: "completed" });
+        const screenshotLogs = await db
+          .select()
+          .from(interviewAuditLog)
+          .where(eq(interviewAuditLog.organizationId, ORG));
+        expect(screenshotLogs).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              action: "offer_ssc_screenshot_uploaded",
+              detail: expect.objectContaining({
+                sscName: "外部 SSC 花名",
+                sscTelegram: `@${identity.username}`,
+              }),
+            }),
+          ]),
+        );
         expect(storage.put).toHaveBeenCalledExactlyOnceWith(
           expect.objectContaining({ body: new Uint8Array(screenshot), contentType: "image/jpeg" }),
         );

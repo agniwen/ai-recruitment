@@ -1,8 +1,10 @@
 import type { AdapterPostableMessage } from "chat";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { interviewAuditLog, member, studioOfferDraft, user } from "@arc/db-schema/schema";
+import { member, studioOfferDraft, user } from "@arc/db-schema/schema";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import { loadOfferSscActivity } from "../dao/offer-ssc-activity";
+import type { OfferSscActivity } from "../dao/offer-ssc-activity";
 import { loadAuthorizedOfferSscContext, OfferDraftError } from "../dao/offer-drafts";
 import {
   buildTelegramOfferPublicCard,
@@ -91,6 +93,7 @@ async function getAuthorizedNotificationTarget(
   input: OfferSscNotificationInput,
   profile: NotificationProfile,
   createdBy: string | null,
+  activity: OfferSscActivity[],
 ): Promise<OfferSscNotificationTarget | null> {
   if (
     profile.organizationId !== input.organizationId ||
@@ -120,7 +123,7 @@ async function getAuthorizedNotificationTarget(
   if (!isCurrentNotificationState(input, context.draft)) {
     return null;
   }
-  const cardContext = { ...context, canConfirm: false, canReceive: false };
+  const cardContext = { ...context, activity, canConfirm: false, canReceive: false };
   const message = buildTelegramOfferPublicCard(cardContext, profile.userId, {
     feedbackLabel: feedbackLabels[input.event],
     title: notificationTitles[input.event],
@@ -132,33 +135,12 @@ async function getAuthorizedNotificationTarget(
   };
 }
 
-async function flowFeedback(input: OfferSscNotificationInput) {
+function flowFeedback(input: OfferSscNotificationInput, activity: OfferSscActivity[]) {
   if (input.event === "pending") {
     return "";
   }
-  const [activity] = await db
-    .select({ detail: interviewAuditLog.detail })
-    .from(interviewAuditLog)
-    .where(
-      and(
-        eq(interviewAuditLog.organizationId, input.organizationId),
-        eq(interviewAuditLog.interviewRecordId, input.interviewRecordId),
-        eq(
-          interviewAuditLog.action,
-          input.event === "received" ? "offer_ssc_received" : "offer_ssc_completed",
-        ),
-        sql`${interviewAuditLog.detail}->>'draftId' = ${input.draftId}`,
-        sql`${interviewAuditLog.detail}->>'revision' = ${String(input.revision)}`,
-      ),
-    )
-    .orderBy(desc(interviewAuditLog.createdAt))
-    .limit(1);
-  const name = activity?.detail.sscName;
-  const telegram = activity?.detail.sscTelegram;
-  const operator =
-    typeof name === "string"
-      ? `${name}${typeof telegram === "string" ? `（${telegram}）` : ""}`
-      : "SSC";
+  const action = input.event === "received" ? "offer_ssc_received" : "offer_ssc_completed";
+  const operator = activity.findLast((entry) => entry.action === action)?.operator ?? "SSC";
   return `${operator}${input.event === "received" ? "已接收，待完成内部审批确认" : "已完成确认"}`;
 }
 
@@ -202,14 +184,22 @@ export async function getOfferSscNotificationTargets(
     interviewRecordId: input.interviewRecordId,
     organizationId: input.organizationId,
   });
-  const feedbackLabel = await flowFeedback(
+  const activity = input.event === "pending" ? [] : await loadOfferSscActivity(offer);
+  const feedbackLabel = flowFeedback(
     offer.sscConfirmationStatus === "completed" ? { ...input, event: "completed" } : input,
+    activity,
   );
   const uniqueRecipients = new Map(recipients.map((recipient) => [recipient.chatId, recipient]));
   const unexpired = !offer.expiresAt || new Date(offer.expiresAt).getTime() > Date.now();
   const targets: OfferSscNotificationTarget[] = [...uniqueRecipients.values()].map((recipient) => {
     const actor = { telegramUserId: recipient.chatId, username: recipient.username };
-    const context = { ...recipient, canConfirm: unexpired, canReceive: unexpired, draft: offer };
+    const context = {
+      ...recipient,
+      activity,
+      canConfirm: unexpired,
+      canReceive: unexpired,
+      draft: offer,
+    };
     const message =
       input.event === "received" &&
       offer.sscConfirmationStatus === "confirming" &&
@@ -247,7 +237,7 @@ export async function getOfferSscNotificationTargets(
     if (chatId && chats.has(chatId)) {
       continue;
     }
-    const target = await getAuthorizedNotificationTarget(input, profile, offer.createdBy);
+    const target = await getAuthorizedNotificationTarget(input, profile, offer.createdBy, activity);
     if (target && !chats.has(target.chatId)) {
       chats.add(target.chatId);
       targets.push(target);

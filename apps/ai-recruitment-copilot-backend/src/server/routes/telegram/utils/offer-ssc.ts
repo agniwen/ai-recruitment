@@ -6,6 +6,7 @@ import {
   receiveOfferSscConfirmation,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 
+import { loadOfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { handleTelegramOfferCompletionAction } from "./offer-ssc-completion";
 import { updateTelegramOfferMessages } from "./offer-ssc-message";
@@ -64,7 +65,8 @@ export async function openTelegramOffer(event: SlashCommandEvent, draftId: strin
       username: message.data.from.username,
     };
     const context = await loadAuthorizedOfferSscContext({ draftId, telegramActor: actor });
-    await event.channel.post(buildTelegramOfferPublicCard(context, actor));
+    const activity = await loadOfferSscActivity(context.draft);
+    await event.channel.post(buildTelegramOfferPublicCard({ ...context, activity }, actor));
   } catch (error) {
     await event.channel.post(errorReply(error));
   }
@@ -126,9 +128,10 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       revision: parsed.revision,
       source: "telegram",
     });
+    const activity = await loadOfferSscActivity(draft);
     await updateTelegramOfferMessages(
       event,
-      buildTelegramOfferPublicCard({ ...context, draft }, actor),
+      buildTelegramOfferPublicCard({ ...context, activity, canConfirm: false, draft }, actor),
     );
   } catch (error) {
     await event.thread.post(errorReply(error));

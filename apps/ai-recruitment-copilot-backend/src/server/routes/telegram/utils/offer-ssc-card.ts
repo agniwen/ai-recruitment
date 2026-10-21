@@ -2,6 +2,7 @@ import { Actions, Button, Card, Field, Fields, LinkButton } from "chat";
 import type { ActionsElement } from "chat";
 import { getOfferSscConfirmationMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
+import type { OfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 
 export interface TelegramOfferCardContext {
@@ -13,6 +14,32 @@ export interface TelegramOfferCardContext {
   pipelineStage: PipelineStage;
   canReceive: boolean;
   canConfirm: boolean;
+  activity?: OfferSscActivity[];
+}
+
+const activityTime = new Intl.DateTimeFormat("zh-CN", {
+  day: "2-digit",
+  hour: "2-digit",
+  hour12: false,
+  minute: "2-digit",
+  month: "2-digit",
+  timeZone: "Asia/Shanghai",
+});
+
+function operationFields(activity: OfferSscActivity[] | undefined) {
+  return activity?.length
+    ? [
+        Field({
+          label: "最近操作记录",
+          value: activity
+            .map(
+              (entry) =>
+                `${entry.label}：${entry.operator} · ${activityTime.format(new Date(entry.occurredAt))}`,
+            )
+            .join("\n"),
+        }),
+      ]
+    : [];
 }
 
 export function telegramOfferCallbackValue(draftId: string, revision: number): string {
@@ -41,6 +68,7 @@ export function buildTelegramOfferCard(
       value: status ? getOfferSscConfirmationMeta(status).label : "历史 Offer，无 SSC 确认记录",
     }),
     ...(options.feedbackLabel ? [Field({ label: "本次反馈", value: options.feedbackLabel })] : []),
+    ...operationFields(context.activity),
   ]);
   const actions: ActionsElement["children"] = [];
   if (canOperate && status === "pending" && context.canReceive) {
@@ -79,6 +107,7 @@ export function buildTelegramOfferCompletionCard(
     detailUrl?: string | null;
     feedbackLabel?: string;
     persistent?: boolean;
+    operatorLabel?: string;
   } = {},
 ) {
   return Card({
@@ -87,6 +116,10 @@ export function buildTelegramOfferCompletionCard(
         Field({ label: "候选人", value: context.candidateName }),
         Field({ label: "岗位", value: context.draft.position || "未填写" }),
         Field({ label: "Offer 版本", value: String(context.draft.version) }),
+        ...operationFields(context.activity),
+        ...(options.operatorLabel
+          ? [Field({ label: "当前操作人", value: options.operatorLabel })]
+          : []),
         ...(options.feedbackLabel
           ? [Field({ label: "本次流转", value: options.feedbackLabel })]
           : []),

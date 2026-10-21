@@ -240,3 +240,20 @@ it("shows all selected ODC names in approval activity", () => {
     ),
   ).toEqual([{ label: "通知人员", value: "ODC甲、ODC乙" }]);
 });
+
+describe("SSC Telegram interaction audit timeline", () => {
+  it.each([
+    ["offer_ssc_confirmation_opened", "SSC 已打开二次确认"],
+    ["offer_ssc_upload_requested", "SSC 已选择上传截图"],
+    ["offer_ssc_screenshot_uploaded", "SSC 已上传审批截图"],
+    ["offer_ssc_confirmation_cancelled", "SSC 已取消本次确认"],
+  ])("identifies the SSC TG on %s", (action, title) => {
+    const detail = { channel: "telegram", sscName: "秋风", sscTelegram: "@qiufeng034", version: 4 };
+    expect(auditTitle(action, detail)).toBe(title);
+    expect(auditDescription(detail, action)).toContain("Offer v4");
+    expect(auditMetadata(detail, action)).toEqual([
+      { label: "SSC 花名", value: "秋风" },
+      { label: "SSC TG", value: "@qiufeng034" },
+    ]);
+  });
+});

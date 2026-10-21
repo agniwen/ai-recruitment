@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   context: vi.fn(),
   direct: vi.fn(),
   edit: vi.fn(),
+  history: vi.fn(),
+  interaction: vi.fn(),
   pins: vi.fn(),
   post: vi.fn(),
   receive: vi.fn(),
@@ -21,6 +23,15 @@ const mocks = vi.hoisted(() => ({
   uploadPrompt: vi.fn(),
   users: vi.fn(),
 }));
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity",
+  () => ({
+    describeOfferSscOperator: (operator: { sscName: string; sscTelegram: string } | null) =>
+      operator ? `${operator.sscName}（${operator.sscTelegram}）` : "SSC",
+    loadOfferSscActivity: mocks.history,
+    recordOfferSscInteraction: mocks.interaction,
+  }),
+);
 vi.mock("./offer-ssc-upload-prompt", () => ({
   postTelegramOfferScreenshotPrompt: mocks.uploadPrompt,
 }));
@@ -130,6 +141,15 @@ function thread() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.history.mockResolvedValue([
+    {
+      action: "offer_ssc_received",
+      label: "接收确认",
+      occurredAt: "2026-10-21T08:52:00.000Z",
+      operator: "秋风（@sscalice）",
+    },
+  ]);
+  mocks.interaction.mockImplementation(() => Promise.resolve());
   mocks.actions.clear();
   mocks.slash.clear();
   mocks.users.mockResolvedValue([boundUser]);
@@ -142,6 +162,12 @@ beforeEach(() => {
     candidateName: "候选人甲",
     draft,
     pipelineStage: "offer",
+    telegramOperator: {
+      responsibilityId: "ssc-responsibility",
+      sscName: "秋风",
+      sscTelegram: "@sscalice",
+      telegramChatId: "12345",
+    },
   });
   mocks.receive.mockResolvedValue({ ...draft, sscConfirmationStatus: "confirming" });
   mocks.complete.mockResolvedValue({ ...draft, sscConfirmationStatus: "completed" });
@@ -261,6 +287,12 @@ async function beginCompletion(targetDraft = draft) {
     candidateName: "候选人甲",
     draft: { ...targetDraft, sscConfirmationStatus: "confirming" },
     pipelineStage: "offer",
+    telegramOperator: {
+      responsibilityId: "ssc-responsibility",
+      sscName: "秋风",
+      sscTelegram: "@sscalice",
+      telegramChatId: "12345",
+    },
   });
   return await action("osc", `${targetDraft.id.replaceAll("-", "")}:3`);
 }
@@ -322,13 +354,14 @@ describe("self-service Telegram Offer SSC actions", () => {
     });
   });
 
-  it("updates the clicked Offer card to confirming and replaces receive with complete", async () => {
+  it("updates the receipt with its actual actor and leaves second confirmation to the broadcast card", async () => {
     const post = await action("osr", `${callbackDraftId}:3`);
     expect(mocks.edit).toHaveBeenCalledTimes(1);
     expect(mocks.edit).toHaveBeenCalledWith("telegram:12345", "12345:7", expect.anything());
     const edited = JSON.stringify(mocks.edit.mock.calls[0][2]);
     expect(edited).toContain("确认中");
-    expect(edited).toContain('"id":"osc"');
+    expect(edited).not.toContain('"id":"osc"');
+    expect(edited).toContain("秋风（@sscalice）");
     expect(edited).not.toContain('"id":"osr"');
     expect(edited).toContain("https://ats.example.test/offer-candidate/");
     expect(post).not.toHaveBeenCalled();
@@ -341,7 +374,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(mocks.edit).toHaveBeenCalledTimes(1);
     const sent = JSON.stringify(post.mock.calls);
     expect(sent).toContain("确认中");
-    expect(sent).toContain('"id":"osc"');
+    expect(sent).not.toContain('"id":"osc"');
     expect(sent).not.toContain("暂时无法处理");
   });
 
@@ -402,6 +435,18 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(buttonValue(post, "osf")).toBeTruthy();
     expect(buttonValue(post, "osu")).toBeTruthy();
     expect(buttonValue(post, "osx")).toBeTruthy();
+  });
+
+  it("records the SSC who opens the second confirmation and identifies them in the card", async () => {
+    const prompt = await beginCompletion();
+    expect(mocks.interaction).toHaveBeenCalledWith(
+      expect.anything(),
+      "offer_ssc_confirmation_opened",
+    );
+    const card = JSON.stringify(prompt.mock.calls);
+    expect(card).toContain("当前操作人");
+    expect(card).toContain("秋风（@sscalice）");
+    expect(card).toContain("接收确认");
   });
 
   it("finishes directly from a broadcast second-confirmation card without a prior local prompt", async () => {

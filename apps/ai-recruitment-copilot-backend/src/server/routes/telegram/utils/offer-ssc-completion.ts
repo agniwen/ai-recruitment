@@ -8,6 +8,11 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 
 import type { OfferSscTelegramActor } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
+import {
+  describeOfferSscOperator,
+  loadOfferSscActivity,
+  recordOfferSscInteraction,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
 import { getTelegramBot } from "./bot";
 import { buildTelegramOfferCompletionCard } from "./offer-ssc-card";
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
@@ -112,7 +117,7 @@ async function authorizedContext(
   ) {
     throw new OfferDraftError("该 Offer 当前不能完成 SSC 确认，请重新打开。", 409);
   }
-  return context;
+  return { ...context, activity: await loadOfferSscActivity(context.draft) };
 }
 
 async function removePending(thread: CompletionThread, chatId: string, token: string) {
@@ -134,7 +139,13 @@ async function beginCompletion(
   const token = randomUUID().replaceAll("-", "");
   let promptMessageId = identity.messageId;
   if (event.actionId === "osc") {
-    const prompt = await thread.post(buildTelegramOfferCompletionCard(context, token));
+    await recordOfferSscInteraction(context, "offer_ssc_confirmation_opened");
+    const activity = await loadOfferSscActivity(context.draft);
+    const prompt = await thread.post(
+      buildTelegramOfferCompletionCard({ ...context, activity }, token, {
+        operatorLabel: describeOfferSscOperator(context.telegramOperator),
+      }),
+    );
     promptMessageId = sentMessageId(prompt.id, identity.chatId);
   }
   return await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
@@ -182,14 +193,6 @@ export async function handleTelegramOfferCompletionAction(
     return;
   }
   const token = initial ? await beginCompletion(event, identity, initial) : (event.value ?? "");
-  if (event.actionId === "osx") {
-    await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
-      pendingFor(pending, token, identity);
-      Reflect.deleteProperty(pending, token);
-    });
-    await thread.post("已取消本次完成确认，Offer 状态未改变。");
-    return;
-  }
   const record = await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => ({
     ...pendingFor(pending, token, identity),
   }));
@@ -199,6 +202,17 @@ export async function handleTelegramOfferCompletionAction(
   } catch (error) {
     await removePending(thread, identity.chatId, token);
     throw error;
+  }
+  if (event.actionId === "osx") {
+    await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
+      pendingFor(pending, token, identity);
+      Reflect.deleteProperty(pending, token);
+    });
+    await recordOfferSscInteraction(context, "offer_ssc_confirmation_cancelled");
+    await thread.post(
+      `${describeOfferSscOperator(context.telegramOperator)}已取消本次完成确认，Offer 状态未改变。`,
+    );
+    return;
   }
   if (event.actionId === "osu") {
     const selectionId = randomUUID();
@@ -214,7 +228,7 @@ export async function handleTelegramOfferCompletionAction(
     });
     const promptId = await postTelegramOfferScreenshotPrompt(
       thread,
-      `请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，上传后会自动发送新的确认卡片，请点击其中的“确认完成”。`,
+      `操作人：${describeOfferSscOperator(context.telegramOperator)}。请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，上传后会自动发送新的确认卡片，请点击其中的“确认完成”。`,
     );
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       if (pending[token]?.uploadSelectionId !== selectionId) {
@@ -224,6 +238,7 @@ export async function handleTelegramOfferCompletionAction(
       selected.uploadPromptMessageId = sentMessageId(promptId, identity.chatId);
       Reflect.deleteProperty(selected, "uploadSelectionId");
     });
+    await recordOfferSscInteraction(context, "offer_ssc_upload_requested");
     return;
   }
   if (event.actionId !== "osf") {
@@ -269,9 +284,10 @@ export async function handleTelegramOfferCompletionAction(
     // The Offer already committed. Keep the durable "completing" claim until expiry.
     console.warn("[telegram-offer-ssc] Offer completed but confirmation state cleanup failed");
   }
+  const activity = await loadOfferSscActivity(draft);
   await updateTelegramOfferMessages(
     event,
-    buildTelegramOfferPublicCard({ ...context, draft }, identity.actor),
+    buildTelegramOfferPublicCard({ ...context, activity, draft }, identity.actor),
     [
       event.messageId,
       ...(claimed.originMessageId ? [`${identity.chatId}:${claimed.originMessageId}`] : []),
@@ -387,7 +403,10 @@ async function postScreenshotConfirmation(
   let prompt: Awaited<ReturnType<CompletionThread["post"]>>;
   try {
     prompt = await thread.post(
-      buildTelegramOfferCompletionCard(context, token, { screenshotReceived: true }),
+      buildTelegramOfferCompletionCard(context, token, {
+        operatorLabel: describeOfferSscOperator(context.telegramOperator),
+        screenshotReceived: true,
+      }),
     );
   } catch {
     await thread
@@ -509,7 +528,9 @@ export async function handleTelegramOfferScreenshot(
     if (!awaitingConfirmation) {
       return true;
     }
-    await postScreenshotConfirmation(thread, context, token, record);
+    await recordOfferSscInteraction(context, "offer_ssc_screenshot_uploaded");
+    const activity = await loadOfferSscActivity(context.draft);
+    await postScreenshotConfirmation(thread, { ...context, activity }, token, record);
   } catch (error) {
     await reportScreenshotError(thread, chatId, selectedToken, error);
   }

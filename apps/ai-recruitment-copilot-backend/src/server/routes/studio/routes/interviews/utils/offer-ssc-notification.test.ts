@@ -359,7 +359,13 @@ describe("SSC notification recipients and cards", () => {
           username: "ssc_bob",
         },
       ]);
-      mocks.audit.mockResolvedValue([{ detail: { sscName: "秋风", sscTelegram: "@ssc_alice" } }]);
+      mocks.audit.mockResolvedValue([
+        {
+          action: event === "received" ? "offer_ssc_received" : "offer_ssc_completed",
+          createdAt: new Date("2026-10-17T07:55:00Z"),
+          detail: { sscName: "秋风", sscTelegram: "@ssc_alice" },
+        },
+      ]);
       const targets = await getOfferSscNotificationTargets({ ...input, event });
       expect(targets.map((target) => target.chatId)).toEqual(["12345", "67890"]);
       expect(mocks.members).not.toHaveBeenCalled();
