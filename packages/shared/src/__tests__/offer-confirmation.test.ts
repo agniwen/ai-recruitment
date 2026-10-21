@@ -76,7 +76,7 @@ describe("Offer confirmation text", () => {
           position: "开发工程师",
         }),
       ).toBe(`【offer信息】
-候选人编码：待补充
+候选人编码：未填写
 简历名：待补充
 性别：待补充
 
@@ -99,10 +99,6 @@ describe("Offer confirmation text", () => {
 试用期：待补充
 试用薪资：待补充
 
-#面试评价：
-主要面试官：待补充
-面试评价：待补充
-
 待 SSC 确认`);
     },
   );
@@ -121,11 +117,42 @@ describe("Offer confirmation text", () => {
       position: "",
     });
 
-    expect(text).toContain("候选人编码：待补充\n简历名：待补充");
+    expect(text).toContain("候选人编码：未填写\n简历名：待补充");
     expect(text).toContain("职位：待补充");
     expect(text).toContain("薪资货币：待补充\n转正薪资：0K");
     expect(text).toContain("试用薪资：0K");
     expect(text).toContain("面试评价：待补充");
+  });
+
+  it("shows the system record code separately from the optional business code", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      candidateRecordId: "a523d505-cd0c-43c1-a2e5-7525e8cadde8",
+      currency: "CNY",
+      info: completeInfo,
+      position: "工程师",
+    });
+    expect(text).toContain("系统记录编码：a523d505-cd0c-43c1-a2e5-7525e8cadde8");
+    expect(text).toContain("候选人编码：C20260001");
+  });
+
+  it("omits unused interview placeholders for an Offer without interview content", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      currency: "CNY",
+      info: {
+        ...completeInfo,
+        candidateCode: null,
+        interviewFeedback: null,
+        mainInterviewerName: null,
+      },
+      position: "工程师",
+    });
+    expect(text).toContain("候选人编码：未填写");
+    expect(text).not.toContain("#面试评价");
+    expect(text).not.toContain("主要面试官");
+    expect(text).not.toContain("系统记录编码：");
+    expect(text).toContain("待 SSC 确认");
   });
 
   it("preserves salary precision when amounts are not whole thousands", () => {

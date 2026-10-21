@@ -22,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OfferCurrencySelect, offerCurrencySymbol, parseOfferCurrency } from "./offer-currency";
 import { OfferConfirmationFields } from "./offer-creation-confirmation";
-import type { OfferCreationContext } from "@arc/shared/offer-confirmation";
 
 // Toast 文案 helper：避免内联三元嵌套（mode + sendImmediately 两维组合）。
 // Save-success toast helper; flattens the nested ternary of mode × sendImmediately.
@@ -118,16 +117,16 @@ export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
 }
 
 export function OfferDraftFormFields({
+  candidateId,
   form,
   idPrefix,
   onFieldChange,
-  context,
   disabled = false,
 }: {
+  candidateId: string;
   form: OfferFormState;
   idPrefix: string;
   onFieldChange: <K extends keyof OfferFormState>(field: K, value: OfferFormState[K]) => void;
-  context?: OfferCreationContext | null;
   disabled?: boolean;
 }) {
   const symbol = offerCurrencySymbol(form.currency);
@@ -142,9 +141,9 @@ export function OfferDraftFormFields({
     <fieldset className="min-w-0 space-y-5" disabled={disabled}>
       <legend className="sr-only">填写 Offer 信息</legend>
       <OfferConfirmationFields
+        candidateId={candidateId}
         info={info}
         idPrefix={`${idPrefix}-confirm`}
-        context={context}
         disabled={disabled}
         onChange={(value) => onFieldChange("confirmationInfo", value)}
         positionField={

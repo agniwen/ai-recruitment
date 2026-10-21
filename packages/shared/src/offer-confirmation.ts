@@ -24,29 +24,43 @@ const sscStatusText: Record<OfferSscConfirmationStatus, string> = {
   pending: "待 SSC 确认",
 };
 
-function textOrMissing(value: string | null | undefined) {
-  return value?.trim() || "待补充";
+function textOrMissing(value: string | null | undefined, emptyText = "待补充") {
+  return value?.trim() || emptyText;
 }
 
 function salaryOrMissing(value: number | null | undefined) {
   return value === null || value === undefined ? "待补充" : `${value / 1000}K`;
 }
 
+function recordCodeLine(candidateRecordId: string | null | undefined) {
+  const code = candidateRecordId?.trim();
+  return code ? `\n系统记录编码：${code}` : "";
+}
+
+function legacyInterviewSection(info: OfferConfirmationDetails | null | undefined) {
+  if (!info?.mainInterviewerName?.trim() && !info?.interviewFeedback?.trim()) {
+    return "";
+  }
+  return `#面试评价：\n主要面试官：${textOrMissing(info?.mainInterviewerName)}\n面试评价：${textOrMissing(info?.interviewFeedback)}\n\n`;
+}
+
 export function buildOfferConfirmationText({
   info,
+  candidateRecordId,
   position,
   baseSalary,
   currency,
   sscConfirmationStatus,
 }: {
   info?: OfferConfirmationDetails | null;
+  candidateRecordId?: string | null;
   position: string | null | undefined;
   baseSalary: number | null | undefined;
   currency: string | null | undefined;
   sscConfirmationStatus?: OfferSscConfirmationStatus | null;
 }) {
   return `【offer信息】
-候选人编码：${textOrMissing(info?.candidateCode)}
+候选人编码：${textOrMissing(info?.candidateCode, "未填写")}${recordCodeLine(candidateRecordId)}
 简历名：${textOrMissing(info?.candidateName)}
 性别：${textOrMissing(info?.gender)}
 
@@ -69,9 +83,5 @@ export function buildOfferConfirmationText({
 试用期：${textOrMissing(info?.probationPeriod)}
 试用薪资：${salaryOrMissing(info?.probationSalary)}
 
-#面试评价：
-主要面试官：${textOrMissing(info?.mainInterviewerName)}
-面试评价：${textOrMissing(info?.interviewFeedback)}
-
-${sscStatusText[sscConfirmationStatus ?? "pending"]}`;
+${legacyInterviewSection(info)}${sscStatusText[sscConfirmationStatus ?? "pending"]}`;
 }

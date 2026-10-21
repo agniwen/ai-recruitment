@@ -20,58 +20,58 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 type TextField = Exclude<keyof OfferConfirmationDetails, "probationSalary">;
-const identityFields: { key: TextField; label: string; maxLength: number }[] = [
-  { key: "candidateCode", label: "候选人编码", maxLength: 120 },
+interface TextFieldConfig {
+  key: TextField;
+  label: string;
+  maxLength: number;
+  placeholder?: string;
+}
+const identityFields: TextFieldConfig[] = [
+  { key: "candidateCode", label: "候选人编码（选填）", maxLength: 120 },
   { key: "candidateName", label: "简历名（候选人姓名）", maxLength: 200 },
   { key: "gender", label: "性别", maxLength: 30 },
 ];
-const organizationFields: { key: TextField; label: string; maxLength: number }[] = [
+const organizationFields: TextFieldConfig[] = [
   { key: "hiringUnitName", label: "入职编制组织", maxLength: 200 },
   { key: "serviceUnit", label: "入职服务单位", maxLength: 200 },
-  { key: "personnelType", label: "人员性质", maxLength: 120 },
+  { key: "personnelType", label: "人员性质", maxLength: 120, placeholder: "直属" },
   { key: "departmentName", label: "入职部门", maxLength: 200 },
   { key: "directManager", label: "直属上级", maxLength: 200 },
   { key: "jobType", label: "岗位类型", maxLength: 120 },
   { key: "jobLevel", label: "建议职级", maxLength: 120 },
-  { key: "managementSequence", label: "管理序列", maxLength: 120 },
-  { key: "workMode", label: "办公方式", maxLength: 120 },
-  { key: "workLocation", label: "办公地区", maxLength: 200 },
+  { key: "managementSequence", label: "管理序列", maxLength: 120, placeholder: "个人" },
+  { key: "workMode", label: "办公方式", maxLength: 120, placeholder: "远程" },
+  { key: "workLocation", label: "办公地区", maxLength: 200, placeholder: "中国" },
 ];
-const selectClassName =
-  "h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50";
-
 export function OfferConfirmationFields({
+  candidateId,
   info,
   onChange,
   idPrefix,
-  context,
   positionField,
   salaryFields,
   disabled = false,
 }: {
+  candidateId: string;
   info: OfferConfirmationDetails;
   onChange: (value: OfferConfirmationDetails) => void;
   idPrefix: string;
-  context?: OfferCreationContext | null;
   positionField?: ReactNode;
   salaryFields?: ReactNode;
   disabled?: boolean;
 }) {
-  const selectedRound = context?.interviewRounds.find(
-    (round) => round.id === info.interviewRoundId,
-  );
-  function textField(field: { key: TextField; label: string; maxLength: number }) {
+  function textField(field: TextFieldConfig) {
     return (
       <div className="grid min-w-0 gap-1.5" key={field.key}>
         <Label htmlFor={`${idPrefix}-${field.key}`}>{field.label}</Label>
         <Input
+          className="placeholder:text-muted-foreground/50"
           id={`${idPrefix}-${field.key}`}
           maxLength={field.maxLength}
           onChange={(event) => onChange({ ...info, [field.key]: event.target.value || null })}
-          placeholder="待补充"
+          placeholder={field.placeholder ?? "待补充"}
           value={info[field.key] ?? ""}
         />
       </div>
@@ -86,8 +86,20 @@ export function OfferConfirmationFields({
       </p>
       <section className="space-y-3">
         <h3 className="font-medium text-sm">候选人信息</h3>
-        <div className="grid gap-3 sm:grid-cols-2">{identityFields.map(textField)}</div>
-        <p className="text-muted-foreground text-xs">候选人编码请按实际业务编码填写。</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-1.5 sm:col-span-2">
+            <Label htmlFor={`${idPrefix}-systemRecordCode`}>系统记录编码</Label>
+            <Input
+              className="bg-muted/30 font-mono text-xs"
+              id={`${idPrefix}-systemRecordCode`}
+              readOnly
+              title={candidateId}
+              value={candidateId}
+            />
+          </div>
+          {identityFields.map(textField)}
+        </div>
+        <p className="text-muted-foreground text-xs">候选人编码可留空，填写时使用实际业务编码。</p>
       </section>
       <section className="space-y-3">
         <h3 className="font-medium text-sm">1️⃣编制信息</h3>
@@ -106,72 +118,6 @@ export function OfferConfirmationFields({
           {salaryFields}
         </section>
       ) : null}
-      <section className="space-y-3">
-        <h3 className="font-medium text-sm">面试评价</h3>
-        {context && context.interviewRounds.length > 0 ? (
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${idPrefix}-interviewRoundId`}>引用真人面试轮次</Label>
-            <select
-              className={selectClassName}
-              id={`${idPrefix}-interviewRoundId`}
-              value={info.interviewRoundId ?? ""}
-              onChange={(event) => {
-                const round = context.interviewRounds.find(
-                  (item) => item.id === event.target.value,
-                );
-                onChange({
-                  ...info,
-                  interviewFeedback: round?.feedback ?? null,
-                  interviewRoundId: round?.id ?? null,
-                  mainInterviewerName: null,
-                });
-              }}
-            >
-              <option value="">不指定轮次，手动填写</option>
-              {context.interviewRounds.map((round) => (
-                <option key={round.id} value={round.id}>
-                  {round.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
-        {selectedRound && selectedRound.interviewers.length > 0 ? (
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${idPrefix}-mainInterviewerName`}>主要面试官</Label>
-            <select
-              className={selectClassName}
-              id={`${idPrefix}-mainInterviewerName`}
-              value={info.mainInterviewerName ?? ""}
-              onChange={(event) =>
-                onChange({ ...info, mainInterviewerName: event.target.value || null })
-              }
-            >
-              <option value="">请选择主要面试官</option>
-              {selectedRound.interviewers.map((interviewer) => (
-                <option key={interviewer.id} value={interviewer.name}>
-                  {interviewer.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          textField({ key: "mainInterviewerName", label: "主要面试官", maxLength: 200 })
-        )}
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${idPrefix}-interviewFeedback`}>面试评价内容</Label>
-          <Textarea
-            id={`${idPrefix}-interviewFeedback`}
-            maxLength={5000}
-            rows={4}
-            placeholder="待补充，可引用面试轮次后修改"
-            value={info.interviewFeedback ?? ""}
-            onChange={(event) =>
-              onChange({ ...info, interviewFeedback: event.target.value || null })
-            }
-          />
-        </div>
-      </section>
     </fieldset>
   );
 }
@@ -188,6 +134,7 @@ export function OfferConfirmationText(props: Parameters<typeof buildOfferConfirm
 }
 
 export function OfferCreationReview({
+  candidateId,
   info,
   position,
   baseSalary,
@@ -197,6 +144,7 @@ export function OfferCreationReview({
   expiresAt,
   disabled,
 }: {
+  candidateId: string;
   info: OfferConfirmationDetails;
   position: string;
   baseSalary: number;
@@ -211,6 +159,7 @@ export function OfferCreationReview({
       <section className="space-y-2">
         <h3 className="font-medium text-sm">完整确认内容</h3>
         <OfferConfirmationText
+          candidateRecordId={candidateId}
           info={info}
           position={position}
           baseSalary={baseSalary}
@@ -266,6 +215,7 @@ export function OfferInformationDialog({
           <DialogDescription>本次 Offer 保存的确认内容。</DialogDescription>
         </DialogHeader>
         <OfferConfirmationText
+          candidateRecordId={draft.interviewRecordId}
           info={draft.confirmationInfo}
           position={draft.position}
           baseSalary={draft.baseSalary}

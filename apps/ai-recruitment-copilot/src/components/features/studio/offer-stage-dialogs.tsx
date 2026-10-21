@@ -281,6 +281,7 @@ export function CreateOrEditOfferDialog({
 
         {confirmingCreation ? (
           <OfferCreationReview
+            candidateId={candidateId}
             info={confirmingCreation}
             position={form.position}
             baseSalary={Number(form.baseSalary)}
@@ -296,10 +297,10 @@ export function CreateOrEditOfferDialog({
               <output className="text-muted-foreground text-sm">正在加载候选人资料…</output>
             ) : null}
             <OfferDraftFormFields
+              candidateId={candidateId}
               form={form}
               idPrefix="offer"
               onFieldChange={setFormField}
-              context={context}
               disabled={mutation.isPending || contextUnavailable || loadingContext}
             />
           </>

@@ -359,6 +359,7 @@ export function OfferCard({
           </div>
 
           <OfferDraftFormFields
+            candidateId={candidateId}
             form={form}
             idPrefix={`offer-${draft.id}`}
             onFieldChange={setFormField}
