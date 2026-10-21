@@ -21,7 +21,7 @@ export interface OfferCreationContext {
 const sscStatusText: Record<OfferSscConfirmationStatus, string> = {
   completed: "offer审批已通过",
   confirming: "SSC 确认中",
-  pending: "待 SSC 确认",
+  pending: "",
 };
 
 function textOrMissing(value: string | null | undefined, emptyText = "待补充") {
@@ -83,5 +83,5 @@ export function buildOfferConfirmationText({
 试用期：${textOrMissing(info?.probationPeriod)}
 试用薪资：${salaryOrMissing(info?.probationSalary)}
 
-${legacyInterviewSection(info)}${sscStatusText[sscConfirmationStatus ?? "pending"]}`;
+${legacyInterviewSection(info)}${sscStatusText[sscConfirmationStatus ?? "pending"]}`.trimEnd();
 }

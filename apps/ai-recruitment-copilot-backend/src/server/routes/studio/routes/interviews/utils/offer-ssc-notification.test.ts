@@ -403,7 +403,8 @@ describe("SSC notification recipients and cards", () => {
       for (const target of targets) {
         const card = JSON.stringify(target.message);
         expect(card).toContain("秋风");
-        expect(card).toContain("@ssc_alice");
+        // Literal field values escape Markdown punctuation before Telegram rendering.
+        expect(card).toContain("@ssc\\\\_alice");
         expect(card).toContain("/offer-candidate/");
         expect(card).not.toContain('"id":"osr"');
         if (event === "received") {

@@ -60,9 +60,7 @@ describe("Offer confirmation text", () => {
 #面试评价：
 主要面试官：王五
 面试评价：技术基础扎实
-沟通清晰，建议录用。
-
-待 SSC 确认`);
+沟通清晰，建议录用。`);
   });
 
   it.each([null, undefined])(
@@ -97,9 +95,7 @@ describe("Offer confirmation text", () => {
 薪资货币：CNY
 转正薪资：12K
 试用期：待补充
-试用薪资：待补充
-
-待 SSC 确认`);
+试用薪资：待补充`);
     },
   );
 
@@ -152,7 +148,8 @@ describe("Offer confirmation text", () => {
     expect(text).not.toContain("#面试评价");
     expect(text).not.toContain("主要面试官");
     expect(text).not.toContain("系统记录编码：");
-    expect(text).toContain("待 SSC 确认");
+    expect(text).not.toContain("待 SSC 确认");
+    expect(text.split("\n").at(-1)).toBe("试用薪资：10K");
   });
 
   it("preserves salary precision when amounts are not whole thousands", () => {
@@ -181,11 +178,8 @@ describe("Offer confirmation text", () => {
   });
 
   it.each([
-    ["pending", "待 SSC 确认"],
     ["confirming", "SSC 确认中"],
     ["completed", "offer审批已通过"],
-    [null, "待 SSC 确认"],
-    [undefined, "待 SSC 确认"],
   ] as const)("ends with the current SSC state %s", (sscConfirmationStatus, label) => {
     const text = buildOfferConfirmationText({
       baseSalary: 12_000,
@@ -196,5 +190,33 @@ describe("Offer confirmation text", () => {
     });
 
     expect(text.split("\n").at(-1)).toBe(label);
+  });
+
+  it.each(["pending", null, undefined] as const)(
+    "omits the pending SSC footer and trailing blank lines for status %s",
+    (sscConfirmationStatus) => {
+      const text = buildOfferConfirmationText({
+        baseSalary: 12_000,
+        currency: "CNY",
+        info: completeInfo,
+        position: "工程师",
+        sscConfirmationStatus,
+      });
+      expect(text).not.toContain("待 SSC 确认");
+      expect(text.split("\n").at(-1)).toBe("沟通清晰，建议录用。");
+      expect(text.endsWith("\n")).toBe(false);
+    },
+  );
+
+  it("preserves pending SSC wording inside saved interview content", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      currency: "CNY",
+      info: { ...completeInfo, interviewFeedback: "待 SSC 确认后联系候选人。\n保留面试记录。" },
+      position: "工程师",
+      sscConfirmationStatus: "pending",
+    });
+    expect(text).toContain("面试评价：待 SSC 确认后联系候选人。\n保留面试记录。");
+    expect(text.split("\n").at(-1)).toBe("保留面试记录。");
   });
 });

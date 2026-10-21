@@ -450,7 +450,11 @@ describe("Offer creation confirmation", () => {
     await next();
     expect(document.querySelector("#offer-confirm-candidateCode")).toBeNull();
     expect(document.querySelector("#offer-confirm-probationSalary")).toBeNull();
-    expect(document.body.textContent).toContain("待 SSC 确认");
+    const confirmationText = document.querySelector(
+      'pre[aria-label="Offer 确认内容"]',
+    )?.textContent;
+    expect(confirmationText).not.toContain("待 SSC 确认");
+    expect(confirmationText?.split("\n").at(-1)).toBe("试用薪资：待补充");
     expect(document.body.textContent).not.toContain("offer审批已通过");
     expect(document.querySelector('input[type="file"]')).toBeNull();
     await click("取消");

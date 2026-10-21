@@ -323,7 +323,9 @@ describe("public Offer candidate preview", () => {
       expect(text).toContain("系统记录编码：legacy-candidate");
       expect(text).toContain("职位：高级招聘专员");
       expect(text).toContain("转正薪资：18K");
-      expect(text).toContain("待 SSC 确认");
+      expect(text).not.toContain("待 SSC 确认");
+      expect(text?.split("\n").at(-1)).toBe("试用薪资：待补充");
+      expect(offer?.textContent).toContain("待 SSC 接收");
       const copy = [...(offer?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
         (node) => node.textContent?.trim() === "复制 Offer 信息",
       );

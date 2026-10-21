@@ -137,6 +137,19 @@ function copyButton(host: HTMLElement) {
 }
 
 describe("copying complete Offer confirmation information", () => {
+  it.each(["pending", null, undefined] as const)(
+    "copies Offer text without a pending SSC footer or trailing blank lines for status %s",
+    async (sscConfirmationStatus) => {
+      const { host, render } = renderConfirmation();
+      render({ ...confirmationProps, sscConfirmationStatus });
+      const expected = savedConfirmationText.replace("\n\noffer审批已通过", "");
+      expect(host.querySelector("pre")?.textContent).toBe(expected);
+      await act(() => copyButton(host).click());
+      expect(mocks.copy).toHaveBeenCalledExactlyOnceWith(expected, expect.any(Function));
+      expect(mocks.toastSuccess).toHaveBeenCalledOnce();
+    },
+  );
+
   it("copies the entire displayed multiline template with salary, system code and current SSC status", async () => {
     const { host, onSubmit, render } = renderConfirmation();
     expect(host.querySelector("pre")?.textContent).toBe(savedConfirmationText);

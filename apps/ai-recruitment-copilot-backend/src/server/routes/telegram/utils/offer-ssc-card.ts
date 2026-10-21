@@ -7,6 +7,10 @@ import {
   LinkButton,
   CardText,
   cardChildToFallbackText,
+  paragraph,
+  root,
+  stringifyMarkdown,
+  text as markdownText,
 } from "chat";
 import type { ActionsElement } from "chat";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
@@ -51,13 +55,14 @@ function offerConfirmationText(context: TelegramOfferCardContext) {
   });
 }
 
-function fencedCopyText(text: string) {
-  let fenceLength = 3;
-  for (const match of text.matchAll(/`+/gu)) {
-    fenceLength = Math.max(fenceLength, match[0].length + 1);
-  }
-  const fence = "`".repeat(fenceLength);
-  return `${fence}\n${text}\n${fence}`;
+function plainMarkdown(value: string) {
+  // The Card transport parses Markdown again: stringify a text-only AST so saved fields
+  // stay literal, including backticks, list markers and Markdown-looking multiline values.
+  return stringifyMarkdown(root([paragraph([markdownText(value)])])).replace(/\n$/u, "");
+}
+
+function literalField(props: { label: string; value: string }) {
+  return Field({ ...props, value: plainMarkdown(props.value) });
 }
 
 function copyInformationActions(detailUrl: string | null | undefined) {
@@ -80,13 +85,12 @@ function offerCopySections(
   }
   const hint = CardText(
     detailUrl
-      ? "完整 Offer 信息：可使用客户端的代码块复制功能，或点击下方按钮复制全文。"
-      : "完整 Offer 信息：可使用客户端的代码块复制功能复制全文。",
+      ? "完整 Offer 信息如下，可点击下方按钮复制全文。"
+      : "完整 Offer 信息如下，可选择正文复制。",
   );
-  // MarkdownV2 escaping can double the non-code text. Code only escapes backslashes/backticks.
+  // The Telegram transport can escape every plain-text character in MarkdownV2.
   // Reserve separators and the explanatory line before the adapter's 4096-character limit.
-  const escapedCodeLength = text.length + (text.match(/[\\`]/gu)?.length ?? 0);
-  const budget = header.length * 2 + escapedCodeLength + 256;
+  const budget = (header.length + text.length) * 2 + 256;
   if (budget > 4096) {
     return [
       CardText(
@@ -96,7 +100,7 @@ function offerCopySections(
       ),
     ];
   }
-  return [hint, CardText(fencedCopyText(text))];
+  return [hint, CardText(plainMarkdown(text))];
 }
 
 const activityTime = new Intl.DateTimeFormat("zh-CN", {
@@ -111,7 +115,7 @@ const activityTime = new Intl.DateTimeFormat("zh-CN", {
 function operationFields(activity: OfferSscActivity[] | undefined) {
   return activity?.length
     ? [
-        Field({
+        literalField({
           label: "最近操作记录",
           value: activity
             .map(
@@ -142,14 +146,16 @@ export function buildTelegramOfferCard(
   const status = draft.sscConfirmationStatus;
   const canOperate = draft.status === "draft" && context.pipelineStage !== "closed";
   const fields = Fields([
-    Field({ label: "候选人", value: context.candidateName }),
-    Field({ label: "岗位", value: draft.position || "未填写" }),
-    Field({ label: "Offer 版本", value: String(draft.version) }),
-    Field({
+    literalField({ label: "候选人", value: context.candidateName }),
+    literalField({ label: "岗位", value: draft.position || "未填写" }),
+    literalField({ label: "Offer 版本", value: String(draft.version) }),
+    literalField({
       label: "SSC 状态",
       value: status ? getOfferSscConfirmationMeta(status).label : "历史 Offer，无 SSC 确认记录",
     }),
-    ...(options.feedbackLabel ? [Field({ label: "本次反馈", value: options.feedbackLabel })] : []),
+    ...(options.feedbackLabel
+      ? [literalField({ label: "本次反馈", value: options.feedbackLabel })]
+      : []),
     ...operationFields(context.activity),
   ]);
   const actions: ActionsElement["children"] = [];
@@ -205,21 +211,21 @@ export function buildTelegramOfferCompletionCard(
   return Card({
     children: [
       Fields([
-        Field({ label: "候选人", value: context.candidateName }),
-        Field({ label: "岗位", value: context.draft.position || "未填写" }),
-        Field({ label: "Offer 版本", value: String(context.draft.version) }),
+        literalField({ label: "候选人", value: context.candidateName }),
+        literalField({ label: "岗位", value: context.draft.position || "未填写" }),
+        literalField({ label: "Offer 版本", value: String(context.draft.version) }),
         ...operationFields(context.activity),
         ...(options.operatorLabel
-          ? [Field({ label: "当前操作人", value: options.operatorLabel })]
+          ? [literalField({ label: "当前操作人", value: options.operatorLabel })]
           : []),
         ...(options.feedbackLabel
-          ? [Field({ label: "本次流转", value: options.feedbackLabel })]
+          ? [literalField({ label: "本次流转", value: options.feedbackLabel })]
           : []),
-        Field({
+        literalField({
           label: "内部审批",
           value: "请确认该 Offer 的内部审批已完成。确认后系统将记录操作人和完成时间。",
         }),
-        Field({
+        literalField({
           label: "审批截图（选填）",
           value: options.screenshotReceived
             ? "审批截图已收到，确认完成后将保存到本次 Offer。请确认内部审批已完成，再点击下方“确认完成”。"

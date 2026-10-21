@@ -102,14 +102,14 @@ async function editedCard(
 }
 
 describe("Offer SSC cards through the real Telegram adapter", () => {
-  it("renders the complete Offer snapshot as one safely escaped copyable code block", async () => {
+  it("renders the complete Offer snapshot as plain text without code formatting or truncation", async () => {
     const info = offerConfirmationDetailsSchema.parse({
       candidateCode: "SSC-001",
       candidateName: "候选人<甲>&乙",
       departmentName: "研发中心",
       directManager: "负责人 `甲` 与 \\测试",
-      hiringUnitName: "技术组织",
-      interviewFeedback: "审阅记录\n```\n仍应保持在完整复制块里\n```\n结束",
+      hiringUnitName: "技术 *组织* [资料](https://example.test) #1",
+      interviewFeedback: "审阅记录\n```\n正文中仍保留这一行\n```\n- 条目 *原文*\n# 原始标题\n结束",
       probationPeriod: "2个月",
       probationSalary: 10_000,
     });
@@ -134,8 +134,20 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       { detailUrl: "https://ats.example.test/offer-candidate/signed-offer" },
     );
     expect(payload.parse_mode).toBe("MarkdownV2");
-    const escaped = expected.replaceAll("\\", "\\\\").replaceAll("`", "\\`");
-    expect(payload.text).toContain(`\`\`\`\n${escaped}\n\`\`\``);
+    const markdownV2Specials = new Set("\\_*[]()~`>#+-=|{}.!");
+    const escaped = Array.from(expected, (character) =>
+      markdownV2Specials.has(character) ? `\\${character}` : character,
+    ).join("");
+    // GFM auto-links the bare URL inside the literal saved text. Telegram's text-link
+    // label preserves the original URL; the surrounding saved Markdown stays escaped.
+    const expectedTransport = escaped.replace(
+      "https://example\\.test",
+      "[https://example\\.test](https://example.test)",
+    );
+    expect(payload.text).toContain(expectedTransport);
+    expect(payload.text).not.toMatch(/(?<!\\)`/u);
+    expect(payload.text).not.toContain("代码块");
+    expect(payload.text).toContain("转正薪资：15K\n试用期：2个月\n试用薪资：10K");
     expect(payload.reply_markup.inline_keyboard.flat()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -163,7 +175,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     });
     expect(payload.text).toContain("offer审批已通过");
     expect(payload.text).toContain("试用薪资：0K");
-    expect(payload.text).toContain("系统记录编码：candidate-final");
+    expect(payload.text).toContain("系统记录编码：candidate\\-final");
     expect(payload.text).not.toContain("待 SSC 确认");
   });
 
@@ -214,6 +226,33 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     );
     expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
       expect.objectContaining({ text: "接收确认" }),
+    );
+  });
+
+  it("keeps punctuation-heavy Offer text available through the signed copy page before escaping exceeds the limit", async () => {
+    const feedback = "*_[x](y).!".repeat(220);
+    const info = offerConfirmationDetailsSchema.parse({
+      candidateName: "Markdown 标点较多的候选人",
+      interviewFeedback: feedback,
+    });
+    const payload = await editedCard(
+      "pending",
+      {
+        baseSalary: 15_000,
+        confirmationInfo: info,
+        currency: "CNY",
+        interviewRecordId: "candidate-escaped-long",
+      },
+      { detailUrl: "https://ats.example.test/offer-candidate/signed-escaped-long" },
+    );
+    expect(payload.text).toContain("信息较长");
+    expect(payload.text).not.toContain(feedback.slice(0, 100));
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({
+        text: "复制完整 Offer 信息",
+        url: "https://ats.example.test/offer-candidate/signed-escaped-long#offer-confirmation-info",
+      }),
     );
   });
 
