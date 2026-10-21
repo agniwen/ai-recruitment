@@ -6,7 +6,10 @@ import type {
   OfferCreationContext,
 } from "@arc/shared/offer-confirmation";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import { Fragment } from "react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { ResumeDocumentPreviewButton } from "@/components/features/resume/resume-document-preview-button";
 import {
   Dialog,
   DialogContent,
@@ -26,10 +29,10 @@ const identityFields: { key: TextField; label: string; maxLength: number }[] = [
   { key: "gender", label: "性别", maxLength: 30 },
 ];
 const organizationFields: { key: TextField; label: string; maxLength: number }[] = [
-  { key: "hiringUnitName", label: "编制组织", maxLength: 200 },
-  { key: "serviceUnit", label: "服务单位", maxLength: 200 },
+  { key: "hiringUnitName", label: "入职编制组织", maxLength: 200 },
+  { key: "serviceUnit", label: "入职服务单位", maxLength: 200 },
   { key: "personnelType", label: "人员性质", maxLength: 120 },
-  { key: "departmentName", label: "部门", maxLength: 200 },
+  { key: "departmentName", label: "入职部门", maxLength: 200 },
   { key: "directManager", label: "直属上级", maxLength: 200 },
   { key: "jobType", label: "岗位类型", maxLength: 120 },
   { key: "jobLevel", label: "建议职级", maxLength: 120 },
@@ -45,12 +48,16 @@ export function OfferConfirmationFields({
   onChange,
   idPrefix,
   context,
+  positionField,
+  salaryFields,
   disabled = false,
 }: {
   info: OfferConfirmationDetails;
   onChange: (value: OfferConfirmationDetails) => void;
   idPrefix: string;
   context?: OfferCreationContext | null;
+  positionField?: ReactNode;
+  salaryFields?: ReactNode;
   disabled?: boolean;
 }) {
   const selectedRound = context?.interviewRounds.find(
@@ -83,33 +90,22 @@ export function OfferConfirmationFields({
         <p className="text-muted-foreground text-xs">候选人编码请按实际业务编码填写。</p>
       </section>
       <section className="space-y-3">
-        <h3 className="font-medium text-sm">编制与岗位</h3>
-        <div className="grid gap-3 sm:grid-cols-2">{organizationFields.map(textField)}</div>
-      </section>
-      <section className="space-y-3">
-        <h3 className="font-medium text-sm">试用期薪资</h3>
+        <h3 className="font-medium text-sm">1️⃣编制信息</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          {textField({ key: "probationPeriod", label: "试用期", maxLength: 120 })}
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${idPrefix}-probationSalary`}>试用薪资（与转正薪资同币种）</Label>
-            <Input
-              id={`${idPrefix}-probationSalary`}
-              inputMode="numeric"
-              min={0}
-              step={1}
-              type="number"
-              placeholder="待补充"
-              value={info.probationSalary ?? ""}
-              onChange={(event) =>
-                onChange({
-                  ...info,
-                  probationSalary: event.target.value === "" ? null : Number(event.target.value),
-                })
-              }
-            />
-          </div>
+          {organizationFields.map((field) => (
+            <Fragment key={field.key}>
+              {textField(field)}
+              {field.key === "jobType" ? positionField : null}
+            </Fragment>
+          ))}
         </div>
       </section>
+      {salaryFields ? (
+        <section className="space-y-3">
+          <h3 className="font-medium text-sm">2️⃣薪资信息</h3>
+          {salaryFields}
+        </section>
+      ) : null}
       <section className="space-y-3">
         <h3 className="font-medium text-sm">面试评价</h3>
         {context && context.interviewRounds.length > 0 ? (
@@ -188,6 +184,68 @@ export function OfferConfirmationText(props: Parameters<typeof buildOfferConfirm
     >
       {buildOfferConfirmationText(props)}
     </pre>
+  );
+}
+
+export function OfferCreationReview({
+  info,
+  position,
+  baseSalary,
+  currency,
+  resume,
+  resumeUrl,
+  expiresAt,
+  disabled,
+}: {
+  info: OfferConfirmationDetails;
+  position: string;
+  baseSalary: number;
+  currency: string;
+  resume?: OfferCreationContext["resume"];
+  resumeUrl: string;
+  expiresAt: string;
+  disabled: boolean;
+}) {
+  return (
+    <div className="min-w-0 space-y-5">
+      <section className="space-y-2">
+        <h3 className="font-medium text-sm">完整确认内容</h3>
+        <OfferConfirmationText
+          info={info}
+          position={position}
+          baseSalary={baseSalary}
+          currency={currency}
+          sscConfirmationStatus="pending"
+        />
+      </section>
+      <section className="space-y-2">
+        <h3 className="font-medium text-sm">原始简历</h3>
+        {resume?.available ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0 break-all text-sm">{resume.filename}</span>
+            <ResumeDocumentPreviewButton
+              filename={resume.filename}
+              mediaType={resume.mediaType}
+              label="预览原始简历"
+              disabled={disabled}
+              url={resumeUrl}
+            />
+            <a
+              className="text-primary text-sm underline underline-offset-4"
+              href={resumeUrl}
+              download={resume.filename ?? undefined}
+            >
+              下载
+            </a>
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm">暂无原始简历附件。</p>
+        )}
+      </section>
+      {expiresAt ? (
+        <p className="text-muted-foreground text-sm">Offer 有效期至：{expiresAt}</p>
+      ) : null}
+    </div>
   );
 }
 

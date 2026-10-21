@@ -63,7 +63,7 @@ import {
   offerFormStateFromDraft,
 } from "./offer-stage-form";
 import type { OfferFormState } from "./offer-stage-form";
-import { OfferConfirmationFields, OfferInformationDialog } from "./offer-creation-confirmation";
+import { OfferInformationDialog } from "./offer-creation-confirmation";
 
 export function CandidateExpectationsBlock({
   candidateId,
@@ -363,15 +363,6 @@ export function OfferCard({
             idPrefix={`offer-${draft.id}`}
             onFieldChange={setFormField}
           />
-          {form.confirmationInfo ? (
-            <OfferConfirmationFields
-              info={form.confirmationInfo}
-              idPrefix={`offer-${draft.id}-confirm`}
-              onChange={(info) => setFormField("confirmationInfo", info)}
-              disabled={saveMutation.isPending}
-            />
-          ) : null}
-
           <div className="mt-3 flex justify-end gap-2">
             <Button
               disabled={saveMutation.isPending}
@@ -544,7 +535,12 @@ function OfferDraftReadonlyFields({ draft }: { draft: OfferDraftRecord }) {
         label="Base 月薪"
         value={formatOfferMoney(draft.baseSalary, draft.currency)}
       />
-      <ReadonlyOfferField label="年度奖金" value={formatOfferMoney(draft.bonus, draft.currency)} />
+      {draft.bonus === null ? null : (
+        <ReadonlyOfferField
+          label="年度奖金"
+          value={formatOfferMoney(draft.bonus, draft.currency)}
+        />
+      )}
       <ReadonlyOfferField label="期权 / 股票" value={draft.equity} />
       <ReadonlyOfferField
         label="预计入职日"

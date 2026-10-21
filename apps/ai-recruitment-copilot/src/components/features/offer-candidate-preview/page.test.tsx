@@ -224,6 +224,20 @@ describe("public Offer candidate preview", () => {
     expect(document.body.textContent).not.toContain("接收确认");
   });
 
+  it.each([null, 0])(
+    "hides missing annual bonus but preserves recorded zero in read-only preview: %s",
+    async (bonus) => {
+      vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+        ...preview,
+        offer: { ...preview.offer, bonus },
+      });
+      await renderPage();
+      await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+      await selectTab("Offer");
+      expect(document.body.textContent?.includes("年度奖金")).toBe(bonus !== null);
+    },
+  );
+
   it("shows the Offer version snapshot with the completed approval text", async () => {
     vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
       ...preview,

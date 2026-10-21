@@ -21,7 +21,8 @@ import { DatePicker } from "@/components/date-time-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OfferCurrencySelect, offerCurrencySymbol, parseOfferCurrency } from "./offer-currency";
-import { Textarea } from "@/components/ui/textarea";
+import { OfferConfirmationFields } from "./offer-creation-confirmation";
+import type { OfferCreationContext } from "@arc/shared/offer-confirmation";
 
 // Toast 文案 helper：避免内联三元嵌套（mode + sendImmediately 两维组合）。
 // Save-success toast helper; flattens the nested ternary of mode × sendImmediately.
@@ -84,7 +85,7 @@ export function offerFormStateFromDraft(draft: OfferDraftRecord): OfferFormState
     currency: draft.currency || "CNY",
     equity: draft.equity ?? "",
     expiresAt: draft.expiresAt ? formatIsoDateOnly(draft.expiresAt) : "",
-    joiningDate: draft.joiningDate ? formatIsoDateOnly(draft.joiningDate) : "",
+    joiningDate: draft.joiningDate ?? "",
     notes: draft.notes ?? "",
     position: draft.position,
   };
@@ -101,10 +102,6 @@ export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
   if (Number.isNaN(parsedBase) || parsedBase <= 0) {
     throw new Error("Base salary 需为正整数");
   }
-  const parsedBonus = form.bonus === "" ? null : Number(form.bonus);
-  if (parsedBonus !== null && (Number.isNaN(parsedBonus) || parsedBonus < 0)) {
-    throw new Error("奖金需为非负整数");
-  }
   const confirmation = form.confirmationInfo
     ? offerConfirmationDetailsSchema.safeParse(form.confirmationInfo)
     : null;
@@ -113,13 +110,9 @@ export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
   }
   return {
     baseSalary: parsedBase,
-    bonus: parsedBonus,
     confirmationInfo: confirmation?.success ? confirmation.data : null,
     currency: parseOfferCurrency(form.currency),
-    equity: form.equity.trim() || null,
     expiresAt: form.expiresAt || null,
-    joiningDate: form.joiningDate || null,
-    notes: form.notes.trim() || null,
     position: form.position.trim(),
   };
 }
@@ -128,109 +121,113 @@ export function OfferDraftFormFields({
   form,
   idPrefix,
   onFieldChange,
+  context,
+  disabled = false,
 }: {
   form: OfferFormState;
   idPrefix: string;
   onFieldChange: <K extends keyof OfferFormState>(field: K, value: OfferFormState[K]) => void;
+  context?: OfferCreationContext | null;
+  disabled?: boolean;
 }) {
   const symbol = offerCurrencySymbol(form.currency);
-  const fullSpanClassName = "sm:col-span-2";
-
+  const info = form.confirmationInfo ?? offerConfirmationDetailsSchema.parse({});
+  function setProbationField<K extends "probationPeriod" | "probationSalary">(
+    field: K,
+    value: OfferConfirmationDetails[K],
+  ) {
+    onFieldChange("confirmationInfo", { ...info, [field]: value });
+  }
   return (
-    <div className="grid gap-3 py-2 sm:grid-cols-2">
-      <div className="grid gap-1.5">
-        <Label className="text-sm" htmlFor={`${idPrefix}-position`}>
-          职位
-        </Label>
-        <Input
-          id={`${idPrefix}-position`}
-          maxLength={200}
-          onChange={(e) => onFieldChange("position", e.target.value)}
-          placeholder="例如 高级前端工程师（L4）"
-          value={form.position}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label className="text-sm" htmlFor={`${idPrefix}-currency`}>
-          币种
-        </Label>
-        <OfferCurrencySelect
-          id={`${idPrefix}-currency`}
-          value={form.currency}
-          onChange={(value) => onFieldChange("currency", value)}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label className="text-sm" htmlFor={`${idPrefix}-base`}>
-          Base 月薪 ({symbol})
-        </Label>
-        <Input
-          id={`${idPrefix}-base`}
-          inputMode="numeric"
-          min={0}
-          onChange={(e) => onFieldChange("baseSalary", e.target.value)}
-          type="number"
-          value={form.baseSalary}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label className="text-sm" htmlFor={`${idPrefix}-bonus`}>
-          年度奖金 ({symbol}，可选)
-        </Label>
-        <Input
-          id={`${idPrefix}-bonus`}
-          inputMode="numeric"
-          min={0}
-          onChange={(e) => onFieldChange("bonus", e.target.value)}
-          type="number"
-          value={form.bonus}
-        />
-      </div>
-      <div className={`grid gap-1.5 ${fullSpanClassName}`}>
-        <Label className="text-sm" htmlFor={`${idPrefix}-equity`}>
-          期权 / 股票（可选，自由文本）
-        </Label>
-        <Input
-          id={`${idPrefix}-equity`}
-          maxLength={500}
-          onChange={(e) => onFieldChange("equity", e.target.value)}
-          placeholder="如 0.1% / 4 年 vest"
-          value={form.equity}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label className="text-sm" htmlFor={`${idPrefix}-joining`}>
-          预计入职日（可选）
-        </Label>
-        <DatePicker
-          id={`${idPrefix}-joining`}
-          onValueChange={(value) => onFieldChange("joiningDate", value)}
-          value={form.joiningDate}
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label className="text-sm" htmlFor={`${idPrefix}-expires`}>
-          Offer 有效期至（可选）
-        </Label>
-        <DatePicker
-          id={`${idPrefix}-expires`}
-          onValueChange={(value) => onFieldChange("expiresAt", value)}
-          value={form.expiresAt}
-        />
-      </div>
-      <div className={`grid gap-1.5 ${fullSpanClassName}`}>
-        <Label className="text-sm" htmlFor={`${idPrefix}-notes`}>
-          备注（可选）
-        </Label>
-        <Textarea
-          id={`${idPrefix}-notes`}
-          maxLength={2000}
-          onChange={(e) => onFieldChange("notes", e.target.value)}
-          rows={2}
-          value={form.notes}
-        />
-      </div>
-    </div>
+    <fieldset className="min-w-0 space-y-5" disabled={disabled}>
+      <legend className="sr-only">填写 Offer 信息</legend>
+      <OfferConfirmationFields
+        info={info}
+        idPrefix={`${idPrefix}-confirm`}
+        context={context}
+        disabled={disabled}
+        onChange={(value) => onFieldChange("confirmationInfo", value)}
+        positionField={
+          <div className="grid min-w-0 gap-1.5">
+            <Label htmlFor={`${idPrefix}-position`}>职位</Label>
+            <Input
+              id={`${idPrefix}-position`}
+              maxLength={200}
+              onChange={(event) => onFieldChange("position", event.target.value)}
+              placeholder="例如 高级前端工程师（L4）"
+              value={form.position}
+            />
+          </div>
+        }
+        salaryFields={
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor={`${idPrefix}-currency`}>薪资货币</Label>
+              <OfferCurrencySelect
+                id={`${idPrefix}-currency`}
+                value={form.currency}
+                onChange={(value) => onFieldChange("currency", value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${idPrefix}-base`}>转正薪资（月薪，{symbol}）</Label>
+              <Input
+                id={`${idPrefix}-base`}
+                inputMode="numeric"
+                min={0}
+                step={1}
+                onChange={(event) => onFieldChange("baseSalary", event.target.value)}
+                type="number"
+                value={form.baseSalary}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${idPrefix}-confirm-probationSalary`}>
+                试用薪资（月薪，{symbol}）
+              </Label>
+              <Input
+                id={`${idPrefix}-confirm-probationSalary`}
+                inputMode="numeric"
+                min={0}
+                step={1}
+                onChange={(event) =>
+                  setProbationField(
+                    "probationSalary",
+                    event.target.value === "" ? null : Number(event.target.value),
+                  )
+                }
+                placeholder="待补充"
+                type="number"
+                value={info.probationSalary ?? ""}
+              />
+            </div>
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor={`${idPrefix}-confirm-probationPeriod`}>试用期期限</Label>
+              <Input
+                id={`${idPrefix}-confirm-probationPeriod`}
+                maxLength={120}
+                onChange={(event) =>
+                  setProbationField("probationPeriod", event.target.value || null)
+                }
+                placeholder="例如 2个月"
+                value={info.probationPeriod ?? ""}
+              />
+            </div>
+          </div>
+        }
+      />
+      <section className="space-y-3 border-t pt-4">
+        <h3 className="font-medium text-sm">系统设置</h3>
+        <div className="grid gap-1.5">
+          <Label htmlFor={`${idPrefix}-expires`}>Offer 有效期至（可选）</Label>
+          <DatePicker
+            id={`${idPrefix}-expires`}
+            onValueChange={(value) => onFieldChange("expiresAt", value)}
+            value={form.expiresAt}
+          />
+        </div>
+      </section>
+    </fieldset>
   );
 }
 

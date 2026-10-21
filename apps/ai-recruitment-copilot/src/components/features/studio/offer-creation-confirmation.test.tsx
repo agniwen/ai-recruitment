@@ -30,6 +30,25 @@ vi.mock("@/lib/client/api", () => ({
   updateCandidateExpectations: vi.fn(),
 }));
 
+vi.mock("@/components/date-time-picker", () => ({
+  DatePicker: ({
+    id,
+    value,
+    onValueChange,
+  }: {
+    id: string;
+    value: string;
+    onValueChange: (value: string) => void;
+  }) => (
+    <input
+      id={id}
+      type="date"
+      value={value}
+      onChange={(event) => onValueChange(event.target.value)}
+    />
+  ),
+}));
+
 const defaults = {
   candidateCode: null,
   candidateName: "候选人甲",
@@ -142,7 +161,7 @@ function fill(id: string, value: string) {
 }
 
 describe("saved Offer confirmation information", () => {
-  function renderCard() {
+  function renderCard(draft = savedDraft()) {
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
@@ -154,7 +173,7 @@ describe("saved Offer confirmation information", () => {
       root.render(
         <QueryClientProvider client={client}>
           <OfferCard
-            draft={savedDraft()}
+            draft={draft}
             canConfirm={false}
             canDelete={false}
             canReceive={false}
@@ -172,6 +191,7 @@ describe("saved Offer confirmation information", () => {
   }
   it("shows the stored template and its completed approval status", async () => {
     renderCard();
+    expect(document.body.textContent).not.toContain("年度奖金");
     await click("查看 Offer 信息");
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.textContent).toContain("EMP-SAVED");
@@ -179,6 +199,44 @@ describe("saved Offer confirmation information", () => {
     expect(dialog?.textContent).toContain("offer审批已通过");
     expect(dialog?.textContent).not.toContain("待 SSC 确认");
   });
+  it.each([0, 36_000])(
+    "preserves historical bonus %s while removing its edit input",
+    async (bonus) => {
+      const { onSaved } = renderCard({
+        ...savedDraft(),
+        bonus,
+        equity: "  历史期权\n尾行  ",
+        expiresAt: "2026-12-31T00:00:00.000Z",
+        joiningDate: "2026-12-01T08:00:00.000Z",
+        notes: "  历史备注\n  缩进尾行  ",
+      });
+      expect(document.body.textContent).toContain("年度奖金");
+      await click("编辑");
+      for (const field of ["bonus", "equity", "joining", "notes"]) {
+        expect(document.querySelector(`#offer-offer-saved-${field}`)).toBeNull();
+      }
+      expect(document.querySelector("#offer-offer-saved-expires")).not.toBeNull();
+      const probationSalary = bonus === 0 ? 0 : 25_000;
+      fill("offer-offer-saved-confirm-probationSalary", String(probationSalary));
+      fill("offer-offer-saved-confirm-probationPeriod", "2个月");
+      await click("保存");
+      await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+      expect(mocks.patch).toHaveBeenCalledWith(
+        "demo",
+        "candidate-1",
+        "offer-saved",
+        expect.objectContaining({
+          confirmationInfo: expect.objectContaining({ probationPeriod: "2个月", probationSalary }),
+          expiresAt: "2026-12-31",
+        }),
+      );
+      const payload = mocks.patch.mock.lastCall?.at(-1);
+      for (const field of ["bonus", "equity", "joiningDate", "notes"]) {
+        expect(payload).not.toHaveProperty(field);
+      }
+      expect(mocks.context).not.toHaveBeenCalled();
+    },
+  );
   it("retains stored information when editing terms and sends edits through the existing patch flow", async () => {
     const { onSaved } = renderCard();
     await click("编辑");
@@ -245,19 +303,49 @@ function renderDialog() {
   fill("offer-base", "30000");
   return { onOpenChange, onSaved, render };
 }
+async function ready() {
+  await vi.waitFor(async () => {
+    await act(() => Promise.resolve());
+    const candidateName = document.querySelector<HTMLInputElement>("#offer-confirm-candidateName");
+    expect(candidateName).not.toBeNull();
+    expect(candidateName?.matches(":disabled")).toBe(false);
+  });
+}
 async function next() {
+  await ready();
   await click("下一步：确认信息");
   await vi.waitFor(() =>
-    expect(document.querySelector("#offer-confirm-candidateCode")).not.toBeNull(),
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("完整确认内容"),
   );
 }
 
 describe("Offer creation confirmation", () => {
-  it("loads context and allows cancelling without creating an offer", async () => {
-    const { onOpenChange } = renderDialog();
-    await next();
-    expect(mocks.context).toHaveBeenCalledExactlyOnceWith("demo", "candidate-1");
+  it("uses only the new information format while keeping the system Offer expiry field", () => {
+    renderDialog();
+    for (const field of ["bonus", "equity", "joining", "notes"]) {
+      expect(document.querySelector(`#offer-${field}`)).toBeNull();
+    }
+    expect(document.querySelector("#offer-expires")).not.toBeNull();
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("loads all editable information on opening and reviews it without writing or annual-bonus input", async () => {
+    const { onOpenChange } = renderDialog();
+    await ready();
+    expect(mocks.context).toHaveBeenCalledExactlyOnceWith("demo", "candidate-1");
+    expect((document.querySelector("#offer-confirm-candidateName") as HTMLInputElement).value).toBe(
+      "候选人甲",
+    );
+    expect(document.querySelector("#offer-confirm-probationSalary")).not.toBeNull();
+    expect(document.querySelector("#offer-confirm-probationPeriod")).not.toBeNull();
+    expect(document.body.textContent).toContain("转正薪资");
+    expect(document.body.textContent).toContain("试用期期限");
+    expect(document.body.textContent).not.toContain("年度奖金");
+    expect(document.querySelector("#offer-bonus")).toBeNull();
+    expect(mocks.create).not.toHaveBeenCalled();
+    await next();
+    expect(document.querySelector("#offer-confirm-candidateCode")).toBeNull();
+    expect(document.querySelector("#offer-confirm-probationSalary")).toBeNull();
     expect(document.body.textContent).toContain("待 SSC 确认");
     expect(document.body.textContent).not.toContain("offer审批已通过");
     expect(document.querySelector('input[type="file"]')).toBeNull();
@@ -266,11 +354,13 @@ describe("Offer creation confirmation", () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it("keeps manual details on returning to the terms and creates only after explicit confirmation", async () => {
+  it("keeps first-step details when returning from read-only review and creates only after confirmation", async () => {
     const { onSaved } = renderDialog();
-    await next();
+    await ready();
     fill("offer-confirm-candidateCode", "EMP-001");
     fill("offer-confirm-probationSalary", "27000");
+    fill("offer-confirm-probationPeriod", "2个月");
+    fill("offer-expires", "2026-12-20");
     fill("offer-confirm-interviewRoundId", "round-1");
     expect(
       (document.querySelector("#offer-confirm-mainInterviewerName") as HTMLSelectElement).value,
@@ -280,14 +370,26 @@ describe("Offer creation confirmation", () => {
       (document.querySelector("#offer-confirm-interviewFeedback") as HTMLTextAreaElement).value,
     ).toBe("系统设计清晰，建议通过。");
     fill("offer-confirm-interviewFeedback", "复核后的面试评价");
+    await next();
+    expect(document.querySelector("#offer-confirm-candidateCode")).toBeNull();
+    expect(document.body.textContent).toContain("EMP-001");
+    expect(document.body.textContent).toContain("试用薪资：27K");
+    expect(document.body.textContent).toContain("试用期：2个月");
     await click("返回修改");
     expect((document.querySelector("#offer-base") as HTMLInputElement).value).toBe("30000");
-    expect(mocks.create).not.toHaveBeenCalled();
-    fill("offer-base", "32000");
-    await next();
     expect((document.querySelector("#offer-confirm-candidateCode") as HTMLInputElement).value).toBe(
       "EMP-001",
     );
+    expect(
+      (document.querySelector("#offer-confirm-probationSalary") as HTMLInputElement).value,
+    ).toBe("27000");
+    expect(
+      (document.querySelector("#offer-confirm-probationPeriod") as HTMLInputElement).value,
+    ).toBe("2个月");
+    expect((document.querySelector("#offer-expires") as HTMLInputElement).value).toBe("2026-12-20");
+    expect(mocks.create).not.toHaveBeenCalled();
+    fill("offer-base", "32000");
+    await next();
     await click("确认创建");
     await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(mocks.create).toHaveBeenCalledExactlyOnceWith(
@@ -300,20 +402,27 @@ describe("Offer creation confirmation", () => {
           interviewFeedback: "复核后的面试评价",
           interviewRoundId: "round-1",
           mainInterviewerName: "面试官乙",
+          probationPeriod: "2个月",
           probationSalary: 27_000,
         }),
+        expiresAt: "2026-12-20",
         position: "平台工程师",
         sendImmediately: false,
       }),
     );
+    const payload = mocks.create.mock.lastCall?.at(-1);
+    for (const field of ["bonus", "equity", "joiningDate", "notes"]) {
+      expect(payload).not.toHaveProperty(field);
+    }
   });
 
-  it("locks repeated submission and keeps all information after a failed create for retry", async () => {
+  it("locks repeated submission and keeps reviewed information after a failed create for retry", async () => {
     const pending = Promise.withResolvers<unknown>();
     mocks.create.mockReturnValueOnce(pending.promise);
     const { onSaved } = renderDialog();
-    await next();
+    await ready();
     fill("offer-confirm-candidateCode", "EMP-RETRY");
+    await next();
     const confirm = button("确认创建");
     await act(() => {
       confirm?.click();
@@ -327,10 +436,13 @@ describe("Offer creation confirmation", () => {
     await vi.waitFor(() =>
       expect(document.querySelector('[role="alert"]')?.textContent).toContain("创建失败，请重试"),
     );
+    expect(document.body.textContent).toContain("EMP-RETRY");
+    expect(onSaved).not.toHaveBeenCalled();
+    await click("返回修改");
     expect((document.querySelector("#offer-confirm-candidateCode") as HTMLInputElement).value).toBe(
       "EMP-RETRY",
     );
-    expect(onSaved).not.toHaveBeenCalled();
+    await next();
     await click("确认创建");
     await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(mocks.create).toHaveBeenCalledTimes(2);
@@ -338,20 +450,21 @@ describe("Offer creation confirmation", () => {
 
   it("starts clean when reopened or switched to a different candidate", async () => {
     const { render } = renderDialog();
-    await next();
+    await ready();
     fill("offer-confirm-candidateCode", "OLD-CODE");
     render("candidate-1", false);
     render("candidate-1", true);
-    expect(document.querySelector("#offer-confirm-candidateCode")).toBeNull();
+    await ready();
+    expect((document.querySelector("#offer-confirm-candidateCode") as HTMLInputElement).value).toBe(
+      "",
+    );
     expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe("");
     fill("offer-position", "新职位");
     fill("offer-base", "20000");
     mocks.context.mockResolvedValueOnce(creationContext("候选人乙"));
     render("candidate-2", true);
+    await ready();
     expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe("");
-    fill("offer-position", "新职位");
-    fill("offer-base", "20000");
-    await next();
     expect((document.querySelector("#offer-confirm-candidateCode") as HTMLInputElement).value).toBe(
       "",
     );
@@ -361,23 +474,23 @@ describe("Offer creation confirmation", () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it("allows manual interview details without available rounds and rejects invalid probation pay", async () => {
+  it("allows manual interview details in the first step and rejects invalid probation pay before review", async () => {
     mocks.context.mockResolvedValueOnce({
       ...creationContext(),
       interviewRounds: [],
       resume: { available: false, filename: null, mediaType: null },
     });
     const { onSaved } = renderDialog();
-    await next();
+    await ready();
     fill("offer-confirm-mainInterviewerName", "补填面试官");
     fill("offer-confirm-interviewFeedback", "补填的评价");
     fill("offer-confirm-probationSalary", "-1");
-    await click("确认创建");
+    await click("下一步：确认信息");
     expect(document.querySelector('[role="alert"]')?.textContent).toContain("试用薪资");
+    expect(button("确认创建")).toBeUndefined();
     expect(mocks.create).not.toHaveBeenCalled();
-    await click("返回修改");
-    await next();
     fill("offer-confirm-probationSalary", "25000");
+    await next();
     await click("确认创建");
     await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(mocks.create).toHaveBeenCalledWith(
@@ -393,28 +506,55 @@ describe("Offer creation confirmation", () => {
     );
   });
 
-  it("keeps the terms available after context loading fails and retries without creating", async () => {
+  it("keeps entered terms after automatic context loading fails and explicitly retries without creating", async () => {
     mocks.context.mockRejectedValueOnce(new Error("确认信息暂不可用"));
     renderDialog();
-    await click("下一步：确认信息");
     await vi.waitFor(() =>
       expect(document.querySelector('[role="alert"]')?.textContent).toContain("确认信息暂不可用"),
     );
     expect((document.querySelector("#offer-base") as HTMLInputElement).value).toBe("30000");
     expect(mocks.create).not.toHaveBeenCalled();
-    await next();
+    await click("重新加载资料");
+    await ready();
     expect(mocks.context).toHaveBeenCalledTimes(2);
+    expect((document.querySelector("#offer-base") as HTMLInputElement).value).toBe("30000");
+    await next();
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it("ignores a delayed creation context from a previous candidate", async () => {
+  it("prevents supplemental input during slow initial loading and keeps source defaults after it completes", async () => {
+    const pending = Promise.withResolvers<ReturnType<typeof creationContext>>();
+    mocks.context.mockReturnValueOnce(pending.promise);
+    renderDialog();
+    expect(mocks.context).toHaveBeenCalledExactlyOnceWith("demo", "candidate-1");
+    const probation = document.querySelector<HTMLInputElement>("#offer-confirm-probationSalary");
+    expect(probation === null || probation.matches(":disabled")).toBe(true);
+    expect(button("确认创建")).toBeUndefined();
+    expect(mocks.create).not.toHaveBeenCalled();
+    await act(() => pending.resolve(creationContext()));
+    await ready();
+    expect((document.querySelector("#offer-confirm-candidateName") as HTMLInputElement).value).toBe(
+      "候选人甲",
+    );
+    expect(
+      (document.querySelector("#offer-confirm-hiringUnitName") as HTMLInputElement).value,
+    ).toBe("研发中心");
+    fill("offer-confirm-probationSalary", "25000");
+    expect((document.querySelector("#offer-confirm-candidateName") as HTMLInputElement).value).toBe(
+      "候选人甲",
+    );
+  });
+  it("ignores a delayed automatic context from a previous candidate", async () => {
     const pending = Promise.withResolvers<ReturnType<typeof creationContext>>();
     mocks.context.mockReturnValueOnce(pending.promise);
     const { render } = renderDialog();
-    await click("下一步：确认信息");
+    mocks.context.mockResolvedValueOnce(creationContext("候选人乙"));
     render("candidate-2", true);
+    await ready();
     await act(() => pending.resolve(creationContext("旧候选人")));
-    expect(document.querySelector("#offer-confirm-candidateName")).toBeNull();
+    expect((document.querySelector("#offer-confirm-candidateName") as HTMLInputElement).value).toBe(
+      "候选人乙",
+    );
     expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe("");
     expect(mocks.create).not.toHaveBeenCalled();
   });

@@ -127,6 +127,34 @@ describe("Offer confirmation version snapshots", () => {
     expect(edited).toHaveProperty("confirmationInfo", expect.objectContaining(confirmation));
   });
 
+  it("preserves hidden historical terms exactly when the editable snapshot is updated", async () => {
+    const created = await create();
+    const legacyTerms = {
+      bonus: 0,
+      equity: "  历史期权\n尾行  ",
+      joiningDate: new Date("2026-12-01T08:42:17.000Z"),
+      notes: "  历史备注\n  缩进尾行  ",
+    };
+    await database
+      .update(studioOfferDraft)
+      .set(legacyTerms)
+      .where(eq(studioOfferDraft.id, created.id));
+    const input = offerDraftInputSchema.partial().parse({
+      confirmationInfo: { ...confirmation, probationPeriod: "2个月", probationSalary: 0 },
+    });
+    const edited = await editOfferDraft({ draftId: created.id, input, organizationId });
+    expect(edited).toMatchObject({
+      ...legacyTerms,
+      confirmationInfo: expect.objectContaining({ probationPeriod: "2个月", probationSalary: 0 }),
+      joiningDate: legacyTerms.joiningDate.toISOString(),
+    });
+    const [stored] = await database
+      .select()
+      .from(studioOfferDraft)
+      .where(eq(studioOfferDraft.id, created.id));
+    expect(stored).toMatchObject(legacyTerms);
+  });
+
   it("invalidates completed SSC confirmation and its evidence when snapshot content changes", async () => {
     const created = await create();
     await database

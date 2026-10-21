@@ -119,14 +119,19 @@ describe("new Offer without ODC attachments", () => {
         input?.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
+    await vi.waitFor(async () => {
+      await act(() => Promise.resolve());
+      expect(document.querySelector("#offer-confirm-candidateCode")).not.toBeNull();
+    });
     const next = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.textContent?.trim() === "下一步：确认信息",
     );
     expect(next?.disabled).toBe(false);
     await act(() => next?.click());
     await vi.waitFor(() =>
-      expect(document.querySelector("#offer-confirm-candidateCode")).not.toBeNull(),
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain("完整确认内容"),
     );
+    expect(document.querySelector("#offer-confirm-candidateCode")).toBeNull();
     expect(mocks.createOfferDraft).not.toHaveBeenCalled();
     const confirm = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.textContent?.trim() === "确认创建",
@@ -147,6 +152,12 @@ describe("new Offer without ODC attachments", () => {
 describe("Offer custom currency", () => {
   it("shows a required description for Other and removes it when switching to GBP", async () => {
     renderDialog();
+    await vi.waitFor(async () => {
+      await act(() => Promise.resolve());
+      expect(document.querySelector("#offer-confirm-candidateName")?.matches(":disabled")).toBe(
+        false,
+      );
+    });
     const trigger = document.body.querySelector<HTMLButtonElement>('[id$="-currency"]');
     expect(trigger).not.toBeNull();
     expect(trigger?.textContent).toContain("人民币 CNY");

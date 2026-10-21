@@ -13,7 +13,7 @@ import { IconArrowUpRight } from "@tabler/icons-react";
 // the caller to launch the close flow.
 
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { OfferDraftInput } from "@arc/db-schema/studio-interviews";
 import type { OfferCreationContext } from "@arc/shared/offer-confirmation";
@@ -25,7 +25,6 @@ import {
   respondOfferDraft,
 } from "@/lib/client/api";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
-import { ResumeDocumentPreviewButton } from "@/components/features/resume/resume-document-preview-button";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -48,7 +47,7 @@ import {
   saveSuccessMessage,
 } from "./offer-stage-form";
 import type { OfferFormState } from "./offer-stage-form";
-import { OfferConfirmationFields, OfferConfirmationText } from "./offer-creation-confirmation";
+import { OfferCreationReview } from "./offer-creation-confirmation";
 
 interface OfferDialogProps {
   open: boolean;
@@ -108,6 +107,38 @@ export function CreateOrEditOfferDialog({
   const submitting = useRef(false);
   const contextLoading = useRef(false);
 
+  const loadContext = useCallback(
+    async (sessionId: number) => {
+      if (contextLoading.current) {
+        return;
+      }
+      contextLoading.current = true;
+      setLoadingContext(true);
+      setErrorMessage(null);
+      try {
+        const loaded = await getOfferCreationContext(slug, candidateId);
+        if (session.current !== sessionId) {
+          return;
+        }
+        setContext(loaded);
+        setForm((current) => ({
+          ...current,
+          confirmationInfo: current.confirmationInfo ?? loaded.defaults,
+        }));
+      } catch (error) {
+        if (session.current === sessionId) {
+          setErrorMessage(error instanceof Error ? error.message : "加载 Offer 确认信息失败");
+        }
+      } finally {
+        if (session.current === sessionId) {
+          contextLoading.current = false;
+          setLoadingContext(false);
+        }
+      }
+    },
+    [slug, candidateId],
+  );
+
   const mutation = useMutation({
     mutationFn: ({
       payload,
@@ -147,8 +178,6 @@ export function CreateOrEditOfferDialog({
     },
   });
 
-  // 编辑模式打开时同步现值；新建模式打开时清空。
-  // Sync form on open: prefill in edit mode, blank in create mode.
   useEffect(() => {
     session.current += 1;
     submitting.current = false;
@@ -162,12 +191,13 @@ export function CreateOrEditOfferDialog({
         setForm(offerFormStateFromDraft(existingDraft));
       } else {
         setForm(createBlankOfferFormState());
+        void loadContext(session.current);
       }
     }
     return () => {
       session.current += 1;
     };
-  }, [open, mode, existingDraft, candidateId, slug]);
+  }, [open, mode, existingDraft, candidateId, slug, loadContext]);
 
   function changeOpen(next: boolean) {
     if (submitting.current) {
@@ -180,44 +210,16 @@ export function CreateOrEditOfferDialog({
     onOpenChange(next);
   }
 
-  async function showConfirmation() {
-    if (contextLoading.current || submitting.current) {
+  function showConfirmation() {
+    if (contextLoading.current || submitting.current || !context) {
       return;
     }
     setErrorMessage(null);
     try {
-      buildOfferDraftPayload({ ...form, confirmationInfo: null });
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "请检查 Offer 条件");
-      return;
-    }
-    if (context) {
-      setStep("confirmation");
-      return;
-    }
-    const sessionId = session.current;
-    contextLoading.current = true;
-    setLoadingContext(true);
-    try {
-      const loaded = await getOfferCreationContext(slug, candidateId);
-      if (session.current !== sessionId) {
-        return;
-      }
-      setContext(loaded);
-      setForm((current) => ({
-        ...current,
-        confirmationInfo: current.confirmationInfo ?? loaded.defaults,
-      }));
+      buildOfferDraftPayload(form);
       setStep("confirmation");
     } catch (error) {
-      if (session.current === sessionId) {
-        setErrorMessage(error instanceof Error ? error.message : "加载 Offer 确认信息失败");
-      }
-    } finally {
-      if (session.current === sessionId) {
-        contextLoading.current = false;
-        setLoadingContext(false);
-      }
+      setErrorMessage(error instanceof Error ? error.message : "请检查 Offer 信息");
     }
   }
 
@@ -248,6 +250,7 @@ export function CreateOrEditOfferDialog({
     }
   }
   const confirmingCreation = mode === "create" && step === "confirmation" && form.confirmationInfo;
+  const contextUnavailable = mode === "create" && !context;
   const resumeUrl = `/api/w/${encodeURIComponent(slug)}/studio/resumes/${encodeURIComponent(candidateId)}/resume`;
   const { dialogTitle, primaryText } = getOfferDialogLabels({
     confirmingCreation: Boolean(confirmingCreation),
@@ -260,14 +263,14 @@ export function CreateOrEditOfferDialog({
     <Dialog onOpenChange={changeOpen} open={open}>
       <DialogContent
         showCloseButton={!mutation.isPending}
-        className={`max-h-[90vh] overflow-y-auto ${confirmingCreation ? "sm:max-w-3xl" : "sm:max-w-lg"}`}
+        className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"
       >
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
             {mode === "edit"
               ? "草稿状态可编辑，修改后需重新完成 SSC 确认。"
-              : "确认创建后生成新版本，并等待 SSC 接收和确认。"}
+              : "先填写完整 Offer 信息，下一步核对后确认创建。"}
           </DialogDescription>
           {mode === "create" ? (
             <p className="text-muted-foreground text-xs">
@@ -277,72 +280,44 @@ export function CreateOrEditOfferDialog({
         </DialogHeader>
 
         {confirmingCreation ? (
-          <div className="min-w-0 space-y-5">
-            <div className="break-words rounded-lg border bg-muted/30 p-3 text-sm">
-              <p>职位：{form.position}</p>
-              <p>
-                转正月薪：{form.currency} {Number(form.baseSalary).toLocaleString("zh-CN")}
-              </p>
-            </div>
-            <OfferConfirmationFields
-              info={confirmingCreation}
-              context={context}
-              idPrefix="offer-confirm"
-              onChange={(info) => setFormField("confirmationInfo", info)}
-              disabled={mutation.isPending}
-            />
-            <section className="space-y-2">
-              <h3 className="font-medium text-sm">原始简历</h3>
-              {context?.resume.available ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-0 break-all text-sm">{context.resume.filename}</span>
-                  <ResumeDocumentPreviewButton
-                    filename={context.resume.filename}
-                    mediaType={context.resume.mediaType}
-                    label="预览原始简历"
-                    disabled={mutation.isPending}
-                    url={resumeUrl}
-                  />
-                  <a
-                    className="text-primary text-sm underline underline-offset-4"
-                    href={resumeUrl}
-                    download={context.resume.filename ?? undefined}
-                  >
-                    下载
-                  </a>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">暂无原始简历附件。</p>
-              )}
-            </section>
-            <section className="space-y-2">
-              <h3 className="font-medium text-sm">完整确认内容</h3>
-              <OfferConfirmationText
-                info={confirmingCreation}
-                position={form.position}
-                baseSalary={Number(form.baseSalary)}
-                currency={form.currency}
-                sscConfirmationStatus="pending"
-              />
-            </section>
-          </div>
+          <OfferCreationReview
+            info={confirmingCreation}
+            position={form.position}
+            baseSalary={Number(form.baseSalary)}
+            currency={form.currency}
+            resume={context?.resume}
+            resumeUrl={resumeUrl}
+            expiresAt={form.expiresAt}
+            disabled={mutation.isPending}
+          />
         ) : (
           <>
-            <OfferDraftFormFields form={form} idPrefix="offer" onFieldChange={setFormField} />
-            {mode === "edit" && form.confirmationInfo ? (
-              <OfferConfirmationFields
-                info={form.confirmationInfo}
-                idPrefix="offer-confirm"
-                onChange={(info) => setFormField("confirmationInfo", info)}
-                disabled={mutation.isPending}
-              />
+            {loadingContext ? (
+              <output className="text-muted-foreground text-sm">正在加载候选人资料…</output>
             ) : null}
+            <OfferDraftFormFields
+              form={form}
+              idPrefix="offer"
+              onFieldChange={setFormField}
+              context={context}
+              disabled={mutation.isPending || contextUnavailable || loadingContext}
+            />
           </>
         )}
         {errorMessage ? (
           <p role="alert" className="text-destructive text-sm">
             {errorMessage}
           </p>
+        ) : null}
+        {contextUnavailable && !loadingContext && errorMessage ? (
+          <Button
+            variant="outline"
+            onClick={() => {
+              void loadContext(session.current);
+            }}
+          >
+            重新加载资料
+          </Button>
         ) : null}
 
         <DialogFooter>
@@ -363,7 +338,11 @@ export function CreateOrEditOfferDialog({
           ) : null}
           <Button
             disabled={
-              mutation.isPending || loadingContext || !form.position.trim() || !form.baseSalary
+              mutation.isPending ||
+              loadingContext ||
+              contextUnavailable ||
+              !form.position.trim() ||
+              !form.baseSalary
             }
             onClick={() => {
               void (confirmingCreation || mode === "edit" ? save() : showConfirmation());

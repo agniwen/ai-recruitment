@@ -48,7 +48,9 @@ export function OfferDetails({ offer }: { offer: OfferCandidatePreview["offer"] 
       <DataFields columns={2}>
         <DataField label="Offer 职位" value={offer.position} />
         <DataField label="Base 月薪" value={salary(offer.baseSalary, offer.currency)} />
-        <DataField label="年度奖金" value={salary(offer.bonus, offer.currency)} />
+        {offer.bonus === null ? null : (
+          <DataField label="年度奖金" value={salary(offer.bonus, offer.currency)} />
+        )}
         <DataField label="股权" value={offer.equity} />
         <DataField kind="date" label="预计入职日期" value={offer.joiningDate} />
         <DataField kind="datetime" label="Offer 有效期至" value={offer.expiresAt} />
