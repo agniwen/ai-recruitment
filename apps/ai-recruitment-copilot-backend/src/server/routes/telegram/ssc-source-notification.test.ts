@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -22,6 +22,7 @@ import { getOfferSscNotificationTargets } from "../studio/routes/interviews/util
 import { resolveExternalInterviewerBindings } from "../studio/routes/interviews/dao/external-interviewers";
 import { resolveBoundTelegramOfferActor } from "./offer-ssc-dao";
 import { bindTelegramUser } from "./dao";
+import { resolveLedgerTelegramOfferActor } from "./ssc-recipients";
 import {
   completeOfferSscConfirmation,
   createOfferDraft,
@@ -29,7 +30,6 @@ import {
   receiveOfferSscConfirmation,
 } from "../studio/routes/interviews/dao/offer-drafts";
 import { dispatchOfferSscNotifications } from "../studio/routes/interviews/dao/offer-ssc-notification-outbox";
-import { verifyOfferCandidatePreviewToken } from "../public/routes/offer-candidates/access";
 import type * as TelegramBot from "./utils/bot";
 
 const transport = vi.hoisted(() => ({ send: vi.fn() }));
@@ -163,6 +163,34 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       return resolveBoundTelegramOfferActor({ telegramUserId: chatId, username: handle });
     }
 
+    it("ignores another workspace's conflicting SSC email when sending to the current source TG", async () => {
+      const otherOrg = `test_ssc_delivery_${randomUUID()}`;
+      const otherSource = randomUUID();
+      extraOrganizationIds.push(otherOrg);
+      await db.insert(organization).values({ id: otherOrg, name: "Other", slug: otherOrg });
+      await db
+        .insert(resumeSource)
+        .values({ id: otherSource, name: "Other source", organizationId: otherOrg });
+      await db.insert(sscResponsibility).values({
+        centerName: "Other source",
+        email,
+        id: randomUUID(),
+        organizationId: otherOrg,
+        resumeSourceId: otherSource,
+        sscName: "Someone else",
+        telegram: `@${username}`,
+      });
+      await db.update(user).set({ telegram: "@different_person" }).where(eq(user.id, sscId));
+      const notifications = await targets();
+      expect(notifications.map((target) => target.chatId)).toEqual([chatId]);
+      expect(JSON.stringify(notifications[0].message)).toContain(
+        `/w/${orgId}/studio/resumes/${candidateId}`,
+      );
+      expect(
+        await db.select().from(sscTelegramIdentity).where(eq(sscTelegramIdentity.chatId, chatId)),
+      ).toEqual([]);
+    });
+
     describe("legacy verified Telegram bindings", () => {
       beforeEach(async () => {
         await db
@@ -202,7 +230,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       }
 
       it.each(["same-workspace requester without an account", "verified personal profile"])(
-        "dispatches and completes a blank-email Offer from a %s",
+        "dispatches a blank-email Offer from a %s independently, then completes after SSC identity resolution",
         async (bindingKind) => {
           if (bindingKind === "same-workspace requester without an account") {
             await removeSystemAccount();
@@ -241,8 +269,12 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
             .where(eq(studioOfferSscNotificationOutbox.draftId, draftId));
           expect(job.status).toBe("completed");
           expect(job.sentUserIds).toHaveLength(1);
+          // Approval identity resolution is separate from notification delivery.
+          expect(
+            await resolveLedgerTelegramOfferActor({ telegramUserId: chatId, username }),
+          ).toBeTruthy();
           const actorId = await actor();
-          expect(actorId).toBe(job.sentUserIds[0]);
+          expect(job.sentUserIds).toEqual([`telegram:${chatId}`]);
           if (!actorId) {
             throw new Error("Expected a pinned SSC actor for the verified legacy recipient");
           }
@@ -329,7 +361,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       });
 
       it.each(["another workspace requester", "verified profile"])(
-        "does not promote legacy proof that conflicts with a %s",
+        "sends via the workspace's legacy chat without promoting conflicting %s approval identities",
         async (conflictKind) => {
           const otherChatId = String(randomInt(1_000_000, 999_999_999_999));
           chatIds.push(otherChatId);
@@ -345,7 +377,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
                 })
                 .where(eq(user.id, sscId)));
           expect(await externalBinding()).toBe(chatId);
-          expect(await targets()).toEqual([]);
+          expect(await targets()).toHaveLength(1);
           expect(
             await db
               .select()
@@ -361,7 +393,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         },
       );
 
-      it("promotes one canonical binding and audit identity under concurrent legacy resolution", async () => {
+      it("deduplicates concurrent legacy notification resolution independently of audit identity creation", async () => {
         await removeSystemAccount();
         await addRequesterBinding();
         expect(await externalBinding()).toBe(chatId);
@@ -371,7 +403,8 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
           expect(result[0].chatId).toBe(chatId);
         }
         expect(new Set(results.map((result) => result[0].userId)).size).toBe(1);
-        expect(await actor()).toBe(results[0][0].userId);
+        expect(results[0][0].userId).toBe(`telegram:${chatId}`);
+        expect(await actor()).toBeTruthy();
         expect(
           await db
             .select()
@@ -392,7 +425,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       });
     });
 
-    it("automatically sends the actual newly created Offer after its source SSC permissions are enabled", async () => {
+    it("automatically sends the actual newly created Offer without checking system account permissions", async () => {
       await db
         .update(sscResponsibility)
         .set({ email: "" })
@@ -409,37 +442,16 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         organizationId: orgId,
       });
       expect(await dispatchOfferSscNotifications()).toBe(1);
-      expect(transport.send).not.toHaveBeenCalled();
-      await db
-        .update(organizationRole)
-        .set({ permission: JSON.stringify({ offer: ["read", "receive", "confirm"] }) })
-        .where(eq(organizationRole.organizationId, orgId));
-      await db
-        .update(studioOfferSscNotificationOutbox)
-        .set({ availableAt: sql`CURRENT_TIMESTAMP - INTERVAL '1 second'` })
-        .where(eq(studioOfferSscNotificationOutbox.draftId, created.id));
-      expect(await dispatchOfferSscNotifications()).toBe(1);
       expect(transport.send).toHaveBeenCalledTimes(1);
       const [[recipient, card]] = transport.send.mock.calls;
       expect(recipient).toBe(chatId);
       const serialized = JSON.stringify(card);
       expect(serialized).toContain("Candidate");
       expect(serialized).toContain("Current system Offer");
-      expect(serialized).toContain('"id":"osr"');
-      const token =
-        /https:\/\/ats\.example\.test\/offer-candidate\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/u.exec(
-          serialized,
-        )?.[1];
-      expect(token).toBeDefined();
-      if (!token) {
-        throw new Error("Missing current Offer preview token");
-      }
-      expect(verifyOfferCandidatePreviewToken(token)).toMatchObject({
-        candidateId,
-        draftId: created.id,
-        organizationId: orgId,
-        revision: 1,
-      });
+      expect(serialized).toContain("登录系统查看并审核");
+      expect(serialized).toContain(`/w/${orgId}/studio/resumes/${candidateId}?stage=offer`);
+      expect(serialized).not.toContain('"id":"osr"');
+      expect(serialized).not.toContain("/offer-candidate/");
       const [job] = await db
         .select()
         .from(studioOfferSscNotificationOutbox)
@@ -462,7 +474,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       const notifications = await targets();
       expect(notifications.map((entry) => entry.chatId)).toEqual([chatId]);
       const actorId = await actor();
-      expect(actorId).toBe(notifications[0].userId);
+      expect(notifications[0].userId).toBe(`telegram:${chatId}`);
       if (!actorId) {
         throw new Error("Expected a provisioned SSC audit identity");
       }
@@ -498,7 +510,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         .set({ email: "" })
         .where(eq(sscResponsibility.organizationId, orgId));
       const notifications = await targets();
-      expect(notifications.map((entry) => entry.userId)).toEqual([sscId]);
+      expect(notifications.map((entry) => entry.userId)).toEqual([`telegram:${chatId}`]);
       expect(await actor()).toBe(sscId);
       const context = await loadAuthorizedOfferSscContext({ actorUserId: sscId, draftId });
       expect(context.canReceive).toBe(true);
@@ -528,7 +540,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         1,
       );
       const notifications = await targets();
-      expect(notifications.map((entry) => entry.userId)).toEqual([actors[0]]);
+      expect(notifications.map((entry) => entry.userId)).toEqual([`telegram:${chatId}`]);
     });
 
     it("revokes a pinned TG actor's candidate access when the responsibility belongs to another registered person", async () => {
@@ -544,7 +556,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         .update(sscResponsibility)
         .set({ email: otherEmail })
         .where(eq(sscResponsibility.organizationId, orgId));
-      expect(await targets()).toEqual([]);
+      expect(await targets()).toHaveLength(1);
       await expect(
         loadAuthorizedOfferSscContext({ actorUserId: sscId, draftId }),
       ).rejects.toMatchObject({ status: 404 });
@@ -576,7 +588,8 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       expect(
         await resolveBoundTelegramOfferActor({ telegramUserId: otherChat, username }),
       ).toBeNull();
-      expect(await targets()).toEqual([]);
+      const notifications = await targets();
+      expect(notifications.map((target) => target.chatId)).toEqual([otherChat]);
       await expect(
         loadAuthorizedOfferSscContext({ actorUserId: sscId, draftId }),
       ).rejects.toMatchObject({ status: 404 });
@@ -586,7 +599,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       const notifications = await targets();
       expect(
         notifications.map(({ userId, chatId: target }) => ({ chatId: target, userId })),
-      ).toEqual([{ chatId, userId: sscId }]);
+      ).toEqual([{ chatId, userId: `telegram:${chatId}` }]);
       expect(await actor()).toBe(sscId);
       const [profile] = await db.select().from(user).where(eq(user.id, sscId));
       expect(profile.telegram).toBeNull();
@@ -608,7 +621,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         .insert(member)
         .values({ id: randomUUID(), organizationId: orgId, role: "admin", userId: adminId });
       const notifications = await targets();
-      expect(notifications.map((entry) => entry.userId)).toEqual([sscId]);
+      expect(notifications.map((entry) => entry.userId)).toEqual([`telegram:${chatId}`]);
       await db
         .update(sscResponsibility)
         .set({ resumeSourceId: null })
@@ -633,11 +646,12 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       expect(
         await resolveBoundTelegramOfferActor({ telegramUserId: movedChat, username }),
       ).toBeNull();
-      expect(await targets()).toEqual([]);
+      const notifications = await targets();
+      expect(notifications.map((target) => target.chatId)).toEqual([movedChat]);
     });
 
     it.each(["banned", "noAccess", "notSsc", "wrongRole"])(
-      "denies %s identities despite a matching ledger TG",
+      "keeps %s approval restrictions without blocking the configured notification chat",
       async (change) => {
         if (change === "banned") {
           await db.update(user).set({ banned: true }).where(eq(user.id, sscId));
@@ -666,18 +680,18 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
             .where(eq(sscResponsibility.organizationId, orgId));
         }
         expect(await actor()).toBeNull();
-        expect(await targets()).toEqual([]);
+        expect(await targets()).toHaveLength(1);
       },
     );
 
     it("does not override an explicitly different personal TG identity", async () => {
       await db.update(user).set({ telegram: "@another_identity" }).where(eq(user.id, sscId));
       expect(await actor()).toBeNull();
-      expect(await targets()).toEqual([]);
+      expect(await targets()).toHaveLength(1);
     });
 
     it.each(["chat", "handle"])(
-      "does not deliver a ledger notification to another global user's %s identity",
+      "ignores another system user's %s identity when sending to the configured verified chat",
       async (kind) => {
         const other = randomUUID();
         userIds.push(other);
@@ -687,18 +701,18 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
           name: "Unrelated user",
           ...(kind === "chat" ? { telegramChatId: chatId } : { telegram: `@${username}` }),
         });
-        expect(await targets()).toEqual([]);
+        expect(await targets()).toHaveLength(1);
       },
     );
 
-    it("denies ambiguous global emails and ambiguous people sharing one ledger TG", async () => {
+    it("keeps approval identity ambiguity separate from one notification per ledger TG", async () => {
       const duplicate = randomUUID();
       userIds.push(duplicate);
       await db
         .insert(user)
         .values({ email: email.toUpperCase(), id: duplicate, name: "Ambiguous" });
       expect(await actor()).toBeNull();
-      expect(await targets()).toEqual([]);
+      expect(await targets()).toHaveLength(1);
       await db.delete(user).where(eq(user.id, duplicate));
       const other = randomUUID();
       userIds.push(other);
@@ -717,7 +731,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         workspaceRole: "ssc-tg",
       });
       expect(await actor()).toBeNull();
-      expect(await targets()).toEqual([]);
+      expect(await targets()).toHaveLength(1);
     });
 
     it("deduplicates the same person across source ledger rows", async () => {
@@ -759,6 +773,9 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         .update(user)
         .set({ telegram: `@${username}`, telegramBoundUsername: username, telegramChatId: chatId })
         .where(eq(user.id, sscId));
+      expect(await resolveLedgerTelegramOfferActor({ telegramUserId: chatId, username })).toBe(
+        sscId,
+      );
       expect(await targets()).toHaveLength(1);
       const movedChat = String(randomInt(1_000_000, 999_999_999_999));
       chatIds.push(movedChat);
@@ -766,7 +783,8 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       expect(
         await resolveBoundTelegramOfferActor({ telegramUserId: movedChat, username }),
       ).toBeNull();
-      expect(await targets()).toEqual([]);
+      const notifications = await targets();
+      expect(notifications.map((target) => target.chatId)).toEqual([movedChat]);
     });
   },
 );

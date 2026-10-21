@@ -22,7 +22,12 @@ function callbackValue(draftId: string, revision: number): string {
 
 export function buildTelegramOfferCard(
   context: TelegramOfferCardContext,
-  options: { detailUrl?: string | null; feedbackLabel?: string; title?: string } = {},
+  options: {
+    detailLabel?: string;
+    detailUrl?: string | null;
+    feedbackLabel?: string;
+    title?: string;
+  } = {},
 ) {
   const { draft } = context;
   const status = draft.sscConfirmationStatus;
@@ -56,7 +61,9 @@ export function buildTelegramOfferCard(
     );
   }
   if (options.detailUrl) {
-    actions.push(LinkButton({ label: "查看候选人详情", url: options.detailUrl }));
+    actions.push(
+      LinkButton({ label: options.detailLabel ?? "查看候选人详情", url: options.detailUrl }),
+    );
   }
   return Card({
     children: actions.length > 0 ? [fields, Actions(actions)] : [fields],

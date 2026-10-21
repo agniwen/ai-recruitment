@@ -20,6 +20,8 @@ import {
   studioInterview,
   studioOfferDraft,
   studioOfferSscNotificationOutbox as outbox,
+  sscTelegramIdentity,
+  user,
 } from "@arc/db-schema/schema";
 import type * as TelegramBot from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot";
 import type { OfferSscNotificationTarget } from "../utils/offer-ssc-notification";
@@ -284,12 +286,51 @@ async function saveProgress(
   }
 }
 
+async function upgradePendingRecipientKeys(job: ClaimedNotification) {
+  if (job.event !== "pending" || job.recipientUserIds === null) {
+    return job;
+  }
+  const ids = [...new Set([...job.recipientUserIds, ...job.sentUserIds])].filter(
+    (id) => !id.startsWith("telegram:"),
+  );
+  if (ids.length === 0) {
+    return job;
+  }
+  // Compatibility for persisted delivery snapshots only. These accounts never
+  // select or authorize the new notification audience.
+  const profiles = await db
+    .select({
+      chatId: sql<string | null>`coalesce(${sscTelegramIdentity.chatId}, ${user.telegramChatId})`,
+      id: user.id,
+    })
+    .from(user)
+    .leftJoin(sscTelegramIdentity, eq(sscTelegramIdentity.userId, user.id))
+    .where(inArray(user.id, ids));
+  const keys = new Map(
+    profiles.flatMap((profile) =>
+      profile.chatId && /^[1-9]\d*$/u.test(profile.chatId)
+        ? [[profile.id, `telegram:${profile.chatId}`] as const]
+        : [],
+    ),
+  );
+  if (keys.size === 0) {
+    return job;
+  }
+  const progress = {
+    recipientUserIds: [...new Set(job.recipientUserIds.map((id) => keys.get(id) ?? id))],
+    sentUserIds: [...new Set(job.sentUserIds.map((id) => keys.get(id) ?? id))],
+  };
+  await saveProgress(job, progress);
+  return { ...job, ...progress };
+}
+
 async function deliverRecipients(
-  job: ClaimedNotification,
+  claimedJob: ClaimedNotification,
   resolveTargets: ResolveTargets,
   sendMessage: SendMessage,
   lease: ReturnType<typeof maintainLease>,
 ) {
+  const job = await upgradePendingRecipientKeys(claimedJob);
   let recipientIds = job.recipientUserIds;
   if (recipientIds === null) {
     const targets = await resolveTargets(job);

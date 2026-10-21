@@ -7,11 +7,13 @@ import { loadAuthorizedOfferSscContext, OfferDraftError } from "../dao/offer-dra
 import { buildTelegramOfferPublicCard } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-public-card";
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
-import { listSourceSscTelegramRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-recipients";
+import { listSourceSscNotificationRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-notification-recipients";
+import { buildTelegramOfferCard } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-card";
 
 export type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
 
 export interface OfferSscNotificationTarget {
+  // Pending notifications use telegram:<chatId>; feedback retains the creator's user ID.
   userId: string;
   chatId: string;
   message: AdapterPostableMessage;
@@ -91,7 +93,7 @@ async function getAuthorizedNotificationTarget(
   if (
     profile.organizationId !== input.organizationId ||
     profile.banned ||
-    (input.event !== "pending" && profile.userId !== createdBy)
+    profile.userId !== createdBy
   ) {
     return null;
   }
@@ -113,15 +115,10 @@ async function getAuthorizedNotificationTarget(
     }
     throw error;
   }
-  if (
-    !isCurrentNotificationState(input, context.draft) ||
-    (input.event === "pending" && context.pipelineStage === "closed") ||
-    (input.event === "pending" && !context.canReceive)
-  ) {
+  if (!isCurrentNotificationState(input, context.draft)) {
     return null;
   }
-  const cardContext =
-    input.event === "pending" ? context : { ...context, canConfirm: false, canReceive: false };
+  const cardContext = { ...context, canConfirm: false, canReceive: false };
   const message = buildTelegramOfferPublicCard(cardContext, profile.userId, {
     feedbackLabel: feedbackLabels[input.event],
     title: notificationTitles[input.event],
@@ -144,9 +141,11 @@ export async function getOfferSscNotificationTargets(
       id: studioOfferDraft.id,
       interviewRecordId: studioOfferDraft.interviewRecordId,
       organizationId: studioOfferDraft.organizationId,
+      position: studioOfferDraft.position,
       sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
       sscRevision: studioOfferDraft.sscRevision,
       status: studioOfferDraft.status,
+      version: studioOfferDraft.version,
     })
     .from(studioOfferDraft)
     .where(
@@ -164,30 +163,6 @@ export async function getOfferSscNotificationTargets(
   ) {
     return [];
   }
-  const profiles =
-    input.event === "pending"
-      ? await listSourceSscTelegramRecipients({
-          interviewRecordId: input.interviewRecordId,
-          organizationId: input.organizationId,
-        })
-      : await db
-          .select({
-            banned: user.banned,
-            organizationId: member.organizationId,
-            telegram: user.telegram,
-            telegramBoundUsername: user.telegramBoundUsername,
-            telegramChatId: user.telegramChatId,
-            userId: user.id,
-          })
-          .from(member)
-          .innerJoin(user, eq(user.id, member.userId))
-          .where(
-            and(
-              eq(member.organizationId, input.organizationId),
-              eq(user.id, offer.createdBy ?? ""),
-            ),
-          )
-          .orderBy(asc(user.id));
   const organization = await db.query.organization.findFirst({
     columns: { slug: true },
     where: { id: input.organizationId },
@@ -195,6 +170,59 @@ export async function getOfferSscNotificationTargets(
   if (!organization) {
     return [];
   }
+  if (input.event === "pending") {
+    const recipients = await listSourceSscNotificationRecipients({
+      interviewRecordId: input.interviewRecordId,
+      organizationId: input.organizationId,
+    });
+    const base = process.env.NEXT_PUBLIC_BASE_URL?.trim() || process.env.BETTER_AUTH_URL?.trim();
+    if (!base) {
+      throw new Error("Offer notification public URL is not configured");
+    }
+    const detailUrl = new URL(
+      `/w/${encodeURIComponent(organization.slug)}/studio/resumes/${encodeURIComponent(input.interviewRecordId)}?stage=offer`,
+      base,
+    ).toString();
+    const seen = new Set<string>();
+    return recipients.flatMap((recipient) => {
+      if (seen.has(recipient.chatId)) {
+        return [];
+      }
+      seen.add(recipient.chatId);
+      return [
+        {
+          chatId: recipient.chatId,
+          message: buildTelegramOfferCard(
+            {
+              ...recipient,
+              canConfirm: false,
+              canReceive: false,
+              draft: offer,
+            },
+            {
+              detailLabel: "登录系统查看并审核",
+              detailUrl,
+              title: notificationTitles.pending,
+            },
+          ),
+          userId: `telegram:${recipient.chatId}`,
+        },
+      ];
+    });
+  }
+  const profiles = await db
+    .select({
+      banned: user.banned,
+      organizationId: member.organizationId,
+      telegram: user.telegram,
+      telegramBoundUsername: user.telegramBoundUsername,
+      telegramChatId: user.telegramChatId,
+      userId: user.id,
+    })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(and(eq(member.organizationId, input.organizationId), eq(user.id, offer.createdBy ?? "")))
+    .orderBy(asc(user.id));
   const targets: OfferSscNotificationTarget[] = [];
   const chats = new Set<string>();
   for (const profile of profiles) {

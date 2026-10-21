@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   current: vi.fn(),
   members: vi.fn(),
   organization: vi.fn(),
+  recipients: vi.fn(),
   select: vi.fn(),
   where: vi.fn(),
 }));
@@ -28,12 +29,14 @@ vi.mock("../dao/offer-drafts", () => ({
   },
   loadAuthorizedOfferSscContext: mocks.context,
 }));
-vi.mock("@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-recipients", () => ({
-  listSourceSscTelegramRecipients: mocks.members,
-}));
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-notification-recipients",
+  () => ({
+    listSourceSscNotificationRecipients: mocks.recipients,
+  }),
+);
 
 const draftId = "550e8400-e29b-41d4-a716-446655440000";
-const compactDraftId = "550e8400e29b41d4a716446655440000";
 const input = {
   draftId,
   event: "pending" as const,
@@ -77,6 +80,9 @@ beforeEach(() => {
   vi.stubEnv("BETTER_AUTH_SECRET", "offer-preview-test-secret-never-used-outside-tests");
   mocks.current.mockResolvedValue([draft]);
   mocks.members.mockResolvedValue([recipient()]);
+  mocks.recipients.mockResolvedValue([
+    { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
+  ]);
   mocks.organization.mockResolvedValue({ id: "org-a", slug: "work" });
   mocks.context.mockImplementation(({ actorUserId }) => {
     if (["no-read", "invisible", "removed"].includes(actorUserId)) {
@@ -115,40 +121,38 @@ afterEach(() => {
 });
 
 describe("SSC notification recipients and cards", () => {
-  it("returns only bound, visible same-workspace members with read and receive permission", async () => {
-    mocks.members.mockResolvedValue([
-      recipient(),
-      recipient("foreign", { organizationId: "org-b", telegramChatId: "20001" }),
-      recipient("banned", { banned: true, telegramChatId: "20002" }),
-      recipient("unbound", { telegramChatId: null }),
-      recipient("numeric", { telegram: "20003", telegramBoundUsername: null }),
-      recipient("changed", { telegramBoundUsername: "previous_handle", telegramChatId: "20004" }),
-      recipient("no-read", { telegramChatId: "20005" }),
-      recipient("no-receive", { telegramChatId: "20006" }),
-      recipient("invisible", { telegramChatId: "20007" }),
-      recipient("removed", { telegramChatId: "20008" }),
-    ]);
+  it("notifies the responsible SSC chat without resolving system accounts or their permissions", async () => {
+    mocks.context.mockRejectedValue(new Error("System account lookup must not run"));
+    mocks.members.mockRejectedValue(new Error("System account lookup must not run"));
     const targets = await getOfferSscNotificationTargets(input);
     expect(targets.map(({ userId, chatId }) => ({ chatId, userId }))).toEqual([
-      { chatId: "12345", userId: "ssc-member" },
+      { chatId: "12345", userId: "telegram:12345" },
     ]);
-    expect(mocks.context).toHaveBeenCalledWith({
-      actorUserId: "ssc-member",
-      draftId,
-      interviewRecordId: "candidate-a",
-      organizationId: "org-a",
+    expect(mocks.recipients).toHaveBeenCalledWith({
+      interviewRecordId: input.interviewRecordId,
+      organizationId: input.organizationId,
     });
+    expect(mocks.context).not.toHaveBeenCalled();
+    expect(mocks.members).not.toHaveBeenCalled();
   });
 
-  it("sends one card per chat with the existing compact UUID and base36 callback", async () => {
-    mocks.members.mockResolvedValue([recipient(), recipient("second-ssc")]);
+  it("sends one login-to-review card per chat without an approval identity or public bearer link", async () => {
+    mocks.recipients.mockResolvedValue([
+      { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
+      { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
+    ]);
     const targets = await getOfferSscNotificationTargets(input);
     expect(targets).toHaveLength(1);
     const [target] = targets;
     expect(target?.message).toMatchObject({ title: "Offer待SSC接收确认" });
     const message = JSON.stringify(target?.message);
-    expect(message).toContain('"id":"osr"');
-    expect(message).toContain(`${compactDraftId}:z`);
+    expect(message).not.toContain('"id":"osr"');
+    expect(message).not.toContain('"id":"osc"');
+    expect(message).toContain("登录系统查看并审核");
+    expect(message).toContain(
+      "https://ats.example.test/w/work/studio/resumes/candidate-a?stage=offer",
+    );
+    expect(message).not.toContain("/offer-candidate/");
     expect(message).toContain("Offer新增");
     expect(message).not.toContain("987654321");
     expect(message).not.toContain("private-approval.png");
@@ -190,14 +194,7 @@ describe("SSC notification recipients and cards", () => {
   });
 
   it("does not send pending work for a closed candidate", async () => {
-    mocks.context.mockResolvedValue({
-      actorRole: "ssc-reviewer",
-      canConfirm: true,
-      canReceive: true,
-      candidateName: "示例候选人",
-      draft,
-      pipelineStage: "closed",
-    });
+    mocks.recipients.mockResolvedValue([]);
     await expect(getOfferSscNotificationTargets(input)).resolves.toEqual([]);
   });
 
@@ -321,15 +318,15 @@ describe("SSC notification recipients and cards", () => {
   it("rechecks the current binding on a later delivery attempt", async () => {
     const first = await getOfferSscNotificationTargets(input);
     expect(first).toHaveLength(1);
-    mocks.members.mockResolvedValue([
-      recipient("ssc-member", { telegramBoundUsername: "old_handle" }),
-    ]);
+    mocks.recipients.mockResolvedValue([]);
     await expect(getOfferSscNotificationTargets(input)).resolves.toEqual([]);
   });
 
   it("does not silently treat permission backend failures as an empty audience", async () => {
+    mocks.current.mockResolvedValue([{ ...draft, sscConfirmationStatus: "completed" }]);
+    mocks.members.mockResolvedValue([recipient("offer-creator")]);
     mocks.context.mockRejectedValue(new Error("permission backend unavailable"));
-    await expect(getOfferSscNotificationTargets(input)).rejects.toThrow(
+    await expect(getOfferSscNotificationTargets({ ...input, event: "completed" })).rejects.toThrow(
       "permission backend unavailable",
     );
   });

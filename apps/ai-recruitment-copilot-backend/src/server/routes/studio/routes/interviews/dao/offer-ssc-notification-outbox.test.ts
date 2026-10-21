@@ -7,6 +7,8 @@ import {
   studioInterview,
   studioOfferDraft,
   studioOfferSscNotificationOutbox,
+  sscTelegramIdentity,
+  user,
 } from "@arc/db-schema/schema";
 import type * as TelegramBot from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/bot";
 import {
@@ -28,6 +30,7 @@ vi.mock(
 );
 
 const fixtureOrganizations: string[] = [];
+const fixtureUsers: string[] = [];
 const TARGET_A = { chatId: "111", message: "SSC notification A", userId: "ssc-a" };
 const TARGET_B = { chatId: "222", message: "SSC notification B", userId: "ssc-b" };
 const databaseUrl = process.env.SSC_OUTBOX_TEST_DATABASE_URL;
@@ -94,6 +97,9 @@ afterEach(async () => {
   if (fixtureOrganizations.length > 0) {
     await db.delete(organization).where(inArray(organization.id, fixtureOrganizations.splice(0)));
   }
+  if (fixtureUsers.length > 0) {
+    await db.delete(user).where(inArray(user.id, fixtureUsers.splice(0)));
+  }
   vi.unstubAllEnvs();
 });
 
@@ -101,6 +107,62 @@ afterEach(async () => {
 describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
   "Offer SSC notification transactional outbox",
   () => {
+    it("resumes an old user-ID recipient snapshot using the pinned chat when no personal profile binding exists", async () => {
+      const input = await fixture();
+      const userId = randomUUID();
+      fixtureUsers.push(userId);
+      await db
+        .insert(user)
+        .values({ email: `${userId}@example.com`, id: userId, name: "Legacy SSC" });
+      await db
+        .insert(sscTelegramIdentity)
+        .values({ chatId: "111", userId, username: "legacy_ssc" });
+      await enqueue(input);
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({ recipientUserIds: [userId] })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, input.draftId));
+      mocks.targets.mockResolvedValue([{ ...TARGET_A, userId: "telegram:111" }]);
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(mocks.post.mock.calls).toEqual([["111", TARGET_A.message]]);
+      expect(await jobs(input)).toMatchObject([
+        {
+          recipientUserIds: ["telegram:111"],
+          sentUserIds: ["telegram:111"],
+          status: "completed",
+        },
+      ]);
+    });
+
+    it("does not resend a chat already delivered through another legacy account ID", async () => {
+      const input = await fixture();
+      const ids = [randomUUID(), randomUUID()];
+      fixtureUsers.push(...ids);
+      await db.insert(user).values(
+        ids.map((id) => ({
+          email: `${id}@example.com`,
+          id,
+          name: "Duplicate binding",
+          telegramChatId: "111",
+        })),
+      );
+      await enqueue(input);
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({ recipientUserIds: ids, sentUserIds: [ids[0]] })
+        .where(eq(studioOfferSscNotificationOutbox.draftId, input.draftId));
+      mocks.targets.mockResolvedValue([{ ...TARGET_A, userId: "telegram:111" }]);
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(mocks.post).not.toHaveBeenCalled();
+      expect(await jobs(input)).toMatchObject([
+        {
+          recipientUserIds: ["telegram:111"],
+          sentUserIds: ["telegram:111"],
+          status: "completed",
+        },
+      ]);
+    });
+
     it("waits for SSC permissions and a verified TG binding instead of completing an empty delivery", async () => {
       const input = await fixture();
       await enqueue(input);
