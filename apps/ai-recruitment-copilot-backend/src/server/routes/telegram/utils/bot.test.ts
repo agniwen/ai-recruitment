@@ -19,8 +19,8 @@ vi.mock("@chat-adapter/state-pg", () => ({
     disconnect: mocks.disconnect,
   }),
 }));
-vi.mock("@chat-adapter/telegram", () => ({
-  createTelegramAdapter: () => ({
+vi.mock("./offer-telegram-adapter", () => ({
+  createOfferTelegramAdapter: () => ({
     channelIdFromThreadId: (threadId: string) => threadId,
     initialize: mocks.initializeAdapter,
     name: "telegram",

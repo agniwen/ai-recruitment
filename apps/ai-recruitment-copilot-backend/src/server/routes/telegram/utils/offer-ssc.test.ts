@@ -66,7 +66,7 @@ vi.mock(
   }),
 );
 vi.mock("@chat-adapter/state-pg", () => ({ createPostgresState: vi.fn() }));
-vi.mock("@chat-adapter/telegram", () => ({ createTelegramAdapter: vi.fn() }));
+vi.mock("./offer-telegram-adapter", () => ({ createOfferTelegramAdapter: vi.fn() }));
 vi.mock("chat", async (importOriginal) => ({
   ...(await importOriginal<typeof ChatSdk>()),
   Chat: function MockChat() {

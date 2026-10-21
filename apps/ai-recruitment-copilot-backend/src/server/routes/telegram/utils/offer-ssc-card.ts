@@ -12,13 +12,14 @@ import {
   stringifyMarkdown,
   text as markdownText,
 } from "chat";
-import type { ActionsElement } from "chat";
+import type { ActionsElement, CardElement } from "chat";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { buildOfferConfirmationText } from "@arc/shared/offer-confirmation";
 import { getOfferSscConfirmationMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import type { OfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import { splitTelegramOfferCopyText } from "./offer-telegram-copy";
 
 export interface TelegramOfferCardContext {
   draft: Pick<
@@ -55,6 +56,11 @@ function offerConfirmationText(context: TelegramOfferCardContext) {
   });
 }
 
+function attachOfferCopyText(card: CardElement, context: TelegramOfferCardContext) {
+  const text = offerConfirmationText(context);
+  return text === null ? card : { ...card, telegramOfferCopyText: text };
+}
+
 function plainMarkdown(value: string) {
   // The Card transport parses Markdown again: stringify a text-only AST so saved fields
   // stay literal, including backticks, list markers and Markdown-looking multiline values.
@@ -71,7 +77,25 @@ function copyInformationActions(detailUrl: string | null | undefined) {
   }
   const url = new URL(detailUrl);
   url.hash = "offer-confirmation-info";
-  return [Actions([LinkButton({ label: "复制完整 Offer 信息", url: url.href })])];
+  return [Actions([LinkButton({ label: "打开全文复制页", url: url.href })])];
+}
+
+function copyInstructions(text: string, detailUrl: string | null | undefined, bodyOmitted = false) {
+  const parts = splitTelegramOfferCopyText(text);
+  if (parts.length === 0) {
+    return CardText(
+      detailUrl
+        ? "Offer 信息较长，请打开“打开全文复制页”查看并复制全文。"
+        : "Offer 信息较长，未配置可用详情地址，请在系统中查看并复制全文。",
+    );
+  }
+  const prefix = bodyOmitted ? "Offer 信息较长，消息中未展开全部内容。" : "";
+  return CardText(
+    prefix +
+      (parts.length === 1
+        ? "点击下方复制按钮直接复制 Offer 信息。"
+        : `Offer 信息共 ${parts.length} 段，请按顺序分别复制并粘贴；每次复制会覆盖剪贴板，不会自动追加。`),
+  );
 }
 
 function offerCopySections(
@@ -83,25 +107,14 @@ function offerCopySections(
   if (text === null) {
     return [];
   }
-  const hint = CardText(
-    detailUrl
-      ? "完整 Offer 信息如下，可点击下方按钮复制全文。"
-      : "完整 Offer 信息如下，可选择正文复制。",
-  );
   // GFM autolinks duplicate URL text as a label and an href; either copy may
   // double again when Telegram escapes MarkdownV2 punctuation or URL delimiters.
   // Reserve separators and the explanatory line before the adapter's 4096-character limit.
   const budget = (header.length + text.length) * 4 + 256;
   if (budget > 4096) {
-    return [
-      CardText(
-        detailUrl
-          ? "Offer 信息较长，请打开“复制完整 Offer 信息”查看并复制全文。"
-          : "Offer 信息较长，未配置可用详情地址，请在系统中查看并复制全文。",
-      ),
-    ];
+    return [copyInstructions(text, detailUrl, true)];
   }
-  return [hint, CardText(plainMarkdown(text))];
+  return [copyInstructions(text, detailUrl), CardText(plainMarkdown(text))];
 }
 
 const activityTime = new Intl.DateTimeFormat("zh-CN", {
@@ -183,7 +196,7 @@ export function buildTelegramOfferCard(
     );
   }
   const title = options.title ?? (status === "pending" ? "Offer新增" : "Offer SSC 确认");
-  return Card({
+  const card = Card({
     children: [
       ...offerCopySections(
         context,
@@ -196,6 +209,7 @@ export function buildTelegramOfferCard(
     ],
     title,
   });
+  return attachOfferCopyText(card, context);
 }
 
 export function buildTelegramOfferCompletionCard(
@@ -209,7 +223,8 @@ export function buildTelegramOfferCompletionCard(
     operatorLabel?: string;
   } = {},
 ) {
-  return Card({
+  const text = offerConfirmationText(context);
+  const card = Card({
     children: [
       Fields([
         literalField({ label: "候选人", value: context.candidateName }),
@@ -233,6 +248,7 @@ export function buildTelegramOfferCompletionCard(
             : `可点击上传截图发送一张 JPEG、PNG 或 WebP 图片（最多 10 MB），也可直接完成确认。上传后会显示新的确认卡片。${options.persistent ? "以当前 Offer 版本和状态为准。" : "本次操作 30 分钟内有效。"}`,
         }),
       ]),
+      ...(text === null ? [] : [copyInstructions(text, options.detailUrl)]),
       Actions([Button({ id: "osf", label: "确认完成", value: token })]),
       Actions([
         Button({
@@ -249,4 +265,5 @@ export function buildTelegramOfferCompletionCard(
     ],
     title: options.screenshotReceived ? "审批截图已收到，请确认完成" : "确认完成 SSC 审核",
   });
+  return attachOfferCopyText(card, context);
 }

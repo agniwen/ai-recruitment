@@ -149,7 +149,7 @@ describe("SSC notification recipients and cards", () => {
     expect(text).toContain("转正薪资：15K");
     expect(text).toContain("试用薪资：10K");
     expect(text).toContain("系统记录编码：candidate-a");
-    expect(text).toContain("复制完整 Offer 信息");
+    expect(text).toContain("打开全文复制页");
     expect(text).not.toContain("private-approval.png");
   });
 

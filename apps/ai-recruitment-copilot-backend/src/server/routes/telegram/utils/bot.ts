@@ -1,5 +1,5 @@
 import { createPostgresState } from "@chat-adapter/state-pg";
-import { createTelegramAdapter } from "@chat-adapter/telegram";
+import { createOfferTelegramAdapter } from "./offer-telegram-adapter";
 import type { TelegramAdapter, TelegramMessage } from "@chat-adapter/telegram";
 import { Chat } from "chat";
 import type { AdapterPostableMessage } from "chat";
@@ -47,7 +47,7 @@ export function getTelegramBot(): TelegramBot {
     return cached.bot;
   }
 
-  const adapter = createTelegramAdapter({
+  const adapter = createOfferTelegramAdapter({
     botToken: getRequiredEnv("TELEGRAM_BOT_TOKEN"),
     mode: "webhook",
     secretToken: getRequiredEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN"),
