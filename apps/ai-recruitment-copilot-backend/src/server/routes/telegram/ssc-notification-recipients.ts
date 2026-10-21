@@ -20,6 +20,8 @@ export async function listSourceSscNotificationRecipients(input: {
       candidateName: studioInterview.candidateName,
       chatId: telegramRecipientBinding.chatId,
       pipelineStage: studioInterview.pipelineStage,
+      responsibilityId: sscResponsibility.id,
+      sscName: sscResponsibility.sscName,
       telegram: sscResponsibility.telegram,
     })
     .from(studioInterview)
@@ -101,6 +103,15 @@ export async function listSourceSscNotificationRecipients(input: {
       return [];
     }
     seen.add(chatId);
-    return [{ candidateName: row.candidateName, chatId, pipelineStage: row.pipelineStage }];
+    return [
+      {
+        candidateName: row.candidateName,
+        chatId,
+        pipelineStage: row.pipelineStage,
+        responsibilityId: row.responsibilityId,
+        sscName: row.sscName,
+        username: row.username,
+      },
+    ];
   });
 }

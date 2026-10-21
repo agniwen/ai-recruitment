@@ -39,6 +39,8 @@ import {
 } from "./human-interview-rounds";
 import { notifyCandidateStageChange } from "../utils/candidate-stage-notification";
 import { enqueueOfferSscNotification } from "./offer-ssc-notification-outbox";
+import { listSourceSscNotificationRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-notification-recipients";
+import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 
 export type { OfferDraftRecord };
 
@@ -224,12 +226,45 @@ async function loadAuthorizedOfferCandidateContext(input: {
   };
 }
 
-export async function loadAuthorizedOfferSscContext(input: {
-  draftId: string;
-  actorUserId: string;
-  organizationId?: string;
-  interviewRecordId?: string;
-}) {
+export interface OfferSscTelegramActor {
+  telegramUserId: string;
+  username: string;
+}
+
+export type OfferSscAccess =
+  | { actorUserId: string; telegramActor?: never }
+  | { actorUserId?: never; telegramActor: OfferSscTelegramActor };
+
+async function assertCurrentTelegramOffer(
+  draft: Pick<
+    typeof studioOfferDraft.$inferSelect,
+    "id" | "organizationId" | "interviewRecordId" | "expiresAt"
+  >,
+  connection: Pick<typeof db, "select"> = db,
+) {
+  const [latest] = await connection
+    .select({ id: studioOfferDraft.id })
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.organizationId, draft.organizationId),
+        eq(studioOfferDraft.interviewRecordId, draft.interviewRecordId),
+      ),
+    )
+    .orderBy(desc(studioOfferDraft.version))
+    .limit(1);
+  if (latest?.id !== draft.id || (draft.expiresAt && draft.expiresAt.getTime() <= Date.now())) {
+    throw new OfferDraftError("Offer 已更新或已过期，请重新打开最新 Offer。", 409);
+  }
+}
+
+export async function loadAuthorizedOfferSscContext(
+  input: OfferSscAccess & {
+    draftId: string;
+    organizationId?: string;
+    interviewRecordId?: string;
+  },
+) {
   const [draft] = await db
     .select()
     .from(studioOfferDraft)
@@ -248,12 +283,44 @@ export async function loadAuthorizedOfferSscContext(input: {
   if (!draft) {
     throw new OfferDraftError("Offer 不存在。", 404);
   }
+  if (input.telegramActor) {
+    const username = normalizeTelegramUsername(input.telegramActor.username);
+    const recipients = await listSourceSscNotificationRecipients({
+      interviewRecordId: draft.interviewRecordId,
+      organizationId: draft.organizationId,
+    });
+    const responsible = recipients.find(
+      (recipient) =>
+        recipient.chatId === input.telegramActor.telegramUserId && recipient.username === username,
+    );
+    if (!responsible) {
+      throw new OfferDraftError(
+        "当前 TG 不在此候选人所属组织的 SSC 负责关系中，或 TG 绑定已变更。",
+        403,
+      );
+    }
+    await assertCurrentTelegramOffer(draft);
+    return {
+      actorRole: null,
+      canConfirm: true,
+      canReceive: true,
+      candidateName: responsible.candidateName,
+      draft: toRecord(draft),
+      pipelineStage: responsible.pipelineStage,
+      telegramOperator: {
+        responsibilityId: responsible.responsibilityId,
+        sscName: responsible.sscName,
+        sscTelegram: `@${responsible.username}`,
+        telegramChatId: responsible.chatId,
+      },
+    };
+  }
   const context = await loadAuthorizedOfferCandidateContext({
     actorUserId: input.actorUserId,
     interviewRecordId: draft.interviewRecordId,
     organizationId: draft.organizationId,
   });
-  return { ...context, draft: toRecord(draft) };
+  return { ...context, draft: toRecord(draft), telegramOperator: null };
 }
 
 export async function loadCurrentOfferSscState(input: {
@@ -286,7 +353,7 @@ export interface OfferSscActionInput {
   interviewRecordId: string;
   organizationId: string;
   revision: number;
-  actor: { id: string; role: string | null };
+  actor: { id: string; role: string | null } | OfferSscTelegramActor;
   source?: "manual" | "telegram";
 }
 
@@ -301,13 +368,28 @@ async function transitionOfferSscConfirmation(
   input: OfferSscActionInput & Partial<Pick<OfferSscCompletionInput, "completionAttachment">>,
   action: "receive" | "complete",
 ) {
-  const context = await loadAuthorizedOfferSscContext({ ...input, actorUserId: input.actor.id });
+  const context = await loadAuthorizedOfferSscContext({
+    ...input,
+    ...("telegramUserId" in input.actor
+      ? { telegramActor: input.actor }
+      : { actorUserId: input.actor.id }),
+  });
   if (!(action === "receive" ? context.canReceive : context.canConfirm)) {
     throw new OfferDraftError(
       action === "receive" ? "没有 SSC 接收确认权限。" : "没有 SSC 完成确认权限。",
       403,
     );
   }
+  const operatorId = "id" in input.actor ? input.actor.id : null;
+  const channel = context.telegramOperator ? "telegram" : (input.source ?? "manual");
+  const source = channel === "telegram" ? "api" : "manual";
+  const completionDetail =
+    action === "complete"
+      ? {
+          hasApprovalScreenshot: Boolean(input.completionAttachment),
+          internalApprovalConfirmed: true,
+        }
+      : {};
   const result = await db.transaction(async (tx) => {
     const candidate = await lockCandidateForOffer(
       tx,
@@ -328,6 +410,9 @@ async function transitionOfferSscConfirmation(
       .limit(1);
     if (!existing) {
       throw new OfferDraftError("Offer 不存在。", 404);
+    }
+    if (context.telegramOperator) {
+      await assertCurrentTelegramOffer(existing, tx);
     }
     if (
       candidate.pipelineStage === "closed" ||
@@ -356,12 +441,12 @@ async function transitionOfferSscConfirmation(
           ? {
               sscConfirmationStatus: "confirming",
               sscReceivedAt: now,
-              sscReceivedBy: input.actor.id,
+              sscReceivedBy: operatorId,
               updatedAt: now,
             }
           : {
               sscCompletedAt: now,
-              sscCompletedBy: input.actor.id,
+              sscCompletedBy: operatorId,
               sscCompletionAttachment: input.completionAttachment ?? null,
               sscConfirmationStatus: "completed",
               updatedAt: now,
@@ -375,20 +460,18 @@ async function transitionOfferSscConfirmation(
     await recordCandidateActivityInTransaction(tx, {
       action: action === "receive" ? "offer_ssc_received" : "offer_ssc_completed",
       detail: {
-        ...(action === "complete" && {
-          hasApprovalScreenshot: Boolean(input.completionAttachment),
-          internalApprovalConfirmed: true,
-        }),
-        channel: input.source ?? "manual",
+        ...completionDetail,
+        ...context.telegramOperator,
+        channel,
         draftId: existing.id,
         revision: existing.sscRevision,
         version: existing.version,
       },
       interviewRecordId: input.interviewRecordId,
-      operatorId: input.actor.id,
+      operatorId,
       operatorRole: context.actorRole,
       organizationId: input.organizationId,
-      source: input.source === "telegram" ? "api" : "manual",
+      source,
     });
     await enqueueOfferSscNotification(tx, {
       draftId: updated.id,

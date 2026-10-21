@@ -13,7 +13,8 @@ const screenshotSchema = z.object({
 });
 
 const pendingSchema = z.object({
-  actorUserId: z.string().min(1),
+  // Accept pending prompts issued before TG-only operations.
+  actorUserId: z.string().min(1).optional(),
   chatId: z.string().min(1),
   draftId: z.uuid(),
   expiresAt: z.number().finite(),
@@ -24,6 +25,7 @@ const pendingSchema = z.object({
   revision: z.number().int().positive(),
   screenshot: screenshotSchema.optional(),
   status: z.enum(["pending", "completing"]),
+  telegramUsername: z.string().min(1).optional(),
   uploadPromptMessageId: z.number().int().positive().optional(),
   uploadSelectionId: z.uuid().optional(),
 });

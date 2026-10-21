@@ -69,7 +69,12 @@ export async function completeOfferSscWithScreenshot(
   if (input.internalApprovalConfirmed !== true) {
     throw new OfferDraftError("请确认已经完成内部审批。", 400);
   }
-  const context = await loadAuthorizedOfferSscContext({ ...input, actorUserId: input.actor.id });
+  const context = await loadAuthorizedOfferSscContext({
+    ...input,
+    ...("telegramUserId" in input.actor
+      ? { telegramActor: input.actor }
+      : { actorUserId: input.actor.id }),
+  });
   if (!context.canConfirm) {
     throw new OfferDraftError("没有 SSC 完成确认权限。", 403);
   }

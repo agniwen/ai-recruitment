@@ -1,6 +1,10 @@
 import { createTelegramAdapter } from "@chat-adapter/telegram";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildTelegramOfferCard, buildTelegramOfferCompletionCard } from "./offer-ssc-card";
+import {
+  buildTelegramOfferCard,
+  buildTelegramOfferCompletionCard,
+  telegramOfferCallbackValue,
+} from "./offer-ssc-card";
 
 interface EditRequest {
   chat_id: string | number;
@@ -103,6 +107,41 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       expect(callback).toContain(draftId.replaceAll("-", ""));
     },
   );
+
+  it("renders the broadcast second-confirmation buttons within Telegram's callback limit", async () => {
+    const adapter = createTelegramAdapter({
+      botToken: "999999:fake-transport-test-token",
+      mode: "webhook",
+      secretToken: "fake-secret",
+      userName: botUser.username,
+    });
+    const card = buildTelegramOfferCompletionCard(
+      {
+        canConfirm: true,
+        canReceive: true,
+        candidateName: "Candidate",
+        draft: {
+          id: draftId,
+          position: "Role",
+          sscConfirmationStatus: "confirming",
+          sscRevision: 2_147_483_647,
+          status: "draft",
+          version: 3,
+        },
+        pipelineStage: "offer",
+      },
+      telegramOfferCallbackValue(draftId, 2_147_483_647),
+      { persistent: true },
+    );
+    await adapter.editMessage(`telegram:${chatId}`, `${chatId}:${messageId}`, card);
+    const buttons = requests[0].reply_markup.inline_keyboard.flat();
+    expect(buttons.map((button) => button.text)).toEqual(["确认完成", "上传截图（选填）", "取消"]);
+    for (const button of buttons) {
+      expect(Buffer.byteLength(button.callback_data ?? "", "utf-8")).toBeLessThanOrEqual(64);
+      expect(button.callback_data).toContain(draftId.replaceAll("-", ""));
+    }
+    expect(requests[0].text).not.toContain("30 分钟");
+  });
 
   it("explicitly clears the old inline keyboard when SSC confirmation completes", async () => {
     const payload = await editedCard("completed");

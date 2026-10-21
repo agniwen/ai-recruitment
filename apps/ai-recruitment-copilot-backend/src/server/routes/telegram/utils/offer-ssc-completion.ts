@@ -6,7 +6,8 @@ import {
   loadAuthorizedOfferSscContext,
   OfferDraftError,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
-import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
+
+import type { OfferSscTelegramActor } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import { getTelegramBot } from "./bot";
 import { buildTelegramOfferCompletionCard } from "./offer-ssc-card";
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
@@ -24,7 +25,7 @@ import type {
 } from "./offer-ssc-state";
 
 interface CompletionIdentity {
-  actorUserId: string;
+  actor: OfferSscTelegramActor;
   chatId: string;
   messageId: number;
 }
@@ -67,7 +68,8 @@ function pendingFor(
   if (
     !record ||
     record.status !== "pending" ||
-    record.actorUserId !== identity.actorUserId ||
+    (record.telegramUsername !== undefined &&
+      record.telegramUsername !== identity.actor.username.toLowerCase()) ||
     record.chatId !== identity.chatId ||
     record.promptMessageId !== identity.messageId
   ) {
@@ -90,11 +92,12 @@ function sentMessageId(id: string, chatId: string): number {
 }
 
 async function authorizedContext(
-  record: Pick<TelegramOfferCompletionPending, "draftId" | "actorUserId" | "revision">,
+  record: Pick<TelegramOfferCompletionPending, "draftId" | "revision">,
+  actor: OfferSscTelegramActor,
 ) {
   const context = await loadAuthorizedOfferSscContext({
-    actorUserId: record.actorUserId,
     draftId: record.draftId,
+    telegramActor: actor,
   });
   if (!context.canConfirm) {
     throw new OfferDraftError("没有 SSC 完成确认权限。", 403);
@@ -118,6 +121,53 @@ async function removePending(thread: CompletionThread, chatId: string, token: st
   });
 }
 
+async function beginCompletion(
+  event: ActionEvent,
+  identity: CompletionIdentity,
+  initial: { draftId: string; revision: number },
+) {
+  const context = await authorizedContext(initial, identity.actor);
+  const { thread } = event;
+  if (!thread) {
+    throw unavailable();
+  }
+  const token = randomUUID().replaceAll("-", "");
+  let promptMessageId = identity.messageId;
+  if (event.actionId === "osc") {
+    const prompt = await thread.post(buildTelegramOfferCompletionCard(context, token));
+    promptMessageId = sentMessageId(prompt.id, identity.chatId);
+  }
+  return await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
+    // Broadcast cards initialize their own private upload/confirmation session on first use.
+    // Reuse it on retries; an older card must not bypass a newer screenshot confirmation.
+    if (event.actionId !== "osc") {
+      const existing = Object.entries(pending).find(
+        ([, current]) =>
+          current.draftId === initial.draftId &&
+          current.revision === initial.revision &&
+          current.originMessageId === identity.messageId,
+      );
+      if (existing) {
+        pendingFor(pending, existing[0], identity);
+        return existing[0];
+      }
+    }
+    pending[token] = {
+      chatId: identity.chatId,
+      draftId: context.draft.id,
+      expiresAt: Date.now() + TELEGRAM_COMPLETION_TTL_MS,
+      interviewRecordId: context.draft.interviewRecordId,
+      organizationId: context.draft.organizationId,
+      originMessageId: identity.messageId,
+      promptMessageId,
+      revision: initial.revision,
+      status: "pending",
+      telegramUsername: identity.actor.username.toLowerCase(),
+    };
+    return token;
+  });
+}
+
 export async function handleTelegramOfferCompletionAction(
   event: ActionEvent,
   identity: CompletionIdentity,
@@ -128,26 +178,10 @@ export async function handleTelegramOfferCompletionAction(
     return;
   }
   if (event.actionId === "osc" && initial) {
-    const context = await authorizedContext({ ...initial, actorUserId: identity.actorUserId });
-    const token = randomUUID().replaceAll("-", "");
-    const prompt = await thread.post(buildTelegramOfferCompletionCard(context, token));
-    await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
-      pending[token] = {
-        actorUserId: identity.actorUserId,
-        chatId: identity.chatId,
-        draftId: context.draft.id,
-        expiresAt: Date.now() + TELEGRAM_COMPLETION_TTL_MS,
-        interviewRecordId: context.draft.interviewRecordId,
-        organizationId: context.draft.organizationId,
-        originMessageId: identity.messageId,
-        promptMessageId: sentMessageId(prompt.id, identity.chatId),
-        revision: initial.revision,
-        status: "pending",
-      };
-    });
+    await beginCompletion(event, identity, initial);
     return;
   }
-  const token = event.value ?? "";
+  const token = initial ? await beginCompletion(event, identity, initial) : (event.value ?? "");
   if (event.actionId === "osx") {
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       pendingFor(pending, token, identity);
@@ -161,7 +195,7 @@ export async function handleTelegramOfferCompletionAction(
   }));
   let context: Awaited<ReturnType<typeof authorizedContext>>;
   try {
-    context = await authorizedContext(record);
+    context = await authorizedContext(record, identity.actor);
   } catch (error) {
     await removePending(thread, identity.chatId, token);
     throw error;
@@ -211,7 +245,7 @@ export async function handleTelegramOfferCompletionAction(
       }
     }
     draft = await completeOfferSscWithScreenshot({
-      actor: { id: identity.actorUserId, role: context.actorRole },
+      actor: identity.actor,
       draftId: claimed.draftId,
       internalApprovalConfirmed: true,
       interviewRecordId: claimed.interviewRecordId,
@@ -237,7 +271,7 @@ export async function handleTelegramOfferCompletionAction(
   }
   await updateTelegramOfferMessages(
     event,
-    buildTelegramOfferPublicCard({ ...context, draft }, identity.actorUserId),
+    buildTelegramOfferPublicCard({ ...context, draft }, identity.actor),
     [
       event.messageId,
       ...(claimed.originMessageId ? [`${identity.chatId}:${claimed.originMessageId}`] : []),
@@ -457,14 +491,14 @@ export async function handleTelegramOfferScreenshot(
     // Offer lookup can yield to a final click. Finalization rechecks all access.
     const [token, record] = await bindScreenshotReply(thread, chatId, replyId, screenshot);
     selectedToken = token;
-    const actorUserId = await resolveBoundTelegramOfferActor({
-      telegramUserId: String(raw.from.id),
-      username: raw.from.username,
-    });
-    if (!actorUserId || actorUserId !== record.actorUserId) {
-      throw new OfferDraftError("请先绑定本人 TG 账号后重试。", 403);
+    const actor = { telegramUserId: String(raw.from.id), username: raw.from.username ?? "" };
+    if (
+      record.telegramUsername !== undefined &&
+      record.telegramUsername !== actor.username.toLowerCase()
+    ) {
+      throw new OfferDraftError("TG 用户名已变更，请从 Offer 重新打开确认。", 403);
     }
-    const context = await authorizedContext(record);
+    const context = await authorizedContext(record, actor);
     const awaitingConfirmation = await withTelegramOfferCompletionState(
       thread,
       chatId,

@@ -5,8 +5,7 @@ import { getRequiredEnv } from "@arc/ai-recruitment-copilot-backend/lib/server/e
 const PURPOSE = "offer-candidate-readonly:v1";
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const identifier = z.string().trim().min(1).max(256);
-const payloadSchema = z.strictObject({
-  actorUserId: identifier,
+const basePayloadSchema = z.object({
   candidateId: identifier,
   draftId: z.uuid(),
   exp: z.number().int().positive(),
@@ -14,6 +13,15 @@ const payloadSchema = z.strictObject({
   purpose: z.literal(PURPOSE),
   revision: z.number().int().positive().max(2_147_483_647),
 });
+
+const telegramActorSchema = z.strictObject({
+  telegramUserId: z.string().regex(/^[1-9]\d*$/u),
+  username: z.string().regex(/^[a-zA-Z0-9_]{5,32}$/u),
+});
+const payloadSchema = z.union([
+  basePayloadSchema.extend({ actorUserId: identifier }).strict(),
+  basePayloadSchema.extend({ telegramActor: telegramActorSchema }).strict(),
+]);
 
 export type OfferCandidatePreviewAccess = z.infer<typeof payloadSchema>;
 
@@ -24,8 +32,7 @@ function signature(payload: string) {
 }
 
 export function buildOfferCandidatePreviewLink(
-  input: {
-    actorUserId: string;
+  input: ({ actorUserId: string } | { telegramActor: z.infer<typeof telegramActorSchema> }) & {
     organizationId: string;
     candidateId: string;
     draftId: string;

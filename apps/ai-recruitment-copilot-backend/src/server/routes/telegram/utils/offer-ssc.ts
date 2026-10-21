@@ -5,7 +5,7 @@ import {
   OfferDraftError,
   receiveOfferSscConfirmation,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
-import { resolveBoundTelegramOfferActor } from "../offer-ssc-dao";
+
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { handleTelegramOfferCompletionAction } from "./offer-ssc-completion";
 import { updateTelegramOfferMessages } from "./offer-ssc-message";
@@ -13,7 +13,7 @@ export { handleTelegramOfferScreenshot } from "./offer-ssc-completion";
 
 const telegramSender = z.object({
   id: z.number().int().positive(),
-  username: z.string().optional(),
+  username: z.string().min(1),
 });
 const privateChat = z.object({ id: z.number().int().positive(), type: z.literal("private") });
 const commandMessage = z.object({ chat: privateChat, from: telegramSender });
@@ -22,8 +22,6 @@ const callbackQuery = z.object({
   message: z.object({ chat: privateChat, message_id: z.number().int().positive() }),
 });
 const MAX_REVISION = 2_147_483_647;
-const bindingRequired =
-  "请确认已在 SSC 负责组织中登记本人 TG 用户名，再私聊机器人发送 /start 完成绑定后重试；无需关联邮箱。";
 
 function parseCallback(value: string | undefined) {
   const match = /^([0-9a-f]{32}):([1-9a-z][0-9a-z]{0,5})$/u.exec(value ?? "");
@@ -61,16 +59,12 @@ export async function openTelegramOffer(event: SlashCommandEvent, draftId: strin
     return;
   }
   try {
-    const actorUserId = await resolveBoundTelegramOfferActor({
+    const actor = {
       telegramUserId: String(message.data.from.id),
       username: message.data.from.username,
-    });
-    if (!actorUserId) {
-      await event.channel.post(bindingRequired);
-      return;
-    }
-    const context = await loadAuthorizedOfferSscContext({ actorUserId, draftId });
-    await event.channel.post(buildTelegramOfferPublicCard(context, actorUserId));
+    };
+    const context = await loadAuthorizedOfferSscContext({ draftId, telegramActor: actor });
+    await event.channel.post(buildTelegramOfferPublicCard(context, actor));
   } catch (error) {
     await event.channel.post(errorReply(error));
   }
@@ -86,9 +80,12 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     await event.thread?.post("请使用本人账号私聊机器人处理 Offer。");
     return;
   }
-  const initialAction = event.actionId === "osr" || event.actionId === "osc";
+  const supportedAction = ["osr", "osc", "osf", "osu", "osx"].includes(event.actionId);
+  const initialAction =
+    ["osr", "osc"].includes(event.actionId) || Boolean(event.value?.includes(":"));
   const parsed = initialAction ? parseCallback(event.value) : null;
   if (
+    !supportedAction ||
     (initialAction && !parsed) ||
     (!initialAction &&
       (!["osf", "osu", "osx"].includes(event.actionId) ||
@@ -98,19 +95,15 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     return;
   }
   try {
-    const actorUserId = await resolveBoundTelegramOfferActor({
+    const actor = {
       telegramUserId: String(callback.data.from.id),
       username: callback.data.from.username,
-    });
-    if (!actorUserId) {
-      await event.thread.post(bindingRequired);
-      return;
-    }
+    };
     if (event.actionId !== "osr") {
       await handleTelegramOfferCompletionAction(
         event,
         {
-          actorUserId,
+          actor,
           chatId: String(callback.data.message.chat.id),
           messageId: callback.data.message.message_id,
         },
@@ -121,9 +114,12 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     if (!parsed) {
       return;
     }
-    const context = await loadAuthorizedOfferSscContext({ actorUserId, draftId: parsed.draftId });
+    const context = await loadAuthorizedOfferSscContext({
+      draftId: parsed.draftId,
+      telegramActor: actor,
+    });
     const draft = await receiveOfferSscConfirmation({
-      actor: { id: actorUserId, role: context.actorRole },
+      actor,
       draftId: parsed.draftId,
       interviewRecordId: context.draft.interviewRecordId,
       organizationId: context.draft.organizationId,
@@ -132,7 +128,7 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     });
     await updateTelegramOfferMessages(
       event,
-      buildTelegramOfferPublicCard({ ...context, draft }, actorUserId),
+      buildTelegramOfferPublicCard({ ...context, draft }, actor),
     );
   } catch (error) {
     await event.thread.post(errorReply(error));

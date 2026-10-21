@@ -723,7 +723,13 @@ export async function loadCandidateTimeline(
     addEvent(events, {
       action: log.action,
       actorImage: log.actorImage,
-      actorName: log.actorName,
+      actorName:
+        log.actorName ??
+        ((log.action === "offer_ssc_received" || log.action === "offer_ssc_completed") &&
+        log.detail?.channel === "telegram" &&
+        typeof log.detail.sscName === "string"
+          ? log.detail.sscName
+          : null),
       availableTimeSlots:
         availableTimeSlots && availableTimeSlots.length > 0 ? availableTimeSlots : undefined,
       description,

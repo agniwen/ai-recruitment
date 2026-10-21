@@ -1,19 +1,21 @@
 import type { AdapterPostableMessage } from "chat";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { member, studioOfferDraft, user } from "@arc/db-schema/schema";
+import { interviewAuditLog, member, studioOfferDraft, user } from "@arc/db-schema/schema";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import { loadAuthorizedOfferSscContext, OfferDraftError } from "../dao/offer-drafts";
-import { buildTelegramOfferPublicCard } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-public-card";
+import {
+  buildTelegramOfferPublicCard,
+  buildTelegramOfferPublicCompletionCard,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-public-card";
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
 import { listSourceSscNotificationRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-notification-recipients";
-import { buildTelegramOfferCard } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-card";
 
 export type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
 
 export interface OfferSscNotificationTarget {
-  // Pending notifications use telegram:<chatId>; feedback retains the creator's user ID.
+  // SSC notifications use telegram:<chatId>; creator-only feedback retains its user ID.
   userId: string;
   chatId: string;
   message: AdapterPostableMessage;
@@ -130,6 +132,36 @@ async function getAuthorizedNotificationTarget(
   };
 }
 
+async function flowFeedback(input: OfferSscNotificationInput) {
+  if (input.event === "pending") {
+    return "";
+  }
+  const [activity] = await db
+    .select({ detail: interviewAuditLog.detail })
+    .from(interviewAuditLog)
+    .where(
+      and(
+        eq(interviewAuditLog.organizationId, input.organizationId),
+        eq(interviewAuditLog.interviewRecordId, input.interviewRecordId),
+        eq(
+          interviewAuditLog.action,
+          input.event === "received" ? "offer_ssc_received" : "offer_ssc_completed",
+        ),
+        sql`${interviewAuditLog.detail}->>'draftId' = ${input.draftId}`,
+        sql`${interviewAuditLog.detail}->>'revision' = ${String(input.revision)}`,
+      ),
+    )
+    .orderBy(desc(interviewAuditLog.createdAt))
+    .limit(1);
+  const name = activity?.detail.sscName;
+  const telegram = activity?.detail.sscTelegram;
+  const operator =
+    typeof name === "string"
+      ? `${name}${typeof telegram === "string" ? `（${telegram}）` : ""}`
+      : "SSC";
+  return `${operator}${input.event === "received" ? "已接收，待完成内部审批确认" : "已完成确认"}`;
+}
+
 export async function getOfferSscNotificationTargets(
   input: OfferSscNotificationInput,
 ): Promise<OfferSscNotificationTarget[]> {
@@ -156,11 +188,7 @@ export async function getOfferSscNotificationTargets(
     )
     .orderBy(desc(studioOfferDraft.version))
     .limit(1);
-  if (
-    !offer ||
-    !isCurrentNotificationState(input, offer) ||
-    (input.event !== "pending" && !offer.createdBy)
-  ) {
+  if (!offer || !isCurrentNotificationState(input, offer)) {
     return [];
   }
   const organization = await db.query.organization.findFirst({
@@ -170,45 +198,35 @@ export async function getOfferSscNotificationTargets(
   if (!organization) {
     return [];
   }
-  if (input.event === "pending") {
-    const recipients = await listSourceSscNotificationRecipients({
-      interviewRecordId: input.interviewRecordId,
-      organizationId: input.organizationId,
-    });
-    const base = process.env.NEXT_PUBLIC_BASE_URL?.trim() || process.env.BETTER_AUTH_URL?.trim();
-    if (!base) {
-      throw new Error("Offer notification public URL is not configured");
-    }
-    const detailUrl = new URL(
-      `/w/${encodeURIComponent(organization.slug)}/studio/resumes/${encodeURIComponent(input.interviewRecordId)}?stage=offer`,
-      base,
-    ).toString();
-    const seen = new Set<string>();
-    return recipients.flatMap((recipient) => {
-      if (seen.has(recipient.chatId)) {
-        return [];
-      }
-      seen.add(recipient.chatId);
-      return [
-        {
-          chatId: recipient.chatId,
-          message: buildTelegramOfferCard(
-            {
-              ...recipient,
-              canConfirm: false,
-              canReceive: true,
-              draft: offer,
-            },
-            {
-              detailLabel: "登录系统查看并审核",
-              detailUrl,
-              title: notificationTitles.pending,
-            },
-          ),
-          userId: `telegram:${recipient.chatId}`,
-        },
-      ];
-    });
+  const recipients = await listSourceSscNotificationRecipients({
+    interviewRecordId: input.interviewRecordId,
+    organizationId: input.organizationId,
+  });
+  const feedbackLabel = await flowFeedback(
+    offer.sscConfirmationStatus === "completed" ? { ...input, event: "completed" } : input,
+  );
+  const uniqueRecipients = new Map(recipients.map((recipient) => [recipient.chatId, recipient]));
+  const unexpired = !offer.expiresAt || new Date(offer.expiresAt).getTime() > Date.now();
+  const targets: OfferSscNotificationTarget[] = [...uniqueRecipients.values()].map((recipient) => {
+    const actor = { telegramUserId: recipient.chatId, username: recipient.username };
+    const context = { ...recipient, canConfirm: unexpired, canReceive: unexpired, draft: offer };
+    const message =
+      input.event === "received" &&
+      offer.sscConfirmationStatus === "confirming" &&
+      offer.status === "draft" &&
+      unexpired
+        ? buildTelegramOfferPublicCompletionCard(context, actor, feedbackLabel)
+        : buildTelegramOfferPublicCard(context, actor, {
+            feedbackLabel,
+            title:
+              notificationTitles[
+                offer.sscConfirmationStatus === "completed" ? "completed" : input.event
+              ],
+          });
+    return { chatId: recipient.chatId, message, userId: `telegram:${recipient.chatId}` };
+  });
+  if (input.event === "pending" || !offer.createdBy) {
+    return targets;
   }
   const profiles = await db
     .select({
@@ -223,9 +241,12 @@ export async function getOfferSscNotificationTargets(
     .innerJoin(user, eq(user.id, member.userId))
     .where(and(eq(member.organizationId, input.organizationId), eq(user.id, offer.createdBy ?? "")))
     .orderBy(asc(user.id));
-  const targets: OfferSscNotificationTarget[] = [];
-  const chats = new Set<string>();
+  const chats = new Set(targets.map((target) => target.chatId));
   for (const profile of profiles) {
+    const chatId = boundChatId(profile);
+    if (chatId && chats.has(chatId)) {
+      continue;
+    }
     const target = await getAuthorizedNotificationTarget(input, profile, offer.createdBy);
     if (target && !chats.has(target.chatId)) {
       chats.add(target.chatId);

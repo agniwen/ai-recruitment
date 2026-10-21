@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { member, studioOfferDraft } from "@arc/db-schema/schema";
+import { interviewAuditLog, member, studioOfferDraft } from "@arc/db-schema/schema";
 import { OfferDraftError } from "../dao/offer-drafts";
 import { getOfferSscNotificationTargets } from "./offer-ssc-notification";
 
 const mocks = vi.hoisted(() => ({
+  audit: vi.fn(),
   context: vi.fn(),
   current: vi.fn(),
   members: vi.fn(),
@@ -79,9 +80,10 @@ beforeEach(() => {
   vi.stubEnv("BETTER_AUTH_URL", "");
   vi.stubEnv("BETTER_AUTH_SECRET", "offer-preview-test-secret-never-used-outside-tests");
   mocks.current.mockResolvedValue([draft]);
+  mocks.audit.mockResolvedValue([]);
   mocks.members.mockResolvedValue([recipient()]);
   mocks.recipients.mockResolvedValue([
-    { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
+    { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer", username: "sscalice" },
   ]);
   mocks.organization.mockResolvedValue({ id: "org-a", slug: "work" });
   mocks.context.mockImplementation(({ actorUserId }) => {
@@ -101,7 +103,7 @@ beforeEach(() => {
     from(table: unknown) {
       const chain = {
         innerJoin: vi.fn().mockReturnThis(),
-        limit: mocks.current,
+        limit: table === interviewAuditLog ? mocks.audit : mocks.current,
         orderBy: vi.fn(),
         where: vi.fn(),
       };
@@ -136,10 +138,20 @@ describe("SSC notification recipients and cards", () => {
     expect(mocks.members).not.toHaveBeenCalled();
   });
 
-  it("keeps the original receive callback and system link without requiring an approval identity to send", async () => {
+  it("keeps the receive callback and read-only candidate preview without requiring an approval identity to send", async () => {
     mocks.recipients.mockResolvedValue([
-      { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
-      { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer" },
+      {
+        candidateName: "示例候选人",
+        chatId: "12345",
+        pipelineStage: "offer",
+        username: "sscalice",
+      },
+      {
+        candidateName: "示例候选人",
+        chatId: "12345",
+        pipelineStage: "offer",
+        username: "sscalice",
+      },
     ]);
     const targets = await getOfferSscNotificationTargets(input);
     expect(targets).toHaveLength(1);
@@ -150,11 +162,9 @@ describe("SSC notification recipients and cards", () => {
     expect(message).toContain("接收确认");
     expect(message).toContain("550e8400e29b41d4a716446655440000:z");
     expect(message).not.toContain('"id":"osc"');
-    expect(message).toContain("登录系统查看并审核");
-    expect(message).toContain(
-      "https://ats.example.test/w/work/studio/resumes/candidate-a?stage=offer",
-    );
-    expect(message).not.toContain("/offer-candidate/");
+    expect(message).toContain("查看候选人详情");
+    expect(message).toContain("https://ats.example.test/offer-candidate/");
+    expect(message).not.toContain("登录系统查看并审核");
     expect(message).toContain("Offer新增");
     expect(message).not.toContain("987654321");
     expect(message).not.toContain("private-approval.png");
@@ -206,6 +216,7 @@ describe("SSC notification recipients and cards", () => {
   ] as const)(
     "feedback for %s goes to the Offer creator with a system link",
     async (event, status, label, title) => {
+      mocks.recipients.mockResolvedValue([]);
       const current = { ...draft, sscConfirmationStatus: status };
       mocks.current.mockResolvedValue([current]);
       mocks.members.mockResolvedValue([
@@ -235,6 +246,7 @@ describe("SSC notification recipients and cards", () => {
   );
 
   it("does not replace an absent Offer creator with the candidate creator", async () => {
+    mocks.recipients.mockResolvedValue([]);
     mocks.current.mockResolvedValue([
       { ...draft, createdBy: null, sscConfirmationStatus: "completed" },
     ]);
@@ -255,6 +267,7 @@ describe("SSC notification recipients and cards", () => {
   it.each(["draft", "sent", "accepted"])(
     "keeps completed feedback for %s even after the candidate closes",
     async (status) => {
+      mocks.recipients.mockResolvedValue([]);
       const current = { ...draft, sscConfirmationStatus: "completed", status };
       mocks.current.mockResolvedValue([current]);
       mocks.members.mockResolvedValue([recipient("offer-creator")]);
@@ -279,6 +292,7 @@ describe("SSC notification recipients and cards", () => {
   ])(
     "keeps received feedback after state %s and Offer status %s",
     async (sscStatus, status, label) => {
+      mocks.recipients.mockResolvedValue([]);
       const current = { ...draft, sscConfirmationStatus: sscStatus, status };
       mocks.current.mockResolvedValue([current]);
       mocks.members.mockResolvedValue([recipient("offer-creator")]);
@@ -324,9 +338,66 @@ describe("SSC notification recipients and cards", () => {
     await expect(getOfferSscNotificationTargets(input)).resolves.toEqual([]);
   });
 
+  it.each(["received", "completed"] as const)(
+    "fans out %s to all responsible SSCs without an Offer creator or system identity",
+    async (event) => {
+      const status = event === "received" ? "confirming" : "completed";
+      mocks.current.mockResolvedValue([
+        { ...draft, createdBy: null, sscConfirmationStatus: status },
+      ]);
+      mocks.recipients.mockResolvedValue([
+        {
+          candidateName: "示例候选人",
+          chatId: "12345",
+          pipelineStage: "offer",
+          username: "ssc_alice",
+        },
+        {
+          candidateName: "示例候选人",
+          chatId: "67890",
+          pipelineStage: "offer",
+          username: "ssc_bob",
+        },
+      ]);
+      mocks.audit.mockResolvedValue([{ detail: { sscName: "秋风", sscTelegram: "@ssc_alice" } }]);
+      const targets = await getOfferSscNotificationTargets({ ...input, event });
+      expect(targets.map((target) => target.chatId)).toEqual(["12345", "67890"]);
+      expect(mocks.members).not.toHaveBeenCalled();
+      expect(mocks.context).not.toHaveBeenCalled();
+      for (const target of targets) {
+        const card = JSON.stringify(target.message);
+        expect(card).toContain("秋风");
+        expect(card).toContain("@ssc_alice");
+        expect(card).toContain("/offer-candidate/");
+        expect(card).not.toContain('"id":"osr"');
+        if (event === "received") {
+          expect(card).toContain('"id":"osf"');
+          expect(card).toContain('"id":"osu"');
+          expect(card).toContain("确认完成");
+        } else {
+          expect(card).not.toContain('"id":"osf"');
+          expect(card).not.toContain('"id":"osu"');
+          expect(card).not.toContain('"id":"osc"');
+        }
+      }
+    },
+  );
+
+  it("does not reopen second confirmation when a received event is delivered after completion", async () => {
+    mocks.current.mockResolvedValue([
+      { ...draft, createdBy: null, sscConfirmationStatus: "completed" },
+    ]);
+    const targets = await getOfferSscNotificationTargets({ ...input, event: "received" });
+    expect(targets).toHaveLength(1);
+    const card = JSON.stringify(targets[0].message);
+    expect(card).toContain("已完成确认");
+    expect(card).not.toContain('"id":"osf"');
+    expect(card).not.toContain('"id":"osu"');
+  });
+
   it("does not silently treat permission backend failures as an empty audience", async () => {
     mocks.current.mockResolvedValue([{ ...draft, sscConfirmationStatus: "completed" }]);
-    mocks.members.mockResolvedValue([recipient("offer-creator")]);
+    mocks.members.mockResolvedValue([recipient("offer-creator", { telegramChatId: "20002" })]);
     mocks.context.mockRejectedValue(new Error("permission backend unavailable"));
     await expect(getOfferSscNotificationTargets({ ...input, event: "completed" })).rejects.toThrow(
       "permission backend unavailable",

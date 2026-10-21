@@ -120,6 +120,17 @@ export function auditMetadata(
       return [{ label: "通知人员", value: names.map((name) => name.trim()).join("、") }];
     }
   }
+  if (
+    (action === "offer_ssc_received" || action === "offer_ssc_completed") &&
+    detail.channel === "telegram"
+  ) {
+    return [
+      ...(typeof detail.sscName === "string" ? [{ label: "SSC 花名", value: detail.sscName }] : []),
+      ...(typeof detail.sscTelegram === "string"
+        ? [{ label: "SSC TG", value: detail.sscTelegram }]
+        : []),
+    ];
+  }
   if (action === "human_interview_evaluation_updated") {
     return humanInterviewEvaluationMetadata(detail);
   }

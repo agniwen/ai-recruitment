@@ -146,15 +146,15 @@ export async function loadOfferCandidatePreview(
   }
   let context;
   try {
-    // Resolves live membership, banned state, Offer read permission and candidate visibility.
+    // TG links use the live source responsibility; system links retain workspace permissions.
     context = await loadAuthorizedOfferSscContext({
-      actorUserId: access.actorUserId,
+      ...access,
       draftId: access.draftId,
       interviewRecordId: access.candidateId,
       organizationId: access.organizationId,
     });
   } catch (error) {
-    if (error instanceof OfferDraftError && [403, 404].includes(error.status)) {
+    if (error instanceof OfferDraftError && [403, 404, 409].includes(error.status)) {
       return null;
     }
     throw error;

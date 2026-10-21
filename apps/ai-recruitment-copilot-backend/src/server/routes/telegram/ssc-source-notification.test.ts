@@ -183,9 +183,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       await db.update(user).set({ telegram: "@different_person" }).where(eq(user.id, sscId));
       const notifications = await targets();
       expect(notifications.map((target) => target.chatId)).toEqual([chatId]);
-      expect(JSON.stringify(notifications[0].message)).toContain(
-        `/w/${orgId}/studio/resumes/${candidateId}`,
-      );
+      expect(JSON.stringify(notifications[0].message)).toContain("/offer-candidate/");
       expect(
         await db.select().from(sscTelegramIdentity).where(eq(sscTelegramIdentity.chatId, chatId)),
       ).toEqual([]);
@@ -448,10 +446,10 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       const serialized = JSON.stringify(card);
       expect(serialized).toContain("Candidate");
       expect(serialized).toContain("Current system Offer");
-      expect(serialized).toContain("登录系统查看并审核");
-      expect(serialized).toContain(`/w/${orgId}/studio/resumes/${candidateId}?stage=offer`);
+      expect(serialized).toContain("查看候选人详情");
+      expect(serialized).toContain("/offer-candidate/");
       expect(serialized).toContain('"id":"osr"');
-      expect(serialized).not.toContain("/offer-candidate/");
+      expect(serialized).not.toContain("登录系统查看并审核");
       const [job] = await db
         .select()
         .from(studioOfferSscNotificationOutbox)

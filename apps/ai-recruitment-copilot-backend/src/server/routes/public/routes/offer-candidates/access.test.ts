@@ -56,6 +56,20 @@ describe("Offer candidate external link credentials", () => {
     });
   });
 
+  it("issues TG-only details credentials without a system account", () => {
+    const { actorUserId: _actorUserId, ...scope } = context;
+    const link = buildOfferCandidatePreviewLink({
+      ...scope,
+      telegramActor: { telegramUserId: "12345", username: "sscalice" },
+    });
+    const token = new URL(link ?? "").pathname.split("/").at(-1) ?? "";
+    expect(verifyOfferCandidatePreviewToken(token)).toMatchObject({
+      ...scope,
+      telegramActor: { telegramUserId: "12345", username: "sscalice" },
+    });
+    expect(verifyOfferCandidatePreviewToken(token)).not.toHaveProperty("actorUserId");
+  });
+
   it("uses the configured auth origin when the public origin is absent", () => {
     vi.stubEnv("NEXT_PUBLIC_BASE_URL", "");
     expect(buildOfferCandidatePreviewLink(context)).toMatch(/^https:\/\/auth\.example\.test\//u);

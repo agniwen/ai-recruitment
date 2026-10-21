@@ -307,11 +307,13 @@ describe("self-service Telegram Offer SSC actions", () => {
 
   it("checks the actual Telegram sender rather than a supplied system user", async () => {
     await action("osr", `${callbackDraftId}:3`);
-    expect(mocks.users).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { telegramChatId: "12345" } }),
-    );
+    expect(mocks.users).not.toHaveBeenCalled();
+    expect(mocks.context).toHaveBeenCalledWith({
+      draftId,
+      telegramActor: { telegramUserId: "12345", username: "SscAlice" },
+    });
     expect(mocks.receive).toHaveBeenCalledWith({
-      actor: { id: "user-a", role: "ssc-reviewer" },
+      actor: { telegramUserId: "12345", username: "SscAlice" },
       draftId,
       interviewRecordId: "candidate-a",
       organizationId: "org-a",
@@ -352,14 +354,16 @@ describe("self-service Telegram Offer SSC actions", () => {
     ["changed username", [{ ...boundUser, telegramBoundUsername: "oldhandle" }]],
     ["banned", [{ ...boundUser, banned: true }]],
     ["ambiguous binding", [boundUser, { ...boundUser, id: "user-b" }]],
-  ])("denies %s identity before loading any Offer details", async (_name, users) => {
-    mocks.users.mockResolvedValue(users);
-    const post = await command("/offer", message(draftId));
-    expect(mocks.context).not.toHaveBeenCalled();
-    expect(mocks.receive).not.toHaveBeenCalled();
-    expect(JSON.stringify(post.mock.calls)).not.toContain("候选人甲");
-    expect(post).toHaveBeenCalledWith(expect.stringContaining("绑定"));
-  });
+  ])(
+    "ignores %s system identity when the TG is responsible for the Offer",
+    async (_name, users) => {
+      mocks.users.mockResolvedValue(users);
+      const post = await command("/offer", message(draftId));
+      expect(mocks.users).not.toHaveBeenCalled();
+      expect(mocks.context).toHaveBeenCalled();
+      expect(JSON.stringify(post.mock.calls)).toContain("候选人甲");
+    },
+  );
 
   it("rejects a group callback before any identity or business query", async () => {
     await action("osr", `${callbackDraftId}:3`, {
@@ -400,6 +404,61 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(buttonValue(post, "osx")).toBeTruthy();
   });
 
+  it("finishes directly from a broadcast second-confirmation card without a prior local prompt", async () => {
+    await beginCompletion();
+    threadState = null;
+    await action("osf", `${callbackDraftId}:3`);
+    expect(mocks.completion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: { telegramUserId: "12345", username: "SscAlice" },
+        internalApprovalConfirmed: true,
+        revision: 3,
+      }),
+    );
+  });
+
+  it("opens screenshot upload from a broadcast second-confirmation card", async () => {
+    await beginCompletion();
+    threadState = null;
+    const upload = await action("osu", `${callbackDraftId}:3`);
+    expect(mocks.uploadPrompt).toHaveBeenCalledOnce();
+    expect(upload.sentIds).toHaveLength(1);
+    await directMessage(upload.sentIds[0], {
+      raw: { photo: [{ file_id: "broadcast-photo", file_size: 4 }] },
+    });
+    expect(JSON.stringify(mocks.post.mock.calls)).toContain("审批截图已收到");
+    expect(mocks.completion).not.toHaveBeenCalled();
+  });
+
+  it("does not let an old broadcast card bypass the latest screenshot confirmation", async () => {
+    await beginCompletion();
+    threadState = null;
+    const upload = await action("osu", `${callbackDraftId}:3`);
+    const receipt = await directMessage(upload.sentIds[0], {
+      raw: { photo: [{ file_id: "broadcast-photo", file_size: 4 }] },
+    });
+    const stale = await action("osf", `${callbackDraftId}:3`);
+    expect(mocks.completion).not.toHaveBeenCalled();
+    expect(JSON.stringify(stale.mock.calls)).toContain("过期");
+    const screenshot = Buffer.from("ffd8ffd9", "hex");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json({
+            ok: true,
+            result: { file_path: "photos/proof.jpg", file_size: screenshot.length },
+          }),
+        )
+        .mockResolvedValueOnce(new Response(screenshot)),
+    );
+    await action("osf", buttonValue(receipt, "osf"), callbackMessage(receipt.sentIds[0]));
+    expect(mocks.completion).toHaveBeenCalledWith(
+      expect.objectContaining({ file: expect.any(File) }),
+    );
+  });
+
   it("completes without an optional image only after the prompt-bound final confirmation", async () => {
     const prompt = await beginCompletion();
     const post = await action(
@@ -409,7 +468,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     );
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(mocks.completion).toHaveBeenCalledWith({
-      actor: { id: "user-a", role: "ssc-reviewer" },
+      actor: { telegramUserId: "12345", username: "SscAlice" },
       draftId,
       internalApprovalConfirmed: true,
       interviewRecordId: "candidate-a",
@@ -568,7 +627,7 @@ describe("self-service Telegram Offer SSC actions", () => {
         vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31 * 60_000);
       }
       if (reason === "binding") {
-        mocks.users.mockResolvedValue([]);
+        mocks.context.mockRejectedValue(new OfferDraftError("SSC 负责关系或绑定已变更。", 403));
       }
       await action("osf", buttonValue(prompt, "osf"), callbackMessage(prompt.sentIds[0]));
       expect(mocks.completion).not.toHaveBeenCalled();
@@ -868,21 +927,13 @@ describe("self-service Telegram Offer SSC actions", () => {
       const context = await mocks.context.getMockImplementation()?.();
       const started = Promise.withResolvers<boolean>();
       const authorization = Promise.withResolvers<boolean>();
-      if (check === "binding") {
-        mocks.users.mockImplementationOnce(async () => {
-          started.resolve(true);
-          await authorization.promise;
-          return [boundUser];
-        });
-      } else {
-        mocks.context.mockImplementationOnce(async () => {
-          started.resolve(true);
-          await authorization.promise;
-          return check === "completed"
-            ? { ...context, draft: { ...context.draft, sscConfirmationStatus: "completed" } }
-            : context;
-        });
-      }
+      mocks.context.mockImplementationOnce(async () => {
+        started.resolve(true);
+        await authorization.promise;
+        return check === "completed"
+          ? { ...context, draft: { ...context.draft, sscConfirmationStatus: "completed" } }
+          : context;
+      });
       const screenshot = Buffer.from("ffd8ffd9", "hex");
       vi.stubGlobal(
         "fetch",
