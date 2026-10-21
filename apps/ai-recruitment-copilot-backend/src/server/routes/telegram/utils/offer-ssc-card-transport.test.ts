@@ -256,6 +256,33 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     );
   });
 
+  it("uses the complete-copy fallback before a punctuation-dense GFM autolink can truncate the Offer", async () => {
+    const feedback = `https://example.test/${"_".repeat(1400)}a`;
+    const info = offerConfirmationDetailsSchema.parse({ interviewFeedback: feedback });
+    const payload = await editedCard(
+      "pending",
+      {
+        baseSalary: 15_000,
+        confirmationInfo: info,
+        currency: "CNY",
+        interviewRecordId: "candidate-autolink-long",
+      },
+      { detailUrl: "https://ats.example.test/offer-candidate/signed-autolink-long" },
+    );
+    expect(payload.text).toContain("信息较长");
+    expect(payload.text).not.toContain("https://example");
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({
+        text: "复制完整 Offer 信息",
+        url: "https://ats.example.test/offer-candidate/signed-autolink-long#offer-confirmation-info",
+      }),
+    );
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({ text: "接收确认" }),
+    );
+  });
+
   it.each([
     ["pending", "接收确认", "osr"],
     ["confirming", "完成确认", "osc"],

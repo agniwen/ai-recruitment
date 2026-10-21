@@ -88,9 +88,10 @@ function offerCopySections(
       ? "完整 Offer 信息如下，可点击下方按钮复制全文。"
       : "完整 Offer 信息如下，可选择正文复制。",
   );
-  // The Telegram transport can escape every plain-text character in MarkdownV2.
+  // GFM autolinks duplicate URL text as a label and an href; either copy may
+  // double again when Telegram escapes MarkdownV2 punctuation or URL delimiters.
   // Reserve separators and the explanatory line before the adapter's 4096-character limit.
-  const budget = (header.length + text.length) * 2 + 256;
+  const budget = (header.length + text.length) * 4 + 256;
   if (budget > 4096) {
     return [
       CardText(
