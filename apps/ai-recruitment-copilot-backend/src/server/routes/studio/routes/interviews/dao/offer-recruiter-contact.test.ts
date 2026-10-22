@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as CandidateStageNotification from "../utils/candidate-stage-notification";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
   interviewAuditLog,
   member,
+  organization,
   studioInterview,
   studioOfferDraft,
   user,
@@ -34,7 +36,10 @@ vi.mock("@arc/ai-recruitment-copilot-backend/server/middlewares/permission", () 
   requirePermission: () => (_c: unknown, next: () => Promise<void>) => next(),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({ deleteObject: vi.fn() }));
-vi.mock("../utils/candidate-stage-notification", () => ({ notifyCandidateStageChange: vi.fn() }));
+vi.mock("../utils/candidate-stage-notification", async (importOriginal) => ({
+  ...(await importOriginal<typeof CandidateStageNotification>()),
+  notifyCandidateStageChange: vi.fn(),
+}));
 vi.mock("@arc/ai-recruitment-copilot-backend/server/cache-tags", () => ({
   invalidateStudioInterviewCaches: vi.fn(),
   safeUpdateTag: vi.fn(),
@@ -68,6 +73,8 @@ async function stored(id: string) {
   return rows[0];
 }
 beforeEach(async () => {
+  vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://ats.example.test/");
+  vi.stubEnv("BETTER_AUTH_URL", "https://auth.example.test/");
   notifications.enqueue.mockReset().mockImplementation(() => Promise.resolve());
   await db.delete(interviewAuditLog).where(eq(interviewAuditLog.organizationId, ORG));
   await db.delete(studioOfferDraft).where(eq(studioOfferDraft.organizationId, ORG));
@@ -75,6 +82,10 @@ beforeEach(async () => {
     .update(studioInterview)
     .set({ createdBy: FIRST_SSC, outcome: "in_pipeline", pipelineStage: "offer" })
     .where(eq(studioInterview.id, CANDIDATE));
+  await db
+    .update(organization)
+    .set({ slug: "recruiter-candidate-links" })
+    .where(eq(organization.id, ORG));
   await db
     .update(user)
     .set({
@@ -85,8 +96,50 @@ beforeEach(async () => {
     })
     .where(eq(user.id, FIRST_SSC));
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("recruiter contact gate for new Offer versions", () => {
+  it.each([
+    {
+      appBase: "https://ats.example.test/",
+      authBase: "https://auth.example.test/",
+      expected:
+        "https://ats.example.test/w/recruiter-candidate-links/studio/resumes/test_offer_ssc_candidate",
+    },
+    {
+      appBase: "  ",
+      authBase: " https://auth.example.test/ ",
+      expected:
+        "https://auth.example.test/w/recruiter-candidate-links/studio/resumes/test_offer_ssc_candidate",
+    },
+    { appBase: "", authBase: "", expected: null },
+  ])(
+    "keeps the candidate system link in pending and completed contexts: %j",
+    async ({ appBase, authBase, expected }) => {
+      vi.stubEnv("NEXT_PUBLIC_BASE_URL", appBase);
+      vi.stubEnv("BETTER_AUTH_URL", authBase);
+      const draft = await create();
+      const { loadOfferRecruiterContactContext, loadTelegramOfferRecruiterContactContext } =
+        await contactModule();
+      const pending = await loadOfferRecruiterContactContext({
+        ...locator,
+        actorUserId: FIRST_SSC,
+        draftId: draft.id,
+      });
+      expect(pending).toMatchObject({ candidateDetailUrl: expected, status: "pending" });
+      expect(
+        await loadTelegramOfferRecruiterContactContext({
+          draftId: draft.id,
+          telegramActor: { telegramUserId: "123456789", username: "recruiter_a" },
+        }),
+      ).toMatchObject({ candidateDetailUrl: expected, status: "pending" });
+      expect(await submit(draft)).toMatchObject({
+        candidateDetailUrl: expected,
+        status: "completed",
+      });
+    },
+  );
+
   it("creates a pending recruiter gate and queues only the uploader notice", async () => {
     const draft = await create();
     expect(await stored(draft.id)).toMatchObject({

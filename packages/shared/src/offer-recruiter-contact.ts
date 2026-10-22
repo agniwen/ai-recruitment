@@ -12,6 +12,7 @@ export interface OfferRecruiterContactState {
   version: number;
   position: string;
   candidateName: string;
+  candidateDetailUrl: string | null;
   status: "pending" | "completed" | null;
   candidatePrivateTelegram: string | null;
   recruiterName: string | null;
