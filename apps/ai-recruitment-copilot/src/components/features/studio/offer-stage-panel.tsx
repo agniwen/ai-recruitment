@@ -151,7 +151,7 @@ export function OfferStagePanel({
         </div>
         <div className="flex w-full items-center justify-between gap-3 @2xl:ml-auto @2xl:w-auto @2xl:justify-end">
           <p className="text-left text-destructive text-xs @2xl:text-right">
-            新版 Offer 须由 SSC 接收并完成确认后，方可发送或标记入职。
+            新版 Offer 先由招聘人员确认私人 TG，再由 SSC 接收并完成确认，方可发送或标记入职。
           </p>
           {disabled || !canCreate ? null : (
             <Button onClick={() => setCreateOpen(true)} size="sm">

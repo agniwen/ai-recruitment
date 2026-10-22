@@ -12,6 +12,7 @@ import { OfferCard } from "./offer-stage-cards";
 
 const mocks = vi.hoisted(() => ({
   completeOfferSscConfirmation: vi.fn(),
+  getOfferRecruiterContact: vi.fn(),
   getOfferSscTelegramLink: vi.fn(),
   patchOfferDraft: vi.fn(),
   patchOfferDraftWithAttachment: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "demo" }));
 vi.mock("@/lib/client/api", () => ({
   completeOfferSscConfirmation: mocks.completeOfferSscConfirmation,
+  getOfferRecruiterContact: mocks.getOfferRecruiterContact,
   getOfferSscTelegramLink: mocks.getOfferSscTelegramLink,
   offerApprovalAttachmentUrl: (_slug: string, _candidateId: string, draftId: string) =>
     `/offer-attachments/${draftId}`,
@@ -36,6 +38,7 @@ const roots: ReturnType<typeof createRoot>[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getOfferSscTelegramLink.mockResolvedValue({ url: null });
+  mocks.getOfferRecruiterContact.mockResolvedValue({ canConfirm: false, status: "pending" });
   vi.stubGlobal(
     "matchMedia",
     vi.fn(() => ({
@@ -208,6 +211,24 @@ async function flushMutation() {
 }
 
 describe("OfferCard SSC confirmation", () => {
+  it("withholds SSC actions and Telegram entry until the recruiter confirms the private TG", async () => {
+    mocks.getOfferSscTelegramLink.mockResolvedValue({
+      url: "https://t.me/recruiting_bot?start=offer_offer-1",
+    });
+    const { host } = renderCard("image/png", "ssc.png", false, "CNY", {
+      canConfirm: true,
+      canReceive: true,
+      disabled: false,
+      draft: { recruiterConfirmationStatus: "pending", sscConfirmationStatus: "pending" },
+    });
+    await flushMutation();
+    expect(host.textContent).toContain("待招聘人员确认私人 TG");
+    expect(findButton(host, "SSC接收确认")).toBeUndefined();
+    expect(findButton(host, "SSC完成确认")).toBeUndefined();
+    expect(host.textContent).not.toContain("在 Telegram 中确认");
+    expect(mocks.getOfferSscTelegramLink).not.toHaveBeenCalled();
+  });
+
   it.each([
     { canReceive: true, status: "completed" },
     { canReceive: false, status: "pending" },

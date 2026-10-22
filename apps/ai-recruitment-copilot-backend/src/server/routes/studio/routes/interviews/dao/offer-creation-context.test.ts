@@ -50,6 +50,7 @@ beforeAll(async () => {
     CREATE TABLE job_description (id text, organization_id text, department_id text, hiring_unit_id text, creation_source text, service_unit text, job_level text, work_location text);
     CREATE TABLE department (id text, organization_id text, hiring_unit_id text, name text);
     CREATE TABLE hiring_unit (id text, organization_id text, name text);
+    CREATE TABLE studio_offer_draft (id text, interview_record_id text, organization_id text, version integer, confirmation_info jsonb);
   `);
 });
 afterAll(async () => {
@@ -71,7 +72,7 @@ beforeEach(async () => {
     },
   ]);
   await client.exec(`
-    TRUNCATE studio_interview, job_description, department, hiring_unit;
+    TRUNCATE studio_interview, job_description, department, hiring_unit, studio_offer_draft;
     INSERT INTO studio_interview VALUES ('candidate-a', 'org-a', '正确姓名', '{"name":"简历旧姓名","gender":"女"}', 'resume.pdf', 'private/resume', 'job-a');
     INSERT INTO hiring_unit VALUES ('job-unit', 'org-a', '岗位编制组织'), ('department-unit', 'org-a', '部门所属组织');
     INSERT INTO department VALUES ('department-a', 'org-a', 'department-unit', '研发部');
@@ -80,6 +81,17 @@ beforeEach(async () => {
 });
 
 describe("read-only Offer creation context", () => {
+  it("prefills the latest version's private TG within the current workspace", async () => {
+    await client.exec(`
+      INSERT INTO studio_offer_draft VALUES
+      ('previous-a', 'candidate-a', 'org-a', 1, '{"candidatePrivateTelegram":"@previous_user"}'),
+      ('latest-a', 'candidate-a', 'org-a', 2, '{"candidatePrivateTelegram":"@latest_user"}'),
+      ('foreign-a', 'candidate-a', 'org-b', 3, '{"candidatePrivateTelegram":"@foreign_user"}');
+    `);
+    const context = await loadOfferCreationContext(input);
+    expect(context?.defaults.candidatePrivateTelegram).toBe("@latest_user");
+  });
+
   it("loads canonical candidate and job defaults plus explicit interview options without changing records", async () => {
     const before = await client.query("SELECT * FROM studio_interview");
     const context = await loadOfferCreationContext(input);
@@ -87,13 +99,14 @@ describe("read-only Offer creation context", () => {
       defaults: {
         candidateCode: null,
         candidateName: "正确姓名",
+        candidatePrivateTelegram: null,
         departmentName: "研发部",
         directManager: null,
         gender: "女",
         hiringUnitName: "岗位编制组织",
         interviewFeedback: null,
         interviewRoundId: null,
-        jobLevel: "P6",
+        jobLevel: null,
         jobType: null,
         mainInterviewerName: null,
         managementSequence: null,
@@ -101,7 +114,7 @@ describe("read-only Offer creation context", () => {
         probationPeriod: null,
         probationSalary: null,
         serviceUnit: "服务单位",
-        workLocation: "上海",
+        workLocation: null,
         workMode: null,
       },
       interviewRounds: [

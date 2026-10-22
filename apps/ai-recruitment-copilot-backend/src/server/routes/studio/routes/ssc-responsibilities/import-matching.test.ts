@@ -17,6 +17,61 @@ const catalog = {
 };
 
 describe("SSC responsibility import matching", () => {
+  it("resolves a unique local department and includes both restrictions in duplicate identity", () => {
+    const scopedCatalog = {
+      ...catalog,
+      departments: [
+        { id: "department-a", name: "制作部" },
+        { id: "department-b", name: "创意部" },
+      ],
+    };
+    const rows = [
+      { ...row, departmentName: " 制作部 ", serviceUnit: " Sinema " },
+      { ...row, departmentName: "创意部", row: 3, serviceUnit: "Sinema" },
+      { ...row, departmentName: "制作部", row: 4, serviceUnit: "sinema" },
+    ];
+    const result = previewSscResponsibilityRows(rows, "ssc", scopedCatalog);
+    expect(result.map((entry) => entry.status)).toEqual(["new", "new", "existing"]);
+    expect(result[0].input).toMatchObject({ departmentId: "department-a", serviceUnit: "Sinema" });
+  });
+
+  it("does not silently broaden unknown or ambiguous department names", () => {
+    const scopedRow = { ...row, departmentName: "制作部", serviceUnit: "Sinema" };
+    const unknown = previewSscResponsibilityRows([scopedRow], "ssc", {
+      ...catalog,
+      departments: [],
+    });
+    expect(unknown[0]).toMatchObject({ error: expect.stringContaining("部门"), status: "invalid" });
+    const ambiguous = previewSscResponsibilityRows([scopedRow], "ssc", {
+      ...catalog,
+      departments: [
+        { id: "a", name: "制作部" },
+        { id: "b", name: "制作部" },
+      ],
+    });
+    expect(ambiguous[0]).toMatchObject({
+      error: expect.stringContaining("同名"),
+      status: "invalid",
+    });
+  });
+
+  it("distinguishes imported restrictions from existing broad relationships", () => {
+    const existing = {
+      ...row,
+      departmentId: null,
+      resumeSourceId: "source-a",
+      serviceUnit: null,
+      workspaceRole: "ssc",
+    };
+    const result = previewSscResponsibilityRows([{ ...row, serviceUnit: "Sinema" }], "ssc", {
+      ...catalog,
+      existing: [existing],
+    });
+    expect(result[0]).toMatchObject({
+      input: { departmentId: null, serviceUnit: "Sinema" },
+      status: "new",
+    });
+  });
   it("matches a unique workspace source and normalizes email", () => {
     expect(previewSscResponsibilityRows([row], "ssc", catalog)).toMatchObject([
       {

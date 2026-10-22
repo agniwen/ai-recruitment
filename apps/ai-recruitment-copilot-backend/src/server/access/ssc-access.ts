@@ -13,6 +13,7 @@ import {
   user,
 } from "@arc/db-schema/schema";
 import { verifiedSscTelegramGrant } from "./ssc-telegram-grant";
+import { buildSscResponsibilityJobScopeCondition } from "../routes/studio/routes/ssc-responsibilities/job-scope";
 
 export interface SscAccessActor {
   organizationId: string;
@@ -84,6 +85,7 @@ export function buildSscCandidateVisibilityCondition(actor: SscAccessActor) {
             eq(job.organizationId, source.organizationId),
             eq(job.resumeSourceId, source.id),
             eq(job.id, studioInterview.jobDescriptionId),
+            buildSscResponsibilityJobScopeCondition(responsibility, job),
           ),
         )
         .where(

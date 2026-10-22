@@ -11,12 +11,17 @@ import {
   sscResponsibility,
   sscTelegramIdentity,
   studioInterview,
+  studioOfferDraft,
   studioOfferSscNotificationOutbox,
   telegramRecipientBinding,
   user,
 } from "@arc/db-schema/schema";
-import { createOfferDraft } from "../studio/routes/interviews/dao/offer-drafts";
-import { dispatchOfferSscNotifications } from "../studio/routes/interviews/dao/offer-ssc-notification-outbox";
+import { submitOfferRecruiterContact } from "../studio/routes/interviews/dao/offer-recruiter-contact";
+import {
+  dispatchOfferSscNotifications,
+  enqueueOfferSscNotification,
+} from "../studio/routes/interviews/dao/offer-ssc-notification-outbox";
+import { createOfferWithRecruiterFixture } from "../../../test-utils/offer-notification-fixture";
 import type * as TelegramBot from "./utils/bot";
 
 const transport = vi.hoisted(() => ({ send: vi.fn() }));
@@ -93,11 +98,26 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       await db.delete(telegramRecipientBinding).where(eq(telegramRecipientBinding.chatId, chatId));
     });
 
-    async function dispatchNewOffer() {
-      const created = await createOfferDraft({
-        input: { baseSalary: 100, position: "Notification-only Offer" },
-        interviewRecordId: candidateId,
-        organizationId: orgId,
+    async function dispatchLegacyOffer() {
+      const created = { id: randomUUID() };
+      await db.transaction(async (tx) => {
+        await tx.insert(studioOfferDraft).values({
+          baseSalary: 100,
+          id: created.id,
+          interviewRecordId: candidateId,
+          organizationId: orgId,
+          position: "Legacy notification-only Offer",
+          recruiterConfirmationStatus: null,
+          sscConfirmationStatus: "pending",
+          version: 1,
+        });
+        await enqueueOfferSscNotification(tx, {
+          draftId: created.id,
+          event: "pending",
+          interviewRecordId: candidateId,
+          organizationId: orgId,
+          revision: 1,
+        });
       });
       expect(await dispatchOfferSscNotifications()).toBe(1);
       expect(transport.send).toHaveBeenCalledTimes(1);
@@ -121,8 +141,8 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       expect(transport.send).toHaveBeenCalledTimes(1);
     }
 
-    it("sends without any system account or role and does not create an approval identity", async () => {
-      await dispatchNewOffer();
+    it("sends a legacy Offer without any system account or role and does not create an approval identity", async () => {
+      await dispatchLegacyOffer();
       expect(await db.select().from(member).where(eq(member.organizationId, orgId))).toEqual([]);
       expect(
         await db.select().from(sscTelegramIdentity).where(eq(sscTelegramIdentity.chatId, chatId)),
@@ -149,11 +169,57 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
           userId: id,
         })),
       );
-      await dispatchNewOffer();
+      await dispatchLegacyOffer();
       expect(await db.select().from(user).where(eq(user.telegramChatId, chatId))).toHaveLength(2);
       expect(
         await db.select().from(sscTelegramIdentity).where(eq(sscTelegramIdentity.chatId, chatId)),
       ).toEqual([]);
+    });
+
+    it("notifies the uploader before delivering a new Offer to an SSC without a system account", async () => {
+      const { draft, recruiterChatId, recruiterId, revision } =
+        await createOfferWithRecruiterFixture({
+          input: { baseSalary: 100, position: "New gated Offer" },
+          interviewRecordId: candidateId,
+          organizationId: orgId,
+          userIds,
+        });
+      expect(draft.recruiterConfirmationStatus).toBe("pending");
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(transport.send).toHaveBeenCalledOnce();
+      expect(transport.send.mock.calls[0][0]).toBe(recruiterChatId);
+      const recruiterCard = JSON.stringify(transport.send.mock.calls[0][1]);
+      expect(recruiterCard).toContain('"id":"orc"');
+      expect(recruiterCard).not.toContain('"id":"osr"');
+      const before = await db
+        .select()
+        .from(studioOfferSscNotificationOutbox)
+        .where(eq(studioOfferSscNotificationOutbox.draftId, draft.id));
+      expect(before.map((job) => job.event)).toEqual(["recruiter"]);
+      await submitOfferRecruiterContact({
+        actorUserId: recruiterId,
+        candidatePrivateTelegram: "@CandidatePrivate",
+        draftId: draft.id,
+        interviewRecordId: candidateId,
+        organizationId: orgId,
+        revision,
+        source: "system",
+      });
+      transport.send.mockClear();
+      expect(await dispatchOfferSscNotifications()).toBe(1);
+      expect(transport.send).toHaveBeenCalledOnce();
+      expect(transport.send.mock.calls[0][0]).toBe(chatId);
+      const sscCard = JSON.stringify(transport.send.mock.calls[0][1]);
+      expect(sscCard).toContain('"id":"osr"');
+      expect(sscCard).toContain("@CandidatePrivate");
+      expect(await db.select().from(member).where(eq(member.organizationId, orgId))).toMatchObject([
+        { userId: recruiterId },
+      ]);
+      expect(
+        await db.select().from(sscTelegramIdentity).where(eq(sscTelegramIdentity.chatId, chatId)),
+      ).toEqual([]);
+      expect(await dispatchOfferSscNotifications()).toBe(0);
+      expect(transport.send).toHaveBeenCalledOnce();
     });
   },
 );

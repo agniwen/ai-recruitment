@@ -19,6 +19,7 @@ import type {
   SscResponsibilitySource,
 } from "../ssc-responsibilities/ssc-responsibilities-grid";
 import { invalidateSscResponsibilityQueries } from "../ssc-responsibilities/ssc-responsibility-queries";
+import type { SscResponsibilityScope } from "../ssc-responsibilities/ssc-scope-fields";
 import { ResumeSourceSscAddDialog } from "./resume-source-ssc-add-dialog";
 
 interface SourceSscManagementProps {
@@ -43,6 +44,7 @@ function SourceSscManagement({ target, onOpenChange, onSaved }: SourceSscManagem
   const [adding, setAdding] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<SscResponsibilityRecord | null>(null);
+  const [preregisterScope, setPreregisterScope] = useState<SscResponsibilityScope | undefined>();
   const [deleting, setDeleting] = useState<SscResponsibilityRecord | null>(null);
   const list = useQuery({
     queryFn: () =>
@@ -84,6 +86,12 @@ function SourceSscManagement({ target, onOpenChange, onSaved }: SourceSscManagem
   });
   const columns = [
     textColumn<SscResponsibilityRecord>({
+      fallback: "不限",
+      key: "serviceUnit",
+      title: "服务单位",
+    }),
+    textColumn<SscResponsibilityRecord>({ fallback: "不限", key: "departmentName", title: "部门" }),
+    textColumn<SscResponsibilityRecord>({
       fallback: "待补充",
       key: "sscName",
       primary: true,
@@ -104,6 +112,7 @@ function SourceSscManagement({ target, onOpenChange, onSaved }: SourceSscManagem
         {
           label: "编辑",
           onClick: (row) => {
+            setPreregisterScope(undefined);
             setEditing(row);
             setEditorOpen(true);
           },
@@ -118,7 +127,7 @@ function SourceSscManagement({ target, onOpenChange, onSaved }: SourceSscManagem
         open
         onOpenChange={onOpenChange}
         title={`管理 部门/中心（来源）“${target.name}”的 SSC`}
-        description="维护当前中心/部门的 SSC 人员。SSC 在新 Offer 待接收后，才可查看所负责范围的相关候选人。"
+        description="按候选人所选岗位匹配 SSC，细分范围优先，未细分时使用通用范围。SSC 在新 Offer 待接收后才可查看所负责范围的相关候选人。"
         size="2xl"
         bodyClassName="px-6 py-5"
       >
@@ -159,7 +168,8 @@ function SourceSscManagement({ target, onOpenChange, onSaved }: SourceSscManagem
             setPage(1);
             await refresh();
           }}
-          onPreregister={() => {
+          onPreregister={(scope) => {
+            setPreregisterScope(scope);
             setAdding(false);
             setEditing(null);
             setEditorOpen(true);
@@ -171,6 +181,7 @@ function SourceSscManagement({ target, onOpenChange, onSaved }: SourceSscManagem
           open
           record={editing}
           fixedSource={target}
+          initialScope={preregisterScope}
           onOpenChange={setEditorOpen}
           onSaved={() => {
             setPage(1);

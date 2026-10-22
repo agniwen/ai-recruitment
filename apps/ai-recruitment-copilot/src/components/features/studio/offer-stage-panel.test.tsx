@@ -12,6 +12,7 @@ import { OfferStagePanel } from "./offer-stage-panel";
 const mocks = vi.hoisted(() => ({
   fetchStudioResume: vi.fn(),
   getCurrentOfferSscState: vi.fn(),
+  getOfferRecruiterContact: vi.fn(),
   getOfferSscTelegramLink: vi.fn(),
   listOfferDrafts: vi.fn(),
   receiveOfferSscConfirmation: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "demo
 vi.mock("@/lib/client/api", () => ({
   fetchStudioResume: mocks.fetchStudioResume,
   getCurrentOfferSscState: mocks.getCurrentOfferSscState,
+  getOfferRecruiterContact: mocks.getOfferRecruiterContact,
   getOfferSscTelegramLink: mocks.getOfferSscTelegramLink,
   listOfferDrafts: mocks.listOfferDrafts,
   receiveOfferSscConfirmation: mocks.receiveOfferSscConfirmation,
@@ -33,6 +35,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.fetchStudioResume.mockResolvedValue(null);
   mocks.getOfferSscTelegramLink.mockResolvedValue({ url: null });
+  mocks.getOfferRecruiterContact.mockResolvedValue({ canConfirm: false, status: "pending" });
   vi.stubGlobal(
     "matchMedia",
     vi.fn(() => ({
@@ -146,6 +149,45 @@ async function renderPanel(
 }
 
 describe("OfferStagePanel SSC progress", () => {
+  it("shows recruiter contact confirmation as the current step before SSC receives a new Offer", async () => {
+    const host = await renderPanel(
+      [makeDraft({ recruiterConfirmationStatus: "pending" })],
+      makeState({ recruiterConfirmationStatus: "pending" }),
+      true,
+    );
+    const progress = host.querySelector('[aria-label="SSC确认进度"]');
+    if (!progress) {
+      throw new Error("Missing Offer confirmation progress");
+    }
+    expect(progress?.querySelectorAll("li")).toHaveLength(4);
+    expect(
+      [...progress.querySelectorAll("li p:first-child")].map((item) => item.textContent),
+    ).toEqual(["ODC生成Offer", "招聘人员确认私人 TG", "SSC接收确认", "SSC完成确认"]);
+    expect(progress?.querySelector('[aria-current="step"]')?.textContent).toContain(
+      "招聘人员确认私人 TG",
+    );
+    expect(progress?.textContent).toContain("确认后自动通知 SSC");
+  });
+
+  it.each([
+    ["pending", "SSC接收确认"],
+    ["confirming", "SSC接收确认"],
+    ["completed", "SSC完成确认"],
+  ] as const)(
+    "keeps recruiter-confirmed %s Offers past the creation step",
+    async (status, label) => {
+      const host = await renderPanel(
+        [makeDraft({ recruiterConfirmationStatus: "completed", sscConfirmationStatus: status })],
+        makeState({ recruiterConfirmationStatus: "completed", sscConfirmationStatus: status }),
+      );
+      const progress = host.querySelector('[aria-label="SSC确认进度"]');
+      expect(progress?.querySelector('[aria-current="step"]')?.textContent).toContain(label);
+      expect(progress?.querySelector('[aria-current="step"]')?.textContent).not.toContain(
+        "ODC生成Offer",
+      );
+    },
+  );
+
   it.each([
     ["pending", "Offer新增"],
     ["confirming", "确认中"],

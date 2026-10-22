@@ -49,6 +49,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { HumanInterviewStagePanel } from "./human-interview-stage-panel";
 import { InterviewReportDetailsDisclosure } from "./interview-report-details-disclosure";
 import { OfferStagePanel } from "./offer-stage-panel";
+import { OfferRecruiterContactForUploader } from "./offer-recruiter-contact";
 import { CandidateTimeline } from "./candidate-timeline";
 import {
   DetailBodySkeleton,
@@ -759,6 +760,12 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
         <AnimatedHeight clip={!showTimelineRail}>
           <TabsContent value="overview">
             <div className="space-y-8">
+              {mode === "resume" &&
+              canUseManagementActions &&
+              !canReadOffer &&
+              record.pipelineStage === "offer" ? (
+                <OfferRecruiterContactForUploader candidateId={record.id} />
+              ) : null}
               {/* 简历模式：复用 ResumeOverviewPanel —— 与「发起 AI 面试」
               弹窗的概览 tab 同一布局，后续要扩字段也只改一处。
               Resume mode: defer to ResumeOverviewPanel so the

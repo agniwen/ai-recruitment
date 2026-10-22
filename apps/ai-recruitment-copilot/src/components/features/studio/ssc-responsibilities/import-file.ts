@@ -2,6 +2,8 @@ export interface SscResponsibilityImportRow {
   row: number;
   centerName: string;
   demandOwner: string;
+  serviceUnit: string;
+  departmentName: string;
   sscName: string;
   telegram: string;
   email: string;
@@ -11,8 +13,10 @@ export interface SscResponsibilityImportRow {
 const HEADERS = {
   centerName: ["中心/部门", "部门/中心", "中心/部门（来源）", "部门/中心（来源）"],
   demandOwner: ["需求对接负责人", "需求负责人", "负责人"],
+  departmentName: ["部门", "所属部门", "入职部门"],
   email: ["SSC邮箱", "邮箱", "Email"],
   notes: ["备注"],
+  serviceUnit: ["服务单位", "入职服务单位"],
   sscName: ["SSC花名", "SSC姓名", "SSC", "姓名/花名"],
   telegram: ["SSCTG", "TG", "Telegram"],
 };
@@ -41,9 +45,11 @@ export function parseSscResponsibilityRows(rows: string[][]): SscResponsibilityI
       {
         centerName: value("centerName"),
         demandOwner: value("demandOwner"),
+        departmentName: value("departmentName"),
         email: value("email"),
         notes: value("notes"),
         row: index + 2,
+        serviceUnit: value("serviceUnit"),
         sscName: value("sscName"),
         telegram: value("telegram"),
       },

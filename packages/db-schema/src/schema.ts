@@ -824,6 +824,7 @@ export const sscResponsibility = pgTable(
     centerName: text("center_name").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     demandOwner: text("demand_owner").notNull().default(""),
+    departmentId: text("department_id"),
     email: text("email").notNull(),
     id: text("id").primaryKey(),
     notes: text("notes").notNull().default(""),
@@ -831,6 +832,7 @@ export const sscResponsibility = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     resumeSourceId: text("resume_source_id"),
+    serviceUnit: text("service_unit"),
     sscName: text("ssc_name").notNull(),
     telegram: text("telegram").notNull().default(""),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -849,6 +851,8 @@ export const sscResponsibility = pgTable(
         WHEN btrim(${table.sscName}) <> '' THEN 'name:' || lower(btrim(${table.sscName}))
         ELSE 'unassigned'
       END)`,
+      sql`lower(btrim(coalesce(${table.serviceUnit}, '')))`,
+      sql`coalesce(${table.departmentId}, '')`,
     ),
     index("ssc_responsibility_org_center_idx").on(table.organizationId, table.centerName),
     index("ssc_responsibility_org_source_idx").on(table.organizationId, table.resumeSourceId),
@@ -862,6 +866,12 @@ export const sscResponsibility = pgTable(
       columns: [table.organizationId, table.resumeSourceId],
       foreignColumns: [resumeSource.organizationId, resumeSource.id],
       name: "ssc_responsibility_source_workspace_fk",
+    }).onDelete("no action"),
+    foreignKey({
+      columns: [table.organizationId, table.departmentId],
+      // oxlint-disable-next-line no-use-before-define -- drizzle-orm resolves refs lazily at runtime
+      foreignColumns: [department.organizationId, department.id],
+      name: "ssc_responsibility_department_workspace_fk",
     }).onDelete("no action"),
     foreignKey({
       columns: [table.organizationId, table.workspaceRole],
@@ -1925,6 +1935,15 @@ export const studioOfferDraft = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     position: text("position").notNull(),
+    // NULL leaves historical Offers on their original SSC workflow.
+    recruiterConfirmationStatus: text("recruiter_confirmation_status").$type<
+      "pending" | "completed"
+    >(),
+    recruiterConfirmedAt: timestamp("recruiter_confirmed_at", { withTimezone: true }),
+    recruiterConfirmedBy: text("recruiter_confirmed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    recruiterConfirmedSource: text("recruiter_confirmed_source").$type<"system" | "telegram">(),
     responseAt: timestamp("response_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
@@ -1960,6 +1979,14 @@ export const studioOfferDraft = pgTable(
       sql`${table.sscConfirmationStatus} IS NULL OR ${table.sscConfirmationStatus} IN ('pending', 'confirming', 'completed')`,
     ),
     check("studio_offer_draft_ssc_revision_check", sql`${table.sscRevision} > 0`),
+    check(
+      "studio_offer_draft_recruiter_status_check",
+      sql`${table.recruiterConfirmationStatus} IS NULL OR ${table.recruiterConfirmationStatus} IN ('pending', 'completed')`,
+    ),
+    check(
+      "studio_offer_draft_recruiter_source_check",
+      sql`${table.recruiterConfirmedSource} IS NULL OR ${table.recruiterConfirmedSource} IN ('system', 'telegram')`,
+    ),
     index("studio_offer_draft_record_idx").on(table.interviewRecordId),
     index("studio_offer_draft_org_idx").on(table.organizationId),
     index("studio_offer_draft_status_idx").on(table.status),
@@ -1986,7 +2013,7 @@ export const studioOfferSscNotificationOutbox = pgTable(
     draftId: text("draft_id")
       .notNull()
       .references(() => studioOfferDraft.id, { onDelete: "cascade" }),
-    event: text("event").$type<"pending" | "received" | "completed">().notNull(),
+    event: text("event").$type<"recruiter" | "pending" | "received" | "completed">().notNull(),
     id: text("id").primaryKey(),
     interviewRecordId: text("interview_record_id")
       .notNull()
@@ -2017,7 +2044,7 @@ export const studioOfferSscNotificationOutbox = pgTable(
     index("offer_ssc_outbox_org_idx").on(table.organizationId),
     check(
       "offer_ssc_outbox_event_check",
-      sql`${table.event} IN ('pending', 'received', 'completed')`,
+      sql`${table.event} IN ('recruiter', 'pending', 'received', 'completed')`,
     ),
     check("offer_ssc_outbox_revision_check", sql`${table.revision} > 0`),
     check("offer_ssc_outbox_attempts_check", sql`${table.attempts} >= 0`),

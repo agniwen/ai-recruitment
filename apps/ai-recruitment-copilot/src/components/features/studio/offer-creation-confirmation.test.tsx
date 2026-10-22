@@ -161,6 +161,18 @@ function fill(id: string, value: string) {
   });
 }
 
+function expectEmptyInputWithTitleHint(id: string, text: string) {
+  const input = document.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`);
+  if (!input) {
+    throw new Error(`Missing input ${id}`);
+  }
+  expect(input.getAttribute("placeholder")).toBeNull();
+  expect(input.value).toBe("");
+  const hint = document.querySelector(`[id="${input.getAttribute("aria-describedby")}"]`);
+  expect(hint?.textContent).toBe(text);
+  expect(hint?.parentElement?.querySelector("label")?.htmlFor).toBe(id);
+}
+
 describe("saved Offer confirmation information", () => {
   function renderCard(draft = savedDraft()) {
     const host = document.createElement("div");
@@ -240,8 +252,29 @@ describe("saved Offer confirmation information", () => {
     },
   );
   it("retains stored information when editing terms and sends edits through the existing patch flow", async () => {
-    const { onSaved } = renderCard();
+    const draft = savedDraft();
+    draft.confirmationInfo = {
+      ...defaults,
+      ...draft.confirmationInfo,
+      gender: "未发现信息",
+      probationPeriod: "60天",
+    };
+    const { onSaved } = renderCard(draft);
     await click("编辑");
+    const gender = document.querySelector<HTMLSelectElement>("#offer-offer-saved-confirm-gender");
+    expect(gender?.value).toBe("未发现信息");
+    expect(gender?.selectedOptions[0].disabled).toBe(true);
+    const period = document.querySelector<HTMLSelectElement>(
+      "#offer-offer-saved-confirm-probationPeriod",
+    );
+    expect(period?.value).toBe("60天");
+    expect(period?.selectedOptions[0].disabled).toBe(true);
+    expect(
+      document.querySelector<HTMLInputElement>("#offer-offer-saved-confirm-jobLevel")?.value,
+    ).toBe("P6");
+    expect(
+      document.querySelector<HTMLInputElement>("#offer-offer-saved-confirm-workLocation")?.value,
+    ).toBe("上海");
     expect(
       (document.querySelector("#offer-offer-saved-confirm-candidateCode") as HTMLInputElement)
         .value,
@@ -266,7 +299,11 @@ describe("saved Offer confirmation information", () => {
         confirmationInfo: expect.objectContaining({
           candidateCode: "EMP-SAVED",
           directManager: "直属上级甲",
+          gender: "未发现信息",
           interviewFeedback: "已保存的面试评价",
+          jobLevel: "P6",
+          probationPeriod: "60天",
+          workLocation: "上海",
         }),
       }),
     );
@@ -379,14 +416,15 @@ describe("Offer creation confirmation", () => {
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
-  it("shows examples without pre-filling terms and creates with an optional business code", async () => {
+  it("shows hints beside field titles with empty inputs and creates with an optional business code", async () => {
     const context = creationContext();
     mocks.context.mockResolvedValueOnce({
       ...context,
-      defaults: { ...context.defaults, workLocation: null },
+      defaults: { ...context.defaults, gender: "未发现信息", workLocation: null },
     });
     const { onSaved } = renderDialog();
     await ready();
+    expect(document.querySelector<HTMLSelectElement>("#offer-confirm-gender")?.value).toBe("");
     const examples = {
       managementSequence: "个人",
       personnelType: "直属",
@@ -394,10 +432,15 @@ describe("Offer creation confirmation", () => {
       workMode: "远程",
     };
     for (const [field, example] of Object.entries(examples)) {
-      const input = document.querySelector<HTMLInputElement>(`#offer-confirm-${field}`);
-      expect(input?.placeholder).toBe(example);
-      expect(input?.value).toBe("");
+      expectEmptyInputWithTitleHint(`offer-confirm-${field}`, `例如：${example}`);
     }
+    for (const field of ["directManager", "jobType", "probationSalary", "probationPeriod"]) {
+      expectEmptyInputWithTitleHint(
+        `offer-confirm-${field}`,
+        field === "probationPeriod" ? "例如：2" : "待补充",
+      );
+    }
+    expect(document.querySelector<HTMLInputElement>("#offer-position")?.placeholder).toBe("");
     expect(document.querySelector('label[for="offer-confirm-candidateCode"]')?.textContent).toBe(
       "候选人编码（选填）",
     );
@@ -418,6 +461,8 @@ describe("Offer creation confirmation", () => {
       expect.objectContaining({
         confirmationInfo: expect.objectContaining({
           candidateCode: null,
+          gender: null,
+          jobLevel: null,
           managementSequence: null,
           personnelType: null,
           workLocation: null,
@@ -437,11 +482,27 @@ describe("Offer creation confirmation", () => {
     expect((document.querySelector("#offer-confirm-candidateName") as HTMLInputElement).value).toBe(
       "候选人甲",
     );
-    expect(document.querySelector<HTMLInputElement>("#offer-confirm-workLocation")?.value).toBe(
-      "上海",
-    );
+    expect(document.querySelector<HTMLInputElement>("#offer-confirm-workLocation")?.value).toBe("");
+    const gender = document.querySelector<HTMLSelectElement>("select#offer-confirm-gender");
+    expect(gender?.value).toBe("女");
+    expect(Array.from(gender?.options ?? [], (option) => option.value)).toEqual(["", "男", "女"]);
+    expectEmptyInputWithTitleHint("offer-confirm-jobLevel", "例如：P3");
+    fill("offer-confirm-gender", "男");
+    fill("offer-confirm-gender", "");
     expect(document.querySelector("#offer-confirm-probationSalary")).not.toBeNull();
     expect(document.querySelector("#offer-confirm-probationPeriod")).not.toBeNull();
+    const period = document.querySelector<HTMLSelectElement>(
+      "select#offer-confirm-probationPeriod",
+    );
+    expect(period?.value).toBe("");
+    expect([...(period?.options ?? [])].slice(1).map((option) => option.text)).toEqual(
+      Array.from({ length: 12 }, (_value, index) => String(index + 1)),
+    );
+    expect(document.querySelector('label[for="offer-confirm-probationPeriod"]')?.textContent).toBe(
+      "试用期期限（月）",
+    );
+    fill("offer-confirm-probationPeriod", "2个月");
+    fill("offer-confirm-probationPeriod", "");
     expect(document.body.textContent).toContain("转正薪资");
     expect(document.body.textContent).toContain("试用期期限");
     expect(document.body.textContent).not.toContain("年度奖金");
@@ -454,6 +515,9 @@ describe("Offer creation confirmation", () => {
       'pre[aria-label="Offer 确认内容"]',
     )?.textContent;
     expect(confirmationText).not.toContain("待 SSC 确认");
+    expect(confirmationText).toContain("建议职级：待补充");
+    expect(confirmationText).toContain("性别：待补充");
+    expect(confirmationText).toContain("试用期：待补充");
     expect(confirmationText?.split("\n").at(-1)).toBe("试用薪资：待补充");
     expect(document.body.textContent).not.toContain("offer审批已通过");
     expect(document.querySelector('input[type="file"]')).toBeNull();
@@ -470,6 +534,9 @@ describe("Offer creation confirmation", () => {
     fill("offer-confirm-probationPeriod", "2个月");
     fill("offer-expires", "2026-12-20");
     fill("offer-confirm-directManager", "确认直属上级");
+    fill("offer-confirm-gender", "男");
+    fill("offer-confirm-jobLevel", "P4");
+    fill("offer-confirm-workLocation", "杭州");
     await next();
     expect(document.querySelector("#offer-confirm-candidateCode")).toBeNull();
     expect(document.body.textContent).toContain("EMP-001");
@@ -477,6 +544,9 @@ describe("Offer creation confirmation", () => {
     expect(document.body.textContent).not.toContain("面试评价");
     expect(document.body.textContent).toContain("试用薪资：27K");
     expect(document.body.textContent).toContain("试用期：2个月");
+    expect(document.body.textContent).toContain("性别：男");
+    expect(document.body.textContent).toContain("建议职级：P4");
+    expect(document.body.textContent).toContain("办公地区：杭州");
     await click("返回修改");
     expect((document.querySelector("#offer-base") as HTMLInputElement).value).toBe("30000");
     expect((document.querySelector("#offer-confirm-candidateCode") as HTMLInputElement).value).toBe(
@@ -486,9 +556,14 @@ describe("Offer creation confirmation", () => {
       (document.querySelector("#offer-confirm-probationSalary") as HTMLInputElement).value,
     ).toBe("27000");
     expect(
-      (document.querySelector("#offer-confirm-probationPeriod") as HTMLInputElement).value,
+      (document.querySelector("#offer-confirm-probationPeriod") as HTMLSelectElement).value,
     ).toBe("2个月");
     expect((document.querySelector("#offer-expires") as HTMLInputElement).value).toBe("2026-12-20");
+    expect(document.querySelector<HTMLSelectElement>("#offer-confirm-gender")?.value).toBe("男");
+    expect(document.querySelector<HTMLInputElement>("#offer-confirm-jobLevel")?.value).toBe("P4");
+    expect(document.querySelector<HTMLInputElement>("#offer-confirm-workLocation")?.value).toBe(
+      "杭州",
+    );
     expect(mocks.create).not.toHaveBeenCalled();
     fill("offer-base", "32000");
     await next();
@@ -502,11 +577,14 @@ describe("Offer creation confirmation", () => {
         confirmationInfo: expect.objectContaining({
           candidateCode: "EMP-001",
           directManager: "确认直属上级",
+          gender: "男",
           interviewFeedback: null,
           interviewRoundId: null,
+          jobLevel: "P4",
           mainInterviewerName: null,
           probationPeriod: "2个月",
           probationSalary: 27_000,
+          workLocation: "杭州",
         }),
         expiresAt: "2026-12-20",
         position: "平台工程师",

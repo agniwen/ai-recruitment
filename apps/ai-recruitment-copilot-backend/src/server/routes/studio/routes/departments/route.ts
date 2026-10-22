@@ -4,7 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { department, hiringUnit } from "@arc/db-schema/schema";
+import { department, hiringUnit, sscResponsibility } from "@arc/db-schema/schema";
 import { departmentFormSchema, departmentUpdateSchema } from "@arc/shared/departments";
 import { factory, jsonValidatorError } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/middlewares/permission";
@@ -28,6 +28,22 @@ const departmentListQuerySchema = z.object({
   sortOrder: z.string().optional(),
   textFilters: listTextFiltersSchema("departments"),
 });
+
+function isSscDepartmentReferenceError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  if (
+    "code" in error &&
+    error.code === "23503" &&
+    (("constraint_name" in error &&
+      error.constraint_name === "ssc_responsibility_department_workspace_fk") ||
+      ("constraint" in error && error.constraint === "ssc_responsibility_department_workspace_fk"))
+  ) {
+    return true;
+  }
+  return "cause" in error && error.cause !== error && isSscDepartmentReferenceError(error.cause);
+}
 
 async function validateDepartmentHiringUnit({
   actorUserId,
@@ -197,14 +213,34 @@ export const departmentsRouter = factory
       return c.json({ error: "部门不存在。" }, 404);
     }
 
+    const [sscReference] = await db
+      .select({ id: sscResponsibility.id })
+      .from(sscResponsibility)
+      .where(
+        and(
+          eq(sscResponsibility.organizationId, activeOrg.id),
+          eq(sscResponsibility.departmentId, id),
+        ),
+      )
+      .limit(1);
+    if (sscReference) {
+      return c.json({ error: "该部门仍被 SSC 负责范围引用，请先调整 SSC 负责关系。" }, 409);
+    }
     const refs = await loadDepartmentReferenceCounts(id);
     if (refs.interviewerCount > 0 || refs.jobDescriptionCount > 0) {
       return c.json({ error: "该部门下仍有面试官或在招岗位，无法删除。", refs }, 400);
     }
 
-    await db
-      .delete(department)
-      .where(and(eq(department.id, id), eq(department.organizationId, activeOrg.id)));
+    try {
+      await db
+        .delete(department)
+        .where(and(eq(department.id, id), eq(department.organizationId, activeOrg.id)));
+    } catch (error) {
+      if (isSscDepartmentReferenceError(error)) {
+        return c.json({ error: "该部门仍被 SSC 负责范围引用，请先调整 SSC 负责关系。" }, 409);
+      }
+      throw error;
+    }
     safeUpdateTag(`departments:${activeOrg.id}`);
     return c.json({ success: true }, 200);
   })

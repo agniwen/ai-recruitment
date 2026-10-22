@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import {
+  department,
   member,
   organization,
   organizationRole,
@@ -43,12 +44,13 @@ function request(path: string, body: unknown) {
       method: "POST",
     });
 }
-async function preview(rows: (typeof blankRow)[], workspaceRole = "custom-ssc") {
+type ImportRow = typeof blankRow & { departmentName?: string; serviceUnit?: string };
+async function preview(rows: ImportRow[], workspaceRole = "custom-ssc") {
   const response = await request("preview", { rows, workspaceRole });
   expect(response.status).toBe(200);
   return response.json();
 }
-async function commit(rows: (typeof blankRow)[], workspaceRole = "custom-ssc", hash?: string) {
+async function commit(rows: ImportRow[], workspaceRole = "custom-ssc", hash?: string) {
   const prepared = hash ? { previewHash: hash } : await preview(rows, workspaceRole);
   return request("import", { previewHash: prepared.previewHash, rows, workspaceRole });
 }
@@ -57,6 +59,11 @@ function records() {
     .select()
     .from(sscResponsibility)
     .where(eq(sscResponsibility.organizationId, organizationId));
+}
+
+async function responseStatus(response: Promise<Response> | Response) {
+  const result = await response;
+  return result.status;
 }
 
 describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
@@ -85,6 +92,35 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
     afterEach(async () => {
       await db.delete(organization).where(eq(organization.id, organizationId));
       await db.delete(user).where(inArray(user.id, [actorId, ...extraUsers.splice(0)]));
+    });
+
+    it("persists resolved restrictions and includes scope changes in confirmation hash", async () => {
+      const departmentId = randomUUID();
+      await db.insert(department).values({ id: departmentId, name: "制作部", organizationId });
+      const rows = [{ ...blankRow, departmentName: " 制作部 ", serviceUnit: " Sinema " }];
+      const prepared = await preview(rows);
+      expect(prepared.rows[0]).toMatchObject({
+        departmentName: "制作部",
+        input: { departmentId, serviceUnit: "Sinema" },
+        status: "new",
+      });
+      expect(
+        await responseStatus(
+          commit([{ ...rows[0], serviceUnit: "Other" }], "custom-ssc", prepared.previewHash),
+        ),
+      ).toBe(409);
+      expect(await records()).toHaveLength(0);
+      expect(await responseStatus(commit(rows, "custom-ssc", prepared.previewHash))).toBe(200);
+      expect(await records()).toMatchObject([{ departmentId, serviceUnit: "Sinema" }]);
+    });
+
+    it("rejects a newly ambiguous department between import preview and commit", async () => {
+      await db.insert(department).values({ id: randomUUID(), name: "制作部", organizationId });
+      const rows = [{ ...blankRow, departmentName: "制作部" }];
+      const prepared = await preview(rows);
+      await db.insert(department).values({ id: randomUUID(), name: "制作部", organizationId });
+      expect(await responseStatus(commit(rows, "custom-ssc", prepared.previewHash))).toBe(409);
+      expect(await records()).toHaveLength(0);
     });
 
     it("previews without writing then imports matched and pending rows, skipping repeats after a fresh preview", async () => {

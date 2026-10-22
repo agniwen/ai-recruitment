@@ -18,6 +18,11 @@ import { rpcFetch } from "@/lib/client/api/rpc-fetch";
 import { rpc } from "@/lib/client/rpc";
 import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 import type { SscResponsibilitySource } from "../ssc-responsibilities/ssc-responsibilities-grid";
+import { SscScopeFields } from "../ssc-responsibilities/ssc-scope-fields";
+import type {
+  SscResponsibilityScope,
+  SscResponsibilityScopeOptions,
+} from "../ssc-responsibilities/ssc-scope-fields";
 
 interface SscCandidate {
   id: string;
@@ -39,20 +44,39 @@ export function ResumeSourceSscAddDialog({
   source: SscResponsibilitySource;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void | Promise<void>;
-  onPreregister: () => void;
+  onPreregister: (scope: SscResponsibilityScope) => void;
 }) {
   const slug = useWorkspaceSlug();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [scope, setScope] = useState<SscResponsibilityScope>({
+    departmentId: null,
+    serviceUnit: null,
+  });
+  const serviceUnit = scope.serviceUnit?.trim() || null;
+  const optionsQuery = useQuery({
+    queryFn: () =>
+      rpcFetch<SscResponsibilityScopeOptions>(
+        rpc.api.w[":slug"].studio["ssc-responsibilities"].options.$get({ param: { slug } }),
+        "加载服务单位与部门失败",
+      ),
+    queryKey: ["studio-ssc-responsibility-options", slug],
+    staleTime: 30_000,
+  });
+  const scopeUnavailable = optionsQuery.isPending || optionsQuery.isError;
   const candidatesQuery = useQuery({
     queryFn: () =>
       rpcFetch<{ candidates: SscCandidate[] }>(
         rpc.api.w[":slug"].studio["ssc-responsibilities"].candidates.$get({
           param: { slug },
-          query: { resumeSourceId: source.id },
+          query: {
+            departmentId: scope.departmentId ?? "",
+            resumeSourceId: source.id,
+            serviceUnit: serviceUnit ?? "",
+          },
         }),
         "加载 SSC 人员失败",
       ),
-    queryKey: ["studio-ssc-candidates", slug, source.id],
+    queryKey: ["studio-ssc-candidates", slug, source.id, serviceUnit, scope.departmentId],
   });
   const options = useMemo(
     () =>
@@ -76,7 +100,12 @@ export function ResumeSourceSscAddDialog({
     mutationFn: () =>
       rpcFetch(
         rpc.api.w[":slug"].studio["ssc-responsibilities"].assign.$post({
-          json: { candidateIds: selectedIds, resumeSourceId: source.id },
+          json: {
+            candidateIds: selectedIds,
+            departmentId: scope.departmentId,
+            resumeSourceId: source.id,
+            serviceUnit,
+          },
           param: { slug },
         }),
         "添加 SSC 失败",
@@ -92,6 +121,8 @@ export function ResumeSourceSscAddDialog({
     selectedIds.length > 0 &&
     !candidatesQuery.isPending &&
     !candidatesQuery.isError &&
+    !scopeUnavailable &&
+    selectedIds.every((id) => options.some((option) => option.value === id && !option.disabled)) &&
     !assignment.isPending;
   return (
     <Dialog
@@ -107,9 +138,31 @@ export function ResumeSourceSscAddDialog({
           <DialogTitle>添加 SSC</DialogTitle>
           <DialogDescription>
             为“{source.name}”选择 SSC
-            人员，可同时选择已注册成员和预录人员。已添加的人员无需重复选择。
+            人员，按候选人所选岗位匹配，细分范围优先，未细分时使用通用范围。同一人员可负责不同范围。
           </DialogDescription>
         </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SscScopeFields
+            value={scope}
+            options={optionsQuery.data}
+            idPrefix="ssc-management-add"
+            disabled={assignment.isPending || scopeUnavailable}
+            onChange={(nextScope) => {
+              setScope(nextScope);
+              setSelectedIds([]);
+            }}
+          />
+        </div>
+        {optionsQuery.isError ? (
+          <div className="grid gap-2">
+            <p role="alert" className="text-sm text-destructive">
+              服务单位与部门加载失败，请重试。
+            </p>
+            <Button type="button" variant="outline" onClick={() => void optionsQuery.refetch()}>
+              重试范围选项
+            </Button>
+          </div>
+        ) : null}
         {candidatesQuery.isError ? (
           <div className="grid gap-3 rounded-lg border p-4">
             <p role="alert" className="text-sm text-destructive">
@@ -130,7 +183,7 @@ export function ResumeSourceSscAddDialog({
               onChange={setSelectedIds}
               options={options}
               showBadges
-              disabled={candidatesQuery.isPending || assignment.isPending}
+              disabled={candidatesQuery.isPending || assignment.isPending || scopeUnavailable}
               placeholder={candidatesQuery.isPending ? "加载 SSC 人员中…" : "选择 SSC 人员"}
               searchPlaceholder="搜索花名、邮箱或 TG"
               emptyMessage="暂无可添加的 SSC 人员"
@@ -148,7 +201,7 @@ export function ResumeSourceSscAddDialog({
             type="button"
             variant="outline"
             disabled={assignment.isPending}
-            onClick={onPreregister}
+            onClick={() => onPreregister({ departmentId: scope.departmentId, serviceUnit })}
           >
             预录新 SSC
           </Button>

@@ -176,11 +176,11 @@ async function clearSubtables() {
 }
 
 // These pre-existing tests exercise the version/response lifecycle. Historical
-// null-SSC fixtures keep that purpose independent of the new SSC workflow suite.
+// Null recruiter/SSC gates keep historical fixtures independent of the new workflow suites.
 async function sendHistoricalOffer(draftId: string) {
   await db
     .update(studioOfferDraft)
-    .set({ sscConfirmationStatus: null })
+    .set({ recruiterConfirmationStatus: null, sscConfirmationStatus: null })
     .where(eq(studioOfferDraft.id, draftId));
   return await sendOfferDraft(draftId, ORG);
 }

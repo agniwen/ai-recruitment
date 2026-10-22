@@ -1,6 +1,24 @@
 import { z } from "zod";
 
+const jobScopeFields = {
+  departmentId: z
+    .string()
+    .trim()
+    .max(200)
+    .transform((value) => value || null)
+    .nullable()
+    .optional(),
+  serviceUnit: z
+    .string()
+    .trim()
+    .max(120)
+    .transform((value) => value || null)
+    .nullable()
+    .optional(),
+};
+
 export const sscResponsibilityInputSchema = z.object({
+  ...jobScopeFields,
   centerName: z.string().trim().min(1, "请输入中心/部门。").max(200),
   demandOwner: z.string().trim().max(100),
   email: z
@@ -31,10 +49,12 @@ export const sscResponsibilitiesQuerySchema = z.object({
 });
 
 export const sscAssignmentCandidatesQuerySchema = z.object({
+  ...jobScopeFields,
   resumeSourceId: z.string().trim().min(1).max(200),
 });
 
 export const sscSourceAssignmentInputSchema = z.object({
+  ...jobScopeFields,
   candidateIds: z
     .array(
       z
@@ -58,9 +78,11 @@ export const sscResponsibilityImportSchema = z.object({
       z.object({
         centerName: z.string().max(10_000),
         demandOwner: z.string().max(10_000),
+        departmentName: z.string().max(10_000).optional().default(""),
         email: z.string().max(10_000),
         notes: z.string().max(10_000),
         row: z.number().int().min(2).max(100_000),
+        serviceUnit: z.string().max(10_000).optional().default(""),
         sscName: z.string().max(10_000),
         telegram: z.string().max(10_000),
       }),
@@ -70,8 +92,8 @@ export const sscResponsibilityImportSchema = z.object({
   workspaceRole: z.string().trim().min(1).max(100),
 });
 
-export type SscResponsibilityImport = z.infer<typeof sscResponsibilityImportSchema>;
+export type SscResponsibilityImport = z.input<typeof sscResponsibilityImportSchema>;
 export const sscResponsibilityImportCommitSchema = sscResponsibilityImportSchema.extend({
   previewHash: z.string().regex(/^[a-f0-9]{64}$/u),
 });
-export type SscResponsibilityImportCommit = z.infer<typeof sscResponsibilityImportCommitSchema>;
+export type SscResponsibilityImportCommit = z.input<typeof sscResponsibilityImportCommitSchema>;

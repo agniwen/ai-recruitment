@@ -122,9 +122,15 @@ export function CreateOrEditOfferDialog({
           return;
         }
         setContext(loaded);
+        const gender = loaded.defaults.gender?.trim();
         setForm((current) => ({
           ...current,
-          confirmationInfo: current.confirmationInfo ?? loaded.defaults,
+          confirmationInfo: current.confirmationInfo ?? {
+            ...loaded.defaults,
+            gender: gender === "男" || gender === "女" ? gender : null,
+            jobLevel: null,
+            workLocation: null,
+          },
         }));
       } catch (error) {
         if (session.current === sessionId) {
@@ -280,7 +286,7 @@ export function CreateOrEditOfferDialog({
           </DialogDescription>
           {mode === "create" ? (
             <p className="text-muted-foreground text-xs">
-              新增后等待 SSC 接收并完成确认；确认完成前不可发送 Offer 或标记入职。
+              新增后先由简历上传人确认候选人私人 TG，再通知 SSC 接收并完成确认。
             </p>
           ) : null}
         </DialogHeader>

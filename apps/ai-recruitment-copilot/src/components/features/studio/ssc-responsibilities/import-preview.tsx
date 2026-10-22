@@ -38,6 +38,8 @@ export function SscImportPreview({ preview }: { preview: Preview }) {
               <TableHead>行号</TableHead>
               <TableHead>需求对接负责人</TableHead>
               <TableHead>中心/部门</TableHead>
+              <TableHead>服务单位</TableHead>
+              <TableHead>部门</TableHead>
               <TableHead>SSC 花名</TableHead>
               <TableHead>SSC TG</TableHead>
               <TableHead>SSC 邮箱</TableHead>
@@ -53,6 +55,8 @@ export function SscImportPreview({ preview }: { preview: Preview }) {
                 <TableCell className="whitespace-normal">
                   {row.input.centerName || "未填写"}
                 </TableCell>
+                <TableCell>{row.input.serviceUnit || "不限"}</TableCell>
+                <TableCell>{row.departmentName || "不限"}</TableCell>
                 <TableCell>{row.input.sscName || "待补充"}</TableCell>
                 <TableCell>{row.input.telegram || "待补充"}</TableCell>
                 <TableCell>{row.input.email || "待补充"}</TableCell>

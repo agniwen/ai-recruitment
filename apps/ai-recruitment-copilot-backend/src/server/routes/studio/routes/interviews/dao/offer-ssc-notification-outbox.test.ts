@@ -107,6 +107,50 @@ afterEach(async () => {
 describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
   "Offer SSC notification transactional outbox",
   () => {
+    it("re-resolves an undelivered recruiter notice after the uploader changes a TG binding", async () => {
+      const original = await fixture();
+      const input: OfferSscNotificationInput = { ...original, event: "recruiter" };
+      await db
+        .update(studioOfferDraft)
+        .set({ recruiterConfirmationStatus: "pending" })
+        .where(eq(studioOfferDraft.id, input.draftId));
+      mocks.targets.mockResolvedValue([TARGET_A]);
+      mocks.post.mockRejectedValueOnce(new Error("temporary delivery failure"));
+      await enqueue(input);
+      await dispatchOfferSscNotifications();
+      mocks.targets.mockResolvedValue([TARGET_B]);
+      await makeDue(input);
+      await dispatchOfferSscNotifications();
+      expect(await jobs(input)).toMatchObject([{ recipientUserIds: null, status: "pending" }]);
+      await makeDue(input);
+      await dispatchOfferSscNotifications();
+      expect(mocks.post.mock.calls.map((call) => call[0])).toEqual(["111", "222"]);
+      expect(await jobs(input)).toMatchObject([
+        { sentUserIds: [TARGET_B.userId], status: "completed" },
+      ]);
+    });
+
+    it("keeps an uploader notice waiting when the recruiter has not bound Telegram", async () => {
+      const original = await fixture();
+      const input: OfferSscNotificationInput = { ...original, event: "recruiter" };
+      await db
+        .update(studioOfferDraft)
+        .set({ recruiterConfirmationStatus: "pending" })
+        .where(eq(studioOfferDraft.id, input.draftId));
+      mocks.targets.mockResolvedValue([]);
+      await enqueue(input);
+      await dispatchOfferSscNotifications();
+      expect(mocks.post).not.toHaveBeenCalled();
+      expect(await jobs(input)).toMatchObject([
+        {
+          attempts: 0,
+          lastError: "recruiter_recipient_unavailable",
+          recipientUserIds: null,
+          status: "pending",
+        },
+      ]);
+    });
+
     it("resumes an old user-ID recipient snapshot using the pinned chat when no personal profile binding exists", async () => {
       const input = await fixture();
       const userId = randomUUID();

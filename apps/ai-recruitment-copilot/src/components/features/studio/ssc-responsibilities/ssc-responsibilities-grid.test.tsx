@@ -64,11 +64,14 @@ const record: SscResponsibilityRecord = {
   centerName: "未建中心",
   createdAt: "2026-10-17T00:00:00.000Z",
   demandOwner: "需求负责人",
+  departmentId: null,
+  departmentName: null,
   email: "ssc@example.com",
   id: "ssc-1",
   notes: "备注内容",
   resumeSourceId: null,
   resumeSourceName: null,
+  serviceUnit: null,
   sscName: "林风",
   telegram: "@ssc",
   updatedAt: "2026-10-17T00:00:00.000Z",
@@ -109,8 +112,13 @@ beforeEach(() => {
   mocks.options.mockImplementation(() =>
     Promise.resolve(
       Response.json({
+        departments: [
+          { hiringUnitName: "事业部甲", id: "department-a", name: "创意部" },
+          { hiringUnitName: "事业部乙", id: "department-b", name: "创意部" },
+        ],
         resumeSources: [{ id: "source-1", name: "实际业务中心" }],
         roles: [{ label: "SSC角色", value: "ssc-01" }],
+        serviceUnits: ["智能增长事业部"],
       }),
     ),
   );
@@ -193,6 +201,113 @@ async function pick(id: string, label: string) {
 }
 
 describe("SSC responsibility editor", () => {
+  it("places service unit and department after the center and displays generic scopes as unlimited", async () => {
+    mocks.list.mockResolvedValue(
+      Response.json({
+        records: [
+          {
+            ...record,
+            departmentId: "department-b",
+            departmentName: "创意部",
+            id: "scoped",
+            serviceUnit: "智能增长事业部",
+          },
+          record,
+        ],
+        total: 2,
+        totalPages: 1,
+      }),
+    );
+    await mountGrid();
+    await waitForUi(() => expect(document.body.textContent).toContain("智能增长事业部"));
+    const headers = [...document.querySelectorAll("th")].map((cell) => cell.textContent?.trim());
+    const centerIndex = headers.indexOf("中心/部门");
+    expect(headers.slice(centerIndex + 1, centerIndex + 3)).toEqual(["服务单位", "部门"]);
+    expect(document.body.textContent).toContain("创意部");
+    expect(document.body.textContent).toContain("不限");
+  });
+
+  it("saves an optional scope with a canonical department ID and disambiguates matching department names", async () => {
+    const saved = vi.fn();
+    await mount(
+      <SscResponsibilityEditorDialog open record={null} onOpenChange={vi.fn()} onSaved={saved} />,
+    );
+    await pick("ssc-resumeSourceId", "实际业务中心");
+    await fill("ssc-serviceUnit", " 智能增长事业部 ");
+    await pick("ssc-departmentId", "创意部事业部乙");
+    await act(() => button("保存")?.click());
+    await waitForUi(() => expect(saved).toHaveBeenCalledOnce());
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          departmentId: "department-b",
+          serviceUnit: "智能增长事业部",
+        }),
+      }),
+    );
+    expect(document.body.textContent).toContain("留空不限");
+  });
+
+  it("prefills existing scope and preserves it when updating only contact information", async () => {
+    const saved = vi.fn();
+    await mount(
+      <SscResponsibilityEditorDialog
+        open
+        record={{
+          ...record,
+          departmentId: "department-b",
+          departmentName: "创意部",
+          serviceUnit: "事业部乙",
+        }}
+        onOpenChange={vi.fn()}
+        onSaved={saved}
+      />,
+    );
+    await waitForUi(() =>
+      expect(document.querySelector<HTMLInputElement>("#ssc-departmentId")?.value).toBe("创意部"),
+    );
+    expect(document.querySelector<HTMLInputElement>("#ssc-serviceUnit")?.value).toBe("事业部乙");
+    await fill("ssc-email", "updated@example.com");
+    await act(() => button("保存")?.click());
+    await waitForUi(() => expect(saved).toHaveBeenCalledOnce());
+    expect(mocks.patch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ departmentId: "department-b", serviceUnit: "事业部乙" }),
+      }),
+    );
+  });
+
+  it("clears an existing scope explicitly rather than preserving the old constraint", async () => {
+    const saved = vi.fn();
+    await mount(
+      <SscResponsibilityEditorDialog
+        open
+        record={{
+          ...record,
+          departmentId: "department-b",
+          departmentName: "创意部",
+          serviceUnit: "事业部乙",
+        }}
+        onOpenChange={vi.fn()}
+        onSaved={saved}
+      />,
+    );
+    await waitForUi(() =>
+      expect(document.querySelector<HTMLInputElement>("#ssc-departmentId")?.value).toBe("创意部"),
+    );
+    await fill("ssc-serviceUnit", "");
+    const field = document.querySelector("#ssc-departmentId")?.closest('[data-slot="input-group"]');
+    const clear = field?.querySelector<HTMLButtonElement>('[data-slot="combobox-clear"]');
+    expect(clear).not.toBeNull();
+    await act(() => clear?.click());
+    await act(() => button("保存")?.click());
+    await waitForUi(() => expect(saved).toHaveBeenCalledOnce());
+    expect(mocks.patch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({ departmentId: null, serviceUnit: null }),
+      }),
+    );
+  });
   it("offers a data import action next to creating a responsibility", async () => {
     await mountGrid();
     await waitForUi(() => expect(button("数据导入")).toBeDefined());
@@ -228,9 +343,11 @@ describe("SSC responsibility editor", () => {
           {
             centerName: "实际业务中心",
             demandOwner: "",
+            departmentName: "",
             email: "SSC@EXAMPLE.COM",
             notes: "",
             row: 2,
+            serviceUnit: "",
             sscName: "",
             telegram: "",
           },
@@ -294,9 +411,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "实际业务中心",
         demandOwner: "",
+        departmentId: null,
         email: "",
         notes: "",
         resumeSourceId: "source-1",
+        serviceUnit: null,
         sscName: "",
         telegram: "",
         workspaceRole: "ssc-01",
@@ -323,9 +442,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "实际业务中心",
         demandOwner: "",
+        departmentId: null,
         email: "",
         notes: "",
         resumeSourceId: "source-1",
+        serviceUnit: null,
         sscName: "",
         telegram: "",
         workspaceRole: "ssc-01",
@@ -378,9 +499,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "未建中心",
         demandOwner: "",
+        departmentId: null,
         email: "later@example.com",
         notes: "",
         resumeSourceId: null,
+        serviceUnit: null,
         sscName: "后补SSC",
         telegram: "@later",
         workspaceRole: "ssc-01",
@@ -408,9 +531,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "实际业务中心",
         demandOwner: "",
+        departmentId: null,
         email: "new@example.com",
         notes: "",
         resumeSourceId: "source-1",
+        serviceUnit: null,
         sscName: "新人SSC",
         telegram: "",
         workspaceRole: "ssc-01",
@@ -435,9 +560,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "未建中心",
         demandOwner: "需求负责人",
+        departmentId: null,
         email: "ssc@example.com",
         notes: "新备注",
         resumeSourceId: null,
+        serviceUnit: null,
         sscName: "林风",
         telegram: "@ssc",
         workspaceRole: "ssc-01",
@@ -470,9 +597,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "未建中心",
         demandOwner: "需求负责人",
+        departmentId: null,
         email: "ssc@example.com",
         notes: "保留原表名称",
         resumeSourceId: null,
+        serviceUnit: null,
         sscName: "林风",
         telegram: "@ssc",
         workspaceRole: "ssc-01",
@@ -493,9 +622,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "实际业务中心",
         demandOwner: "需求负责人",
+        departmentId: null,
         email: "ssc@example.com",
         notes: "备注内容",
         resumeSourceId: "source-1",
+        serviceUnit: null,
         sscName: "林风",
         telegram: "@ssc",
         workspaceRole: "ssc-01",
@@ -528,9 +659,11 @@ describe("SSC responsibility editor", () => {
       json: {
         centerName: "实际业务中心",
         demandOwner: "",
+        departmentId: null,
         email: "",
         notes: "",
         resumeSourceId: "source-1",
+        serviceUnit: null,
         sscName: "",
         telegram: "",
         workspaceRole: "ssc-02",

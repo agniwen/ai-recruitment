@@ -64,6 +64,7 @@ import {
 } from "./offer-stage-form";
 import type { OfferFormState } from "./offer-stage-form";
 import { OfferInformationDialog } from "./offer-creation-confirmation";
+import { OfferRecruiterContact } from "./offer-recruiter-contact";
 
 export function CandidateExpectationsBlock({
   candidateId,
@@ -406,6 +407,14 @@ export function OfferCard({
           ) : null}
 
           <OfferSscCompletionAttachment candidateId={candidateId} draft={draft} slug={slug} />
+
+          <OfferRecruiterContact
+            candidateId={candidateId}
+            disabled={disabled}
+            draft={draft}
+            key={`${draft.id}:${draft.sscRevision ?? 1}`}
+            onSaved={onSaved}
+          />
 
           <OfferSscNotice draft={draft} error={ssc.error} />
 

@@ -22,6 +22,7 @@ import { assignSscSourceCandidates, listSscAssignmentCandidates } from "./source
 import { importSscResponsibilities, previewSscResponsibilityImport } from "./import-dao";
 
 const SAVE_VALIDATION_MESSAGES = {
+  invalid_department: "请选择当前工作区的部门，留空则不限制部门。",
   invalid_role: "请选择当前工作区中标记为 SSC 的工作区角色。",
   invalid_source: "请选择当前工作区的部门/中心；未关联的历史记录仅可保留原名称。",
   role_conflict: "该邮箱对应的 SSC 工作区角色存在冲突，或账号已被限制，请先核对成员和负责关系。",
@@ -89,10 +90,13 @@ export const sscResponsibilitiesRouter = factory
     async (c) => {
       const result = await listSscAssignmentCandidates(
         getWorkspaceRequestContext(c).organization.id,
-        c.req.valid("query").resumeSourceId,
+        c.req.valid("query"),
       );
       if (result === "invalid_source") {
         return c.json({ error: SAVE_VALIDATION_MESSAGES.invalid_source }, 400);
+      }
+      if (result === "invalid_department") {
+        return c.json({ error: SAVE_VALIDATION_MESSAGES.invalid_department }, 400);
       }
       return c.json(result, 200);
     },
@@ -107,6 +111,9 @@ export const sscResponsibilitiesRouter = factory
       );
       if (result === "invalid_source") {
         return c.json({ error: SAVE_VALIDATION_MESSAGES.invalid_source }, 400);
+      }
+      if (result === "invalid_department") {
+        return c.json({ error: SAVE_VALIDATION_MESSAGES.invalid_department }, 400);
       }
       if (result === "duplicate") {
         return c.json({ error: "所选 SSC 已负责该部门/中心，请刷新后重试。" }, 409);
@@ -139,7 +146,12 @@ export const sscResponsibilitiesRouter = factory
       if (result === "duplicate") {
         return c.json({ error: "该中心/部门与 SSC 人员的对应关系已存在。" }, 409);
       }
-      if (result === "invalid_role" || result === "invalid_source" || result === "role_conflict") {
+      if (
+        result === "invalid_role" ||
+        result === "invalid_source" ||
+        result === "invalid_department" ||
+        result === "role_conflict"
+      ) {
         return c.json({ error: SAVE_VALIDATION_MESSAGES[result] }, 400);
       }
       return c.json(result, 201);
@@ -160,7 +172,12 @@ export const sscResponsibilitiesRouter = factory
       if (result === "duplicate") {
         return c.json({ error: "该中心/部门与 SSC 人员的对应关系已存在。" }, 409);
       }
-      if (result === "invalid_role" || result === "invalid_source" || result === "role_conflict") {
+      if (
+        result === "invalid_role" ||
+        result === "invalid_source" ||
+        result === "invalid_department" ||
+        result === "role_conflict"
+      ) {
         return c.json({ error: SAVE_VALIDATION_MESSAGES[result] }, 400);
       }
       return c.json(result, 200);

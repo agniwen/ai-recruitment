@@ -4,6 +4,30 @@ import { offerDraftInputSchema } from "@arc/db-schema/studio-interviews";
 const offer = { baseSalary: 12_000, position: "工程师" };
 
 describe("Offer confirmation snapshot input", () => {
+  it("preserves and normalizes the candidate private Telegram in the Offer snapshot", () => {
+    const parsed = offerDraftInputSchema.parse({
+      ...offer,
+      confirmationInfo: { candidatePrivateTelegram: "  https://t.me/Candidate_123  " },
+    });
+    expect(parsed.confirmationInfo).toHaveProperty("candidatePrivateTelegram", "@Candidate_123");
+  });
+
+  it.each([
+    "https://t.me/+private_invite",
+    "https://t.me.evil.test/candidate_a",
+    "https://t.me/candidate_a?start=token",
+    "https://t.me/candidate_a/other",
+    "candidate a",
+    "",
+  ])("rejects invalid candidate private Telegram input %s", (candidatePrivateTelegram) => {
+    expect(
+      offerDraftInputSchema.safeParse({
+        ...offer,
+        confirmationInfo: { candidatePrivateTelegram },
+      }).success,
+    ).toBe(false);
+  });
+
   it("retains a normalized snapshot separately from Offer notes", () => {
     const parsed = offerDraftInputSchema.parse({
       ...offer,

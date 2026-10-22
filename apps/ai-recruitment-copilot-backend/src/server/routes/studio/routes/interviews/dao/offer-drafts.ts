@@ -42,6 +42,7 @@ import { notifyCandidateStageChange } from "../utils/candidate-stage-notificatio
 import { enqueueOfferSscNotification } from "./offer-ssc-notification-outbox";
 import { listSourceSscNotificationRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-notification-recipients";
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 
 export type { OfferDraftRecord };
 
@@ -85,6 +86,10 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
     notes: row.notes,
     organizationId: row.organizationId,
     position: row.position,
+    recruiterConfirmationStatus: row.recruiterConfirmationStatus,
+    recruiterConfirmedAt: serializeDate(row.recruiterConfirmedAt),
+    recruiterConfirmedBy: row.recruiterConfirmedBy,
+    recruiterConfirmedSource: row.recruiterConfirmedSource,
     responseAt: serializeDate(row.responseAt),
     sentAt: serializeDate(row.sentAt),
     sscCompletedAt: serializeDate(row.sscCompletedAt),
@@ -304,8 +309,8 @@ export async function loadAuthorizedOfferSscContext(
     await assertCurrentTelegramOffer(draft);
     return {
       actorRole: null,
-      canConfirm: true,
-      canReceive: true,
+      canConfirm: draft.recruiterConfirmationStatus !== "pending",
+      canReceive: draft.recruiterConfirmationStatus !== "pending",
       candidateName: responsible.candidateName,
       draft: toRecord(draft),
       pipelineStage: responsible.pipelineStage,
@@ -322,7 +327,13 @@ export async function loadAuthorizedOfferSscContext(
     interviewRecordId: draft.interviewRecordId,
     organizationId: draft.organizationId,
   });
-  return { ...context, draft: toRecord(draft), telegramOperator: null };
+  return {
+    ...context,
+    canConfirm: context.canConfirm && draft.recruiterConfirmationStatus !== "pending",
+    canReceive: context.canReceive && draft.recruiterConfirmationStatus !== "pending",
+    draft: toRecord(draft),
+    telegramOperator: null,
+  };
 }
 
 export async function loadCurrentOfferSscState(input: {
@@ -334,6 +345,7 @@ export async function loadCurrentOfferSscState(input: {
   const [state] = await db
     .select({
       id: studioOfferDraft.id,
+      recruiterConfirmationStatus: studioOfferDraft.recruiterConfirmationStatus,
       sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
       status: studioOfferDraft.status,
       version: studioOfferDraft.version,
@@ -376,6 +388,9 @@ async function transitionOfferSscConfirmation(
       ? { telegramActor: input.actor }
       : { actorUserId: input.actor.id }),
   });
+  if (context.draft.recruiterConfirmationStatus === "pending") {
+    throw new OfferDraftError("请先由招聘人员补充并确认候选人私人 TG。", 409);
+  }
   if (!(action === "receive" ? context.canReceive : context.canConfirm)) {
     throw new OfferDraftError(
       action === "receive" ? "没有 SSC 接收确认权限。" : "没有 SSC 完成确认权限。",
@@ -412,6 +427,9 @@ async function transitionOfferSscConfirmation(
       .limit(1);
     if (!existing) {
       throw new OfferDraftError("Offer 不存在。", 404);
+    }
+    if (existing.recruiterConfirmationStatus === "pending") {
+      throw new OfferDraftError("请先由招聘人员补充并确认候选人私人 TG。", 409);
     }
     if (context.telegramOperator) {
       await assertCurrentTelegramOffer(existing, tx);
@@ -653,7 +671,7 @@ export async function removeOfferApprovalAttachment(
     if (row.sscConfirmationStatus !== null) {
       await enqueueOfferSscNotification(tx, {
         draftId,
-        event: "pending",
+        event: row.recruiterConfirmationStatus === "pending" ? "recruiter" : "pending",
         interviewRecordId,
         organizationId,
         revision: row.sscRevision + 1,
@@ -709,6 +727,7 @@ export async function createOfferDraft({
     // Lock all drafts for this candidate to serialize version creation.
     const existing = await tx
       .select({
+        confirmationInfo: studioOfferDraft.confirmationInfo,
         id: studioOfferDraft.id,
         status: studioOfferDraft.status,
         version: studioOfferDraft.version,
@@ -720,6 +739,14 @@ export async function createOfferDraft({
 
     const [latestExisting] = existing;
     const nextVersion = latestExisting ? latestExisting.version + 1 : 1;
+    const previousTelegram = latestExisting?.confirmationInfo?.candidatePrivateTelegram;
+    const confirmationInfo =
+      input.confirmationInfo?.candidatePrivateTelegram === undefined && previousTelegram
+        ? offerConfirmationDetailsSchema.parse({
+            ...input.confirmationInfo,
+            candidatePrivateTelegram: previousTelegram,
+          })
+        : (input.confirmationInfo ?? null);
 
     // Supersede 所有未结的旧版本。
     // Supersede all non-terminal predecessors.
@@ -737,7 +764,7 @@ export async function createOfferDraft({
       approvalAttachment,
       baseSalary: input.baseSalary,
       bonus: input.bonus ?? null,
-      confirmationInfo: input.confirmationInfo ?? null,
+      confirmationInfo,
       createdAt: now,
       createdBy: actorId,
       createdByRole: actorRole,
@@ -750,6 +777,7 @@ export async function createOfferDraft({
       notes: input.notes ?? null,
       organizationId,
       position: input.position,
+      recruiterConfirmationStatus: "pending",
       sscConfirmationStatus: "pending",
       sscRevision: 1,
       status: "draft",
@@ -767,7 +795,7 @@ export async function createOfferDraft({
     }
     await enqueueOfferSscNotification(tx, {
       draftId: created.id,
-      event: "pending",
+      event: "recruiter",
       interviewRecordId,
       organizationId,
       revision: created.sscRevision,
@@ -783,6 +811,66 @@ export interface EditDraftOptions {
   organizationId: string;
   input: Partial<OfferDraftInput>;
   approvalAttachment?: (typeof studioOfferDraft.$inferInsert)["approvalAttachment"];
+}
+
+function resolveEditedConfirmationInfo(
+  existing: typeof studioOfferDraft.$inferSelect,
+  next: OfferDraftInput["confirmationInfo"],
+) {
+  if (next === undefined) {
+    return existing.confirmationInfo;
+  }
+  if (existing.recruiterConfirmationStatus !== "completed") {
+    return next;
+  }
+  const confirmedTelegram = existing.confirmationInfo?.candidatePrivateTelegram ?? null;
+  if (
+    next?.candidatePrivateTelegram !== undefined &&
+    next.candidatePrivateTelegram?.toLowerCase() !== confirmedTelegram?.toLowerCase()
+  ) {
+    throw new OfferDraftError("候选人私人 TG 已确认，如需更换请新建 Offer 版本后重新确认。", 409);
+  }
+  return offerConfirmationDetailsSchema.parse({
+    ...next,
+    candidatePrivateTelegram: confirmedTelegram,
+  });
+}
+
+function buildOfferEditPatch(
+  existing: typeof studioOfferDraft.$inferSelect,
+  input: Partial<OfferDraftInput>,
+  approvalAttachment: EditDraftOptions["approvalAttachment"],
+  now: Date,
+) {
+  return {
+    ...(approvalAttachment !== undefined && { approvalAttachment }),
+    baseSalary: input.baseSalary ?? existing.baseSalary,
+    bonus: input.bonus ?? existing.bonus,
+    confirmationInfo: resolveEditedConfirmationInfo(existing, input.confirmationInfo),
+    currency: input.currency ?? existing.currency,
+    equity: input.equity ?? existing.equity,
+    expiresAt: resolveDateField(input.expiresAt, serializeDate(existing.expiresAt)),
+    joiningDate: resolveDateField(input.joiningDate, serializeDate(existing.joiningDate)),
+    notes: input.notes ?? existing.notes,
+    position: input.position ?? existing.position,
+    updatedAt: now,
+  };
+}
+
+function hasOfferEditChanges(
+  existing: typeof studioOfferDraft.$inferSelect,
+  patch: ReturnType<typeof buildOfferEditPatch>,
+) {
+  return Object.entries(patch).some(([key, value]) => {
+    if (key === "updatedAt") {
+      return false;
+    }
+    const previous = existing[key as keyof typeof existing];
+    return value instanceof Date || previous instanceof Date
+      ? (value instanceof Date ? value.getTime() : value) !==
+          (previous instanceof Date ? previous.getTime() : previous)
+      : !isEqual(value, previous);
+  });
 }
 
 export async function editOfferDraftWithAttachment({
@@ -823,34 +911,8 @@ export async function editOfferDraftWithAttachment({
     if (existing.sscConfirmationStatus !== null && candidate.pipelineStage === "closed") {
       throw new OfferDraftError("已结案候选人的 Offer 不能编辑。", 400);
     }
-    // existing.expiresAt / joiningDate 是 Date，resolveDateField 期待 string | null。
-    // existing.expiresAt / joiningDate are Date columns; resolveDateField wants strings.
-    const existingExpiresAtIso = serializeDate(existing.expiresAt);
-    const existingJoiningDateIso = serializeDate(existing.joiningDate);
-    const patch = {
-      ...(approvalAttachment !== undefined && { approvalAttachment }),
-      baseSalary: input.baseSalary ?? existing.baseSalary,
-      bonus: input.bonus ?? existing.bonus,
-      confirmationInfo:
-        input.confirmationInfo === undefined ? existing.confirmationInfo : input.confirmationInfo,
-      currency: input.currency ?? existing.currency,
-      equity: input.equity ?? existing.equity,
-      expiresAt: resolveDateField(input.expiresAt, existingExpiresAtIso),
-      joiningDate: resolveDateField(input.joiningDate, existingJoiningDateIso),
-      notes: input.notes ?? existing.notes,
-      position: input.position ?? existing.position,
-      updatedAt: now,
-    };
-    const changed = Object.entries(patch).some(([key, value]) => {
-      if (key === "updatedAt") {
-        return false;
-      }
-      const previous = existing[key as keyof typeof existing];
-      return value instanceof Date || previous instanceof Date
-        ? (value instanceof Date ? value.getTime() : value) !==
-            (previous instanceof Date ? previous.getTime() : previous)
-        : !isEqual(value, previous);
-    });
+    const patch = buildOfferEditPatch(existing, input, approvalAttachment, now);
+    const changed = hasOfferEditChanges(existing, patch);
     const [updated] = await tx
       .update(studioOfferDraft)
       .set({ ...patch, ...(changed ? resetSscConfirmation(existing) : {}) })
@@ -862,7 +924,7 @@ export async function editOfferDraftWithAttachment({
     if (changed && existing.sscConfirmationStatus !== null) {
       await enqueueOfferSscNotification(tx, {
         draftId: updated.id,
-        event: "pending",
+        event: updated.recruiterConfirmationStatus === "pending" ? "recruiter" : "pending",
         interviewRecordId: updated.interviewRecordId,
         organizationId,
         revision: updated.sscRevision,
@@ -905,6 +967,9 @@ export async function sendOfferDraft(
     }
     if (existing.status !== "draft") {
       throw new OfferDraftError("只有草稿状态的 Offer 可以发出", 400);
+    }
+    if (existing.recruiterConfirmationStatus === "pending") {
+      throw new OfferDraftError("请先由招聘人员补充并确认候选人私人 TG。", 409);
     }
     if (
       existing.sscConfirmationStatus !== null &&

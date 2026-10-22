@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { copyTextToClipboard } from "@/lib/client/clipboard";
 
@@ -29,7 +30,7 @@ interface TextFieldConfig {
   key: TextField;
   label: string;
   maxLength: number;
-  placeholder?: string;
+  example?: string;
 }
 const identityFields: TextFieldConfig[] = [
   { key: "candidateCode", label: "候选人编码（选填）", maxLength: 120 },
@@ -39,14 +40,14 @@ const identityFields: TextFieldConfig[] = [
 const organizationFields: TextFieldConfig[] = [
   { key: "hiringUnitName", label: "入职编制组织", maxLength: 200 },
   { key: "serviceUnit", label: "入职服务单位", maxLength: 200 },
-  { key: "personnelType", label: "人员性质", maxLength: 120, placeholder: "直属" },
+  { example: "直属", key: "personnelType", label: "人员性质", maxLength: 120 },
   { key: "departmentName", label: "入职部门", maxLength: 200 },
   { key: "directManager", label: "直属上级", maxLength: 200 },
   { key: "jobType", label: "岗位类型", maxLength: 120 },
-  { key: "jobLevel", label: "建议职级", maxLength: 120 },
-  { key: "managementSequence", label: "管理序列", maxLength: 120, placeholder: "个人" },
-  { key: "workMode", label: "办公方式", maxLength: 120, placeholder: "远程" },
-  { key: "workLocation", label: "办公地区", maxLength: 200, placeholder: "中国" },
+  { example: "P3", key: "jobLevel", label: "建议职级", maxLength: 120 },
+  { example: "个人", key: "managementSequence", label: "管理序列", maxLength: 120 },
+  { example: "远程", key: "workMode", label: "办公方式", maxLength: 120 },
+  { example: "中国", key: "workLocation", label: "办公地区", maxLength: 200 },
 ];
 export function OfferConfirmationFields({
   candidateId,
@@ -66,17 +67,47 @@ export function OfferConfirmationFields({
   disabled?: boolean;
 }) {
   function textField(field: TextFieldConfig) {
+    const hintId = `${idPrefix}-${field.key}-hint`;
+    const hint = field.example ? `例如：${field.example}` : "待补充";
+    const showHint = Boolean(field.example) || !info[field.key]?.trim();
     return (
-      <div className="grid min-w-0 gap-1.5" key={field.key}>
-        <Label htmlFor={`${idPrefix}-${field.key}`}>{field.label}</Label>
-        <Input
-          className="placeholder:text-muted-foreground/50"
-          id={`${idPrefix}-${field.key}`}
-          maxLength={field.maxLength}
-          onChange={(event) => onChange({ ...info, [field.key]: event.target.value || null })}
-          placeholder={field.placeholder ?? "待补充"}
-          value={info[field.key] ?? ""}
-        />
+      <div
+        className="grid min-w-0 gap-1.5 [&>[data-slot=native-select-wrapper]]:w-full"
+        key={field.key}
+      >
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <Label htmlFor={`${idPrefix}-${field.key}`}>{field.label}</Label>
+          {showHint ? (
+            <span className="text-muted-foreground text-xs" id={hintId}>
+              {hint}
+            </span>
+          ) : null}
+        </div>
+        {field.key === "gender" ? (
+          <NativeSelect
+            aria-describedby={showHint ? hintId : undefined}
+            id={`${idPrefix}-gender`}
+            onChange={(event) => onChange({ ...info, gender: event.target.value || null })}
+            value={info.gender ?? ""}
+          >
+            <NativeSelectOption aria-label="未选择性别" value="" />
+            {info.gender && !["男", "女"].includes(info.gender) ? (
+              <NativeSelectOption disabled value={info.gender}>
+                {info.gender}（原记录）
+              </NativeSelectOption>
+            ) : null}
+            <NativeSelectOption value="男">男</NativeSelectOption>
+            <NativeSelectOption value="女">女</NativeSelectOption>
+          </NativeSelect>
+        ) : (
+          <Input
+            aria-describedby={showHint ? hintId : undefined}
+            id={`${idPrefix}-${field.key}`}
+            maxLength={field.maxLength}
+            onChange={(event) => onChange({ ...info, [field.key]: event.target.value || null })}
+            value={info[field.key] ?? ""}
+          />
+        )}
       </div>
     );
   }
@@ -85,7 +116,7 @@ export function OfferConfirmationFields({
       <legend className="sr-only">Offer 确认信息</legend>
       <p className="text-muted-foreground text-xs leading-5">
         已带入系统中可用的信息。补填或修改仅保存到本次
-        Offer，不会改动候选人或岗位资料；未填写的字段显示为「待补充」。
+        Offer，不会改动候选人或岗位资料；示例仅供参考，不会自动保存。
       </p>
       <section className="space-y-3">
         <h3 className="font-medium text-sm">候选人信息</h3>

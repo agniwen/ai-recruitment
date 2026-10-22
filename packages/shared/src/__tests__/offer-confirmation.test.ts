@@ -24,6 +24,16 @@ const completeInfo: OfferConfirmationDetails = {
 };
 
 describe("Offer confirmation text", () => {
+  it("includes the confirmed private Telegram in the full Offer copy text", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      currency: "CNY",
+      info: { ...completeInfo, candidatePrivateTelegram: "@Candidate_123" },
+      position: "工程师",
+    });
+    expect(text).toContain("简历名：张三\n性别：男\n候选人私人 TG：@Candidate_123");
+  });
+
   it("includes the complete creation snapshot in the requested field order", () => {
     expect(
       buildOfferConfirmationText({

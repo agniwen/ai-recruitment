@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { factory } from "@arc/ai-recruitment-copilot-backend/server/factory";
 import {
+  department,
   member,
   organization,
   organizationRole,
@@ -118,6 +119,11 @@ function assignments() {
     );
 }
 
+async function responseStatus(response: Promise<Response> | Response) {
+  const result = await response;
+  return result.status;
+}
+
 describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
   "SSC source assignment",
   () => {
@@ -137,6 +143,75 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
     afterEach(async () => {
       await db.delete(organization).where(inArray(organization.id, organizations.splice(0)));
       await db.delete(user).where(inArray(user.id, users.splice(0)));
+    });
+
+    it("checks assigned identities only within the selected source and job restrictions", async () => {
+      const entry = await account("ssc-role");
+      const departmentId = randomUUID();
+      await db.insert(department).values({ id: departmentId, name: "制作部", organizationId });
+      const payload = {
+        candidateIds: [`member:${entry.memberId}`],
+        departmentId,
+        resumeSourceId: sourceA,
+        serviceUnit: "Sinema",
+      };
+      expect(await responseStatus(request("/assign", "POST", payload))).toBe(201);
+      const same = await request(
+        `/candidates?resumeSourceId=${sourceA}&departmentId=${departmentId}&serviceUnit=sinema`,
+      );
+      expect(await same.json()).toMatchObject({
+        candidates: [{ assigned: true, id: `member:${entry.memberId}` }],
+      });
+      expect(
+        await responseStatus(request("/assign", "POST", { ...payload, serviceUnit: " sinema " })),
+      ).toBe(409);
+      expect(
+        await responseStatus(request("/assign", "POST", { ...payload, serviceUnit: "Other" })),
+      ).toBe(201);
+      expect(
+        await responseStatus(
+          request("/assign", "POST", {
+            candidateIds: payload.candidateIds,
+            resumeSourceId: sourceA,
+          }),
+        ),
+      ).toBe(201);
+      expect(await assignments()).toHaveLength(3);
+    });
+
+    it("does not broaden a cloned restricted preentry when assignment scope is omitted", async () => {
+      const departmentId = randomUUID();
+      await db.insert(department).values({ id: departmentId, name: "制作部", organizationId });
+      const original = await preentry("future@example.com", {
+        departmentId,
+        resumeSourceId: sourceB,
+        serviceUnit: "Sinema",
+      });
+      const response = await request("/assign", "POST", {
+        candidateIds: [`responsibility:${original}`],
+        resumeSourceId: sourceA,
+      });
+      expect(response.status).toBe(201);
+      expect(await assignments()).toMatchObject([{ departmentId, serviceUnit: "Sinema" }]);
+    });
+
+    it("rejects a foreign source-assignment department without partial writes", async () => {
+      const entry = await account("ssc-role");
+      const foreignOrg = await workspace();
+      const departmentId = randomUUID();
+      await db
+        .insert(department)
+        .values({ id: departmentId, name: "Foreign", organizationId: foreignOrg });
+      expect(
+        await responseStatus(
+          request("/assign", "POST", {
+            candidateIds: [`member:${entry.memberId}`],
+            departmentId,
+            resumeSourceId: sourceA,
+          }),
+        ),
+      ).toBe(400);
+      expect(await assignments()).toHaveLength(0);
     });
 
     it("filters the ledger by exact source ID independently of text search", async () => {

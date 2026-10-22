@@ -25,10 +25,10 @@ import { bindTelegramUser } from "./dao";
 import { resolveLedgerTelegramOfferActor } from "./ssc-recipients";
 import {
   completeOfferSscConfirmation,
-  createOfferDraft,
   loadAuthorizedOfferSscContext,
   receiveOfferSscConfirmation,
 } from "../studio/routes/interviews/dao/offer-drafts";
+import { createRecruiterConfirmedOfferFixture } from "../../../test-utils/offer-notification-fixture";
 import { dispatchOfferSscNotifications } from "../studio/routes/interviews/dao/offer-ssc-notification-outbox";
 import type * as TelegramBot from "./utils/bot";
 
@@ -251,20 +251,23 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
               .where(eq(telegramRecipientBinding.chatId, chatId)),
           ).toEqual([]);
 
-          const created = await createOfferDraft({
+          const created = await createRecruiterConfirmedOfferFixture({
             input: { baseSalary: 23_456, position: "Legacy-bound SSC Offer" },
             interviewRecordId: candidateId,
             organizationId: orgId,
+            userIds,
           });
           draftId = created.id;
-          expect(await dispatchOfferSscNotifications()).toBe(1);
+          // System confirmation retires the queued recruiter task before SSC delivery.
+          expect(await dispatchOfferSscNotifications()).toBe(2);
           expect(transport.send).toHaveBeenCalledTimes(1);
           expect(transport.send.mock.calls[0][0]).toBe(chatId);
 
           const [job] = await db
             .select()
             .from(studioOfferSscNotificationOutbox)
-            .where(eq(studioOfferSscNotificationOutbox.draftId, draftId));
+            .where(eq(studioOfferSscNotificationOutbox.draftId, draftId))
+            .then((jobs) => jobs.filter((row) => row.event === "pending"));
           expect(job.status).toBe("completed");
           expect(job.sentUserIds).toHaveLength(1);
           // Approval identity resolution is separate from notification delivery.
@@ -423,7 +426,7 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       });
     });
 
-    it("automatically sends the actual newly created Offer without checking system account permissions", async () => {
+    it("automatically sends a newly created Offer after uploader confirmation without requiring SSC approval permissions", async () => {
       await db
         .update(sscResponsibility)
         .set({ email: "" })
@@ -432,14 +435,14 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
         .update(organizationRole)
         .set({ permission: JSON.stringify({ offer: ["read"] }) })
         .where(eq(organizationRole.organizationId, orgId));
-      const created = await createOfferDraft({
-        actorId: sscId,
-        actorRole: "owner",
+      const created = await createRecruiterConfirmedOfferFixture({
         input: { baseSalary: 23_456, currency: "CNY", position: "Current system Offer" },
         interviewRecordId: candidateId,
         organizationId: orgId,
+        userIds,
       });
-      expect(await dispatchOfferSscNotifications()).toBe(1);
+      // One obsolete recruiter task and one deliverable SSC task are claimed.
+      expect(await dispatchOfferSscNotifications()).toBe(2);
       expect(transport.send).toHaveBeenCalledTimes(1);
       const [[recipient, card]] = transport.send.mock.calls;
       expect(recipient).toBe(chatId);
@@ -453,7 +456,8 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       const [job] = await db
         .select()
         .from(studioOfferSscNotificationOutbox)
-        .where(eq(studioOfferSscNotificationOutbox.draftId, created.id));
+        .where(eq(studioOfferSscNotificationOutbox.draftId, created.id))
+        .then((jobs) => jobs.filter((row) => row.event === "pending"));
       expect(job.status).toBe("completed");
       expect(job.sentUserIds).toHaveLength(1);
       expect(await dispatchOfferSscNotifications()).toBe(0);

@@ -98,7 +98,7 @@ async function create() {
 }
 
 describe("Offer confirmation version snapshots", () => {
-  it("persists and returns the confirmed content in the same pending Offer transaction", async () => {
+  it("persists and returns confirmed content before the recruiter notification in the same transaction", async () => {
     const created = await create();
     expect(created).toHaveProperty("confirmationInfo", expect.objectContaining(confirmation));
     const [stored] = await database
@@ -107,13 +107,14 @@ describe("Offer confirmation version snapshots", () => {
       .where(eq(studioOfferDraft.id, created.id));
     expect(stored).toHaveProperty("confirmationInfo", expect.objectContaining(confirmation));
     expect(stored).toMatchObject({
+      recruiterConfirmationStatus: "pending",
       sscConfirmationStatus: "pending",
       sscRevision: 1,
       status: "draft",
     });
     expect(mocks.enqueue).toHaveBeenCalledExactlyOnceWith(
       expect.anything(),
-      expect.objectContaining({ draftId: created.id, event: "pending", revision: 1 }),
+      expect.objectContaining({ draftId: created.id, event: "recruiter", revision: 1 }),
     );
   });
 

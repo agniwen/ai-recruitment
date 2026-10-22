@@ -42,6 +42,8 @@ import { EntityDeleteDialog } from "../entity-delete-dialog";
 import { PageHeader } from "../page-header";
 import { invalidateSscResponsibilityQueries } from "./ssc-responsibility-queries";
 import { SscResponsibilityImportDialog } from "./import-dialog";
+import { SscScopeFields } from "./ssc-scope-fields";
+import type { SscResponsibilityScope, SscResponsibilityScopeOptions } from "./ssc-scope-fields";
 
 export interface SscResponsibilitySource {
   id: string;
@@ -52,6 +54,9 @@ export interface SscResponsibilityRecord {
   id: string;
   demandOwner: string;
   centerName: string;
+  serviceUnit: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
   resumeSourceId: string | null;
   resumeSourceName: string | null;
   sscName: string;
@@ -68,6 +73,8 @@ type EditorForm = Pick<
   SscResponsibilityRecord,
   | "demandOwner"
   | "centerName"
+  | "serviceUnit"
+  | "departmentId"
   | "sscName"
   | "telegram"
   | "email"
@@ -75,16 +82,18 @@ type EditorForm = Pick<
   | "resumeSourceId"
   | "workspaceRole"
 >;
-interface SscResponsibilityOptions {
+interface SscResponsibilityOptions extends SscResponsibilityScopeOptions {
   roles: { value: string; label: string }[];
   resumeSources: { id: string; name: string }[];
 }
 const EMPTY_FORM: EditorForm = {
   centerName: "",
   demandOwner: "",
+  departmentId: null,
   email: "",
   notes: "",
   resumeSourceId: null,
+  serviceUnit: null,
   sscName: "",
   telegram: "",
   workspaceRole: null,
@@ -126,9 +135,11 @@ function buildSscResponsibilityInput(
   return {
     centerName: selectedSource?.name ?? form.centerName,
     demandOwner: form.demandOwner.trim(),
+    departmentId: form.departmentId,
     email: form.email.trim().toLowerCase(),
     notes: form.notes.trim(),
     resumeSourceId: selectedSource?.id ?? null,
+    serviceUnit: form.serviceUnit?.trim() || null,
     sscName: form.sscName.trim(),
     telegram: form.telegram.trim(),
     workspaceRole: selectedRole.value,
@@ -252,12 +263,14 @@ export function SscResponsibilityEditorDialog({
   onOpenChange,
   onSaved,
   fixedSource,
+  initialScope,
 }: {
   open: boolean;
   record: SscResponsibilityRecord | null;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
   fixedSource?: SscResponsibilitySource;
+  initialScope?: SscResponsibilityScope;
 }) {
   const slug = useWorkspaceSlug();
   const queryClient = useQueryClient();
@@ -265,12 +278,12 @@ export function SscResponsibilityEditorDialog({
     () =>
       fixedSource
         ? {
-            ...(record ?? EMPTY_FORM),
+            ...(record ?? { ...EMPTY_FORM, ...initialScope }),
             centerName: fixedSource.name,
             resumeSourceId: fixedSource.id,
           }
-        : (record ?? EMPTY_FORM),
-    [record, fixedSource],
+        : (record ?? { ...EMPTY_FORM, ...initialScope }),
+    [record, fixedSource, initialScope],
   );
   const [form, setForm] = useState<EditorForm>(initialForm);
   const optionsQuery = useQuery({
@@ -334,7 +347,8 @@ export function SscResponsibilityEditorDialog({
           <DialogHeader>
             <DialogTitle>{record ? "编辑 SSC 负责组织" : "新增 SSC 负责组织"}</DialogTitle>
             <DialogDescription>
-              请选择负责的中心/部门和 SSC 工作区角色。SSC 无需先注册，联系方式可先留空，后续补充。
+              按候选人所选岗位匹配 SSC，优先使用服务单位、部门细分范围，未细分时使用通用范围。SSC
+              无需先注册，联系方式可后续补充。
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-5 sm:grid-cols-2">
@@ -360,6 +374,12 @@ export function SscResponsibilityEditorDialog({
               loading={optionsQuery.isPending}
               failed={optionsQuery.isError}
               onChange={(value) => setForm((previous) => ({ ...previous, workspaceRole: value }))}
+            />
+            <SscScopeFields
+              value={form}
+              options={optionsQuery.data}
+              disabled={mutation.isPending || optionsQuery.isPending || optionsQuery.isError}
+              onChange={(scope) => setForm((previous) => ({ ...previous, ...scope }))}
             />
             {optionsQuery.isError ? (
               <div className="sm:col-span-2">
@@ -514,6 +534,16 @@ export function SscResponsibilitiesGrid() {
       textColumn<SscResponsibilityRecord>({ key: "demandOwner", title: "需求对接负责人" }),
       sortableTextColumn({ key: "centerName", primary: true, title: "中心/部门" }),
       textColumn<SscResponsibilityRecord>({
+        fallback: "不限",
+        key: "serviceUnit",
+        title: "服务单位",
+      }),
+      textColumn<SscResponsibilityRecord>({
+        fallback: "不限",
+        key: "departmentName",
+        title: "部门",
+      }),
+      textColumn<SscResponsibilityRecord>({
         fallback: "待设置角色",
         key: "workspaceRoleName",
         title: "工作区角色",
@@ -540,7 +570,10 @@ export function SscResponsibilitiesGrid() {
   );
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="SSC 负责组织" description="提前录入 SSC 的联系方式及其负责的中心/部门。" />
+      <PageHeader
+        title="SSC 负责组织"
+        description="按候选人所选岗位匹配 SSC，细分范围优先，未细分时使用通用范围。"
+      />
       <DataGrid<SscResponsibilityRecord>
         {...grid.bind}
         columns={columns}
@@ -550,7 +583,7 @@ export function SscResponsibilitiesGrid() {
           {
             key: "search",
             minWidth: "20rem",
-            placeholder: "搜索负责人、中心、SSC、TG、邮箱或备注",
+            placeholder: "搜索负责人、中心、服务单位、部门、SSC 或联系方式",
             type: "search",
           },
         ]}
