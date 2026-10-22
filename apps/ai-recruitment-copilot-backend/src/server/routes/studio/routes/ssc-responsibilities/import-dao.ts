@@ -5,7 +5,12 @@ import {
   acquireSscProvisioningLock,
   syncSscMemberRole,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/ssc-provisioning";
-import { organizationRole, resumeSource, sscResponsibility } from "@arc/db-schema/schema";
+import {
+  department,
+  organizationRole,
+  resumeSource,
+  sscResponsibility,
+} from "@arc/db-schema/schema";
 import { duplicateError } from "./dao";
 import { previewSscResponsibilityRows } from "./import-matching";
 import type { SscResponsibilityImport, SscResponsibilityImportCommit } from "./schema";
@@ -34,8 +39,10 @@ async function loadCatalog(organizationId: string, tx: Transaction) {
   const existing = await tx
     .select({
       centerName: sscResponsibility.centerName,
+      departmentId: sscResponsibility.departmentId,
       email: sscResponsibility.email,
       resumeSourceId: sscResponsibility.resumeSourceId,
+      serviceUnit: sscResponsibility.serviceUnit,
       sscName: sscResponsibility.sscName,
       telegram: sscResponsibility.telegram,
       workspaceRole: sscResponsibility.workspaceRole,
@@ -43,7 +50,12 @@ async function loadCatalog(organizationId: string, tx: Transaction) {
     .from(sscResponsibility)
     .where(eq(sscResponsibility.organizationId, organizationId))
     .for("share");
-  return { existing, resumeSources, roles };
+  const departments = await tx
+    .select({ id: department.id, name: department.name })
+    .from(department)
+    .where(eq(department.organizationId, organizationId))
+    .for("share");
+  return { departments, existing, resumeSources, roles };
 }
 
 function previewHash(rows: SscImportPreviewRow[]) {

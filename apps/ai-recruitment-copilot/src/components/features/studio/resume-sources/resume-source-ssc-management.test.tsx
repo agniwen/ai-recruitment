@@ -79,11 +79,14 @@ const ledger = {
   centerName: "研发中心",
   createdAt: "2026-10-18T00:00:00.000Z",
   demandOwner: "负责人",
+  departmentId: "department-b",
+  departmentName: "创意部",
   email: "current@example.com",
   id: "entry-1",
   notes: "范围备注",
   resumeSourceId: "source-a",
   resumeSourceName: "研发中心",
+  serviceUnit: "智能增长事业部",
   sscName: "当前SSC",
   telegram: "@current",
   updatedAt: "2026-10-18T00:00:00.000Z",
@@ -147,8 +150,13 @@ beforeEach(() => {
   mocks.options.mockImplementation(() =>
     Promise.resolve(
       Response.json({
+        departments: [
+          { hiringUnitName: "事业部甲", id: "department-a", name: "创意部" },
+          { hiringUnitName: "事业部乙", id: "department-b", name: "创意部" },
+        ],
         resumeSources: sourceRows.map(({ id, name }) => ({ id, name })),
         roles: [{ label: "SSC审核角色", value: "ssc-01" }],
+        serviceUnits: ["智能增长事业部"],
       }),
     ),
   );
@@ -223,7 +231,104 @@ async function fill(id: string, value: string) {
   });
 }
 
+async function pickDepartment() {
+  await waitForUi(() =>
+    expect(
+      document.querySelector<HTMLInputElement>("#ssc-management-add-departmentId")?.disabled,
+    ).toBe(false),
+  );
+  const input = document.querySelector<HTMLInputElement>("#ssc-management-add-departmentId");
+  await act(() => {
+    input?.focus();
+    input?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" }));
+  });
+  let option: HTMLElement | undefined;
+  await waitForUi(() => {
+    option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) =>
+      item.textContent?.includes("事业部乙"),
+    );
+    expect(option).toBeDefined();
+  });
+  await act(() => option?.click());
+}
+
 describe("source SSC management", () => {
+  it("shows service unit and department in the source responsibility list", async () => {
+    await mountPage();
+    await manage();
+    expect(document.body.textContent).toContain("智能增长事业部");
+    expect(document.body.textContent).toContain("创意部");
+  });
+
+  it("queries and assigns using the selected scope and clears candidates when the scope changes", async () => {
+    await mountPage();
+    await manage();
+    await act(() => button("添加 SSC")?.click());
+    await waitForUi(() =>
+      expect(document.querySelector("#ssc-management-add-members")?.matches(":disabled")).toBe(
+        false,
+      ),
+    );
+    await pickCandidate("已注册甲");
+    await fill("ssc-management-add-serviceUnit", "智能增长事业部");
+    await waitForUi(() => expect(button("添加")?.disabled).toBe(true));
+    expect(document.querySelector('[aria-label="移除 已注册甲"]')).toBeNull();
+    await pickDepartment();
+    await waitForUi(() =>
+      expect(mocks.candidates).toHaveBeenLastCalledWith({
+        param: { slug: "work" },
+        query: {
+          departmentId: "department-b",
+          resumeSourceId: "source-a",
+          serviceUnit: "智能增长事业部",
+        },
+      }),
+    );
+    await waitForUi(() =>
+      expect(document.querySelector("#ssc-management-add-members")?.matches(":disabled")).toBe(
+        false,
+      ),
+    );
+    await pickCandidate("已注册甲");
+    await act(() => button("添加")?.click());
+    await waitForUi(() => expect(mocks.assign).toHaveBeenCalledOnce());
+    expect(mocks.assign).toHaveBeenCalledWith({
+      json: {
+        candidateIds: ["member-one"],
+        departmentId: "department-b",
+        resumeSourceId: "source-a",
+        serviceUnit: "智能增长事业部",
+      },
+      param: { slug: "work" },
+    });
+  });
+
+  it("retains the selected scope when switching from adding an SSC to preregistering one", async () => {
+    await mountPage();
+    await manage();
+    await act(() => button("添加 SSC")?.click());
+    await fill("ssc-management-add-serviceUnit", "智能增长事业部");
+    await pickDepartment();
+    await act(() => button("预录新 SSC")?.click());
+    await waitForUi(() =>
+      expect(document.querySelector<HTMLInputElement>("#ssc-departmentId")?.value).toBe("创意部"),
+    );
+    expect(document.querySelector<HTMLInputElement>("#ssc-serviceUnit")?.value).toBe(
+      "智能增长事业部",
+    );
+    await fill("ssc-email", "new@example.com");
+    await act(() => button("保存")?.click());
+    await waitForUi(() => expect(mocks.create).toHaveBeenCalledOnce());
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          departmentId: "department-b",
+          resumeSourceId: "source-a",
+          serviceUnit: "智能增长事业部",
+        }),
+      }),
+    );
+  });
   it.each([
     ["owner", true, true],
     ["admin", true, true],
@@ -280,7 +385,12 @@ describe("source SSC management", () => {
     await act(() => button("添加")?.click());
     await waitForUi(() => expect(mocks.assign).toHaveBeenCalledOnce());
     expect(mocks.assign).toHaveBeenCalledWith({
-      json: { candidateIds: ["member-one", "preentry-two"], resumeSourceId: "source-a" },
+      json: {
+        candidateIds: ["member-one", "preentry-two"],
+        departmentId: null,
+        resumeSourceId: "source-a",
+        serviceUnit: null,
+      },
       param: { slug: "work" },
     });
     await waitForUi(() => expect(mocks.list.mock.calls.length).toBeGreaterThan(1));
@@ -308,9 +418,11 @@ describe("source SSC management", () => {
       json: {
         centerName: "研发中心",
         demandOwner: "",
+        departmentId: null,
         email: "new@example.com",
         notes: "",
         resumeSourceId: "source-a",
+        serviceUnit: null,
         sscName: "",
         telegram: "",
         workspaceRole: "ssc-01",
@@ -372,7 +484,7 @@ describe("source SSC management", () => {
     );
     expect(mocks.candidates).toHaveBeenLastCalledWith({
       param: { slug: "work" },
-      query: { resumeSourceId: "source-a" },
+      query: { departmentId: "", resumeSourceId: "source-a", serviceUnit: "" },
     });
   });
 
@@ -418,7 +530,7 @@ describe("source SSC management", () => {
     await waitForUi(() =>
       expect(mocks.candidates).toHaveBeenLastCalledWith({
         param: { slug: "work" },
-        query: { resumeSourceId: "source-b" },
+        query: { departmentId: "", resumeSourceId: "source-b", serviceUnit: "" },
       }),
     );
     expect(button("添加")?.disabled).toBe(true);

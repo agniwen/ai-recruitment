@@ -39,6 +39,11 @@ function recordCodeLine(candidateRecordId: string | null | undefined) {
   return code ? `\n系统记录编码：${code}` : "";
 }
 
+function privateTelegramLine(info: OfferConfirmationDetails | null | undefined) {
+  const telegram = info?.candidatePrivateTelegram?.trim();
+  return telegram ? `\n候选人私人 TG：${telegram}` : "";
+}
+
 function legacyInterviewSection(info: OfferConfirmationDetails | null | undefined) {
   if (!info?.mainInterviewerName?.trim() && !info?.interviewFeedback?.trim()) {
     return "";
@@ -66,7 +71,7 @@ export function buildOfferConfirmationText({
   return `【offer信息】
 候选人编码：${textOrMissing(info?.candidateCode, "未填写")}${recordCodeLine(candidateRecordId)}
 简历名：${textOrMissing(info?.candidateName)}
-性别：${textOrMissing(info?.gender)}
+性别：${textOrMissing(info?.gender)}${privateTelegramLine(info)}
 
 1️⃣编制信息：
 入职编制组织：${textOrMissing(info?.hiringUnitName)}

@@ -129,6 +129,12 @@ afterEach(() => {
 });
 
 describe("SSC notification recipients and cards", () => {
+  it("does not notify SSC before the recruiter confirms the candidate private TG", async () => {
+    mocks.current.mockResolvedValue([{ ...draft, recruiterConfirmationStatus: "pending" }]);
+    await expect(getOfferSscNotificationTargets(input)).resolves.toEqual([]);
+    expect(mocks.recipients).not.toHaveBeenCalled();
+  });
+
   it("loads and delivers the saved Offer confirmation content to the responsible SSC", async () => {
     const confirmationInfo = offerConfirmationDetailsSchema.parse({
       candidateCode: "SSC-SNAPSHOT-01",

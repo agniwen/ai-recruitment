@@ -11,6 +11,7 @@ import {
   recruitingGroup,
   recruitingGroupMember,
   studioInterview,
+  studioOfferDraft,
   user,
 } from "@arc/db-schema/schema";
 
@@ -135,10 +136,17 @@ export function requestAction(
   });
 }
 
-export async function newOffer() {
-  return await createOfferDraft({
+export async function newLegacySscOffer() {
+  const draft = await createOfferDraft({
     input: INPUT,
     interviewRecordId: CANDIDATE,
     organizationId: ORG,
   });
+  // This fixture isolates the historical SSC lifecycle. The recruiter gate has
+  // dedicated coverage in dao/offer-recruiter-contact.test.ts.
+  await db
+    .update(studioOfferDraft)
+    .set({ recruiterConfirmationStatus: null })
+    .where(eq(studioOfferDraft.id, draft.id));
+  return { ...draft, recruiterConfirmationStatus: null };
 }

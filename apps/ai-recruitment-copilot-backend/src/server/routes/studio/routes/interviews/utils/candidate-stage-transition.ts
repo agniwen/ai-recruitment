@@ -301,6 +301,7 @@ export async function transitionCandidateStage(command: {
       // an unconfirmed Offer into the historical compatibility path.
       const offers = await tx
         .select({
+          recruiterConfirmationStatus: studioOfferDraft.recruiterConfirmationStatus,
           sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
           status: studioOfferDraft.status,
           version: studioOfferDraft.version,
@@ -316,6 +317,12 @@ export async function transitionCandidateStage(command: {
         .for("update");
       const hasSscFlow = offers.some((offer) => offer.sscConfirmationStatus !== null);
       const [currentOffer] = offers;
+      if (currentOffer?.recruiterConfirmationStatus === "pending") {
+        return {
+          kind: "invalid",
+          message: "最新 Offer 尚未由招聘人员补充并确认候选人私人 TG，不能标记已到岗。",
+        } as const;
+      }
       if (
         hasSscFlow &&
         (currentOffer?.sscConfirmationStatus !== "completed" ||

@@ -20,8 +20,11 @@ import { formatDate as formatChinaDate } from "@arc/shared/utils/time";
 import { DatePicker } from "@/components/date-time-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { OfferCurrencySelect, offerCurrencySymbol, parseOfferCurrency } from "./offer-currency";
 import { OfferConfirmationFields } from "./offer-creation-confirmation";
+
+const probationPeriods = Array.from({ length: 12 }, (_value, index) => `${index + 1}个月`);
 
 // Toast 文案 helper：避免内联三元嵌套（mode + sendImmediately 两维组合）。
 // Save-success toast helper; flattens the nested ternary of mode × sendImmediately.
@@ -165,14 +168,19 @@ export function OfferDraftFormFields({
         onChange={(value) => onFieldChange("confirmationInfo", value)}
         positionField={
           <div className="grid min-w-0 gap-1.5">
-            <Label htmlFor={`${idPrefix}-position`}>职位（必填）</Label>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <Label htmlFor={`${idPrefix}-position`}>职位（必填）</Label>
+              <span className="text-muted-foreground text-xs" id={`${idPrefix}-position-hint`}>
+                例如：高级前端工程师（L4）
+              </span>
+            </div>
             <Input
+              aria-describedby={`${idPrefix}-position-hint`}
               aria-invalid={showValidationErrors && Boolean(errors.position)}
               aria-required
               id={`${idPrefix}-position`}
               maxLength={200}
               onChange={(event) => onFieldChange("position", event.target.value)}
-              placeholder="例如 高级前端工程师（L4）"
               value={form.position}
             />
             {showValidationErrors && errors.position ? (
@@ -182,7 +190,7 @@ export function OfferDraftFormFields({
         }
         salaryFields={
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5 sm:col-span-2">
+            <div className="grid gap-1.5 sm:col-start-1">
               <Label htmlFor={`${idPrefix}-currency`}>薪资货币</Label>
               <OfferCurrencySelect
                 id={`${idPrefix}-currency`}
@@ -190,7 +198,7 @@ export function OfferDraftFormFields({
                 onChange={(value) => onFieldChange("currency", value)}
               />
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-1.5 sm:col-start-1">
               <Label htmlFor={`${idPrefix}-base`}>转正薪资（月薪，{symbol}，必填）</Label>
               <Input
                 aria-invalid={showValidationErrors && Boolean(errors.baseSalary)}
@@ -208,10 +216,25 @@ export function OfferDraftFormFields({
               ) : null}
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor={`${idPrefix}-confirm-probationSalary`}>
-                试用薪资（月薪，{symbol}）
-              </Label>
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <Label htmlFor={`${idPrefix}-confirm-probationSalary`}>
+                  试用薪资（月薪，{symbol}）
+                </Label>
+                {info.probationSalary === null ? (
+                  <span
+                    className="text-muted-foreground text-xs"
+                    id={`${idPrefix}-confirm-probationSalary-hint`}
+                  >
+                    待补充
+                  </span>
+                ) : null}
+              </div>
               <Input
+                aria-describedby={
+                  info.probationSalary === null
+                    ? `${idPrefix}-confirm-probationSalary-hint`
+                    : undefined
+                }
                 id={`${idPrefix}-confirm-probationSalary`}
                 inputMode="numeric"
                 min={0}
@@ -222,35 +245,55 @@ export function OfferDraftFormFields({
                     event.target.value === "" ? null : Number(event.target.value),
                   )
                 }
-                placeholder="待补充"
                 type="number"
                 value={info.probationSalary ?? ""}
               />
             </div>
-            <div className="grid gap-1.5 sm:col-span-2">
-              <Label htmlFor={`${idPrefix}-confirm-probationPeriod`}>试用期期限</Label>
-              <Input
+            <div className="grid gap-1.5 sm:col-start-1 [&>[data-slot=native-select-wrapper]]:w-full">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <Label htmlFor={`${idPrefix}-confirm-probationPeriod`}>试用期期限（月）</Label>
+                <span
+                  className="text-muted-foreground text-xs"
+                  id={`${idPrefix}-confirm-probationPeriod-hint`}
+                >
+                  例如：2
+                </span>
+              </div>
+              <NativeSelect
+                aria-describedby={`${idPrefix}-confirm-probationPeriod-hint`}
                 id={`${idPrefix}-confirm-probationPeriod`}
-                maxLength={120}
                 onChange={(event) =>
                   setProbationField("probationPeriod", event.target.value || null)
                 }
-                placeholder="例如 2个月"
                 value={info.probationPeriod ?? ""}
-              />
+              >
+                <NativeSelectOption aria-label="未选择试用期" value="" />
+                {info.probationPeriod && !probationPeriods.includes(info.probationPeriod) ? (
+                  <NativeSelectOption disabled value={info.probationPeriod}>
+                    {info.probationPeriod}（原记录）
+                  </NativeSelectOption>
+                ) : null}
+                {probationPeriods.map((period, index) => (
+                  <NativeSelectOption key={period} value={period}>
+                    {index + 1}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
             </div>
           </div>
         }
       />
       <section className="space-y-3 border-t pt-4">
         <h3 className="font-medium text-sm">系统设置</h3>
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${idPrefix}-expires`}>Offer 有效期至（可选）</Label>
-          <DatePicker
-            id={`${idPrefix}-expires`}
-            onValueChange={(value) => onFieldChange("expiresAt", value)}
-            value={form.expiresAt}
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${idPrefix}-expires`}>Offer 有效期至（可选）</Label>
+            <DatePicker
+              id={`${idPrefix}-expires`}
+              onValueChange={(value) => onFieldChange("expiresAt", value)}
+              value={form.expiresAt}
+            />
+          </div>
         </div>
       </section>
     </fieldset>

@@ -31,7 +31,7 @@ export interface OfferSscNotificationInput {
   organizationId: string;
   interviewRecordId: string;
   revision: number;
-  event: "pending" | "received" | "completed";
+  event: "recruiter" | "pending" | "received" | "completed";
 }
 
 type OfferSscTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -120,7 +120,7 @@ function ownsLease(job: ClaimedNotification) {
   );
 }
 
-function currentPendingOffer() {
+function currentPendingOffer(event: "pending" | "recruiter" = "pending") {
   const newer = alias(studioOfferDraft, "ssc_notification_newer_offer");
   return exists(
     db
@@ -141,6 +141,12 @@ function currentPendingOffer() {
           eq(studioOfferDraft.sscRevision, outbox.revision),
           eq(studioOfferDraft.status, "draft"),
           eq(studioOfferDraft.sscConfirmationStatus, "pending"),
+          event === "recruiter"
+            ? eq(studioOfferDraft.recruiterConfirmationStatus, "pending")
+            : or(
+                isNull(studioOfferDraft.recruiterConfirmationStatus),
+                eq(studioOfferDraft.recruiterConfirmationStatus, "completed"),
+              ),
           ne(studioInterview.pipelineStage, "closed"),
           or(
             isNull(studioOfferDraft.expiresAt),
@@ -165,12 +171,15 @@ function currentPendingOffer() {
 
 function completedWithoutRecipients() {
   return and(
-    eq(outbox.event, "pending"),
+    inArray(outbox.event, ["pending", "recruiter"]),
     eq(outbox.status, "completed"),
     isNull(outbox.lastError),
     sql`${outbox.recipientUserIds} = '[]'::jsonb`,
     sql`${outbox.sentUserIds} = '[]'::jsonb`,
-    currentPendingOffer(),
+    or(
+      and(eq(outbox.event, "pending"), currentPendingOffer()),
+      and(eq(outbox.event, "recruiter"), currentPendingOffer("recruiter")),
+    ),
   );
 }
 
@@ -192,7 +201,7 @@ async function recoverEmptyNotifications() {
       attempts: 0,
       availableAt: sql`CURRENT_TIMESTAMP`,
       completedAt: null,
-      lastError: "ssc_recipient_unavailable",
+      lastError: sql`CASE WHEN ${outbox.event} = 'recruiter' THEN 'recruiter_recipient_unavailable' ELSE 'ssc_recipient_unavailable' END`,
       leaseToken: null,
       leaseUntil: null,
       recipientUserIds: null,
@@ -218,14 +227,17 @@ async function waitForRecipient(job: ClaimedNotification) {
       attempts: Math.max(0, job.attempts - 1),
       availableAt: sql`CURRENT_TIMESTAMP + INTERVAL '60 seconds'`,
       completedAt: null,
-      lastError: "ssc_recipient_unavailable",
+      lastError:
+        job.event === "recruiter" ? "recruiter_recipient_unavailable" : "ssc_recipient_unavailable",
       leaseToken: null,
       leaseUntil: null,
       recipientUserIds: null,
       status: "pending",
       updatedAt: new Date(),
     })
-    .where(and(ownsLease(job), currentPendingOffer()))
+    .where(
+      and(ownsLease(job), currentPendingOffer(job.event === "recruiter" ? "recruiter" : "pending")),
+    )
     .returning({ id: outbox.id });
   return updated.length > 0;
 }
@@ -336,7 +348,7 @@ async function deliverRecipients(
     const targets = await resolveTargets(job);
     if (
       targets.length === 0 &&
-      job.event === "pending" &&
+      (job.event === "pending" || job.event === "recruiter") &&
       job.sentUserIds.length === 0 &&
       (await waitForRecipient(job))
     ) {
@@ -369,9 +381,9 @@ async function deliverRecipients(
   }
   if (
     !failed &&
-    job.lastError !== "notification_delivery_failed" &&
+    (job.event === "recruiter" || job.lastError !== "notification_delivery_failed") &&
     sentUserIds.length === 0 &&
-    job.event === "pending" &&
+    (job.event === "pending" || job.event === "recruiter") &&
     (await waitForRecipient(job))
   ) {
     return "waiting";
@@ -456,7 +468,7 @@ async function findNotificationForTestChat(testChat: string, resolveTargets: Res
       .where(
         and(
           claimableNotifications(),
-          eq(outbox.event, "pending"),
+          inArray(outbox.event, ["pending", "recruiter"]),
           cursor
             ? sql`(${outbox.availableAt}, ${outbox.createdAt}, ${outbox.id}) > (${cursor.availableAt}::timestamptz, ${cursor.createdAt}::timestamptz, ${cursor.id})`
             : undefined,
@@ -497,7 +509,8 @@ export async function dispatchOfferSscNotifications(): Promise<number> {
     const targets = await getOfferSscNotificationTargets(input);
     if (
       testChat &&
-      (input.event !== "pending" || targets.some((target) => target.chatId !== testChat))
+      (!["pending", "recruiter"].includes(input.event) ||
+        targets.some((target) => target.chatId !== testChat))
     ) {
       throw new Error("Notification is outside the local test recipient scope");
     }

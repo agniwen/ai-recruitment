@@ -3,6 +3,9 @@ import { and, asc, count, desc, eq, ilike, ne, notInArray, or, sql } from "drizz
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { syncSscMemberRole } from "@arc/ai-recruitment-copilot-backend/lib/server/ssc-provisioning";
 import {
+  department,
+  hiringUnit,
+  jobDescription,
   member,
   organizationRole,
   resumeSource,
@@ -19,7 +22,11 @@ const UNIQUE_RELATIONSHIP_CONSTRAINTS = new Set([
 ]);
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-type SaveValidationError = "invalid_role" | "invalid_source" | "role_conflict";
+type SaveValidationError =
+  | "invalid_role"
+  | "invalid_source"
+  | "invalid_department"
+  | "role_conflict";
 
 class SscRoleConflictError extends Error {
   override name = "SscRoleConflictError";
@@ -28,7 +35,7 @@ class SscRoleConflictError extends Error {
 const NON_SSC_ROLE_KEYS = ["owner", "admin", "member", "noAccess"];
 
 export async function listSscResponsibilityOptions(organizationId: string) {
-  const [roles, resumeSources] = await Promise.all([
+  const [roles, resumeSources, departments, serviceUnits] = await Promise.all([
     db
       .select({ label: organizationRole.name, value: organizationRole.role })
       .from(organizationRole)
@@ -45,8 +52,36 @@ export async function listSscResponsibilityOptions(organizationId: string) {
       .from(resumeSource)
       .where(eq(resumeSource.organizationId, organizationId))
       .orderBy(asc(resumeSource.name), asc(resumeSource.id)),
+    db
+      .select({ hiringUnitName: hiringUnit.name, id: department.id, name: department.name })
+      .from(department)
+      .leftJoin(
+        hiringUnit,
+        and(
+          eq(hiringUnit.id, department.hiringUnitId),
+          eq(hiringUnit.organizationId, department.organizationId),
+        ),
+      )
+      .where(eq(department.organizationId, organizationId))
+      .orderBy(asc(department.name), asc(department.id)),
+    db
+      .select({ value: sql<string>`min(btrim(${jobDescription.serviceUnit}))` })
+      .from(jobDescription)
+      .where(
+        and(
+          eq(jobDescription.organizationId, organizationId),
+          sql`nullif(btrim(${jobDescription.serviceUnit}), '') IS NOT NULL`,
+        ),
+      )
+      .groupBy(sql`lower(btrim(${jobDescription.serviceUnit}))`)
+      .orderBy(sql`lower(btrim(${jobDescription.serviceUnit}))`),
   ]);
-  return { resumeSources, roles };
+  return {
+    departments,
+    resumeSources,
+    roles,
+    serviceUnits: serviceUnits.map((entry) => entry.value),
+  };
 }
 
 async function lockSscWrites(tx: Transaction, organizationId: string) {
@@ -97,6 +132,19 @@ async function validateAssignment(
     centerName = source.name;
   } else if (!current || current.resumeSourceId !== null || current.centerName !== centerName) {
     return "invalid_source";
+  }
+
+  if (input.departmentId) {
+    const [selected] = await tx
+      .select({ id: department.id })
+      .from(department)
+      .where(
+        and(eq(department.id, input.departmentId), eq(department.organizationId, organizationId)),
+      )
+      .for("share");
+    if (!selected) {
+      return "invalid_department";
+    }
   }
 
   if (input.email) {
@@ -186,8 +234,10 @@ export async function queryPaginatedSscResponsibilities(
           ilike(sscResponsibility.centerName, pattern),
           ilike(resumeSource.name, pattern),
           ilike(sscResponsibility.demandOwner, pattern),
+          ilike(department.name, pattern),
           ilike(sscResponsibility.email, pattern),
           ilike(sscResponsibility.notes, pattern),
+          ilike(sscResponsibility.serviceUnit, pattern),
           ilike(sscResponsibility.sscName, pattern),
           ilike(sscResponsibility.telegram, pattern),
         )
@@ -208,11 +258,14 @@ export async function queryPaginatedSscResponsibilities(
         centerName: sscResponsibility.centerName,
         createdAt: sscResponsibility.createdAt,
         demandOwner: sscResponsibility.demandOwner,
+        departmentId: sscResponsibility.departmentId,
+        departmentName: department.name,
         email: sscResponsibility.email,
         id: sscResponsibility.id,
         notes: sscResponsibility.notes,
         resumeSourceId: sscResponsibility.resumeSourceId,
         resumeSourceName: resumeSource.name,
+        serviceUnit: sscResponsibility.serviceUnit,
         sscName: sscResponsibility.sscName,
         telegram: sscResponsibility.telegram,
         updatedAt: sscResponsibility.updatedAt,
@@ -221,6 +274,13 @@ export async function queryPaginatedSscResponsibilities(
       })
       .from(sscResponsibility)
       .leftJoin(resumeSource, sourceJoin)
+      .leftJoin(
+        department,
+        and(
+          eq(department.id, sscResponsibility.departmentId),
+          eq(department.organizationId, sscResponsibility.organizationId),
+        ),
+      )
       .leftJoin(
         organizationRole,
         and(
@@ -236,6 +296,13 @@ export async function queryPaginatedSscResponsibilities(
       .select({ total: count() })
       .from(sscResponsibility)
       .leftJoin(resumeSource, sourceJoin)
+      .leftJoin(
+        department,
+        and(
+          eq(department.id, sscResponsibility.departmentId),
+          eq(department.organizationId, sscResponsibility.organizationId),
+        ),
+      )
       .where(where),
   ]);
   return {
@@ -264,7 +331,14 @@ export async function createSscResponsibility(
       }
       const [created] = await tx
         .insert(sscResponsibility)
-        .values({ ...input, ...validated, id: randomUUID(), organizationId })
+        .values({
+          ...input,
+          ...validated,
+          departmentId: input.departmentId ?? null,
+          id: randomUUID(),
+          organizationId,
+          serviceUnit: input.serviceUnit ?? null,
+        })
         .returning({ id: sscResponsibility.id });
       await syncSavedRole(tx, organizationId, input);
       return created;
@@ -291,8 +365,10 @@ export async function updateSscResponsibility(
       const [current] = await tx
         .select({
           centerName: sscResponsibility.centerName,
+          departmentId: sscResponsibility.departmentId,
           id: sscResponsibility.id,
           resumeSourceId: sscResponsibility.resumeSourceId,
+          serviceUnit: sscResponsibility.serviceUnit,
         })
         .from(sscResponsibility)
         .where(
@@ -302,13 +378,18 @@ export async function updateSscResponsibility(
       if (!current) {
         return "not_found";
       }
-      const validated = await validateAssignment(tx, organizationId, input, current);
+      const scopedInput = {
+        ...input,
+        departmentId: input.departmentId === undefined ? current.departmentId : input.departmentId,
+        serviceUnit: input.serviceUnit === undefined ? current.serviceUnit : input.serviceUnit,
+      };
+      const validated = await validateAssignment(tx, organizationId, scopedInput, current);
       if (typeof validated === "string") {
         return validated;
       }
       const [updated] = await tx
         .update(sscResponsibility)
-        .set({ ...input, ...validated, updatedAt: new Date() })
+        .set({ ...scopedInput, ...validated, updatedAt: new Date() })
         .where(
           and(eq(sscResponsibility.id, id), eq(sscResponsibility.organizationId, organizationId)),
         )

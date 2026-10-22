@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   loadOfferApprovalAttachment: vi.fn(),
   loadOfferCreationContext: vi.fn(),
   maybeAdvanceToOffer: vi.fn(),
+  notifyCandidateStageChange: vi.fn(),
   permissionCalls: [] as [string, string][],
   putObjectBytes: vi.fn(),
   receiveOfferSscConfirmation: vi.fn(),
@@ -116,6 +117,10 @@ vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-activity",
   () => ({ recordCandidateActivity: mocks.recordCandidateActivity }),
 );
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/utils/candidate-stage-notification",
+  () => ({ notifyCandidateStageChange: mocks.notifyCandidateStageChange }),
+);
 
 // oxlint-disable-next-line import/first -- must follow vi.mock() calls for correct hoisting.
 import { offerDraftsRouter } from "../route";
@@ -135,6 +140,27 @@ function makeApp() {
 }
 
 describe("offerDraftsRouter", () => {
+  it("uses the durable recruiter notice instead of a second generic stage notice for new gated Offers", async () => {
+    mocks.limit.mockResolvedValue([
+      { id: RECORD_ID, outcome: "in_pipeline", pipelineStage: "human_interview" },
+    ]);
+    mocks.createOfferDraft.mockResolvedValue({
+      id: "new-gated-offer",
+      position: "工程师",
+      recruiterConfirmationStatus: "pending",
+      version: 1,
+    });
+    mocks.maybeAdvanceToOffer.mockResolvedValue(true);
+    const response = await makeApp().request(`/${RECORD_ID}/offer-drafts`, {
+      body: JSON.stringify({ baseSalary: 30_000, position: "工程师" }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.createOfferDraft).toHaveBeenCalledOnce();
+    expect(mocks.notifyCandidateStageChange).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resolveSscAccessActor.mockResolvedValue(null);

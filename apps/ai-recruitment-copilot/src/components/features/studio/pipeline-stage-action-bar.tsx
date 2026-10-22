@@ -391,6 +391,8 @@ function RecruitmentStageHoverCard({
   let stageLabel: string = pipelineStageMeta[pipelineStage].label;
   if (retired) {
     stageLabel = "Offer · 待新增有效版本";
+  } else if (state?.recruiterConfirmationStatus === "pending") {
+    stageLabel = "Offer · 待招聘人员确认私人 TG";
   } else if (sscStatus) {
     stageLabel = `Offer · ${getOfferSscConfirmationMeta(sscStatus).label}`;
   }
@@ -457,7 +459,10 @@ function RecruitmentStageHoverCard({
           {state ? (
             <div className="border-border border-t pt-3">
               <p className="mb-2 font-medium text-sm">SSC 确认进度</p>
-              <OfferSscProgressSteps status={sscStatus ?? null} />
+              <OfferSscProgressSteps
+                recruiterStatus={retired ? null : state.recruiterConfirmationStatus}
+                status={sscStatus ?? null}
+              />
             </div>
           ) : null}
         </div>

@@ -170,6 +170,7 @@ export interface OfferSscState {
   version: number;
   status: OfferDraftStatus;
   sscConfirmationStatus: OfferSscConfirmationStatus | null;
+  recruiterConfirmationStatus?: "pending" | "completed" | null;
 }
 
 /**
@@ -181,6 +182,10 @@ export interface OfferSscState {
 export interface OfferDraftRecord {
   id: string;
   confirmationInfo?: OfferConfirmationDetails | null;
+  recruiterConfirmationStatus?: "pending" | "completed" | null;
+  recruiterConfirmedAt?: string | null;
+  recruiterConfirmedBy?: string | null;
+  recruiterConfirmedSource?: "system" | "telegram" | null;
   approvalAttachment: {
     filename: string;
     mediaType: string;

@@ -21,6 +21,7 @@ type OfferSscAction = { action: "receive" } | { action: "complete"; file: File |
 
 function getOfferSscActionState(draft: OfferDraftRecord, canReceive: boolean, canConfirm: boolean) {
   const status = draft.sscConfirmationStatus ?? null;
+  const recruiterPending = draft.recruiterConfirmationStatus === "pending";
   let receiveDisabledReason: string | null = null;
   let confirmDisabledReason: string | null = null;
   if (!canReceive) {
@@ -34,11 +35,12 @@ function getOfferSscActionState(draft: OfferDraftRecord, canReceive: boolean, ca
     confirmDisabledReason = "请先完成SSC接收确认";
   }
   return {
-    canConfirm: canConfirm && status === "confirming" && draft.status === "draft",
-    canReceive: canReceive && status === "pending" && draft.status === "draft",
+    canConfirm:
+      !recruiterPending && canConfirm && status === "confirming" && draft.status === "draft",
+    canReceive: !recruiterPending && canReceive && status === "pending" && draft.status === "draft",
     confirmDisabledReason,
     receiveDisabledReason,
-    showActions: draft.status === "draft" && status !== null,
+    showActions: !recruiterPending && draft.status === "draft" && status !== null,
     status,
   };
 }
@@ -102,6 +104,7 @@ export function useOfferSscConfirmation({
       draft.version,
       draft.sscRevision ?? 1,
       draft.status,
+      draft.recruiterConfirmationStatus,
       actions.status,
       canConfirm,
       Boolean(disabled),
@@ -109,7 +112,11 @@ export function useOfferSscConfirmation({
     error: mutation.error,
     isPending: mutation.isPending,
     pendingAction: mutation.isPending ? mutation.variables?.action : null,
-    receive: () => mutation.mutate({ action: "receive" }),
+    receive: () => {
+      if (!disabled && actions.canReceive && !mutation.isPending) {
+        mutation.mutate({ action: "receive" });
+      }
+    },
     showActions: !disabled && actions.showActions,
     telegramUrl:
       !disabled && (actions.canReceive || actions.canConfirm) ? (telegramLink?.url ?? null) : null,
@@ -124,6 +131,9 @@ export function OfferStatusBadges({
   editing?: boolean;
 }) {
   const meta = getOfferDraftStatusMeta(draft.status);
+  if (draft.recruiterConfirmationStatus === "pending" && draft.status === "draft") {
+    return <Badge variant="outline">待招聘人员确认私人 TG</Badge>;
+  }
   const sscMeta = draft.sscConfirmationStatus
     ? getOfferSscConfirmationMeta(draft.sscConfirmationStatus)
     : null;
@@ -146,7 +156,7 @@ export function OfferSscNotice({ draft, error }: { draft: OfferDraftRecord; erro
     draft.sscConfirmationStatus === "pending" || draft.sscConfirmationStatus === "confirming";
   return (
     <>
-      {pending ? (
+      {pending && draft.recruiterConfirmationStatus !== "pending" ? (
         <p className="text-muted-foreground text-xs">
           SSC完成确认后方可发送 Offer 或标记入职。修改 Offer 内容后需重新确认。
         </p>

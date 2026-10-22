@@ -9,6 +9,7 @@ import {
 } from "@arc/db-schema/schema";
 import { resolveExternalInterviewerBindings } from "../studio/routes/interviews/dao/external-interviewers";
 import { normalizeTelegramUsername } from "./utils/identity";
+import { buildSscResponsibilityJobScopeCondition } from "../studio/routes/ssc-responsibilities/job-scope";
 
 /** Notification delivery uses the source ledger and verified chat, never an approval identity. */
 export async function listSourceSscNotificationRecipients(input: {
@@ -44,6 +45,7 @@ export async function listSourceSscNotificationRecipients(input: {
       and(
         eq(sscResponsibility.resumeSourceId, resumeSource.id),
         eq(sscResponsibility.organizationId, studioInterview.organizationId),
+        buildSscResponsibilityJobScopeCondition(sscResponsibility, jobDescription),
       ),
     )
     .leftJoin(

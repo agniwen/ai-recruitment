@@ -25,7 +25,7 @@ import {
   RECEIVE_ONLY_SSC,
   SECOND_SSC,
   makeApp,
-  newOffer,
+  newLegacySscOffer,
   requestAction,
   setupOfferSscFixture,
 } from "./offer-ssc-fixture";
@@ -68,11 +68,15 @@ beforeEach(async () => {
 });
 
 describe("Offer SSC notification events", () => {
-  it("enqueues pending after inserting a new Offer in the same transaction", async () => {
-    const offer = await newOffer();
+  it("enqueues recruiter after inserting a new Offer in the same transaction", async () => {
+    const offer = await createOfferDraft({
+      input: INPUT,
+      interviewRecordId: CANDIDATE,
+      organizationId: ORG,
+    });
     expect(notificationMocks.enqueue).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
       draftId: offer.id,
-      event: "pending",
+      event: "recruiter",
       interviewRecordId: CANDIDATE,
       organizationId: ORG,
       revision: 1,
@@ -82,7 +86,7 @@ describe("Offer SSC notification events", () => {
   it.each(["receive", "complete"] as const)(
     "enqueues %s only on the first transition",
     async (action) => {
-      const offer = await newOffer();
+      const offer = await newLegacySscOffer();
       if (action === "complete") {
         await expect(requestAction(offer.id, "receive")).resolves.toHaveProperty("status", 200);
       }
@@ -103,7 +107,7 @@ describe("Offer SSC notification events", () => {
   );
 
   it("enqueues a fresh revision for changed terms but not an unchanged save", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     notificationMocks.enqueue.mockClear();
     await editOfferDraft({ draftId: offer.id, input: { baseSalary: 35_000 }, organizationId: ORG });
     await editOfferDraft({ draftId: offer.id, input: { baseSalary: 35_000 }, organizationId: ORG });
@@ -118,7 +122,7 @@ describe("Offer SSC notification events", () => {
   });
 
   it("enqueues pending for review attachment replacement and removal, not a missing attachment", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     notificationMocks.enqueue.mockClear();
     await editOfferDraftWithAttachment({
       approvalAttachment: {
@@ -152,7 +156,7 @@ describe("Offer SSC notification events", () => {
   });
 
   it("does not enqueue historical NULL Offer edits", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await db
       .update(studioOfferDraft)
       .set({ sscConfirmationStatus: null })
@@ -164,14 +168,14 @@ describe("Offer SSC notification events", () => {
 
   it("rolls back Offer creation if its durable event cannot be saved", async () => {
     notificationMocks.enqueue.mockRejectedValueOnce(new Error("outbox unavailable"));
-    await expect(newOffer()).rejects.toThrow("outbox unavailable");
+    await expect(newLegacySscOffer()).rejects.toThrow("outbox unavailable");
     expect(
       await db.select().from(studioOfferDraft).where(eq(studioOfferDraft.organizationId, ORG)),
     ).toHaveLength(0);
   });
 
   it("rolls back changed terms when the corresponding notification event fails", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     notificationMocks.enqueue.mockRejectedValueOnce(new Error("outbox unavailable"));
     await expect(
       editOfferDraft({ draftId: offer.id, input: { baseSalary: 35_000 }, organizationId: ORG }),
@@ -192,7 +196,7 @@ describe("current Offer SSC state", () => {
   const path = `/${CANDIDATE}/offer-drafts/ssc/current`;
 
   it("returns only the SSC summary to a custom role with Offer read access", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await db
       .update(studioOfferDraft)
       .set({
@@ -210,6 +214,7 @@ describe("current Offer SSC state", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       id: offer.id,
+      recruiterConfirmationStatus: null,
       sscConfirmationStatus: "pending",
       status: "draft",
       version: 1,
@@ -219,18 +224,19 @@ describe("current Offer SSC state", () => {
   it.each(["deleted", "superseded"] as const)(
     "keeps a newer %s version instead of falling back to an accepted confirmed Offer",
     async (status) => {
-      const accepted = await newOffer();
+      const accepted = await newLegacySscOffer();
       await db
         .update(studioOfferDraft)
         .set({ sscConfirmationStatus: "completed", status: "accepted" })
         .where(eq(studioOfferDraft.id, accepted.id));
-      const latest = await newOffer();
+      const latest = await newLegacySscOffer();
       await db.update(studioOfferDraft).set({ status }).where(eq(studioOfferDraft.id, latest.id));
 
       const response = await makeApp().request(path);
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
         id: latest.id,
+        recruiterConfirmationStatus: null,
         sscConfirmationStatus: "pending",
         status,
         version: 2,
@@ -248,14 +254,14 @@ describe("current Offer SSC state", () => {
     "checks actual Offer read permission when an Offer exists: %s",
     async (exists) => {
       if (exists) {
-        await newOffer();
+        await newLegacySscOffer();
       }
       await expect(makeApp(FORBIDDEN_USER).request(path)).resolves.toHaveProperty("status", 403);
     },
   );
 
   it("hides the SSC state when the reader cannot see the candidate", async () => {
-    await newOffer();
+    await newLegacySscOffer();
     await db
       .update(studioInterview)
       .set({ createdBy: SECOND_SSC })
@@ -272,7 +278,7 @@ describe("current Offer SSC state", () => {
 
 describe("Offer SSC confirmation", () => {
   it("requires an explicit internal approval declaration before completion", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await requestAction(offer.id, "receive");
     for (const internalApprovalConfirmed of [undefined, false]) {
       const response = await makeApp().request(
@@ -293,7 +299,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("enforces the internal approval declaration inside the shared DAO", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await requestAction(offer.id, "receive");
     await expect(
       completeOfferSscConfirmation({
@@ -308,7 +314,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("stores completion proof separately, strips storage keys, and preserves the first completion", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await requestAction(offer.id, "receive");
     const completionAttachment = {
       filename: "approved.png",
@@ -365,7 +371,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("rejects completion proof belonging to an older revision", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await requestAction(offer.id, "receive");
     await expect(
       completeOfferSscConfirmation({
@@ -387,7 +393,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("streams completion proof privately only for its authorized candidate and current revision", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await requestAction(offer.id, "receive");
     await completeOfferSscConfirmation({
       actor: { id: FIRST_SSC, role: "owner" },
@@ -424,7 +430,7 @@ describe("Offer SSC confirmation", () => {
   it.each([false, true])(
     "supports optional screenshots through the multipart completion endpoint: %s",
     async (withScreenshot) => {
-      const offer = await newOffer();
+      const offer = await newLegacySscOffer();
       await requestAction(offer.id, "receive");
       vi.mocked(buildOfferApprovalAttachmentKey).mockResolvedValue("private/multipart.png");
       const form = new FormData();
@@ -457,7 +463,7 @@ describe("Offer SSC confirmation", () => {
   it.each(["false", "duplicate", "invalid"])(
     "rejects invalid multipart completion input without storing screenshots: %s",
     async (mode) => {
-      const offer = await newOffer();
+      const offer = await newLegacySscOffer();
       await requestAction(offer.id, "receive");
       vi.mocked(putObjectBytes).mockClear();
       const form = new FormData();
@@ -482,7 +488,7 @@ describe("Offer SSC confirmation", () => {
   );
 
   it("creates a pending internal Offer", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     expect(offer).toMatchObject({
       sscConfirmationStatus: "pending",
       sscRevision: 1,
@@ -509,7 +515,7 @@ describe("Offer SSC confirmation", () => {
       .update(studioInterview)
       .set({ outcome: "withdrawn", pipelineStage: "closed" })
       .where(eq(studioInterview.id, CANDIDATE));
-    await expect(newOffer()).rejects.toThrow();
+    await expect(newLegacySscOffer()).rejects.toThrow();
     expect(
       await db.select().from(studioOfferDraft).where(eq(studioOfferDraft.organizationId, ORG)),
     ).toHaveLength(0);
@@ -518,7 +524,7 @@ describe("Offer SSC confirmation", () => {
   it.each(["pending", "confirming"] as const)(
     "cannot send an Offer while SSC is %s",
     async (sscConfirmationStatus) => {
-      const offer = await newOffer();
+      const offer = await newLegacySscOffer();
       await db
         .update(studioOfferDraft)
         .set({ sscConfirmationStatus })
@@ -534,7 +540,7 @@ describe("Offer SSC confirmation", () => {
   );
 
   it("allows a different SSC to finish after the first SSC receives, then permits sending", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     const received = await requestAction(offer.id, "receive");
     expect(received.status).toBe(200);
     expect(await received.json()).toMatchObject({
@@ -551,7 +557,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("does not allow completion before receipt", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await expect(requestAction(offer.id, "complete")).resolves.toHaveProperty("status", 409);
     const [stored] = await db
       .select()
@@ -561,7 +567,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("keeps the first receiver and completion facts on repeated actions", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     const first = await requestAction(offer.id, "receive");
     expect(first.status).toBe(200);
     const received = await first.json();
@@ -592,7 +598,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("serializes concurrent receipts so exactly one receiver is recorded", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     const results = await Promise.all([
       requestAction(offer.id, "receive", 1, FIRST_SSC),
       requestAction(offer.id, "receive", 1, SECOND_SSC),
@@ -604,7 +610,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("resets completed confirmation on changed terms and rejects stale buttons", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await expect(requestAction(offer.id, "receive")).resolves.toHaveProperty("status", 200);
     await expect(requestAction(offer.id, "complete")).resolves.toHaveProperty("status", 200);
     const updated = await editOfferDraft({
@@ -626,7 +632,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("does not reset confirmation for an unchanged save", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await expect(requestAction(offer.id, "receive")).resolves.toHaveProperty("status", 200);
     const unchanged = await editOfferDraft({
       draftId: offer.id,
@@ -641,7 +647,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("invalidates confirmation when the review attachment is removed", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await editOfferDraftWithAttachment({
       approvalAttachment: {
         filename: "review.png",
@@ -668,7 +674,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("checks the actual member permission even when HTTP middleware was bypassed", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await expect(requestAction(offer.id, "receive", 1, FORBIDDEN_USER)).resolves.toHaveProperty(
       "status",
       403,
@@ -676,7 +682,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("allows the custom receive-only role to receive but never complete confirmation", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     const received = await requestAction(offer.id, "receive", 1, RECEIVE_ONLY_SSC);
     expect(received.status).toBe(200);
     expect(await received.json()).toMatchObject({
@@ -695,7 +701,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("allows the custom confirm-only role to finish another SSC's receipt but never receive", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await expect(requestAction(offer.id, "receive", 1, CONFIRM_ONLY_SSC)).resolves.toHaveProperty(
       "status",
       403,
@@ -723,7 +729,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("does not accept an Offer through another candidate's URL", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await expect(
       requestAction(offer.id, "receive", 1, FIRST_SSC, "wrong-candidate"),
     ).resolves.toHaveProperty("status", 404);
@@ -732,14 +738,14 @@ describe("Offer SSC confirmation", () => {
   it.each(["deleted", "superseded"] as const)(
     "rejects SSC actions on %s versions",
     async (status) => {
-      const offer = await newOffer();
+      const offer = await newLegacySscOffer();
       await db.update(studioOfferDraft).set({ status }).where(eq(studioOfferDraft.id, offer.id));
       await expect(requestAction(offer.id, "receive")).resolves.toHaveProperty("status", 409);
     },
   );
 
   it("rejects SSC actions after the candidate closes", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await db
       .update(studioInterview)
       .set({ outcome: "withdrawn", pipelineStage: "closed" })
@@ -748,7 +754,7 @@ describe("Offer SSC confirmation", () => {
   });
 
   it("preserves the send behavior of historical null SSC records", async () => {
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     await db
       .update(studioOfferDraft)
       .set({ sscConfirmationStatus: null })
@@ -758,7 +764,7 @@ describe("Offer SSC confirmation", () => {
 
   it("provides a bot entry link only for an authorized Offer reader", async () => {
     vi.stubEnv("TELEGRAM_BOT_USERNAME", "@ssc_test_bot");
-    const offer = await newOffer();
+    const offer = await newLegacySscOffer();
     const path = `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/telegram-link`;
     const response = await makeApp().request(path);
     expect(response.status).toBe(200);
@@ -772,7 +778,7 @@ describe("Offer SSC confirmation", () => {
     "returns no bot entry link when the bot username is not configured: %s",
     async (username) => {
       vi.stubEnv("TELEGRAM_BOT_USERNAME", username);
-      const offer = await newOffer();
+      const offer = await newLegacySscOffer();
       const response = await makeApp().request(
         `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/telegram-link`,
       );

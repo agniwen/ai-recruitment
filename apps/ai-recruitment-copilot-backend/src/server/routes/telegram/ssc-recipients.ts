@@ -15,6 +15,7 @@ import { pinSscTelegramIdentity } from "./ssc-telegram-binding";
 import { provisionSscTelegramFollower } from "./ssc-telegram-provisioning";
 import { promoteLegacySscTelegramBindings } from "./ssc-legacy-telegram-bindings";
 import { verifiedSscTelegramGrant } from "@arc/ai-recruitment-copilot-backend/server/access/ssc-telegram-grant";
+import { buildSscResponsibilityJobScopeCondition } from "../studio/routes/ssc-responsibilities/job-scope";
 
 interface RecipientFilter {
   chatId?: string;
@@ -41,6 +42,7 @@ async function loadSscRecipients(filter: RecipientFilter) {
               eq(studioInterview.id, filter.interviewRecordId),
               eq(studioInterview.organizationId, sscResponsibility.organizationId),
               eq(jobDescription.resumeSourceId, sscResponsibility.resumeSourceId),
+              buildSscResponsibilityJobScopeCondition(sscResponsibility, jobDescription),
             ),
           ),
       )

@@ -92,7 +92,12 @@ async function request(path = "", method = "GET", body?: unknown, scope = organi
 }
 
 async function create(
-  input: typeof INPUT & { resumeSourceId?: string | null; workspaceRole?: string } = INPUT,
+  input: typeof INPUT & {
+    resumeSourceId?: string | null;
+    workspaceRole?: string;
+    departmentId?: string | null;
+    serviceUnit?: string | null;
+  } = INPUT,
   scope = organizationId,
 ): Promise<string> {
   const response = await request("", "POST", input, scope);
@@ -198,8 +203,10 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       const response = await request("/options");
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
+        departments: [],
         resumeSources: [{ id: localSource, name: "Local Center" }],
         roles: [{ label: "SSC 角色", value: "custom-ssc" }],
+        serviceUnits: [],
       });
     });
 

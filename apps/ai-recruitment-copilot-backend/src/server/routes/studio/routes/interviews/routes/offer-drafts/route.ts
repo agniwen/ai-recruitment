@@ -32,9 +32,19 @@ import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-bac
 import { isPreviewImage } from "./utils";
 import { offerSscRouter } from "./routes/ssc/route";
 import { loadOfferCreationContext } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-creation-context";
+import { candidatePrivateTelegramSchema } from "@arc/shared/offer-recruiter-contact";
+import {
+  loadCurrentOfferRecruiterContactContext,
+  loadOfferRecruiterContactContext,
+  submitOfferRecruiterContact,
+} from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-recruiter-contact";
 
 const createOfferInputSchema = offerDraftInputSchema.extend({
   sendImmediately: z.boolean().optional(),
+});
+const recruiterContactInputSchema = z.object({
+  candidatePrivateTelegram: candidatePrivateTelegramSchema,
+  revision: z.number().int().min(1),
 });
 
 async function createOfferVersion({
@@ -99,7 +109,7 @@ async function createOfferVersion({
     throw error;
   }
   const stageChanged = await maybeAdvanceToOffer(recordId, organizationId);
-  if (stageChanged) {
+  if (stageChanged && created.recruiterConfirmationStatus !== "pending") {
     await notifyCandidateStageChange({
       candidateId: recordId,
       fromOutcome: candidate.outcome,
@@ -128,6 +138,93 @@ async function createOfferVersion({
 
 export const offerDraftsRouter = factory
   .createApp()
+  .get("/recruiter-contact/current", async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const interviewRecordId = c.req.param("id");
+    if (!interviewRecordId) {
+      return c.json({ error: "候选人记录不存在。" }, 404);
+    }
+    try {
+      return c.json(
+        await loadCurrentOfferRecruiterContactContext({
+          actorUserId: user.id,
+          interviewRecordId,
+          organizationId: activeOrg.id,
+        }),
+        200,
+      );
+    } catch (error) {
+      if (error instanceof OfferDraftError) {
+        return c.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
+  })
+  .get("/:draftId/recruiter-contact", async (c) => {
+    const { activeOrg, user } = c.var;
+    if (!activeOrg || !user) {
+      return c.json({ message: "Unauthorized" }, 401);
+    }
+    const interviewRecordId = c.req.param("id");
+    if (!interviewRecordId) {
+      return c.json({ error: "候选人记录不存在。" }, 404);
+    }
+    try {
+      return c.json(
+        await loadOfferRecruiterContactContext({
+          actorUserId: user.id,
+          draftId: c.req.param("draftId"),
+          interviewRecordId,
+          organizationId: activeOrg.id,
+        }),
+        200,
+      );
+    } catch (error) {
+      if (error instanceof OfferDraftError) {
+        return c.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
+  })
+  .post(
+    "/:draftId/recruiter-contact",
+    zValidator(
+      "json",
+      recruiterContactInputSchema,
+      jsonValidatorError("请填写有效的候选人私人 TG。"),
+    ),
+    async (c) => {
+      const { activeOrg, user } = c.var;
+      if (!activeOrg || !user) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+      const interviewRecordId = c.req.param("id");
+      if (!interviewRecordId) {
+        return c.json({ error: "候选人记录不存在。" }, 404);
+      }
+      try {
+        return c.json(
+          await submitOfferRecruiterContact({
+            ...c.req.valid("json"),
+            actorUserId: user.id,
+            draftId: c.req.param("draftId"),
+            interviewRecordId,
+            organizationId: activeOrg.id,
+            source: "system",
+          }),
+          200,
+        );
+      } catch (error) {
+        if (error instanceof OfferDraftError) {
+          return c.json({ error: error.message }, error.status);
+        }
+        throw error;
+      }
+    },
+  )
   .use("*", requireSscCandidateAccess())
   .get("/creation-context", requirePermission("offer", "create"), async (c) => {
     const { activeOrg, user, member } = c.var;

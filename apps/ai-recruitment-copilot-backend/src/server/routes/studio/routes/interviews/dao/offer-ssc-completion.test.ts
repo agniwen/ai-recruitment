@@ -53,6 +53,27 @@ beforeEach(() => {
 });
 
 describe("SSC completion screenshot service", () => {
+  it("rejects pending recruiter contact confirmation before storing screenshots", async () => {
+    mocks.load.mockResolvedValueOnce({
+      canConfirm: true,
+      draft: {
+        recruiterConfirmationStatus: "pending",
+        sscConfirmationStatus: "confirming",
+        sscRevision: 3,
+        status: "draft",
+      },
+      pipelineStage: "offer",
+    });
+    await expect(
+      completeOfferSscWithScreenshot({
+        ...input,
+        file: new File([png], "approved.png", { type: "image/png" }),
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mocks.putObjectBytes).not.toHaveBeenCalled();
+    expect(mocks.complete).not.toHaveBeenCalled();
+  });
+
   it("completes without requiring a screenshot", async () => {
     await expect(completeOfferSscWithScreenshot(input)).resolves.toMatchObject({
       sscConfirmationStatus: "completed",

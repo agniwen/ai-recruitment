@@ -64,7 +64,10 @@ export async function withTelegramOfferCompletionState<T>(
       }
     }
     const result = update(pending);
-    await thread.setState({ offerSscCompletions: pending });
+    await thread.setState({
+      ...(state && typeof state === "object" ? state : {}),
+      offerSscCompletions: pending,
+    });
     return result;
   });
 }

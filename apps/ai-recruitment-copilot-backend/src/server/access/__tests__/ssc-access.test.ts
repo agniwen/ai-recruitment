@@ -53,6 +53,10 @@ describe.skipIf(!process.env.DATABASE_URL)("SSC current Offer and source access"
         ('ov1','a','old-completed-new-pending',1,'superseded','completed'),
         ('ov2','a','old-completed-new-pending',2,'draft','pending');
       ALTER TABLE ssc_responsibility ADD COLUMN telegram text NOT NULL DEFAULT '';
+      ALTER TABLE ssc_responsibility ADD COLUMN service_unit text;
+      ALTER TABLE ssc_responsibility ADD COLUMN department_id text;
+      ALTER TABLE job_description ADD COLUMN service_unit text;
+      ALTER TABLE job_description ADD COLUMN department_id text;
       ALTER TABLE organization_role ADD COLUMN is_odc boolean NOT NULL DEFAULT false;
       ALTER TABLE "user" ADD COLUMN telegram text;
       ALTER TABLE "user" ADD COLUMN telegram_bound_username text;

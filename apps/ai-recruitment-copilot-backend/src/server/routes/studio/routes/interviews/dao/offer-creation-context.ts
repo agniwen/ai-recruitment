@@ -1,7 +1,13 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { department, hiringUnit, jobDescription, studioInterview } from "@arc/db-schema/schema";
+import {
+  department,
+  hiringUnit,
+  jobDescription,
+  studioInterview,
+  studioOfferDraft,
+} from "@arc/db-schema/schema";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import type { OfferCreationContext } from "@arc/shared/offer-confirmation";
 import {
@@ -42,12 +48,10 @@ export async function loadOfferCreationContext(input: {
       departmentHiringUnitName: departmentHiringUnit.name,
       departmentName: department.name,
       jobHiringUnitName: jobHiringUnit.name,
-      jobLevel: jobDescription.jobLevel,
       resumeFileName: studioInterview.resumeFileName,
       resumeProfile: studioInterview.resumeProfile,
       resumeStorageKey: studioInterview.resumeStorageKey,
       serviceUnit: jobDescription.serviceUnit,
-      workLocation: jobDescription.workLocation,
     })
     .from(studioInterview)
     .leftJoin(
@@ -103,6 +107,17 @@ export async function loadOfferCreationContext(input: {
     ? await listHumanInterviewRounds(input.interviewRecordId, input.organizationId)
     : [];
   const extension = candidate.resumeFileName?.split(".").at(-1)?.toLowerCase();
+  const [previousOffer] = await db
+    .select({ confirmationInfo: studioOfferDraft.confirmationInfo })
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.interviewRecordId, input.interviewRecordId),
+        eq(studioOfferDraft.organizationId, input.organizationId),
+      ),
+    )
+    .orderBy(desc(studioOfferDraft.version))
+    .limit(1);
   // Explicit Google blanks stay blank; manual jobs can inherit their department's unit.
   const hiringUnitName =
     candidate.creationSource === "google_sheets"
@@ -111,13 +126,12 @@ export async function loadOfferCreationContext(input: {
   return {
     defaults: offerConfirmationDetailsSchema.parse({
       candidateName: candidate.candidateName,
+      candidatePrivateTelegram: previousOffer?.confirmationInfo?.candidatePrivateTelegram ?? null,
       departmentName: canReadJob ? candidate.departmentName : null,
       gender:
         typeof candidate.resumeProfile?.gender === "string" ? candidate.resumeProfile.gender : null,
       hiringUnitName: canReadJob ? hiringUnitName : null,
-      jobLevel: canReadJob ? candidate.jobLevel : null,
       serviceUnit: canReadJob ? candidate.serviceUnit : null,
-      workLocation: canReadJob ? candidate.workLocation : null,
     }),
     interviewRounds: rounds.map((round) => ({
       feedback: round.feedback,

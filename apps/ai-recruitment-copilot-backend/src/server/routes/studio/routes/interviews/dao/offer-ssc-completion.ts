@@ -75,6 +75,9 @@ export async function completeOfferSscWithScreenshot(
       ? { telegramActor: input.actor }
       : { actorUserId: input.actor.id }),
   });
+  if (context.draft.recruiterConfirmationStatus === "pending") {
+    throw new OfferDraftError("请先由招聘人员补充并确认候选人私人 TG。", 409);
+  }
   if (!context.canConfirm) {
     throw new OfferDraftError("没有 SSC 完成确认权限。", 403);
   }

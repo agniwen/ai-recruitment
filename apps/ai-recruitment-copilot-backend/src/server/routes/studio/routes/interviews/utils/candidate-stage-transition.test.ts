@@ -76,6 +76,7 @@ function createTransaction(
     resumeSourceType?: "direct_upload" | "private_pool" | "public_pool" | null;
   },
   offers: {
+    recruiterConfirmationStatus?: "pending" | "completed" | null;
     sscConfirmationStatus: "pending" | "confirming" | "completed" | null;
     status: "draft" | "sent" | "accepted" | "deleted" | "superseded";
     version: number;
@@ -582,6 +583,41 @@ describe("transitionCandidateStage", () => {
       expect(mocks.autoCloseRelatedCandidatesAfterHire).not.toHaveBeenCalled();
     },
   );
+
+  it("rejects hiring when recruiter contact confirmation is pending even if SSC is completed", async () => {
+    const { tx, updatedWhere, insertedValues } = createTransaction(
+      {
+        closedMeta: null,
+        jobDescriptionId: "jd-a",
+        outcome: "in_pipeline",
+        pipelineStage: "offer",
+      },
+      [
+        {
+          recruiterConfirmationStatus: "pending",
+          sscConfirmationStatus: "completed",
+          status: "draft",
+          version: 1,
+        },
+      ],
+    );
+    mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+    const result = await transitionCandidateStage({
+      authorize: vi.fn().mockResolvedValue(true),
+      candidateId: "candidate-a",
+      input: {
+        closedMeta: { hiredDetails: { preOnboardingTelegram: "@candidate" } },
+        outcome: "hired",
+        pipelineStage: "closed",
+      },
+      operatorId: "user-a",
+      organizationId: "org-a",
+      provenance: { kind: "manual" },
+    });
+    expect(result.kind).toBe("invalid");
+    expect(updatedWhere).not.toHaveBeenCalled();
+    expect(insertedValues).not.toHaveBeenCalled();
+  });
 
   it.each([null, "completed"] as const)(
     "allows historical or SSC-completed Offers to hire (%s)",

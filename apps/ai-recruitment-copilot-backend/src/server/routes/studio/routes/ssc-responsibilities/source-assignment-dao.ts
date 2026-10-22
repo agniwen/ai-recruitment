@@ -6,6 +6,7 @@ import {
   syncSscMemberRole,
 } from "@arc/ai-recruitment-copilot-backend/lib/server/ssc-provisioning";
 import {
+  department,
   member,
   organizationRole,
   resumeSource,
@@ -28,9 +29,11 @@ const contactSchema = sscResponsibilityInputSchema.pick({
 
 export interface SscAssignmentCandidate {
   assigned: boolean;
+  departmentId: string | null;
   email: string;
   id: string;
   registered: boolean;
+  serviceUnit: string | null;
   sscName: string;
   telegram: string;
   workspaceRole: string;
@@ -39,7 +42,40 @@ export interface SscAssignmentCandidate {
 
 interface CandidateEntry {
   candidate: SscAssignmentCandidate;
+  scope: JobScope;
   userId?: string;
+}
+
+interface JobScope {
+  departmentId: string | null;
+  serviceUnit: string | null;
+}
+type AssignmentScope = Partial<JobScope>;
+
+function jobScope(input: AssignmentScope, fallback?: AssignmentScope): JobScope {
+  return {
+    departmentId:
+      input.departmentId === undefined ? (fallback?.departmentId ?? null) : input.departmentId,
+    serviceUnit:
+      (input.serviceUnit === undefined ? fallback?.serviceUnit : input.serviceUnit)?.trim() || null,
+  };
+}
+
+async function validDepartment(
+  executor: Executor,
+  organizationId: string,
+  departmentId: string | null | undefined,
+  lock: boolean,
+) {
+  if (!departmentId) {
+    return true;
+  }
+  const query = executor
+    .select({ id: department.id })
+    .from(department)
+    .where(and(eq(department.id, departmentId), eq(department.organizationId, organizationId)));
+  const [row] = await (lock ? query.for("share") : query);
+  return Boolean(row);
 }
 
 class StaleSscCandidateError extends Error {
@@ -70,9 +106,11 @@ async function loadCandidateData(executor: Executor, organizationId: string, loc
   const roles = await (lock ? roleQuery.for("share") : roleQuery);
   const entryQuery = executor
     .select({
+      departmentId: sscResponsibility.departmentId,
       email: sscResponsibility.email,
       id: sscResponsibility.id,
       resumeSourceId: sscResponsibility.resumeSourceId,
+      serviceUnit: sscResponsibility.serviceUnit,
       sscName: sscResponsibility.sscName,
       telegram: sscResponsibility.telegram,
       workspaceRole: sscResponsibility.workspaceRole,
@@ -120,10 +158,9 @@ async function loadCandidateData(executor: Executor, organizationId: string, loc
 
 type CandidateData = Awaited<ReturnType<typeof loadCandidateData>>;
 
-function candidateContext(data: CandidateData, resumeSourceId: string) {
+function candidateContext(data: CandidateData, resumeSourceId: string, scope: AssignmentScope) {
   const usersByEmail = new Map<string, CandidateData["users"]>();
   const intendedRoles = new Map<string, Set<string>>();
-  const assignedEmails = new Set<string>();
   for (const row of data.users) {
     const email = row.email.trim().toLowerCase();
     usersByEmail.set(email, [...(usersByEmail.get(email) ?? []), row]);
@@ -135,19 +172,29 @@ function candidateContext(data: CandidateData, resumeSourceId: string) {
       roles.add(entry.workspaceRole);
     }
     intendedRoles.set(email, roles);
-    if (entry.resumeSourceId === resumeSourceId) {
-      assignedEmails.add(email);
-    }
   }
   return {
-    assignedEmails,
+    entries: data.entries,
     intendedRoles,
+    resumeSourceId,
     roleNames: new Map(data.roles.map((role) => [role.role, role.name])),
+    scope,
     usersByEmail,
   };
 }
 
 type CandidateContext = ReturnType<typeof candidateContext>;
+
+function alreadyAssigned(context: CandidateContext, email: string, scope: JobScope) {
+  return context.entries.some(
+    (entry) =>
+      entry.resumeSourceId === context.resumeSourceId &&
+      entry.email.trim().toLowerCase() === email &&
+      (entry.departmentId ?? null) === scope.departmentId &&
+      (entry.serviceUnit?.trim().toLowerCase() || null) ===
+        (scope.serviceUnit?.toLowerCase() ?? null),
+  );
+}
 
 function compatibleIntent(context: CandidateContext, email: string, role: string) {
   const roles = context.intendedRoles.get(email);
@@ -181,14 +228,17 @@ function memberCandidate(
   if (workspaceRoleName === undefined) {
     return null;
   }
+  const scope = jobScope(context.scope);
   return {
     candidate: {
       ...contact.data,
-      assigned: context.assignedEmails.has(contact.data.email),
+      ...scope,
+      assigned: alreadyAssigned(context, contact.data.email, scope),
       id: `member:${row.id}`,
       registered: true,
       workspaceRoleName,
     },
+    scope,
     userId: row.userId,
   };
 }
@@ -211,19 +261,22 @@ function preentryCandidate(
   if (workspaceRoleName === undefined) {
     return null;
   }
+  const scope = jobScope(context.scope, row);
   return {
     candidate: {
       ...contact.data,
-      assigned: context.assignedEmails.has(contact.data.email),
+      ...scope,
+      assigned: alreadyAssigned(context, contact.data.email, scope),
       id: `responsibility:${row.id}`,
       registered: false,
       workspaceRoleName,
     },
+    scope,
   };
 }
 
-function buildCandidates(data: CandidateData, resumeSourceId: string) {
-  const context = candidateContext(data, resumeSourceId);
+function buildCandidates(data: CandidateData, resumeSourceId: string, scope: AssignmentScope) {
+  const context = candidateContext(data, resumeSourceId, scope);
   const byEmail = new Map<string, CandidateEntry>();
   for (const row of data.members) {
     const entry = memberCandidate(row, context, data.entries);
@@ -245,13 +298,20 @@ function buildCandidates(data: CandidateData, resumeSourceId: string) {
   );
 }
 
-export async function listSscAssignmentCandidates(organizationId: string, resumeSourceId: string) {
-  if (!(await loadSource(db, organizationId, resumeSourceId, false))) {
+export async function listSscAssignmentCandidates(
+  organizationId: string,
+  input: AssignmentScope & { resumeSourceId: string },
+) {
+  if (!(await loadSource(db, organizationId, input.resumeSourceId, false))) {
     return "invalid_source" as const;
+  }
+  if (!(await validDepartment(db, organizationId, input.departmentId, false))) {
+    return "invalid_department" as const;
   }
   const candidates = buildCandidates(
     await loadCandidateData(db, organizationId, false),
-    resumeSourceId,
+    input.resumeSourceId,
+    input,
   );
   return { candidates: candidates.map((entry) => entry.candidate) };
 }
@@ -289,7 +349,14 @@ export async function assignSscSourceCandidates(
       if (!source) {
         return "invalid_source" as const;
       }
-      const catalog = buildCandidates(await loadCandidateData(tx, organizationId, true), source.id);
+      if (!(await validDepartment(tx, organizationId, input.departmentId, true))) {
+        return "invalid_department" as const;
+      }
+      const catalog = buildCandidates(
+        await loadCandidateData(tx, organizationId, true),
+        source.id,
+        input,
+      );
       const byId = new Map(catalog.map((entry) => [entry.candidate.id, entry]));
       const selected: CandidateEntry[] = [];
       for (const id of input.candidateIds) {
@@ -303,7 +370,8 @@ export async function assignSscSourceCandidates(
         selected.push(entry);
       }
       await tx.insert(sscResponsibility).values(
-        selected.map(({ candidate }) => ({
+        selected.map(({ candidate, scope }) => ({
+          ...scope,
           centerName: source.name,
           demandOwner: "",
           email: candidate.email,

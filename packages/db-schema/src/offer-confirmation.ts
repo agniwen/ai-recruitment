@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { candidatePrivateTelegramSchema } from "./offer-recruiter-contact";
 
 const nullableText = (max: number) =>
   z
@@ -13,6 +14,7 @@ const nullableText = (max: number) =>
 export const offerConfirmationDetailsSchema = z.object({
   candidateCode: nullableText(120),
   candidateName: nullableText(200),
+  candidatePrivateTelegram: candidatePrivateTelegramSchema.nullable().optional(),
   departmentName: nullableText(200),
   directManager: nullableText(200),
   gender: nullableText(30),

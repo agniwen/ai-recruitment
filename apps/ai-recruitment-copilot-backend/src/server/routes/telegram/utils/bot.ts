@@ -103,9 +103,18 @@ export function getTelegramBot(): TelegramBot {
     await handleTelegramOfferAction(event);
   });
 
+  bot.onAction(["orc", "ors"], async (event) => {
+    const { handleTelegramOfferRecruiterAction } = await import("./offer-recruiter-contact");
+    await handleTelegramOfferRecruiterAction(event);
+  });
+
   bot.onDirectMessage(async (thread, message) => {
     const { handleTelegramOfferScreenshot } = await import("./offer-ssc");
     if (await handleTelegramOfferScreenshot(thread, message)) {
+      return;
+    }
+    const { handleTelegramOfferRecruiterMessage } = await import("./offer-recruiter-contact");
+    if (await handleTelegramOfferRecruiterMessage(thread, message)) {
       return;
     }
     await thread.post("发送 /start 即可关注并接收通知。");

@@ -26,7 +26,13 @@ export interface OfferSscNotificationTarget {
 
 type NotificationOfferState = Pick<
   OfferDraftRecord,
-  "id" | "organizationId" | "interviewRecordId" | "sscRevision" | "sscConfirmationStatus" | "status"
+  | "id"
+  | "organizationId"
+  | "interviewRecordId"
+  | "sscRevision"
+  | "sscConfirmationStatus"
+  | "status"
+  | "recruiterConfirmationStatus"
 > & { expiresAt: Date | string | null };
 
 const expectedStates = {
@@ -49,6 +55,9 @@ function isCurrentNotificationState(
   input: OfferSscNotificationInput,
   offer: NotificationOfferState,
 ) {
+  if (input.event === "recruiter" || offer.recruiterConfirmationStatus === "pending") {
+    return false;
+  }
   const matchesStatus =
     offer.sscConfirmationStatus === expectedStates[input.event] ||
     (input.event === "received" && offer.sscConfirmationStatus === "completed");
@@ -96,6 +105,9 @@ async function getAuthorizedNotificationTarget(
   createdBy: string | null,
   activity: OfferSscActivity[],
 ): Promise<OfferSscNotificationTarget | null> {
+  if (input.event === "recruiter") {
+    return null;
+  }
   if (
     profile.organizationId !== input.organizationId ||
     profile.banned ||
@@ -143,7 +155,7 @@ async function getAuthorizedNotificationTarget(
 }
 
 function flowFeedback(input: OfferSscNotificationInput, activity: OfferSscActivity[]) {
-  if (input.event === "pending") {
+  if (input.event === "pending" || input.event === "recruiter") {
     return "";
   }
   const action = input.event === "received" ? "offer_ssc_received" : "offer_ssc_completed";
@@ -154,6 +166,10 @@ function flowFeedback(input: OfferSscNotificationInput, activity: OfferSscActivi
 export async function getOfferSscNotificationTargets(
   input: OfferSscNotificationInput,
 ): Promise<OfferSscNotificationTarget[]> {
+  if (input.event === "recruiter") {
+    const { getOfferRecruiterNotificationTargets } = await import("./offer-recruiter-notification");
+    return await getOfferRecruiterNotificationTargets(input);
+  }
   // Include deleted and superseded versions: a tombstone must never revive an older Offer.
   const [offer] = await db
     .select({
@@ -166,6 +182,7 @@ export async function getOfferSscNotificationTargets(
       interviewRecordId: studioOfferDraft.interviewRecordId,
       organizationId: studioOfferDraft.organizationId,
       position: studioOfferDraft.position,
+      recruiterConfirmationStatus: studioOfferDraft.recruiterConfirmationStatus,
       sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
       sscRevision: studioOfferDraft.sscRevision,
       status: studioOfferDraft.status,
@@ -207,6 +224,8 @@ export async function getOfferSscNotificationTargets(
       })
     : [];
   const unexpired = !offer.expiresAt || new Date(offer.expiresAt).getTime() > Date.now();
+  const notificationTitle =
+    notificationTitles[offer.sscConfirmationStatus === "completed" ? "completed" : input.event];
   const targets: OfferSscNotificationTarget[] = [...uniqueRecipients.values()].map((recipient) => {
     const actor = { telegramUserId: recipient.chatId, username: recipient.username };
     const context = {
@@ -225,10 +244,7 @@ export async function getOfferSscNotificationTargets(
         ? buildTelegramOfferPublicCompletionCard(context, actor, feedbackLabel)
         : buildTelegramOfferPublicCard(context, actor, {
             feedbackLabel,
-            title:
-              notificationTitles[
-                offer.sscConfirmationStatus === "completed" ? "completed" : input.event
-              ],
+            title: notificationTitle,
           });
     return { chatId: recipient.chatId, message, userId: `telegram:${recipient.chatId}` };
   });
