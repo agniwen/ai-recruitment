@@ -9,6 +9,7 @@
 /* oxlint-disable max-lines -- versioned Offer mutations and shared SSC authorization use one lifecycle boundary */
 
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { isEqual } from "lodash-es";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { deleteObject } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
@@ -73,6 +74,7 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
     baseSalary: row.baseSalary,
     bonus: row.bonus,
     candidateCounter: row.candidateCounter,
+    confirmationInfo: row.confirmationInfo ?? null,
     createdAt: serializeDate(row.createdAt) ?? new Date().toISOString(),
     currency: row.currency,
     equity: row.equity,
@@ -735,6 +737,7 @@ export async function createOfferDraft({
       approvalAttachment,
       baseSalary: input.baseSalary,
       bonus: input.bonus ?? null,
+      confirmationInfo: input.confirmationInfo ?? null,
       createdAt: now,
       createdBy: actorId,
       createdByRole: actorRole,
@@ -822,12 +825,14 @@ export async function editOfferDraftWithAttachment({
     }
     // existing.expiresAt / joiningDate 是 Date，resolveDateField 期待 string | null。
     // existing.expiresAt / joiningDate are Date columns; resolveDateField wants strings.
-    const existingExpiresAtIso = existing.expiresAt ? existing.expiresAt.toISOString() : null;
-    const existingJoiningDateIso = existing.joiningDate ? existing.joiningDate.toISOString() : null;
+    const existingExpiresAtIso = serializeDate(existing.expiresAt);
+    const existingJoiningDateIso = serializeDate(existing.joiningDate);
     const patch = {
       ...(approvalAttachment !== undefined && { approvalAttachment }),
       baseSalary: input.baseSalary ?? existing.baseSalary,
       bonus: input.bonus ?? existing.bonus,
+      confirmationInfo:
+        input.confirmationInfo === undefined ? existing.confirmationInfo : input.confirmationInfo,
       currency: input.currency ?? existing.currency,
       equity: input.equity ?? existing.equity,
       expiresAt: resolveDateField(input.expiresAt, existingExpiresAtIso),
@@ -844,7 +849,7 @@ export async function editOfferDraftWithAttachment({
       return value instanceof Date || previous instanceof Date
         ? (value instanceof Date ? value.getTime() : value) !==
             (previous instanceof Date ? previous.getTime() : previous)
-        : JSON.stringify(value) !== JSON.stringify(previous);
+        : !isEqual(value, previous);
     });
     const [updated] = await tx
       .update(studioOfferDraft)

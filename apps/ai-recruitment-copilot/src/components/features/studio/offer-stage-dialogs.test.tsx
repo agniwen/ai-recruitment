@@ -13,10 +13,12 @@ vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "demo
 const mocks = vi.hoisted(() => ({
   createOfferDraft: vi.fn(),
   createOfferDraftWithAttachment: vi.fn(),
+  getOfferCreationContext: vi.fn(),
 }));
 vi.mock("@/lib/client/api", () => ({
   createOfferDraft: mocks.createOfferDraft,
   createOfferDraftWithAttachment: mocks.createOfferDraftWithAttachment,
+  getOfferCreationContext: mocks.getOfferCreationContext,
   patchOfferDraft: vi.fn(),
   respondOfferDraft: vi.fn(),
 }));
@@ -26,6 +28,30 @@ const roots: ReturnType<typeof createRoot>[] = [];
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.createOfferDraft.mockResolvedValue({ id: "offer-1" });
+  mocks.getOfferCreationContext.mockResolvedValue({
+    defaults: {
+      candidateCode: null,
+      candidateName: "候选人",
+      departmentName: null,
+      directManager: null,
+      gender: null,
+      hiringUnitName: null,
+      interviewFeedback: null,
+      interviewRoundId: null,
+      jobLevel: null,
+      jobType: null,
+      mainInterviewerName: null,
+      managementSequence: null,
+      personnelType: null,
+      probationPeriod: null,
+      probationSalary: null,
+      serviceUnit: null,
+      workLocation: null,
+      workMode: null,
+    },
+    interviewRounds: [],
+    resume: { available: false, filename: "resume.pdf", mediaType: "application/pdf" },
+  });
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn(() => ({
@@ -93,11 +119,24 @@ describe("new Offer without ODC attachments", () => {
         input?.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
-    const save = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent?.trim() === "保存",
+    await vi.waitFor(async () => {
+      await act(() => Promise.resolve());
+      expect(document.querySelector("#offer-confirm-candidateCode")).not.toBeNull();
+    });
+    const next = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "下一步：确认信息",
     );
-    expect(save?.disabled).toBe(false);
-    await act(() => save?.click());
+    expect(next?.disabled).toBe(false);
+    await act(() => next?.click());
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain("完整确认内容"),
+    );
+    expect(document.querySelector("#offer-confirm-candidateCode")).toBeNull();
+    expect(mocks.createOfferDraft).not.toHaveBeenCalled();
+    const confirm = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "确认创建",
+    );
+    await act(() => confirm?.click());
     await vi.waitFor(async () => {
       await act(() => Promise.resolve());
       expect(onSaved).toHaveBeenCalledOnce();
@@ -113,6 +152,12 @@ describe("new Offer without ODC attachments", () => {
 describe("Offer custom currency", () => {
   it("shows a required description for Other and removes it when switching to GBP", async () => {
     renderDialog();
+    await vi.waitFor(async () => {
+      await act(() => Promise.resolve());
+      expect(document.querySelector("#offer-confirm-candidateName")?.matches(":disabled")).toBe(
+        false,
+      );
+    });
     const trigger = document.body.querySelector<HTMLButtonElement>('[id$="-currency"]');
     expect(trigger).not.toBeNull();
     expect(trigger?.textContent).toContain("人民币 CNY");

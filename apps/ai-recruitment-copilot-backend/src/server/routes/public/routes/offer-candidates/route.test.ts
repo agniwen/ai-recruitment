@@ -262,6 +262,7 @@ describe("Anonymous Offer candidate preview", () => {
     const response = await app().request(`/api/public/offer-candidates/${token()}`);
     expect(response.status).toBe(200);
     const body = await response.json();
+    expect(body.candidate.id).toBe(draft.interviewRecordId);
     expect(body.candidate.name).toBe("测试候选人");
     expect(body.candidate.profile.skills).toEqual(["TypeScript"]);
     expect(body.candidate.hasResumeFile).toBe(true);
@@ -289,6 +290,31 @@ describe("Anonymous Offer candidate preview", () => {
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
     expect(response.headers.get("X-Robots-Tag")).toContain("noindex");
+  });
+
+  it("includes the confirmed Offer snapshot without recomputing it from live candidate data", async () => {
+    mocks.context.mockResolvedValue({
+      canConfirm: true,
+      canReceive: true,
+      draft: {
+        ...draft,
+        confirmationInfo: {
+          candidateName: "确认时姓名",
+          interviewFeedback: "确认时评价",
+          probationSalary: 10_000,
+        },
+      },
+      pipelineStage: "offer",
+    });
+    const response = await app().request(`/api/public/offer-candidates/${token()}`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.offer.confirmationInfo).toEqual({
+      candidateName: "确认时姓名",
+      interviewFeedback: "确认时评价",
+      probationSalary: 10_000,
+    });
+    expect(body.candidate.name).toBe("测试候选人");
   });
 
   it("uses a fresh Offer status when the same link is read after SSC confirmation", async () => {

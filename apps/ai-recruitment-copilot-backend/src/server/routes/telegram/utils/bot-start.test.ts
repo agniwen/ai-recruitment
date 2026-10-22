@@ -4,7 +4,7 @@ import { getTelegramBot, shutdownTelegramBot } from "./bot";
 const mocks = vi.hoisted(() => ({ bind: vi.fn(), slash: vi.fn() }));
 vi.mock("../dao", () => ({ bindTelegramUser: mocks.bind }));
 vi.mock("@chat-adapter/state-pg", () => ({ createPostgresState: vi.fn() }));
-vi.mock("@chat-adapter/telegram", () => ({ createTelegramAdapter: vi.fn() }));
+vi.mock("./offer-telegram-adapter", () => ({ createOfferTelegramAdapter: vi.fn() }));
 vi.mock("chat", () => ({
   Chat: class {
     onSlashCommand = mocks.slash;

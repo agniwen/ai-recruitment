@@ -41,7 +41,9 @@ function decodeSegment(value: string | undefined) {
 
 function offerDraftId(path: string) {
   const value = /\/offer-drafts\/([^/]+)(?:\/|$)/u.exec(path)?.[1];
-  return value === "ssc" || value === "with-attachment" ? undefined : decodeSegment(value);
+  return value === "ssc" || value === "with-attachment" || value === "creation-context"
+    ? undefined
+    : decodeSegment(value);
 }
 
 export function requireSscCandidateAccess() {

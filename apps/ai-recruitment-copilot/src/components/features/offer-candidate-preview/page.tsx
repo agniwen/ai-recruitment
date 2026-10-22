@@ -1,7 +1,7 @@
 import type { OfferCandidatePreview } from "@arc/shared/offer-candidate-preview";
 import { IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { DataField } from "@/components/features/display/data-field";
 import { DataFields } from "@/components/features/display/data-fields";
@@ -30,6 +30,16 @@ function CandidateDetails({
   onRefresh: () => void;
 }) {
   const [activeTab, setActiveTab] = useState("overview");
+  useEffect(() => {
+    if (window.location.hash === "#offer-confirmation-info") {
+      setActiveTab("offer");
+    }
+  }, []);
+  useEffect(() => {
+    if (activeTab === "offer" && window.location.hash === "#offer-confirmation-info") {
+      document.querySelector("#offer-confirmation-info")?.scrollIntoView?.({ block: "start" });
+    }
+  }, [activeTab]);
   return (
     <>
       <header>
@@ -84,7 +94,11 @@ function CandidateDetails({
           <HumanInterviewDetails rounds={data.humanInterviews} />
         </TabsContent>
         <TabsContent value="offer">
-          <OfferDetails offer={data.offer} />
+          <OfferDetails
+            candidateName={data.candidate.name}
+            candidateRecordId={data.candidate.id}
+            offer={data.offer}
+          />
         </TabsContent>
       </Tabs>
       <footer className="border-border/50 border-t pt-5 text-muted-foreground text-xs">

@@ -3,9 +3,11 @@ import {
   humanInterviewRoundOutcomeMeta,
 } from "@arc/db-schema/studio-interviews";
 import type { OfferCandidatePreview } from "@arc/shared/offer-candidate-preview";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { DataField } from "@/components/features/display/data-field";
 import { DataFields } from "@/components/features/display/data-fields";
 import { ResumeReviewStructuredView } from "@/components/features/studio/resumes/resume-overview-panel";
+import { OfferConfirmationText } from "@/components/features/studio/offer-creation-confirmation";
 import { Badge } from "@/components/ui/badge";
 
 const SSC_STATUS_LABELS = {
@@ -35,9 +37,21 @@ function salary(value: number | null, currency: string) {
   return value === null ? null : `${currency} ${value.toLocaleString("zh-CN")}`;
 }
 
-export function OfferDetails({ offer }: { offer: OfferCandidatePreview["offer"] }) {
+export function OfferDetails({
+  offer,
+  candidateRecordId,
+  candidateName,
+}: {
+  offer: OfferCandidatePreview["offer"];
+  candidateRecordId?: string;
+  candidateName: string | null;
+}) {
   return (
-    <section aria-labelledby="offer-title" className="rounded-xl border bg-card p-5 sm:p-6">
+    <section
+      aria-labelledby="offer-title"
+      className="rounded-xl border bg-card p-5 sm:p-6"
+      id="offer-confirmation-info"
+    >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-semibold text-lg" id="offer-title">
           本次 Offer · v{offer.version}
@@ -47,7 +61,9 @@ export function OfferDetails({ offer }: { offer: OfferCandidatePreview["offer"] 
       <DataFields columns={2}>
         <DataField label="Offer 职位" value={offer.position} />
         <DataField label="Base 月薪" value={salary(offer.baseSalary, offer.currency)} />
-        <DataField label="年度奖金" value={salary(offer.bonus, offer.currency)} />
+        {offer.bonus === null ? null : (
+          <DataField label="年度奖金" value={salary(offer.bonus, offer.currency)} />
+        )}
         <DataField label="股权" value={offer.equity} />
         <DataField kind="date" label="预计入职日期" value={offer.joiningDate} />
         <DataField kind="datetime" label="Offer 有效期至" value={offer.expiresAt} />
@@ -60,6 +76,18 @@ export function OfferDetails({ offer }: { offer: OfferCandidatePreview["offer"] 
           valueClassName="whitespace-pre-wrap"
         />
       </DataFields>
+      <div className="mt-5 min-w-0">
+        <OfferConfirmationText
+          candidateRecordId={candidateRecordId}
+          info={
+            offer.confirmationInfo ?? { ...offerConfirmationDetailsSchema.parse({}), candidateName }
+          }
+          position={offer.position}
+          baseSalary={offer.baseSalary}
+          currency={offer.currency}
+          sscConfirmationStatus={offer.sscConfirmationStatus}
+        />
+      </div>
     </section>
   );
 }

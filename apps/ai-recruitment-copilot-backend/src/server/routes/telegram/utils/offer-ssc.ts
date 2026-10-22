@@ -131,7 +131,7 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     const activity = await loadOfferSscActivity(draft);
     await updateTelegramOfferMessages(
       event,
-      buildTelegramOfferPublicCard({ ...context, activity, canConfirm: false, draft }, actor),
+      buildTelegramOfferPublicCard({ ...context, activity, draft }, actor),
     );
   } catch (error) {
     await event.thread.post(errorReply(error));

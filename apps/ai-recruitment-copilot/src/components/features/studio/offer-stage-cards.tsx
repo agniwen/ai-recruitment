@@ -63,6 +63,7 @@ import {
   offerFormStateFromDraft,
 } from "./offer-stage-form";
 import type { OfferFormState } from "./offer-stage-form";
+import { OfferInformationDialog } from "./offer-creation-confirmation";
 
 export function CandidateExpectationsBlock({
   candidateId,
@@ -296,6 +297,7 @@ export function OfferCard({
   });
   const [editing, setEditing] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [informationOpen, setInformationOpen] = useState(false);
   const [form, setForm] = useState<OfferFormState>(() => offerFormStateFromDraft(draft));
   const setFormField = createOfferFormFieldSetter(setForm);
 
@@ -357,11 +359,11 @@ export function OfferCard({
           </div>
 
           <OfferDraftFormFields
+            candidateId={candidateId}
             form={form}
             idPrefix={`offer-${draft.id}`}
             onFieldChange={setFormField}
           />
-
           <div className="mt-3 flex justify-end gap-2">
             <Button
               disabled={saveMutation.isPending}
@@ -397,6 +399,12 @@ export function OfferCard({
 
           <OfferDraftReadonlyFields draft={draft} />
 
+          {draft.confirmationInfo ? (
+            <Button onClick={() => setInformationOpen(true)} size="sm" variant="outline">
+              查看 Offer 信息
+            </Button>
+          ) : null}
+
           <OfferSscCompletionAttachment candidateId={candidateId} draft={draft} slug={slug} />
 
           <OfferSscNotice draft={draft} error={ssc.error} />
@@ -425,6 +433,11 @@ export function OfferCard({
           onConfirm={() => deleteMutation.mutate()}
           record={deleteConfirmOpen ? draft : null}
           title="删除这条 Offer？"
+        />
+        <OfferInformationDialog
+          draft={draft}
+          open={informationOpen}
+          onOpenChange={setInformationOpen}
         />
       </CardContent>
     </Card>
@@ -523,7 +536,12 @@ function OfferDraftReadonlyFields({ draft }: { draft: OfferDraftRecord }) {
         label="Base 月薪"
         value={formatOfferMoney(draft.baseSalary, draft.currency)}
       />
-      <ReadonlyOfferField label="年度奖金" value={formatOfferMoney(draft.bonus, draft.currency)} />
+      {draft.bonus === null ? null : (
+        <ReadonlyOfferField
+          label="年度奖金"
+          value={formatOfferMoney(draft.bonus, draft.currency)}
+        />
+      )}
       <ReadonlyOfferField label="期权 / 股票" value={draft.equity} />
       <ReadonlyOfferField
         label="预计入职日"

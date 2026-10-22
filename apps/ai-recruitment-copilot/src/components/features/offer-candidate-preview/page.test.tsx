@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { OfferCandidatePreview } from "@arc/shared/offer-candidate-preview";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { resumeReviewV5Schema } from "@arc/shared/resume-review";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
@@ -11,6 +12,8 @@ import {
   waitForUi,
 } from "@/test-utils/react-act";
 import { fetchOfferCandidatePreview } from "@/lib/client/api/endpoints/offer-candidate-preview";
+import { copyTextToClipboard } from "@/lib/client/clipboard";
+import type * as ClipboardModule from "@/lib/client/clipboard";
 import { ResumeDocumentPreviewModal } from "@/components/features/resume/resume-document-preview-modal";
 import { OfferCandidatePreviewPage } from "./page";
 
@@ -31,6 +34,15 @@ vi.mock("@/components/ui/chart-radar", () => ({
   DimensionRadarChart: () => <div>评分雷达图</div>,
 }));
 vi.mock("@/lib/client/api", () => ({}));
+vi.mock("@/lib/client/clipboard", async (importOriginal) => ({
+  ...(await importOriginal<typeof ClipboardModule>()),
+  copyTextToClipboard: vi.fn(),
+}));
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
+}));
+// Vitest does not apply Start's server-function transform to the shared review UI imports.
+vi.mock("@/lib/start/auth-session", () => ({ getWorkspaceAccessState: vi.fn() }));
 enableReactActEnvironment();
 
 const dimension = { basis: "both", rationale: "项目实践与岗位要求相符", score: 82 };
@@ -158,8 +170,10 @@ async function renderPage() {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.mocked(fetchOfferCandidatePreview).mockReset().mockResolvedValue(preview);
+  vi.mocked(copyTextToClipboard).mockReset().mockResolvedValue("copied");
   vi.mocked(ResumeDocumentPreviewModal).mockClear();
 });
 afterEach(async () => {
@@ -168,6 +182,7 @@ afterEach(async () => {
   }
   rendered = undefined;
   queryClient.clear();
+  window.history.replaceState(null, "", "/");
   document.body.replaceChildren();
 });
 
@@ -220,6 +235,150 @@ describe("public Offer candidate preview", () => {
     expect(document.body.textContent).not.toContain("登录");
     expect(document.body.textContent).not.toContain("完成确认");
     expect(document.body.textContent).not.toContain("接收确认");
+  });
+
+  it.each([null, 0])(
+    "hides missing annual bonus but preserves recorded zero in read-only preview: %s",
+    async (bonus) => {
+      vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+        ...preview,
+        offer: { ...preview.offer, bonus },
+      });
+      await renderPage();
+      await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+      await selectTab("Offer");
+      expect(document.body.textContent?.includes("年度奖金")).toBe(bonus !== null);
+    },
+  );
+
+  it("copies the complete Offer snapshot with its actual candidate record code and SSC status", async () => {
+    vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+      ...preview,
+      candidate: { ...preview.candidate, id: "candidate-public-actual" },
+      offer: {
+        ...preview.offer,
+        confirmationInfo: {
+          candidateCode: "PUBLIC-001",
+          candidateName: "保存时的姓名",
+          departmentName: "保存时的部门",
+          directManager: null,
+          gender: "女",
+          hiringUnitName: "保存时的编制组织",
+          interviewFeedback: "保存时确认的面试评价",
+          interviewRoundId: null,
+          jobLevel: "P6",
+          jobType: null,
+          mainInterviewerName: "保存的面试官",
+          managementSequence: null,
+          personnelType: null,
+          probationPeriod: "3个月",
+          probationSalary: 16_000,
+          serviceUnit: null,
+          workLocation: "上海",
+          workMode: null,
+        },
+        sscConfirmationStatus: "completed",
+      },
+    });
+    await renderPage();
+    await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+    await selectTab("Offer");
+    expect(document.body.textContent).toContain("PUBLIC-001");
+    expect(document.body.textContent).toContain("保存时的编制组织");
+    expect(document.body.textContent).toContain("保存时确认的面试评价");
+    expect(document.body.textContent).toContain("offer审批已通过");
+    expect(document.body.textContent).not.toContain("待 SSC 确认");
+    const offer = document.querySelector<HTMLElement>("#offer-confirmation-info");
+    const text = offer?.querySelector("pre")?.textContent;
+    expect(text).toContain("系统记录编码：candidate-public-actual");
+    expect(text).toContain("简历名：保存时的姓名");
+    expect(text).toContain("转正薪资：18K");
+    expect(text).toContain("试用薪资：16K");
+    expect(text).toContain("offer审批已通过");
+    expect(text?.length).toBeGreaterThan(256);
+    const copy = [...(offer?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (node) => node.textContent?.trim() === "复制 Offer 信息",
+    );
+    expect(copy, "missing public Offer copy button").toBeDefined();
+    await act(() => copy?.click());
+    expect(copyTextToClipboard).toHaveBeenCalledExactlyOnceWith(text, expect.any(Function));
+    expect(fetchOfferCandidatePreview).toHaveBeenCalledExactlyOnceWith("test-token");
+    expectReadOnly();
+  });
+
+  it.each([null, undefined])(
+    "copies historical Offers without a confirmation snapshot using the candidate name: %s",
+    async (confirmationInfo) => {
+      vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+        ...preview,
+        candidate: { ...preview.candidate, id: "legacy-candidate" },
+        offer: { ...preview.offer, confirmationInfo },
+      });
+      await renderPage();
+      await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+      await selectTab("Offer");
+      const offer = document.querySelector("#offer-confirmation-info");
+      const text = offer?.querySelector("pre")?.textContent;
+      expect(text).toContain("简历名：SSC测试候选人");
+      expect(text).toContain("系统记录编码：legacy-candidate");
+      expect(text).toContain("职位：高级招聘专员");
+      expect(text).toContain("转正薪资：18K");
+      expect(text).not.toContain("待 SSC 确认");
+      expect(text?.split("\n").at(-1)).toBe("试用薪资：待补充");
+      expect(offer?.textContent).toContain("待 SSC 接收");
+      const copy = [...(offer?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+        (node) => node.textContent?.trim() === "复制 Offer 信息",
+      );
+      expect(copy, "missing historical Offer copy button").toBeDefined();
+      await act(() => copy?.click());
+      expect(copyTextToClipboard).toHaveBeenCalledExactlyOnceWith(text, expect.any(Function));
+      expectReadOnly();
+    },
+  );
+
+  it("preserves a deliberately empty candidate name in an existing Offer snapshot", async () => {
+    vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+      ...preview,
+      offer: {
+        ...preview.offer,
+        confirmationInfo: offerConfirmationDetailsSchema.parse({ candidateName: null }),
+      },
+    });
+    await renderPage();
+    await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+    await selectTab("Offer");
+    const text = document.querySelector("#offer-confirmation-info pre")?.textContent;
+    expect(text).toContain("简历名：待补充");
+    expect(text).not.toContain("简历名：SSC测试候选人");
+  });
+
+  it("opens the Offer tab directly from the notification copy anchor", async () => {
+    const scroll = vi.fn();
+    const previousScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scroll,
+    });
+    window.history.replaceState(null, "", "#offer-confirmation-info");
+    try {
+      await renderPage();
+      await waitForUi(() =>
+        expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(
+          "Offer",
+        ),
+      );
+      expect(document.querySelector("#offer-confirmation-info")?.textContent).toContain(
+        "本次 Offer · v3",
+      );
+      expect(scroll).toHaveBeenCalled();
+      expectReadOnly();
+    } finally {
+      if (previousScroll) {
+        Object.defineProperty(HTMLElement.prototype, "scrollIntoView", previousScroll);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+      }
+    }
   });
 
   it("shows the four original sections and their real review and interview records without auth requests", async () => {

@@ -1,4 +1,7 @@
-import { createTelegramAdapter } from "@chat-adapter/telegram";
+import { createOfferTelegramAdapter } from "./offer-telegram-adapter";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
+import { buildOfferConfirmationText } from "@arc/shared/offer-confirmation";
+import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildTelegramOfferCard,
@@ -9,8 +12,14 @@ import {
 interface EditRequest {
   chat_id: string | number;
   message_id: number;
+  parse_mode?: string;
   reply_markup: {
-    inline_keyboard: { callback_data?: string; text: string }[][];
+    inline_keyboard: {
+      callback_data?: string;
+      copy_text?: { text: string };
+      text: string;
+      url?: string;
+    }[][];
   };
   text?: string;
 }
@@ -62,27 +71,35 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function editedCard(status: "pending" | "confirming" | "completed") {
-  const adapter = createTelegramAdapter({
+async function editedCard(
+  status: "pending" | "confirming" | "completed",
+  overrides: Partial<OfferDraftRecord> = {},
+  options: Parameters<typeof buildTelegramOfferCard>[1] = {},
+) {
+  const adapter = createOfferTelegramAdapter({
     botToken: "999999:fake-transport-test-token",
     mode: "webhook",
     secretToken: "fake-transport-test-secret",
     userName: botUser.username,
   });
-  const card = buildTelegramOfferCard({
-    canConfirm: true,
-    canReceive: true,
-    candidateName: "Transport test candidate",
-    draft: {
-      id: draftId,
-      position: "Transport test role",
-      sscConfirmationStatus: status,
-      sscRevision: 2_147_483_647,
-      status: "draft",
-      version: 3,
+  const card = buildTelegramOfferCard(
+    {
+      canConfirm: true,
+      canReceive: true,
+      candidateName: "Transport test candidate",
+      draft: {
+        id: draftId,
+        position: "Transport test role",
+        sscConfirmationStatus: status,
+        sscRevision: 2_147_483_647,
+        status: "draft",
+        version: 3,
+        ...overrides,
+      },
+      pipelineStage: "offer",
     },
-    pipelineStage: "offer",
-  });
+    options,
+  );
   await adapter.editMessage(`telegram:${chatId}`, `${chatId}:${messageId}`, card);
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({ chat_id: chatId, message_id: messageId });
@@ -90,6 +107,257 @@ async function editedCard(status: "pending" | "confirming" | "completed") {
 }
 
 describe("Offer SSC cards through the real Telegram adapter", () => {
+  it("renders the complete Offer snapshot as plain text without code formatting or truncation", async () => {
+    const info = offerConfirmationDetailsSchema.parse({
+      candidateCode: "SSC-001",
+      candidateName: "候选人<甲>&乙",
+      departmentName: "研发中心",
+      directManager: "负责人 `甲` 与 \\测试",
+      hiringUnitName: "技术 *组织* [资料](https://example.test) #1",
+      interviewFeedback: "审阅记录\n```\n正文中仍保留这一行\n```\n- 条目 *原文*\n# 原始标题\n结束",
+      probationPeriod: "2个月",
+      probationSalary: 10_000,
+    });
+    const expected = buildOfferConfirmationText({
+      baseSalary: 15_000,
+      candidateRecordId: "candidate-record-id",
+      currency: "CNY",
+      info,
+      position: "工程师\n```\n职位尾部",
+      sscConfirmationStatus: "pending",
+    });
+    expect(expected.length).toBeGreaterThan(256);
+    const payload = await editedCard(
+      "pending",
+      {
+        baseSalary: 15_000,
+        confirmationInfo: info,
+        currency: "CNY",
+        interviewRecordId: "candidate-record-id",
+        position: "工程师\n```\n职位尾部",
+      },
+      { detailUrl: "https://ats.example.test/offer-candidate/signed-offer" },
+    );
+    expect(payload.parse_mode).toBe("MarkdownV2");
+    const markdownV2Specials = new Set("\\_*[]()~`>#+-=|{}.!");
+    const escaped = Array.from(expected, (character) =>
+      markdownV2Specials.has(character) ? `\\${character}` : character,
+    ).join("");
+    // GFM auto-links the bare URL inside the literal saved text. Telegram's text-link
+    // label preserves the original URL; the surrounding saved Markdown stays escaped.
+    const expectedTransport = escaped.replace(
+      "https://example\\.test",
+      "[https://example\\.test](https://example.test)",
+    );
+    expect(payload.text).toContain(expectedTransport);
+    expect(payload.text).not.toMatch(/(?<!\\)`/u);
+    expect(payload.text).not.toContain("代码块");
+    expect(payload.text).toContain("转正薪资：15K\n试用期：2个月\n试用薪资：10K");
+    const copies = payload.reply_markup.inline_keyboard.flat().filter((button) => button.copy_text);
+    expect(copies.length).toBeGreaterThan(1);
+    expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
+    for (const [index, button] of copies.entries()) {
+      expect(button.text).toBe(`复制第 ${index + 1}/${copies.length} 段`);
+      expect(button.copy_text?.text.length).toBeLessThanOrEqual(256);
+      expect(button.url).toBeUndefined();
+      expect(button.callback_data).toBeUndefined();
+    }
+    expect(payload.text).toContain("分别复制");
+    expect(payload.reply_markup.inline_keyboard.flat()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          callback_data: expect.stringContaining('"a":"osr"'),
+          text: "接收确认",
+        }),
+        expect.objectContaining({
+          text: "查看候选人详情",
+          url: "https://ats.example.test/offer-candidate/signed-offer",
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    ["pending", "接收确认", "osr"],
+    ["confirming", "完成确认", "osc"],
+    ["completed", null, null],
+  ] as const)(
+    "keeps %s workflow and native copying without a separate full-copy page button",
+    async (status, actionLabel, actionId) => {
+      const info = offerConfirmationDetailsSchema.parse({
+        candidateName: "SSC 流程候选人",
+        hiringUnitName: "渠道中心",
+        probationPeriod: "2个月",
+        probationSalary: 10_000,
+      });
+      const expected = buildOfferConfirmationText({
+        baseSalary: 15_000,
+        candidateRecordId: "workflow-candidate",
+        currency: "CNY",
+        info,
+        position: "工程师",
+        sscConfirmationStatus: status,
+      });
+      const detailUrl = "https://ats.example.test/offer-candidate/workflow";
+      const payload = await editedCard(
+        status,
+        {
+          baseSalary: 15_000,
+          confirmationInfo: info,
+          currency: "CNY",
+          interviewRecordId: "workflow-candidate",
+          position: "工程师",
+        },
+        { detailUrl },
+      );
+      const buttons = payload.reply_markup.inline_keyboard.flat();
+      const copies = buttons.filter((button) => button.copy_text);
+      expect(copies.length).toBeGreaterThan(0);
+      expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
+      expect(buttons.filter((button) => button.url)).toEqual([
+        { text: "查看候选人详情", url: detailUrl },
+      ]);
+      expect(buttons.map((button) => button.text)).not.toContain("打开全文复制页");
+      const workflow = buttons.filter((button) => button.callback_data);
+      if (actionLabel && actionId) {
+        expect(workflow).toEqual([
+          expect.objectContaining({
+            callback_data: expect.stringContaining(`"a":"${actionId}"`),
+            text: actionLabel,
+          }),
+        ]);
+      } else {
+        expect(workflow).toEqual([]);
+      }
+    },
+  );
+
+  it("uses the saved current status in the copied Offer after confirmation", async () => {
+    const info = offerConfirmationDetailsSchema.parse({
+      candidateName: "保存的候选人",
+      probationSalary: 0,
+    });
+    const payload = await editedCard("completed", {
+      baseSalary: 20_000,
+      confirmationInfo: info,
+      currency: "USD",
+      interviewRecordId: "candidate-final",
+    });
+    expect(payload.text).toContain("offer审批已通过");
+    expect(payload.text).toContain("试用薪资：0K");
+    expect(payload.text).toContain("系统记录编码：candidate\\-final");
+    expect(payload.text).not.toContain("待 SSC 确认");
+  });
+
+  it("explains a missing detail address for a long Offer without promising a missing copy button", async () => {
+    const info = offerConfirmationDetailsSchema.parse({
+      candidateName: "未配置详情地址的候选人",
+      interviewFeedback: "详细".repeat(2500),
+    });
+    const payload = await editedCard("pending", {
+      baseSalary: 15_000,
+      confirmationInfo: info,
+      currency: "CNY",
+      interviewRecordId: "candidate-without-public-url",
+    });
+    expect(payload.text).toContain("未配置可用详情地址");
+    expect(payload.text).toContain("系统中查看并复制全文");
+    expect(payload.text).not.toContain("请打开“打开全文复制页”");
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(payload.reply_markup.inline_keyboard.flat().map((button) => button.text)).not.toContain(
+      "打开全文复制页",
+    );
+  });
+
+  it("keeps long Offer content available through candidate details instead of truncating it", async () => {
+    const feedback = "详细".repeat(2500);
+    const info = offerConfirmationDetailsSchema.parse({
+      candidateName: "长内容候选人",
+      interviewFeedback: feedback,
+    });
+    const payload = await editedCard(
+      "pending",
+      {
+        baseSalary: 15_000,
+        confirmationInfo: info,
+        currency: "CNY",
+        interviewRecordId: "candidate-long",
+      },
+      { detailUrl: "https://ats.example.test/offer-candidate/signed-long" },
+    );
+    expect(payload.text).toContain("信息较长");
+    expect(payload.text).toContain("查看候选人详情");
+    expect(payload.text).toContain("Offer 页签");
+    expect(payload.text).not.toContain("详细".repeat(100));
+    expect(payload.reply_markup.inline_keyboard.flat().some((button) => button.copy_text)).toBe(
+      false,
+    );
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({
+        text: "查看候选人详情",
+        url: "https://ats.example.test/offer-candidate/signed-long",
+      }),
+    );
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({ text: "接收确认" }),
+    );
+  });
+
+  it("keeps punctuation-heavy Offer text available through candidate details before escaping exceeds the limit", async () => {
+    const feedback = "*_[x](y).!".repeat(220);
+    const info = offerConfirmationDetailsSchema.parse({
+      candidateName: "Markdown 标点较多的候选人",
+      interviewFeedback: feedback,
+    });
+    const payload = await editedCard(
+      "pending",
+      {
+        baseSalary: 15_000,
+        confirmationInfo: info,
+        currency: "CNY",
+        interviewRecordId: "candidate-escaped-long",
+      },
+      { detailUrl: "https://ats.example.test/offer-candidate/signed-escaped-long" },
+    );
+    expect(payload.text).toContain("信息较长");
+    expect(payload.text).not.toContain(feedback.slice(0, 100));
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({
+        text: "查看候选人详情",
+        url: "https://ats.example.test/offer-candidate/signed-escaped-long",
+      }),
+    );
+  });
+
+  it("uses the complete-copy fallback before a punctuation-dense GFM autolink can truncate the Offer", async () => {
+    const feedback = `https://example.test/${"_".repeat(1400)}a`;
+    const info = offerConfirmationDetailsSchema.parse({ interviewFeedback: feedback });
+    const payload = await editedCard(
+      "pending",
+      {
+        baseSalary: 15_000,
+        confirmationInfo: info,
+        currency: "CNY",
+        interviewRecordId: "candidate-autolink-long",
+      },
+      { detailUrl: "https://ats.example.test/offer-candidate/signed-autolink-long" },
+    );
+    expect(payload.text).toContain("信息较长");
+    expect(payload.text).not.toContain("https://example");
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({
+        text: "查看候选人详情",
+        url: "https://ats.example.test/offer-candidate/signed-autolink-long",
+      }),
+    );
+    expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+      expect.objectContaining({ text: "接收确认" }),
+    );
+  });
+
   it.each([
     ["pending", "接收确认", "osr"],
     ["confirming", "完成确认", "osc"],
@@ -109,7 +377,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
   );
 
   it("renders the broadcast second-confirmation buttons within Telegram's callback limit", async () => {
-    const adapter = createTelegramAdapter({
+    const adapter = createOfferTelegramAdapter({
       botToken: "999999:fake-transport-test-token",
       mode: "webhook",
       secretToken: "fake-secret",
@@ -143,13 +411,88 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     expect(requests[0].text).not.toContain("30 分钟");
   });
 
+  it.each([false, true])(
+    "keeps native copying on the approval confirmation card (screenshot received: %s)",
+    async (screenshotReceived) => {
+      const adapter = createOfferTelegramAdapter({
+        botToken: "999999:fake-transport-test-token",
+        mode: "webhook",
+        secretToken: "fake-transport-test-secret",
+        userName: botUser.username,
+      });
+      const info = offerConfirmationDetailsSchema.parse({
+        candidateName: "审批确认候选人",
+        hiringUnitName: "研发中心",
+        interviewFeedback: "内部审批参考说明。".repeat(10),
+        probationPeriod: "2个月",
+        probationSalary: 10_000,
+      });
+      const expected = buildOfferConfirmationText({
+        baseSalary: 15_000,
+        candidateRecordId: "confirmation-candidate",
+        currency: "CNY",
+        info,
+        position: "工程师",
+        sscConfirmationStatus: "confirming",
+      });
+      expect(expected.length).toBeGreaterThan(256);
+      const card = buildTelegramOfferCompletionCard(
+        {
+          canConfirm: true,
+          canReceive: true,
+          candidateName: "审批确认候选人",
+          draft: {
+            baseSalary: 15_000,
+            confirmationInfo: info,
+            currency: "CNY",
+            id: draftId,
+            interviewRecordId: "confirmation-candidate",
+            position: "工程师",
+            sscConfirmationStatus: "confirming",
+            sscRevision: 1,
+            status: "draft",
+            version: 3,
+          },
+          pipelineStage: "offer",
+        },
+        "a".repeat(32),
+        { detailUrl: "https://ats.example.test/offer-candidate/confirmation", screenshotReceived },
+      );
+      await adapter.editMessage(`telegram:${chatId}`, `${chatId}:${messageId}`, card);
+      const buttons = requests[0].reply_markup.inline_keyboard.flat();
+      const copies = buttons.filter((button) => button.copy_text);
+      expect(copies.length).toBeGreaterThan(1);
+      expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
+      for (const button of copies) {
+        expect(button.copy_text?.text.length).toBeLessThanOrEqual(256);
+        expect(button.url).toBeUndefined();
+        expect(button.callback_data).toBeUndefined();
+      }
+      expect(buttons).toContainEqual(
+        expect.objectContaining({
+          callback_data: expect.stringContaining('"a":"osf"'),
+          text: "确认完成",
+        }),
+      );
+      expect(buttons).toContainEqual(
+        expect.objectContaining({
+          text: "查看候选人详情",
+          url: "https://ats.example.test/offer-candidate/confirmation",
+        }),
+      );
+      expect(buttons.map((button) => button.text)).not.toContain("打开全文复制页");
+      expect(buttons.filter((button) => button.url)).toHaveLength(1);
+      expect(requests[0].text).toContain("分别复制");
+    },
+  );
+
   it("explicitly clears the old inline keyboard when SSC confirmation completes", async () => {
     const payload = await editedCard("completed");
     expect(payload.reply_markup).toEqual({ inline_keyboard: [] });
   });
 
   it("shows a complete final button after screenshot upload and clears actions from the old prompt", async () => {
-    const adapter = createTelegramAdapter({
+    const adapter = createOfferTelegramAdapter({
       botToken: "999999:fake-transport-test-token",
       mode: "webhook",
       secretToken: "fake-transport-test-secret",

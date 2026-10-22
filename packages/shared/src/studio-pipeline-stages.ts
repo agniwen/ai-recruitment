@@ -3,6 +3,8 @@
 // Shared DTOs for the late-pipeline stages (human interview / offer / closed).
 // Imported by both DAO and client; single source of truth.
 
+import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
+
 import type {
   ExternalInterviewerInput,
   HumanInterviewMeetingInterviewerRole,
@@ -178,6 +180,7 @@ export interface OfferSscState {
  */
 export interface OfferDraftRecord {
   id: string;
+  confirmationInfo?: OfferConfirmationDetails | null;
   approvalAttachment: {
     filename: string;
     mediaType: string;

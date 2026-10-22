@@ -57,6 +57,7 @@ import type {
 import type { ResumeParserStructured } from "./resume-parser-schema";
 import type { ResumeReview } from "./resume-review";
 import type { ResumeRecruitmentSource } from "./resume-recruitment-source";
+import type { OfferConfirmationDetails } from "./offer-confirmation";
 import { sql } from "drizzle-orm";
 import {
   bigserial,
@@ -1907,6 +1908,7 @@ export const studioOfferDraft = pgTable(
     baseSalary: integer("base_salary").notNull(),
     bonus: integer("bonus"),
     candidateCounter: text("candidate_counter"),
+    confirmationInfo: jsonb("confirmation_info").$type<OfferConfirmationDetails | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     createdByRole: text("created_by_role"),

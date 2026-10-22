@@ -33,6 +33,7 @@ describe("offer currencies", () => {
       ...createBlankOfferFormState(),
       baseSalary: "30000",
       currency: "  港币 HKD  ",
+      position: "工程师",
     });
     expect(payload.currency).toBe("港币 HKD");
   });
@@ -42,6 +43,7 @@ describe("offer currencies", () => {
         ...createBlankOfferFormState(),
         baseSalary: "30000",
         currency,
+        position: "工程师",
       }),
     ).toThrow(/币种说明/);
     expect(offerDraftInputSchema.partial().safeParse({ currency }).success).toBe(false);

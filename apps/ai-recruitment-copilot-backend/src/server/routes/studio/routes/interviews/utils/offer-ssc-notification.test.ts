@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { interviewAuditLog, member, studioOfferDraft } from "@arc/db-schema/schema";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { OfferDraftError } from "../dao/offer-drafts";
 import { getOfferSscNotificationTargets } from "./offer-ssc-notification";
 
@@ -123,6 +124,36 @@ afterEach(() => {
 });
 
 describe("SSC notification recipients and cards", () => {
+  it("loads and delivers the saved Offer confirmation content to the responsible SSC", async () => {
+    const confirmationInfo = offerConfirmationDetailsSchema.parse({
+      candidateCode: "SSC-SNAPSHOT-01",
+      candidateName: "保存的候选人姓名",
+      probationPeriod: "2个月",
+      probationSalary: 10_000,
+      workMode: "远程",
+    });
+    mocks.current.mockResolvedValue([
+      { ...draft, baseSalary: 15_000, confirmationInfo, currency: "CNY" },
+    ]);
+    const [target] = await getOfferSscNotificationTargets(input);
+    expect(mocks.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseSalary: studioOfferDraft.baseSalary,
+        confirmationInfo: studioOfferDraft.confirmationInfo,
+        currency: studioOfferDraft.currency,
+      }),
+    );
+    const text = JSON.stringify(target?.message);
+    expect(text).toContain("SSC-SNAPSHOT-01");
+    expect(text).toContain("保存的候选人姓名");
+    expect(text).toContain("转正薪资：15K");
+    expect(text).toContain("试用薪资：10K");
+    expect(text).toContain("系统记录编码：candidate-a");
+    expect(text).not.toContain("打开全文复制页");
+    expect(text).toContain("查看候选人详情");
+    expect(text).not.toContain("private-approval.png");
+  });
+
   it("notifies the responsible SSC chat without resolving system accounts or their permissions", async () => {
     mocks.context.mockRejectedValue(new Error("System account lookup must not run"));
     mocks.members.mockRejectedValue(new Error("System account lookup must not run"));
@@ -373,7 +404,8 @@ describe("SSC notification recipients and cards", () => {
       for (const target of targets) {
         const card = JSON.stringify(target.message);
         expect(card).toContain("秋风");
-        expect(card).toContain("@ssc_alice");
+        // Literal field values escape Markdown punctuation before Telegram rendering.
+        expect(card).toContain("@ssc\\\\_alice");
         expect(card).toContain("/offer-candidate/");
         expect(card).not.toContain('"id":"osr"');
         if (event === "received") {
