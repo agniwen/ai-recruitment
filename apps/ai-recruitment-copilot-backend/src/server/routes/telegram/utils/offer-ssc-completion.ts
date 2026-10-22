@@ -13,8 +13,10 @@ import {
   loadOfferSscActivity,
   recordOfferSscInteraction,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
+import { loadOfferSscInterviewSummary } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-interview-summary";
 import { getTelegramBot } from "./bot";
 import { buildTelegramOfferCompletionCard } from "./offer-ssc-card";
+import { buildOfferCandidatePreviewLink } from "@arc/ai-recruitment-copilot-backend/server/routes/public/routes/offer-candidates/access";
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { updateTelegramOfferMessages } from "./offer-ssc-message";
 import { downloadTelegramOfferScreenshot } from "./offer-ssc-screenshot";
@@ -117,7 +119,24 @@ async function authorizedContext(
   ) {
     throw new OfferDraftError("该 Offer 当前不能完成 SSC 确认，请重新打开。", 409);
   }
-  return { ...context, activity: await loadOfferSscActivity(context.draft) };
+  const [activity, interviewRounds] = await Promise.all([
+    loadOfferSscActivity(context.draft),
+    loadOfferSscInterviewSummary({
+      interviewRecordId: context.draft.interviewRecordId,
+      organizationId: context.draft.organizationId,
+    }),
+  ]);
+  return { ...context, activity, interviewRounds, telegramActor: actor };
+}
+
+function completionDetailUrl(context: Awaited<ReturnType<typeof authorizedContext>>) {
+  return buildOfferCandidatePreviewLink({
+    candidateId: context.draft.interviewRecordId,
+    draftId: context.draft.id,
+    organizationId: context.draft.organizationId,
+    revision: context.draft.sscRevision ?? 1,
+    telegramActor: context.telegramActor,
+  });
 }
 
 async function removePending(thread: CompletionThread, chatId: string, token: string) {
@@ -143,6 +162,7 @@ async function beginCompletion(
     const activity = await loadOfferSscActivity(context.draft);
     const prompt = await thread.post(
       buildTelegramOfferCompletionCard({ ...context, activity }, token, {
+        detailUrl: completionDetailUrl(context),
         operatorLabel: describeOfferSscOperator(context.telegramOperator),
       }),
     );
@@ -404,6 +424,7 @@ async function postScreenshotConfirmation(
   try {
     prompt = await thread.post(
       buildTelegramOfferCompletionCard(context, token, {
+        detailUrl: completionDetailUrl(context),
         operatorLabel: describeOfferSscOperator(context.telegramOperator),
         screenshotReceived: true,
       }),

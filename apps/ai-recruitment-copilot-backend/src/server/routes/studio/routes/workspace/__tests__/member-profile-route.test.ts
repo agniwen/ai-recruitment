@@ -16,7 +16,7 @@ describe("workspace member profile route", () => {
 
   it("keeps TG numbers out of the unrestricted interviewer member list", () => {
     const listStart = daoSource.indexOf("export async function listWorkspaceMembers");
-    const listEnd = daoSource.indexOf("export function listWorkspaceMemberProfiles");
+    const listEnd = daoSource.indexOf("export async function listWorkspaceMemberProfiles");
 
     expect(daoSource.slice(listStart, listEnd)).not.toContain("telegram");
   });

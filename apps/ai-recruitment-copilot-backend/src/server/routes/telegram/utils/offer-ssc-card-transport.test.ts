@@ -2,6 +2,7 @@ import { createOfferTelegramAdapter } from "./offer-telegram-adapter";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { buildOfferConfirmationText } from "@arc/shared/offer-confirmation";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import type { OfferInterviewRound } from "@arc/shared/offer-interviews";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildTelegramOfferCard,
@@ -28,6 +29,16 @@ const requests: EditRequest[] = [];
 const chatId = "12345";
 const messageId = 7;
 const draftId = "550e8400-e29b-41d4-a716-446655440000";
+const completedInterviewRounds: readonly OfferInterviewRound[] = [
+  {
+    feedback: "能清楚说明方案与取舍，建议录用。",
+    interviewers: [{ name: "技术面试官甲" }, { name: "外部面试官乙" }],
+    label: "技术复面",
+    scheduledAt: "2026-10-20T02:30:00.000Z",
+    sortOrder: 1,
+    status: "completed",
+  },
+];
 const botUser = {
   first_name: "Transport test bot",
   id: 999_999,
@@ -46,7 +57,10 @@ beforeEach(() => {
       if (method === "getMe") {
         return Promise.resolve(Response.json({ ok: true, result: botUser }));
       }
-      if (method !== "editMessageText" || typeof init?.body !== "string") {
+      if (
+        !["sendMessage", "editMessageText"].includes(method ?? "") ||
+        typeof init?.body !== "string"
+      ) {
         throw new Error("Unexpected Telegram transport request in isolated test");
       }
       const payload = JSON.parse(init.body) as EditRequest;
@@ -58,7 +72,7 @@ beforeEach(() => {
             chat: { first_name: "SSC test user", id: Number(payload.chat_id), type: "private" },
             date: 1_700_000_000,
             from: botUser,
-            message_id: payload.message_id,
+            message_id: payload.message_id ?? messageId,
             text: payload.text ?? "Transport test card",
           },
         }),
@@ -75,6 +89,7 @@ async function editedCard(
   status: "pending" | "confirming" | "completed",
   overrides: Partial<OfferDraftRecord> = {},
   options: Parameters<typeof buildTelegramOfferCard>[1] = {},
+  interviewRounds?: readonly OfferInterviewRound[],
 ) {
   const adapter = createOfferTelegramAdapter({
     botToken: "999999:fake-transport-test-token",
@@ -96,6 +111,7 @@ async function editedCard(
         version: 3,
         ...overrides,
       },
+      interviewRounds,
       pipelineStage: "offer",
     },
     options,
@@ -106,8 +122,96 @@ async function editedCard(
   return requests[0];
 }
 
+function copiedBlock(payload: EditRequest) {
+  const match = /```[^\n]*\n([\s\S]*?)\n```/u.exec(payload.text ?? "");
+  expect(match, "one complete Telegram preformatted block").not.toBeNull();
+  expect((payload.text ?? "").match(/^```/gmu)).toHaveLength(2);
+  return match?.[1].replaceAll(/\\([\\`])/gu, "$1");
+}
+
 describe("Offer SSC cards through the real Telegram adapter", () => {
-  it("renders the complete Offer snapshot as plain text without code formatting or truncation", async () => {
+  it.each([
+    ["post", false],
+    ["edit", false],
+    ["post", true],
+    ["edit", true],
+  ] as const)(
+    "preserves literal emoji templates in the complete Offer on %s (plain retry: %s)",
+    async (operation, plainRetry) => {
+      if (plainRetry) {
+        const defaultFetch = vi.mocked(fetch).getMockImplementation();
+        if (!defaultFetch) {
+          throw new Error("Missing isolated Telegram fetch implementation");
+        }
+        let rejectedMarkdown = false;
+        vi.mocked(fetch).mockImplementation((input, init) => {
+          if (!rejectedMarkdown && typeof init?.body === "string") {
+            const payload = JSON.parse(init.body) as EditRequest;
+            if (payload.parse_mode === "MarkdownV2") {
+              requests.push(payload);
+              rejectedMarkdown = true;
+              return Promise.resolve(
+                Response.json(
+                  {
+                    description: "Bad Request: can't parse entities: malformed MarkdownV2 entity",
+                    error_code: 400,
+                    ok: false,
+                  },
+                  { status: 400 },
+                ),
+              );
+            }
+          }
+          return defaultFetch(input, init);
+        });
+      }
+      const adapter = createOfferTelegramAdapter({
+        botToken: "999999:fake-transport-test-token",
+        mode: "webhook",
+        secretToken: "fake-transport-test-secret",
+        userName: botUser.username,
+      });
+      const info = offerConfirmationDetailsSchema.parse({
+        candidateName: "原文测试候选人",
+        interviewFeedback:
+          "原文 {{emoji:smile}}\r\n{{emoji:unknown_template}} :smile: \\ 与 ```代码``` $& $` $'",
+      });
+      const draft = {
+        baseSalary: 15_000,
+        confirmationInfo: info,
+        currency: "CNY" as const,
+        id: draftId,
+        position: "工程师",
+        sscConfirmationStatus: "pending" as const,
+        status: "draft" as const,
+        version: 3,
+      };
+      const card = buildTelegramOfferCard({
+        canConfirm: true,
+        canReceive: true,
+        candidateName: "原文测试候选人",
+        draft,
+        pipelineStage: "offer",
+      });
+      await (operation === "post"
+        ? adapter.postMessage(`telegram:${chatId}`, card)
+        : adapter.editMessage(`telegram:${chatId}`, `${chatId}:${messageId}`, card));
+      expect(requests).toHaveLength(plainRetry ? 2 : 1);
+      const expected = buildOfferConfirmationText({ ...draft, info });
+      expect(copiedBlock(requests[0])).toBe(expected);
+      if (plainRetry) {
+        expect(requests[1].parse_mode).toBeUndefined();
+        expect(requests[1].text).toContain(expected);
+      }
+      for (const payload of requests) {
+        expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+          expect.objectContaining({ text: "接收确认" }),
+        );
+      }
+    },
+  );
+
+  it("renders the complete Offer snapshot inside one copyable block without truncation", async () => {
     const info = offerConfirmationDetailsSchema.parse({
       candidateCode: "SSC-001",
       candidateName: "候选人<甲>&乙",
@@ -139,30 +243,11 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       { detailUrl: "https://ats.example.test/offer-candidate/signed-offer" },
     );
     expect(payload.parse_mode).toBe("MarkdownV2");
-    const markdownV2Specials = new Set("\\_*[]()~`>#+-=|{}.!");
-    const escaped = Array.from(expected, (character) =>
-      markdownV2Specials.has(character) ? `\\${character}` : character,
-    ).join("");
-    // GFM auto-links the bare URL inside the literal saved text. Telegram's text-link
-    // label preserves the original URL; the surrounding saved Markdown stays escaped.
-    const expectedTransport = escaped.replace(
-      "https://example\\.test",
-      "[https://example\\.test](https://example.test)",
-    );
-    expect(payload.text).toContain(expectedTransport);
-    expect(payload.text).not.toMatch(/(?<!\\)`/u);
-    expect(payload.text).not.toContain("代码块");
+    expect(copiedBlock(payload)).toBe(expected);
     expect(payload.text).toContain("转正薪资：15K\n试用期：2个月\n试用薪资：10K");
     const copies = payload.reply_markup.inline_keyboard.flat().filter((button) => button.copy_text);
-    expect(copies.length).toBeGreaterThan(1);
-    expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
-    for (const [index, button] of copies.entries()) {
-      expect(button.text).toBe(`复制第 ${index + 1}/${copies.length} 段`);
-      expect(button.copy_text?.text.length).toBeLessThanOrEqual(256);
-      expect(button.url).toBeUndefined();
-      expect(button.callback_data).toBeUndefined();
-    }
-    expect(payload.text).toContain("分别复制");
+    expect(copies).toEqual([]);
+    expect(payload.text).toContain("文本块");
     expect(payload.reply_markup.inline_keyboard.flat()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -182,7 +267,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     ["confirming", "完成确认", "osc"],
     ["completed", null, null],
   ] as const)(
-    "keeps %s workflow and native copying without a separate full-copy page button",
+    "keeps %s workflow and whole-message copying without a separate full-copy page button",
     async (status, actionLabel, actionId) => {
       const info = offerConfirmationDetailsSchema.parse({
         candidateName: "SSC 流程候选人",
@@ -195,6 +280,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
         candidateRecordId: "workflow-candidate",
         currency: "CNY",
         info,
+        interviewRounds: completedInterviewRounds,
         position: "工程师",
         sscConfirmationStatus: status,
       });
@@ -209,11 +295,17 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
           position: "工程师",
         },
         { detailUrl },
+        completedInterviewRounds,
       );
       const buttons = payload.reply_markup.inline_keyboard.flat();
       const copies = buttons.filter((button) => button.copy_text);
-      expect(copies.length).toBeGreaterThan(0);
-      expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
+      expect(copies).toEqual([]);
+      expect(payload.text).toContain("文本块");
+      expect(copiedBlock(payload)).toBe(expected);
+      expect(expected).toContain("技术面试官甲");
+      expect(expected).toContain("外部面试官乙");
+      expect(expected).toContain("10:30");
+      expect(payload.text).toContain("建议录用");
       expect(buttons.filter((button) => button.url)).toEqual([
         { text: "查看候选人详情", url: detailUrl },
       ]);
@@ -232,6 +324,27 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     },
   );
 
+  it("uses the detail fallback for long completed interview feedback without partial native copies", async () => {
+    const feedback = "面试评价长内容".repeat(500);
+    const detailUrl = "https://ats.example.test/offer-candidate/long-interviews";
+    const payload = await editedCard(
+      "pending",
+      { baseSalary: 15_000, currency: "CNY", interviewRecordId: "interview-long" },
+      { detailUrl },
+      [{ ...completedInterviewRounds[0], feedback }],
+    );
+    const buttons = payload.reply_markup.inline_keyboard.flat();
+    expect(payload.text).toContain("信息较长");
+    expect(payload.text).toContain("查看候选人详情");
+    expect(payload.text).not.toContain(feedback.slice(0, 60));
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(buttons.some((button) => button.copy_text)).toBe(false);
+    expect(buttons).toContainEqual(expect.objectContaining({ text: "接收确认" }));
+    expect(buttons.filter((button) => button.url)).toEqual([
+      { text: "查看候选人详情", url: detailUrl },
+    ]);
+  });
+
   it("uses the saved current status in the copied Offer after confirmation", async () => {
     const info = offerConfirmationDetailsSchema.parse({
       candidateName: "保存的候选人",
@@ -245,7 +358,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     });
     expect(payload.text).toContain("offer审批已通过");
     expect(payload.text).toContain("试用薪资：0K");
-    expect(payload.text).toContain("系统记录编码：candidate\\-final");
+    expect(payload.text).toContain("系统记录编码：candidate-final");
     expect(payload.text).not.toContain("待 SSC 确认");
   });
 
@@ -412,7 +525,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
   });
 
   it.each([false, true])(
-    "keeps native copying on the approval confirmation card (screenshot received: %s)",
+    "keeps full-copy access on the approval confirmation card (screenshot received: %s)",
     async (screenshotReceived) => {
       const adapter = createOfferTelegramAdapter({
         botToken: "999999:fake-transport-test-token",
@@ -432,6 +545,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
         candidateRecordId: "confirmation-candidate",
         currency: "CNY",
         info,
+        interviewRounds: completedInterviewRounds,
         position: "工程师",
         sscConfirmationStatus: "confirming",
       });
@@ -453,6 +567,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
             status: "draft",
             version: 3,
           },
+          interviewRounds: completedInterviewRounds,
           pipelineStage: "offer",
         },
         "a".repeat(32),
@@ -461,13 +576,9 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       await adapter.editMessage(`telegram:${chatId}`, `${chatId}:${messageId}`, card);
       const buttons = requests[0].reply_markup.inline_keyboard.flat();
       const copies = buttons.filter((button) => button.copy_text);
-      expect(copies.length).toBeGreaterThan(1);
-      expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
-      for (const button of copies) {
-        expect(button.copy_text?.text.length).toBeLessThanOrEqual(256);
-        expect(button.url).toBeUndefined();
-        expect(button.callback_data).toBeUndefined();
-      }
+      expect(copies).toEqual([]);
+      expect(expected).toContain("能清楚说明方案与取舍，建议录用。");
+      expect(expected).toContain("10:30");
       expect(buttons).toContainEqual(
         expect.objectContaining({
           callback_data: expect.stringContaining('"a":"osf"'),
@@ -482,7 +593,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       );
       expect(buttons.map((button) => button.text)).not.toContain("打开全文复制页");
       expect(buttons.filter((button) => button.url)).toHaveLength(1);
-      expect(requests[0].text).toContain("分别复制");
+      expect(copiedBlock(requests[0])).toBe(expected);
     },
   );
 

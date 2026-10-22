@@ -137,7 +137,7 @@ function copyButton(host: HTMLElement) {
 }
 
 describe("copying complete Offer confirmation information", () => {
-  it.each(["pending", null, undefined] as const)(
+  it.each(["pending", "confirming", null, undefined] as const)(
     "copies Offer text without a pending SSC footer or trailing blank lines for status %s",
     async (sscConfirmationStatus) => {
       const { host, render } = renderConfirmation();
@@ -169,7 +169,7 @@ describe("copying complete Offer confirmation information", () => {
       savedConfirmationText
         .replace("EMP-SAVED", "EMP-UPDATED")
         .replace("转正薪资：30K", "转正薪资：35K")
-        .replace("offer审批已通过", "SSC 确认中"),
+        .replace("\n\noffer审批已通过", ""),
       expect.any(Function),
     );
     expect(onSubmit).not.toHaveBeenCalled();

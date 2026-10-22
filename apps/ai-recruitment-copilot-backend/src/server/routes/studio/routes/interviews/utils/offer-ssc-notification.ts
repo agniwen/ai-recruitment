@@ -4,6 +4,7 @@ import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { member, studioOfferDraft, user } from "@arc/db-schema/schema";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import { loadOfferSscActivity } from "../dao/offer-ssc-activity";
+import { loadOfferSscInterviewSummary } from "../dao/offer-ssc-interview-summary";
 import type { OfferSscActivity } from "../dao/offer-ssc-activity";
 import { loadAuthorizedOfferSscContext, OfferDraftError } from "../dao/offer-drafts";
 import {
@@ -123,7 +124,13 @@ async function getAuthorizedNotificationTarget(
   if (!isCurrentNotificationState(input, context.draft)) {
     return null;
   }
-  const cardContext = { ...context, activity, canConfirm: false, canReceive: false };
+  const cardContext = {
+    ...context,
+    activity,
+    canConfirm: false,
+    canReceive: false,
+    interviewRounds: undefined,
+  };
   const message = buildTelegramOfferPublicCard(cardContext, profile.userId, {
     feedbackLabel: feedbackLabels[input.event],
     title: notificationTitles[input.event],
@@ -193,6 +200,12 @@ export async function getOfferSscNotificationTargets(
     activity,
   );
   const uniqueRecipients = new Map(recipients.map((recipient) => [recipient.chatId, recipient]));
+  const interviewRounds = uniqueRecipients.size
+    ? await loadOfferSscInterviewSummary({
+        interviewRecordId: offer.interviewRecordId,
+        organizationId: offer.organizationId,
+      })
+    : [];
   const unexpired = !offer.expiresAt || new Date(offer.expiresAt).getTime() > Date.now();
   const targets: OfferSscNotificationTarget[] = [...uniqueRecipients.values()].map((recipient) => {
     const actor = { telegramUserId: recipient.chatId, username: recipient.username };
@@ -202,6 +215,7 @@ export async function getOfferSscNotificationTargets(
       canConfirm: unexpired,
       canReceive: unexpired,
       draft: offer,
+      interviewRounds,
     };
     const message =
       input.event === "received" &&

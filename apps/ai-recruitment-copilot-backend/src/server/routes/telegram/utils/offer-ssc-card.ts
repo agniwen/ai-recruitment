@@ -7,6 +7,7 @@ import {
   LinkButton,
   CardText,
   cardChildToFallbackText,
+  codeBlock,
   paragraph,
   root,
   stringifyMarkdown,
@@ -19,7 +20,7 @@ import { getOfferSscConfirmationMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import type { OfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
-import { splitTelegramOfferCopyText } from "./offer-telegram-copy";
+import type { OfferInterviewRound } from "@arc/shared/offer-interviews";
 
 export interface TelegramOfferCardContext {
   draft: Pick<
@@ -34,6 +35,7 @@ export interface TelegramOfferCardContext {
   canReceive: boolean;
   canConfirm: boolean;
   activity?: OfferSscActivity[];
+  interviewRounds?: readonly OfferInterviewRound[];
 }
 
 const blankConfirmationInfo = offerConfirmationDetailsSchema.parse({});
@@ -51,6 +53,7 @@ function offerConfirmationText(context: TelegramOfferCardContext) {
       ...blankConfirmationInfo,
       candidateName: context.candidateName,
     },
+    interviewRounds: context.interviewRounds,
     position: draft.position,
     sscConfirmationStatus: draft.sscConfirmationStatus,
   });
@@ -71,21 +74,11 @@ function literalField(props: { label: string; value: string }) {
   return Field({ ...props, value: plainMarkdown(props.value) });
 }
 
-function copyInstructions(text: string, detailUrl: string | null | undefined, bodyOmitted = false) {
-  const parts = splitTelegramOfferCopyText(text);
-  if (parts.length === 0) {
-    return CardText(
-      detailUrl
-        ? "Offer 信息较长，请通过“查看候选人详情”进入 Offer 页签查看并复制全文。"
-        : "Offer 信息较长，未配置可用详情地址，请在系统中查看并复制全文。",
-    );
-  }
-  const prefix = bodyOmitted ? "Offer 信息较长，消息中未展开全部内容。" : "";
+function longOfferCopyInstructions(detailUrl: string | null | undefined) {
   return CardText(
-    prefix +
-      (parts.length === 1
-        ? "点击下方复制按钮直接复制 Offer 信息。"
-        : `Offer 信息共 ${parts.length} 段，请按顺序分别复制并粘贴；每次复制会覆盖剪贴板，不会自动追加。`),
+    detailUrl
+      ? "Offer 信息较长，请通过“查看候选人详情”进入 Offer 页签查看并复制全文。"
+      : "Offer 信息较长，未配置可用详情地址，请在系统中查看并复制全文。",
   );
 }
 
@@ -103,9 +96,12 @@ function offerCopySections(
   // Reserve separators and the explanatory line before the adapter's 4096-character limit.
   const budget = (header.length + text.length) * 4 + 256;
   if (budget > 4096) {
-    return [copyInstructions(text, detailUrl, true)];
+    return [longOfferCopyInstructions(detailUrl)];
   }
-  return [copyInstructions(text, detailUrl), CardText(plainMarkdown(text))];
+  return [
+    CardText("点击下方文本块的复制入口，整块复制 Offer 信息和面试情况。"),
+    CardText(stringifyMarkdown(root([codeBlock(text)])).replace(/\n$/u, "")),
+  ];
 }
 
 const activityTime = new Intl.DateTimeFormat("zh-CN", {
@@ -213,32 +209,37 @@ export function buildTelegramOfferCompletionCard(
     operatorLabel?: string;
   } = {},
 ) {
-  const text = offerConfirmationText(context);
+  const title = options.screenshotReceived ? "审批截图已收到，请确认完成" : "确认完成 SSC 审核";
+  const fields = Fields([
+    literalField({ label: "候选人", value: context.candidateName }),
+    literalField({ label: "岗位", value: context.draft.position || "未填写" }),
+    literalField({ label: "Offer 版本", value: String(context.draft.version) }),
+    ...operationFields(context.activity),
+    ...(options.operatorLabel
+      ? [literalField({ label: "当前操作人", value: options.operatorLabel })]
+      : []),
+    ...(options.feedbackLabel
+      ? [literalField({ label: "本次流转", value: options.feedbackLabel })]
+      : []),
+    literalField({
+      label: "内部审批",
+      value: "请确认该 Offer 的内部审批已完成。确认后系统将记录操作人和完成时间。",
+    }),
+    literalField({
+      label: "审批截图（选填）",
+      value: options.screenshotReceived
+        ? "审批截图已收到，确认完成后将保存到本次 Offer。请确认内部审批已完成，再点击下方“确认完成”。"
+        : `可点击上传截图发送一张 JPEG、PNG 或 WebP 图片（最多 10 MB），也可直接完成确认。上传后会显示新的确认卡片。${options.persistent ? "以当前 Offer 版本和状态为准。" : "本次操作 30 分钟内有效。"}`,
+    }),
+  ]);
   const card = Card({
     children: [
-      Fields([
-        literalField({ label: "候选人", value: context.candidateName }),
-        literalField({ label: "岗位", value: context.draft.position || "未填写" }),
-        literalField({ label: "Offer 版本", value: String(context.draft.version) }),
-        ...operationFields(context.activity),
-        ...(options.operatorLabel
-          ? [literalField({ label: "当前操作人", value: options.operatorLabel })]
-          : []),
-        ...(options.feedbackLabel
-          ? [literalField({ label: "本次流转", value: options.feedbackLabel })]
-          : []),
-        literalField({
-          label: "内部审批",
-          value: "请确认该 Offer 的内部审批已完成。确认后系统将记录操作人和完成时间。",
-        }),
-        literalField({
-          label: "审批截图（选填）",
-          value: options.screenshotReceived
-            ? "审批截图已收到，确认完成后将保存到本次 Offer。请确认内部审批已完成，再点击下方“确认完成”。"
-            : `可点击上传截图发送一张 JPEG、PNG 或 WebP 图片（最多 10 MB），也可直接完成确认。上传后会显示新的确认卡片。${options.persistent ? "以当前 Offer 版本和状态为准。" : "本次操作 30 分钟内有效。"}`,
-        }),
-      ]),
-      ...(text === null ? [] : [copyInstructions(text, options.detailUrl)]),
+      fields,
+      ...offerCopySections(
+        context,
+        `${title}\n${cardChildToFallbackText(fields) ?? ""}`,
+        options.detailUrl,
+      ),
       Actions([Button({ id: "osf", label: "确认完成", value: token })]),
       Actions([
         Button({
@@ -252,7 +253,7 @@ export function buildTelegramOfferCompletionCard(
         ? [Actions([LinkButton({ label: "查看候选人详情", url: options.detailUrl })])]
         : []),
     ],
-    title: options.screenshotReceived ? "审批截图已收到，请确认完成" : "确认完成 SSC 审核",
+    title,
   });
   return attachOfferCopyText(card, context);
 }

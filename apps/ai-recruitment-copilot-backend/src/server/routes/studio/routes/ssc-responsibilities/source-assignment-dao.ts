@@ -13,6 +13,7 @@ import {
   user,
 } from "@arc/db-schema/schema";
 import { duplicateError } from "./dao";
+import { resolveSscMemberTelegram } from "./member-telegram";
 import { sscResponsibilityInputSchema } from "./schema";
 import type { SscSourceAssignmentInput } from "./schema";
 
@@ -156,11 +157,14 @@ function compatibleIntent(context: CandidateContext, email: string, role: string
 function memberCandidate(
   row: CandidateData["members"][number],
   context: CandidateContext,
+  entries: CandidateData["entries"],
 ): CandidateEntry | null {
   const contact = contactSchema.safeParse({
     email: row.email,
     sscName: row.name,
-    telegram: row.telegram ?? "",
+    telegram: row.telegram?.trim()
+      ? row.telegram
+      : (resolveSscMemberTelegram(entries, { email: row.email, workspaceRole: row.role }) ?? ""),
     workspaceRole: row.role,
   });
   if (!contact.success || !contact.data.email) {
@@ -222,7 +226,7 @@ function buildCandidates(data: CandidateData, resumeSourceId: string) {
   const context = candidateContext(data, resumeSourceId);
   const byEmail = new Map<string, CandidateEntry>();
   for (const row of data.members) {
-    const entry = memberCandidate(row, context);
+    const entry = memberCandidate(row, context, data.entries);
     if (entry) {
       byEmail.set(entry.candidate.email, entry);
     }

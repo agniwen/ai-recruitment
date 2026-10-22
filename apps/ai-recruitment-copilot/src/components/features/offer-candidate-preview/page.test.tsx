@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { OfferCandidatePreview } from "@arc/shared/offer-candidate-preview";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
+import { buildOfferConfirmationText } from "@arc/shared/offer-confirmation";
 import { resumeReviewV5Schema } from "@arc/shared/resume-review";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
@@ -285,7 +286,9 @@ describe("public Offer candidate preview", () => {
     await selectTab("Offer");
     expect(document.body.textContent).toContain("PUBLIC-001");
     expect(document.body.textContent).toContain("保存时的编制组织");
-    expect(document.body.textContent).toContain("保存时确认的面试评价");
+    expect(document.body.textContent).toContain("沟通清晰，项目追问通过。");
+    expect(document.body.textContent).not.toContain("保存时确认的面试评价");
+    expect(document.body.textContent).not.toContain("保存的面试官");
     expect(document.body.textContent).toContain("offer审批已通过");
     expect(document.body.textContent).not.toContain("待 SSC 确认");
     const offer = document.querySelector<HTMLElement>("#offer-confirmation-info");
@@ -306,12 +309,112 @@ describe("public Offer candidate preview", () => {
     expectReadOnly();
   });
 
+  it("copies every completed interview with the same Offer text while retaining readonly interview history", async () => {
+    const [round] = preview.humanInterviews;
+    const humanInterviews: OfferCandidatePreview["humanInterviews"] = [
+      {
+        ...round,
+        feedback: `业务复面反馈：${"已核实交付和协作经历。\n".repeat(30)}最终结论：通过`,
+        interviewers: [{ name: "业务面试官" }, { name: "外部面试官" }],
+        label: "业务复面已完成",
+        scheduledAt: "2026-10-20T02:30:00.000Z",
+        sortOrder: 2,
+      },
+      {
+        ...round,
+        completedAt: null,
+        feedback: "尚未完成的反馈不得复制",
+        interviewers: [{ name: "待面试面试官" }],
+        label: "尚未完成的面试",
+        sortOrder: 1,
+        status: "pending",
+      },
+      {
+        ...round,
+        feedback: "技术复面已确认反馈",
+        interviewers: [{ name: "技术面试官" }],
+        label: "技术复面已完成",
+        scheduledAt: "2026-10-19T00:00:00.000Z",
+        sortOrder: 0,
+      },
+      {
+        ...round,
+        cancelledAt: "2026-10-21T03:00:00.000Z",
+        completedAt: null,
+        feedback: "已取消的反馈不得复制",
+        interviewers: [{ name: "取消面试面试官" }],
+        label: "已经取消的面试",
+        sortOrder: 3,
+        status: "cancelled",
+      },
+    ];
+    const confirmationInfo = offerConfirmationDetailsSchema.parse({ candidateName: "保存的姓名" });
+    vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+      ...preview,
+      candidate: { ...preview.candidate, id: "candidate-completed-interviews" },
+      humanInterviews,
+      offer: { ...preview.offer, confirmationInfo },
+    });
+    await renderPage();
+    await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+    await selectTab("Offer");
+    const offer = document.querySelector<HTMLElement>("#offer-confirmation-info");
+    const text = offer?.querySelector("pre")?.textContent ?? "";
+    for (const value of [
+      "技术复面已完成",
+      "技术面试官",
+      "技术复面已确认反馈",
+      "业务复面已完成",
+      "业务面试官",
+      "外部面试官",
+      humanInterviews[0].feedback,
+    ]) {
+      expect(text).toContain(value);
+    }
+    for (const value of [
+      "尚未完成的面试",
+      "尚未完成的反馈不得复制",
+      "待面试面试官",
+      "已经取消的面试",
+      "已取消的反馈不得复制",
+      "取消面试面试官",
+    ]) {
+      expect(text).not.toContain(value);
+    }
+    expect(text.indexOf("技术复面已完成")).toBeLessThan(text.indexOf("业务复面已完成"));
+    expect(text).toBe(
+      buildOfferConfirmationText({
+        baseSalary: preview.offer.baseSalary,
+        candidateRecordId: "candidate-completed-interviews",
+        currency: preview.offer.currency,
+        info: confirmationInfo,
+        interviewRounds: humanInterviews,
+        position: preview.offer.position,
+        sscConfirmationStatus: preview.offer.sscConfirmationStatus,
+      }),
+    );
+    const copy = [...(offer?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+      (node) => node.textContent?.trim() === "复制 Offer 信息",
+    );
+    expect(copy, "missing interview-inclusive Offer copy button").toBeDefined();
+    await act(() => copy?.click());
+    expect(copyTextToClipboard).toHaveBeenCalledExactlyOnceWith(text, expect.any(Function));
+    expectReadOnly();
+    await selectTab("真人复面");
+    for (const value of ["技术复面已完成", "业务复面已完成", "尚未完成的面试", "已经取消的面试"]) {
+      expect(document.body.textContent).toContain(value);
+    }
+    expect(fetchOfferCandidatePreview).toHaveBeenCalledExactlyOnceWith("test-token");
+    expectReadOnly();
+  });
+
   it.each([null, undefined])(
     "copies historical Offers without a confirmation snapshot using the candidate name: %s",
     async (confirmationInfo) => {
       vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
         ...preview,
         candidate: { ...preview.candidate, id: "legacy-candidate" },
+        humanInterviews: [],
         offer: { ...preview.offer, confirmationInfo },
       });
       await renderPage();
@@ -324,7 +427,8 @@ describe("public Offer candidate preview", () => {
       expect(text).toContain("职位：高级招聘专员");
       expect(text).toContain("转正薪资：18K");
       expect(text).not.toContain("待 SSC 确认");
-      expect(text?.split("\n").at(-1)).toBe("试用薪资：待补充");
+      expect(text).toContain("试用薪资：待补充");
+      expect(text).toContain("【面试情况】\n暂无已完成的真人面试记录。");
       expect(offer?.textContent).toContain("待 SSC 接收");
       const copy = [...(offer?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
         (node) => node.textContent?.trim() === "复制 Offer 信息",

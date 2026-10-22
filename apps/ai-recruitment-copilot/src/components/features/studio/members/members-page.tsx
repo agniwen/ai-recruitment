@@ -265,8 +265,10 @@ export function MembersManagementPage() {
         isInterviewer: isInterviewerByUserId.get(m.userId) ?? false,
         lastActiveAt: lastActiveMap[m.userId] ?? null,
         name: user?.name ?? user?.email ?? "—",
+        profileTelegram: memberProfile?.profileTelegram,
         role: m.role,
         telegram: memberProfile?.telegram ?? null,
+        telegramSource: memberProfile?.telegramSource,
         userId: m.userId,
       };
     });

@@ -27,6 +27,8 @@ export interface MemberRow {
   isInterviewer: boolean;
   role: string;
   telegram: string | null;
+  profileTelegram?: string | null;
+  telegramSource?: "profile" | "ssc" | null;
   createdAt: string | Date;
   lastActiveAt: string | null;
   treeDepth?: number;

@@ -101,6 +101,7 @@ async function candidates(sourceId = sourceA) {
     email: string;
     registered: boolean;
     assigned: boolean;
+    telegram: string;
     workspaceRole: string;
   }[];
 }
@@ -201,6 +202,78 @@ describe.skipIf(!databaseUrl || databaseUrl !== process.env.DATABASE_URL)(
       await preentry(foreignAccount.email);
       await preentry("no-role@example.com", { workspaceRole: null });
       expect(await candidates()).toEqual([]);
+    });
+
+    it("retains a registered member's ledger Telegram when assigning another source without changing their profile", async () => {
+      const email = `${randomUUID()}@example.com`;
+      const originalId = await preentry(` ${email.toUpperCase()} `, {
+        resumeSourceId: sourceB,
+        telegram: " @Ledger_Ssc ",
+      });
+      const registered = await account("ssc-role", { email });
+      await db
+        .update(user)
+        .set({
+          telegram: null,
+          telegramBoundUsername: "preserved_binding",
+          telegramChatId: "987654321",
+        })
+        .where(eq(user.id, registered.id));
+      const [profileBefore] = await db.select().from(user).where(eq(user.id, registered.id));
+      const [originalBefore] = await db
+        .select()
+        .from(sscResponsibility)
+        .where(eq(sscResponsibility.id, originalId));
+
+      expect(await candidates()).toMatchObject([
+        {
+          assigned: false,
+          id: `member:${registered.memberId}`,
+          registered: true,
+          telegram: "@ledger_ssc",
+        },
+      ]);
+      const response = await request("/assign", "POST", {
+        candidateIds: [`member:${registered.memberId}`],
+        resumeSourceId: sourceA,
+      });
+      expect(response.status).toBe(201);
+      expect(await assignments()).toMatchObject([{ email, telegram: "@ledger_ssc" }]);
+      const [profileAfter] = await db.select().from(user).where(eq(user.id, registered.id));
+      expect(profileAfter).toEqual(profileBefore);
+      const [originalAfter] = await db
+        .select()
+        .from(sscResponsibility)
+        .where(eq(sscResponsibility.id, originalId));
+      expect(originalAfter).toEqual(originalBefore);
+    });
+
+    it("keeps an existing personal Telegram ahead of a different ledger contact", async () => {
+      const registered = await account("ssc-role");
+      await preentry(registered.email, { resumeSourceId: sourceB, telegram: "@ledger_ssc" });
+      expect(await candidates()).toMatchObject([
+        { id: `member:${registered.memberId}`, telegram: "@existing" },
+      ]);
+    });
+
+    it("does not guess between conflicting ledger Telegram contacts for a registered member", async () => {
+      const registered = await account("ssc-role");
+      await db.update(user).set({ telegram: " " }).where(eq(user.id, registered.id));
+      await preentry(registered.email, { resumeSourceId: sourceB, telegram: "@first_ssc" });
+      await preentry(registered.email, { telegram: "@second_ssc" });
+      expect(await candidates()).toMatchObject([
+        { id: `member:${registered.memberId}`, telegram: "" },
+      ]);
+    });
+
+    it("does not use another workspace's ledger Telegram for an unfilled local member profile", async () => {
+      const registered = await account("ssc-role");
+      await db.update(user).set({ telegram: null }).where(eq(user.id, registered.id));
+      const foreign = await workspace();
+      await preentry(registered.email, { organizationId: foreign, telegram: "@foreign_ssc" });
+      expect(await candidates()).toMatchObject([
+        { id: `member:${registered.memberId}`, telegram: "" },
+      ]);
     });
 
     it("copies a batch into the same ledger without moving original preentries or changing profiles", async () => {

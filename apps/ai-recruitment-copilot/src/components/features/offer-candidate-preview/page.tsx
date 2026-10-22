@@ -97,6 +97,7 @@ function CandidateDetails({
           <OfferDetails
             candidateName={data.candidate.name}
             candidateRecordId={data.candidate.id}
+            interviewRounds={data.humanInterviews}
             offer={data.offer}
           />
         </TabsContent>

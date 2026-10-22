@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type * as ChatSdk from "chat";
 import { getTelegramBot, shutdownTelegramBot } from "./bot";
 import { OfferDraftError } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
+import { verifyOfferCandidatePreviewToken } from "@arc/ai-recruitment-copilot-backend/server/routes/public/routes/offer-candidates/access";
 
 const mocks = vi.hoisted(() => ({
   actions: new Map<string, (event: unknown) => Promise<void>>(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   edit: vi.fn(),
   history: vi.fn(),
   interaction: vi.fn(),
+  interviewSummary: vi.fn(),
   pins: vi.fn(),
   post: vi.fn(),
   receive: vi.fn(),
@@ -31,6 +33,10 @@ vi.mock(
     loadOfferSscActivity: mocks.history,
     recordOfferSscInteraction: mocks.interaction,
   }),
+);
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-interview-summary",
+  () => ({ loadOfferSscInterviewSummary: mocks.interviewSummary }),
 );
 vi.mock("./offer-ssc-upload-prompt", () => ({
   postTelegramOfferScreenshotPrompt: mocks.uploadPrompt,
@@ -150,6 +156,7 @@ beforeEach(() => {
     },
   ]);
   mocks.interaction.mockImplementation(() => Promise.resolve());
+  mocks.interviewSummary.mockResolvedValue([]);
   mocks.actions.clear();
   mocks.slash.clear();
   mocks.users.mockResolvedValue([boundUser]);
@@ -338,6 +345,135 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(JSON.stringify(post.mock.calls)).toContain("候选人甲");
     expect(JSON.stringify(post.mock.calls)).toContain("Offer新增");
     expect(JSON.stringify(post.mock.calls)).toContain("https://ats.example.test/offer-candidate/");
+  });
+
+  it("keeps completed interview details in Offer copies through open, receive, approval and screenshot cards", async () => {
+    const rounds = [
+      {
+        feedback: "面试点评内容完整，建议推进录用。",
+        interviewers: [{ name: "真人面试官甲" }, { name: "外部面试官乙" }],
+        label: "技术复面",
+        scheduledAt: "2026-10-20T02:30:00.000Z",
+        sortOrder: 1,
+        status: "completed",
+      },
+    ];
+    const fullDraft = { ...draft, baseSalary: 15_000, currency: "CNY" };
+    const context = {
+      actorRole: null,
+      canConfirm: true,
+      canReceive: true,
+      candidateName: "候选人甲",
+      draft: fullDraft,
+      pipelineStage: "offer",
+      telegramOperator: {
+        responsibilityId: "ssc-responsibility",
+        sscName: "秋风",
+        sscTelegram: "@sscalice",
+        telegramChatId: "12345",
+      },
+    };
+    mocks.context.mockResolvedValue(context);
+    mocks.interviewSummary.mockResolvedValue(rounds);
+    mocks.receive.mockImplementationOnce(() => {
+      expect(mocks.interviewSummary).toHaveBeenCalledWith({
+        interviewRecordId: "candidate-a",
+        organizationId: "org-a",
+      });
+      return Promise.resolve({ ...fullDraft, sscConfirmationStatus: "confirming" });
+    });
+    const opened = await command("/offer", message(draftId));
+    expect(JSON.stringify(opened.mock.calls)).toContain("真人面试官甲");
+    expect(JSON.stringify(opened.mock.calls)).toContain('"telegramOfferCopyText"');
+    mocks.interviewSummary.mockClear();
+    await action("osr", `${callbackDraftId}:3`);
+    expect(mocks.edit.mock.calls[0][2]).toMatchObject({
+      telegramOfferCopyText: expect.stringContaining("外部面试官乙"),
+    });
+    const completeCallback = buttonValue(mocks.edit, "osc");
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...fullDraft, sscConfirmationStatus: "confirming" },
+    });
+    const prompt = await action("osc", completeCallback);
+    expect(prompt.mock.calls[0][0]).toMatchObject({
+      telegramOfferCopyText: expect.stringContaining("面试点评内容完整，建议推进录用。"),
+    });
+    const upload = await action(
+      "osu",
+      buttonValue(prompt, "osu"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    const screenshot = await directMessage(upload.sentIds[0], {
+      raw: { photo: [{ file_id: "interview-proof", file_size: 4 }] },
+    });
+    expect(screenshot.mock.calls[0][0]).toMatchObject({
+      telegramOfferCopyText: expect.stringContaining("10:30"),
+    });
+    expect(buttonValue(screenshot, "osf")).toBeTruthy();
+    expect(mocks.completion).not.toHaveBeenCalled();
+    expect(mocks.interviewSummary).toHaveBeenCalledWith({
+      interviewRecordId: "candidate-a",
+      organizationId: "org-a",
+    });
+  });
+
+  it.each([false, true])(
+    "keeps authorized candidate details available for long interviews on a private approval card (screenshot: %s)",
+    async (screenshotReceived) => {
+      const feedback = "点评内容很长，需要在详情页完整查看。".repeat(200);
+      const fullDraft = { ...draft, baseSalary: 15_000, currency: "CNY" };
+      mocks.interviewSummary.mockResolvedValue([
+        {
+          feedback,
+          interviewers: [{ name: "面试官甲" }],
+          label: "技术复面",
+          scheduledAt: "2026-10-20T02:30:00.000Z",
+          status: "completed",
+        },
+      ]);
+      let prompt = await beginCompletion(fullDraft);
+      if (screenshotReceived) {
+        const upload = await action(
+          "osu",
+          buttonValue(prompt, "osu"),
+          callbackMessage(prompt.sentIds[0]),
+        );
+        prompt = await directMessage(upload.sentIds[0], {
+          raw: { photo: [{ file_id: "long-interview-proof", file_size: 4 }] },
+        });
+      }
+      expect(prompt.mock.calls[0][0]).toMatchObject({
+        telegramOfferCopyText: expect.stringContaining(feedback),
+      });
+      const serialized = JSON.stringify(prompt.mock.calls);
+      expect(serialized).toContain("内部审批");
+      expect(serialized).toContain("查看候选人详情");
+      expect(serialized).not.toContain("未配置可用详情地址");
+      expect(buttonValue(prompt, "osf")).toMatch(/^[0-9a-f]{32}$/u);
+      expect(buttonValue(prompt, "osu")).toMatch(/^[0-9a-f]{32}$/u);
+      const previewToken =
+        /https:\/\/ats\.example\.test\/offer-candidate\/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43})/u.exec(
+          serialized,
+        )?.[1];
+      expect(previewToken).toBeTypeOf("string");
+      expect(verifyOfferCandidatePreviewToken(previewToken ?? "")).toMatchObject({
+        candidateId: "candidate-a",
+        draftId,
+        organizationId: "org-a",
+        revision: 3,
+        telegramActor: { telegramUserId: "12345", username: "SscAlice" },
+      });
+      expect(mocks.completion).not.toHaveBeenCalled();
+      expect(mocks.users).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not load interview summaries when Offer authorization is denied", async () => {
+    mocks.context.mockRejectedValue(new OfferDraftError("Forbidden", 403));
+    await action("osr", `${callbackDraftId}:3`);
+    expect(mocks.interviewSummary).not.toHaveBeenCalled();
+    expect(mocks.receive).not.toHaveBeenCalled();
   });
 
   it("checks the actual Telegram sender rather than a supplied system user", async () => {

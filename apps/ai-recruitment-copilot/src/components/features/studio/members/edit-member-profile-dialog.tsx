@@ -39,20 +39,23 @@ export function EditMemberProfileDialog({
   const [telegram, setTelegram] = useState("");
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; telegram?: string }>({});
   const [submitting, setSubmitting] = useState(false);
+  // Effective SSC handles are a display fallback, not a personal profile edit.
+  const personalTelegram =
+    member?.profileTelegram === undefined ? member?.telegram : member.profileTelegram;
 
   useEffect(() => {
     if (member) {
       setName(member.name);
-      setTelegram(member.telegram ?? "");
+      setTelegram(personalTelegram ?? "");
       setFieldErrors({});
     }
-  }, [member]);
+  }, [member, personalTelegram]);
 
   const trimmedName = name.trim();
   const trimmedTelegram = telegram.trim();
   const canSubmit =
     Boolean(member) &&
-    (trimmedName !== member?.name.trim() || trimmedTelegram !== (member?.telegram ?? "")) &&
+    (trimmedName !== member?.name.trim() || trimmedTelegram !== (personalTelegram ?? "").trim()) &&
     !submitting;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -102,7 +105,7 @@ export function EditMemberProfileDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>编辑成员资料</DialogTitle>
-          <DialogDescription>修改该成员在系统中显示的名称和 TG 号。</DialogDescription>
+          <DialogDescription>修改该成员在系统中显示的名称和个人 TG 号。</DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-4" id="edit-member-profile-form" onSubmit={onSubmit}>
           <FieldGroup>
@@ -133,7 +136,7 @@ export function EditMemberProfileDialog({
               <FieldError id="member-name-error">{fieldErrors.name}</FieldError>
             </Field>
             <Field data-invalid={Boolean(fieldErrors.telegram)}>
-              <FieldLabel htmlFor="member-telegram">TG 号（可选）</FieldLabel>
+              <FieldLabel htmlFor="member-telegram">个人 TG 号（可选）</FieldLabel>
               <Input
                 aria-describedby={
                   fieldErrors.telegram
@@ -155,6 +158,12 @@ export function EditMemberProfileDialog({
               />
               <FieldDescription id="member-telegram-description">
                 可填写 Telegram 用户名，最多 120 个字符。
+                {member?.telegramSource === "ssc" && member.telegram ? (
+                  <span className="mt-1 block">
+                    SSC 负责组织登记：{member.telegram}。个人 TG 可留空，SSC
+                    登记请在负责组织中维护。
+                  </span>
+                ) : null}
               </FieldDescription>
               <FieldError id="member-telegram-error">{fieldErrors.telegram}</FieldError>
             </Field>
