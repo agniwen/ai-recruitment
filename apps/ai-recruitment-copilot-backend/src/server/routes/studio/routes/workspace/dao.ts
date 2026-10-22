@@ -1,17 +1,32 @@
 import { parseDatabaseTimestamp } from "@arc/ai-recruitment-copilot-backend/lib/server/db/timestamp-codecs";
-import { and, asc, count, desc, eq, exists, gte, inArray, notExists, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  notExists,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { startOfBeijingDay } from "@arc/shared/beijing-calendar";
 import {
   resumeSource,
   member,
+  organizationRole,
   recruitingGroup,
   recruitingGroupResumeSource,
   recruitingGroupMember,
   session,
+  sscResponsibility,
   studioInterview,
   user,
 } from "@arc/db-schema/schema";
+import { resolveSscMemberTelegram } from "../ssc-responsibilities/member-telegram";
 
 export const DEFAULT_RECRUITING_GROUP_NAME = "默认招聘组";
 export const UNGROUPED_RECRUITING_GROUP_ID = "__ungrouped__";
@@ -55,7 +70,9 @@ export interface WorkspaceMemberRow {
 }
 
 export interface WorkspaceMemberProfileRow {
+  profileTelegram: string | null;
   telegram: string | null;
+  telegramSource: "profile" | "ssc" | null;
   userId: string;
 }
 
@@ -81,14 +98,83 @@ export async function listWorkspaceMembers(organizationId: string): Promise<Work
   }));
 }
 
-export function listWorkspaceMemberProfiles(
+export async function listWorkspaceMemberProfiles(
   organizationId: string,
 ): Promise<WorkspaceMemberProfileRow[]> {
-  return db
-    .select({ telegram: user.telegram, userId: user.id })
+  const rows = await db
+    .select({
+      banned: user.banned,
+      email: user.email,
+      role: member.role,
+      telegram: user.telegram,
+      userId: user.id,
+    })
     .from(member)
     .innerJoin(user, eq(member.userId, user.id))
     .where(eq(member.organizationId, organizationId));
+  const emails = [
+    ...new Set(
+      rows
+        .filter((row) => !row.telegram?.trim() && !row.banned)
+        .map((row) => row.email.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  const entries = emails.length
+    ? await db
+        .select({
+          email: sscResponsibility.email,
+          telegram: sscResponsibility.telegram,
+          workspaceRole: sscResponsibility.workspaceRole,
+        })
+        .from(sscResponsibility)
+        .innerJoin(
+          organizationRole,
+          and(
+            eq(organizationRole.organizationId, sscResponsibility.organizationId),
+            eq(organizationRole.role, sscResponsibility.workspaceRole),
+            eq(organizationRole.isSsc, true),
+            eq(organizationRole.isOdc, false),
+            notInArray(organizationRole.role, ["owner", "admin", "member", "noAccess"]),
+          ),
+        )
+        .where(
+          and(
+            eq(sscResponsibility.organizationId, organizationId),
+            inArray(sql<string>`lower(btrim(${sscResponsibility.email}))`, emails),
+          ),
+        )
+    : [];
+  const profiles = entries.length
+    ? await db
+        .select({ email: user.email })
+        .from(user)
+        .where(inArray(sql<string>`lower(btrim(${user.email}))`, emails))
+    : [];
+  const emailCounts = new Map<string, number>();
+  for (const profile of profiles) {
+    const email = profile.email.trim().toLowerCase();
+    emailCounts.set(email, (emailCounts.get(email) ?? 0) + 1);
+  }
+  return rows.map((row) => {
+    const profileTelegram = row.telegram?.trim() ? row.telegram : null;
+    const ledgerTelegram =
+      !profileTelegram && !row.banned && emailCounts.get(row.email.trim().toLowerCase()) === 1
+        ? resolveSscMemberTelegram(entries, { email: row.email, workspaceRole: row.role })
+        : null;
+    let telegramSource: WorkspaceMemberProfileRow["telegramSource"] = null;
+    if (profileTelegram) {
+      telegramSource = "profile";
+    } else if (ledgerTelegram) {
+      telegramSource = "ssc";
+    }
+    return {
+      profileTelegram,
+      telegram: profileTelegram ?? ledgerTelegram,
+      telegramSource,
+      userId: row.userId,
+    };
+  });
 }
 
 export async function updateWorkspaceMemberInterviewer({

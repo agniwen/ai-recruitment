@@ -9,6 +9,8 @@ import { useWorkspaceSlug } from "@/lib/client/workspace-context";
 
 interface WorkspaceMemberProfile {
   telegram: string | null;
+  profileTelegram?: string | null;
+  telegramSource?: "profile" | "ssc" | null;
   userId: string;
 }
 
@@ -36,7 +38,14 @@ export function useWorkspaceMemberProfileControl(canUpdate: boolean) {
       canUpdate && query.isSuccess
         ? customColumn<MemberRow>({
             cell: (row) => (
-              <span className="text-muted-foreground text-sm">{row.telegram || "—"}</span>
+              <span className="inline-flex items-center gap-1.5 text-muted-foreground text-sm">
+                <span>{row.telegram || "—"}</span>
+                {row.telegram && row.telegramSource === "ssc" ? (
+                  <span className="rounded border px-1 text-[10px]" title="来自 SSC 负责组织">
+                    SSC
+                  </span>
+                ) : null}
+              </span>
             ),
             key: "telegram",
             title: "TG 号",
