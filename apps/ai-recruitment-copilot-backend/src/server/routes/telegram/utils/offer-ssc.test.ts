@@ -249,7 +249,10 @@ async function action(
   return currentThread.post;
 }
 
-function buttonValue(post: ReturnType<typeof thread>["post"], id: string): string {
+function buttonValue(
+  post: ReturnType<typeof thread>["post"] | typeof mocks.edit,
+  id: string,
+): string {
   let result: string | undefined;
   function visit(value: unknown) {
     if (!value || typeof value !== "object") {
@@ -354,13 +357,13 @@ describe("self-service Telegram Offer SSC actions", () => {
     });
   });
 
-  it("updates the receipt with its actual actor and leaves second confirmation to the broadcast card", async () => {
+  it("keeps completion available on the received card for its authorized SSC", async () => {
     const post = await action("osr", `${callbackDraftId}:3`);
     expect(mocks.edit).toHaveBeenCalledTimes(1);
     expect(mocks.edit).toHaveBeenCalledWith("telegram:12345", "12345:7", expect.anything());
     const edited = JSON.stringify(mocks.edit.mock.calls[0][2]);
     expect(edited).toContain("确认中");
-    expect(edited).not.toContain('"id":"osc"');
+    expect(edited).toContain('"id":"osc"');
     expect(edited).toContain("秋风（@sscalice）");
     expect(edited).not.toContain('"id":"osr"');
     expect(edited).toContain("https://ats.example.test/offer-candidate/");
@@ -374,8 +377,67 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(mocks.edit).toHaveBeenCalledTimes(1);
     const sent = JSON.stringify(post.mock.calls);
     expect(sent).toContain("确认中");
-    expect(sent).not.toContain('"id":"osc"');
+    expect(sent).toContain('"id":"osc"');
     expect(sent).not.toContain("暂时无法处理");
+  });
+
+  it("does not add completion permission to a receive-only authorized context", async () => {
+    mocks.context.mockResolvedValue({
+      actorRole: "ssc-receiver",
+      canConfirm: false,
+      canReceive: true,
+      candidateName: "候选人甲",
+      draft,
+      pipelineStage: "offer",
+    });
+    await action("osr", `${callbackDraftId}:3`);
+    expect(mocks.receive).toHaveBeenCalledOnce();
+    const edited = JSON.stringify(mocks.edit.mock.calls[0][2]);
+    expect(edited).toContain("确认中");
+    expect(edited).not.toContain('"id":"osc"');
+    expect(edited).not.toContain('"id":"osr"');
+  });
+
+  it("opens approval and optional upload from the completion button on the received card", async () => {
+    await action("osr", `${callbackDraftId}:3`);
+    const completeCallback = buttonValue(mocks.edit, "osc");
+    mocks.context.mockResolvedValue({
+      actorRole: "ssc-reviewer",
+      canConfirm: true,
+      canReceive: true,
+      candidateName: "候选人甲",
+      draft: { ...draft, sscConfirmationStatus: "confirming" },
+      pipelineStage: "offer",
+      telegramOperator: {
+        responsibilityId: "ssc-responsibility",
+        sscName: "秋风",
+        sscTelegram: "@sscalice",
+        telegramChatId: "12345",
+      },
+    });
+    const prompt = await action("osc", completeCallback);
+    expect(JSON.stringify(prompt.mock.calls)).toContain("内部审批");
+    expect(mocks.completion).not.toHaveBeenCalled();
+    const finalCallback = buttonValue(prompt, "osf");
+    const upload = await action(
+      "osu",
+      buttonValue(prompt, "osu"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    expect(mocks.uploadPrompt).toHaveBeenCalledOnce();
+    expect(upload.sentIds).toHaveLength(1);
+    // Screenshots stay optional: selecting upload does not approve the Offer.
+    expect(mocks.completion).not.toHaveBeenCalled();
+    await action("osf", finalCallback, callbackMessage(prompt.sentIds[0]));
+    expect(mocks.completion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: { telegramUserId: "12345", username: "SscAlice" },
+        draftId,
+        internalApprovalConfirmed: true,
+        revision: 3,
+      }),
+    );
+    expect(JSON.stringify(mocks.edit.mock.calls.at(-1)?.[2])).toContain("已完成确认");
   });
 
   it.each([
