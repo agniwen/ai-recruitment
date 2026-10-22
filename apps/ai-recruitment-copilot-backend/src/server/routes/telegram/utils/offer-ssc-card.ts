@@ -71,21 +71,12 @@ function literalField(props: { label: string; value: string }) {
   return Field({ ...props, value: plainMarkdown(props.value) });
 }
 
-function copyInformationActions(detailUrl: string | null | undefined) {
-  if (!detailUrl) {
-    return [];
-  }
-  const url = new URL(detailUrl);
-  url.hash = "offer-confirmation-info";
-  return [Actions([LinkButton({ label: "打开全文复制页", url: url.href })])];
-}
-
 function copyInstructions(text: string, detailUrl: string | null | undefined, bodyOmitted = false) {
   const parts = splitTelegramOfferCopyText(text);
   if (parts.length === 0) {
     return CardText(
       detailUrl
-        ? "Offer 信息较长，请打开“打开全文复制页”查看并复制全文。"
+        ? "Offer 信息较长，请通过“查看候选人详情”进入 Offer 页签查看并复制全文。"
         : "Offer 信息较长，未配置可用详情地址，请在系统中查看并复制全文。",
     );
   }
@@ -205,7 +196,6 @@ export function buildTelegramOfferCard(
       ),
       fields,
       ...(actions.length > 0 ? [Actions(actions)] : []),
-      ...copyInformationActions(options.detailUrl),
     ],
     title,
   });
@@ -261,7 +251,6 @@ export function buildTelegramOfferCompletionCard(
       ...(options.detailUrl
         ? [Actions([LinkButton({ label: "查看候选人详情", url: options.detailUrl })])]
         : []),
-      ...copyInformationActions(options.detailUrl),
     ],
     title: options.screenshotReceived ? "审批截图已收到，请确认完成" : "确认完成 SSC 审核",
   });

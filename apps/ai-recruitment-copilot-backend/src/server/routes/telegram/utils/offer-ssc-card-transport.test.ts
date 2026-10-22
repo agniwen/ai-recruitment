@@ -170,12 +170,67 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
           text: "接收确认",
         }),
         expect.objectContaining({
-          text: "打开全文复制页",
-          url: "https://ats.example.test/offer-candidate/signed-offer#offer-confirmation-info",
+          text: "查看候选人详情",
+          url: "https://ats.example.test/offer-candidate/signed-offer",
         }),
       ]),
     );
   });
+
+  it.each([
+    ["pending", "接收确认", "osr"],
+    ["confirming", "完成确认", "osc"],
+    ["completed", null, null],
+  ] as const)(
+    "keeps %s workflow and native copying without a separate full-copy page button",
+    async (status, actionLabel, actionId) => {
+      const info = offerConfirmationDetailsSchema.parse({
+        candidateName: "SSC 流程候选人",
+        hiringUnitName: "渠道中心",
+        probationPeriod: "2个月",
+        probationSalary: 10_000,
+      });
+      const expected = buildOfferConfirmationText({
+        baseSalary: 15_000,
+        candidateRecordId: "workflow-candidate",
+        currency: "CNY",
+        info,
+        position: "工程师",
+        sscConfirmationStatus: status,
+      });
+      const detailUrl = "https://ats.example.test/offer-candidate/workflow";
+      const payload = await editedCard(
+        status,
+        {
+          baseSalary: 15_000,
+          confirmationInfo: info,
+          currency: "CNY",
+          interviewRecordId: "workflow-candidate",
+          position: "工程师",
+        },
+        { detailUrl },
+      );
+      const buttons = payload.reply_markup.inline_keyboard.flat();
+      const copies = buttons.filter((button) => button.copy_text);
+      expect(copies.length).toBeGreaterThan(0);
+      expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
+      expect(buttons.filter((button) => button.url)).toEqual([
+        { text: "查看候选人详情", url: detailUrl },
+      ]);
+      expect(buttons.map((button) => button.text)).not.toContain("打开全文复制页");
+      const workflow = buttons.filter((button) => button.callback_data);
+      if (actionLabel && actionId) {
+        expect(workflow).toEqual([
+          expect.objectContaining({
+            callback_data: expect.stringContaining(`"a":"${actionId}"`),
+            text: actionLabel,
+          }),
+        ]);
+      } else {
+        expect(workflow).toEqual([]);
+      }
+    },
+  );
 
   it("uses the saved current status in the copied Offer after confirmation", async () => {
     const info = offerConfirmationDetailsSchema.parse({
@@ -214,7 +269,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     );
   });
 
-  it("keeps long Offer content available through the signed copy page instead of truncating it", async () => {
+  it("keeps long Offer content available through candidate details instead of truncating it", async () => {
     const feedback = "详细".repeat(2500);
     const info = offerConfirmationDetailsSchema.parse({
       candidateName: "长内容候选人",
@@ -231,6 +286,8 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       { detailUrl: "https://ats.example.test/offer-candidate/signed-long" },
     );
     expect(payload.text).toContain("信息较长");
+    expect(payload.text).toContain("查看候选人详情");
+    expect(payload.text).toContain("Offer 页签");
     expect(payload.text).not.toContain("详细".repeat(100));
     expect(payload.reply_markup.inline_keyboard.flat().some((button) => button.copy_text)).toBe(
       false,
@@ -238,8 +295,8 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     expect(payload.text?.length).toBeLessThanOrEqual(4096);
     expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
       expect.objectContaining({
-        text: "打开全文复制页",
-        url: "https://ats.example.test/offer-candidate/signed-long#offer-confirmation-info",
+        text: "查看候选人详情",
+        url: "https://ats.example.test/offer-candidate/signed-long",
       }),
     );
     expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
@@ -247,7 +304,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     );
   });
 
-  it("keeps punctuation-heavy Offer text available through the signed copy page before escaping exceeds the limit", async () => {
+  it("keeps punctuation-heavy Offer text available through candidate details before escaping exceeds the limit", async () => {
     const feedback = "*_[x](y).!".repeat(220);
     const info = offerConfirmationDetailsSchema.parse({
       candidateName: "Markdown 标点较多的候选人",
@@ -268,8 +325,8 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     expect(payload.text?.length).toBeLessThanOrEqual(4096);
     expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
       expect.objectContaining({
-        text: "打开全文复制页",
-        url: "https://ats.example.test/offer-candidate/signed-escaped-long#offer-confirmation-info",
+        text: "查看候选人详情",
+        url: "https://ats.example.test/offer-candidate/signed-escaped-long",
       }),
     );
   });
@@ -292,8 +349,8 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     expect(payload.text?.length).toBeLessThanOrEqual(4096);
     expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
       expect.objectContaining({
-        text: "打开全文复制页",
-        url: "https://ats.example.test/offer-candidate/signed-autolink-long#offer-confirmation-info",
+        text: "查看候选人详情",
+        url: "https://ats.example.test/offer-candidate/signed-autolink-long",
       }),
     );
     expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
@@ -419,10 +476,12 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       );
       expect(buttons).toContainEqual(
         expect.objectContaining({
-          text: "打开全文复制页",
-          url: "https://ats.example.test/offer-candidate/confirmation#offer-confirmation-info",
+          text: "查看候选人详情",
+          url: "https://ats.example.test/offer-candidate/confirmation",
         }),
       );
+      expect(buttons.map((button) => button.text)).not.toContain("打开全文复制页");
+      expect(buttons.filter((button) => button.url)).toHaveLength(1);
       expect(requests[0].text).toContain("分别复制");
     },
   );
