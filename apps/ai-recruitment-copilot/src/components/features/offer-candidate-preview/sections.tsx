@@ -41,10 +41,12 @@ export function OfferDetails({
   offer,
   candidateRecordId,
   candidateName,
+  interviewRounds,
 }: {
   offer: OfferCandidatePreview["offer"];
   candidateRecordId?: string;
   candidateName: string | null;
+  interviewRounds: OfferCandidatePreview["humanInterviews"];
 }) {
   return (
     <section
@@ -79,6 +81,7 @@ export function OfferDetails({
       <div className="mt-5 min-w-0">
         <OfferConfirmationText
           candidateRecordId={candidateRecordId}
+          interviewRounds={interviewRounds}
           info={
             offer.confirmationInfo ?? { ...offerConfirmationDetailsSchema.parse({}), candidateName }
           }

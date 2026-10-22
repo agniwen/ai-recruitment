@@ -2,6 +2,7 @@ import { createOfferTelegramAdapter } from "./offer-telegram-adapter";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { buildOfferConfirmationText } from "@arc/shared/offer-confirmation";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import type { OfferInterviewRound } from "@arc/shared/offer-interviews";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildTelegramOfferCard,
@@ -28,6 +29,16 @@ const requests: EditRequest[] = [];
 const chatId = "12345";
 const messageId = 7;
 const draftId = "550e8400-e29b-41d4-a716-446655440000";
+const completedInterviewRounds: readonly OfferInterviewRound[] = [
+  {
+    feedback: "能清楚说明方案与取舍，建议录用。",
+    interviewers: [{ name: "技术面试官甲" }, { name: "外部面试官乙" }],
+    label: "技术复面",
+    scheduledAt: "2026-10-20T02:30:00.000Z",
+    sortOrder: 1,
+    status: "completed",
+  },
+];
 const botUser = {
   first_name: "Transport test bot",
   id: 999_999,
@@ -75,6 +86,7 @@ async function editedCard(
   status: "pending" | "confirming" | "completed",
   overrides: Partial<OfferDraftRecord> = {},
   options: Parameters<typeof buildTelegramOfferCard>[1] = {},
+  interviewRounds?: readonly OfferInterviewRound[],
 ) {
   const adapter = createOfferTelegramAdapter({
     botToken: "999999:fake-transport-test-token",
@@ -96,6 +108,7 @@ async function editedCard(
         version: 3,
         ...overrides,
       },
+      interviewRounds,
       pipelineStage: "offer",
     },
     options,
@@ -195,6 +208,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
         candidateRecordId: "workflow-candidate",
         currency: "CNY",
         info,
+        interviewRounds: completedInterviewRounds,
         position: "工程师",
         sscConfirmationStatus: status,
       });
@@ -209,11 +223,16 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
           position: "工程师",
         },
         { detailUrl },
+        completedInterviewRounds,
       );
       const buttons = payload.reply_markup.inline_keyboard.flat();
       const copies = buttons.filter((button) => button.copy_text);
       expect(copies.length).toBeGreaterThan(0);
       expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
+      expect(expected).toContain("技术面试官甲");
+      expect(expected).toContain("外部面试官乙");
+      expect(expected).toContain("10:30");
+      expect(payload.text).toContain("建议录用");
       expect(buttons.filter((button) => button.url)).toEqual([
         { text: "查看候选人详情", url: detailUrl },
       ]);
@@ -231,6 +250,27 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       }
     },
   );
+
+  it("uses the detail fallback for long completed interview feedback without partial native copies", async () => {
+    const feedback = "面试评价长内容".repeat(500);
+    const detailUrl = "https://ats.example.test/offer-candidate/long-interviews";
+    const payload = await editedCard(
+      "pending",
+      { baseSalary: 15_000, currency: "CNY", interviewRecordId: "interview-long" },
+      { detailUrl },
+      [{ ...completedInterviewRounds[0], feedback }],
+    );
+    const buttons = payload.reply_markup.inline_keyboard.flat();
+    expect(payload.text).toContain("信息较长");
+    expect(payload.text).toContain("查看候选人详情");
+    expect(payload.text).not.toContain(feedback.slice(0, 60));
+    expect(payload.text?.length).toBeLessThanOrEqual(4096);
+    expect(buttons.some((button) => button.copy_text)).toBe(false);
+    expect(buttons).toContainEqual(expect.objectContaining({ text: "接收确认" }));
+    expect(buttons.filter((button) => button.url)).toEqual([
+      { text: "查看候选人详情", url: detailUrl },
+    ]);
+  });
 
   it("uses the saved current status in the copied Offer after confirmation", async () => {
     const info = offerConfirmationDetailsSchema.parse({
@@ -432,6 +472,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
         candidateRecordId: "confirmation-candidate",
         currency: "CNY",
         info,
+        interviewRounds: completedInterviewRounds,
         position: "工程师",
         sscConfirmationStatus: "confirming",
       });
@@ -453,6 +494,7 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
             status: "draft",
             version: 3,
           },
+          interviewRounds: completedInterviewRounds,
           pipelineStage: "offer",
         },
         "a".repeat(32),
@@ -463,6 +505,8 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       const copies = buttons.filter((button) => button.copy_text);
       expect(copies.length).toBeGreaterThan(1);
       expect(copies.map((button) => button.copy_text?.text).join("")).toBe(expected);
+      expect(expected).toContain("能清楚说明方案与取舍，建议录用。");
+      expect(expected).toContain("10:30");
       for (const button of copies) {
         expect(button.copy_text?.text.length).toBeLessThanOrEqual(256);
         expect(button.url).toBeUndefined();

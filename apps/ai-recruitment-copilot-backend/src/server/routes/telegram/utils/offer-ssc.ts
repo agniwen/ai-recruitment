@@ -7,6 +7,7 @@ import {
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 
 import { loadOfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
+import { loadOfferSscInterviewSummary } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-interview-summary";
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { handleTelegramOfferCompletionAction } from "./offer-ssc-completion";
 import { updateTelegramOfferMessages } from "./offer-ssc-message";
@@ -65,8 +66,16 @@ export async function openTelegramOffer(event: SlashCommandEvent, draftId: strin
       username: message.data.from.username,
     };
     const context = await loadAuthorizedOfferSscContext({ draftId, telegramActor: actor });
-    const activity = await loadOfferSscActivity(context.draft);
-    await event.channel.post(buildTelegramOfferPublicCard({ ...context, activity }, actor));
+    const [activity, interviewRounds] = await Promise.all([
+      loadOfferSscActivity(context.draft),
+      loadOfferSscInterviewSummary({
+        interviewRecordId: context.draft.interviewRecordId,
+        organizationId: context.draft.organizationId,
+      }),
+    ]);
+    await event.channel.post(
+      buildTelegramOfferPublicCard({ ...context, activity, interviewRounds }, actor),
+    );
   } catch (error) {
     await event.channel.post(errorReply(error));
   }
@@ -120,6 +129,10 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       draftId: parsed.draftId,
       telegramActor: actor,
     });
+    const interviewRounds = await loadOfferSscInterviewSummary({
+      interviewRecordId: context.draft.interviewRecordId,
+      organizationId: context.draft.organizationId,
+    });
     const draft = await receiveOfferSscConfirmation({
       actor,
       draftId: parsed.draftId,
@@ -131,7 +144,7 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     const activity = await loadOfferSscActivity(draft);
     await updateTelegramOfferMessages(
       event,
-      buildTelegramOfferPublicCard({ ...context, activity, draft }, actor),
+      buildTelegramOfferPublicCard({ ...context, activity, draft, interviewRounds }, actor),
     );
   } catch (error) {
     await event.thread.post(errorReply(error));

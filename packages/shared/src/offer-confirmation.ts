@@ -1,5 +1,7 @@
 import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
 import type { OfferSscConfirmationStatus } from "@arc/db-schema/studio-interviews";
+import { buildOfferInterviewText } from "./offer-interviews";
+import type { OfferInterviewRound } from "./offer-interviews";
 
 export type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
 
@@ -50,6 +52,7 @@ export function buildOfferConfirmationText({
   position,
   baseSalary,
   currency,
+  interviewRounds,
   sscConfirmationStatus,
 }: {
   info?: OfferConfirmationDetails | null;
@@ -57,6 +60,7 @@ export function buildOfferConfirmationText({
   position: string | null | undefined;
   baseSalary: number | null | undefined;
   currency: string | null | undefined;
+  interviewRounds?: readonly OfferInterviewRound[];
   sscConfirmationStatus?: OfferSscConfirmationStatus | null;
 }) {
   return `【offer信息】
@@ -83,5 +87,5 @@ export function buildOfferConfirmationText({
 试用期：${textOrMissing(info?.probationPeriod)}
 试用薪资：${salaryOrMissing(info?.probationSalary)}
 
-${legacyInterviewSection(info)}${sscStatusText[sscConfirmationStatus ?? "pending"]}`.trimEnd();
+${interviewRounds === undefined ? legacyInterviewSection(info) : `${buildOfferInterviewText(interviewRounds)}\n\n`}${sscStatusText[sscConfirmationStatus ?? "pending"]}`.trimEnd();
 }

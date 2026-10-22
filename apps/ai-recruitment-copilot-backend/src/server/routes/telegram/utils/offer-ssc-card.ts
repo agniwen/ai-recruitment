@@ -19,6 +19,7 @@ import { getOfferSscConfirmationMeta } from "@arc/db-schema/studio-interviews";
 import type { PipelineStage } from "@arc/db-schema/studio-interviews";
 import type { OfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-activity";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import type { OfferInterviewRound } from "@arc/shared/offer-interviews";
 import { splitTelegramOfferCopyText } from "./offer-telegram-copy";
 
 export interface TelegramOfferCardContext {
@@ -34,6 +35,7 @@ export interface TelegramOfferCardContext {
   canReceive: boolean;
   canConfirm: boolean;
   activity?: OfferSscActivity[];
+  interviewRounds?: readonly OfferInterviewRound[];
 }
 
 const blankConfirmationInfo = offerConfirmationDetailsSchema.parse({});
@@ -51,6 +53,7 @@ function offerConfirmationText(context: TelegramOfferCardContext) {
       ...blankConfirmationInfo,
       candidateName: context.candidateName,
     },
+    interviewRounds: context.interviewRounds,
     position: draft.position,
     sscConfirmationStatus: draft.sscConfirmationStatus,
   });

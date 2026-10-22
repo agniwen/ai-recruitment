@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   audit: vi.fn(),
   context: vi.fn(),
   current: vi.fn(),
+  interviewSummary: vi.fn(),
   members: vi.fn(),
   organization: vi.fn(),
   recipients: vi.fn(),
@@ -20,6 +21,9 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
     query: { organization: { findFirst: mocks.organization } },
     select: mocks.select,
   },
+}));
+vi.mock("../dao/offer-ssc-interview-summary", () => ({
+  loadOfferSscInterviewSummary: mocks.interviewSummary,
 }));
 vi.mock("../dao/offer-drafts", () => ({
   OfferDraftError: class extends Error {
@@ -82,6 +86,7 @@ beforeEach(() => {
   vi.stubEnv("BETTER_AUTH_SECRET", "offer-preview-test-secret-never-used-outside-tests");
   mocks.current.mockResolvedValue([draft]);
   mocks.audit.mockResolvedValue([]);
+  mocks.interviewSummary.mockResolvedValue([]);
   mocks.members.mockResolvedValue([recipient()]);
   mocks.recipients.mockResolvedValue([
     { candidateName: "示例候选人", chatId: "12345", pipelineStage: "offer", username: "sscalice" },
@@ -153,6 +158,70 @@ describe("SSC notification recipients and cards", () => {
     expect(text).toContain("查看候选人详情");
     expect(text).not.toContain("private-approval.png");
   });
+
+  it.each([
+    ["pending", "pending", "osr"],
+    ["received", "confirming", "osf"],
+    ["completed", "completed", null],
+  ] as const)(
+    "loads completed interview details once for all SSC %s notifications",
+    async (event, status, actionId) => {
+      mocks.current.mockResolvedValue([
+        {
+          ...draft,
+          baseSalary: 15_000,
+          createdBy: null,
+          currency: "CNY",
+          sscConfirmationStatus: status,
+        },
+      ]);
+      mocks.recipients.mockResolvedValue([
+        {
+          candidateName: "示例候选人",
+          chatId: "12345",
+          pipelineStage: "offer",
+          username: "sscalice",
+        },
+        {
+          candidateName: "示例候选人",
+          chatId: "67890",
+          pipelineStage: "offer",
+          username: "sscbob",
+        },
+      ]);
+      mocks.interviewSummary.mockResolvedValue([
+        {
+          feedback: "真实面试点评应进入通知与复制文本。",
+          interviewers: [{ name: "内部面试官" }, { name: "外部面试官" }],
+          label: "业务复面",
+          scheduledAt: "2026-10-20T02:30:00.000Z",
+          sortOrder: 1,
+          status: "completed",
+        },
+      ]);
+      const targets = await getOfferSscNotificationTargets({ ...input, event });
+      expect(targets).toHaveLength(2);
+      expect(mocks.interviewSummary).toHaveBeenCalledOnce();
+      expect(mocks.interviewSummary).toHaveBeenCalledWith({
+        interviewRecordId: "candidate-a",
+        organizationId: "org-a",
+      });
+      for (const target of targets) {
+        expect(target.message).toMatchObject({
+          telegramOfferCopyText: expect.stringContaining("真实面试点评应进入通知与复制文本。"),
+        });
+        const message = JSON.stringify(target.message);
+        expect(message).toContain("内部面试官");
+        expect(message).toContain("外部面试官");
+        expect(message).toContain("10:30");
+        if (actionId) {
+          expect(message).toContain(`"id":"${actionId}"`);
+        } else {
+          expect(message).not.toContain('"id":"osc"');
+        }
+      }
+    },
+  );
 
   it("notifies the responsible SSC chat without resolving system accounts or their permissions", async () => {
     mocks.context.mockRejectedValue(new Error("System account lookup must not run"));
@@ -273,6 +342,8 @@ describe("SSC notification recipients and cards", () => {
       expect(message).not.toContain("/w/work/studio/resumes/");
       expect(message).not.toContain('"id":"osr"');
       expect(message).not.toContain('"id":"osc"');
+      expect(mocks.interviewSummary).not.toHaveBeenCalled();
+      expect(message).not.toContain("【面试情况】");
     },
   );
 
