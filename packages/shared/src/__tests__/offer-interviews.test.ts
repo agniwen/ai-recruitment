@@ -144,7 +144,8 @@ describe("Offer completed interview information", () => {
       expect(text).not.toContain("待 SSC 确认");
       expect(text.endsWith("\n")).toBe(false);
       if (sscConfirmationStatus === "confirming") {
-        expect(text).toMatch(/SSC 确认中$/u);
+        expect(text).not.toContain("SSC 确认中");
+        expect(text).toMatch(/点评结束$/u);
       }
       if (sscConfirmationStatus === "completed") {
         expect(text).toMatch(/offer审批已通过$/u);

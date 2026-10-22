@@ -122,21 +122,22 @@ describe("SSC native copy Telegram transport", () => {
     },
   );
 
-  it("copies all long text with numbered native segments, without URLs or callbacks", async () => {
-    const text = `【offer信息】\n${"保留薪资与换行😀\n".repeat(50)}结尾`;
-    await adapter().postMessage(`telegram:${chatId}`, card(text));
-    const buttons = copyButtons(requests[0].payload);
-    expect(buttons.length).toBeGreaterThan(1);
-    expect(buttons.map((button) => button.copy_text?.text).join("")).toBe(text);
-    for (const [index, button] of buttons.entries()) {
-      expect(button.text).toBe(`复制第 ${index + 1}/${buttons.length} 段`);
-      expect(button.copy_text?.text.length).toBeLessThanOrEqual(256);
-      expect(button).not.toHaveProperty("url");
-      expect(button).not.toHaveProperty("callback_data");
-    }
-  });
+  it.each(["post", "edit"] as const)(
+    "keeps workflow buttons without splitting long Offer text on %s",
+    async (operation) => {
+      const text = `【offer信息】\n${"保留薪资与换行😀\n".repeat(50)}结尾`;
+      const target = adapter();
+      await (operation === "post"
+        ? target.postMessage(`telegram:${chatId}`, card(text))
+        : target.editMessage(`telegram:${chatId}`, `${chatId}:7`, card(text)));
+      expect(copyButtons(requests[0].payload)).toEqual([]);
+      expect(requests[0].payload.reply_markup?.inline_keyboard.flat()).toContainEqual(
+        expect.objectContaining({ callback_data: expect.any(String), text: "接收确认" }),
+      );
+    },
+  );
 
-  it("preserves one native copy group and the receive callback when Markdown falls back to plain text", async () => {
+  it("preserves the receive callback without segmented copies when Markdown falls back to plain text", async () => {
     const text = `【offer信息】\n${"薪资：15K，保留 `*_[]\\\n".repeat(25)}结尾`;
     const defaultFetch = vi.mocked(fetch).getMockImplementation();
     if (!defaultFetch) {
@@ -176,14 +177,10 @@ describe("SSC native copy Telegram transport", () => {
     expect(requests[0].payload.parse_mode).toBe("MarkdownV2");
     expect(requests[1].payload.parse_mode).toBeUndefined();
     const originalCopies = copyButtons(requests[0].payload);
-    expect(originalCopies.length).toBeGreaterThan(1);
+    expect(originalCopies).toEqual([]);
     expect(copyButtons(requests[1].payload)).toEqual(originalCopies);
     for (const { payload } of requests) {
-      expect(
-        copyButtons(payload)
-          .map((button) => button.copy_text?.text)
-          .join(""),
-      ).toBe(text);
+      expect(copyButtons(payload)).toEqual([]);
       expect(
         payload.reply_markup?.inline_keyboard.flat().filter((button) => button.callback_data),
       ).toEqual([expect.objectContaining({ callback_data: expect.any(String), text: "接收确认" })]);

@@ -22,7 +22,7 @@ export interface OfferCreationContext {
 
 const sscStatusText: Record<OfferSscConfirmationStatus, string> = {
   completed: "offer审批已通过",
-  confirming: "SSC 确认中",
+  confirming: "",
   pending: "",
 };
 

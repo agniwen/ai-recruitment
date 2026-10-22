@@ -177,22 +177,22 @@ describe("Offer confirmation text", () => {
     expect(text).toContain("试用薪资：待补充");
   });
 
-  it.each([
-    ["confirming", "SSC 确认中"],
-    ["completed", "offer审批已通过"],
-  ] as const)("ends with the current SSC state %s", (sscConfirmationStatus, label) => {
-    const text = buildOfferConfirmationText({
-      baseSalary: 12_000,
-      currency: "CNY",
-      info: completeInfo,
-      position: "工程师",
-      sscConfirmationStatus,
-    });
+  it.each([["completed", "offer审批已通过"]] as const)(
+    "ends with the current SSC state %s",
+    (sscConfirmationStatus, label) => {
+      const text = buildOfferConfirmationText({
+        baseSalary: 12_000,
+        currency: "CNY",
+        info: completeInfo,
+        position: "工程师",
+        sscConfirmationStatus,
+      });
 
-    expect(text.split("\n").at(-1)).toBe(label);
-  });
+      expect(text.split("\n").at(-1)).toBe(label);
+    },
+  );
 
-  it.each(["pending", null, undefined] as const)(
+  it.each(["pending", "confirming", null, undefined] as const)(
     "omits the pending SSC footer and trailing blank lines for status %s",
     (sscConfirmationStatus) => {
       const text = buildOfferConfirmationText({
@@ -203,6 +203,7 @@ describe("Offer confirmation text", () => {
         sscConfirmationStatus,
       });
       expect(text).not.toContain("待 SSC 确认");
+      expect(text).not.toContain("SSC 确认中");
       expect(text.split("\n").at(-1)).toBe("沟通清晰，建议录用。");
       expect(text.endsWith("\n")).toBe(false);
     },
