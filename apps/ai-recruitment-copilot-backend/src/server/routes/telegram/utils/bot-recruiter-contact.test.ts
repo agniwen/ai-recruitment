@@ -4,6 +4,7 @@ import { getTelegramBot, shutdownTelegramBot } from "./bot";
 const mocks = vi.hoisted(() => ({
   action: vi.fn(),
   direct: vi.fn(),
+  preboarding: vi.fn(),
   recruiterAction: vi.fn(),
   recruiterMessage: vi.fn(),
   screenshot: vi.fn(),
@@ -15,7 +16,10 @@ vi.mock("./offer-recruiter-contact", () => ({
   handleTelegramOfferRecruiterAction: mocks.recruiterAction,
   handleTelegramOfferRecruiterMessage: mocks.recruiterMessage,
 }));
-vi.mock("./offer-ssc", () => ({ handleTelegramOfferScreenshot: mocks.screenshot }));
+vi.mock("./offer-ssc", () => ({
+  handleTelegramOfferPreboardingMessage: mocks.preboarding,
+  handleTelegramOfferScreenshot: mocks.screenshot,
+}));
 vi.mock("chat", () => ({
   Chat: class {
     onSlashCommand = vi.fn();
@@ -30,6 +34,7 @@ beforeEach(() => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   vi.stubEnv("TELEGRAM_WEBHOOK_SECRET_TOKEN", "test-secret");
   mocks.screenshot.mockResolvedValue(false);
+  mocks.preboarding.mockResolvedValue(false);
   mocks.recruiterMessage.mockResolvedValue(false);
 });
 afterEach(async () => {
@@ -46,7 +51,7 @@ describe("recruiter contact bot dispatch", () => {
     await registration?.[1](event);
     expect(mocks.recruiterAction).toHaveBeenCalledWith(event);
     expect(mocks.action).toHaveBeenCalledWith(
-      ["osr", "osc", "osf", "osu", "osx"],
+      ["osr", "osd", "osc", "osf", "osu", "osx"],
       expect.any(Function),
     );
   });

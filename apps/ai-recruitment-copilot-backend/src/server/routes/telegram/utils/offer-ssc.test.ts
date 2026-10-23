@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   interviewSummary: vi.fn(),
   pins: vi.fn(),
   post: vi.fn(),
+  preboarding: vi.fn(),
+  preboardingPrompt: vi.fn(),
   receive: vi.fn(),
   sentEdit: vi.fn(),
   slash: new Map<string, (event: unknown) => Promise<void>>(),
@@ -40,6 +42,9 @@ vi.mock(
 );
 vi.mock("./offer-ssc-upload-prompt", () => ({
   postTelegramOfferScreenshotPrompt: mocks.uploadPrompt,
+}));
+vi.mock("./offer-ssc-preboarding-prompt", () => ({
+  postTelegramOfferPreboardingPrompt: mocks.preboardingPrompt,
 }));
 vi.mock(
   "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-completion",
@@ -67,6 +72,7 @@ vi.mock(
       }
     },
     completeOfferSscConfirmation: mocks.complete,
+    confirmOfferPreboardingDate: mocks.preboarding,
     loadAuthorizedOfferSscContext: mocks.context,
     receiveOfferSscConfirmation: mocks.receive,
   }),
@@ -103,6 +109,7 @@ const draft = {
   interviewRecordId: "candidate-a",
   organizationId: "org-a",
   position: "后端工程师",
+  preboardingDate: "2026-11-01",
   sscConfirmationStatus: "pending",
   sscReceivedBy: null,
   sscRevision: 3,
@@ -177,11 +184,24 @@ beforeEach(() => {
     },
   });
   mocks.receive.mockResolvedValue({ ...draft, sscConfirmationStatus: "confirming" });
+  mocks.preboarding.mockImplementation((input) =>
+    Promise.resolve({
+      ...draft,
+      preboardingDate: input.preboardingDate,
+      sscConfirmationStatus: "confirming",
+    }),
+  );
   mocks.complete.mockResolvedValue({ ...draft, sscConfirmationStatus: "completed" });
   mocks.completion.mockResolvedValue({ ...draft, sscConfirmationStatus: "completed" });
   mocks.edit.mockResolvedValue({ id: "12345:7" });
   mocks.sentEdit.mockResolvedValue({ id: "12345:8" });
   mocks.uploadPrompt.mockImplementation(
+    async (targetThread: ReturnType<typeof thread>, text: string) => {
+      const posted = await targetThread.post(text);
+      return posted.id;
+    },
+  );
+  mocks.preboardingPrompt.mockImplementation(
     async (targetThread: ReturnType<typeof thread>, text: string) => {
       const posted = await targetThread.post(text);
       return posted.id;
@@ -339,6 +359,315 @@ async function directMessage(
 }
 
 describe("self-service Telegram Offer SSC actions", () => {
+  it("keeps preboarding date confirmation and final approval available after receiving", async () => {
+    mocks.receive.mockResolvedValue({
+      ...draft,
+      preboardingDate: null,
+      sscConfirmationStatus: "confirming",
+    });
+    await action("osr", `${callbackDraftId}:3`);
+    expect(buttonValue(mocks.edit, "osd")).toBe(`${callbackDraftId}:3`);
+    expect(buttonValue(mocks.edit, "osc")).toBe(`${callbackDraftId}:3`);
+  });
+
+  it("saves a valid preboarding date from a private reply and refreshes the original Offer", async () => {
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, preboardingDate: null, sscConfirmationStatus: "confirming" },
+    });
+    const previousSessions = {
+      ["a".repeat(32)]: {
+        chatId: "12345",
+        draftId: "550e8400-e29b-41d4-a716-446655440001",
+        expiresAt: Date.now() + 60_000,
+        interviewRecordId: "candidate-b",
+        organizationId: "org-a",
+        originMessageId: 8,
+        promptMessageId: 9,
+        revision: 1,
+        status: "pending",
+        telegramUsername: "sscalice",
+      },
+    };
+    threadState = { offerSscCompletions: previousSessions };
+    const prompt = await action("osd", `${callbackDraftId}:3`);
+    expect(JSON.stringify(prompt.mock.calls)).toContain("YYYY-MM-DD");
+    expect(mocks.preboarding).not.toHaveBeenCalled();
+    await directMessage(prompt.sentIds[0], { raw: { text: "2026-11-08" } });
+    expect(mocks.preboarding).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        actor: { telegramUserId: "12345", username: "SscAlice" },
+        draftId,
+        preboardingDate: "2026-11-08",
+        revision: 3,
+        source: "telegram",
+      }),
+    );
+    expect(JSON.stringify(mocks.edit.mock.calls)).toContain("2026-11-08");
+    expect(buttonValue(mocks.edit, "osc")).toBe(`${callbackDraftId}:3`);
+    expect(threadState?.offerSscCompletions).toEqual(previousSessions);
+    expect(mocks.completion).not.toHaveBeenCalled();
+  });
+
+  it("automatically opens a persisted screenshot and final-confirmation session after saving a date", async () => {
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, preboardingDate: null, sscConfirmationStatus: "confirming" },
+    });
+    mocks.preboarding.mockImplementation((input) => {
+      const saved = {
+        ...draft,
+        preboardingDate: input.preboardingDate,
+        sscConfirmationStatus: "confirming",
+      };
+      mocks.context.mockResolvedValue({ ...context, draft: saved });
+      return Promise.resolve(saved);
+    });
+    const prompt = await action("osd", `${callbackDraftId}:3`);
+    const reply = await directMessage(prompt.sentIds[0], { raw: { text: "2026-11-08" } });
+    const token = buttonValue(reply, "osf");
+    expect(token).toMatch(/^[0-9a-f]{32}$/u);
+    expect(buttonValue(reply, "osu")).toBe(token);
+    expect(buttonValue(reply, "osx")).toBe(token);
+    const cardIndex = reply.mock.calls.findIndex(
+      ([content]) => typeof content === "object" && JSON.stringify(content).includes('"id":"osf"'),
+    );
+    expect(cardIndex).toBeGreaterThanOrEqual(0);
+    const cardId = reply.sentIds[cardIndex];
+    expect(threadState?.offerSscCompletions).toEqual({
+      [token]: expect.objectContaining({
+        chatId: "12345",
+        draftId,
+        originMessageId: 7,
+        preboardingDate: "2026-11-08",
+        promptMessageId: cardId,
+        revision: 3,
+        status: "pending",
+        telegramUsername: "sscalice",
+      }),
+    });
+    expect(mocks.completion).not.toHaveBeenCalled();
+    const upload = await action("osu", token, callbackMessage(cardId));
+    expect(JSON.stringify(upload.mock.calls)).toContain("预入职日期：2026-11-08");
+  });
+
+  it("keeps a committed date successful if the automatic completion card cannot be delivered", async () => {
+    await beginCompletion();
+    const previousSessions = structuredClone(threadState?.offerSscCompletions);
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, sscConfirmationStatus: "confirming" },
+    });
+    mocks.preboarding.mockImplementation((input) => {
+      const saved = {
+        ...draft,
+        preboardingDate: input.preboardingDate,
+        sscConfirmationStatus: "confirming",
+      };
+      mocks.context.mockResolvedValue({ ...context, draft: saved });
+      return Promise.resolve(saved);
+    });
+    const prompt = await action("osd", `${callbackDraftId}:3`);
+    const postsBeforeReply = mocks.post.mock.calls.length;
+    mocks.post.mockImplementation((content) =>
+      typeof content === "object" && JSON.stringify(content).includes('"id":"osf"')
+        ? Promise.reject(new Error("completion card delivery failed"))
+        : Promise.resolve(),
+    );
+    const reply = await directMessage(prompt.sentIds[0], { raw: { text: "2026-11-01" } });
+    expect(mocks.preboarding).toHaveBeenCalledOnce();
+    expect(
+      mocks.post.mock.calls
+        .slice(postsBeforeReply)
+        .some(
+          ([content]) =>
+            typeof content === "object" && JSON.stringify(content).includes('"id":"osf"'),
+        ),
+    ).toBe(true);
+    expect(JSON.stringify(reply.mock.calls)).toContain("预入职日期已保存：2026-11-01");
+    expect(JSON.stringify(reply.mock.calls)).not.toContain("暂时无法保存预入职日期");
+    expect(threadState?.offerPreboardingDates).toEqual({});
+    expect(threadState?.offerSscCompletions).toEqual(previousSessions);
+    expect(mocks.completion).not.toHaveBeenCalled();
+  });
+
+  it("retires the same Offer's old screenshot selection only after the new dated confirmation is delivered", async () => {
+    const previous = await beginCompletion();
+    const previousToken = buttonValue(previous, "osu");
+    await action("osu", previousToken, callbackMessage(previous.sentIds[0]));
+    const context = await mocks.context();
+    mocks.preboarding.mockImplementation((input) => {
+      const saved = {
+        ...draft,
+        preboardingDate: input.preboardingDate,
+        sscConfirmationStatus: "confirming",
+      };
+      mocks.context.mockResolvedValue({ ...context, draft: saved });
+      return Promise.resolve(saved);
+    });
+    const prompt = await action("osd", `${callbackDraftId}:3`);
+    const reply = await directMessage(prompt.sentIds[0], { raw: { text: "2026-11-08" } });
+    const token = buttonValue(reply, "osf");
+    expect(token).not.toBe(previousToken);
+    expect(threadState?.offerSscCompletions).toEqual({
+      [token]: expect.objectContaining({ preboardingDate: "2026-11-08", status: "pending" }),
+    });
+    expect(JSON.stringify(threadState?.offerSscCompletions)).not.toContain("uploadPromptMessageId");
+    await action("osf", previousToken, callbackMessage(previous.sentIds[0]));
+    expect(mocks.completion).not.toHaveBeenCalled();
+  });
+
+  it.each(["2026-11-01", "2026-11-08"])(
+    "does not let a delayed older confirmation replace a newer session or its screenshot (latest date=%s)",
+    async (latestDate) => {
+      // Equal timestamps must not make an older opening look newer on receipt.
+      vi.spyOn(Date, "now").mockReturnValue(Date.now());
+      const context = await mocks.context();
+      mocks.context.mockResolvedValue({
+        ...context,
+        draft: { ...draft, sscConfirmationStatus: "confirming" },
+      });
+      const started = Promise.withResolvers<boolean>();
+      const delivery = Promise.withResolvers<boolean>();
+      mocks.post.mockImplementationOnce(async () => {
+        started.resolve(true);
+        await delivery.promise;
+      });
+      const older = action("osc", `${callbackDraftId}:3`);
+      await started.promise;
+      mocks.context.mockResolvedValue({
+        ...context,
+        draft: { ...draft, preboardingDate: latestDate, sscConfirmationStatus: "confirming" },
+      });
+      const newer = await action("osc", `${callbackDraftId}:3`);
+      const newerToken = buttonValue(newer, "osu");
+      const upload = await action("osu", newerToken, callbackMessage(newer.sentIds[0]));
+      await directMessage(upload.sentIds[0], {
+        raw: { photo: [{ file_id: "newer-confirmation-screenshot", file_size: 4 }] },
+      });
+      const savedNewerSessions = structuredClone(threadState?.offerSscCompletions);
+      delivery.resolve(true);
+      const oldCard = await older;
+      expect(threadState?.offerSscCompletions).toEqual(savedNewerSessions);
+      expect(threadState?.offerSscCompletions).toEqual({
+        [newerToken]: expect.objectContaining({
+          preboardingDate: latestDate,
+          screenshot: expect.objectContaining({ fileId: "newer-confirmation-screenshot" }),
+        }),
+      });
+      await action("osf", buttonValue(oldCard, "osf"), callbackMessage(oldCard.sentIds[0]));
+      expect(mocks.completion).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["2026/11/08", "2026-02-30", "明天", "2026-1-8"])(
+    "rejects invalid preboarding date %s and accepts a correction",
+    async (input) => {
+      const context = await mocks.context();
+      mocks.context.mockResolvedValue({
+        ...context,
+        draft: { ...draft, preboardingDate: null, sscConfirmationStatus: "confirming" },
+      });
+      const prompt = await action("osd", `${callbackDraftId}:3`);
+      const rejected = await directMessage(prompt.sentIds[0], { raw: { text: input } });
+      expect(mocks.preboarding).not.toHaveBeenCalled();
+      expect(JSON.stringify(rejected.mock.calls)).toContain("YYYY-MM-DD");
+      await directMessage(prompt.sentIds[0], { raw: { text: "2028-02-29" } });
+      expect(mocks.preboarding).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("rechecks revision and permissions before recording a date reply", async () => {
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, sscConfirmationStatus: "confirming" },
+    });
+    const prompt = await action("osd", `${callbackDraftId}:3`);
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, sscConfirmationStatus: "confirming", sscRevision: 4 },
+    });
+    const rejected = await directMessage(prompt.sentIds[0], { raw: { text: "2026-11-08" } });
+    expect(mocks.preboarding).not.toHaveBeenCalled();
+    expect(JSON.stringify(rejected.mock.calls)).toContain("更新");
+  });
+
+  it("requires the preboarding date before opening final approval", async () => {
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, preboardingDate: null, sscConfirmationStatus: "confirming" },
+    });
+    const rejected = await action("osc", `${callbackDraftId}:3`);
+    expect(JSON.stringify(rejected.mock.calls)).toContain("预入职");
+    expect(mocks.interaction).not.toHaveBeenCalled();
+    expect(mocks.completion).not.toHaveBeenCalled();
+  });
+
+  it("does not consume a recruiter TG handle while a preboarding date prompt is open", async () => {
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, sscConfirmationStatus: "confirming" },
+    });
+    await action("osd", `${callbackDraftId}:3`);
+    const { handleTelegramOfferPreboardingMessage } = await import("./offer-ssc-preboarding");
+    const currentThread = thread();
+    expect(
+      await handleTelegramOfferPreboardingMessage(
+        currentThread as unknown as Parameters<typeof handleTelegramOfferPreboardingMessage>[0],
+        {
+          metadata: {},
+          raw: {
+            chat: { id: 12_345, type: "private" },
+            from: { id: 12_345, username: "SscAlice" },
+            message_id: 999,
+            text: "@candidate_private",
+          },
+        } as unknown as Parameters<typeof handleTelegramOfferPreboardingMessage>[1],
+      ),
+    ).toBe(false);
+    expect(currentThread.post).not.toHaveBeenCalled();
+    expect(mocks.preboarding).not.toHaveBeenCalled();
+  });
+
+  it("does not report a committed date as failed when the success receipt cannot be delivered", async () => {
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...draft, sscConfirmationStatus: "confirming" },
+    });
+    const prompt = await action("osd", `${callbackDraftId}:3`);
+    mocks.post.mockImplementation((content) =>
+      typeof content === "string" && content.startsWith("预入职日期已保存")
+        ? Promise.reject(new Error("delivery failed"))
+        : Promise.resolve(),
+    );
+    const reply = await directMessage(prompt.sentIds[0], { raw: { text: "2026-11-08" } });
+    expect(mocks.preboarding).toHaveBeenCalledOnce();
+    expect(threadState?.offerPreboardingDates).toEqual({});
+    expect(JSON.stringify(reply.mock.calls)).not.toContain("暂时无法保存");
+  });
+
+  it("rejects final approval from a card showing an older preboarding date", async () => {
+    const prompt = await beginCompletion();
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({
+      ...context,
+      draft: { ...context.draft, preboardingDate: "2026-11-09" },
+    });
+    const rejected = await action(
+      "osf",
+      buttonValue(prompt, "osf"),
+      callbackMessage(prompt.sentIds[0]),
+    );
+    expect(mocks.completion).not.toHaveBeenCalled();
+    expect(JSON.stringify(rejected.mock.calls)).toContain("预入职日期已更新");
+  });
   it("opens an Offer deep link without implicitly rebinding the sender", async () => {
     const post = await command("/start", message(`offer_${draftId}`));
     expect(mocks.bind).not.toHaveBeenCalled();
@@ -647,10 +976,13 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(card).toContain("接收确认");
   });
 
-  it("finishes directly from a broadcast second-confirmation card without a prior local prompt", async () => {
+  it("refreshes a broadcast approval card before confirming its current preboarding date", async () => {
     await beginCompletion();
     threadState = null;
-    await action("osf", `${callbackDraftId}:3`);
+    const refreshed = await action("osf", `${callbackDraftId}:3`);
+    expect(mocks.completion).not.toHaveBeenCalled();
+    expect(JSON.stringify(refreshed.mock.calls)).toContain("2026-11-01");
+    await action("osf", buttonValue(refreshed, "osf"), callbackMessage(refreshed.sentIds[0]));
     expect(mocks.completion).toHaveBeenCalledWith(
       expect.objectContaining({
         actor: { telegramUserId: "12345", username: "SscAlice" },
@@ -713,6 +1045,7 @@ describe("self-service Telegram Offer SSC actions", () => {
     expect(mocks.completion).toHaveBeenCalledWith({
       actor: { telegramUserId: "12345", username: "SscAlice" },
       draftId,
+      expectedPreboardingDate: "2026-11-01",
       internalApprovalConfirmed: true,
       interviewRecordId: "candidate-a",
       organizationId: "org-a",

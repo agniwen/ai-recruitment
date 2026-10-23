@@ -99,7 +99,7 @@ function sentMessageId(id: string, chatId: string): number {
 }
 
 async function authorizedContext(
-  record: Pick<TelegramOfferCompletionPending, "draftId" | "revision">,
+  record: Pick<TelegramOfferCompletionPending, "draftId" | "revision" | "preboardingDate">,
   actor: OfferSscTelegramActor,
 ) {
   const context = await loadAuthorizedOfferSscContext({
@@ -118,6 +118,12 @@ async function authorizedContext(
     context.pipelineStage === "closed"
   ) {
     throw new OfferDraftError("该 Offer 当前不能完成 SSC 确认，请重新打开。", 409);
+  }
+  if (!context.draft.preboardingDate) {
+    throw new OfferDraftError("请先完成预入职时间确认并录入预入职日期。", 409);
+  }
+  if (record.preboardingDate && record.preboardingDate !== context.draft.preboardingDate) {
+    throw new OfferDraftError("预入职日期已更新，请重新打开完成确认并核对新日期。", 409);
   }
   const [activity, interviewRounds] = await Promise.all([
     loadOfferSscActivity(context.draft),
@@ -145,19 +151,71 @@ async function removePending(thread: CompletionThread, chatId: string, token: st
   });
 }
 
-async function beginCompletion(
-  event: ActionEvent,
-  identity: CompletionIdentity,
-  initial: { draftId: string; revision: number },
+async function clearCompletionOpening(
+  thread: CompletionThread,
+  chatId: string,
+  draftId: string,
+  token: string,
 ) {
-  const context = await authorizedContext(initial, identity.actor);
-  const { thread } = event;
-  if (!thread) {
+  await withTelegramOfferCompletionState(thread, chatId, (_pending, openings) => {
+    if (openings[draftId]?.token === token) {
+      Reflect.deleteProperty(openings, draftId);
+    }
+  });
+}
+
+async function registerDeliveredCompletion(
+  thread: CompletionThread,
+  token: string,
+  record: TelegramOfferCompletionPending,
+) {
+  return await withTelegramOfferCompletionState(thread, record.chatId, (pending, openings) => {
+    if (
+      openings[record.draftId]?.token !== token ||
+      openings[record.draftId]?.revision !== record.revision
+    ) {
+      return false;
+    }
+    // A newer opening reserves a different token before posting. An older SDK
+    // receipt can never replace that opening, its card, or an uploaded screenshot.
+    for (const [key, current] of Object.entries(pending)) {
+      if (current.draftId === record.draftId && current.status === "pending") {
+        Reflect.deleteProperty(pending, key);
+      }
+    }
+    pending[token] = record;
+    Reflect.deleteProperty(openings, record.draftId);
+    return true;
+  });
+}
+
+export async function openTelegramOfferCompletionSession(input: {
+  actor: OfferSscTelegramActor;
+  draftId: string;
+  originMessageId: number;
+  revision: number;
+  thread: CompletionThread;
+}): Promise<string> {
+  const { actor, originMessageId, thread } = input;
+  if (
+    thread.id !== `telegram:${actor.telegramUserId}` ||
+    !z.uuid().safeParse(input.draftId).success ||
+    !Number.isSafeInteger(input.revision) ||
+    input.revision < 1 ||
+    !Number.isSafeInteger(originMessageId) ||
+    originMessageId < 1
+  ) {
     throw unavailable();
   }
   const token = randomUUID().replaceAll("-", "");
-  let promptMessageId = identity.messageId;
-  if (event.actionId === "osc") {
+  const expiresAt = Date.now() + TELEGRAM_COMPLETION_TTL_MS;
+  // Reserve at entry, before any asynchronous permission read or message post.
+  // This CAS token orders openings even when their timestamps are identical.
+  await withTelegramOfferCompletionState(thread, actor.telegramUserId, (_pending, openings) => {
+    openings[input.draftId] = { expiresAt, revision: input.revision, token };
+  });
+  try {
+    const context = await authorizedContext(input, actor);
     await recordOfferSscInteraction(context, "offer_ssc_confirmation_opened");
     const activity = await loadOfferSscActivity(context.draft);
     const prompt = await thread.post(
@@ -166,9 +224,53 @@ async function beginCompletion(
         operatorLabel: describeOfferSscOperator(context.telegramOperator),
       }),
     );
-    promptMessageId = sentMessageId(prompt.id, identity.chatId);
+    const registered = await registerDeliveredCompletion(thread, token, {
+      chatId: actor.telegramUserId,
+      draftId: context.draft.id,
+      expiresAt,
+      interviewRecordId: context.draft.interviewRecordId,
+      organizationId: context.draft.organizationId,
+      originMessageId,
+      preboardingDate: context.draft.preboardingDate ?? undefined,
+      promptMessageId: sentMessageId(prompt.id, actor.telegramUserId),
+      revision: input.revision,
+      status: "pending",
+      telegramUsername: actor.username.toLowerCase(),
+    });
+    if (!registered) {
+      await prompt.edit("这张确认卡已被更新，请使用最新确认卡完成操作。").catch(() => {
+        console.warn("[telegram-offer-ssc] Superseded confirmation card could not be cleared");
+      });
+    }
+  } catch (error) {
+    await clearCompletionOpening(thread, actor.telegramUserId, input.draftId, token).catch(() => {
+      console.warn("[telegram-offer-ssc] Failed opening reservation could not be cleared");
+    });
+    throw error;
   }
-  return await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
+  return token;
+}
+
+async function beginCompletion(
+  event: ActionEvent,
+  identity: CompletionIdentity,
+  initial: { draftId: string; revision: number },
+) {
+  const { thread } = event;
+  if (!thread) {
+    throw unavailable();
+  }
+  if (event.actionId === "osc") {
+    return await openTelegramOfferCompletionSession({
+      ...initial,
+      actor: identity.actor,
+      originMessageId: identity.messageId,
+      thread,
+    });
+  }
+  const context = await authorizedContext(initial, identity.actor);
+  const token = randomUUID().replaceAll("-", "");
+  return await withTelegramOfferCompletionState(thread, identity.chatId, (pending, openings) => {
     // Broadcast cards initialize their own private upload/confirmation session on first use.
     // Reuse it on retries; an older card must not bypass a newer screenshot confirmation.
     if (event.actionId !== "osc") {
@@ -180,6 +282,11 @@ async function beginCompletion(
       );
       if (existing) {
         pendingFor(pending, existing[0], identity);
+        openings[initial.draftId] = {
+          expiresAt: existing[1].expiresAt,
+          revision: initial.revision,
+          token: existing[0],
+        };
         return existing[0];
       }
     }
@@ -190,10 +297,16 @@ async function beginCompletion(
       interviewRecordId: context.draft.interviewRecordId,
       organizationId: context.draft.organizationId,
       originMessageId: identity.messageId,
-      promptMessageId,
+      preboardingDate: context.draft.preboardingDate ?? undefined,
+      promptMessageId: identity.messageId,
       revision: initial.revision,
       status: "pending",
       telegramUsername: identity.actor.username.toLowerCase(),
+    };
+    openings[initial.draftId] = {
+      expiresAt: pending[token].expiresAt,
+      revision: initial.revision,
+      token,
     };
     return token;
   });
@@ -223,6 +336,21 @@ export async function handleTelegramOfferCompletionAction(
     await removePending(thread, identity.chatId, token);
     throw error;
   }
+  if (initial && event.actionId === "osf") {
+    const prompt = await thread.post(
+      buildTelegramOfferCompletionCard(context, token, {
+        detailUrl: completionDetailUrl(context),
+        operatorLabel: describeOfferSscOperator(context.telegramOperator),
+      }),
+    );
+    await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
+      pendingFor(pending, token, identity).promptMessageId = sentMessageId(
+        prompt.id,
+        identity.chatId,
+      );
+    });
+    return;
+  }
   if (event.actionId === "osx") {
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       pendingFor(pending, token, identity);
@@ -248,7 +376,7 @@ export async function handleTelegramOfferCompletionAction(
     });
     const promptId = await postTelegramOfferScreenshotPrompt(
       thread,
-      `操作人：${describeOfferSscOperator(context.telegramOperator)}。请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，上传后会自动发送新的确认卡片，请点击其中的“确认完成”。`,
+      `操作人：${describeOfferSscOperator(context.telegramOperator)}。预入职日期：${context.draft.preboardingDate}。请回复本条消息发送“${context.candidateName}”第 ${context.draft.version} 版 Offer 的一张审批截图（JPEG、PNG 或 WebP，最多 10 MB）。截图选填，上传后会自动发送新的确认卡片，请点击其中的“确认完成”。`,
     );
     await withTelegramOfferCompletionState(thread, identity.chatId, (pending) => {
       if (pending[token]?.uploadSelectionId !== selectionId) {
@@ -282,6 +410,8 @@ export async function handleTelegramOfferCompletionAction(
     draft = await completeOfferSscWithScreenshot({
       actor: identity.actor,
       draftId: claimed.draftId,
+      expectedPreboardingDate:
+        claimed.preboardingDate ?? context.draft.preboardingDate ?? undefined,
       internalApprovalConfirmed: true,
       interviewRecordId: claimed.interviewRecordId,
       organizationId: claimed.organizationId,

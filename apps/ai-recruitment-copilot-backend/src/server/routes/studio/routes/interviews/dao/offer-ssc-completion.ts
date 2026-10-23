@@ -63,6 +63,21 @@ async function cleanupUpload(storageKey: string | undefined) {
   }
 }
 
+function assertPreboardingReadiness(
+  context: Awaited<ReturnType<typeof loadAuthorizedOfferSscContext>>,
+  expectedPreboardingDate: string | undefined,
+) {
+  if (context.draft.sscConfirmationStatus !== "completed" && !context.draft.preboardingDate) {
+    throw new OfferDraftError("请先完成预入职时间确认并录入预入职日期。", 409);
+  }
+  if (
+    expectedPreboardingDate !== undefined &&
+    expectedPreboardingDate !== context.draft.preboardingDate
+  ) {
+    throw new OfferDraftError("预入职日期已更新，请重新打开确认卡片后再完成确认。", 409);
+  }
+}
+
 export async function completeOfferSscWithScreenshot(
   input: Omit<OfferSscCompletionInput, "completionAttachment"> & { file?: File },
 ) {
@@ -91,6 +106,7 @@ export async function completeOfferSscWithScreenshot(
   if (!["confirming", "completed"].includes(context.draft.sscConfirmationStatus ?? "")) {
     throw new OfferDraftError("请先由 SSC 接收确认。", 409);
   }
+  assertPreboardingReadiness(context, input.expectedPreboardingDate);
   const { file, ...completionInput } = input;
   const screenshot =
     file && context.draft.sscConfirmationStatus !== "completed"

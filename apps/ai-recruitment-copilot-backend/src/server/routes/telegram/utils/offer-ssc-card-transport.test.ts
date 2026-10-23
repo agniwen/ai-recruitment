@@ -312,17 +312,67 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
       expect(buttons.map((button) => button.text)).not.toContain("打开全文复制页");
       const workflow = buttons.filter((button) => button.callback_data);
       if (actionLabel && actionId) {
-        expect(workflow).toEqual([
-          expect.objectContaining({
-            callback_data: expect.stringContaining(`"a":"${actionId}"`),
-            text: actionLabel,
-          }),
-        ]);
+        expect(workflow).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              callback_data: expect.stringContaining(`"a":"${actionId}"`),
+              text: actionLabel,
+            }),
+          ]),
+        );
+        expect(workflow).toHaveLength(status === "confirming" ? 2 : 1);
       } else {
         expect(workflow).toEqual([]);
       }
     },
   );
+
+  it("copies completed recruitment and preboarding details together with the Offer and interviews", async () => {
+    const info = offerConfirmationDetailsSchema.parse({
+      candidateName: "候选人甲",
+      candidatePrivateTelegram: "@candidate_private",
+    });
+    const completionInfo = {
+      candidateCode: "ZYHSQ00198",
+      candidateName: "候选人甲",
+      candidatePrivateTelegram: "@candidate_private",
+      preboardingDate: "2026-11-08",
+      recruiterTelegram: "@recruiter_private",
+      recruitingGroupNames: ["中诚渠道"],
+      recruitmentChannel: "TG",
+      resumeSource: "上传来源",
+    };
+    const payload = await editedCard(
+      "completed",
+      {
+        baseSalary: 15_000,
+        completionInfo,
+        confirmationInfo: info,
+        currency: "CNY",
+        interviewRecordId: "candidate-a",
+        position: "工程师",
+        preboardingDate: completionInfo.preboardingDate,
+      },
+      { detailUrl: "https://ats.example.test/offer-candidate/final" },
+      completedInterviewRounds,
+    );
+    const expected = buildOfferConfirmationText({
+      baseSalary: 15_000,
+      candidateRecordId: "candidate-a",
+      completionInfo,
+      currency: "CNY",
+      info,
+      interviewRounds: completedInterviewRounds,
+      position: "工程师",
+      sscConfirmationStatus: "completed",
+    });
+    expect(copiedBlock(payload)).toBe(expected);
+    expect(expected).toContain("3️⃣招聘信息");
+    expect(expected).toContain("4️⃣入职信息");
+    expect(expected).toContain("@recruiter_private");
+    expect(expected).toContain("2026-11-08");
+    expect(expected).toContain("技术面试官甲");
+  });
 
   it("uses the detail fallback for long completed interview feedback without partial native copies", async () => {
     const feedback = "面试评价长内容".repeat(500);
@@ -479,13 +529,20 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     async (status, label, actionId) => {
       const payload = await editedCard(status);
       const buttons = payload.reply_markup.inline_keyboard.flat();
-      expect(buttons).toHaveLength(1);
-      expect(buttons[0].text).toBe(label);
-      const callback = buttons[0].callback_data;
+      expect(buttons).toHaveLength(status === "confirming" ? 2 : 1);
+      const callback = buttons.find((button) => button.text === label)?.callback_data;
       expect(callback).toBeTypeOf("string");
       expect(callback).toContain(`"a":"${actionId}"`);
       expect(Buffer.byteLength(callback ?? "", "utf-8")).toBeLessThanOrEqual(64);
       expect(callback).toContain(draftId.replaceAll("-", ""));
+      if (status === "confirming") {
+        expect(buttons).toContainEqual(
+          expect.objectContaining({
+            callback_data: expect.stringContaining('"a":"osd"'),
+            text: "完成预入职时间确认",
+          }),
+        );
+      }
     },
   );
 
@@ -516,7 +573,12 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     );
     await adapter.editMessage(`telegram:${chatId}`, `${chatId}:${messageId}`, card);
     const buttons = requests[0].reply_markup.inline_keyboard.flat();
-    expect(buttons.map((button) => button.text)).toEqual(["确认完成", "上传截图（选填）", "取消"]);
+    expect(buttons.map((button) => button.text)).toEqual([
+      "完成预入职时间确认",
+      "确认完成",
+      "上传截图（选填）",
+      "取消",
+    ]);
     for (const button of buttons) {
       expect(Buffer.byteLength(button.callback_data ?? "", "utf-8")).toBeLessThanOrEqual(64);
       expect(button.callback_data).toContain(draftId.replaceAll("-", ""));

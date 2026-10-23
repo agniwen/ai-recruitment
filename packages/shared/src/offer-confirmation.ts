@@ -1,4 +1,5 @@
 import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
+import type { OfferCompletionInfo } from "@arc/db-schema/offer-completion";
 import type { OfferSscConfirmationStatus } from "@arc/db-schema/studio-interviews";
 import { buildOfferInterviewText } from "./offer-interviews";
 import type { OfferInterviewRound } from "./offer-interviews";
@@ -51,9 +52,33 @@ function legacyInterviewSection(info: OfferConfirmationDetails | null | undefine
   return `#面试评价：\n主要面试官：${textOrMissing(info?.mainInterviewerName)}\n面试评价：${textOrMissing(info?.interviewFeedback)}\n\n`;
 }
 
+function completionSections(
+  info: OfferCompletionInfo | null | undefined,
+  status: OfferSscConfirmationStatus | null | undefined,
+) {
+  if (!info || (status !== "confirming" && status !== "completed")) {
+    return "";
+  }
+  const recruiterContact = info.recruiterTelegram?.trim();
+  return `3️⃣招聘信息
+招聘渠道：${textOrMissing(info.recruitingGroupNames.join("、"))}
+简历来源：${textOrMissing(info.resumeSource)}
+招聘通道：${textOrMissing(info.recruitmentChannel)}
+招聘专员／内推人联系方式：${recruiterContact ? `TG—${recruiterContact}` : "待补充"}
+
+4️⃣入职信息
+候选人编码：${textOrMissing(info.candidateCode, "未填写")}
+候选人姓名：${textOrMissing(info.candidateName)}
+入职日期：${textOrMissing(info.preboardingDate)}
+候选人联系方式：${textOrMissing(info.candidatePrivateTelegram)}
+
+`;
+}
+
 export function buildOfferConfirmationText({
   info,
   candidateRecordId,
+  completionInfo,
   position,
   baseSalary,
   currency,
@@ -62,6 +87,7 @@ export function buildOfferConfirmationText({
 }: {
   info?: OfferConfirmationDetails | null;
   candidateRecordId?: string | null;
+  completionInfo?: OfferCompletionInfo | null;
   position: string | null | undefined;
   baseSalary: number | null | undefined;
   currency: string | null | undefined;
@@ -92,5 +118,5 @@ export function buildOfferConfirmationText({
 试用期：${textOrMissing(info?.probationPeriod)}
 试用薪资：${salaryOrMissing(info?.probationSalary)}
 
-${interviewRounds === undefined ? legacyInterviewSection(info) : `${buildOfferInterviewText(interviewRounds)}\n\n`}${sscStatusText[sscConfirmationStatus ?? "pending"]}`.trimEnd();
+${completionSections(completionInfo, sscConfirmationStatus)}${interviewRounds === undefined ? legacyInterviewSection(info) : `${buildOfferInterviewText(interviewRounds)}\n\n`}${sscStatusText[sscConfirmationStatus ?? "pending"]}`.trimEnd();
 }

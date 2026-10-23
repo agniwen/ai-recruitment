@@ -10,8 +10,11 @@ import { loadOfferSscActivity } from "@arc/ai-recruitment-copilot-backend/server
 import { loadOfferSscInterviewSummary } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-interview-summary";
 import { buildTelegramOfferPublicCard } from "./offer-ssc-public-card";
 import { handleTelegramOfferCompletionAction } from "./offer-ssc-completion";
+import { handleTelegramOfferPreboardingAction } from "./offer-ssc-preboarding";
 import { updateTelegramOfferMessages } from "./offer-ssc-message";
+import type { OfferSscTelegramActor } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 export { handleTelegramOfferScreenshot } from "./offer-ssc-completion";
+export { handleTelegramOfferPreboardingMessage } from "./offer-ssc-preboarding";
 
 const telegramSender = z.object({
   id: z.number().int().positive(),
@@ -81,6 +84,18 @@ export async function openTelegramOffer(event: SlashCommandEvent, draftId: strin
   }
 }
 
+async function handlePostReceiptAction(
+  event: ActionEvent,
+  identity: { actor: OfferSscTelegramActor; chatId: string; messageId: number },
+  initial?: { draftId: string; revision: number },
+) {
+  if (event.actionId === "osd" && initial) {
+    await handleTelegramOfferPreboardingAction(event, identity.actor, initial, identity.messageId);
+    return;
+  }
+  await handleTelegramOfferCompletionAction(event, identity, initial);
+}
+
 export async function handleTelegramOfferAction(event: ActionEvent): Promise<void> {
   const callback = callbackQuery.safeParse(event.raw);
   if (
@@ -91,9 +106,9 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
     await event.thread?.post("请使用本人账号私聊机器人处理 Offer。");
     return;
   }
-  const supportedAction = ["osr", "osc", "osf", "osu", "osx"].includes(event.actionId);
+  const supportedAction = ["osr", "osd", "osc", "osf", "osu", "osx"].includes(event.actionId);
   const initialAction =
-    ["osr", "osc"].includes(event.actionId) || Boolean(event.value?.includes(":"));
+    ["osr", "osd", "osc"].includes(event.actionId) || Boolean(event.value?.includes(":"));
   const parsed = initialAction ? parseCallback(event.value) : null;
   if (
     !supportedAction ||
@@ -111,7 +126,7 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       username: callback.data.from.username,
     };
     if (event.actionId !== "osr") {
-      await handleTelegramOfferCompletionAction(
+      await handlePostReceiptAction(
         event,
         {
           actor,

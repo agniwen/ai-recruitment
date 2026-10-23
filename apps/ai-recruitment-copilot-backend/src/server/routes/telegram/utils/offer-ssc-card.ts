@@ -28,7 +28,15 @@ export interface TelegramOfferCardContext {
     "id" | "position" | "version" | "sscConfirmationStatus" | "sscRevision" | "status"
   > &
     Partial<
-      Pick<OfferDraftRecord, "baseSalary" | "confirmationInfo" | "currency" | "interviewRecordId">
+      Pick<
+        OfferDraftRecord,
+        | "baseSalary"
+        | "confirmationInfo"
+        | "currency"
+        | "interviewRecordId"
+        | "preboardingDate"
+        | "completionInfo"
+      >
     >;
   candidateName: string;
   pipelineStage: PipelineStage;
@@ -48,6 +56,7 @@ function offerConfirmationText(context: TelegramOfferCardContext) {
   return buildOfferConfirmationText({
     baseSalary: draft.baseSalary,
     candidateRecordId: draft.interviewRecordId,
+    completionInfo: draft.completionInfo,
     currency: draft.currency,
     info: draft.confirmationInfo ?? {
       ...blankConfirmationInfo,
@@ -134,31 +143,10 @@ export function telegramOfferCallbackValue(draftId: string, revision: number): s
   return `${draftId.replaceAll("-", "")}:${revision.toString(36)}`;
 }
 
-export function buildTelegramOfferCard(
-  context: TelegramOfferCardContext,
-  options: {
-    detailLabel?: string;
-    detailUrl?: string | null;
-    feedbackLabel?: string;
-    title?: string;
-  } = {},
-) {
+function initialOfferActions(context: TelegramOfferCardContext) {
   const { draft } = context;
   const status = draft.sscConfirmationStatus;
   const canOperate = draft.status === "draft" && context.pipelineStage !== "closed";
-  const fields = Fields([
-    literalField({ label: "候选人", value: context.candidateName }),
-    literalField({ label: "岗位", value: draft.position || "未填写" }),
-    literalField({ label: "Offer 版本", value: String(draft.version) }),
-    literalField({
-      label: "SSC 状态",
-      value: status ? getOfferSscConfirmationMeta(status).label : "历史 Offer，无 SSC 确认记录",
-    }),
-    ...(options.feedbackLabel
-      ? [literalField({ label: "本次反馈", value: options.feedbackLabel })]
-      : []),
-    ...operationFields(context.activity),
-  ]);
   const actions: ActionsElement["children"] = [];
   if (canOperate && status === "pending" && context.canReceive) {
     actions.push(
@@ -171,12 +159,51 @@ export function buildTelegramOfferCard(
   } else if (canOperate && status === "confirming" && context.canConfirm) {
     actions.push(
       Button({
+        id: "osd",
+        label: draft.preboardingDate ? "修改预入职日期" : "完成预入职时间确认",
+        value: telegramOfferCallbackValue(draft.id, draft.sscRevision ?? 1),
+      }),
+    );
+    actions.push(
+      Button({
         id: "osc",
         label: "完成确认",
         value: telegramOfferCallbackValue(draft.id, draft.sscRevision ?? 1),
       }),
     );
   }
+  return actions;
+}
+
+export function buildTelegramOfferCard(
+  context: TelegramOfferCardContext,
+  options: {
+    detailLabel?: string;
+    detailUrl?: string | null;
+    feedbackLabel?: string;
+    title?: string;
+  } = {},
+) {
+  const { draft } = context;
+  const status = draft.sscConfirmationStatus;
+  const fields = Fields([
+    literalField({ label: "候选人", value: context.candidateName }),
+    literalField({ label: "岗位", value: draft.position || "未填写" }),
+    literalField({ label: "Offer 版本", value: String(draft.version) }),
+    literalField({
+      label: "预入职日期",
+      value: draft.preboardingDate || "待 SSC 联系候选人后确认",
+    }),
+    literalField({
+      label: "SSC 状态",
+      value: status ? getOfferSscConfirmationMeta(status).label : "历史 Offer，无 SSC 确认记录",
+    }),
+    ...(options.feedbackLabel
+      ? [literalField({ label: "本次反馈", value: options.feedbackLabel })]
+      : []),
+    ...operationFields(context.activity),
+  ]);
+  const actions = initialOfferActions(context);
   if (options.detailUrl) {
     actions.push(
       LinkButton({ label: options.detailLabel ?? "查看候选人详情", url: options.detailUrl }),
@@ -214,6 +241,7 @@ export function buildTelegramOfferCompletionCard(
     literalField({ label: "候选人", value: context.candidateName }),
     literalField({ label: "岗位", value: context.draft.position || "未填写" }),
     literalField({ label: "Offer 版本", value: String(context.draft.version) }),
+    literalField({ label: "预入职日期", value: context.draft.preboardingDate || "待确认" }),
     ...operationFields(context.activity),
     ...(options.operatorLabel
       ? [literalField({ label: "当前操作人", value: options.operatorLabel })]
@@ -240,6 +268,9 @@ export function buildTelegramOfferCompletionCard(
         `${title}\n${cardChildToFallbackText(fields) ?? ""}`,
         options.detailUrl,
       ),
+      ...(options.persistent && !context.draft.preboardingDate && context.canConfirm
+        ? [Actions([Button({ id: "osd", label: "完成预入职时间确认", value: token })])]
+        : []),
       Actions([Button({ id: "osf", label: "确认完成", value: token })]),
       Actions([
         Button({

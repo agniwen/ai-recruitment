@@ -12,6 +12,7 @@ import { OfferCard } from "./offer-stage-cards";
 
 const mocks = vi.hoisted(() => ({
   completeOfferSscConfirmation: vi.fn(),
+  confirmOfferPreboardingDate: vi.fn(),
   getOfferRecruiterContact: vi.fn(),
   getOfferSscTelegramLink: vi.fn(),
   patchOfferDraft: vi.fn(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/client/workspace-context", () => ({ useWorkspaceSlug: () => "demo" }));
 vi.mock("@/lib/client/api", () => ({
   completeOfferSscConfirmation: mocks.completeOfferSscConfirmation,
+  confirmOfferPreboardingDate: mocks.confirmOfferPreboardingDate,
   getOfferRecruiterContact: mocks.getOfferRecruiterContact,
   getOfferSscTelegramLink: mocks.getOfferSscTelegramLink,
   offerApprovalAttachmentUrl: (_slug: string, _candidateId: string, draftId: string) =>
@@ -98,6 +100,7 @@ function renderCard(
     notes: null,
     organizationId: "org-1",
     position: "工程师",
+    preboardingDate: "2026-11-02",
     responseAt: null,
     sentAt: null,
     sscCompletedAt: null,
@@ -149,6 +152,16 @@ function findButton(host: HTMLElement, label: string) {
 }
 
 describe("OfferCard approval attachment", () => {
+  it("shows the SSC preboarding date separately from the ODC expected joining date", () => {
+    const { host } = renderCard("application/pdf", "approval.pdf", false, "CNY", {
+      draft: { joiningDate: "2026-11-02", preboardingDate: "2026-11-05" },
+    });
+    expect(host.textContent).toContain("预计入职日");
+    expect(host.textContent).toContain("预入职日期");
+    expect(host.textContent).toContain("2026-11-05");
+    expect(host.textContent).toContain("2026-11-02");
+  });
+
   it.each([
     ["CNY", "¥", "人民币 CNY"],
     ["USD", "$", "美元 USD"],

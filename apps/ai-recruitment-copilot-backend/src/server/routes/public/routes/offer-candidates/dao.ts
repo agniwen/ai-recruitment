@@ -141,6 +141,7 @@ function publicOffer(
   return {
     baseSalary: draft.baseSalary,
     bonus: draft.bonus,
+    completionInfo: draft.completionInfo ?? null,
     confirmationInfo: draft.confirmationInfo ?? null,
     currency: draft.currency,
     equity: draft.equity,
@@ -149,6 +150,7 @@ function publicOffer(
     joiningDate: draft.joiningDate,
     notes: draft.notes,
     position: draft.position,
+    preboardingDate: draft.preboardingDate ?? null,
     sscCompletedAt: draft.sscCompletedAt ?? null,
     sscConfirmationStatus,
     sscReceivedAt: draft.sscReceivedAt ?? null,

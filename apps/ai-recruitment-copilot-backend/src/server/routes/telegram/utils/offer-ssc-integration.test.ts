@@ -1,7 +1,9 @@
+/* oxlint-disable max-lines -- One shared real database fixture covers Telegram date, screenshot and final confirmation lifecycle. */
 import { randomInt, randomUUID } from "node:crypto";
+import { parseMarkdown } from "chat";
 import type { ActionEvent, SlashCommandEvent, Message } from "chat";
 import type * as S3 from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import {
@@ -11,6 +13,8 @@ import {
   member,
   organization,
   organizationRole,
+  recruitingGroup,
+  recruitingGroupMember,
   resumeSource,
   sscResponsibility,
   studioInterview,
@@ -23,18 +27,26 @@ import {
   createOfferDraft,
   editOfferDraft,
   loadCurrentOfferSscState,
+  loadAuthorizedOfferSscContext,
+  loadDraftById,
 } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-drafts";
 import {
   handleTelegramOfferAction,
   openTelegramOffer,
   handleTelegramOfferScreenshot,
+  handleTelegramOfferPreboardingMessage,
 } from "./offer-ssc";
 import { buildOfferCandidatePreviewLink } from "@arc/ai-recruitment-copilot-backend/server/routes/public/routes/offer-candidates/access";
 import { dispatchOfferSscNotifications } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/interviews/dao/offer-ssc-notification-outbox";
 import { loadOfferCandidatePreview } from "@arc/ai-recruitment-copilot-backend/server/routes/public/routes/offer-candidates/dao";
+import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
+import { buildOfferConfirmationText } from "@arc/shared/offer-confirmation";
 
 const storage = vi.hoisted(() => ({ put: vi.fn(() => Promise.resolve()) }));
 const transport = vi.hoisted(() => ({
+  edit: vi.fn<(threadId: string, messageId: string, message: unknown) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
   send: vi.fn<(chatId: string, message: unknown) => Promise<void>>(() => Promise.resolve()),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", async (importOriginal) => ({
@@ -53,9 +65,18 @@ vi.mock("./offer-ssc-upload-prompt", () => ({
     return prompt.id;
   },
 }));
+vi.mock("./offer-ssc-preboarding-prompt", () => ({
+  postTelegramOfferPreboardingPrompt: async (
+    thread: { post(text: string): Promise<{ id: string }> },
+    text: string,
+  ) => {
+    const prompt = await thread.post(text);
+    return prompt.id;
+  },
+}));
 vi.mock("./bot", () => ({
   getTelegramBot: () => ({
-    getAdapter: () => ({ editMessage: vi.fn(() => Promise.resolve()) }),
+    getAdapter: () => ({ editMessage: transport.edit }),
   }),
   isTelegramBotConfigured: () => true,
   postTelegramDirectMessage: transport.send,
@@ -72,6 +93,7 @@ const SOURCE = randomUUID();
 const OTHER_SOURCE = randomUUID();
 const DEPARTMENT = randomUUID();
 const JD = randomUUID();
+const RECRUITING_GROUP = randomUUID();
 const identities = {
   confirmer: {
     chatId: randomInt(10_000_000, 999_999_999_999),
@@ -134,6 +156,15 @@ function findButton(value: unknown, actionId: string): string | undefined {
       return found;
     }
   }
+}
+
+function renderedText(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(parseMarkdown(value));
+  }
+  return value && typeof value === "object"
+    ? Object.values(value).map(renderedText).join("\n")
+    : "";
 }
 
 function button(telegram: FakeTelegram, actionId: string): string {
@@ -208,19 +239,37 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
     beforeAll(async () => {
       // Fixture records are opt-in and confined to the isolated test database.
       if (
-        new URL(testDatabaseUrl ?? "postgres://invalid/unknown").pathname !==
-        "/ai_recruitment_ssc_test"
+        !["/ai_recruitment_ssc_test", "/ats_ssc_member_contact_test_20261022"].includes(
+          new URL(testDatabaseUrl ?? "postgres://invalid/unknown").pathname,
+        )
       ) {
-        throw new Error("Telegram Offer integration tests require /ai_recruitment_ssc_test");
+        throw new Error(
+          "Telegram Offer integration tests require a named isolated SSC test database",
+        );
       }
       fixtureStarted = true;
       await db.insert(organization).values({ id: ORG, name: "TG Offer integration", slug: ORG });
-      await db
-        .insert(user)
-        .values({ email: `${FIRST_SSC}@example.com`, id: FIRST_SSC, name: "Offer creator" });
+      await db.insert(user).values({
+        email: `${FIRST_SSC}@example.com`,
+        id: FIRST_SSC,
+        name: "Offer creator",
+        telegram: "@integration_recruiter",
+      });
       await db
         .insert(member)
         .values({ id: randomUUID(), organizationId: ORG, role: "owner", userId: FIRST_SSC });
+      await db.insert(recruitingGroup).values({
+        id: RECRUITING_GROUP,
+        name: "Integration recruiting team",
+        organizationId: ORG,
+      });
+      await db.insert(recruitingGroupMember).values({
+        groupId: RECRUITING_GROUP,
+        id: randomUUID(),
+        organizationId: ORG,
+        role: "member",
+        userId: FIRST_SSC,
+      });
       await db.insert(resumeSource).values([
         { id: SOURCE, name: "Assigned source", organizationId: ORG },
         { id: OTHER_SOURCE, name: "Unassigned source", organizationId: ORG },
@@ -310,6 +359,7 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
       storage.put.mockClear();
     });
     beforeEach(async () => {
+      transport.edit.mockReset().mockImplementation(() => Promise.resolve());
       transport.send.mockReset().mockImplementation(() => Promise.resolve());
       await db.delete(interviewAuditLog).where(eq(interviewAuditLog.organizationId, ORG));
       await db.delete(studioOfferDraft).where(eq(studioOfferDraft.organizationId, ORG));
@@ -319,6 +369,8 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
           createdBy: FIRST_SSC,
           outcome: "in_pipeline",
           pipelineStage: "offer",
+          recruitmentSource: "tg",
+          recruitmentSourceDetail: "Integration uploaded source",
         })
         .where(eq(studioInterview.id, CANDIDATE));
       await db
@@ -328,14 +380,254 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
     });
 
     async function newOffer() {
-      return await createOfferDraft({
+      const draft = await createOfferDraft({
         actorId: FIRST_SSC,
         actorRole: "owner",
         input: { baseSalary: 30_000, currency: "CNY", position: "Integration role" },
         interviewRecordId: CANDIDATE,
         organizationId: ORG,
       });
+      // This suite starts at the SSC handoff. Recruiter TG collection has its own
+      // integration suite; explicitly model a legacy/ready handoff here so its
+      // pending recruiter gate does not hide the SSC behaviors under test.
+      await db
+        .update(studioOfferDraft)
+        .set({ preboardingDate: "2026-11-02", recruiterConfirmationStatus: null })
+        .where(eq(studioOfferDraft.id, draft.id));
+      await db
+        .update(studioOfferSscNotificationOutbox)
+        .set({ event: "pending" })
+        .where(
+          and(
+            eq(studioOfferSscNotificationOutbox.draftId, draft.id),
+            eq(studioOfferSscNotificationOutbox.event, "recruiter"),
+          ),
+        );
+      return { ...draft, preboardingDate: "2026-11-02", recruiterConfirmationStatus: null };
     }
+
+    it("derives a read-only legacy date preview only after the real Telegram actor is authorized", async () => {
+      const draft = await newOffer();
+      const receiver = fakeTelegram(identities.receiver);
+      const value = `${draft.id.replaceAll("-", "")}:1`;
+      await click(receiver, "osr", value);
+      const [before] = await db
+        .select()
+        .from(studioOfferDraft)
+        .where(eq(studioOfferDraft.id, draft.id));
+      expect(before).toMatchObject({
+        completionInfo: null,
+        preboardingDate: "2026-11-02",
+        sscConfirmationStatus: "confirming",
+      });
+      const context = await loadAuthorizedOfferSscContext({
+        draftId: draft.id,
+        organizationId: ORG,
+        telegramActor: {
+          telegramUserId: String(identities.confirmer.chatId),
+          username: identities.confirmer.username,
+        },
+      });
+      expect(context.draft).toMatchObject({
+        completionInfo: {
+          preboardingDate: "2026-11-02",
+          recruiterTelegram: "@integration_recruiter",
+          recruitingGroupNames: ["Integration recruiting team"],
+          recruitmentChannel: "TG",
+          resumeSource: "Integration uploaded source",
+        },
+        sscCompletedAt: null,
+        sscConfirmationStatus: "confirming",
+      });
+      await expect(
+        loadAuthorizedOfferSscContext({
+          draftId: draft.id,
+          telegramActor: {
+            telegramUserId: String(identities.confirmer.chatId),
+            username: "not_the_bound_actor",
+          },
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+      const [after] = await db
+        .select()
+        .from(studioOfferDraft)
+        .where(eq(studioOfferDraft.id, draft.id));
+      expect(after).toEqual(before);
+      const audit = await db
+        .select()
+        .from(interviewAuditLog)
+        .where(eq(interviewAuditLog.interviewRecordId, CANDIDATE));
+      expect(audit.map((entry) => entry.action)).not.toContain(
+        "offer_ssc_preboarding_date_confirmed",
+      );
+      expect(audit.map((entry) => entry.action)).not.toContain("offer_ssc_completed");
+    });
+
+    it("previews sections 3 and 4 after a TG date, then preserves screenshot confirmation and final copying", async () => {
+      const draft = await newOffer();
+      const confirmationInfo = offerConfirmationDetailsSchema.parse({
+        candidateCode: "INTEGRATION-CANDIDATE",
+        candidateName: "Telegram integration candidate",
+        candidatePrivateTelegram: "@integration_candidate",
+      });
+      await db
+        .update(studioOfferDraft)
+        .set({ confirmationInfo, preboardingDate: null })
+        .where(eq(studioOfferDraft.id, draft.id));
+      const receiver = fakeTelegram(identities.receiver);
+      const confirmer = fakeTelegram(identities.confirmer);
+      const value = `${draft.id.replaceAll("-", "")}:1`;
+      await click(receiver, "osr", value);
+      await openOffer(confirmer, draft.id);
+      const originMessageId = confirmer.sentIds.at(-1);
+      expect(findButton(confirmer.post.mock.calls.at(-1)?.[0], "osd")).toBe(value);
+      await click(confirmer, "osd", value, originMessageId);
+      const datePromptId = confirmer.sentIds.at(-1);
+      expect(JSON.stringify(confirmer.post.mock.calls.at(-1))).toContain("YYYY-MM-DD");
+      expect(
+        await handleTelegramOfferPreboardingMessage(
+          confirmer.thread as unknown as Parameters<
+            typeof handleTelegramOfferPreboardingMessage
+          >[0],
+          {
+            attachments: [],
+            metadata: { edited: false },
+            raw: {
+              chat: { id: identities.confirmer.chatId, type: "private" },
+              from: { id: identities.confirmer.chatId, username: identities.confirmer.username },
+              message_id: 998,
+              reply_to_message: { message_id: datePromptId },
+              text: "2026-11-05",
+            },
+            replyTo: { id: `${identities.confirmer.chatId}:${datePromptId}` },
+            text: "2026-11-05",
+          } as unknown as Message,
+        ),
+      ).toBe(true);
+      const datedOffer = await loadDraftById(draft.id, ORG);
+      expect(datedOffer).toMatchObject({
+        completionInfo: {
+          candidateCode: "INTEGRATION-CANDIDATE",
+          candidatePrivateTelegram: "@integration_candidate",
+          preboardingDate: "2026-11-05",
+          recruiterTelegram: "@integration_recruiter",
+          recruitingGroupNames: ["Integration recruiting team"],
+          resumeSource: "Integration uploaded source",
+        },
+        preboardingDate: "2026-11-05",
+        sscCompletedAt: null,
+        sscConfirmationStatus: "confirming",
+      });
+      expect(transport.edit).toHaveBeenCalledWith(
+        confirmer.thread.id,
+        `${identities.confirmer.chatId}:${originMessageId}`,
+        expect.anything(),
+      );
+      const datedCard = transport.edit.mock.calls.at(-1)?.[2];
+      const pendingCard = confirmer.post.mock.calls.at(-1)?.[0];
+      const expectedPreview = buildOfferConfirmationText({
+        baseSalary: datedOffer?.baseSalary,
+        candidateRecordId: CANDIDATE,
+        completionInfo: datedOffer?.completionInfo,
+        currency: datedOffer?.currency,
+        info: datedOffer?.confirmationInfo,
+        interviewRounds: [],
+        position: datedOffer?.position,
+        sscConfirmationStatus: datedOffer?.sscConfirmationStatus,
+      });
+      for (const card of [datedCard, pendingCard]) {
+        const copy = (card as { telegramOfferCopyText?: string } | undefined)
+          ?.telegramOfferCopyText;
+        expect(copy).toBe(expectedPreview);
+        expect(copy).toContain("3️⃣招聘信息");
+        expect(copy).toContain("4️⃣入职信息");
+        expect(copy).toContain("入职日期：2026-11-05");
+        expect(copy).toContain("候选人联系方式：@integration_candidate");
+        expect(copy).not.toContain("offer审批已通过");
+      }
+      expect(findButton(pendingCard, "osf")).toBeDefined();
+      expect(findButton(pendingCard, "osu")).toBeDefined();
+      await click(confirmer, "osu", button(confirmer, "osu"), confirmer.sentIds.at(-1));
+      const uploadPromptId = confirmer.sentIds.at(-1);
+      const screenshot = Buffer.from("ffd8ffd9", "hex");
+      vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValueOnce(
+            Response.json({
+              ok: true,
+              result: { file_path: "photos/preboarding-proof.jpg", file_size: screenshot.length },
+            }),
+          )
+          .mockResolvedValueOnce(new Response(screenshot)),
+      );
+      await handleTelegramOfferScreenshot(
+        confirmer.thread as unknown as Parameters<typeof handleTelegramOfferScreenshot>[0],
+        {
+          attachments: [],
+          metadata: { edited: false },
+          raw: {
+            chat: { id: identities.confirmer.chatId, type: "private" },
+            from: { id: identities.confirmer.chatId, username: identities.confirmer.username },
+            message_id: 999,
+            photo: [{ file_id: "preboarding-photo", file_size: screenshot.length }],
+            reply_to_message: { message_id: uploadPromptId },
+          },
+          replyTo: { id: `${identities.confirmer.chatId}:${uploadPromptId}` },
+        } as unknown as Message,
+      );
+      expect(storage.put).not.toHaveBeenCalled();
+      expect(JSON.stringify(confirmer.post.mock.calls.at(-1))).toContain("审批截图已收到");
+      await click(confirmer, "osf", button(confirmer, "osf"), confirmer.sentIds.at(-1));
+
+      const saved = await loadDraftById(draft.id, ORG);
+      expect(saved).toMatchObject({
+        completionInfo: {
+          candidateCode: "INTEGRATION-CANDIDATE",
+          candidateName: "Telegram integration candidate",
+          candidatePrivateTelegram: "@integration_candidate",
+          preboardingDate: "2026-11-05",
+          recruiterTelegram: "@integration_recruiter",
+          recruitingGroupNames: ["Integration recruiting team"],
+          recruitmentChannel: "TG",
+          resumeSource: "Integration uploaded source",
+        },
+        preboardingDate: "2026-11-05",
+        sscCompletionAttachment: {
+          filename: "approval-screenshot.jpg",
+          revision: 1,
+          size: screenshot.length,
+        },
+        sscConfirmationStatus: "completed",
+      });
+      expect(storage.put).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ body: new Uint8Array(screenshot), contentType: "image/jpeg" }),
+      );
+      const finalCard = confirmer.adapter.editMessage.mock.calls.at(-1)?.[2];
+      const fullText = (finalCard as { telegramOfferCopyText?: string } | undefined)
+        ?.telegramOfferCopyText;
+      expect(fullText).toBe(
+        buildOfferConfirmationText({
+          baseSalary: saved?.baseSalary,
+          candidateRecordId: CANDIDATE,
+          completionInfo: saved?.completionInfo,
+          currency: saved?.currency,
+          info: saved?.confirmationInfo,
+          interviewRounds: [],
+          position: saved?.position,
+          sscConfirmationStatus: saved?.sscConfirmationStatus,
+        }),
+      );
+      expect(fullText).toContain("3️⃣招聘信息");
+      expect(fullText).toContain("4️⃣入职信息");
+      expect(fullText).toContain("入职日期：2026-11-05");
+      expect(fullText).toContain("候选人联系方式：@integration_candidate");
+      expect(findButton(finalCard, "osc")).toBeUndefined();
+      expect(findButton(finalCard, "osd")).toBeUndefined();
+      expect(await outboxEvents()).toEqual(["completed", "pending", "received"]);
+    });
 
     it("receives and explicitly completes the same Offer through real bound actors and services", async () => {
       const draft = await newOffer();
@@ -460,19 +752,27 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
         expect(findButton(card, "osf")).toBeTypeOf("string");
         expect(findButton(card, "osu")).toBeTypeOf("string");
         expect(findButton(card, "osr")).toBeUndefined();
-        expect(JSON.stringify(card)).toContain(identities.receiver.username);
+        expect(renderedText(card)).toContain(identities.receiver.username);
+        expect(renderedText(card)).toContain("2026-11-02");
         await telegram.thread.post(card);
       }
-      // B can confirm the broadcast card directly, without first receiving or opening a prompt.
+      // The broadcast entry opens a private confirmation bound to the current date.
       await click(confirmer, "osf", button(confirmer, "osf"), confirmer.sentIds.at(-1));
+      expect(await systemState()).toMatchObject({ sscConfirmationStatus: "confirming" });
+      const privateFinalToken = findButton(confirmer.post.mock.calls.at(-1)?.[0], "osf");
+      expect(privateFinalToken).toMatch(/^[0-9a-f]{32}$/u);
+      await click(confirmer, "osf", privateFinalToken ?? "", confirmer.sentIds.at(-1));
       expect(await systemState()).toMatchObject({ sscConfirmationStatus: "completed" });
       transport.send.mockClear();
       expect(await dispatchOfferSscNotifications()).toBe(1);
       expect(transport.send).toHaveBeenCalledTimes(2);
       for (const call of transport.send.mock.calls) {
-        expect(JSON.stringify(call[1])).toContain(identities.confirmer.username);
-        expect(JSON.stringify(call[1])).toContain(identities.receiver.username);
+        expect(renderedText(call[1])).toContain(identities.confirmer.username);
+        expect(renderedText(call[1])).toContain(identities.receiver.username);
         expect(JSON.stringify(call[1])).toContain("已完成确认");
+        const copyText = (call[1] as { telegramOfferCopyText?: string }).telegramOfferCopyText;
+        expect(copyText).toContain("3️⃣招聘信息");
+        expect(copyText).toContain("4️⃣入职信息");
         expect(findButton(call[1], "osf")).toBeUndefined();
         expect(findButton(call[1], "osc")).toBeUndefined();
       }
@@ -495,7 +795,7 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
       const value = `${draft.id.replaceAll("-", "")}:1`;
       await click(receiver, "osr", value);
       await click(confirmer, "osc", value);
-      expect(JSON.stringify(confirmer.post.mock.calls.at(-1))).toContain(
+      expect(renderedText(confirmer.post.mock.calls.at(-1))).toContain(
         `@${identities.confirmer.username}`,
       );
       await click(confirmer, "osu", button(confirmer, "osu"), confirmer.sentIds.at(-1));
@@ -505,7 +805,7 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
       await click(confirmer, "osc", value);
       const finalToken = findButton(confirmer.post.mock.calls.at(-1)?.[0], "osf");
       await click(confirmer, "osf", finalToken ?? "", confirmer.sentIds.at(-1));
-      const finalLocalCard = JSON.stringify(confirmer.adapter.editMessage.mock.calls.at(-1)?.[2]);
+      const finalLocalCard = renderedText(confirmer.adapter.editMessage.mock.calls.at(-1)?.[2]);
       expect(finalLocalCard).toContain(`@${identities.receiver.username}`);
       expect(finalLocalCard).toContain(`@${identities.confirmer.username}`);
       const logs = await db
@@ -540,6 +840,15 @@ describe.skipIf(!testDatabaseUrl || testDatabaseUrl !== process.env.DATABASE_URL
       const value = `${draft.id.replaceAll("-", "")}:1`;
       await click(first, "osr", value);
       await Promise.all([click(first, "osf", value), click(second, "osf", value)]);
+      expect(await systemState()).toMatchObject({ sscConfirmationStatus: "confirming" });
+      const firstFinalToken = findButton(first.post.mock.calls.at(-1)?.[0], "osf");
+      const secondFinalToken = findButton(second.post.mock.calls.at(-1)?.[0], "osf");
+      expect(firstFinalToken).toMatch(/^[0-9a-f]{32}$/u);
+      expect(secondFinalToken).toMatch(/^[0-9a-f]{32}$/u);
+      await Promise.all([
+        click(first, "osf", firstFinalToken ?? "", first.sentIds.at(-1)),
+        click(second, "osf", secondFinalToken ?? "", second.sentIds.at(-1)),
+      ]);
       expect(await systemState()).toMatchObject({ sscConfirmationStatus: "completed" });
       const audits = await auditActions();
       const completions = audits.filter((log) => log.action === "offer_ssc_completed");

@@ -43,6 +43,8 @@ import { enqueueOfferSscNotification } from "./offer-ssc-notification-outbox";
 import { listSourceSscNotificationRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-notification-recipients";
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
+import { offerPreboardingDateSchema } from "@arc/shared/offer-preboarding";
+import { loadOfferCompletionInfo } from "./offer-completion-info";
 
 export type { OfferDraftRecord };
 
@@ -75,6 +77,7 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
     baseSalary: row.baseSalary,
     bonus: row.bonus,
     candidateCounter: row.candidateCounter,
+    completionInfo: row.completionInfo ?? null,
     confirmationInfo: row.confirmationInfo ?? null,
     createdAt: serializeDate(row.createdAt) ?? new Date().toISOString(),
     currency: row.currency,
@@ -86,6 +89,7 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
     notes: row.notes,
     organizationId: row.organizationId,
     position: row.position,
+    preboardingDate: row.preboardingDate ?? null,
     recruiterConfirmationStatus: row.recruiterConfirmationStatus,
     recruiterConfirmedAt: serializeDate(row.recruiterConfirmedAt),
     recruiterConfirmedBy: row.recruiterConfirmedBy,
@@ -110,6 +114,63 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
     status: row.status,
     updatedAt: serializeDate(row.updatedAt) ?? new Date().toISOString(),
     version: row.version,
+  };
+}
+
+async function toReadRecord(row: typeof studioOfferDraft.$inferSelect): Promise<OfferDraftRecord> {
+  const record = toRecord(row);
+  const date = offerPreboardingDateSchema.safeParse(row.preboardingDate);
+  if (
+    record.completionInfo ||
+    row.sscConfirmationStatus !== "confirming" ||
+    row.status !== "draft" ||
+    row.recruiterConfirmationStatus === "pending" ||
+    !date.success ||
+    (row.expiresAt && row.expiresAt.getTime() <= Date.now())
+  ) {
+    return record;
+  }
+  const [candidate] = await db
+    .select({ pipelineStage: studioInterview.pipelineStage })
+    .from(studioInterview)
+    .where(
+      and(
+        eq(studioInterview.id, row.interviewRecordId),
+        eq(studioInterview.organizationId, row.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!candidate || candidate.pipelineStage === "closed") {
+    return record;
+  }
+  // Include newer deleted versions so a tombstone cannot revive a legacy draft.
+  const [latest] = await db
+    .select({ id: studioOfferDraft.id })
+    .from(studioOfferDraft)
+    .where(
+      and(
+        eq(studioOfferDraft.interviewRecordId, row.interviewRecordId),
+        eq(studioOfferDraft.organizationId, row.organizationId),
+      ),
+    )
+    .orderBy(desc(studioOfferDraft.version))
+    .limit(1);
+  if (latest?.id !== row.id) {
+    return record;
+  }
+  // Older confirmed dates predate preview persistence. Derive the display value
+  // without changing the date, approval, audit trail or any stored snapshot.
+  return {
+    ...record,
+    completionInfo: await loadOfferCompletionInfo(
+      {
+        confirmationInfo: row.confirmationInfo,
+        interviewRecordId: row.interviewRecordId,
+        organizationId: row.organizationId,
+        preboardingDate: date.data,
+      },
+      db,
+    ),
   };
 }
 
@@ -164,6 +225,8 @@ function resetSscConfirmation(row: typeof studioOfferDraft.$inferSelect) {
   return row.sscConfirmationStatus === null
     ? {}
     : {
+        completionInfo: null,
+        preboardingDate: null,
         sscCompletedAt: null,
         sscCompletedBy: null,
         sscCompletionAttachment: null,
@@ -312,7 +375,7 @@ export async function loadAuthorizedOfferSscContext(
       canConfirm: draft.recruiterConfirmationStatus !== "pending",
       canReceive: draft.recruiterConfirmationStatus !== "pending",
       candidateName: responsible.candidateName,
-      draft: toRecord(draft),
+      draft: await toReadRecord(draft),
       pipelineStage: responsible.pipelineStage,
       telegramOperator: {
         responsibilityId: responsible.responsibilityId,
@@ -331,7 +394,7 @@ export async function loadAuthorizedOfferSscContext(
     ...context,
     canConfirm: context.canConfirm && draft.recruiterConfirmationStatus !== "pending",
     canReceive: context.canReceive && draft.recruiterConfirmationStatus !== "pending",
-    draft: toRecord(draft),
+    draft: await toReadRecord(draft),
     telegramOperator: null,
   };
 }
@@ -372,15 +435,131 @@ export interface OfferSscActionInput {
 }
 
 export interface OfferSscCompletionInput extends OfferSscActionInput {
+  expectedPreboardingDate?: string;
   internalApprovalConfirmed: true;
   completionAttachment?: NonNullable<
     (typeof studioOfferDraft.$inferInsert)["sscCompletionAttachment"]
   >;
 }
 
-async function transitionOfferSscConfirmation(
-  input: OfferSscActionInput & Partial<Pick<OfferSscCompletionInput, "completionAttachment">>,
+function assertSscTransitionCurrent(
+  candidate: { pipelineStage: PipelineStage },
+  existing: typeof studioOfferDraft.$inferSelect,
+  revision: number,
+) {
+  if (existing.recruiterConfirmationStatus === "pending") {
+    throw new OfferDraftError("请先由招聘人员补充并确认候选人私人 TG。", 409);
+  }
+  if (
+    candidate.pipelineStage === "closed" ||
+    existing.status !== "draft" ||
+    existing.sscConfirmationStatus === null
+  ) {
+    throw new OfferDraftError("该 Offer 当前不能进行 SSC 确认。", 409);
+  }
+  if (existing.sscRevision !== revision) {
+    throw new OfferDraftError("Offer 内容已更新，请刷新后重新确认。", 409);
+  }
+}
+
+function assertExpectedPreboardingDate(
+  existing: typeof studioOfferDraft.$inferSelect,
+  expectedPreboardingDate: string | undefined,
+  action: "receive" | "preboarding" | "complete",
+) {
+  if (
+    action === "complete" &&
+    expectedPreboardingDate !== undefined &&
+    expectedPreboardingDate !== existing.preboardingDate
+  ) {
+    throw new OfferDraftError("预入职日期已更新，请重新打开确认卡片后再完成确认。", 409);
+  }
+}
+
+async function saveOfferPreboardingDate(
+  tx: OfferTransaction,
+  existing: typeof studioOfferDraft.$inferSelect,
+  input: OfferSscActionInput & { preboardingDate?: string },
+  context: Awaited<ReturnType<typeof loadAuthorizedOfferSscContext>>,
+) {
+  const preboardingDate = offerPreboardingDateSchema.safeParse(input.preboardingDate);
+  if (!preboardingDate.success) {
+    throw new OfferDraftError(preboardingDate.error.issues[0].message, 400);
+  }
+  if (
+    existing.preboardingDate === preboardingDate.data &&
+    existing.completionInfo?.preboardingDate === preboardingDate.data
+  ) {
+    return { changed: false, draft: toRecord(existing) };
+  }
+  // Preview recruitment and entry details together with the saved date. Final
+  // confirmation reloads these sources before freezing its completed snapshot.
+  const completionInfo = await loadOfferCompletionInfo(
+    {
+      confirmationInfo: existing.confirmationInfo,
+      interviewRecordId: existing.interviewRecordId,
+      organizationId: existing.organizationId,
+      preboardingDate: preboardingDate.data,
+    },
+    tx,
+  );
+  const [updated] = await tx
+    .update(studioOfferDraft)
+    .set({ completionInfo, preboardingDate: preboardingDate.data, updatedAt: new Date() })
+    .where(eq(studioOfferDraft.id, existing.id))
+    .returning();
+  if (!updated) {
+    throw new Error("预入职日期保存后查询失败");
+  }
+  const channel = context.telegramOperator ? "telegram" : (input.source ?? "manual");
+  await recordCandidateActivityInTransaction(tx, {
+    action: "offer_ssc_preboarding_date_confirmed",
+    detail: {
+      ...context.telegramOperator,
+      channel,
+      draftId: existing.id,
+      preboardingDate: preboardingDate.data,
+      previousDate: existing.preboardingDate,
+      revision: existing.sscRevision,
+      version: existing.version,
+    },
+    interviewRecordId: input.interviewRecordId,
+    operatorId: "id" in input.actor ? input.actor.id : null,
+    operatorRole: context.actorRole,
+    organizationId: input.organizationId,
+    source: channel === "telegram" ? "api" : "manual",
+  });
+  return { changed: true, draft: toRecord(updated) };
+}
+
+async function loadSscCompletionSnapshot(
+  tx: OfferTransaction,
+  existing: typeof studioOfferDraft.$inferSelect,
   action: "receive" | "complete",
+) {
+  if (action !== "complete") {
+    return null;
+  }
+  if (!existing.preboardingDate) {
+    throw new OfferDraftError("请先完成预入职时间确认并录入预入职日期。", 409);
+  }
+  return await loadOfferCompletionInfo(
+    {
+      confirmationInfo: existing.confirmationInfo,
+      interviewRecordId: existing.interviewRecordId,
+      organizationId: existing.organizationId,
+      preboardingDate: existing.preboardingDate,
+    },
+    tx,
+  );
+}
+
+async function transitionOfferSscConfirmation(
+  input: OfferSscActionInput &
+    Partial<Pick<OfferSscCompletionInput, "completionAttachment" | "expectedPreboardingDate">> & {
+      preboardingDate?: string;
+    },
+  action: "receive" | "preboarding" | "complete",
 ) {
   const context = await loadAuthorizedOfferSscContext({
     ...input,
@@ -428,31 +607,27 @@ async function transitionOfferSscConfirmation(
     if (!existing) {
       throw new OfferDraftError("Offer 不存在。", 404);
     }
-    if (existing.recruiterConfirmationStatus === "pending") {
-      throw new OfferDraftError("请先由招聘人员补充并确认候选人私人 TG。", 409);
-    }
-    if (context.telegramOperator) {
+    if (context.telegramOperator || action === "preboarding") {
       await assertCurrentTelegramOffer(existing, tx);
     }
-    if (
-      candidate.pipelineStage === "closed" ||
-      existing.status !== "draft" ||
-      existing.sscConfirmationStatus === null
-    ) {
-      throw new OfferDraftError("该 Offer 当前不能进行 SSC 确认。", 409);
-    }
-    if (existing.sscRevision !== input.revision) {
-      throw new OfferDraftError("Offer 内容已更新，请刷新后重新确认。", 409);
-    }
+    assertSscTransitionCurrent(candidate, existing, input.revision);
+    assertExpectedPreboardingDate(existing, input.expectedPreboardingDate, action);
     if (
       existing.sscConfirmationStatus === "completed" ||
       (action === "receive" && existing.sscConfirmationStatus === "confirming")
     ) {
+      if (action === "preboarding" && existing.preboardingDate !== input.preboardingDate) {
+        throw new OfferDraftError("Offer 已完成确认，不能修改预入职日期。", 409);
+      }
       return { changed: false, draft: toRecord(existing) };
     }
-    if (action === "complete" && existing.sscConfirmationStatus !== "confirming") {
+    if (action !== "receive" && existing.sscConfirmationStatus !== "confirming") {
       throw new OfferDraftError("请先由 SSC 接收确认。", 409);
     }
+    if (action === "preboarding") {
+      return await saveOfferPreboardingDate(tx, existing, input, context);
+    }
+    const completionInfo = await loadSscCompletionSnapshot(tx, existing, action);
     const now = new Date();
     const [updated] = await tx
       .update(studioOfferDraft)
@@ -465,6 +640,7 @@ async function transitionOfferSscConfirmation(
               updatedAt: now,
             }
           : {
+              completionInfo,
               sscCompletedAt: now,
               sscCompletedBy: operatorId,
               sscCompletionAttachment: input.completionAttachment ?? null,
@@ -512,6 +688,20 @@ export async function receiveOfferSscConfirmation(
   input: OfferSscActionInput,
 ): Promise<OfferDraftRecord> {
   const result = await transitionOfferSscConfirmation(input, "receive");
+  return result.draft;
+}
+
+export async function confirmOfferPreboardingDate(
+  input: OfferSscActionInput & { preboardingDate: string },
+): Promise<OfferDraftRecord> {
+  const parsed = offerPreboardingDateSchema.safeParse(input.preboardingDate);
+  if (!parsed.success) {
+    throw new OfferDraftError(parsed.error.issues[0].message, 400);
+  }
+  const result = await transitionOfferSscConfirmation(
+    { ...input, preboardingDate: parsed.data },
+    "preboarding",
+  );
   return result.draft;
 }
 
@@ -592,7 +782,7 @@ export async function listOfferDrafts(
       ),
     )
     .orderBy(desc(studioOfferDraft.version));
-  return rows.map(toRecord);
+  return await Promise.all(rows.map(toReadRecord));
 }
 
 // 加载单条详情，校验组织归属。
@@ -612,7 +802,7 @@ export async function loadDraftById(
       ),
     )
     .limit(1);
-  return row ? toRecord(row) : null;
+  return row ? await toReadRecord(row) : null;
 }
 
 export async function loadOfferApprovalAttachment(

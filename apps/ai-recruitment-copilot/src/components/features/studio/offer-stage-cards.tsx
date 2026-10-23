@@ -556,6 +556,7 @@ function OfferDraftReadonlyFields({ draft }: { draft: OfferDraftRecord }) {
         label="预计入职日"
         value={draft.joiningDate ? formatIsoDateOnly(draft.joiningDate) : null}
       />
+      <ReadonlyOfferField label="预入职日期" value={draft.preboardingDate ?? null} />
       <ReadonlyOfferField
         label="Offer 有效期至"
         value={draft.expiresAt ? formatIsoDateOnly(draft.expiresAt) : null}

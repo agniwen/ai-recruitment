@@ -174,6 +174,7 @@ export async function getOfferSscNotificationTargets(
   const [offer] = await db
     .select({
       baseSalary: studioOfferDraft.baseSalary,
+      completionInfo: studioOfferDraft.completionInfo,
       confirmationInfo: studioOfferDraft.confirmationInfo,
       createdBy: studioOfferDraft.createdBy,
       currency: studioOfferDraft.currency,
@@ -182,6 +183,7 @@ export async function getOfferSscNotificationTargets(
       interviewRecordId: studioOfferDraft.interviewRecordId,
       organizationId: studioOfferDraft.organizationId,
       position: studioOfferDraft.position,
+      preboardingDate: studioOfferDraft.preboardingDate,
       recruiterConfirmationStatus: studioOfferDraft.recruiterConfirmationStatus,
       sscConfirmationStatus: studioOfferDraft.sscConfirmationStatus,
       sscRevision: studioOfferDraft.sscRevision,

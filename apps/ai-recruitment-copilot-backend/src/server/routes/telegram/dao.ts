@@ -15,6 +15,18 @@ export type TelegramBindingResult = (
   | { kind: "registered"; memberAmbiguous: boolean }
 ) & { sscProvisioningPending?: true };
 
+/** Notification opt-in only; this lookup does not bind a user or authorize Offer actions. */
+export async function isTelegramNotificationFollower(chatId: string): Promise<boolean> {
+  if (!/^[1-9]\d*$/u.test(chatId)) {
+    return false;
+  }
+  const followed = await db.query.telegramRecipientBinding.findFirst({
+    columns: { chatId: true },
+    where: { chatId },
+  });
+  return Boolean(followed);
+}
+
 export async function bindTelegramUser(input: {
   chatId: string;
   username: string | null | undefined;

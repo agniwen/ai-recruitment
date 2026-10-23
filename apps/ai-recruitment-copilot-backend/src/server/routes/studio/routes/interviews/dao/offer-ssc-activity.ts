@@ -7,6 +7,7 @@ const actionLabels = {
   offer_ssc_completed: "完成确认",
   offer_ssc_confirmation_cancelled: "取消本次确认",
   offer_ssc_confirmation_opened: "打开二次确认",
+  offer_ssc_preboarding_date_confirmed: "预入职时间确认",
   offer_ssc_received: "接收确认",
   offer_ssc_screenshot_uploaded: "上传审批截图",
   offer_ssc_upload_requested: "选择上传截图",
@@ -14,7 +15,7 @@ const actionLabels = {
 
 type InteractionAction = Exclude<
   keyof typeof actionLabels,
-  "offer_ssc_received" | "offer_ssc_completed"
+  "offer_ssc_received" | "offer_ssc_completed" | "offer_ssc_preboarding_date_confirmed"
 >;
 
 interface OfferLocator {

@@ -10,14 +10,19 @@ import {
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
 import {
   completeOfferSscConfirmation,
+  confirmOfferPreboardingDate,
   getOfferSscTelegramLink,
   receiveOfferSscConfirmation,
 } from "@/lib/client/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { OfferSscCompleteDialog } from "./offer-ssc-complete-dialog";
+import { OfferSscPreboardingDateDialog } from "./offer-ssc-preboarding-date-dialog";
 
-type OfferSscAction = { action: "receive" } | { action: "complete"; file: File | null };
+type OfferSscAction =
+  | { action: "receive" }
+  | { action: "preboarding"; preboardingDate: string }
+  | { action: "complete"; file: File | null };
 
 function getOfferSscActionState(draft: OfferDraftRecord, canReceive: boolean, canConfirm: boolean) {
   const status = draft.sscConfirmationStatus ?? null;
@@ -33,10 +38,14 @@ function getOfferSscActionState(draft: OfferDraftRecord, canReceive: boolean, ca
     confirmDisabledReason = "当前账号无SSC完成确认权限";
   } else if (status === "pending") {
     confirmDisabledReason = "请先完成SSC接收确认";
+  } else if (!draft.preboardingDate) {
+    confirmDisabledReason = "请先完成预入职时间确认";
   }
+  const canPreboard =
+    !recruiterPending && canConfirm && status === "confirming" && draft.status === "draft";
   return {
-    canConfirm:
-      !recruiterPending && canConfirm && status === "confirming" && draft.status === "draft",
+    canConfirm: canPreboard && Boolean(draft.preboardingDate),
+    canPreboard,
     canReceive: !recruiterPending && canReceive && status === "pending" && draft.status === "draft",
     confirmDisabledReason,
     receiveDisabledReason,
@@ -64,38 +73,61 @@ export function useOfferSscConfirmation({
 }) {
   const actions = getOfferSscActionState(draft, canReceive, canConfirm);
   const { data: telegramLink } = useQuery({
-    enabled: !disabled && (actions.canReceive || actions.canConfirm),
+    enabled: !disabled && (actions.canReceive || actions.canPreboard),
     queryFn: () => getOfferSscTelegramLink(slug, candidateId, draft.id),
     queryKey: ["offer-ssc-telegram-link", slug, candidateId, draft.id],
   });
   const mutation = useMutation({
     mutationFn: (inputAction: OfferSscAction) => {
       const input = { revision: draft.sscRevision ?? 1 };
-      return inputAction.action === "receive"
-        ? receiveOfferSscConfirmation(slug, candidateId, draft.id, input)
-        : completeOfferSscConfirmation(
-            slug,
-            candidateId,
-            draft.id,
-            { ...input, internalApprovalConfirmed: true },
-            inputAction.file,
-          );
+      if (inputAction.action === "receive") {
+        return receiveOfferSscConfirmation(slug, candidateId, draft.id, input);
+      }
+      if (inputAction.action === "preboarding") {
+        return confirmOfferPreboardingDate(slug, candidateId, draft.id, {
+          ...input,
+          preboardingDate: inputAction.preboardingDate,
+        });
+      }
+      const expectedPreboardingDate = draft.preboardingDate;
+      if (!expectedPreboardingDate) {
+        throw new Error("请先完成预入职时间确认并刷新当前 Offer。");
+      }
+      return completeOfferSscConfirmation(
+        slug,
+        candidateId,
+        draft.id,
+        { ...input, expectedPreboardingDate, internalApprovalConfirmed: true },
+        inputAction.file,
+      );
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "SSC确认操作失败"),
     onSuccess: async (_updated, { action }) => {
       await onSaved();
-      toast.success(action === "receive" ? "SSC已接收，当前 Offer 确认中" : "SSC已完成确认");
+      const message = {
+        complete: "SSC已完成确认",
+        preboarding: "预入职日期已确认",
+        receive: "SSC已接收，当前 Offer 确认中",
+      }[action];
+      toast.success(message);
     },
   });
   return {
     ...actions,
     canConfirm: !disabled && actions.canConfirm,
+    canPreboard: !disabled && actions.canPreboard,
     canReceive: !disabled && actions.canReceive,
     complete: (file: File | null) => {
       if (disabled || !actions.canConfirm || mutation.isPending) {
         return Promise.reject(new Error("当前 Offer 无法完成 SSC 确认，请刷新后重试。"));
       }
       return mutation.mutateAsync({ action: "complete", file });
+    },
+    confirmPreboarding: (preboardingDate: string) => {
+      if (disabled || !actions.canPreboard || mutation.isPending) {
+        return Promise.reject(new Error("当前 Offer 无法确认预入职日期，请刷新后重试。"));
+      }
+      return mutation.mutateAsync({ action: "preboarding", preboardingDate });
     },
     contextKey: JSON.stringify([
       slug,
@@ -105,6 +137,7 @@ export function useOfferSscConfirmation({
       draft.sscRevision ?? 1,
       draft.status,
       draft.recruiterConfirmationStatus,
+      draft.preboardingDate,
       actions.status,
       canConfirm,
       Boolean(disabled),
@@ -112,6 +145,7 @@ export function useOfferSscConfirmation({
     error: mutation.error,
     isPending: mutation.isPending,
     pendingAction: mutation.isPending ? mutation.variables?.action : null,
+    preboardingDate: draft.preboardingDate ?? null,
     receive: () => {
       if (!disabled && actions.canReceive && !mutation.isPending) {
         mutation.mutate({ action: "receive" });
@@ -119,7 +153,7 @@ export function useOfferSscConfirmation({
     },
     showActions: !disabled && actions.showActions,
     telegramUrl:
-      !disabled && (actions.canReceive || actions.canConfirm) ? (telegramLink?.url ?? null) : null,
+      !disabled && (actions.canReceive || actions.canPreboard) ? (telegramLink?.url ?? null) : null,
   };
 }
 
@@ -158,7 +192,9 @@ export function OfferSscNotice({ draft, error }: { draft: OfferDraftRecord; erro
     <>
       {pending && draft.recruiterConfirmationStatus !== "pending" ? (
         <p className="text-muted-foreground text-xs">
-          SSC完成确认后方可发送 Offer 或标记入职。修改 Offer 内容后需重新确认。
+          {draft.sscConfirmationStatus === "confirming" && !draft.preboardingDate
+            ? "请先联系候选人并完成预入职时间确认，再完成内部审批确认。"
+            : "SSC完成确认后方可发送 Offer 或标记入职。修改 Offer 内容后需重新确认。"}
         </p>
       ) : null}
       {error ? (
@@ -179,8 +215,11 @@ export function OfferSscActions({
 }) {
   const id = useId();
   const [openContext, setOpenContext] = useState<string | null>(null);
+  const [preboardingContext, setPreboardingContext] = useState<string | null>(null);
+  const preboardingLabel = confirmation.preboardingDate ? "修改预入职日期" : "完成预入职时间确认";
   useEffect(() => {
     setOpenContext(null);
+    setPreboardingContext(null);
   }, [confirmation.contextKey]);
   if (!confirmation.showActions) {
     return null;
@@ -217,6 +256,15 @@ export function OfferSscActions({
       </div>
       <div className="flex flex-col items-end gap-1">
         <Button
+          disabled={isBusy || !confirmation.canPreboard}
+          onClick={() => setPreboardingContext(confirmation.contextKey)}
+          size="sm"
+        >
+          {confirmation.pendingAction === "preboarding" ? "保存中…" : preboardingLabel}
+        </Button>
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        <Button
           aria-describedby={confirmation.confirmDisabledReason ? `${id}-confirm-reason` : undefined}
           disabled={isBusy || !confirmation.canConfirm}
           onClick={() => setOpenContext(confirmation.contextKey)}
@@ -235,6 +283,14 @@ export function OfferSscActions({
           key={confirmation.contextKey}
           onClose={() => setOpenContext(null)}
           onConfirm={confirmation.complete}
+        />
+      ) : null}
+      {preboardingContext === confirmation.contextKey && confirmation.canPreboard ? (
+        <OfferSscPreboardingDateDialog
+          key={confirmation.contextKey}
+          onClose={() => setPreboardingContext(null)}
+          onConfirm={confirmation.confirmPreboarding}
+          preboardingDate={confirmation.preboardingDate}
         />
       ) : null}
     </>

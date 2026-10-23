@@ -8,6 +8,7 @@ import { requirePermission } from "@arc/ai-recruitment-copilot-backend/server/mi
 import type { Env } from "@arc/ai-recruitment-copilot-backend/server/type";
 import {
   completeOfferSscConfirmation,
+  confirmOfferPreboardingDate,
   loadAuthorizedOfferSscContext,
   loadOfferSscCompletionAttachment,
   OfferDraftError,
@@ -16,10 +17,16 @@ import {
 import { completeOfferSscWithScreenshot } from "../../../../dao/offer-ssc-completion";
 import { buildTelegramOfferLink } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/offer-ssc-link";
 import { MAX_SSC_COMPLETION_SCREENSHOT_BYTES } from "@arc/shared/studio-pipeline-stages";
+import { offerPreboardingDateSchema } from "@arc/shared/offer-preboarding";
 
 const actionSchema = z.object({ revision: z.number().int().min(1) });
-const completionSchema = actionSchema.extend({ internalApprovalConfirmed: z.literal(true) });
+const completionSchema = actionSchema.extend({
+  expectedPreboardingDate: offerPreboardingDateSchema.optional(),
+  internalApprovalConfirmed: z.literal(true),
+});
+const preboardingSchema = actionSchema.extend({ preboardingDate: offerPreboardingDateSchema });
 const completionFormSchema = z.object({
+  expectedPreboardingDate: offerPreboardingDateSchema.optional(),
   internalApprovalConfirmed: z.literal("true"),
   revision: z.coerce.number().int().min(1),
 });
@@ -57,6 +64,7 @@ async function completionForm(request: Request) {
   }
   const file = form.get("file");
   const input = completionFormSchema.safeParse({
+    expectedPreboardingDate: form.get("expectedPreboardingDate") ?? undefined,
     internalApprovalConfirmed: form.get("internalApprovalConfirmed"),
     revision: form.get("revision"),
   });
@@ -66,11 +74,19 @@ async function completionForm(request: Request) {
     form.getAll("file").length > 1 ||
     form.getAll("revision").length !== 1 ||
     form.getAll("internalApprovalConfirmed").length !== 1 ||
-    [...form.keys()].some((key) => !["file", "revision", "internalApprovalConfirmed"].includes(key))
+    form.getAll("expectedPreboardingDate").length > 1 ||
+    [...form.keys()].some(
+      (key) =>
+        !["file", "revision", "internalApprovalConfirmed", "expectedPreboardingDate"].includes(key),
+    )
   ) {
     throw new OfferDraftError("请确认已经完成内部审批，并至多上传一张审批截图。", 400);
   }
-  return { file: file ?? undefined, revision: input.data.revision };
+  return {
+    expectedPreboardingDate: input.data.expectedPreboardingDate,
+    file: file ?? undefined,
+    revision: input.data.revision,
+  };
 }
 
 export const offerSscRouter = factory
@@ -112,6 +128,28 @@ export const offerSscRouter = factory
     },
   )
   .post(
+    "/preboarding-date",
+    requirePermission("offer", "confirm"),
+    zValidator(
+      "json",
+      preboardingSchema,
+      jsonValidatorError("请输入有效的预入职日期，格式：YYYY-MM-DD，例如：2026-11-01。"),
+    ),
+    async (c) => {
+      try {
+        return c.json(
+          await confirmOfferPreboardingDate({
+            ...actionInput(c, c.req.valid("json").revision),
+            preboardingDate: c.req.valid("json").preboardingDate,
+          }),
+          200,
+        );
+      } catch (error) {
+        return errorResponse(error, c);
+      }
+    },
+  )
+  .post(
     "/complete",
     requirePermission("offer", "confirm"),
     zValidator("json", completionSchema, jsonValidatorError("请确认已经完成内部审批。")),
@@ -120,6 +158,7 @@ export const offerSscRouter = factory
         return c.json(
           await completeOfferSscConfirmation({
             ...actionInput(c, c.req.valid("json").revision),
+            expectedPreboardingDate: c.req.valid("json").expectedPreboardingDate,
             internalApprovalConfirmed: true,
           }),
           200,
@@ -142,6 +181,7 @@ export const offerSscRouter = factory
         return c.json(
           await completeOfferSscWithScreenshot({
             ...actionInput(c, form.revision),
+            expectedPreboardingDate: form.expectedPreboardingDate,
             file: form.file,
             internalApprovalConfirmed: true,
           }),
