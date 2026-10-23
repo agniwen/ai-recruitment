@@ -1,3 +1,9 @@
+import {
+  admitResumeRecord,
+  isResumeAdmitted,
+  findResumeProtectionConflict,
+  identityForResume,
+} from "../dao/protection";
 import { notifyAiReviewPending } from "./ai-review-notification";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
@@ -32,6 +38,7 @@ function guardedRecordWhere(input: {
 }) {
   return and(
     recordWhere(input),
+    eq(studioInterview.resumeAdmissionStatus, "accepted"),
     input.expectedJobDescriptionId
       ? eq(studioInterview.jobDescriptionId, input.expectedJobDescriptionId)
       : isNull(studioInterview.jobDescriptionId),
@@ -56,6 +63,7 @@ const lifecycleDeps: ResumeAssessmentLifecycleDeps = {
         jobDescriptionId: studioInterview.jobDescriptionId,
         outcome: studioInterview.outcome,
         pipelineStage: studioInterview.pipelineStage,
+        resumeAdmissionStatus: studioInterview.resumeAdmissionStatus,
         resumeParseStatus: studioInterview.resumeParseStatus,
         resumeProfile: studioInterview.resumeProfile,
         resumeReview: studioInterview.resumeReview,
@@ -146,7 +154,16 @@ const lifecycleDeps: ResumeAssessmentLifecycleDeps = {
   },
 };
 
-export function reassessResumeRecord(input: { organizationId: string; resumeRecordId: string }) {
+export async function reassessResumeRecord(input: {
+  organizationId: string;
+  resumeRecordId: string;
+}) {
+  const admission = await db.transaction((tx) =>
+    admitResumeRecord(tx, input.resumeRecordId, input.organizationId),
+  );
+  if (admission !== "accepted") {
+    return { reason: "protection_restricted", status: "skipped" } as const;
+  }
   return runResumeAssessmentLifecycle(
     {
       force: true,
@@ -224,8 +241,12 @@ async function processResumePoolReviewGenerationJob(
 ): Promise<void> {
   const [record] = await db
     .select({
+      candidateEmail: resumePoolItem.candidateEmail,
+      candidateName: resumePoolItem.candidateName,
+      candidatePhone: resumePoolItem.candidatePhone,
       createdBy: resumePoolItem.createdBy,
       jobDescriptionId: resumePoolItem.jobDescriptionId,
+      resumeContentHash: resumePoolItem.resumeContentHash,
       resumeParseStatus: resumePoolItem.resumeParseStatus,
       resumeProfile: resumePoolItem.resumeProfile,
       resumeText: resumePoolItem.resumeText,
@@ -239,6 +260,16 @@ async function processResumePoolReviewGenerationJob(
     )
     .limit(1);
   if (!record?.resumeProfile || record.resumeParseStatus !== "ready") {
+    return;
+  }
+  if (
+    record.createdBy &&
+    (await findResumeProtectionConflict({
+      identity: identityForResume(record),
+      organizationId: input.organizationId,
+      userId: record.createdBy,
+    }))
+  ) {
     return;
   }
   let { jobDescriptionId } = record;
@@ -296,8 +327,17 @@ export async function processResumeReviewGenerationJob(input: ResumeReviewGenera
   if (input.source === "resume_pool_upload") {
     return processResumePoolReviewGenerationJob(input);
   }
+  if (!(await isResumeAdmitted(input.resumeRecordId, input.organizationId))) {
+    return;
+  }
   const force = Boolean(input.force) || input.source === "reassess";
   const jobDescriptionId = await resolveRecordJobDescriptionId(input);
+  const admission = await db.transaction((tx) =>
+    admitResumeRecord(tx, input.resumeRecordId, input.organizationId),
+  );
+  if (admission !== "accepted") {
+    return;
+  }
   return runResumeAssessmentLifecycle(
     {
       expectedJobDescriptionId: jobDescriptionId,

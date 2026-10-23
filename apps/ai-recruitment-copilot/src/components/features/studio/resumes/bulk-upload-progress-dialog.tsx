@@ -47,6 +47,9 @@ function itemStatusLabel(
     case "failed": {
       return { label: "失败", variant: "destructive" };
     }
+    case "protection_blocked": {
+      return { label: "推荐受限", variant: "secondary" };
+    }
     case "duplicate_skipped": {
       return { label: "已跳过", variant: "secondary" };
     }
@@ -71,7 +74,7 @@ function ItemIcon({ status }: { status: BulkResumeBatchItemDto["status"] }) {
   if (status === "failed") {
     return <XCircleIcon className="size-4 text-destructive" />;
   }
-  if (status === "duplicate_skipped") {
+  if (status === "duplicate_skipped" || status === "protection_blocked") {
     return <SkipForwardIcon className="size-4 text-amber-500" />;
   }
   return <CircleIcon className="size-4 text-muted-foreground" />;

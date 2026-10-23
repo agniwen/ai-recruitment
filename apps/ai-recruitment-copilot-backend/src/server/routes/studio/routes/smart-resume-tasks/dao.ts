@@ -333,6 +333,14 @@ export async function submitSmartTask(
           tx,
         );
         recordIds.push(recordId);
+        const [candidate] = await tx
+          .select({ status: studioInterview.resumeAdmissionStatus })
+          .from(studioInterview)
+          .where(eq(studioInterview.id, recordId))
+          .limit(1);
+        if (candidate?.status !== "accepted") {
+          continue;
+        }
         await tx.insert(resumePoolImport).values({
           id: crypto.randomUUID(),
           importedBy: userId,
@@ -370,6 +378,7 @@ export async function submitSmartTask(
           and(
             eq(studioInterview.organizationId, organizationId),
             inArray(studioInterview.id, records),
+            eq(studioInterview.resumeAdmissionStatus, "accepted"),
           ),
         )
     : [];

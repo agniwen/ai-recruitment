@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { globalConfig } from "@arc/db-schema/schema";
+import { globalConfig, resumeProtectionConfigChange, user } from "@arc/db-schema/schema";
 import type { GlobalConfigInput, GlobalConfigRecord } from "@arc/shared/global-config";
 
 function serialize(row: typeof globalConfig.$inferSelect): GlobalConfigRecord {
@@ -10,6 +10,9 @@ function serialize(row: typeof globalConfig.$inferSelect): GlobalConfigRecord {
     companyName: row.companyName,
     jobCodePrefix: row.jobCodePrefix,
     openingInstructions: row.openingInstructions,
+    resumeProtectionDays: row.resumeProtectionDays,
+    resumeProtectionUpdatedAt: row.resumeProtectionUpdatedAt?.toISOString() ?? null,
+    resumeProtectionUpdatedBy: row.resumeProtectionUpdatedBy,
     updatedAt: row.updatedAt.toISOString(),
     updatedBy: row.updatedBy,
   };
@@ -25,7 +28,14 @@ export async function getGlobalConfig(orgId: string): Promise<GlobalConfigRecord
     .limit(1);
 
   if (row) {
-    return serialize(row);
+    const [editor] = row.resumeProtectionUpdatedBy
+      ? await db
+          .select({ name: user.name })
+          .from(user)
+          .where(eq(user.id, row.resumeProtectionUpdatedBy))
+          .limit(1)
+      : [];
+    return { ...serialize(row), resumeProtectionUpdatedByName: editor?.name ?? null };
   }
 
   // Lazy-create a blank config row for workspaces that have none yet (new
@@ -38,6 +48,9 @@ export async function getGlobalConfig(orgId: string): Promise<GlobalConfigRecord
     jobCodePrefix: "AUR",
     openingInstructions: "",
     organizationId: orgId,
+    resumeProtectionDays: 15,
+    resumeProtectionUpdatedAt: null,
+    resumeProtectionUpdatedBy: null,
     updatedAt: new Date(),
     updatedBy: null as string | null,
   };
@@ -69,6 +82,9 @@ export async function upsertGlobalConfig(
       jobCodePrefix: input.jobCodePrefix,
       openingInstructions: input.openingInstructions,
       organizationId: orgId,
+      resumeProtectionDays: 15,
+      resumeProtectionUpdatedAt: null,
+      resumeProtectionUpdatedBy: null,
       updatedAt: now,
       updatedBy: userId,
     };
@@ -95,4 +111,37 @@ export async function upsertGlobalConfig(
     .where(eq(globalConfig.organizationId, orgId))
     .limit(1);
   return serialize(updated);
+}
+
+export async function saveResumeProtectionDays(orgId: string, userId: string, days: number) {
+  await getGlobalConfig(orgId);
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(globalConfig)
+      .where(eq(globalConfig.organizationId, orgId))
+      .for("update");
+    if (current.resumeProtectionDays === days) {
+      return serialize(current);
+    }
+    const now = new Date();
+    const [updated] = await tx
+      .update(globalConfig)
+      .set({
+        resumeProtectionDays: days,
+        resumeProtectionUpdatedAt: now,
+        resumeProtectionUpdatedBy: userId,
+      })
+      .where(eq(globalConfig.id, current.id))
+      .returning();
+    await tx.insert(resumeProtectionConfigChange).values({
+      changedAt: now,
+      changedBy: userId,
+      days,
+      id: crypto.randomUUID(),
+      organizationId: orgId,
+      previousDays: current.resumeProtectionDays,
+    });
+    return serialize(updated);
+  });
 }

@@ -124,7 +124,7 @@ export interface ResumePoolUploaderOption {
 
 export interface ResumePoolImportSuccessResult {
   resumeRecordId: string;
-  status: "imported";
+  status: "imported" | "protected";
 }
 
 export interface ResumePoolImportDuplicateMatchRecord {
@@ -215,6 +215,6 @@ export interface ResumePoolImportOptions {
 export type ResumePoolBatchImportResult =
   | ResumePoolImportDuplicateResult
   | {
-      status: "imported";
+      status: "imported" | "protected";
       records: { resumeRecordId: string; jobDescriptionId: string | null }[];
     };

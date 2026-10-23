@@ -1,3 +1,4 @@
+import type { ResumeAdmissionStatus } from "@arc/db-schema/resume-protection";
 import type { ResumeAnalysisResult } from "@arc/db-schema/interview/types";
 import type {
   PipelineStage,
@@ -12,6 +13,7 @@ import {
 import type { CompatibleResumeVisibilityScope } from "@arc/ai-recruitment-copilot-backend/server/access/resume-visibility";
 
 interface LaunchCandidate {
+  resumeAdmissionStatus?: ResumeAdmissionStatus;
   jobDescriptionAiInterviewDisabled: boolean;
   jobDescriptionId: string | null;
   jobDescriptionInterviewers?: { id: string }[] | null;
@@ -111,6 +113,13 @@ export function createLaunchAiInterviewRound<TSchedule extends LaunchSchedule>(
     });
     if (!candidate) {
       return { ok: false, reason: "not_found" };
+    }
+    if (candidate.resumeAdmissionStatus && candidate.resumeAdmissionStatus !== "accepted") {
+      return {
+        message: "该候选人暂不能继续推荐，请查看保护详情。",
+        ok: false,
+        reason: "resume_evaluation_required",
+      };
     }
     if (candidate.pipelineStage === "closed") {
       return { ok: false, reason: "closed_candidate" };

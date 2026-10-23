@@ -320,10 +320,15 @@ export function buildOdcActivityCondition(
   );
 }
 
+function isStageFiltered(filters?: ResumeQueryFilters) {
+  return Boolean(filters?.pipelineStages?.length || filters?.outcomes?.length || filters?.activity);
+}
+
 function buildWhere(organizationId: string, filters?: ResumeQueryFilters) {
   const conditions = [
     eq(studioInterview.organizationId, organizationId),
     filters?.visibilityCondition,
+    isStageFiltered(filters) ? eq(studioInterview.resumeAdmissionStatus, "accepted") : undefined,
     buildOdcActivityCondition(filters?.activity, filters?.activityFrom, filters?.activityTo),
     buildSearchCondition(filters?.search),
     buildIlikeCondition(studioInterview.id, filters?.id),
@@ -386,6 +391,7 @@ const SELECTED_COLUMNS = {
   recommendationText: studioInterview.recommendationText,
   recruitmentSource: studioInterview.recruitmentSource,
   recruitmentSourceDetail: studioInterview.recruitmentSourceDetail,
+  resumeAdmissionStatus: studioInterview.resumeAdmissionStatus,
   resumeContentHash: studioInterview.resumeContentHash,
   resumeEducationExperiences:
     sql<unknown>`${studioInterview.resumeProfile}->'educationExperiences'`.as(
@@ -424,6 +430,7 @@ const SELECTED_COLUMNS = {
   resumeProjectExperiences: sql<unknown>`${studioInterview.resumeProfile}->'projectExperiences'`.as(
     "resume_project_experiences",
   ),
+  resumeProtection: studioInterview.resumeProtection,
   resumeReviewBaseScore: sql<
     string | null
   >`coalesce(${studioInterview.resumeReview}->'overall'->>'baseScore', ${studioInterview.resumeReview}->'overall'->>'score')`.as(
@@ -503,6 +510,7 @@ const LIST_SELECTED_COLUMNS = {
   recommendationText: SELECTED_COLUMNS.recommendationText,
   recruitmentSource: SELECTED_COLUMNS.recruitmentSource,
   recruitmentSourceDetail: SELECTED_COLUMNS.recruitmentSourceDetail,
+  resumeAdmissionStatus: SELECTED_COLUMNS.resumeAdmissionStatus,
   resumeContentHash: SELECTED_COLUMNS.resumeContentHash,
   resumeEducationExperiences: SELECTED_COLUMNS.resumeEducationExperiences,
   resumeEducationGraduationYear: SELECTED_COLUMNS.resumeEducationGraduationYear,
@@ -514,6 +522,7 @@ const LIST_SELECTED_COLUMNS = {
   resumeFileName: SELECTED_COLUMNS.resumeFileName,
   resumeParseStatus: SELECTED_COLUMNS.resumeParseStatus,
   resumeProjectExperiences: SELECTED_COLUMNS.resumeProjectExperiences,
+  resumeProtection: SELECTED_COLUMNS.resumeProtection,
   resumeReviewBaseScore: SELECTED_COLUMNS.resumeReviewBaseScore,
   resumeReviewConclusion: SELECTED_COLUMNS.resumeReviewConclusion,
   resumeReviewNextStepAction: SELECTED_COLUMNS.resumeReviewNextStepAction,
@@ -1041,6 +1050,7 @@ function toRecord(
     recommendationText: row.recommendationText,
     recruitmentSource: row.recruitmentSource,
     recruitmentSourceDetail: row.recruitmentSourceDetail,
+    resumeAdmissionStatus: row.resumeAdmissionStatus,
     resumeContentHash: row.resumeContentHash,
     resumeEvaluationStatus: row.resumeEvaluationStatus,
     resumeEvaluatorId: resolvedPeople.resumeEvaluatorId,
@@ -1053,6 +1063,7 @@ function toRecord(
       (resolvedDerived.resumeParseRetryable ?? true),
     resumeParseStatus: row.resumeParseStatus,
     resumeProfileSnapshot: buildResumeProfileSnapshot(row),
+    resumeProtection: row.resumeProtection,
     resumeReviewBaseScore: parseResumeReviewBaseScore(row.resumeReviewBaseScore),
     resumeReviewNextStepAction: parseResumeReviewNextStepAction(row.resumeReviewNextStepAction),
     resumeReviewStatus: row.resumeReviewStatus,

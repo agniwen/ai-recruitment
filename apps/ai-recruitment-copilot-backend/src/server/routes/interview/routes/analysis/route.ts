@@ -1,3 +1,4 @@
+import { requireResumeAnalysisAdmission } from "./protection-guard";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -49,6 +50,11 @@ async function loadJobDescriptionText(organizationId: string, jobDescriptionId?:
 
 export const interviewAnalysisRouter = factory
   .createApp()
+  .use("/match-job-description", requireResumeAnalysisAdmission)
+  .use("/generate-questions", requireResumeAnalysisAdmission)
+  .use("/generate-review", requireResumeAnalysisAdmission)
+  .use("/generate-review-markdown-stream", requireResumeAnalysisAdmission)
+
   .post("/parse-resume", async (c) => {
     const { activeOrg, user } = c.var;
     if (!(activeOrg && user)) {
@@ -142,7 +148,7 @@ export const interviewAnalysisRouter = factory
     "/generate-questions",
     zValidator(
       "json",
-      z.object({ resumeProfile: resumeProfileSchema }),
+      z.object({ interviewRecordId: z.string().optional(), resumeProfile: resumeProfileSchema }),
       jsonValidatorError("缺少候选人信息 (resumeProfile)。"),
     ),
     (c) =>

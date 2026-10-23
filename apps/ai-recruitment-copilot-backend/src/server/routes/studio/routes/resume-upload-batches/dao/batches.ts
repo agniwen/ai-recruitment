@@ -173,6 +173,7 @@ export async function insertBatchWithItems(input: CreateBatchInput): Promise<str
           portfolioAttachments: file.portfolioAttachments ?? [],
           recruitmentSource: input.recruitmentSource ?? null,
           recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
+          resumeAdmissionStatus: "pending" as const,
           resumeContentHash: file.contentHash,
           resumeFileName: file.originalFileName,
           resumeParseError: null,
@@ -291,7 +292,8 @@ export async function reconcileBatchProgress(batchId: string): Promise<void> {
     const byStatus = new Map(counts.map((row) => [row.status, row.count]));
     const succeededCount = byStatus.get("succeeded") ?? 0;
     const failedCount = byStatus.get("failed") ?? 0;
-    const skippedCount = byStatus.get("duplicate_skipped") ?? 0;
+    const skippedCount =
+      (byStatus.get("duplicate_skipped") ?? 0) + (byStatus.get("protection_blocked") ?? 0);
     const cancelledCount = byStatus.get("cancelled") ?? 0;
     const processedCount = succeededCount + failedCount + skippedCount;
     const now = new Date();

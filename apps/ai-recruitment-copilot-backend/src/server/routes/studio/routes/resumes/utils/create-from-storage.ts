@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { studioInterview } from "@arc/db-schema/schema";
 import type { StudioInterviewResumeSourceType } from "@arc/db-schema/schema";
@@ -11,11 +12,13 @@ import type {
 } from "@arc/db-schema/studio-interviews";
 import type { ResumeScreeningResult } from "@arc/shared/resume-screening";
 import type { PortfolioItem } from "@arc/shared/bulk-resume-upload";
+import { admitResumeRecord } from "../dao/protection";
 import { syncResumeSkills } from "../dao/skills";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export interface CreateResumeRecordFromStorageInput {
+  recommendationReady?: boolean;
   candidateEmail: string | null;
   candidateName: string | null;
   candidatePhone: string | null;
@@ -53,11 +56,11 @@ export interface CreateResumeRecordFromStorageInput {
 }
 
 // 仅"从已经上传好的简历文件 + 已经解析过的 profile"装配一行 studio_interview。
-// 不做：dedup / JD 匹配 / 上传 / 解析——由调用方负责。
+// 推荐保护期在本事务中校验；查重展示、JD 匹配、上传与解析由调用方负责。
 //
 // Assemble a single studio_interview row from an already-uploaded resume +
 // already-parsed profile. Does NOT do dedup / JD-matching / upload / parsing —
-// the caller is responsible for those.
+// the caller is responsible for those. Protection admission is transactional.
 // oxlint-disable-next-line complexity -- central data mapper for the resume-library row.
 export async function createResumeRecordFromStorage(
   input: CreateResumeRecordFromStorageInput,
@@ -90,6 +93,7 @@ export async function createResumeRecordFromStorage(
       recommendationText: input.recommendationText ?? null,
       recruitmentSource: input.recruitmentSource ?? null,
       recruitmentSourceDetail: input.recruitmentSourceDetail?.trim() || null,
+      resumeAdmissionStatus: "pending",
       resumeContentHash: input.contentHash,
       resumeFileName: input.resumeFileName,
       resumeParseError: null,
@@ -98,17 +102,15 @@ export async function createResumeRecordFromStorage(
         (input.storageKey && !input.resumeProfile ? "unparsed" : "ready"),
       resumeParsedAt: input.resumeProfile ? now : null,
       resumeProfile: input.resumeProfile,
-      resumeReview: input.resumeReview ?? null,
-      resumeReviewError: input.resumeReviewError ?? null,
-      resumeReviewGeneratedAt: input.resumeReview ? now : null,
-      resumeReviewQueuedAt: input.resumeReviewStatus === "queued" ? now : null,
-      resumeReviewStatus: input.resumeReview ? "ready" : (input.resumeReviewStatus ?? "idle"),
-      resumeScreeningError: input.resumeScreeningError ?? null,
-      resumeScreeningEvaluatedAt: input.resumeScreeningResult ? now : null,
-      resumeScreeningResult: input.resumeScreeningResult ?? null,
-      resumeScreeningStatus: input.resumeScreeningResult
-        ? "ready"
-        : (input.resumeScreeningStatus ?? "idle"),
+      resumeReview: null,
+      resumeReviewError: null,
+      resumeReviewGeneratedAt: null,
+      resumeReviewQueuedAt: null,
+      resumeReviewStatus: "idle",
+      resumeScreeningError: null,
+      resumeScreeningEvaluatedAt: null,
+      resumeScreeningResult: null,
+      resumeScreeningStatus: "idle",
       resumeSourceImportedAt: input.source?.importedAt ?? null,
       resumeSourceImportedBy: input.source?.importedBy ?? null,
       resumeSourcePoolItemId: input.source?.poolItemId ?? null,
@@ -118,6 +120,30 @@ export async function createResumeRecordFromStorage(
       targetRole: input.targetRole?.trim() || input.resumeProfile?.targetRoles?.[0] || null,
       updatedAt: now,
     });
+    const admission = await admitResumeRecord(
+      executor,
+      recordId,
+      input.organizationId,
+      input.recommendationReady !== false,
+    );
+    if (admission === "accepted") {
+      await executor
+        .update(studioInterview)
+        .set({
+          resumeReview: input.resumeReview ?? null,
+          resumeReviewError: input.resumeReviewError ?? null,
+          resumeReviewGeneratedAt: input.resumeReview ? now : null,
+          resumeReviewQueuedAt: input.resumeReviewStatus === "queued" ? now : null,
+          resumeReviewStatus: input.resumeReview ? "ready" : (input.resumeReviewStatus ?? "idle"),
+          resumeScreeningError: input.resumeScreeningError ?? null,
+          resumeScreeningEvaluatedAt: input.resumeScreeningResult ? now : null,
+          resumeScreeningResult: input.resumeScreeningResult ?? null,
+          resumeScreeningStatus: input.resumeScreeningResult
+            ? "ready"
+            : (input.resumeScreeningStatus ?? "idle"),
+        })
+        .where(eq(studioInterview.id, recordId));
+    }
     await syncResumeSkills(executor, {
       interviewId: recordId,
       organizationId: input.organizationId,

@@ -1,3 +1,4 @@
+import { isResumeAdmitted } from "../dao/protection";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { studioInterview } from "@arc/db-schema/schema";
@@ -21,6 +22,7 @@ export async function markResumeReviewQueued(input: {
   const conditions = [
     eq(studioInterview.id, input.resumeRecordId),
     eq(studioInterview.organizationId, input.organizationId),
+    eq(studioInterview.resumeAdmissionStatus, "accepted"),
   ];
   if (!input.allowExistingReview) {
     conditions.push(isNull(studioInterview.resumeReview));
@@ -46,6 +48,7 @@ async function markResumeReviewQueueFailed(input: {
   const conditions = [
     eq(studioInterview.id, input.resumeRecordId),
     eq(studioInterview.organizationId, input.organizationId),
+    eq(studioInterview.resumeAdmissionStatus, "accepted"),
   ];
   if (!input.allowExistingReview) {
     conditions.push(isNull(studioInterview.resumeReview));
@@ -63,6 +66,9 @@ async function markResumeReviewQueueFailed(input: {
 export async function enqueueResumeReviewGenerationForRecordBestEffort(
   input: ResumeRecordReviewGenerationJobData,
 ): Promise<boolean> {
+  if (!(await isResumeAdmitted(input.resumeRecordId, input.organizationId))) {
+    return true;
+  }
   if (!isResumeReviewGenerationQueueConfigured()) {
     return false;
   }
@@ -79,6 +85,7 @@ export async function enqueueResumeReviewGenerationForRecordBestEffort(
       and(
         eq(studioInterview.id, input.resumeRecordId),
         eq(studioInterview.organizationId, input.organizationId),
+        eq(studioInterview.resumeAdmissionStatus, "accepted"),
       ),
     )
     .limit(1);
@@ -150,6 +157,9 @@ export async function enqueueResumeReassessmentForRecord(input: {
   organizationId: string;
   resumeRecordId: string;
 }): Promise<"already_in_progress" | "enqueued" | "fallback_sync"> {
+  if (!(await isResumeAdmitted(input.resumeRecordId, input.organizationId))) {
+    throw new ResumeReassessmentEnqueueError("该候选人暂不能继续推荐，请查看保护详情。");
+  }
   const [record] = await db
     .select({
       jobDescriptionId: studioInterview.jobDescriptionId,
@@ -164,6 +174,7 @@ export async function enqueueResumeReassessmentForRecord(input: {
       and(
         eq(studioInterview.id, input.resumeRecordId),
         eq(studioInterview.organizationId, input.organizationId),
+        eq(studioInterview.resumeAdmissionStatus, "accepted"),
       ),
     )
     .limit(1);
@@ -199,6 +210,7 @@ export async function enqueueResumeReassessmentForRecord(input: {
         and(
           eq(studioInterview.id, input.resumeRecordId),
           eq(studioInterview.organizationId, input.organizationId),
+          eq(studioInterview.resumeAdmissionStatus, "accepted"),
           notInArray(studioInterview.resumeReviewStatus, ["queued", "processing"]),
         ),
       );

@@ -28,6 +28,18 @@ export const globalConfigSchema = z.object({
 export type GlobalConfigInput = z.infer<typeof globalConfigSchema>;
 
 export interface GlobalConfigRecord extends GlobalConfigInput {
+  resumeProtectionDays?: number;
+  resumeProtectionUpdatedAt?: string | null;
+  resumeProtectionUpdatedBy?: string | null;
+  resumeProtectionUpdatedByName?: string | null;
   updatedAt: string;
   updatedBy: string | null;
 }
+
+export const resumeProtectionConfigSchema = z.object({
+  days: z
+    .number()
+    .int("保护期必须为整数天")
+    .min(1, "保护期至少为 1 天")
+    .max(365, "保护期最多为 365 天"),
+});

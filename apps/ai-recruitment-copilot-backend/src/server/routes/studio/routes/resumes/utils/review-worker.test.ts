@@ -19,6 +19,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
         }),
       }),
     }),
+    transaction: (run: (tx: unknown) => Promise<unknown>) => run({}),
     update: () => ({
       set: (patch: Record<string, unknown>) => {
         mocks.updates.push(patch);
@@ -38,6 +39,19 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
       },
     }),
   },
+}));
+vi.mock("../dao/protection", () => ({
+  admitResumeRecord: vi.fn().mockResolvedValue("accepted"),
+  findResumeProtectionConflict: vi.fn().mockResolvedValue(null),
+  identityForResume: (row: unknown) => row,
+  isResumeAdmitted: () =>
+    Promise.resolve(
+      Boolean(
+        mocks.record &&
+        mocks.record.resumeAdmissionStatus !== "protected" &&
+        mocks.record.resumeAdmissionStatus !== "pending",
+      ),
+    ),
 }));
 vi.mock("./ai-review-notification", () => ({ notifyAiReviewPending: mocks.notifyAiReviewPending }));
 vi.mock("./review-generation", () => ({
@@ -77,6 +91,20 @@ function assessmentRecord(overrides: Record<string, unknown>) {
 }
 
 describe("processResumeReviewGenerationJob", () => {
+  it.each(["protected", "pending"] as const)(
+    "does not match a JD, generate an evaluation or notify for %s records",
+    async (resumeAdmissionStatus) => {
+      mocks.record = assessmentRecord({ jobDescriptionId: null, resumeAdmissionStatus });
+      await processResumeReviewGenerationJob({
+        ...JOB,
+        autoMatchJobDescription: true,
+        source: "resume_upload",
+      });
+      expect(mocks.matchJobDescriptionForResume).not.toHaveBeenCalled();
+      expect(mocks.generateResumeReviewBestEffort).not.toHaveBeenCalled();
+      expect(mocks.notifyAiReviewPending).not.toHaveBeenCalled();
+    },
+  );
   beforeEach(() => {
     mocks.record = null;
     mocks.superseded = false;

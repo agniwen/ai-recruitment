@@ -9,6 +9,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
       run({ insert: () => ({ values: mocks.values }) }),
   },
 }));
+vi.mock("../dao/protection", () => ({ admitResumeRecord: vi.fn().mockResolvedValue("pending") }));
 vi.mock("../dao/skills", () => ({
   syncResumeSkills: vi.fn().mockImplementation(() => Promise.resolve()),
 }));
@@ -38,7 +39,11 @@ describe("new candidate approval stage", () => {
         userId: "user-1",
       });
       expect(mocks.values).toHaveBeenLastCalledWith(
-        expect.objectContaining({ pipelineStage: "ai_review", resumeSourceType: type }),
+        expect.objectContaining({
+          pipelineStage: "ai_review",
+          resumeAdmissionStatus: "pending",
+          resumeSourceType: type,
+        }),
       );
     },
   );

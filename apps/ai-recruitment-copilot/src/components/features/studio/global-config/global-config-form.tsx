@@ -1,5 +1,7 @@
 "use client";
 
+import { ResumeProtectionSettings } from "./resume-protection-settings";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDebouncedCallback } from "use-debounce";
@@ -215,6 +217,7 @@ export function GlobalConfigForm({ initial }: Props) {
           />
         </Field>
       </FieldGroup>
+      <ResumeProtectionSettings initial={initial} />
     </div>
   );
 }

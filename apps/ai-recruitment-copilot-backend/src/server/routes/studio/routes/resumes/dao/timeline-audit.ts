@@ -369,6 +369,7 @@ export function auditTitle(action: string, detail: Record<string, unknown> = {})
     resume_evaluation_reset_for_job_change: "简历评估已重置",
     resume_evaluation_submitted: "简历评估已提交",
     resume_evaluation_updated: "简历评估状态变更",
+    resume_protection_continued: "已确认继续推荐",
     round_reset: "AI 面试轮次重置",
   };
   if (action === "candidate_transition") {

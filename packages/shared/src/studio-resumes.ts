@@ -1,3 +1,7 @@
+import type {
+  ResumeAdmissionStatus,
+  ResumeProtectionSummary,
+} from "@arc/db-schema/resume-protection";
 /* oxlint-disable max-lines -- Resume library DTOs and validators share this module. */
 import { z } from "zod";
 import type { ResumeAnalysisResult, ResumeProfile } from "@arc/db-schema/interview/types";
@@ -148,6 +152,8 @@ export const EMPTY_RESUME_PROFILE_SNAPSHOT: ResumeLibraryProfileSnapshot = {
  * the resume library view stays focused on candidate + resume metadata.
  */
 export interface ResumeLibraryListRecord {
+  resumeAdmissionStatus?: ResumeAdmissionStatus;
+  resumeProtection?: ResumeProtectionSummary | null;
   aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
   id: string;
   candidateName: string;
@@ -374,12 +380,18 @@ function describeAiReviewApproval(status: ResumeLibraryListRecord["aiReviewAppro
     : ({ label: "AI 评价审核 · 待审批", tone: "warning" } as const);
 }
 
+export function isResumeAdmissionRestricted(status: ResumeAdmissionStatus | undefined) {
+  return status === "protected" || status === "pending";
+}
+
+// oxlint-disable-next-line complexity -- Progress prioritizes admission, parsing and recruiting lifecycle states.
 export function describeResumeProgress(record: {
   aiReviewApprovalStatus?: "pending" | "approved" | "rejected";
   closedReason?: string | null;
   pipelineStage: PipelineStage;
   outcome: CandidateOutcome;
   resumeEvaluationStatus?: ResumeEvaluationStatus | null;
+  resumeAdmissionStatus?: ResumeAdmissionStatus;
   resumeParseStatus?: ResumeParseStatus;
   resumeReviewStatus?: ResumeReviewStatus;
   stageProgress: ResumeStageProgress;
@@ -423,6 +435,12 @@ export function describeResumeProgress(record: {
   if (resumeParseStatus && resumeParseStatus !== "ready") {
     const meta = resumeParseStatusMeta[resumeParseStatus];
     return { label: meta.label, tone: meta.tone };
+  }
+  if (isResumeAdmissionRestricted(record.resumeAdmissionStatus)) {
+    return {
+      label: record.resumeAdmissionStatus === "protected" ? "保护期中" : "待核实",
+      tone: "warning",
+    };
   }
   if (
     pipelineStage === "screening" &&

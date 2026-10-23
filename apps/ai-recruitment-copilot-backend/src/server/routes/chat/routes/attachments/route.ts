@@ -1,3 +1,4 @@
+import { findResumeProtectionConflict } from "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/protection/index";
 import { isResumeStructuredSourceFileNameCompatible } from "@arc/db-schema/resume-parser-schema";
 import { getObjectBytes, getObjectStream } from "@arc/ai-recruitment-copilot-backend/lib/server/s3";
 import {
@@ -77,6 +78,20 @@ export const attachmentsRouter = factory
 
     if (!resumeProfile) {
       return c.json({ error: "简历解析缓存不可用，请重新上传简历后再试。" }, 422);
+    }
+
+    const protection = await findResumeProtectionConflict({
+      identity: {
+        contentHash: attachment.contentHash,
+        email: resumeProfile.email,
+        name: resumeProfile.name,
+        phone: resumeProfile.phone,
+      },
+      organizationId: activeOrg.id,
+      userId: user.id,
+    });
+    if (protection) {
+      return c.json({ error: "该候选人处于推荐保护期，暂不能继续推荐。", protection }, 409);
     }
 
     try {

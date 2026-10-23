@@ -1,5 +1,5 @@
 import type { SQL } from "drizzle-orm";
-import { and, eq, exists, inArray, isNull, not, or, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { createRequestWorkspaceAuthorizer } from "./workspace-access-policy";
 import { buildSscCandidateVisibilityCondition, resolveSscAccessActor } from "./ssc-access";
@@ -164,10 +164,15 @@ function buildOdcApprovalRestriction(
   );
   return or(
     not(isOdc),
+    and(
+      eq(studioInterview.createdBy, actor.userId),
+      ne(studioInterview.resumeAdmissionStatus, "accepted"),
+    ),
     aiReviewOrganizationId
       ? and(
           eq(studioInterview.organizationId, aiReviewOrganizationId),
           eq(studioInterview.pipelineStage, "ai_review"),
+          eq(studioInterview.resumeAdmissionStatus, "accepted"),
         )
       : undefined,
     and(
@@ -194,6 +199,21 @@ function buildOdcApprovalRestriction(
   );
 }
 
+function buildOwnUnadmittedCondition(actor: { userId: string } | undefined) {
+  return actor
+    ? and(
+        eq(studioInterview.createdBy, actor.userId),
+        ne(studioInterview.resumeAdmissionStatus, "accepted"),
+      )
+    : undefined;
+}
+
+function buildAdmittedOdcCondition(condition: SQL | undefined) {
+  return condition
+    ? and(condition, eq(studioInterview.resumeAdmissionStatus, "accepted"))
+    : undefined;
+}
+
 function buildNonSscResumeVisibilityCondition(normalized: ResumeVisibilityScope): SQL | undefined {
   const actor = normalized.actor ?? normalized.odcActor;
   const approvalRestriction = buildOdcApprovalRestriction(actor, normalized.aiReviewOrganizationId);
@@ -211,6 +231,7 @@ function buildNonSscResumeVisibilityCondition(normalized: ResumeVisibilityScope)
     ? and(
         eq(studioInterview.organizationId, normalized.aiReviewOrganizationId),
         eq(studioInterview.pipelineStage, "ai_review"),
+        eq(studioInterview.resumeAdmissionStatus, "accepted"),
       )
     : undefined;
   const odcJobCondition = buildJobDescriptionHiringUnitScopeCondition({
@@ -248,7 +269,9 @@ function buildNonSscResumeVisibilityCondition(normalized: ResumeVisibilityScope)
     ? buildCurrentOdcVisibilityCondition(normalized.odcActor)
     : assignedOdcCondition;
 
+  const ownUnadmitted = buildOwnUnadmittedCondition(actor);
   if (
+    !ownUnadmitted &&
     !aiReviewCondition &&
     !recruitingCondition &&
     (normalized.odc.resumeSourceIds?.length ?? 0) === 0 &&
@@ -257,7 +280,15 @@ function buildNonSscResumeVisibilityCondition(normalized: ResumeVisibilityScope)
   ) {
     return sql`false`;
   }
-  return and(or(recruitingCondition, odcCondition, aiReviewCondition), approvalRestriction);
+  return and(
+    or(
+      ownUnadmitted,
+      recruitingCondition,
+      buildAdmittedOdcCondition(odcCondition),
+      aiReviewCondition,
+    ),
+    approvalRestriction,
+  );
 }
 
 export function buildResumeVisibilityCondition(

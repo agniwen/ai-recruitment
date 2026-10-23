@@ -9,6 +9,7 @@ import type { StudioInterviewRoundDetail } from "@arc/shared/studio-interview-ro
 import {
   canLaunchInterviewFromResume,
   canProgressResumeToInterview,
+  isResumeAdmissionRestricted,
 } from "@arc/shared/studio-resumes";
 import type { ResumeEvaluationStatus, ResumeLibraryDetail } from "@arc/shared/studio-resumes";
 import { cn } from "@arc/shared/utils";
@@ -527,6 +528,8 @@ export function useStudioPersonDetailController({
     }
   }, [optimisticPipelineStage, record?.pipelineStage]);
   const visiblePipelineStage = optimisticPipelineStage ?? record?.pipelineStage;
+  const admissionRestricted =
+    mode === "resume" && isResumeAdmissionRestricted(resumeRecord?.resumeAdmissionStatus);
   const { data: currentOfferSscState } = useQuery({
     enabled:
       enabled &&
@@ -561,7 +564,9 @@ export function useStudioPersonDetailController({
       }
       return tabs;
     }
-    tabs.add("ai-analysis");
+    if (!admissionRestricted) {
+      tabs.add("ai-analysis");
+    }
     // Review share links only need overview + AI score; later pipeline tabs
     // rely on fuller studio permissions and would strand reviewers.
     if (!isReview && shouldShowAiInterviewTab(tabVisibilityRecord)) {
@@ -755,15 +760,17 @@ export function useStudioPersonDetailController({
   })();
   const actionBarPipelineStage = visiblePipelineStage ?? record?.pipelineStage;
   const actionBarAiRound = candidateRounds.at(-1);
-  const resumeEvaluationActions = shouldShowResumeEvaluationActions({
-    canEvaluate: canEvaluateResume,
-    hasJobDescription: Boolean(resumeRecord?.jobDescriptionId),
-    layoutMode,
-    pipelineStage: resumeRecord?.pipelineStage ?? record?.pipelineStage,
-    status: resumeRecord?.resumeEvaluationStatus,
-  }) ? (
-    <ResumeEvaluationActions onDecisionSelect={setEvaluationDecision} />
-  ) : null;
+  const resumeEvaluationActions =
+    !admissionRestricted &&
+    shouldShowResumeEvaluationActions({
+      canEvaluate: canEvaluateResume,
+      hasJobDescription: Boolean(resumeRecord?.jobDescriptionId),
+      layoutMode,
+      pipelineStage: resumeRecord?.pipelineStage ?? record?.pipelineStage,
+      status: resumeRecord?.resumeEvaluationStatus,
+    }) ? (
+      <ResumeEvaluationActions onDecisionSelect={setEvaluationDecision} />
+    ) : null;
   const missingJobAction =
     layoutMode === "page" &&
     resumeRecord &&
@@ -786,6 +793,7 @@ export function useStudioPersonDetailController({
     mode === "resume" &&
     record &&
     canUseManagementActions &&
+    !admissionRestricted &&
     actionBarPipelineStage &&
     record.outcome ? (
       <PipelineStageActionBar
@@ -915,10 +923,15 @@ export function useStudioPersonDetailController({
         primaryAction={launchResumeModeButtonContent}
       />
     ) : null;
-  const headerActionBar = layoutMode === "modal" ? actionBar : null;
-  const floatingActionBar = layoutMode === "page" ? actionBar : null;
+  const admissionStatusBadge = admissionRestricted ? (
+    <Badge variant="warning">
+      {resumeRecord?.resumeAdmissionStatus === "protected" ? "保护期中" : "待核实"}
+    </Badge>
+  ) : null;
+  const headerActionBar = layoutMode === "modal" ? (admissionStatusBadge ?? actionBar) : null;
+  const floatingActionBar = layoutMode === "page" ? (admissionStatusBadge ?? actionBar) : null;
   const resumeEvaluationDialog =
-    mode === "resume" && canEvaluateResume && record ? (
+    mode === "resume" && !admissionRestricted && canEvaluateResume && record ? (
       <ResumeEvaluationDialog
         decision={evaluationDecision}
         onDecisionChange={setEvaluationDecision}
@@ -950,7 +963,7 @@ export function useStudioPersonDetailController({
               经历
             </TabsTrigger>
           ) : null}
-          {mode === "resume" ? (
+          {mode === "resume" && !admissionRestricted ? (
             <TabsTrigger className="flex-1 sm:min-w-[6em] sm:flex-none" value="ai-analysis">
               AI评分
             </TabsTrigger>
@@ -1024,6 +1037,7 @@ export function useStudioPersonDetailController({
   );
   return {
     activeTab,
+    admissionRestricted,
     bodyLayoutClassName,
     canCloseCandidate,
     canConfirmOffer,

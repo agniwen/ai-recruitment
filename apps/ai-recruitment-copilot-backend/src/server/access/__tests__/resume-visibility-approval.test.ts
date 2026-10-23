@@ -50,9 +50,10 @@ describe("AI approval candidate visibility", () => {
     const query = await visibilityQuery();
     expect(query.sql).toContain('"studio_interview"."organization_id" =');
     expect(query.sql).toContain('"studio_interview"."pipeline_stage" =');
-    expect(query.sql).not.toContain("created_by");
+    expect(query.sql).toContain('"studio_interview"."resume_admission_status" =');
+    expect(query.sql).toContain('"studio_interview"."resume_admission_status" <>');
     expect(query.sql).toContain("resume_source");
-    expect(query.params.slice(0, 2)).toEqual(["workspace-a", "ai_review"]);
+    expect(query.params.slice(2, 5)).toEqual(["workspace-a", "ai_review", "accepted"]);
     expect(mocks.authorizer).toHaveBeenCalledWith({
       memberRole: "ai-reviewer",
       organizationId: "workspace-a",
@@ -70,7 +71,7 @@ describe("AI approval candidate visibility", () => {
     const query = await visibilityQuery();
     expect(query.sql).toContain('"studio_interview"."created_by" in');
     expect(query.sql).toContain(" or ");
-    expect(query.params.slice(0, 4)).toEqual([
+    expect(query.params.slice(2, 6)).toEqual([
       "reviewer",
       "subordinate",
       "workspace-a",
@@ -81,8 +82,10 @@ describe("AI approval candidate visibility", () => {
   it("removes cross-group pending visibility when approval permission is revoked", async () => {
     mocks.authorize.mockResolvedValue(false);
     const query = await visibilityQuery();
-    expect(query.sql).toBe("false");
-    expect(query.params).toEqual([]);
+    expect(query.sql).not.toContain('"studio_interview"."pipeline_stage" =');
+    expect(query.sql).toContain('"studio_interview"."created_by" =');
+    expect(query.sql).toContain('"studio_interview"."resume_admission_status" <>');
+    expect(query.params.slice(0, 2)).toEqual(["reviewer", "accepted"]);
   });
 
   it.each(["admin", "owner"])(

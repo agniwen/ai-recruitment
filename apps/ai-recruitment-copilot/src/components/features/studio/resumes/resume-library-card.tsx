@@ -1,3 +1,6 @@
+"use client";
+
+import { ResumeProtectionPanel } from "./resume-protection-panel";
 import {
   IconBriefcase,
   IconBuilding,
@@ -183,6 +186,7 @@ function isResumeCardInteractiveClick(event: ReactMouseEvent<HTMLElement>) {
         "[role='button']",
         "[role='menuitem']",
         "[data-resume-card-interactive='true']",
+        ".resume-protection-detail",
         // HoverCard 内容经 Portal 挂到 body，DOM 上不在卡片内，但 React 合成事件仍会冒泡到卡片。
         "[data-slot='hover-card-trigger']",
         "[data-slot='hover-card-content']",
@@ -353,6 +357,8 @@ function ResumeLibraryCardComponent({
 }: ResumeLibraryCardProps) {
   const jobDescriptionLabel = getResumeLibraryJobDescriptionLabel(record);
   const lifecycle = describeLifecycleCell(record);
+  const isPendingAdmission =
+    record.resumeAdmissionStatus === "pending" && record.resumeParseStatus === "ready";
   const resumeEvaluation = describeResumeEvaluationStatus(record.resumeEvaluationStatus);
   const profileSnapshot = record.resumeProfileSnapshot;
   const skills = record.resumeSkills;
@@ -376,7 +382,7 @@ function ResumeLibraryCardComponent({
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
     <Card
       className={cn(
-        "h-full overflow-hidden transition-colors hover:border-border hover:bg-muted/30",
+        "overflow-hidden transition-colors hover:border-border hover:bg-muted/30",
         selected
           ? "border-primary/40 bg-primary/5 hover:border-primary/60 hover:bg-primary/5"
           : "dark:bg-background dark:hover:bg-input/30",
@@ -459,17 +465,23 @@ function ResumeLibraryCardComponent({
                   <CopyableResumeRecordId id={record.id} parentheses />
                 </div>
                 {duplicateMatchBadge(record, () => onShowDuplicateMatches(record))}
-                <ResumeLifecycleBadge
-                  className="max-w-full"
-                  detailLabel={lifecycle.detailLabel}
-                  fullLabel={lifecycle.fullLabel}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenDetail(record, lifecycleTargetTab(record));
-                  }}
-                  stageLabel={lifecycle.stageLabel}
-                  tone={lifecycle.tone}
-                />
+                {record.resumeAdmissionStatus === "protected" && (
+                  <ResumeProtectionPanel record={record} tagOnly />
+                )}
+                {isPendingAdmission && <Badge variant="outline">待核实</Badge>}
+                {record.resumeAdmissionStatus !== "protected" && !isPendingAdmission && (
+                  <ResumeLifecycleBadge
+                    className="max-w-full"
+                    detailLabel={lifecycle.detailLabel}
+                    fullLabel={lifecycle.fullLabel}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenDetail(record, lifecycleTargetTab(record));
+                    }}
+                    stageLabel={lifecycle.stageLabel}
+                    tone={lifecycle.tone}
+                  />
+                )}
               </div>
 
               <div className="min-w-0">
@@ -568,6 +580,9 @@ function ResumeLibraryCardComponent({
                 ) : null}
               </div>
 
+              {record.resumeAdmissionStatus === "protected" ? (
+                <ResumeProtectionPanel record={record} />
+              ) : null}
               <ResumeCardProfileSnapshot snapshot={profileSnapshot} />
             </div>
           </div>

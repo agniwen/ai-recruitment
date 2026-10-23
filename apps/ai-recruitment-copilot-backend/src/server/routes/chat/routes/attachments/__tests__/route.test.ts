@@ -8,10 +8,15 @@ const mocks = vi.hoisted(() => ({
   getUserAttachment: vi.fn(),
   listAllJobDescriptions: vi.fn(),
   projectAttachmentToResumeProfile: vi.fn(),
+  protection: vi.fn(),
   resolveJobDescriptionMatchBestEffort: vi.fn(),
   updateStructuredByHash: vi.fn(),
 }));
 
+vi.mock(
+  "@arc/ai-recruitment-copilot-backend/server/routes/studio/routes/resumes/dao/protection/index",
+  () => ({ findResumeProtectionConflict: mocks.protection }),
+);
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/s3", () => ({
   getObjectBytes: mocks.getObjectBytes,
   getObjectStream: mocks.getObjectStream,
@@ -61,6 +66,7 @@ describe("attachmentsRouter match-job-description", () => {
     for (const fn of Object.values(mocks)) {
       fn.mockReset();
     }
+    mocks.protection.mockResolvedValue(null);
     mocks.listAllJobDescriptions.mockResolvedValue([{ id: "jd-1", name: "前端工程师" }]);
     mocks.resolveJobDescriptionMatchBestEffort.mockResolvedValue({
       matchedId: "jd-1",
@@ -118,5 +124,19 @@ describe("attachmentsRouter match-job-description", () => {
       jobDescriptions: [{ id: "jd-1", name: "前端工程师" }],
       resumeProfile: profile,
     });
+  });
+  it("does not run job analysis for an attachment protected by another recommender", async () => {
+    mocks.getUserAttachment.mockResolvedValue({
+      contentHash: "a".repeat(64),
+      filename: "resume.pdf",
+      parsedStructured: { name: "候选人", sourceFileName: "resume.pdf" },
+    });
+    mocks.projectAttachmentToResumeProfile.mockReturnValue({ name: "候选人", targetRoles: [] });
+    mocks.protection.mockResolvedValue({ ownerName: "保护人" });
+    const response = await makeApp().request("/attachments/att-1/match-job-description", {
+      method: "POST",
+    });
+    expect(response.status).toBe(409);
+    expect(mocks.resolveJobDescriptionMatchBestEffort).not.toHaveBeenCalled();
   });
 });

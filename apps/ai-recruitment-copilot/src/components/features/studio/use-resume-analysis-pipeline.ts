@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+
 // 简历分析流水线 hook：parse → JD 匹配 → 语义查重。
 // 出题不再自动跟在解析之后，而是由组件层在「保存并发起面试」按下时显式调用
 // `generateQuestions()` 触发——按钮 loading 与流式 overlay 由本 hook 的 isBusy
@@ -125,6 +127,7 @@ export function useResumeAnalysisPipeline(
   options: ResumeAnalysisPipelineOptions,
 ): ResumeAnalysisPipeline {
   const slug = useWorkspaceSlug();
+  const queryClient = useQueryClient();
   const {
     onProfileParsed,
     onJobDescriptionMatched,
@@ -402,6 +405,34 @@ export function useResumeAnalysisPipeline(
 
         const { fileName, resumeProfile, resumeText } = parseResult;
 
+        const checkForm = new FormData();
+        checkForm.append("resume", file);
+        checkForm.append(
+          "resumePayload",
+          JSON.stringify({ ...parseResult, interviewQuestions: [] }),
+        );
+        const checkResponse = await fetch(
+          `/api/w/${encodeURIComponent(slug)}/studio/resumes/protection-check`,
+          {
+            body: checkForm,
+            method: "POST",
+            signal: abortController.signal,
+          },
+        );
+        if (!checkResponse.ok) {
+          throw new Error("推荐保护期检测暂未完成，请稍后重试。");
+        }
+        const check = (await checkResponse.json()) as {
+          status: "clear" | "protected";
+          message?: string;
+        };
+        if (check.status === "protected") {
+          void queryClient.invalidateQueries({ queryKey: ["studio-resumes", slug] });
+          setResumeFile(null);
+          toast.warning(check.message || "该候选人处于推荐保护期，暂不能继续推荐。");
+          return;
+        }
+
         onProfileParsed({ fileName, resumeProfile });
         setResumePayload({
           fileName,
@@ -601,7 +632,14 @@ export function useResumeAnalysisPipeline(
         accumulatedTextRef.current = "";
       }
     },
-    [onJobDescriptionMatched, onProfileParsed, onReviewDraftChange, onReviewGenerated, slug],
+    [
+      onJobDescriptionMatched,
+      onProfileParsed,
+      onReviewDraftChange,
+      onReviewGenerated,
+      queryClient,
+      slug,
+    ],
   );
 
   const handleDedupContinue = useCallback(() => {

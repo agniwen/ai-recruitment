@@ -25,7 +25,13 @@ describe("buildResumeVisibilityCondition", () => {
     expect(query.sql).not.toContain('"studio_interview"."hiring_unit_id" in');
     expect(query.sql).toContain('"department"."hiring_unit_id" in');
     expect(query.sql).toContain('"job_description"."department_id" in');
-    expect(query.params).toEqual(["user-1", "hiring-unit-1", "hiring-unit-1", "department-1"]);
+    expect(query.params).toEqual([
+      "user-1",
+      "hiring-unit-1",
+      "hiring-unit-1",
+      "department-1",
+      "accepted",
+    ]);
   });
 
   it("does not grant sibling departments for a department-only ODC", () => {
@@ -40,7 +46,7 @@ describe("buildResumeVisibilityCondition", () => {
     const query = new PgDialect().sqlToQuery(condition);
     expect(query.sql).toContain('"job_description"."department_id" in');
     expect(query.sql).not.toContain('"department"."hiring_unit_id" in');
-    expect(query.params).toEqual(["department-1"]);
+    expect(query.params).toEqual(["department-1", "accepted"]);
   });
 
   it("rechecks the current ODC role and assignments for resolved request scopes", () => {

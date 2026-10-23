@@ -1,3 +1,10 @@
+import { createResumeRecordFromStorage } from "../resumes/utils/create-from-storage";
+import { eq } from "drizzle-orm";
+import {
+  admitResumeRecord,
+  isResumeAdmitted,
+  findResumeProtectionConflict,
+} from "../resumes/dao/protection";
 /* oxlint-disable complexity -- collection router coordinates validation, persistence, and access policy. */
 import { notifyExternalInterviewers } from "./utils/external-interviewer-notification";
 import { humanInterviewMeetingsRouter } from "./routes/human-interview-meetings/route";
@@ -16,7 +23,6 @@ import {
   toNullableString,
 } from "@arc/db-schema/studio-interviews";
 import {
-  analyzeResumeFile,
   generateInterviewQuestionsForProfile,
   parseResumeFastToProfile,
 } from "@arc/ai-recruitment-copilot-backend/server/agents/resume-analysis-agent";
@@ -166,28 +172,64 @@ export const studioInterviewCollectionRouter = factory
       // Reuse order: client-prebaked → registry cache → server full analysis.
       let analysis = parsedResumePayload;
       if (!analysis && resume) {
-        if (uploadResult?.cachedResumeProfile) {
-          const interviewQuestions = candidateQuestionGenerationEnabled
-            ? await generateInterviewQuestionsForProfile(uploadResult.cachedResumeProfile)
-            : [];
-          analysis = {
-            fileName: resume.name,
-            interviewQuestions,
-            resumeProfile: uploadResult.cachedResumeProfile,
-            resumeText: uploadResult.resumeText,
-          };
-        } else if (candidateQuestionGenerationEnabled) {
-          analysis = await analyzeResumeFile(resume);
-          ({ resumeText } = analysis);
-        } else {
-          const parsed = await parseResumeFastToProfile(resume);
-          resumeText = parsed.parsedText;
-          analysis = {
-            fileName: resume.name,
-            interviewQuestions: [],
-            resumeProfile: parsed.resumeProfile,
+        const parsed = uploadResult?.cachedResumeProfile
+          ? null
+          : await parseResumeFastToProfile(resume);
+        resumeText = parsed?.parsedText ?? resumeText;
+        const resolvedProfile = uploadResult?.cachedResumeProfile ?? parsed?.resumeProfile;
+        if (!resolvedProfile) {
+          throw new Error("简历资料暂不可用，请重新上传。");
+        }
+        analysis = {
+          fileName: resume.name,
+          interviewQuestions: [],
+          resumeProfile: resolvedProfile,
+          resumeText,
+        };
+      }
+      if (analysis?.resumeProfile && c.var.user) {
+        const protection = await findResumeProtectionConflict({
+          identity: {
+            contentHash: resumeContentHash,
+            email: analysis.resumeProfile.email,
+            name: analysis.resumeProfile.name,
+            phone: analysis.resumeProfile.phone,
+          },
+          organizationId: activeOrg.id,
+          userId: c.var.user.id,
+        });
+        if (protection) {
+          const blockedId = await createResumeRecordFromStorage({
+            candidateEmail: analysis.resumeProfile.email,
+            candidateName: analysis.resumeProfile.name,
+            candidatePhone: analysis.resumeProfile.phone,
+            contentHash: resumeContentHash,
+            jobDescriptionId: input.data.jobDescriptionId || null,
+            notes: null,
+            organizationId: activeOrg.id,
+            recommendationReady: false,
+            resumeFileName: analysis.fileName,
+            resumeProfile: analysis.resumeProfile,
             resumeText,
-          };
+            storageKey: resumeStorageKey,
+            targetRole: input.data.targetRole || null,
+            userId: c.var.user.id,
+            userRole: c.var.member?.role,
+          });
+          invalidateStudioInterviewCaches(activeOrg.id);
+          return c.json(
+            {
+              candidateId: blockedId,
+              error: "该候选人处于推荐保护期，已保留至全部候选人。",
+              protection,
+            },
+            409,
+          );
+        }
+        if (!parsedResumePayload && candidateQuestionGenerationEnabled) {
+          analysis.interviewQuestions = await generateInterviewQuestionsForProfile(
+            analysis.resumeProfile,
+          );
         }
       }
       const dedupConflict = await resolveResumeCreateDedupConflict({
@@ -236,7 +278,17 @@ export const studioInterviewCollectionRouter = factory
       );
 
       await db.transaction(async (tx) => {
-        await tx.insert(studioInterview).values(record);
+        await tx
+          .insert(studioInterview)
+          .values({ ...record, pipelineStage: "ai_review", resumeAdmissionStatus: "pending" });
+        const admission = await admitResumeRecord(tx, interviewRecordId, activeOrg.id);
+        if (admission !== "accepted") {
+          return;
+        }
+        await tx
+          .update(studioInterview)
+          .set({ pipelineStage: "ai_interview" })
+          .where(eq(studioInterview.id, interviewRecordId));
         await tx.insert(studioInterviewSchedule).values(scheduleRows);
         await autoBindApplicableTemplates(tx, interviewRecordId, record.jobDescriptionId);
         await createInterviewContextSnapshot(tx, {
@@ -263,6 +315,12 @@ export const studioInterviewCollectionRouter = factory
       }
       // POST / 返回新建轮次的完整 detail，供招聘台 onCreated 直接使用。
       // Return the first round's full detail so the resume library onCreated can use it directly.
+      if (!(await isResumeAdmitted(interviewRecordId, activeOrg.id))) {
+        return c.json(
+          { candidateId: interviewRecordId, error: "该候选人暂不能继续推荐，已保留至全部候选人。" },
+          409,
+        );
+      }
       const firstRoundId = scheduleRows[0]?.id;
       if (!firstRoundId) {
         return c.json({ error: "未生成面试轮次。" }, 400);

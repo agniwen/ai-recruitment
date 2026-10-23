@@ -1,3 +1,6 @@
+import { resumeProtectionCheckRouter } from "./routes/protection/check-route";
+import { resumeProtectionRouter } from "./routes/protection/route";
+import { isResumeAdmitted } from "./dao/protection";
 import { candidateEntryCredentialRouter } from "./routes/entry-credentials/route";
 /* oxlint-disable max-lines -- resume route keeps its collection and item mutations in one route-owned module. */
 import { notifyAiReviewPending } from "./utils/ai-review-notification";
@@ -221,6 +224,8 @@ export function parseResumeReviewFormInput(
 
 export const resumeLibraryRouter = factory
   .createApp()
+  .route("/protection-check", resumeProtectionCheckRouter)
+  .route("/:id/protection", resumeProtectionRouter)
   .route("/:id/portfolio", portfolioRouter)
   .route("/:id/entry-credentials", candidateEntryCredentialRouter)
   .route("/", resumeLibraryReadRouter)
@@ -389,37 +394,11 @@ export const resumeLibraryRouter = factory
         uploaderUserId: c.var.user?.id,
       });
 
-      let generatedReview: Awaited<ReturnType<typeof generateResumeReviewBestEffort>> = null;
       let resumeReview = resumeReviewInput.data;
       let resumeScreeningResult = null;
-      if (!resumeReview && resumeProfile) {
-        generatedReview = await generateResumeReviewBestEffort({
-          jobDescriptionId: input.data.jobDescriptionId || null,
-          logPrefix: "[studio-resumes]",
-          organizationId: activeOrg.id,
-          resumeProfile,
-          resumeText,
-        });
-        resumeReview = generatedReview?.structuredReview ?? null;
-        resumeScreeningResult = generatedReview?.screeningResult ?? null;
-      } else if (resumeProfile && resumeReview && !isResumeReviewV5(resumeReview)) {
-        resumeScreeningResult = await generateResumeScreeningBestEffort({
-          jobDescriptionId: input.data.jobDescriptionId || null,
-          logPrefix: "[studio-resumes]",
-          organizationId: activeOrg.id,
-          resumeProfile,
-          resumeText,
-        });
-      }
-      let resumeReviewStatus: "failed" | "idle" | "ready" = "idle";
+      let resumeReviewStatus: "failed" | "idle" | "ready" = resumeReview ? "ready" : "idle";
       let resumeScreeningStatus: "failed" | "idle" | "ready" = "idle";
-      const usesLegacyScreening = Boolean(resumeReview && !isResumeReviewV5(resumeReview));
-      if (resumeProfile) {
-        resumeReviewStatus = resumeReview ? "ready" : "failed";
-        if (usesLegacyScreening) {
-          resumeScreeningStatus = resumeScreeningResult ? "ready" : "failed";
-        }
-      }
+      let usesLegacyScreening = false;
 
       const recordId = await createResumeRecordFromStorage({
         candidateEmail: input.data.candidateEmail || null,
@@ -449,7 +428,58 @@ export const resumeLibraryRouter = factory
         userRole: c.var.member?.role ?? null,
       });
 
-      if (resumeReview) {
+      const admitted = await isResumeAdmitted(recordId, activeOrg.id);
+      if (admitted) {
+        let generatedReview: Awaited<ReturnType<typeof generateResumeReviewBestEffort>> = null;
+
+        if (!resumeReview && resumeProfile) {
+          generatedReview = await generateResumeReviewBestEffort({
+            jobDescriptionId: input.data.jobDescriptionId || null,
+            logPrefix: "[studio-resumes]",
+            organizationId: activeOrg.id,
+            resumeProfile,
+            resumeText,
+          });
+          resumeReview = generatedReview?.structuredReview ?? null;
+          resumeScreeningResult = generatedReview?.screeningResult ?? null;
+        } else if (resumeProfile && resumeReview && !isResumeReviewV5(resumeReview)) {
+          resumeScreeningResult = await generateResumeScreeningBestEffort({
+            jobDescriptionId: input.data.jobDescriptionId || null,
+            logPrefix: "[studio-resumes]",
+            organizationId: activeOrg.id,
+            resumeProfile,
+            resumeText,
+          });
+        }
+
+        usesLegacyScreening = Boolean(resumeReview && !isResumeReviewV5(resumeReview));
+        if (resumeProfile) {
+          resumeReviewStatus = resumeReview ? "ready" : "failed";
+          if (usesLegacyScreening) {
+            resumeScreeningStatus = resumeScreeningResult ? "ready" : "failed";
+          }
+        }
+
+        await db
+          .update(studioInterview)
+          .set({
+            resumeReview,
+            resumeReviewError: resumeProfile && !resumeReview ? "AI 分析生成失败。" : null,
+            resumeReviewGeneratedAt: resumeReview ? new Date() : null,
+            resumeReviewStatus,
+            resumeScreeningEvaluatedAt: resumeScreeningResult ? new Date() : null,
+            resumeScreeningResult,
+            resumeScreeningStatus,
+          })
+          .where(
+            and(
+              eq(studioInterview.id, recordId),
+              eq(studioInterview.organizationId, activeOrg.id),
+              eq(studioInterview.resumeAdmissionStatus, "accepted"),
+            ),
+          );
+      }
+      if (admitted && resumeReview) {
         await notifyAiReviewPending({ candidateId: recordId, organizationId: activeOrg.id });
       }
       await replaceDuplicateMatchesForSource({

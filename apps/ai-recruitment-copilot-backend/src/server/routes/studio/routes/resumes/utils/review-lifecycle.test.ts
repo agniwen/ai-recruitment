@@ -116,6 +116,23 @@ function createStore(overrides: Partial<ResumeAssessmentRecord> = {}) {
 }
 
 describe("runResumeAssessmentLifecycle", () => {
+  it.each(["pending", "protected"] as const)(
+    "never calls the LLM for %s recommendations, including forced reassessment",
+    async (resumeAdmissionStatus) => {
+      const { deps } = createStore({ resumeAdmissionStatus });
+      deps.generate = () => {
+        throw new Error("must not call the LLM");
+      };
+      deps.markExistingReady = () => {
+        throw new Error("must not reuse an evaluation");
+      };
+      const result = await runResumeAssessmentLifecycle(
+        { force: true, organizationId: "org-1", resumeRecordId: "resume-1" },
+        deps,
+      );
+      expect(result).toEqual({ reason: "protection_restricted", status: "skipped" });
+    },
+  );
   it("does not upgrade an existing legacy review during a normal queued run", async () => {
     const { deps, record } = createStore();
     deps.generate = () => {

@@ -32,6 +32,7 @@ export const UPLOAD_STATUS_FILTER_OPTIONS = [
   { label: "已完成", value: "succeeded" },
   { label: "失败", value: "failed" },
   { label: "已跳过", value: "duplicate_skipped" },
+  { label: "推荐受限", value: "protection_blocked" },
   { label: "已取消", value: "cancelled" },
 ] as const;
 
@@ -244,6 +245,9 @@ export function uploadItemStatusMeta(
   }
   if (status === "failed") {
     return { label: "失败", variant: "danger" };
+  }
+  if (status === "protection_blocked") {
+    return { label: "推荐受限", variant: "warning" };
   }
   if (status === "duplicate_skipped") {
     return { label: "已跳过", variant: "warning" };

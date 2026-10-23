@@ -1,5 +1,6 @@
+import { findResumeProtectionConflict, identityForResume } from "../../../resumes/dao/protection";
 import { validateImportDestinations } from "./validation";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { resumePoolEvent, resumePoolImport, studioInterview } from "@arc/db-schema/schema";
 import type {
@@ -41,6 +42,7 @@ export async function batchImportResumePoolItem(
     const existing = await tx
       .select({
         jobDescriptionId: studioInterview.jobDescriptionId,
+        resumeAdmissionStatus: studioInterview.resumeAdmissionStatus,
         resumeRecordId: studioInterview.id,
       })
       .from(resumePoolEvent)
@@ -56,7 +58,7 @@ export async function batchImportResumePoolItem(
           eq(resumePoolEvent.organizationId, input.organizationId),
           eq(resumePoolEvent.poolItemId, input.poolItemId),
           eq(resumePoolEvent.actorId, input.userId),
-          eq(resumePoolEvent.type, "imported"),
+          inArray(resumePoolEvent.type, ["imported", "protection_blocked"]),
           sql`${resumePoolEvent.payload}->>'requestId' = ${input.requestId}`,
         ),
       );
@@ -64,7 +66,15 @@ export async function batchImportResumePoolItem(
       return existing;
     }
     // Check once for the entire batch, before any destination is created.
-    if (input.dedupPolicy === "check") {
+    const protection = await findResumeProtectionConflict(
+      {
+        identity: identityForResume(source),
+        organizationId: input.organizationId,
+        userId: input.userId,
+      },
+      tx,
+    );
+    if (input.dedupPolicy === "check" && !protection) {
       const matches = await findSemanticResumeDuplicates({
         email: source.candidateEmail ?? source.resumeProfile?.email ?? null,
         name: source.candidateName ?? source.resumeProfile?.name ?? null,
@@ -111,23 +121,35 @@ export async function batchImportResumePoolItem(
         },
         tx,
       );
-      await tx.insert(resumePoolImport).values({
-        id: crypto.randomUUID(),
-        importedAt,
-        importedBy: input.userId,
-        importedResumeRecordId: resumeRecordId,
-        organizationId: input.organizationId,
-        poolItemId: source.id,
-      });
+      const [candidate] = await tx
+        .select({ resumeAdmissionStatus: studioInterview.resumeAdmissionStatus })
+        .from(studioInterview)
+        .where(eq(studioInterview.id, resumeRecordId))
+        .limit(1);
+      const accepted = candidate?.resumeAdmissionStatus === "accepted";
+      if (accepted) {
+        await tx.insert(resumePoolImport).values({
+          id: crypto.randomUUID(),
+          importedAt,
+          importedBy: input.userId,
+          importedResumeRecordId: resumeRecordId,
+          organizationId: input.organizationId,
+          poolItemId: source.id,
+        });
+      }
       await tx.insert(resumePoolEvent).values({
         actorId: input.userId,
         id: crypto.randomUUID(),
         organizationId: input.organizationId,
         payload: { destination, requestId: input.requestId, resumeRecordId },
         poolItemId: source.id,
-        type: "imported",
+        type: accepted ? "imported" : "protection_blocked",
       });
-      created.push({ jobDescriptionId: destination.jobDescriptionId, resumeRecordId });
+      created.push({
+        jobDescriptionId: destination.jobDescriptionId,
+        resumeAdmissionStatus: candidate?.resumeAdmissionStatus,
+        resumeRecordId,
+      });
     }
     return created;
   });
@@ -136,6 +158,9 @@ export async function batchImportResumePoolItem(
   }
   // Parsing is reused; only indexing and job-specific evaluation run after commit.
   for (const record of records) {
+    if (record.resumeAdmissionStatus !== "accepted") {
+      continue;
+    }
     await enqueueResumeSemanticIndexJobBestEffort({
       organizationId: input.organizationId,
       sourceId: record.resumeRecordId,
@@ -151,5 +176,13 @@ export async function batchImportResumePoolItem(
       });
     }
   }
-  return { records, status: "imported" };
+  return {
+    records: records.map(({ jobDescriptionId, resumeRecordId }) => ({
+      jobDescriptionId,
+      resumeRecordId,
+    })),
+    status: records.some((record) => record.resumeAdmissionStatus !== "accepted")
+      ? "protected"
+      : "imported",
+  };
 }

@@ -12,6 +12,7 @@ import { CandidateBasicInfoView } from "@/components/features/candidate/candidat
 import { CandidateInterviewFeedbackContent } from "@/components/features/interview/candidate-interview-feedback";
 import { MarkdownView } from "@/components/features/display/markdown-view";
 import { ResumeProfileView } from "@/components/features/resume/resume-profile-view";
+import { ResumeProtectionPanel } from "@/components/features/studio/resumes/resume-protection-panel";
 import {
   ResumeOverviewPanel,
   ResumeReviewStructuredView,
@@ -766,6 +767,9 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
               record.pipelineStage === "offer" ? (
                 <OfferRecruiterContactForUploader candidateId={record.id} />
               ) : null}
+              {mode === "resume" && resumeRecord && !model.isPublic && (
+                <ResumeProtectionPanel record={resumeRecord} />
+              )}
               {/* 简历模式：复用 ResumeOverviewPanel —— 与「发起 AI 面试」
               弹窗的概览 tab 同一布局，后续要扩字段也只改一处。
               Resume mode: defer to ResumeOverviewPanel so the
@@ -793,7 +797,7 @@ export function StudioPersonDetailBody({ model }: { model: StudioPersonDetailVie
               )}
             </div>
           </TabsContent>
-          {mode === "resume" ? (
+          {mode === "resume" && !model.admissionRestricted ? (
             <TabsContent value="ai-analysis">
               <div className="space-y-6">
                 <ResumeReviewStructuredView

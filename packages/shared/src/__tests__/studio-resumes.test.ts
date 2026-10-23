@@ -24,6 +24,26 @@ const EMPTY: ResumeStageProgress = {
   offer: null,
 };
 
+describe("unadmitted candidate progress", () => {
+  it.each([
+    ["protected", "保护期中"],
+    ["pending", "待核实"],
+  ] as const)(
+    "shows admission status before the default pipeline stage: %s",
+    (resumeAdmissionStatus, label) => {
+      expect(
+        describeResumeProgress({
+          outcome: "in_pipeline",
+          pipelineStage: "ai_review",
+          resumeAdmissionStatus,
+          resumeParseStatus: "ready",
+          stageProgress: EMPTY,
+        }),
+      ).toEqual({ label, tone: "warning" });
+    },
+  );
+});
+
 describe("resumeLibraryFormSchema", () => {
   it("requires a job description when saving a resume record", () => {
     const result = resumeLibraryFormSchema.safeParse({

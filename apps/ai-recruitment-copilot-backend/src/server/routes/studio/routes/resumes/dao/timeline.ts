@@ -29,6 +29,7 @@ import {
 } from "@arc/db-schema/studio-interviews";
 import { readResumeEvaluationTimeSlots } from "./evaluation";
 import { loadResumeDetail } from "./resumes";
+import { describeResumeProgress, isResumeAdmissionRestricted } from "@arc/shared/studio-resumes";
 import {
   auditDescription,
   auditMetadata,
@@ -759,7 +760,9 @@ export async function loadCandidateTimeline(
     events: events.slice(0, 120),
     summary: {
       currentOutcomeLabel: candidateOutcomeMeta[candidate.outcome].label,
-      currentStageLabel: pipelineStageMeta[candidate.pipelineStage].label,
+      currentStageLabel: isResumeAdmissionRestricted(candidate.resumeAdmissionStatus)
+        ? describeResumeProgress(candidate).label
+        : pipelineStageMeta[candidate.pipelineStage].label,
       latestAt: events[0]?.occurredAt ?? null,
       totalEvents: events.length,
     },

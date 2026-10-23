@@ -71,6 +71,7 @@ function createTransaction(
     jobDescriptionId: string | null;
     outcome: "archived" | "hired" | "in_pipeline";
     pipelineStage: "ai_review" | "closed" | "human_interview" | "screening" | "offer";
+    resumeAdmissionStatus?: "accepted" | "pending" | "protected";
     resumeReviewStatus?: "ready" | "processing";
     resumeSourcePoolItemId?: string | null;
     resumeSourceType?: "direct_upload" | "private_pool" | "public_pool" | null;
@@ -92,6 +93,7 @@ function createTransaction(
       let rows: unknown[] = [
         {
           candidateName: "候选人甲",
+          resumeAdmissionStatus: "accepted",
           resumeSourcePoolItemId: null,
           resumeSourceType: "direct_upload",
           ...existing,
@@ -133,6 +135,35 @@ describe("transitionCandidateStage", () => {
     mocks.notifyCandidateStageChange.mockImplementation(() => Promise.resolve());
     mocks.refreshDirectUploadDuplicateMatchesBeforeHire.mockImplementation(() => Promise.resolve());
   });
+
+  it.each(["pending", "protected"] as const)(
+    "blocks stage advancement for %s uploads",
+    async (resumeAdmissionStatus) => {
+      const { tx, insertedValues, updatedWhere } = createTransaction({
+        closedMeta: null,
+        jobDescriptionId: "jd-a",
+        outcome: "in_pipeline",
+        pipelineStage: "ai_review",
+        resumeAdmissionStatus,
+        resumeReviewStatus: "ready",
+      });
+      mocks.transaction.mockImplementation(async (callback) => await callback(tx));
+      const result = await transitionCandidateStage({
+        authorize: vi.fn().mockResolvedValue(true),
+        candidateId: "candidate-a",
+        input: { pipelineStage: "screening" },
+        operatorId: "odc-user",
+        organizationId: "org-a",
+        provenance: { kind: "manual" },
+      });
+      expect(result).toEqual({
+        kind: "invalid",
+        message: "该候选人暂不能继续推荐，请查看保护详情。",
+      });
+      expect(updatedWhere).not.toHaveBeenCalled();
+      expect(insertedValues).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["字".repeat(2001)])(
     "rejects approval without a valid explanation",

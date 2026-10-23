@@ -1,3 +1,4 @@
+import { admitResumeRecord, isResumeAdmitted } from "../resumes/dao/protection";
 import { isWorkspaceAdministrator } from "@arc/ai-recruitment-copilot-backend/server/access/workspace-administrator";
 import { buildResumeAtomicSearch } from "../resumes/dao/atomic-search";
 /* oxlint-disable max-lines -- resume-pool persistence keeps list/detail/write transactions co-located. */
@@ -773,10 +774,10 @@ export async function publishPrivatePoolItem(
   return publicItem;
 }
 
-export function importPoolItemToResumeLibrary(
+export async function importPoolItemToResumeLibrary(
   input: ImportPoolItemInput,
 ): Promise<ResumePoolImportResult> {
-  return admitResumePoolItem<PoolRow, ResumePoolImportDuplicateMatchRecord>(input, {
+  const result = await admitResumePoolItem<PoolRow, ResumePoolImportDuplicateMatchRecord>(input, {
     cloneSemanticIndex: (admission) =>
       cloneResumeSemanticIndexFromPoolToInterview({
         poolItemId: admission.poolItemId,
@@ -805,6 +806,7 @@ export function importPoolItemToResumeLibrary(
             .from(resumePoolImport)
             .where(
               and(
+                eq(resumePoolImport.importedBy, admission.importedBy),
                 eq(resumePoolImport.poolItemId, source.id),
                 eq(resumePoolImport.organizationId, admission.organizationId),
               ),
@@ -861,7 +863,7 @@ export function importPoolItemToResumeLibrary(
             recruitmentSource: source.recruitmentSource,
             recruitmentSourceDetail: source.recruitmentSourceDetail,
             resumeFileName: source.resumeFileName,
-            resumeParseStatus: "processing",
+            resumeParseStatus: "ready",
             resumeProfile: source.resumeProfile,
             resumeText: source.resumeText,
             source: {
@@ -877,20 +879,28 @@ export function importPoolItemToResumeLibrary(
           },
           tx,
         );
-        await tx.insert(resumePoolImport).values({
-          id: crypto.randomUUID(),
-          importedAt,
-          importedBy: admission.importedBy,
-          importedResumeRecordId: resumeRecordId,
-          organizationId: admission.organizationId,
-          poolItemId: source.id,
-        });
+        const [candidate] = await tx
+          .select({ status: studioInterview.resumeAdmissionStatus })
+          .from(studioInterview)
+          .where(eq(studioInterview.id, resumeRecordId))
+          .limit(1);
+        const accepted = candidate?.status === "accepted";
+        if (accepted) {
+          await tx.insert(resumePoolImport).values({
+            id: crypto.randomUUID(),
+            importedAt,
+            importedBy: admission.importedBy,
+            importedResumeRecordId: resumeRecordId,
+            organizationId: admission.organizationId,
+            poolItemId: source.id,
+          });
+        }
         await writeResumePoolEvent(tx, {
           actorId: admission.importedBy,
           organizationId: admission.organizationId,
           payload: { resumeRecordId },
           poolItemId: source.id,
-          type: "imported",
+          type: accepted ? "imported" : "protection_blocked",
         });
       });
       return resumeRecordId;
@@ -916,6 +926,7 @@ export function importPoolItemToResumeLibrary(
         .from(resumePoolImport)
         .where(
           and(
+            eq(resumePoolImport.importedBy, admission.importedBy),
             eq(resumePoolImport.poolItemId, admission.poolItemId),
             eq(resumePoolImport.organizationId, admission.organizationId),
           ),
@@ -948,20 +959,23 @@ export function importPoolItemToResumeLibrary(
     },
     markAdmissionReady: async (admission) => {
       const now = new Date();
-      await db
-        .update(studioInterview)
-        .set({
-          resumeParseError: null,
-          resumeParseStatus: "ready",
-          resumeParsedAt: now,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(studioInterview.id, admission.resumeRecordId),
-            eq(studioInterview.organizationId, admission.organizationId),
-          ),
-        );
+      await db.transaction(async (tx) => {
+        await tx
+          .update(studioInterview)
+          .set({
+            resumeParseError: null,
+            resumeParseStatus: "ready",
+            resumeParsedAt: now,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(studioInterview.id, admission.resumeRecordId),
+              eq(studioInterview.organizationId, admission.organizationId),
+            ),
+          );
+        await admitResumeRecord(tx, admission.resumeRecordId, admission.organizationId);
+      });
     },
     replaceDuplicateSnapshot: async (admission) => {
       await replaceDuplicateMatchesForSource({
@@ -972,6 +986,13 @@ export function importPoolItemToResumeLibrary(
       });
     },
   });
+  if (
+    result.status === "imported" &&
+    !(await isResumeAdmitted(result.resumeRecordId, input.organizationId))
+  ) {
+    return { resumeRecordId: result.resumeRecordId, status: "protected" };
+  }
+  return result;
 }
 
 export async function deleteOwnPoolItem(input: DeleteOwnPoolItemInput): Promise<void> {

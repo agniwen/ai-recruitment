@@ -2,16 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { batchImportResumePoolItem } from "./dao";
 
 const mocks = vi.hoisted(() => ({
+  admissionStatus: "accepted",
   create: vi.fn(),
   duplicates: vi.fn(),
   index: vi.fn(),
   options: vi.fn(),
+  protection: vi.fn(),
   review: vi.fn(),
   source: vi.fn(),
   transaction: vi.fn(),
 }));
 vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
   db: { transaction: mocks.transaction },
+}));
+vi.mock("../../../resumes/dao/protection", () => ({
+  findResumeProtectionConflict: mocks.protection,
+  identityForResume: (row: unknown) => row,
 }));
 vi.mock("../../dao", () => ({ loadAccessiblePoolItem: mocks.source }));
 vi.mock("./options", () => ({ loadResumePoolImportOptions: mocks.options }));
@@ -48,6 +54,8 @@ const inserted = vi.fn();
 let existing: { resumeRecordId: string; jobDescriptionId: null }[];
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.protection.mockResolvedValue(null);
+  mocks.admissionStatus = "accepted";
   committed = [];
   existing = [];
   mocks.source.mockResolvedValue({
@@ -73,7 +81,17 @@ beforeEach(() => {
       execute: vi.fn(),
       insert: () => ({ values: inserted }),
       select: () => ({
-        from: () => ({ innerJoin: () => ({ where: () => Promise.resolve(existing) }) }),
+        from: () => ({
+          innerJoin: () => ({
+            where: () =>
+              Promise.resolve(
+                existing.map((row) => ({ ...row, resumeAdmissionStatus: mocks.admissionStatus })),
+              ),
+          }),
+          where: () => ({
+            limit: () => Promise.resolve([{ resumeAdmissionStatus: mocks.admissionStatus }]),
+          }),
+        }),
       }),
       staged: [] as unknown[],
     };
@@ -84,6 +102,17 @@ beforeEach(() => {
 });
 
 describe("batch admission transaction", () => {
+  it("retains protected uploads without recording a successful import or launching assessment", async () => {
+    mocks.protection.mockResolvedValue({ cycleId: "cycle" });
+    mocks.admissionStatus = "protected";
+    const result = await batchImportResumePoolItem({ ...input, dedupPolicy: "force" });
+    expect(result.status).toBe("protected");
+    expect(mocks.index).not.toHaveBeenCalled();
+    expect(mocks.review).not.toHaveBeenCalled();
+    expect(inserted).not.toHaveBeenCalledWith(
+      expect.objectContaining({ importedResumeRecordId: expect.any(String) }),
+    );
+  });
   it("creates a candidate for each destination in the same transaction", async () => {
     const result = await batchImportResumePoolItem(input);
     expect(result.status).toBe("imported");

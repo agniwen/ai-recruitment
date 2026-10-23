@@ -80,6 +80,7 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
                   roundLabel: "AI 一面",
                 },
                 id: "unit-1",
+                status: "accepted",
               },
             ]),
         }),

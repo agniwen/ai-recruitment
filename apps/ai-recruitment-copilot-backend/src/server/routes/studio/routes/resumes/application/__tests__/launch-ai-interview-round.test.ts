@@ -43,6 +43,14 @@ describe("launchAiInterviewRound", () => {
     deps.idGenerator.next.mockReturnValueOnce("round_1").mockReturnValueOnce("audit_1");
   });
 
+  it("rejects a protected candidate before constructing or writing an interview round", async () => {
+    deps.loadCandidate.mockResolvedValue({ ...candidate, resumeAdmissionStatus: "protected" });
+    const result = await createLaunchAiInterviewRound(deps)(command);
+    expect(result).toMatchObject({ ok: false, reason: "resume_evaluation_required" });
+    expect(deps.commit).not.toHaveBeenCalled();
+    expect(deps.buildSchedule).not.toHaveBeenCalled();
+  });
+
   it("returns not_found without starting the write workflow", async () => {
     deps.loadCandidate.mockResolvedValue(null);
 

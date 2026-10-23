@@ -206,12 +206,13 @@ export function ResumeLibraryCardList({
             }
             return (
               <div
-                className="absolute top-0 left-0 w-full pb-3 [contain:layout]"
+                className="absolute top-0 left-0 grid w-full pb-3 [contain:layout]"
                 data-index={virtualRow.index}
                 data-resume-record-id={record.id}
                 key={virtualRow.key}
+                ref={virtualizer.measureElement}
                 style={{
-                  height: virtualRow.size,
+                  minHeight: cardHeight,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >

@@ -362,7 +362,11 @@ export function ImportResumePoolDialog({
         setDuplicates(result);
         return;
       }
-      toast.success(`已入库到候选人管理，共 ${result.records.length} 条记录`);
+      if (result.status === "protected") {
+        toast.warning("该候选人暂不能继续推荐，已保留至全部候选人，请查看保护详情。");
+      } else {
+        toast.success(`已入库到候选人管理，共 ${result.records.length} 条记录`);
+      }
       onImported();
       onOpenChange(false);
     },

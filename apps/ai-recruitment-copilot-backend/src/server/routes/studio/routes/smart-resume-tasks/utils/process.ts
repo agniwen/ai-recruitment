@@ -1,8 +1,12 @@
+import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
+import { findResumeProtectionConflict, identityForResume } from "../../resumes/dao/protection";
+import { createResumeRecordFromStorage } from "../../resumes/utils/create-from-storage";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { serializeErrorDetails } from "@arc/ai-recruitment-copilot-backend/lib/server/error-reporting";
 import {
   member,
+  studioInterview,
   resumePoolItem,
   resumeUploadBatchItem,
   smartResumeTask,
@@ -72,6 +76,67 @@ export async function processSmartResumeRecommendation(itemId: string) {
     }
     if (!row.pool.resumeProfile || row.pool.resumeParseStatus !== "ready") {
       throw new Error("简历尚未解析完成。");
+    }
+    const protection = await findResumeProtectionConflict({
+      identity: identityForResume(row.pool),
+      organizationId: row.task.organizationId,
+      userId: row.task.createdBy,
+    });
+    if (protection) {
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`smart-protection:${itemId}`}, 0))`,
+        );
+        const [existing] = await tx
+          .select({ id: studioInterview.id })
+          .from(studioInterview)
+          .where(
+            and(
+              eq(studioInterview.resumeSourcePoolItemId, row.pool.id),
+              eq(studioInterview.organizationId, row.task.organizationId),
+              eq(studioInterview.createdBy, row.task.createdBy),
+              eq(studioInterview.resumeAdmissionStatus, "protected"),
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          await createResumeRecordFromStorage(
+            {
+              candidateEmail: row.pool.candidateEmail,
+              candidateName: row.pool.candidateName,
+              candidatePhone: row.pool.candidatePhone,
+              contentHash: row.pool.resumeContentHash,
+              jobDescriptionId: null,
+              notes: null,
+              organizationId: row.task.organizationId,
+              recommendationReady: false,
+              resumeFileName: row.pool.resumeFileName,
+              resumeProfile: row.pool.resumeProfile,
+              resumeText: row.pool.resumeText,
+              source: {
+                importedAt: new Date(),
+                importedBy: row.task.createdBy,
+                poolItemId: row.pool.id,
+                type: "private_pool",
+              },
+              storageKey: row.pool.resumeStorageKey,
+              targetRole: row.pool.targetRole,
+              userId: row.task.createdBy,
+            },
+            tx,
+          );
+        }
+        await tx
+          .update(smartResumeTaskItem)
+          .set({
+            error: "该候选人处于推荐保护期，暂不能继续推荐。请到全部候选人查看保护详情。",
+            selectedJobIds: [],
+            status: "failed",
+          })
+          .where(eq(smartResumeTaskItem.id, itemId));
+      });
+      invalidateStudioInterviewCaches(row.task.organizationId);
+      return;
     }
     const { recommendSmartJobs } = await import("./recommend");
     const result = await recommendSmartJobs(

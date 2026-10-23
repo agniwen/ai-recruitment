@@ -46,6 +46,7 @@ function resumeMetricsOrgFilters(
 ) {
   return and(
     eq(studioInterview.organizationId, organizationId),
+    eq(studioInterview.resumeAdmissionStatus, "accepted"),
     createdByUserId ? eq(studioInterview.createdBy, createdByUserId) : undefined,
     visibilityCondition,
   );
@@ -266,6 +267,7 @@ async function loadDashboardActivity(organizationId: string) {
       from: studioInterview,
       where: and(
         eq(studioInterview.organizationId, organizationId),
+        eq(studioInterview.resumeAdmissionStatus, "accepted"),
         gte(studioInterview.createdAt, since),
       ),
     }),
@@ -335,6 +337,7 @@ async function loadActionItems(organizationId: string): Promise<DashboardActionI
     .where(
       and(
         eq(studioInterview.organizationId, organizationId),
+        eq(studioInterview.resumeAdmissionStatus, "accepted"),
         ne(studioInterview.outcome, "archived"),
       ),
     );
@@ -488,6 +491,7 @@ async function loadJobPipeline(organizationId: string) {
     .where(
       and(
         eq(studioInterview.organizationId, organizationId),
+        eq(studioInterview.resumeAdmissionStatus, "accepted"),
         ne(studioInterview.outcome, "archived"),
       ),
     )

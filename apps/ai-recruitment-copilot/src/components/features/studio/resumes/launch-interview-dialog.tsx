@@ -76,6 +76,7 @@ interface LaunchInterviewDialogProps {
  */
 async function streamGenerateQuestions(
   slug: string,
+  interviewRecordId: string,
   resumeProfile: ResumeProfile,
   signal: AbortSignal,
 ): Promise<InterviewQuestion[] | null> {
@@ -84,7 +85,7 @@ async function streamGenerateQuestions(
   // Streaming via hc: URL + body types come from the zValidator schema. Consume
   // the stream manually because rpcFetch would parse the whole body.
   const response = await rpc.api.w[":slug"].interview["generate-questions"].$post(
-    { json: { resumeProfile }, param: { slug } },
+    { json: { interviewRecordId, resumeProfile }, param: { slug } },
     { init: { signal } },
   );
   if (!response.ok) {
@@ -236,7 +237,12 @@ export function LaunchInterviewDialog({
         }
 
         setIsGenerating(true);
-        const questions = await streamGenerateQuestions(slug, profile, abortController.signal);
+        const questions = await streamGenerateQuestions(
+          slug,
+          recordId,
+          profile,
+          abortController.signal,
+        );
         if (cancelled || abortController.signal.aborted) {
           return;
         }

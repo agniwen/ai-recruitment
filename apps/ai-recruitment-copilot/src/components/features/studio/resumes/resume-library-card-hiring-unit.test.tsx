@@ -76,6 +76,14 @@ function createRecord(overrides: Partial<ResumeLibraryListRecord> = {}): ResumeL
 }
 
 describe("candidate card hiring unit", () => {
+  it("keeps the existing parse-failure status for unadmitted uploads", () => {
+    const record = createRecord({ resumeAdmissionStatus: "pending", resumeParseStatus: "failed" });
+    const markup = renderToStaticMarkup(
+      <ResumeLibraryCard {...({ record } as ResumeLibraryCardProps)} />,
+    );
+    expect(markup).toContain("解析失败");
+    expect(markup).not.toContain("待核实");
+  });
   it.each([
     ["岗位组织", "入库组织", "岗位组织"],
     [null, "入库组织", "入库组织"],

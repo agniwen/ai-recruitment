@@ -34,6 +34,7 @@ export async function loadJobDescriptionForReader(input: {
         eq(studioInterview.organizationId, input.organizationId),
         eq(studioInterview.jobDescriptionId, input.jobDescriptionId),
         eq(studioInterview.pipelineStage, "ai_review"),
+        eq(studioInterview.resumeAdmissionStatus, "accepted"),
       ),
     )
     .limit(1);

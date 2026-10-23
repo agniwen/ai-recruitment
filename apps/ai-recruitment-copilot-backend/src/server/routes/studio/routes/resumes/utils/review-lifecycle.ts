@@ -1,3 +1,4 @@
+import type { ResumeAdmissionStatus } from "@arc/db-schema/resume-protection";
 import type {
   CandidateOutcome,
   PipelineStage,
@@ -14,6 +15,7 @@ export interface ResumeAssessment {
 }
 
 export interface ResumeAssessmentRecord {
+  resumeAdmissionStatus?: ResumeAdmissionStatus;
   jobDescriptionId: string | null;
   outcome: CandidateOutcome;
   pipelineStage: PipelineStage;
@@ -65,7 +67,12 @@ export type ResumeAssessmentLifecycleResult =
   | { errorMessage: string; status: "failed" }
   | { status: "ready" }
   | {
-      reason: "already_ready" | "missing_record" | "stale_job_description" | "superseded";
+      reason:
+        | "protection_restricted"
+        | "already_ready"
+        | "missing_record"
+        | "stale_job_description"
+        | "superseded";
       status: "skipped";
     };
 
@@ -88,6 +95,7 @@ async function resolveExistingAssessment(input: {
     : { reason: "stale_job_description", status: "skipped" };
 }
 
+// oxlint-disable-next-line complexity -- assessment lifecycle checks admission before reusing or generating evaluations.
 export async function runResumeAssessmentLifecycle(
   input: ResumeAssessmentLifecycleKey & {
     expectedJobDescriptionId?: string | null;
@@ -108,6 +116,9 @@ export async function runResumeAssessmentLifecycle(
     record.jobDescriptionId !== input.expectedJobDescriptionId
   ) {
     return { reason: "stale_job_description", status: "skipped" };
+  }
+  if (record.resumeAdmissionStatus && record.resumeAdmissionStatus !== "accepted") {
+    return { reason: "protection_restricted", status: "skipped" };
   }
   const existingAssessment = await resolveExistingAssessment({
     deps,

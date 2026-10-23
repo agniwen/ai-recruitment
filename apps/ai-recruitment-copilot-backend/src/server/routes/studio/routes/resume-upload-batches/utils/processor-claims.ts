@@ -69,6 +69,7 @@ type ClaimMissSnapshot = {
 const CLAIM_MISS_NOOP_STATUSES = new Set([
   "cancelled",
   "duplicate_skipped",
+  "protection_blocked",
   "failed",
   "processing",
   "succeeded",

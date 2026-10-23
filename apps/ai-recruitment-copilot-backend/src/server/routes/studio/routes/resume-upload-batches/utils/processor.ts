@@ -1,3 +1,4 @@
+import { admitResumeRecord, isResumeAdmitted } from "../../resumes/dao/protection";
 import { withFileParseLock } from "./with-file-parse-lock";
 /* oxlint-disable max-lines -- Parser stages and their outcome transaction remain one workflow. */
 import { createHash } from "node:crypto";
@@ -355,6 +356,7 @@ async function upsertParsedResumeRecord(
     .where(
       and(eq(studioInterview.id, recordId), eq(studioInterview.organizationId, organizationId)),
     );
+  await admitResumeRecord(tx, recordId, organizationId);
   await syncResumeSkills(tx, {
     interviewId: recordId,
     organizationId,
@@ -568,6 +570,12 @@ async function enqueueParsedResumeEnrichment(input: {
   succeededPoolItemId: string | null;
   succeededRecordId: string | null;
 }): Promise<void> {
+  if (
+    input.succeededRecordId &&
+    !(await isResumeAdmitted(input.succeededRecordId, input.organizationId))
+  ) {
+    return;
+  }
   if (input.succeededRecordId) {
     await requireEnrichmentTasks([
       enqueueResumeReviewGenerationForRecordBestEffort({
@@ -632,7 +640,10 @@ async function writeOutcome(
   },
 ): Promise<void> {
   const startedAt = Date.now();
-  let outcomeStatus = "succeeded";
+  const blocked =
+    outcome.succeededRecordId &&
+    !(await isResumeAdmitted(outcome.succeededRecordId, item.organizationId));
+  let outcomeStatus = blocked ? "protection_blocked" : "succeeded";
   if (outcome.errorMessage) {
     outcomeStatus = "failed";
   }
@@ -686,10 +697,11 @@ async function writeOutcome(
       await tx
         .update(resumeUploadBatchItem)
         .set({
+          errorMessage: blocked ? "该候选人暂不能继续推荐，已保留至全部候选人。" : null,
           finishedAt: now,
           poolItemId: outcome.succeededPoolItemId,
           resumeRecordId: outcome.succeededRecordId,
-          status: "succeeded",
+          status: blocked ? "protection_blocked" : "succeeded",
         })
         .where(eq(resumeUploadBatchItem.id, item.id));
     }

@@ -1,3 +1,4 @@
+import { requireResumeAnalysisAdmission } from "./routes/analysis/protection-guard";
 import { RoomAgentDispatch, RoomConfiguration } from "@livekit/protocol";
 import { eq } from "drizzle-orm";
 import { AccessToken } from "livekit-server-sdk";
@@ -54,6 +55,11 @@ export const interviewRouter = factory
   .createApp()
   .use("*", guardSscPublicSurface())
   .route("/", candidateInterviewFeedbackRouter)
+  .use("/match-job-description", authMiddleware, requireResumeAnalysisAdmission)
+  .use("/generate-questions", authMiddleware, requireResumeAnalysisAdmission)
+  .use("/generate-review", authMiddleware, requireResumeAnalysisAdmission)
+  .use("/generate-review-markdown-stream", authMiddleware, requireResumeAnalysisAdmission)
+
   .post("/parse-resume", authMiddleware, async (c) => {
     const formData = await c.req.formData();
     const resume = formData.get("resume");

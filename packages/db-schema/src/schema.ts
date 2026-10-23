@@ -1,3 +1,8 @@
+import type {
+  ResumeAdmissionStatus,
+  ResumeProtectionSummary,
+  ResumeProtectionIdentity,
+} from "./resume-protection";
 /* oxlint-disable no-inline-comments -- `/* @__PURE__ *\/` is a bundler annotation, not a human comment. */
 
 import type { PreRegistrationOdcAssignment } from "./pre-registration";
@@ -637,6 +642,11 @@ export const studioInterview = pgTable(
     recommendationText: text("recommendation_text"),
     recruitmentSource: text("recruitment_source").$type<ResumeRecruitmentSource>(),
     recruitmentSourceDetail: text("recruitment_source_detail"),
+    resumeAdmissionCheckedAt: timestamp("resume_admission_checked_at", { withTimezone: true }),
+    resumeAdmissionStatus: text("resume_admission_status")
+      .$type<ResumeAdmissionStatus>()
+      .notNull()
+      .default("accepted"),
     resumeContentHash: text("resume_content_hash"),
     resumeEvaluationStatus: text("resume_evaluation_status").$type<ResumeEvaluationStatus>(),
     resumeFileName: text("resume_file_name"),
@@ -647,6 +657,8 @@ export const studioInterview = pgTable(
       .default("ready"),
     resumeParsedAt: timestamp("resume_parsed_at", { withTimezone: true }),
     resumeProfile: jsonb("resume_profile").$type<ResumeProfile | null>(),
+    resumeProtection: jsonb("resume_protection").$type<ResumeProtectionSummary | null>(),
+    resumeProtectionCycleId: text("resume_protection_cycle_id"),
     resumeReview: jsonb("resume_review").$type<ResumeReview | null>(),
     resumeReviewError: text("resume_review_error"),
     resumeReviewGeneratedAt: timestamp("resume_review_generated_at", { withTimezone: true }),
@@ -697,6 +709,19 @@ export const studioInterview = pgTable(
   },
   (table) => [
     // 新模型的索引：tabs 通常 WHERE pipeline_stage = ? AND outcome = ?。
+    index("studio_interview_org_admission_stage_idx").on(
+      table.organizationId,
+      table.resumeAdmissionStatus,
+      table.pipelineStage,
+    ),
+    check(
+      "studio_interview_admission_status_check",
+      sql`${table.resumeAdmissionStatus} IN ('accepted', 'pending', 'protected')`,
+    ),
+    check(
+      "studio_interview_admission_workflow_check",
+      sql`${table.resumeAdmissionStatus} = 'accepted' OR (${table.pipelineStage} IN ('ai_review', 'closed') AND ${table.outcome} <> 'hired' AND ${table.resumeReview} IS NULL AND ${table.resumeScreeningResult} IS NULL AND ${table.resumeEvaluationStatus} IS NULL AND ${table.resumeReviewStatus} = 'idle')`,
+    ),
     index("studio_interview_pipeline_stage_idx").on(table.pipelineStage),
     index("studio_interview_outcome_idx").on(table.outcome),
     index("studio_interview_stage_outcome_idx").on(table.pipelineStage, table.outcome),
@@ -2072,6 +2097,7 @@ export type ResumePoolEventType =
   | "parsed"
   | "published"
   | "imported"
+  | "protection_blocked"
   | "bound"
   | "archived"
   | "restored";
@@ -2203,6 +2229,7 @@ export type ResumeUploadBatchItemStatus =
   | "succeeded"
   | "failed"
   | "duplicate_skipped"
+  | "protection_blocked"
   | "cancelled";
 
 export const resumeUploadBatch = pgTable(
@@ -3292,23 +3319,98 @@ export const platformInterviewConfig = pgTable(
 
 // 上下文设置（单例表，固定 id="singleton"）
 // Global config (singleton table, id="singleton")
-export const globalConfig = pgTable("global_config", {
-  closingInstructions: text("closing_instructions").notNull().default(""),
-  companyContext: text("company_context").notNull().default(""),
-  companyName: text("company_name").notNull().default(""),
-  id: text("id").primaryKey().default("singleton"),
-  jobCodePrefix: text("job_code_prefix").notNull().default("AUR"),
-  openingInstructions: text("opening_instructions").notNull().default(""),
+export const globalConfig = pgTable(
+  "global_config",
+  {
+    closingInstructions: text("closing_instructions").notNull().default(""),
+    companyContext: text("company_context").notNull().default(""),
+    companyName: text("company_name").notNull().default(""),
+    id: text("id").primaryKey().default("singleton"),
+    jobCodePrefix: text("job_code_prefix").notNull().default("AUR"),
+    openingInstructions: text("opening_instructions").notNull().default(""),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, {
+        onDelete: "cascade",
+      }),
+    resumeProtectionDays: integer("resume_protection_days").notNull().default(15),
+    resumeProtectionUpdatedAt: timestamp("resume_protection_updated_at", { withTimezone: true }),
+    resumeProtectionUpdatedBy: text("resume_protection_updated_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [
+    check(
+      "global_config_resume_protection_days_check",
+      sql`${table.resumeProtectionDays} BETWEEN 1 AND 365`,
+    ),
+  ],
+);
+
+// Protection survives deletion of a recommendation or its recommender account.
+export const resumeProtectionCycle = pgTable(
+  "resume_protection_cycle",
+  {
+    durationDays: integer("duration_days").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    id: text("id").primaryKey(),
+    identity: jsonb("identity").$type<ResumeProtectionIdentity>().notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    ownerName: text("owner_name").notNull(),
+    ownerUserId: text("owner_user_id").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("resume_protection_cycle_workspace_expiry_idx").on(table.organizationId, table.expiresAt),
+    index("resume_protection_cycle_identity_hash_idx").on(
+      table.organizationId,
+      sql`(${table.identity}->>'contentHash')`,
+    ),
+    index("resume_protection_cycle_identity_email_idx").on(
+      table.organizationId,
+      sql`(${table.identity}->>'email')`,
+    ),
+    index("resume_protection_cycle_identity_phone_idx").on(
+      table.organizationId,
+      sql`(${table.identity}->>'phone')`,
+    ),
+    check(
+      "resume_protection_cycle_duration_days_check",
+      sql`${table.durationDays} BETWEEN 1 AND 365`,
+    ),
+    check("resume_protection_cycle_time_check", sql`${table.expiresAt} > ${table.startsAt}`),
+  ],
+);
+
+export const resumeProtectionRecommendation = pgTable(
+  "resume_protection_recommendation",
+  {
+    cycleId: text("cycle_id")
+      .notNull()
+      .references(() => resumeProtectionCycle.id, { onDelete: "cascade" }),
+    hiringUnitName: text("hiring_unit_name"),
+    identity: jsonb("identity").$type<ResumeProtectionIdentity>().notNull(),
+    recommendedAt: timestamp("recommended_at", { withTimezone: true }).notNull(),
+    recordId: text("record_id").primaryKey(),
+    targetRole: text("target_role"),
+  },
+  (table) => [index("resume_protection_recommendation_cycle_idx").on(table.cycleId)],
+);
+
+export const resumeProtectionConfigChange = pgTable("resume_protection_config_change", {
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  changedBy: text("changed_by").notNull(),
+  days: integer("days").notNull(),
+  id: text("id").primaryKey(),
   organizationId: text("organization_id")
     .notNull()
-    .references(() => organization.id, {
-      onDelete: "cascade",
-    }),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+    .references(() => organization.id, { onDelete: "cascade" }),
+  previousDays: integer("previous_days").notNull(),
 });
 
 export { interviewMediaRoom, interviewMediaAsset, interviewMediaAccess } from "./interview-media";

@@ -147,6 +147,7 @@ export async function transitionCandidateStage(command: {
         jobDescriptionId: studioInterview.jobDescriptionId,
         outcome: studioInterview.outcome,
         pipelineStage: studioInterview.pipelineStage,
+        resumeAdmissionStatus: studioInterview.resumeAdmissionStatus,
         resumeReviewStatus: studioInterview.resumeReviewStatus,
         resumeSourcePoolItemId: studioInterview.resumeSourcePoolItemId,
         resumeSourceType: studioInterview.resumeSourceType,
@@ -171,6 +172,12 @@ export async function transitionCandidateStage(command: {
       return { kind: "not_found" } as const;
     }
 
+    if (
+      existing.resumeAdmissionStatus !== "accepted" &&
+      (command.input.pipelineStage !== "closed" || command.input.outcome === "hired")
+    ) {
+      return { kind: "invalid", message: "该候选人暂不能继续推荐，请查看保护详情。" } as const;
+    }
     const approvalRecipients: { chatId: string; name: string; userId: string }[] = [];
     if (existing.pipelineStage === "ai_review" && command.input.pipelineStage === "screening") {
       if (
