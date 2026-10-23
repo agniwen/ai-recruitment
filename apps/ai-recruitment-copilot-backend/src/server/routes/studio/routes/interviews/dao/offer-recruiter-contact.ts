@@ -1,7 +1,13 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type { Database } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
-import { member, studioInterview, studioOfferDraft, user } from "@arc/db-schema/schema";
+import {
+  member,
+  organization,
+  studioInterview,
+  studioOfferDraft,
+  user,
+} from "@arc/db-schema/schema";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { candidatePrivateTelegramSchema } from "@arc/shared/offer-recruiter-contact";
 import type { OfferRecruiterContactState } from "@arc/shared/offer-recruiter-contact";
@@ -14,6 +20,7 @@ import {
 import { invalidateStudioInterviewCaches } from "@arc/ai-recruitment-copilot-backend/server/cache-tags";
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import { recordCandidateActivityInTransaction } from "../utils/candidate-activity";
+import { buildCandidateDetailUrl } from "../utils/candidate-stage-notification";
 import { enqueueOfferSscNotification } from "./offer-ssc-notification-outbox";
 import { OfferDraftError } from "./offer-drafts";
 
@@ -51,7 +58,17 @@ async function loadCandidate(input: Locator, connection: Connection, lock = fals
   if (!candidate) {
     throw new OfferDraftError("候选人记录不存在。", 404);
   }
-  return candidate;
+  const [workspace] = await connection
+    .select({ slug: organization.slug })
+    .from(organization)
+    .where(eq(organization.id, input.organizationId))
+    .limit(1);
+  return {
+    ...candidate,
+    candidateDetailUrl: workspace
+      ? buildCandidateDetailUrl(input.interviewRecordId, workspace.slug)
+      : null,
+  };
 }
 async function loadDraft(input: Locator, connection: Connection, lock = false) {
   const query = connection
@@ -222,6 +239,7 @@ function state(
       canWrite &&
       draft.recruiterConfirmationStatus === "pending" &&
       currentTask(candidate, draft, latestId),
+    candidateDetailUrl: candidate.candidateDetailUrl,
     candidateName: candidate.candidateName,
     candidatePrivateTelegram: draft.confirmationInfo?.candidatePrivateTelegram ?? null,
     draftId: input.draftId,

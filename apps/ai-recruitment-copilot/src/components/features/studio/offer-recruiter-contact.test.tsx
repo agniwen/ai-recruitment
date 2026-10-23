@@ -24,6 +24,7 @@ const clients: QueryClient[] = [];
 function context(overrides: Partial<OfferRecruiterContactState> = {}): OfferRecruiterContactState {
   return {
     canConfirm: true,
+    candidateDetailUrl: "https://ats.example.test/w/demo/studio/resumes/candidate-1",
     candidateName: "候选人甲",
     candidatePrivateTelegram: "@candidate_123",
     draftId: "offer-1",

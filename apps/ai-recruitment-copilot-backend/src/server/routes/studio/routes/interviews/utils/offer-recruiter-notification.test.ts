@@ -54,6 +54,7 @@ const row = {
 };
 const context: OfferRecruiterContactState = {
   canConfirm: true,
+  candidateDetailUrl: "https://ats.example.test/w/recruiter-workspace/studio/resumes/candidate-a",
   candidateName: "候选人甲",
   candidatePrivateTelegram: "@candidate_name",
   draftId: input.draftId,
@@ -112,6 +113,10 @@ describe("Offer recruiter notification targets", () => {
     const card = JSON.stringify(targets[0].message);
     expect(card).toContain("候选人甲");
     expect(card).toContain("私人 TG");
+    expect(card).toContain(context.candidateDetailUrl);
+    expect(card).toContain("查看候选人详情");
+    expect(card).toContain('"id":"orc"');
+    expect(card).toContain('"id":"ors"');
     expect(card).not.toContain('"id":"osr"');
   });
 

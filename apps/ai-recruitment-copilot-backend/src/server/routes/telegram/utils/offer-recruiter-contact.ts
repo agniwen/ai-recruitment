@@ -6,6 +6,7 @@ import {
   CardText,
   Field,
   Fields,
+  LinkButton,
   paragraph,
   root,
   stringifyMarkdown,
@@ -103,6 +104,9 @@ export function buildTelegramOfferRecruiterCard(context: OfferRecruiterContactSt
         }),
       ]),
       ...(actions.length ? [Actions(actions)] : []),
+      ...(context.candidateDetailUrl
+        ? [Actions([LinkButton({ label: "查看候选人详情", url: context.candidateDetailUrl })])]
+        : []),
     ],
     title:
       context.status === "completed" ? "候选人私人 TG 已确认" : "Offer 已生成，请补充候选人私人 TG",
@@ -422,6 +426,13 @@ export async function handleTelegramOfferRecruiterMessage(
               Button({ id: "ors", label: "确认并提交 SSC", value: token }),
               Button({ id: "orc", label: "重新填写", value: callbackValue(context) }),
             ]),
+            ...(context.candidateDetailUrl
+              ? [
+                  Actions([
+                    LinkButton({ label: "查看候选人详情", url: context.candidateDetailUrl }),
+                  ]),
+                ]
+              : []),
           ],
           title: "核对候选人私人 TG",
         }),

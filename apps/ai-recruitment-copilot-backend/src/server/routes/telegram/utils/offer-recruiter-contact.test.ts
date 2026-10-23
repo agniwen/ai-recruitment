@@ -7,6 +7,7 @@ import {
   handleTelegramOfferRecruiterMessage,
 } from "./offer-recruiter-contact";
 import { withTelegramOfferCompletionState } from "./offer-ssc-state";
+import { createOfferTelegramAdapter } from "./offer-telegram-adapter";
 
 const mocks = vi.hoisted(() => ({ load: vi.fn(), prompt: vi.fn(), submit: vi.fn() }));
 vi.mock(
@@ -28,6 +29,7 @@ const draftId = "321abcde-1234-4123-8123-123456789abc";
 const value = "321abcde123441238123123456789abc:2";
 const context = {
   canConfirm: true,
+  candidateDetailUrl: "https://recruitment.example/w/hiring-team/studio/resumes/candidate-a",
   candidateName: "候选人甲",
   candidatePrivateTelegram: null,
   draftId,
@@ -117,6 +119,10 @@ function renderedStrings(content: unknown): string {
     ? Object.values(content).map(renderedStrings).join("\n")
     : "";
 }
+function expectCandidateLink(content: unknown) {
+  expect(JSON.stringify(content)).toContain(context.candidateDetailUrl);
+  expect(JSON.stringify(content)).toContain("查看候选人详情");
+}
 async function begin(thread: TestThread) {
   await handleTelegramOfferRecruiterAction(action(thread, "orc", value));
 }
@@ -134,7 +140,10 @@ beforeEach(() => {
   );
   mocks.prompt.mockResolvedValue("12345:90");
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("Offer recruiter private Telegram collection", () => {
   it("keeps SSC submission unavailable until a private Telegram exists", () => {
@@ -143,12 +152,83 @@ describe("Offer recruiter private Telegram collection", () => {
     expect(button(card, "orc")).toBe(value);
     expect(button(card, "ors")).toBeUndefined();
     expect(button(card, "osr")).toBeUndefined();
+    expectCandidateLink(card);
   });
+
+  it("keeps contact actions available when no system base URL is configured", () => {
+    const card = buildTelegramOfferRecruiterCard({
+      ...context,
+      candidateDetailUrl: null,
+      candidatePrivateTelegram: "@candidate_a",
+    });
+    expect(button(card, "orc")).toBe(value);
+    expect(button(card, "ors")).toBe(value);
+    expect(JSON.stringify(card)).not.toContain("查看候选人详情");
+  });
+
+  it.each(["post", "edit"] as const)(
+    "sends the candidate URL alongside recruiter callbacks in the Telegram %s keyboard",
+    async (operation) => {
+      const requests: { reply_markup?: { inline_keyboard: unknown[][] } }[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+          const url = new URL(input instanceof Request ? input.url : String(input));
+          const bot = { first_name: "Test bot", id: 999_999, is_bot: true, username: "test_bot" };
+          if (url.pathname.endsWith("/getMe")) {
+            return Response.json({ ok: true, result: bot });
+          }
+          if (
+            !["sendMessage", "editMessageText"].includes(url.pathname.split("/").at(-1) ?? "") ||
+            typeof init?.body !== "string"
+          ) {
+            throw new Error("Unexpected mocked Telegram request");
+          }
+          const payload = JSON.parse(init.body);
+          requests.push(payload);
+          await Promise.resolve();
+          return Response.json({
+            ok: true,
+            result: {
+              chat: { id: 12_345, type: "private" },
+              date: 1_700_000_000,
+              from: bot,
+              message_id: payload.message_id ?? 7,
+              text: payload.text,
+            },
+          });
+        }),
+      );
+      const target = createOfferTelegramAdapter({
+        botToken: "999999:fake-test-token",
+        mode: "webhook",
+        secretToken: "fake-test-secret",
+        userName: "test_bot",
+      });
+      const card = buildTelegramOfferRecruiterCard({
+        ...context,
+        candidatePrivateTelegram: "@candidate_a",
+      });
+      await (operation === "post"
+        ? target.postMessage("telegram:12345", card)
+        : target.editMessage("telegram:12345", "12345:7", card));
+      expect(requests).toHaveLength(1);
+      expect(requests[0].reply_markup?.inline_keyboard.flat()).toEqual(
+        expect.arrayContaining([
+          { text: "查看候选人详情", url: context.candidateDetailUrl },
+          expect.objectContaining({ callback_data: expect.any(String), text: "修改候选人私人 TG" }),
+          expect.objectContaining({ callback_data: expect.any(String), text: "确认并提交 SSC" }),
+        ]),
+      );
+    },
+  );
 
   it("lets the recruiter explicitly confirm an existing Telegram without retyping it", async () => {
     const existing = { ...context, candidatePrivateTelegram: "@candidate_a" };
     const card = buildTelegramOfferRecruiterCard(existing);
     expect(button(card, "ors")).toBe(value);
+    expect(button(card, "orc")).toBe(value);
+    expectCandidateLink(card);
     mocks.load.mockResolvedValue(existing);
     const thread = fakeThread();
     await handleTelegramOfferRecruiterAction(action(thread, "ors", value));
@@ -218,6 +298,8 @@ describe("Offer recruiter private Telegram collection", () => {
     const confirm = button(thread.post.mock.calls, "ors");
     expect(confirm).toMatch(/^[0-9a-f]{32}$/u);
     expect(renderedStrings(thread.post.mock.calls)).toContain("@Candidate_One");
+    expect(button(thread.post.mock.calls, "orc")).toBe(value);
+    expectCandidateLink(thread.post.mock.calls.at(-1));
     await handleTelegramOfferRecruiterAction(action(thread, "ors", confirm ?? "", 101));
     expect(mocks.submit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -255,7 +337,28 @@ describe("Offer recruiter private Telegram collection", () => {
     await handleTelegramOfferRecruiterAction(event);
     const editedIds = vi.mocked(event.adapter.editMessage).mock.calls.map(([, id]) => id);
     expect(editedIds).toEqual(expect.arrayContaining(["12345:10", "12345:101"]));
+    for (const call of vi.mocked(event.adapter.editMessage).mock.calls) {
+      const card = call.at(2);
+      expectCandidateLink(card);
+      expect(button(card, "orc")).toBeUndefined();
+      expect(button(card, "ors")).toBeUndefined();
+    }
     expect(mocks.submit).toHaveBeenCalledOnce();
+  });
+
+  it("retains the candidate link on a submitted fallback card when message editing fails", async () => {
+    const thread = fakeThread();
+    await begin(thread);
+    await handleTelegramOfferRecruiterMessage(thread, textMessage("@candidate_a", 90));
+    const confirm = button(thread.post.mock.calls, "ors");
+    const event = action(thread, "ors", confirm ?? "", 101);
+    vi.mocked(event.adapter.editMessage).mockRejectedValue(new Error("message unavailable"));
+    thread.post.mockClear();
+    await handleTelegramOfferRecruiterAction(event);
+    expect(mocks.submit).toHaveBeenCalledOnce();
+    expectCandidateLink(thread.post.mock.calls);
+    expect(button(thread.post.mock.calls, "orc")).toBeUndefined();
+    expect(button(thread.post.mock.calls, "ors")).toBeUndefined();
   });
 
   it("retains the original card when reopening private Telegram input from a review", async () => {
