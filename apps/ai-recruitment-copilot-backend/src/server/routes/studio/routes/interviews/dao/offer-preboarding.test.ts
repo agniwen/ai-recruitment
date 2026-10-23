@@ -129,6 +129,52 @@ const previewReaders = [
 ] as const;
 
 describe("read-only previews for already-confirmed legacy dates", () => {
+  it.each(["pending", "confirming"] as const)(
+    "derives sections before a date is entered on a %s SSC Offer without persisting the preview",
+    async (sscConfirmationStatus) => {
+      const draft = await legacyDateWithoutPreview({
+        preboardingDate: null,
+        recruiterConfirmationStatus: "completed",
+        sscConfirmationStatus,
+      });
+      const before = await stored(draft.id);
+      const previousAudit = await db
+        .select()
+        .from(interviewAuditLog)
+        .where(eq(interviewAuditLog.interviewRecordId, CANDIDATE));
+      const update = vi.spyOn(db, "update");
+      const insert = vi.spyOn(db, "insert");
+      const transaction = vi.spyOn(db, "transaction");
+      for (const [, read] of previewReaders) {
+        expect(await read(draft.id)).toMatchObject({
+          completionInfo: {
+            candidateCode: "LEGACY-001",
+            candidateName: "SSC 候选人",
+            candidatePrivateTelegram: "@legacy_candidate",
+            preboardingDate: null,
+            recruiterTelegram: "@legacy_recruiter",
+            recruitingGroupNames: ["SSC 可见范围测试组"],
+            recruitmentChannel: "TG",
+            resumeSource: "Legacy resume source",
+          },
+          preboardingDate: null,
+          sscCompletedAt: null,
+          sscConfirmationStatus,
+        });
+      }
+      expect(update).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+      expect(await stored(draft.id)).toEqual(before);
+      expect(
+        await db
+          .select()
+          .from(interviewAuditLog)
+          .where(eq(interviewAuditLog.interviewRecordId, CANDIDATE)),
+      ).toEqual(previousAudit);
+    },
+  );
+
   it.each(previewReaders)(
     "derives sections for %s without updating an Offer or audit",
     async (_name, read) => {
@@ -194,8 +240,6 @@ describe("read-only previews for already-confirmed legacy dates", () => {
   );
 
   it.each([
-    ["pending receipt", { sscConfirmationStatus: "pending" }],
-    ["missing date", { preboardingDate: null }],
     ["historical completed without a snapshot", { sscConfirmationStatus: "completed" }],
     ["sent Offer", { status: "sent" }],
     ["superseded Offer", { status: "superseded" }],

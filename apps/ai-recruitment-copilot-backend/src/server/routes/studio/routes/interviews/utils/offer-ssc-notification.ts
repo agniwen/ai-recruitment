@@ -3,8 +3,10 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import { member, studioOfferDraft, user } from "@arc/db-schema/schema";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import type { OfferCompletionPreview } from "@arc/db-schema/offer-completion";
 import { loadOfferSscActivity } from "../dao/offer-ssc-activity";
 import { loadOfferSscInterviewSummary } from "../dao/offer-ssc-interview-summary";
+import { loadOfferCompletionPreview } from "../dao/offer-completion-info";
 import type { OfferSscActivity } from "../dao/offer-ssc-activity";
 import { loadAuthorizedOfferSscContext, OfferDraftError } from "../dao/offer-drafts";
 import {
@@ -14,6 +16,7 @@ import {
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
 import { listSourceSscNotificationRecipients } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/ssc-notification-recipients";
+import { offerPreboardingDateSchema } from "@arc/shared/offer-preboarding";
 
 export type { OfferSscNotificationInput } from "../dao/offer-ssc-notification-outbox";
 
@@ -163,6 +166,41 @@ function flowFeedback(input: OfferSscNotificationInput, activity: OfferSscActivi
   return `${operator}${input.event === "received" ? "已接收，待完成内部审批确认" : "已完成确认"}`;
 }
 
+async function loadNotificationCompletionPreview(
+  offer: NotificationOfferState &
+    Pick<
+      typeof studioOfferDraft.$inferSelect,
+      "completionInfo" | "confirmationInfo" | "preboardingDate"
+    >,
+  hasRecipients: boolean,
+  unexpired: boolean,
+): Promise<OfferCompletionPreview | null> {
+  if (offer.completionInfo) {
+    return offer.completionInfo;
+  }
+  if (
+    !hasRecipients ||
+    !unexpired ||
+    offer.status !== "draft" ||
+    (offer.sscConfirmationStatus !== "pending" && offer.sscConfirmationStatus !== "confirming")
+  ) {
+    return null;
+  }
+  const date = offerPreboardingDateSchema.nullable().safeParse(offer.preboardingDate ?? null);
+  if (!date.success) {
+    return null;
+  }
+  return await loadOfferCompletionPreview(
+    {
+      confirmationInfo: offer.confirmationInfo,
+      interviewRecordId: offer.interviewRecordId,
+      organizationId: offer.organizationId,
+      preboardingDate: date.data,
+    },
+    db,
+  );
+}
+
 export async function getOfferSscNotificationTargets(
   input: OfferSscNotificationInput,
 ): Promise<OfferSscNotificationTarget[]> {
@@ -181,6 +219,7 @@ export async function getOfferSscNotificationTargets(
       expiresAt: studioOfferDraft.expiresAt,
       id: studioOfferDraft.id,
       interviewRecordId: studioOfferDraft.interviewRecordId,
+      joiningDate: studioOfferDraft.joiningDate,
       organizationId: studioOfferDraft.organizationId,
       position: studioOfferDraft.position,
       preboardingDate: studioOfferDraft.preboardingDate,
@@ -226,6 +265,16 @@ export async function getOfferSscNotificationTargets(
       })
     : [];
   const unexpired = !offer.expiresAt || new Date(offer.expiresAt).getTime() > Date.now();
+  const completionInfo = await loadNotificationCompletionPreview(
+    offer,
+    uniqueRecipients.size > 0,
+    unexpired,
+  );
+  const cardOffer = {
+    ...offer,
+    completionInfo,
+    joiningDate: offer.joiningDate?.toISOString() ?? null,
+  };
   const notificationTitle =
     notificationTitles[offer.sscConfirmationStatus === "completed" ? "completed" : input.event];
   const targets: OfferSscNotificationTarget[] = [...uniqueRecipients.values()].map((recipient) => {
@@ -235,7 +284,7 @@ export async function getOfferSscNotificationTargets(
       activity,
       canConfirm: unexpired,
       canReceive: unexpired,
-      draft: offer,
+      draft: cardOffer,
       interviewRounds,
     };
     const message =

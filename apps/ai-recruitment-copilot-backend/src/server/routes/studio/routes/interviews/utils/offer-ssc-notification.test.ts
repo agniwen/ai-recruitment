@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   interviewSummary: vi.fn(),
   members: vi.fn(),
   organization: vi.fn(),
+  preview: vi.fn(),
   recipients: vi.fn(),
   select: vi.fn(),
   where: vi.fn(),
@@ -24,6 +25,9 @@ vi.mock("@arc/ai-recruitment-copilot-backend/lib/server/db", () => ({
 }));
 vi.mock("../dao/offer-ssc-interview-summary", () => ({
   loadOfferSscInterviewSummary: mocks.interviewSummary,
+}));
+vi.mock("../dao/offer-completion-info", () => ({
+  loadOfferCompletionPreview: mocks.preview,
 }));
 vi.mock("../dao/offer-drafts", () => ({
   OfferDraftError: class extends Error {
@@ -86,6 +90,16 @@ beforeEach(() => {
   vi.stubEnv("BETTER_AUTH_SECRET", "offer-preview-test-secret-never-used-outside-tests");
   mocks.current.mockResolvedValue([draft]);
   mocks.audit.mockResolvedValue([]);
+  mocks.preview.mockResolvedValue({
+    candidateCode: "EARLY-001",
+    candidateName: "示例候选人",
+    candidatePrivateTelegram: "@candidate_private",
+    preboardingDate: null,
+    recruiterTelegram: "@original_recruiter",
+    recruitingGroupNames: ["原始招聘组"],
+    recruitmentChannel: "TG",
+    resumeSource: "原始简历来源",
+  });
   mocks.interviewSummary.mockResolvedValue([]);
   mocks.members.mockResolvedValue([recipient()]);
   mocks.recipients.mockResolvedValue([
@@ -129,10 +143,102 @@ afterEach(() => {
 });
 
 describe("SSC notification recipients and cards", () => {
+  it.each([
+    ["pending", "pending", "osr"],
+    ["received", "confirming", "osf"],
+  ] as const)(
+    "includes early sections with a missing date in the SSC %s notification",
+    async (event, status, actionId) => {
+      const confirmationInfo = offerConfirmationDetailsSchema.parse({
+        candidateCode: "EARLY-001",
+        candidateName: "示例候选人",
+        candidatePrivateTelegram: "@candidate_private",
+      });
+      mocks.current.mockResolvedValue([
+        {
+          ...draft,
+          baseSalary: 15_000,
+          completionInfo: null,
+          confirmationInfo,
+          currency: "CNY",
+          joiningDate: new Date("2026-12-15T00:00:00.000Z"),
+          preboardingDate: null,
+          recruiterConfirmationStatus: "completed",
+          sscConfirmationStatus: status,
+        },
+      ]);
+      const [target] = await getOfferSscNotificationTargets({ ...input, event });
+      expect(target?.message).toMatchObject({
+        telegramOfferCopyText: expect.stringContaining("3️⃣招聘信息"),
+      });
+      const text = target?.message as unknown as { telegramOfferCopyText: string };
+      expect(text.telegramOfferCopyText).toContain("招聘渠道：原始招聘组");
+      expect(text.telegramOfferCopyText).toContain("简历来源：原始简历来源");
+      expect(text.telegramOfferCopyText).toContain("4️⃣入职信息");
+      expect(text.telegramOfferCopyText).toContain("入职日期：待补充");
+      expect(text.telegramOfferCopyText).toContain("期望上岗日期：2026-12-15");
+      expect(text.telegramOfferCopyText.indexOf("期望上岗日期：")).toBeLessThan(
+        text.telegramOfferCopyText.indexOf("2️⃣薪资信息"),
+      );
+      expect(text.telegramOfferCopyText).toContain("候选人联系方式：@candidate_private");
+      const message = JSON.stringify(target?.message);
+      expect(message).toContain("3️⃣招聘信息");
+      expect(message).toContain("4️⃣入职信息");
+      expect(message).toContain(`"id":"${actionId}"`);
+      expect(message).not.toContain(`"id":"${event === "pending" ? "osf" : "osr"}"`);
+      expect(mocks.preview).toHaveBeenCalledWith(
+        {
+          confirmationInfo,
+          interviewRecordId: "candidate-a",
+          organizationId: "org-a",
+          preboardingDate: null,
+        },
+        expect.objectContaining({ select: mocks.select }),
+      );
+    },
+  );
+
+  it("preserves the saved completed snapshot without deriving new recruitment details", async () => {
+    mocks.current.mockResolvedValue([
+      {
+        ...draft,
+        baseSalary: 15_000,
+        completionInfo: {
+          candidateCode: "FROZEN-001",
+          candidateName: "冻结姓名",
+          candidatePrivateTelegram: "@frozen_candidate",
+          preboardingDate: "2026-11-01",
+          recruiterTelegram: "@frozen_recruiter",
+          recruitingGroupNames: ["冻结招聘组"],
+          recruitmentChannel: "冻结通道",
+          resumeSource: "冻结来源",
+        },
+        confirmationInfo: offerConfirmationDetailsSchema.parse({
+          candidateCode: "FROZEN-001",
+          candidateName: "冻结姓名",
+          candidatePrivateTelegram: "@frozen_candidate",
+        }),
+        currency: "CNY",
+        preboardingDate: "2026-11-01",
+        sscConfirmationStatus: "completed",
+      },
+    ]);
+    const [target] = await getOfferSscNotificationTargets({ ...input, event: "completed" });
+    expect(target?.message).toMatchObject({
+      telegramOfferCopyText: expect.stringContaining("招聘渠道：冻结招聘组"),
+    });
+    const text = target?.message as unknown as { telegramOfferCopyText: string };
+    expect(text.telegramOfferCopyText).toContain("简历来源：冻结来源");
+    expect(text.telegramOfferCopyText).toContain("入职日期：2026-11-01");
+    expect(text.telegramOfferCopyText).not.toContain("原始招聘组");
+    expect(mocks.preview).not.toHaveBeenCalled();
+  });
+
   it("does not notify SSC before the recruiter confirms the candidate private TG", async () => {
     mocks.current.mockResolvedValue([{ ...draft, recruiterConfirmationStatus: "pending" }]);
     await expect(getOfferSscNotificationTargets(input)).resolves.toEqual([]);
     expect(mocks.recipients).not.toHaveBeenCalled();
+    expect(mocks.preview).not.toHaveBeenCalled();
   });
 
   it("loads and delivers the saved Offer confirmation content to the responsible SSC", async () => {
@@ -314,6 +420,7 @@ describe("SSC notification recipients and cards", () => {
   it("does not send pending work for a closed candidate", async () => {
     mocks.recipients.mockResolvedValue([]);
     await expect(getOfferSscNotificationTargets(input)).resolves.toEqual([]);
+    expect(mocks.preview).not.toHaveBeenCalled();
   });
 
   it.each([

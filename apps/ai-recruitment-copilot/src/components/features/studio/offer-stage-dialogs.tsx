@@ -104,6 +104,7 @@ export function CreateOrEditOfferDialog({
   const [loadingContext, setLoadingContext] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [validationAttempt, setValidationAttempt] = useState(0);
   const session = useRef(0);
   const submitting = useRef(false);
   const contextLoading = useRef(false);
@@ -192,6 +193,7 @@ export function CreateOrEditOfferDialog({
     setContext(null);
     setStep("terms");
     setShowValidationErrors(false);
+    setValidationAttempt(0);
     setErrorMessage(null);
     setLoadingContext(false);
     if (open) {
@@ -224,6 +226,7 @@ export function CreateOrEditOfferDialog({
     }
     setErrorMessage(null);
     setShowValidationErrors(true);
+    setValidationAttempt((attempt) => attempt + 1);
     try {
       buildOfferDraftPayload(form);
       setStep("confirmation");
@@ -240,6 +243,7 @@ export function CreateOrEditOfferDialog({
     }
     const sessionId = session.current;
     setShowValidationErrors(true);
+    setValidationAttempt((attempt) => attempt + 1);
     try {
       const payload = buildOfferDraftPayload(form);
       submitting.current = true;
@@ -298,6 +302,7 @@ export function CreateOrEditOfferDialog({
             position={form.position}
             baseSalary={Number(form.baseSalary)}
             currency={form.currency}
+            joiningDate={form.joiningDate}
             resume={context?.resume}
             resumeUrl={resumeUrl}
             expiresAt={form.expiresAt}
@@ -317,6 +322,7 @@ export function CreateOrEditOfferDialog({
                 setErrorMessage(null);
               }}
               showValidationErrors={showValidationErrors}
+              validationAttempt={validationAttempt}
               disabled={mutation.isPending || contextUnavailable || loadingContext}
             />
           </>

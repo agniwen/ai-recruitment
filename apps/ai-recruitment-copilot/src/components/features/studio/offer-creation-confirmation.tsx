@@ -31,23 +31,24 @@ interface TextFieldConfig {
   label: string;
   maxLength: number;
   example?: string;
+  required?: boolean;
 }
 const identityFields: TextFieldConfig[] = [
   { key: "candidateCode", label: "候选人编码（选填）", maxLength: 120 },
   { key: "candidateName", label: "简历名（候选人姓名）", maxLength: 200 },
-  { key: "gender", label: "性别", maxLength: 30 },
+  { key: "gender", label: "性别", maxLength: 30, required: true },
 ];
 const organizationFields: TextFieldConfig[] = [
-  { key: "hiringUnitName", label: "入职编制组织", maxLength: 200 },
-  { key: "serviceUnit", label: "入职服务单位", maxLength: 200 },
-  { example: "直属", key: "personnelType", label: "人员性质", maxLength: 120 },
-  { key: "departmentName", label: "入职部门", maxLength: 200 },
-  { key: "directManager", label: "直属上级", maxLength: 200 },
-  { key: "jobType", label: "岗位类型", maxLength: 120 },
-  { example: "P3", key: "jobLevel", label: "建议职级", maxLength: 120 },
-  { example: "个人", key: "managementSequence", label: "管理序列", maxLength: 120 },
-  { example: "远程", key: "workMode", label: "办公方式", maxLength: 120 },
-  { example: "中国", key: "workLocation", label: "办公地区", maxLength: 200 },
+  { key: "hiringUnitName", label: "入职编制组织", maxLength: 200, required: true },
+  { key: "serviceUnit", label: "入职服务单位", maxLength: 200, required: true },
+  { example: "直属", key: "personnelType", label: "人员性质", maxLength: 120, required: true },
+  { key: "departmentName", label: "入职部门", maxLength: 200, required: true },
+  { key: "directManager", label: "直属上级", maxLength: 200, required: true },
+  { key: "jobType", label: "岗位类型", maxLength: 120, required: true },
+  { example: "P3", key: "jobLevel", label: "建议职级", maxLength: 120, required: true },
+  { example: "个人", key: "managementSequence", label: "管理序列", maxLength: 120, required: true },
+  { example: "远程", key: "workMode", label: "办公方式", maxLength: 120, required: true },
+  { example: "中国", key: "workLocation", label: "办公地区", maxLength: 200, required: true },
 ];
 export function OfferConfirmationFields({
   candidateId,
@@ -55,7 +56,9 @@ export function OfferConfirmationFields({
   onChange,
   idPrefix,
   positionField,
+  joiningDateField,
   salaryFields,
+  errors = {},
   disabled = false,
 }: {
   candidateId: string;
@@ -63,20 +66,26 @@ export function OfferConfirmationFields({
   onChange: (value: OfferConfirmationDetails) => void;
   idPrefix: string;
   positionField?: ReactNode;
+  joiningDateField?: ReactNode;
   salaryFields?: ReactNode;
+  errors?: Record<string, string | undefined>;
   disabled?: boolean;
 }) {
   function textField(field: TextFieldConfig) {
     const hintId = `${idPrefix}-${field.key}-hint`;
     const hint = field.example ? `例如：${field.example}` : "待补充";
     const showHint = Boolean(field.example) || !info[field.key]?.trim();
+    const error = errors[`confirmationInfo.${field.key}`];
     return (
       <div
         className="grid min-w-0 gap-1.5 [&>[data-slot=native-select-wrapper]]:w-full"
         key={field.key}
       >
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <Label htmlFor={`${idPrefix}-${field.key}`}>{field.label}</Label>
+          <Label htmlFor={`${idPrefix}-${field.key}`}>
+            {field.label}
+            {field.required ? "（必填）" : ""}
+          </Label>
           {showHint ? (
             <span className="text-muted-foreground text-xs" id={hintId}>
               {hint}
@@ -85,6 +94,8 @@ export function OfferConfirmationFields({
         </div>
         {field.key === "gender" ? (
           <NativeSelect
+            aria-invalid={Boolean(error)}
+            aria-required={field.required}
             aria-describedby={showHint ? hintId : undefined}
             id={`${idPrefix}-gender`}
             onChange={(event) => onChange({ ...info, gender: event.target.value || null })}
@@ -101,6 +112,8 @@ export function OfferConfirmationFields({
           </NativeSelect>
         ) : (
           <Input
+            aria-invalid={Boolean(error)}
+            aria-required={field.required}
             aria-describedby={showHint ? hintId : undefined}
             id={`${idPrefix}-${field.key}`}
             maxLength={field.maxLength}
@@ -108,6 +121,7 @@ export function OfferConfirmationFields({
             value={info[field.key] ?? ""}
           />
         )}
+        {error ? <p className="text-destructive text-xs">{error}</p> : null}
       </div>
     );
   }
@@ -144,6 +158,7 @@ export function OfferConfirmationFields({
               {field.key === "jobType" ? positionField : null}
             </Fragment>
           ))}
+          {joiningDateField}
         </div>
       </section>
       {salaryFields ? (
@@ -249,6 +264,7 @@ export function OfferCreationReview({
   position,
   baseSalary,
   currency,
+  joiningDate,
   resume,
   resumeUrl,
   expiresAt,
@@ -259,6 +275,7 @@ export function OfferCreationReview({
   position: string;
   baseSalary: number;
   currency: string;
+  joiningDate?: string | null;
   resume?: OfferCreationContext["resume"];
   resumeUrl: string;
   expiresAt: string;
@@ -274,6 +291,7 @@ export function OfferCreationReview({
           position={position}
           baseSalary={baseSalary}
           currency={currency}
+          joiningDate={joiningDate}
           sscConfirmationStatus="pending"
         />
       </section>
@@ -331,6 +349,7 @@ export function OfferInformationDialog({
           position={draft.position}
           baseSalary={draft.baseSalary}
           currency={draft.currency}
+          joiningDate={draft.joiningDate}
           sscConfirmationStatus={draft.sscConfirmationStatus}
         />
         <DialogFooter>

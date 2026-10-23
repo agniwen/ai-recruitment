@@ -11,11 +11,13 @@
 // timeline. Draft → sent → respond / cancel flows; on "accepted" we prompt
 // the caller to launch the close flow.
 
+import { useLayoutEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { OfferDraftInput } from "@arc/db-schema/studio-interviews";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
 import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import { getOfferRequiredFieldIssues } from "@arc/shared/offer-required-fields";
 import { formatDate as formatChinaDate } from "@arc/shared/utils/time";
 import { DatePicker } from "@/components/date-time-picker";
 import { Input } from "@/components/ui/input";
@@ -87,7 +89,7 @@ export function offerFormStateFromDraft(draft: OfferDraftRecord): OfferFormState
     currency: draft.currency || "CNY",
     equity: draft.equity ?? "",
     expiresAt: draft.expiresAt ? formatIsoDateOnly(draft.expiresAt) : "",
-    joiningDate: draft.joiningDate ?? "",
+    joiningDate: draft.joiningDate ? formatIsoDateOnly(draft.joiningDate) : "",
     notes: draft.notes ?? "",
     position: draft.position,
   };
@@ -100,16 +102,12 @@ export function createOfferFormFieldSetter(setForm: Dispatch<SetStateAction<Offe
 }
 
 export function getOfferRequiredFieldErrors(form: OfferFormState) {
-  const errors: { position?: string; baseSalary?: string } = {};
-  if (!form.position.trim()) {
-    errors.position = "请填写职位";
-  }
-  if (!form.baseSalary.trim()) {
-    errors.baseSalary = "请填写转正薪资（月薪）";
-  } else if (!Number.isInteger(Number(form.baseSalary)) || Number(form.baseSalary) <= 0) {
-    errors.baseSalary = "转正薪资（月薪）需为正整数";
-  }
-  return errors;
+  return Object.fromEntries(
+    getOfferRequiredFieldIssues({
+      ...form,
+      baseSalary: form.baseSalary.trim() ? Number(form.baseSalary) : null,
+    }).map(({ path, message }) => [path, message]),
+  ) as Record<string, string | undefined>;
 }
 
 export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
@@ -129,6 +127,7 @@ export function buildOfferDraftPayload(form: OfferFormState): OfferDraftInput {
     confirmationInfo: confirmation?.success ? confirmation.data : null,
     currency: parseOfferCurrency(form.currency),
     expiresAt: form.expiresAt || null,
+    joiningDate: form.joiningDate,
     position: form.position.trim(),
   };
 }
@@ -139,6 +138,7 @@ export function OfferDraftFormFields({
   idPrefix,
   onFieldChange,
   showValidationErrors = false,
+  validationAttempt = 0,
   disabled = false,
 }: {
   candidateId: string;
@@ -147,24 +147,28 @@ export function OfferDraftFormFields({
   onFieldChange: <K extends keyof OfferFormState>(field: K, value: OfferFormState[K]) => void;
   disabled?: boolean;
   showValidationErrors?: boolean;
+  validationAttempt?: number;
 }) {
-  const errors = getOfferRequiredFieldErrors(form);
-  const symbol = offerCurrencySymbol(form.currency);
+  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
+  useLayoutEffect(() => {
+    if (showValidationErrors && validationAttempt > 0) {
+      fieldsetRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    }
+  }, [showValidationErrors, validationAttempt]);
+  const errors: Record<string, string | undefined> = showValidationErrors
+    ? getOfferRequiredFieldErrors(form)
+    : {};
   const info = form.confirmationInfo ?? offerConfirmationDetailsSchema.parse({});
-  function setProbationField<K extends "probationPeriod" | "probationSalary">(
-    field: K,
-    value: OfferConfirmationDetails[K],
-  ) {
-    onFieldChange("confirmationInfo", { ...info, [field]: value });
-  }
+
   return (
-    <fieldset className="min-w-0 space-y-5" disabled={disabled}>
+    <fieldset className="min-w-0 space-y-5" disabled={disabled} ref={fieldsetRef}>
       <legend className="sr-only">填写 Offer 信息</legend>
       <OfferConfirmationFields
         candidateId={candidateId}
         info={info}
         idPrefix={`${idPrefix}-confirm`}
         disabled={disabled}
+        errors={errors}
         onChange={(value) => onFieldChange("confirmationInfo", value)}
         positionField={
           <div className="grid min-w-0 gap-1.5">
@@ -176,111 +180,39 @@ export function OfferDraftFormFields({
             </div>
             <Input
               aria-describedby={`${idPrefix}-position-hint`}
-              aria-invalid={showValidationErrors && Boolean(errors.position)}
+              aria-invalid={Boolean(errors.position)}
               aria-required
               id={`${idPrefix}-position`}
               maxLength={200}
               onChange={(event) => onFieldChange("position", event.target.value)}
               value={form.position}
             />
-            {showValidationErrors && errors.position ? (
-              <p className="text-destructive text-xs">{errors.position}</p>
+            {errors.position ? <p className="text-destructive text-xs">{errors.position}</p> : null}
+          </div>
+        }
+        joiningDateField={
+          <div className="grid min-w-0 gap-1.5">
+            <Label htmlFor={`${idPrefix}-joining`}>期望上岗日期（必填）</Label>
+            <DatePicker
+              aria-invalid={Boolean(errors.joiningDate)}
+              id={`${idPrefix}-joining`}
+              onValueChange={(value) => onFieldChange("joiningDate", value)}
+              required
+              value={form.joiningDate}
+            />
+            {errors.joiningDate ? (
+              <p className="text-destructive text-xs">{errors.joiningDate}</p>
             ) : null}
           </div>
         }
         salaryFields={
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5 sm:col-start-1">
-              <Label htmlFor={`${idPrefix}-currency`}>薪资货币</Label>
-              <OfferCurrencySelect
-                id={`${idPrefix}-currency`}
-                value={form.currency}
-                onChange={(value) => onFieldChange("currency", value)}
-              />
-            </div>
-            <div className="grid gap-1.5 sm:col-start-1">
-              <Label htmlFor={`${idPrefix}-base`}>转正薪资（月薪，{symbol}，必填）</Label>
-              <Input
-                aria-invalid={showValidationErrors && Boolean(errors.baseSalary)}
-                aria-required
-                id={`${idPrefix}-base`}
-                inputMode="numeric"
-                min={0}
-                step={1}
-                onChange={(event) => onFieldChange("baseSalary", event.target.value)}
-                type="number"
-                value={form.baseSalary}
-              />
-              {showValidationErrors && errors.baseSalary ? (
-                <p className="text-destructive text-xs">{errors.baseSalary}</p>
-              ) : null}
-            </div>
-            <div className="grid gap-1.5">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <Label htmlFor={`${idPrefix}-confirm-probationSalary`}>
-                  试用薪资（月薪，{symbol}）
-                </Label>
-                {info.probationSalary === null ? (
-                  <span
-                    className="text-muted-foreground text-xs"
-                    id={`${idPrefix}-confirm-probationSalary-hint`}
-                  >
-                    待补充
-                  </span>
-                ) : null}
-              </div>
-              <Input
-                aria-describedby={
-                  info.probationSalary === null
-                    ? `${idPrefix}-confirm-probationSalary-hint`
-                    : undefined
-                }
-                id={`${idPrefix}-confirm-probationSalary`}
-                inputMode="numeric"
-                min={0}
-                step={1}
-                onChange={(event) =>
-                  setProbationField(
-                    "probationSalary",
-                    event.target.value === "" ? null : Number(event.target.value),
-                  )
-                }
-                type="number"
-                value={info.probationSalary ?? ""}
-              />
-            </div>
-            <div className="grid gap-1.5 sm:col-start-1 [&>[data-slot=native-select-wrapper]]:w-full">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <Label htmlFor={`${idPrefix}-confirm-probationPeriod`}>试用期期限（月）</Label>
-                <span
-                  className="text-muted-foreground text-xs"
-                  id={`${idPrefix}-confirm-probationPeriod-hint`}
-                >
-                  例如：2
-                </span>
-              </div>
-              <NativeSelect
-                aria-describedby={`${idPrefix}-confirm-probationPeriod-hint`}
-                id={`${idPrefix}-confirm-probationPeriod`}
-                onChange={(event) =>
-                  setProbationField("probationPeriod", event.target.value || null)
-                }
-                value={info.probationPeriod ?? ""}
-              >
-                <NativeSelectOption aria-label="未选择试用期" value="" />
-                {info.probationPeriod && !probationPeriods.includes(info.probationPeriod) ? (
-                  <NativeSelectOption disabled value={info.probationPeriod}>
-                    {info.probationPeriod}（原记录）
-                  </NativeSelectOption>
-                ) : null}
-                {probationPeriods.map((period, index) => (
-                  <NativeSelectOption key={period} value={period}>
-                    {index + 1}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-          </div>
+          <OfferSalaryFields
+            errors={errors}
+            form={form}
+            idPrefix={idPrefix}
+            info={info}
+            onFieldChange={onFieldChange}
+          />
         }
       />
       <section className="space-y-3 border-t pt-4">
@@ -293,6 +225,9 @@ export function OfferDraftFormFields({
               onValueChange={(value) => onFieldChange("expiresAt", value)}
               value={form.expiresAt}
             />
+            <p className="text-muted-foreground text-xs">
+              Offer 到期后仍未入职，该候选人记录将失效重置
+            </p>
           </div>
         </div>
       </section>
@@ -300,5 +235,125 @@ export function OfferDraftFormFields({
   );
 }
 
-// ── 新建 / 编辑 Offer dialog ──
-// Create-or-edit dialog.
+function OfferSalaryFields({
+  errors,
+  form,
+  idPrefix,
+  info,
+  onFieldChange,
+}: {
+  errors: Record<string, string | undefined>;
+  form: OfferFormState;
+  idPrefix: string;
+  info: OfferConfirmationDetails;
+  onFieldChange: <K extends keyof OfferFormState>(field: K, value: OfferFormState[K]) => void;
+}) {
+  const symbol = offerCurrencySymbol(form.currency);
+  function setProbationField<K extends "probationPeriod" | "probationSalary">(
+    field: K,
+    value: OfferConfirmationDetails[K],
+  ) {
+    onFieldChange("confirmationInfo", { ...info, [field]: value });
+  }
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-1.5 sm:col-start-1">
+        <Label htmlFor={`${idPrefix}-currency`}>薪资货币（必填）</Label>
+        <OfferCurrencySelect
+          aria-invalid={Boolean(errors.currency)}
+          required
+          id={`${idPrefix}-currency`}
+          value={form.currency}
+          onChange={(value) => onFieldChange("currency", value)}
+        />
+        {errors.currency ? <p className="text-destructive text-xs">{errors.currency}</p> : null}
+      </div>
+      <div className="grid gap-1.5 sm:col-start-1">
+        <Label htmlFor={`${idPrefix}-base`}>转正薪资（月薪，{symbol}，必填）</Label>
+        <Input
+          aria-invalid={Boolean(errors.baseSalary)}
+          aria-required
+          id={`${idPrefix}-base`}
+          inputMode="numeric"
+          min={0}
+          step={1}
+          onChange={(event) => onFieldChange("baseSalary", event.target.value)}
+          type="number"
+          value={form.baseSalary}
+        />
+        {errors.baseSalary ? <p className="text-destructive text-xs">{errors.baseSalary}</p> : null}
+      </div>
+      <div className="grid gap-1.5">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <Label htmlFor={`${idPrefix}-confirm-probationSalary`}>
+            试用薪资（月薪，{symbol}，必填）
+          </Label>
+          {info.probationSalary === null ? (
+            <span
+              className="text-muted-foreground text-xs"
+              id={`${idPrefix}-confirm-probationSalary-hint`}
+            >
+              待补充
+            </span>
+          ) : null}
+        </div>
+        <Input
+          aria-invalid={Boolean(errors["confirmationInfo.probationSalary"])}
+          aria-required
+          aria-describedby={
+            info.probationSalary === null ? `${idPrefix}-confirm-probationSalary-hint` : undefined
+          }
+          id={`${idPrefix}-confirm-probationSalary`}
+          inputMode="numeric"
+          min={0}
+          step={1}
+          onChange={(event) =>
+            setProbationField(
+              "probationSalary",
+              event.target.value === "" ? null : Number(event.target.value),
+            )
+          }
+          type="number"
+          value={info.probationSalary ?? ""}
+        />
+        {errors["confirmationInfo.probationSalary"] ? (
+          <p className="text-destructive text-xs">{errors["confirmationInfo.probationSalary"]}</p>
+        ) : null}
+      </div>
+      <div className="grid gap-1.5 sm:col-start-1 [&>[data-slot=native-select-wrapper]]:w-full">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <Label htmlFor={`${idPrefix}-confirm-probationPeriod`}>试用期期限（月，必填）</Label>
+          <span
+            className="text-muted-foreground text-xs"
+            id={`${idPrefix}-confirm-probationPeriod-hint`}
+          >
+            例如：2
+          </span>
+        </div>
+        <NativeSelect
+          aria-invalid={Boolean(errors["confirmationInfo.probationPeriod"])}
+          aria-required
+          aria-describedby={`${idPrefix}-confirm-probationPeriod-hint`}
+          id={`${idPrefix}-confirm-probationPeriod`}
+          onChange={(event) => setProbationField("probationPeriod", event.target.value || null)}
+          value={info.probationPeriod ?? ""}
+        >
+          <NativeSelectOption aria-label="未选择试用期" value="" />
+          {info.probationPeriod && !probationPeriods.includes(info.probationPeriod) ? (
+            <NativeSelectOption disabled value={info.probationPeriod}>
+              {info.probationPeriod}（原记录）
+            </NativeSelectOption>
+          ) : null}
+          {probationPeriods.map((period, index) => (
+            <NativeSelectOption key={period} value={period}>
+              {index + 1}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        {errors["confirmationInfo.probationPeriod"] ? (
+          <p className="text-destructive text-xs">{errors["confirmationInfo.probationPeriod"]}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}

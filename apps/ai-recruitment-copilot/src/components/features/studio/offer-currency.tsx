@@ -39,10 +39,14 @@ export function OfferCurrencySelect({
   id,
   value,
   onChange,
+  required,
+  "aria-invalid": ariaInvalid,
 }: {
   id: string;
   value: string;
   onChange: (currency: string) => void;
+  required?: boolean;
+  "aria-invalid"?: boolean;
 }) {
   const [otherSelected, setOtherSelected] = useState(false);
   const isOther = otherSelected || !currencies.some((item) => item.code === value);
@@ -57,7 +61,12 @@ export function OfferCurrencySelect({
           }
         }}
       >
-        <SelectTrigger id={id} className="w-full">
+        <SelectTrigger
+          id={id}
+          className="w-full"
+          aria-invalid={ariaInvalid}
+          aria-required={required}
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -75,6 +84,8 @@ export function OfferCurrencySelect({
         <div className="space-y-2">
           <Label htmlFor={`${id}-description`}>币种说明（必填）</Label>
           <Input
+            aria-invalid={ariaInvalid}
+            aria-required={required}
             id={`${id}-description`}
             value={value}
             onChange={(event) => onChange(event.target.value)}

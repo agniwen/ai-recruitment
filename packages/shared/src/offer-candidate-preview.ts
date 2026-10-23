@@ -1,7 +1,7 @@
 import type { ResumeProfile } from "@arc/db-schema/interview/types";
 import type { ResumeReviewLoose } from "@arc/db-schema/resume-review";
 import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
-import type { OfferCompletionInfo } from "@arc/db-schema/offer-completion";
+import type { OfferCompletionPreview } from "@arc/db-schema/offer-completion";
 import type {
   HumanInterviewFormat,
   HumanInterviewRoundOutcome,
@@ -100,7 +100,7 @@ export interface OfferCandidatePreview {
   humanInterviews: OfferCandidateHumanInterview[];
   timeline?: OfferCandidateActivity[];
   offer: {
-    completionInfo?: OfferCompletionInfo | null;
+    completionInfo?: OfferCompletionPreview | null;
     confirmationInfo?: OfferConfirmationDetails | null;
     id: string;
     version: number;

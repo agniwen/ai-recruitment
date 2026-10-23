@@ -22,6 +22,25 @@ vi.mock("@/lib/client/api", () => ({
   patchOfferDraft: vi.fn(),
   respondOfferDraft: vi.fn(),
 }));
+vi.mock("@/components/date-time-picker", () => ({
+  DatePicker: ({
+    id,
+    value,
+    onValueChange,
+  }: {
+    id: string;
+    value: string;
+    onValueChange: (value: string) => void;
+  }) => (
+    <input
+      aria-label={id}
+      id={id}
+      type="date"
+      value={value}
+      onChange={(event) => onValueChange(event.target.value)}
+    />
+  ),
+}));
 
 const roots: ReturnType<typeof createRoot>[] = [];
 
@@ -123,6 +142,34 @@ describe("new Offer without ODC attachments", () => {
       await act(() => Promise.resolve());
       expect(document.querySelector("#offer-confirm-candidateCode")).not.toBeNull();
     });
+    for (const [id, value] of Object.entries({
+      "offer-confirm-departmentName": "平台部",
+      "offer-confirm-directManager": "上级甲",
+      "offer-confirm-gender": "女",
+      "offer-confirm-hiringUnitName": "研发中心",
+      "offer-confirm-jobLevel": "P3",
+      "offer-confirm-jobType": "技术",
+      "offer-confirm-managementSequence": "个人",
+      "offer-confirm-personnelType": "直属",
+      "offer-confirm-probationPeriod": "2个月",
+      "offer-confirm-probationSalary": "25000",
+      "offer-confirm-serviceUnit": "研发服务单位",
+      "offer-confirm-workLocation": "中国",
+      "offer-confirm-workMode": "远程",
+      "offer-joining": "2026-12-01",
+    })) {
+      const input = document.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`);
+      expect(input, id).not.toBeNull();
+      act(() => {
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value")?.set?.call(
+          input,
+          value,
+        );
+        input?.dispatchEvent(
+          new Event(input instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }),
+        );
+      });
+    }
     const next = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.textContent?.trim() === "下一步：确认信息",
     );

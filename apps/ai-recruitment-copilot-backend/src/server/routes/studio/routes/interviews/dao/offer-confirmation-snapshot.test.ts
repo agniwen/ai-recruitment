@@ -84,12 +84,13 @@ beforeEach(async () => {
   ]);
 });
 
-async function create() {
+async function create(joiningDate?: string) {
   return await createOfferDraft({
     input: offerDraftInputSchema.parse({
       baseSalary: 12_000,
       confirmationInfo: confirmation,
       currency: "USD",
+      joiningDate,
       position: "工程师",
     }),
     interviewRecordId: candidateId,
@@ -98,6 +99,21 @@ async function create() {
 }
 
 describe("Offer confirmation version snapshots", () => {
+  it("persists the ODC expected joining date without confirming an SSC preboarding date", async () => {
+    const created = await create("2026-12-15");
+    expect(created).toMatchObject({
+      joiningDate: "2026-12-15T00:00:00.000Z",
+      preboardingDate: null,
+      sscConfirmationStatus: "pending",
+    });
+    const [stored] = await database
+      .select()
+      .from(studioOfferDraft)
+      .where(eq(studioOfferDraft.id, created.id));
+    expect(stored.joiningDate?.toISOString()).toBe("2026-12-15T00:00:00.000Z");
+    expect(stored.preboardingDate).toBeNull();
+  });
+
   it("persists and returns confirmed content before the recruiter notification in the same transaction", async () => {
     const created = await create();
     expect(created).toHaveProperty("confirmationInfo", expect.objectContaining(confirmation));

@@ -1,8 +1,9 @@
 import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
-import type { OfferCompletionInfo } from "@arc/db-schema/offer-completion";
+import type { OfferCompletionPreview } from "@arc/db-schema/offer-completion";
 import type { OfferSscConfirmationStatus } from "@arc/db-schema/studio-interviews";
 import { buildOfferInterviewText } from "./offer-interviews";
 import type { OfferInterviewRound } from "./offer-interviews";
+import { offerPreboardingDateSchema } from "./offer-preboarding";
 
 export type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
 
@@ -45,6 +46,14 @@ function privateTelegramLine(info: OfferConfirmationDetails | null | undefined) 
   return telegram ? `\n候选人私人 TG：${telegram}` : "";
 }
 
+function expectedJoiningDateLine(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+  const parsed = offerPreboardingDateSchema.safeParse(value?.slice(0, 10));
+  return `\n期望上岗日期：${parsed.success ? parsed.data : "待补充"}`;
+}
+
 function legacyInterviewSection(info: OfferConfirmationDetails | null | undefined) {
   if (!info?.mainInterviewerName?.trim() && !info?.interviewFeedback?.trim()) {
     return "";
@@ -53,10 +62,10 @@ function legacyInterviewSection(info: OfferConfirmationDetails | null | undefine
 }
 
 function completionSections(
-  info: OfferCompletionInfo | null | undefined,
+  info: OfferCompletionPreview | null | undefined,
   status: OfferSscConfirmationStatus | null | undefined,
 ) {
-  if (!info || (status !== "confirming" && status !== "completed")) {
+  if (!info || !status) {
     return "";
   }
   const recruiterContact = info.recruiterTelegram?.trim();
@@ -83,15 +92,17 @@ export function buildOfferConfirmationText({
   baseSalary,
   currency,
   interviewRounds,
+  joiningDate,
   sscConfirmationStatus,
 }: {
   info?: OfferConfirmationDetails | null;
   candidateRecordId?: string | null;
-  completionInfo?: OfferCompletionInfo | null;
+  completionInfo?: OfferCompletionPreview | null;
   position: string | null | undefined;
   baseSalary: number | null | undefined;
   currency: string | null | undefined;
   interviewRounds?: readonly OfferInterviewRound[];
+  joiningDate?: string | null;
   sscConfirmationStatus?: OfferSscConfirmationStatus | null;
 }) {
   return `【offer信息】
@@ -110,7 +121,7 @@ export function buildOfferConfirmationText({
 建议职级：${textOrMissing(info?.jobLevel)}
 管理序列：${textOrMissing(info?.managementSequence)}
 办公方式：${textOrMissing(info?.workMode)}
-办公地区：${textOrMissing(info?.workLocation)}
+办公地区：${textOrMissing(info?.workLocation)}${expectedJoiningDateLine(joiningDate)}
 
 2️⃣薪资信息
 薪资货币：${textOrMissing(currency)}

@@ -35,6 +35,23 @@ describe("Offer confirmation text", () => {
     resumeSource: "林图",
   };
 
+  it("keeps the ODC expected joining date in section one, separate from the SSC date", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      completionInfo: { ...completionInfo, preboardingDate: null },
+      currency: "CNY",
+      info: completeInfo,
+      interviewRounds: [],
+      joiningDate: "2026-12-15T00:00:00.000Z",
+      position: "工程师",
+      sscConfirmationStatus: "pending",
+    });
+    expect(text).toContain("期望上岗日期：2026-12-15");
+    expect(text.indexOf("期望上岗日期：")).toBeGreaterThan(text.indexOf("1️⃣编制信息"));
+    expect(text.indexOf("期望上岗日期：")).toBeLessThan(text.indexOf("2️⃣薪资信息"));
+    expect(text).toContain("入职日期：待补充");
+  });
+
   it("adds completed recruitment and preboarding sections to the same full Offer text", () => {
     const text = buildOfferConfirmationText({
       baseSalary: 12_000,
@@ -80,7 +97,7 @@ describe("Offer confirmation text", () => {
     expect(text).not.toContain("SSC 确认中");
   });
 
-  it("does not invent recruitment or entry previews before a date has generated their data", () => {
+  it("does not invent recruitment or entry previews without provenance data", () => {
     const text = buildOfferConfirmationText({
       baseSalary: 12_000,
       completionInfo: null,
@@ -94,8 +111,40 @@ describe("Offer confirmation text", () => {
     expect(text).not.toContain("offer审批已通过");
   });
 
-  it.each(["pending", null, undefined] as const)(
-    "does not expose recruitment or entry details before SSC receipt for status %s",
+  it.each(["pending", "confirming"] as const)(
+    "shows all SSC sections before date entry for status %s without inventing a date",
+    (sscConfirmationStatus) => {
+      const text = buildOfferConfirmationText({
+        baseSalary: 12_000,
+        completionInfo: { ...completionInfo, preboardingDate: null },
+        currency: "CNY",
+        info: completeInfo,
+        interviewRounds: [
+          {
+            feedback: "建议录用",
+            interviewers: [{ name: "面试官甲" }],
+            label: "技术面试",
+            scheduledAt: "2026-10-22T02:30:00.000Z",
+            status: "completed",
+          },
+        ],
+        position: "工程师",
+        sscConfirmationStatus,
+      });
+      expect(text).toContain("3️⃣招聘信息\n招聘渠道：中诚渠道、招聘二组");
+      expect(text).toContain("招聘专员／内推人联系方式：TG—@recruiter_source");
+      expect(text).toContain("4️⃣入职信息\n候选人编码：C20260001");
+      expect(text).toContain("入职日期：待补充\n候选人联系方式：@candidate_private");
+      expect(text).toContain("面试时间：2026-10-22 10:30（北京时间）");
+      expect(text).toContain("面试官：面试官甲\n面试点评：建议录用");
+      expect(text.indexOf("4️⃣入职信息")).toBeLessThan(text.indexOf("【面试情况】"));
+      expect(text).not.toContain("2026-11-01");
+      expect(text).not.toContain("offer审批已通过");
+    },
+  );
+
+  it.each([null, undefined] as const)(
+    "does not expose recruitment or entry details outside an SSC stage for status %s",
     (sscConfirmationStatus) => {
       const text = buildOfferConfirmationText({
         baseSalary: 12_000,

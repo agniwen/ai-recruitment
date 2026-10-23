@@ -299,12 +299,16 @@ export function OfferCard({
   const [editing, setEditing] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [informationOpen, setInformationOpen] = useState(false);
+  const [validationAttempt, setValidationAttempt] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState<OfferFormState>(() => offerFormStateFromDraft(draft));
   const setFormField = createOfferFormFieldSetter(setForm);
 
   useEffect(() => {
     if (editing) {
       setForm(offerFormStateFromDraft(draft));
+      setValidationAttempt(0);
+      setSaveError(null);
     }
   }, [draft, editing]);
 
@@ -321,7 +325,11 @@ export function OfferCard({
       const payload = buildOfferDraftPayload(form);
       return patchOfferDraft(slug, candidateId, draft.id, payload);
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "保存失败"),
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "保存失败";
+      setSaveError(message);
+      toast.error(message);
+    },
     onSuccess: () => {
       toast.success("已更新草稿");
       setEditing(false);
@@ -363,8 +371,18 @@ export function OfferCard({
             candidateId={candidateId}
             form={form}
             idPrefix={`offer-${draft.id}`}
-            onFieldChange={setFormField}
+            onFieldChange={(field, value) => {
+              setFormField(field, value);
+              setSaveError(null);
+            }}
+            showValidationErrors={validationAttempt > 0}
+            validationAttempt={validationAttempt}
           />
+          {saveError ? (
+            <p role="alert" className="mt-3 text-destructive text-sm">
+              {saveError}
+            </p>
+          ) : null}
           <div className="mt-3 flex justify-end gap-2">
             <Button
               disabled={saveMutation.isPending}
@@ -375,8 +393,11 @@ export function OfferCard({
               取消
             </Button>
             <Button
-              disabled={saveMutation.isPending || !form.position.trim() || !form.baseSalary}
-              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              onClick={() => {
+                setValidationAttempt((attempt) => attempt + 1);
+                saveMutation.mutate();
+              }}
               size="sm"
             >
               {saveMutation.isPending ? "保存中…" : "保存"}
@@ -553,7 +574,7 @@ function OfferDraftReadonlyFields({ draft }: { draft: OfferDraftRecord }) {
       )}
       <ReadonlyOfferField label="期权 / 股票" value={draft.equity} />
       <ReadonlyOfferField
-        label="预计入职日"
+        label="期望上岗日期"
         value={draft.joiningDate ? formatIsoDateOnly(draft.joiningDate) : null}
       />
       <ReadonlyOfferField label="预入职日期" value={draft.preboardingDate ?? null} />

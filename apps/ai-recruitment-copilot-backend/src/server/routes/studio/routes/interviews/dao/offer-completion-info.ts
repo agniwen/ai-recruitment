@@ -1,8 +1,11 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { Database } from "@arc/ai-recruitment-copilot-backend/lib/server/db";
 import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
-import { offerCompletionInfoSchema } from "@arc/db-schema/offer-completion";
-import type { OfferCompletionInfo } from "@arc/db-schema/offer-completion";
+import {
+  offerCompletionInfoSchema,
+  offerCompletionPreviewSchema,
+} from "@arc/db-schema/offer-completion";
+import type { OfferCompletionInfo, OfferCompletionPreview } from "@arc/db-schema/offer-completion";
 import { candidatePrivateTelegramSchema } from "@arc/db-schema/offer-recruiter-contact";
 import type { ResumeRecruitmentSource } from "@arc/db-schema/resume-recruitment-source";
 import {
@@ -22,15 +25,15 @@ function uploadedSourceDetails(source: ResumeRecruitmentSource | null, detail: s
   };
 }
 
-export async function loadOfferCompletionInfo(
+export async function loadOfferCompletionPreview(
   input: {
     organizationId: string;
     interviewRecordId: string;
     confirmationInfo: OfferConfirmationDetails | null;
-    preboardingDate: string;
+    preboardingDate: string | null;
   },
   connection: Pick<Database, "select">,
-): Promise<OfferCompletionInfo> {
+): Promise<OfferCompletionPreview> {
   const [candidate] = await connection
     .select({
       candidateName: studioInterview.candidateName,
@@ -84,7 +87,7 @@ export async function loadOfferCompletionInfo(
       recruitingGroupNames = [...new Set(groups.map(({ name }) => name.trim()).filter(Boolean))];
     }
   }
-  return offerCompletionInfoSchema.parse({
+  return offerCompletionPreviewSchema.parse({
     candidateCode: input.confirmationInfo?.candidateCode?.trim() || null,
     candidateName: input.confirmationInfo?.candidateName?.trim() || candidate.candidateName,
     candidatePrivateTelegram: input.confirmationInfo?.candidatePrivateTelegram ?? null,
@@ -93,4 +96,16 @@ export async function loadOfferCompletionInfo(
     recruitingGroupNames,
     ...uploadedSourceDetails(candidate.recruitmentSource, candidate.recruitmentSourceDetail),
   });
+}
+
+export async function loadOfferCompletionInfo(
+  input: {
+    organizationId: string;
+    interviewRecordId: string;
+    confirmationInfo: OfferConfirmationDetails | null;
+    preboardingDate: string;
+  },
+  connection: Pick<Database, "select">,
+): Promise<OfferCompletionInfo> {
+  return offerCompletionInfoSchema.parse(await loadOfferCompletionPreview(input, connection));
 }
