@@ -327,6 +327,64 @@ describe("Offer SSC cards through the real Telegram adapter", () => {
     },
   );
 
+  it.each(["pending", "confirming"] as const)(
+    "copies all SSC sections with a missing date and keeps workflow buttons for %s",
+    async (status) => {
+      const info = offerConfirmationDetailsSchema.parse({
+        candidateName: "候选人甲",
+        candidatePrivateTelegram: "@candidate_private",
+      });
+      const completionInfo = {
+        candidateCode: "ZYHSQ00198",
+        candidateName: "候选人甲",
+        candidatePrivateTelegram: "@candidate_private",
+        preboardingDate: null,
+        recruiterTelegram: "@recruiter_private",
+        recruitingGroupNames: ["中诚渠道"],
+        recruitmentChannel: "TG",
+        resumeSource: "上传来源",
+      };
+      const payload = await editedCard(
+        status,
+        {
+          baseSalary: 15_000,
+          completionInfo,
+          confirmationInfo: info,
+          currency: "CNY",
+          interviewRecordId: "candidate-a",
+          joiningDate: "2027-01-15T00:00:00.000Z",
+          position: "工程师",
+          preboardingDate: null,
+        },
+        { detailUrl: "https://ats.example.test/offer-candidate/ssc-preview" },
+        completedInterviewRounds,
+      );
+      const expected = buildOfferConfirmationText({
+        baseSalary: 15_000,
+        candidateRecordId: "candidate-a",
+        completionInfo,
+        currency: "CNY",
+        info,
+        interviewRounds: completedInterviewRounds,
+        joiningDate: "2027-01-15T00:00:00.000Z",
+        position: "工程师",
+        sscConfirmationStatus: status,
+      });
+      expect(copiedBlock(payload)).toBe(expected);
+      expect(expected).toContain("3️⃣招聘信息");
+      expect(expected).toContain("4️⃣入职信息");
+      expect(expected).toContain("入职日期：待补充");
+      expect(expected).toContain("期望上岗日期：2027-01-15");
+      expect(expected.indexOf("期望上岗日期：")).toBeLessThan(expected.indexOf("2️⃣薪资信息"));
+      expect(expected).toContain("面试官：技术面试官甲、外部面试官乙");
+      expect(expected).toContain("面试点评：能清楚说明方案与取舍，建议录用。");
+      expect(expected).not.toContain("offer审批已通过");
+      expect(payload.reply_markup.inline_keyboard.flat()).toContainEqual(
+        expect.objectContaining({ text: status === "pending" ? "接收确认" : "完成预入职时间确认" }),
+      );
+    },
+  );
+
   it("copies completed recruitment and preboarding details together with the Offer and interviews", async () => {
     const info = offerConfirmationDetailsSchema.parse({
       candidateName: "候选人甲",

@@ -6,7 +6,14 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateOrEditOfferDialog } from "./offer-stage-dialogs";
 import { OfferCard } from "./offer-stage-cards";
-import type { OfferDraftRecord } from "@arc/shared/studio-pipeline-stages";
+import {
+  creationContext,
+  defaults,
+  savedDraft,
+  fill,
+  fillMissingRequired,
+  expectEmptyInputWithTitleHint,
+} from "./offer-creation-test-utils";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,13 +42,17 @@ vi.mock("@/components/date-time-picker", () => ({
     id,
     value,
     onValueChange,
+    ...props
   }: {
     id: string;
     value: string;
     onValueChange: (value: string) => void;
+    "aria-invalid"?: boolean;
+    required?: boolean;
   }) => (
     <input
-      aria-label="Offer 有效期"
+      {...props}
+      aria-required={props.required}
       id={id}
       type="date"
       value={value}
@@ -49,74 +60,6 @@ vi.mock("@/components/date-time-picker", () => ({
     />
   ),
 }));
-
-const defaults = {
-  candidateCode: null,
-  candidateName: "候选人甲",
-  departmentName: "平台部",
-  directManager: null,
-  gender: "女",
-  hiringUnitName: "研发中心",
-  interviewFeedback: null,
-  interviewRoundId: null,
-  jobLevel: "P6",
-  jobType: null,
-  mainInterviewerName: null,
-  managementSequence: null,
-  personnelType: null,
-  probationPeriod: null,
-  probationSalary: null,
-  serviceUnit: "研发服务单位",
-  workLocation: "上海",
-  workMode: null,
-};
-function creationContext(name = "候选人甲") {
-  return {
-    defaults: { ...defaults, candidateName: name },
-    interviewRounds: [
-      {
-        feedback: "系统设计清晰，建议通过。",
-        id: "round-1",
-        interviewers: [
-          { id: "interviewer-1", name: "面试官甲" },
-          { id: "interviewer-2", name: "面试官乙" },
-        ],
-        label: "技术复面",
-      },
-    ],
-    resume: { available: true, filename: "original-resume.pdf", mediaType: "application/pdf" },
-  };
-}
-function savedDraft(): OfferDraftRecord {
-  return {
-    approvalAttachment: null,
-    baseSalary: 30_000,
-    bonus: null,
-    candidateCounter: null,
-    confirmationInfo: {
-      ...defaults,
-      candidateCode: "EMP-SAVED",
-      interviewFeedback: "已保存的面试评价",
-    },
-    createdAt: "2026-10-21T00:00:00.000Z",
-    currency: "CNY",
-    equity: null,
-    expiresAt: null,
-    id: "offer-saved",
-    interviewRecordId: "candidate-1",
-    joiningDate: null,
-    notes: null,
-    organizationId: "org-1",
-    position: "平台工程师",
-    responseAt: null,
-    sentAt: null,
-    sscConfirmationStatus: "completed",
-    sscRevision: 3,
-    status: "draft",
-    updatedAt: "2026-10-21T00:00:00.000Z",
-    version: 2,
-  };
-}
 
 const roots: ReturnType<typeof createRoot>[] = [];
 const clients: QueryClient[] = [];
@@ -145,34 +88,6 @@ async function click(label: string) {
   expect(target, `missing button ${label}`).toBeDefined();
   await act(() => target?.click());
 }
-function fill(id: string, value: string) {
-  const input = document.querySelector(`#${id}`) as
-    | HTMLInputElement
-    | HTMLTextAreaElement
-    | HTMLSelectElement
-    | null;
-  expect(input, `missing input ${id}`).not.toBeNull();
-  const prototype = Object.getPrototypeOf(input);
-  act(() => {
-    Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(input, value);
-    input?.dispatchEvent(
-      new Event(input instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }),
-    );
-  });
-}
-
-function expectEmptyInputWithTitleHint(id: string, text: string) {
-  const input = document.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`);
-  if (!input) {
-    throw new Error(`Missing input ${id}`);
-  }
-  expect(input.getAttribute("placeholder")).toBeNull();
-  expect(input.value).toBe("");
-  const hint = document.querySelector(`[id="${input.getAttribute("aria-describedby")}"]`);
-  expect(hint?.textContent).toBe(text);
-  expect(hint?.parentElement?.querySelector("label")?.htmlFor).toBe(id);
-}
-
 describe("saved Offer confirmation information", () => {
   function renderCard(draft = savedDraft()) {
     const host = document.createElement("div");
@@ -226,10 +141,13 @@ describe("saved Offer confirmation information", () => {
       });
       expect(document.body.textContent).toContain("年度奖金");
       await click("编辑");
-      for (const field of ["bonus", "equity", "joining", "notes"]) {
+      for (const field of ["bonus", "equity", "notes"]) {
         expect(document.querySelector(`#offer-offer-saved-${field}`)).toBeNull();
       }
       expect(document.querySelector("#offer-offer-saved-expires")).not.toBeNull();
+      expect(document.querySelector<HTMLInputElement>("#offer-offer-saved-joining")?.value).toBe(
+        "2026-12-01",
+      );
       const probationSalary = bonus === 0 ? 0 : 25_000;
       fill("offer-offer-saved-confirm-probationSalary", String(probationSalary));
       fill("offer-offer-saved-confirm-probationPeriod", "2个月");
@@ -242,10 +160,11 @@ describe("saved Offer confirmation information", () => {
         expect.objectContaining({
           confirmationInfo: expect.objectContaining({ probationPeriod: "2个月", probationSalary }),
           expiresAt: "2026-12-31",
+          joiningDate: "2026-12-01",
         }),
       );
       const payload = mocks.patch.mock.lastCall?.at(-1);
-      for (const field of ["bonus", "equity", "joiningDate", "notes"]) {
+      for (const field of ["bonus", "equity", "notes"]) {
         expect(payload).not.toHaveProperty(field);
       }
       expect(mocks.context).not.toHaveBeenCalled();
@@ -288,6 +207,8 @@ describe("saved Offer confirmation information", () => {
     }
     fill("offer-offer-saved-base", "35000");
     fill("offer-offer-saved-confirm-directManager", "直属上级甲");
+    fill("offer-offer-saved-confirm-gender", "女");
+    fill("offer-offer-saved-confirm-probationPeriod", "2个月");
     await click("保存");
     await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(
@@ -299,10 +220,10 @@ describe("saved Offer confirmation information", () => {
         confirmationInfo: expect.objectContaining({
           candidateCode: "EMP-SAVED",
           directManager: "直属上级甲",
-          gender: "未发现信息",
+          gender: "女",
           interviewFeedback: "已保存的面试评价",
           jobLevel: "P6",
-          probationPeriod: "60天",
+          probationPeriod: "2个月",
           workLocation: "上海",
         }),
       }),
@@ -359,6 +280,7 @@ async function ready() {
 }
 async function next() {
   await ready();
+  fillMissingRequired();
   await click("下一步：确认信息");
   await vi.waitFor(() =>
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("完整确认内容"),
@@ -366,9 +288,82 @@ async function next() {
 }
 
 describe("Offer creation confirmation", () => {
+  it("blocks review, lists every missing required field and focuses the first invalid control", async () => {
+    renderDialog();
+    await ready();
+    const required = {
+      base: "转正薪资",
+      "confirm-departmentName": "入职部门",
+      "confirm-directManager": "直属上级",
+      "confirm-gender": "性别",
+      "confirm-hiringUnitName": "入职编制组织",
+      "confirm-jobLevel": "建议职级",
+      "confirm-jobType": "岗位类型",
+      "confirm-managementSequence": "管理序列",
+      "confirm-personnelType": "人员性质",
+      "confirm-probationPeriod": "试用期期限",
+      "confirm-probationSalary": "试用薪资",
+      "confirm-serviceUnit": "入职服务单位",
+      "confirm-workLocation": "办公地区",
+      "confirm-workMode": "办公方式",
+      joining: "期望上岗日期",
+      position: "职位",
+    };
+    for (const field of Object.keys(required)) {
+      fill(`offer-${field}`, "");
+    }
+    await click("下一步：确认信息");
+    const alert = document.querySelector('[role="alert"]');
+    for (const [field, label] of Object.entries(required)) {
+      const control = document.querySelector(`#offer-${field}`);
+      expect(control?.getAttribute("aria-invalid"), label).toBe("true");
+      expect(control?.getAttribute("aria-required"), label).toBe("true");
+      expect(alert?.textContent, label).toContain(label);
+    }
+    expect(document.activeElement?.id).toBe("offer-confirm-gender");
+    expect(document.querySelector('label[for="offer-currency"]')?.textContent).toContain("必填");
+    expect(document.querySelector("#offer-expires")?.getAttribute("aria-required")).not.toBe(
+      "true",
+    );
+    expect(button("确认创建")).toBeUndefined();
+    expect(mocks.create).not.toHaveBeenCalled();
+    fill("offer-confirm-gender", "男");
+    expect(document.querySelector("#offer-confirm-gender")?.getAttribute("aria-invalid")).not.toBe(
+      "true",
+    );
+    await click("下一步：确认信息");
+    expect(document.activeElement?.id).toBe("offer-confirm-hiringUnitName");
+  });
+
+  it("preserves the expected joining date through review and saves it independently of SSC dates", async () => {
+    const { onSaved } = renderDialog();
+    await ready();
+    fillMissingRequired();
+    fill("offer-joining", "2027-01-15");
+    fill("offer-confirm-probationSalary", "0");
+    await next();
+    expect(document.querySelector('pre[aria-label="Offer 确认内容"]')?.textContent).toContain(
+      "期望上岗日期：2027-01-15",
+    );
+    await click("返回修改");
+    expect(document.querySelector<HTMLInputElement>("#offer-joining")?.value).toBe("2027-01-15");
+    await next();
+    await click("确认创建");
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+    const payload = mocks.create.mock.lastCall?.at(-1);
+    expect(payload).toMatchObject({
+      confirmationInfo: { probationSalary: 0 },
+      expiresAt: null,
+      joiningDate: "2027-01-15",
+    });
+    expect(payload).not.toHaveProperty("preboardingDate");
+    expect(payload?.confirmationInfo).not.toHaveProperty("preboardingDate");
+  });
+
   it("lists missing required terms on click and clears their field errors as they are filled", async () => {
     renderDialog();
     await ready();
+    fillMissingRequired();
     fill("offer-position", "");
     fill("offer-base", "");
     expect(button("下一步：确认信息")?.disabled).toBe(false);
@@ -409,10 +404,15 @@ describe("Offer creation confirmation", () => {
 
   it("uses only the new information format while keeping the system Offer expiry field", () => {
     renderDialog();
-    for (const field of ["bonus", "equity", "joining", "notes"]) {
+    for (const field of ["bonus", "equity", "notes"]) {
       expect(document.querySelector(`#offer-${field}`)).toBeNull();
     }
     expect(document.querySelector("#offer-expires")).not.toBeNull();
+    expect(document.querySelector("#offer-joining")).not.toBeNull();
+    expect(
+      document.querySelector("#offer-joining")?.closest("section")?.querySelector("h3")
+        ?.textContent,
+    ).toBe("1️⃣编制信息");
     expect(mocks.create).not.toHaveBeenCalled();
   });
 
@@ -461,12 +461,12 @@ describe("Offer creation confirmation", () => {
       expect.objectContaining({
         confirmationInfo: expect.objectContaining({
           candidateCode: null,
-          gender: null,
-          jobLevel: null,
-          managementSequence: null,
-          personnelType: null,
-          workLocation: null,
-          workMode: null,
+          gender: "女",
+          jobLevel: "P3",
+          managementSequence: "个人",
+          personnelType: "直属",
+          workLocation: "中国",
+          workMode: "远程",
         }),
       }),
     );
@@ -499,7 +499,7 @@ describe("Offer creation confirmation", () => {
       Array.from({ length: 12 }, (_value, index) => String(index + 1)),
     );
     expect(document.querySelector('label[for="offer-confirm-probationPeriod"]')?.textContent).toBe(
-      "试用期期限（月）",
+      "试用期期限（月，必填）",
     );
     fill("offer-confirm-probationPeriod", "2个月");
     fill("offer-confirm-probationPeriod", "");
@@ -515,10 +515,11 @@ describe("Offer creation confirmation", () => {
       'pre[aria-label="Offer 确认内容"]',
     )?.textContent;
     expect(confirmationText).not.toContain("待 SSC 确认");
-    expect(confirmationText).toContain("建议职级：待补充");
-    expect(confirmationText).toContain("性别：待补充");
-    expect(confirmationText).toContain("试用期：待补充");
-    expect(confirmationText?.split("\n").at(-1)).toBe("试用薪资：待补充");
+    expect(confirmationText).toContain("建议职级：P3");
+    expect(confirmationText).toContain("性别：女");
+    expect(confirmationText).toContain("试用期：2个月");
+    expect(confirmationText).toContain("试用薪资：25K");
+    expect(confirmationText).toContain("期望上岗日期：2026-12-01");
     expect(document.body.textContent).not.toContain("offer审批已通过");
     expect(document.querySelector('input[type="file"]')).toBeNull();
     await click("取消");
@@ -587,12 +588,13 @@ describe("Offer creation confirmation", () => {
           workLocation: "杭州",
         }),
         expiresAt: "2026-12-20",
+        joiningDate: "2026-12-01",
         position: "平台工程师",
         sendImmediately: false,
       }),
     );
     const payload = mocks.create.mock.lastCall?.at(-1);
-    for (const field of ["bonus", "equity", "joiningDate", "notes"]) {
+    for (const field of ["bonus", "equity", "notes"]) {
       expect(payload).not.toHaveProperty(field);
     }
   });

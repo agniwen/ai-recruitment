@@ -183,7 +183,12 @@ beforeEach(() => {
       telegramChatId: "12345",
     },
   });
-  mocks.receive.mockResolvedValue({ ...draft, sscConfirmationStatus: "confirming" });
+  mocks.receive.mockImplementation(async () => {
+    const context = await mocks.context.getMockImplementation()?.();
+    const received = { ...context.draft, sscConfirmationStatus: "confirming" };
+    mocks.context.mockResolvedValue({ ...context, draft: received });
+    return received;
+  });
   mocks.preboarding.mockImplementation((input) =>
     Promise.resolve({
       ...draft,
@@ -360,11 +365,8 @@ async function directMessage(
 
 describe("self-service Telegram Offer SSC actions", () => {
   it("keeps preboarding date confirmation and final approval available after receiving", async () => {
-    mocks.receive.mockResolvedValue({
-      ...draft,
-      preboardingDate: null,
-      sscConfirmationStatus: "confirming",
-    });
+    const context = await mocks.context();
+    mocks.context.mockResolvedValue({ ...context, draft: { ...draft, preboardingDate: null } });
     await action("osr", `${callbackDraftId}:3`);
     expect(buttonValue(mocks.edit, "osd")).toBe(`${callbackDraftId}:3`);
     expect(buttonValue(mocks.edit, "osc")).toBe(`${callbackDraftId}:3`);
@@ -709,6 +711,10 @@ describe("self-service Telegram Offer SSC actions", () => {
         interviewRecordId: "candidate-a",
         organizationId: "org-a",
       });
+      mocks.context.mockResolvedValue({
+        ...context,
+        draft: { ...fullDraft, sscConfirmationStatus: "confirming" },
+      });
       return Promise.resolve({ ...fullDraft, sscConfirmationStatus: "confirming" });
     });
     const opened = await command("/offer", message(draftId));
@@ -820,6 +826,45 @@ describe("self-service Telegram Offer SSC actions", () => {
       revision: 3,
       source: "telegram",
     });
+  });
+
+  it("reloads the authorized preview after receipt without losing sections or granting permissions", async () => {
+    const initial = await mocks.context();
+    const fullDraft = { ...draft, baseSalary: 15_000, currency: "CNY", preboardingDate: null };
+    const completionInfo = {
+      candidateCode: null,
+      candidateName: "候选人甲",
+      candidatePrivateTelegram: "@candidate_private",
+      preboardingDate: null,
+      recruiterTelegram: "@recruiter_source",
+      recruitingGroupNames: ["招聘一组"],
+      recruitmentChannel: "TG",
+      resumeSource: "内推",
+    };
+    mocks.context
+      .mockResolvedValueOnce({ ...initial, draft: { ...fullDraft, completionInfo } })
+      .mockResolvedValueOnce({
+        ...initial,
+        canConfirm: false,
+        draft: { ...fullDraft, completionInfo, sscConfirmationStatus: "confirming" },
+      });
+    mocks.receive.mockResolvedValue({
+      ...fullDraft,
+      completionInfo: null,
+      preboardingDate: null,
+      sscConfirmationStatus: "confirming",
+    });
+    await action("osr", `${callbackDraftId}:3`);
+    const [[threadId, messageId, card]] = mocks.edit.mock.calls;
+    expect({ messageId, threadId }).toEqual({ messageId: "12345:7", threadId: "telegram:12345" });
+    expect(card).toMatchObject({
+      telegramOfferCopyText: expect.stringContaining("3️⃣招聘信息\n招聘渠道：招聘一组"),
+    });
+    expect(card.telegramOfferCopyText).toContain("4️⃣入职信息");
+    expect(card.telegramOfferCopyText).toContain("入职日期：待补充");
+    expect(JSON.stringify(card)).not.toContain('"id":"osr"');
+    expect(JSON.stringify(card)).not.toContain('"id":"osc"');
+    expect(JSON.stringify(card)).not.toContain('"id":"osd"');
   });
 
   it("keeps completion available on the received card for its authorized SSC", async () => {

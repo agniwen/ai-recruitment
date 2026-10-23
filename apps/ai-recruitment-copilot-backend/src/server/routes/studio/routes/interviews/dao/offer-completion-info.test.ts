@@ -12,6 +12,7 @@ import {
 } from "@arc/db-schema/schema";
 import { CANDIDATE, FIRST_SSC, ORG, setupOfferSscFixture } from "../__tests__/offer-ssc-fixture";
 import { loadOfferCompletionInfo } from "./offer-completion-info";
+import * as completionLoaders from "./offer-completion-info";
 
 setupOfferSscFixture();
 const FOREIGN_ORG = `${ORG}_completion_foreign`;
@@ -100,6 +101,46 @@ async function snapshot(
 }
 
 describe("Offer final recruitment and preboarding snapshot", () => {
+  it("loads recruitment and entry details with a missing date for a read-only preview", async () => {
+    expect(completionLoaders).toHaveProperty("loadOfferCompletionPreview", expect.any(Function));
+    const info = await completionLoaders.loadOfferCompletionPreview(
+      {
+        confirmationInfo,
+        interviewRecordId: CANDIDATE,
+        organizationId: ORG,
+        preboardingDate: null,
+      },
+      db,
+    );
+    expect(info).toEqual({
+      candidateCode: "ZCLT00089",
+      candidateName: "Offer 中的姓名",
+      candidatePrivateTelegram: "@candidate_private",
+      preboardingDate: null,
+      recruiterTelegram: "@Recruiter_123",
+      recruitingGroupNames: ["SSC 可见范围测试组", "另一招聘组"],
+      recruitmentChannel: "其他",
+      resumeSource: "林图",
+    });
+  });
+
+  it.each([null, "", "2026-02-30"])(
+    "keeps final snapshot validation strict for the date %j",
+    async (preboardingDate) => {
+      await expect(
+        loadOfferCompletionInfo(
+          {
+            confirmationInfo,
+            interviewRecordId: CANDIDATE,
+            organizationId: ORG,
+            preboardingDate: preboardingDate as never,
+          },
+          db,
+        ),
+      ).rejects.toThrow();
+    },
+  );
+
   it("uses the original uploader's current workspace teams and TG with the uploaded source", async () => {
     const info = await snapshot();
     expect(info).toEqual({

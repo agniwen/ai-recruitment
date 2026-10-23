@@ -188,50 +188,69 @@ afterEach(async () => {
 });
 
 describe("public Offer candidate preview", () => {
-  it("shows the SSC preboarding date and copies completed recruitment and onboarding information", async () => {
+  it("shows the same expected calendar date in the summary and copied section one", async () => {
     vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
       ...preview,
-      offer: {
-        ...preview.offer,
-        completionInfo: {
-          candidateCode: "CANDIDATE-2026",
-          candidateName: "SSC测试候选人",
-          candidatePrivateTelegram: "@candidate_private",
-          preboardingDate: "2026-11-05",
-          recruiterTelegram: "@resume_uploader",
-          recruitingGroupNames: ["渠道招聘团队"],
-          recruitmentChannel: "TG",
-          resumeSource: "内推渠道",
-        },
-        preboardingDate: "2026-11-05",
-        sscConfirmationStatus: "completed",
-      },
+      offer: { ...preview.offer, joiningDate: "2026-12-01T18:00:00.000Z" },
     });
     await renderPage();
-    await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
     await selectTab("Offer");
-    expect(document.body.textContent).toContain("预入职日期");
-    expect(document.body.textContent).toContain("2026-11-05");
-    const text = document.body.querySelector("pre")?.textContent;
-    expect(text).toContain("招聘信息");
-    expect(text).toContain("入职信息");
-    for (const value of [
-      "渠道招聘团队",
-      "内推渠道",
-      "@resume_uploader",
-      "CANDIDATE-2026",
-      "@candidate_private",
-      "2026-11-05",
-    ]) {
-      expect(text).toContain(value);
-    }
-    const copy = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (node) => node.textContent?.trim() === "复制 Offer 信息",
-    );
-    await act(() => copy?.click());
-    expect(copyTextToClipboard).toHaveBeenCalledExactlyOnceWith(text, expect.any(Function));
-    expectReadOnly();
+    expect(document.body.textContent).toContain("26/12/01");
+    expect(document.body.textContent).not.toContain("26/12/02");
+    expect(document.querySelector("pre")?.textContent).toContain("期望上岗日期：2026-12-01");
   });
+
+  it.each([
+    { date: null, status: "pending" },
+    { date: null, status: "confirming" },
+    { date: "2026-11-05", status: "completed" },
+  ] as const)(
+    "copies all SSC sections with date $date for status $status",
+    async ({ date, status }) => {
+      vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
+        ...preview,
+        offer: {
+          ...preview.offer,
+          completionInfo: {
+            candidateCode: "CANDIDATE-2026",
+            candidateName: "SSC测试候选人",
+            candidatePrivateTelegram: "@candidate_private",
+            preboardingDate: date,
+            recruiterTelegram: "@resume_uploader",
+            recruitingGroupNames: ["渠道招聘团队"],
+            recruitmentChannel: "TG",
+            resumeSource: "内推渠道",
+          },
+          preboardingDate: date,
+          sscConfirmationStatus: status,
+        },
+      });
+      await renderPage();
+      await waitForUi(() => expect(document.body.textContent).toContain("SSC测试候选人"));
+      await selectTab("Offer");
+      expect(document.body.textContent).toContain("预入职日期");
+      expect(document.body.textContent).toContain(date ?? "入职日期：待补充");
+      const text = document.body.querySelector("pre")?.textContent;
+      expect(text).toContain("招聘信息");
+      expect(text).toContain("入职信息");
+      for (const value of [
+        "渠道招聘团队",
+        "内推渠道",
+        "@resume_uploader",
+        "CANDIDATE-2026",
+        "@candidate_private",
+        date ?? "入职日期：待补充",
+      ]) {
+        expect(text).toContain(value);
+      }
+      const copy = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+        (node) => node.textContent?.trim() === "复制 Offer 信息",
+      );
+      await act(() => copy?.click());
+      expect(copyTextToClipboard).toHaveBeenCalledExactlyOnceWith(text, expect.any(Function));
+      expectReadOnly();
+    },
+  );
 
   it("prefers the corrected candidate name over the parsed resume name", async () => {
     vi.mocked(fetchOfferCandidatePreview).mockResolvedValue({
@@ -434,6 +453,7 @@ describe("public Offer candidate preview", () => {
         currency: preview.offer.currency,
         info: confirmationInfo,
         interviewRounds: humanInterviews,
+        joiningDate: preview.offer.joiningDate,
         position: preview.offer.position,
         sscConfirmationStatus: preview.offer.sscConfirmationStatus,
       }),

@@ -44,7 +44,7 @@ import { listSourceSscNotificationRecipients } from "@arc/ai-recruitment-copilot
 import { normalizeTelegramUsername } from "@arc/ai-recruitment-copilot-backend/server/routes/telegram/utils/identity";
 import { offerConfirmationDetailsSchema } from "@arc/db-schema/offer-confirmation";
 import { offerPreboardingDateSchema } from "@arc/shared/offer-preboarding";
-import { loadOfferCompletionInfo } from "./offer-completion-info";
+import { loadOfferCompletionInfo, loadOfferCompletionPreview } from "./offer-completion-info";
 
 export type { OfferDraftRecord };
 
@@ -119,10 +119,10 @@ function toRecord(row: typeof studioOfferDraft.$inferSelect): OfferDraftRecord {
 
 async function toReadRecord(row: typeof studioOfferDraft.$inferSelect): Promise<OfferDraftRecord> {
   const record = toRecord(row);
-  const date = offerPreboardingDateSchema.safeParse(row.preboardingDate);
+  const date = offerPreboardingDateSchema.nullable().safeParse(row.preboardingDate);
   if (
     record.completionInfo ||
-    row.sscConfirmationStatus !== "confirming" ||
+    (row.sscConfirmationStatus !== "pending" && row.sscConfirmationStatus !== "confirming") ||
     row.status !== "draft" ||
     row.recruiterConfirmationStatus === "pending" ||
     !date.success ||
@@ -158,11 +158,11 @@ async function toReadRecord(row: typeof studioOfferDraft.$inferSelect): Promise<
   if (latest?.id !== row.id) {
     return record;
   }
-  // Older confirmed dates predate preview persistence. Derive the display value
-  // without changing the date, approval, audit trail or any stored snapshot.
+  // Show recruitment and entry details from the first SSC handoff without
+  // changing the date, approval, audit trail or any stored snapshot.
   return {
     ...record,
-    completionInfo: await loadOfferCompletionInfo(
+    completionInfo: await loadOfferCompletionPreview(
       {
         confirmationInfo: row.confirmationInfo,
         interviewRecordId: row.interviewRecordId,

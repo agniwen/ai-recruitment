@@ -67,7 +67,11 @@ export function OfferDetails({
           <DataField label="年度奖金" value={salary(offer.bonus, offer.currency)} />
         )}
         <DataField label="股权" value={offer.equity} />
-        <DataField kind="date" label="预计入职日期" value={offer.joiningDate} />
+        <DataField
+          kind="date"
+          label="期望上岗日期"
+          value={offer.joiningDate?.slice(0, 10) ?? null}
+        />
         <DataField label="预入职日期" value={offer.preboardingDate ?? null} />
         <DataField kind="datetime" label="Offer 有效期至" value={offer.expiresAt} />
         <DataField kind="datetime" label="SSC 接收时间" value={offer.sscReceivedAt} />
@@ -84,6 +88,7 @@ export function OfferDetails({
           candidateRecordId={candidateRecordId}
           completionInfo={offer.completionInfo}
           interviewRounds={interviewRounds}
+          joiningDate={offer.joiningDate}
           info={
             offer.confirmationInfo ?? { ...offerConfirmationDetailsSchema.parse({}), candidateName }
           }

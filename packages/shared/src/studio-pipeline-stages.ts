@@ -4,7 +4,7 @@
 // Imported by both DAO and client; single source of truth.
 
 import type { OfferConfirmationDetails } from "@arc/db-schema/offer-confirmation";
-import type { OfferCompletionInfo } from "@arc/db-schema/offer-completion";
+import type { OfferCompletionPreview } from "@arc/db-schema/offer-completion";
 
 import type {
   ExternalInterviewerInput,
@@ -182,7 +182,7 @@ export interface OfferSscState {
  */
 export interface OfferDraftRecord {
   id: string;
-  completionInfo?: OfferCompletionInfo | null;
+  completionInfo?: OfferCompletionPreview | null;
   preboardingDate?: string | null;
   confirmationInfo?: OfferConfirmationDetails | null;
   recruiterConfirmationStatus?: "pending" | "completed" | null;

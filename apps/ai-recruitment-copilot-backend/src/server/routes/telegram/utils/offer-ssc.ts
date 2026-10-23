@@ -148,7 +148,7 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       interviewRecordId: context.draft.interviewRecordId,
       organizationId: context.draft.organizationId,
     });
-    const draft = await receiveOfferSscConfirmation({
+    await receiveOfferSscConfirmation({
       actor,
       draftId: parsed.draftId,
       interviewRecordId: context.draft.interviewRecordId,
@@ -156,10 +156,14 @@ export async function handleTelegramOfferAction(event: ActionEvent): Promise<voi
       revision: parsed.revision,
       source: "telegram",
     });
-    const activity = await loadOfferSscActivity(draft);
+    const receivedContext = await loadAuthorizedOfferSscContext({
+      draftId: parsed.draftId,
+      telegramActor: actor,
+    });
+    const activity = await loadOfferSscActivity(receivedContext.draft);
     await updateTelegramOfferMessages(
       event,
-      buildTelegramOfferPublicCard({ ...context, activity, draft, interviewRounds }, actor),
+      buildTelegramOfferPublicCard({ ...receivedContext, activity, interviewRounds }, actor),
     );
   } catch (error) {
     await event.thread.post(errorReply(error));

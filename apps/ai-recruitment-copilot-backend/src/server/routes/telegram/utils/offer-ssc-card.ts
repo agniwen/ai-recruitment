@@ -34,6 +34,7 @@ export interface TelegramOfferCardContext {
         | "confirmationInfo"
         | "currency"
         | "interviewRecordId"
+        | "joiningDate"
         | "preboardingDate"
         | "completionInfo"
       >
@@ -63,6 +64,7 @@ function offerConfirmationText(context: TelegramOfferCardContext) {
       candidateName: context.candidateName,
     },
     interviewRounds: context.interviewRounds,
+    joiningDate: draft.joiningDate,
     position: draft.position,
     sscConfirmationStatus: draft.sscConfirmationStatus,
   });

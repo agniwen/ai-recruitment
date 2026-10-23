@@ -156,7 +156,7 @@ describe("OfferCard approval attachment", () => {
     const { host } = renderCard("application/pdf", "approval.pdf", false, "CNY", {
       draft: { joiningDate: "2026-11-02", preboardingDate: "2026-11-05" },
     });
-    expect(host.textContent).toContain("预计入职日");
+    expect(host.textContent).toContain("期望上岗日期");
     expect(host.textContent).toContain("预入职日期");
     expect(host.textContent).toContain("2026-11-05");
     expect(host.textContent).toContain("2026-11-02");
@@ -189,7 +189,31 @@ describe("OfferCard approval attachment", () => {
 
   it("edits offer terms as JSON without file controls or screenshot paste", async () => {
     mocks.patchOfferDraft.mockResolvedValue({ id: "offer-1" });
-    const { host, onSaved } = renderCard("image/png", "old-odc-approval.png", true);
+    const { host, onSaved } = renderCard("image/png", "old-odc-approval.png", true, "CNY", {
+      draft: {
+        confirmationInfo: {
+          candidateCode: null,
+          candidateName: "候选人甲",
+          departmentName: "平台部",
+          directManager: "上级甲",
+          gender: "女",
+          hiringUnitName: "研发中心",
+          interviewFeedback: null,
+          interviewRoundId: null,
+          jobLevel: "P3",
+          jobType: "技术",
+          mainInterviewerName: null,
+          managementSequence: "个人",
+          personnelType: "直属",
+          probationPeriod: "2个月",
+          probationSalary: 25_000,
+          serviceUnit: "研发服务单位",
+          workLocation: "中国",
+          workMode: "远程",
+        },
+        joiningDate: "2026-12-01",
+      },
+    });
     await act(() => findButton(host, "编辑")?.click());
     expect(host.querySelector('input[type="file"]')).toBeNull();
     expect(host.querySelector('[aria-label^="附件操作"]')).toBeNull();
@@ -201,6 +225,25 @@ describe("OfferCard approval attachment", () => {
     act(() => host.querySelector("textarea")?.dispatchEvent(paste));
     expect(paste.defaultPrevented).toBe(false);
     expect(host.textContent).not.toContain("pasted.png");
+    const gender = host.querySelector<HTMLSelectElement>("#offer-offer-1-confirm-gender");
+    function setGender(value: string) {
+      act(() => {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(
+          gender,
+          value,
+        );
+        gender?.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+    setGender("");
+    await act(() => findButton(host, "保存")?.click());
+    await vi.waitFor(() => {
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain("性别");
+      expect(gender?.getAttribute("aria-invalid")).toBe("true");
+    });
+    expect(mocks.patchOfferDraft).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(gender);
+    setGender("女");
     await act(() => findButton(host, "保存")?.click());
     await vi.waitFor(async () => {
       await act(() => Promise.resolve());
