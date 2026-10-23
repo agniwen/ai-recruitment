@@ -240,7 +240,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function renderDialog() {
+function renderDialog(position = "平台工程师") {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
@@ -266,7 +266,7 @@ function renderDialog() {
     );
   }
   render();
-  fill("offer-position", "平台工程师");
+  fill("offer-position", position);
   fill("offer-base", "30000");
   return { onOpenChange, onSaved, render };
 }
@@ -426,6 +426,7 @@ describe("Offer creation confirmation", () => {
     await ready();
     expect(document.querySelector<HTMLSelectElement>("#offer-confirm-gender")?.value).toBe("");
     const examples = {
+      jobType: "策划",
       managementSequence: "个人",
       personnelType: "直属",
       workLocation: "中国",
@@ -434,7 +435,7 @@ describe("Offer creation confirmation", () => {
     for (const [field, example] of Object.entries(examples)) {
       expectEmptyInputWithTitleHint(`offer-confirm-${field}`, `例如：${example}`);
     }
-    for (const field of ["directManager", "jobType", "probationSalary", "probationPeriod"]) {
+    for (const field of ["directManager", "probationSalary", "probationPeriod"]) {
       expectEmptyInputWithTitleHint(
         `offer-confirm-${field}`,
         field === "probationPeriod" ? "例如：2" : "待补充",
@@ -632,8 +633,9 @@ describe("Offer creation confirmation", () => {
   });
 
   it("starts clean when reopened or switched to a different candidate", async () => {
-    const { render } = renderDialog();
+    const { render } = renderDialog("");
     await ready();
+    expect(document.querySelector<HTMLInputElement>("#offer-position")?.value).toBe("当前投递岗位");
     fill("offer-confirm-candidateCode", "OLD-CODE");
     render("candidate-1", false);
     render("candidate-1", true);
@@ -641,13 +643,17 @@ describe("Offer creation confirmation", () => {
     expect((document.querySelector("#offer-confirm-candidateCode") as HTMLInputElement).value).toBe(
       "",
     );
-    expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe("");
+    expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe(
+      "当前投递岗位",
+    );
     fill("offer-position", "新职位");
     fill("offer-base", "20000");
-    mocks.context.mockResolvedValueOnce(creationContext("候选人乙"));
+    mocks.context.mockResolvedValueOnce(creationContext("候选人乙", "候选人乙投递岗位"));
     render("candidate-2", true);
     await ready();
-    expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe("");
+    expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe(
+      "候选人乙投递岗位",
+    );
     expect((document.querySelector("#offer-confirm-candidateCode") as HTMLInputElement).value).toBe(
       "",
     );
@@ -664,10 +670,13 @@ describe("Offer creation confirmation", () => {
     mocks.context.mockResolvedValueOnce({
       ...creationContext(),
       interviewRounds: [],
+      position: null,
       resume: { available: false, filename: null, mediaType: null },
     });
-    const { onSaved } = renderDialog();
+    const { onSaved } = renderDialog("");
     await ready();
+    expect(document.querySelector<HTMLInputElement>("#offer-position")?.value).toBe("");
+    fill("offer-position", "平台工程师");
     for (const field of ["interviewRoundId", "mainInterviewerName", "interviewFeedback"]) {
       expect(document.querySelector(`#offer-confirm-${field}`)).toBeNull();
     }
@@ -736,14 +745,16 @@ describe("Offer creation confirmation", () => {
     const pending = Promise.withResolvers<ReturnType<typeof creationContext>>();
     mocks.context.mockReturnValueOnce(pending.promise);
     const { render } = renderDialog();
-    mocks.context.mockResolvedValueOnce(creationContext("候选人乙"));
+    mocks.context.mockResolvedValueOnce(creationContext("候选人乙", "候选人乙投递岗位"));
     render("candidate-2", true);
     await ready();
     await act(() => pending.resolve(creationContext("旧候选人")));
     expect((document.querySelector("#offer-confirm-candidateName") as HTMLInputElement).value).toBe(
       "候选人乙",
     );
-    expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe("");
+    expect((document.querySelector("#offer-position") as HTMLInputElement).value).toBe(
+      "候选人乙投递岗位",
+    );
     expect(mocks.create).not.toHaveBeenCalled();
   });
 });

@@ -44,7 +44,7 @@ const organizationFields: TextFieldConfig[] = [
   { example: "直属", key: "personnelType", label: "人员性质", maxLength: 120, required: true },
   { key: "departmentName", label: "入职部门", maxLength: 200, required: true },
   { key: "directManager", label: "直属上级", maxLength: 200, required: true },
-  { key: "jobType", label: "岗位类型", maxLength: 120, required: true },
+  { example: "策划", key: "jobType", label: "岗位类型", maxLength: 120, required: true },
   { example: "P3", key: "jobLevel", label: "建议职级", maxLength: 120, required: true },
   { example: "个人", key: "managementSequence", label: "管理序列", maxLength: 120, required: true },
   { example: "远程", key: "workMode", label: "办公方式", maxLength: 120, required: true },

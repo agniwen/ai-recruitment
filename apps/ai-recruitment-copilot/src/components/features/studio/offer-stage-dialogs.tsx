@@ -132,6 +132,7 @@ export function CreateOrEditOfferDialog({
             jobLevel: null,
             workLocation: null,
           },
+          position: current.position || loaded.position?.trim() || "",
         }));
       } catch (error) {
         if (session.current === sessionId) {
