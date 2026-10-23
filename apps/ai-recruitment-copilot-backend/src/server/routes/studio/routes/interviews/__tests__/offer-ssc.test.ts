@@ -660,6 +660,15 @@ describe("Offer SSC confirmation", () => {
       organizationId: ORG,
     });
     await expect(requestAction(offer.id, "receive", 2)).resolves.toHaveProperty("status", 200);
+    const dateConfirmed = await makeApp().request(
+      `/${CANDIDATE}/offer-drafts/${offer.id}/ssc/preboarding-date`,
+      {
+        body: JSON.stringify({ preboardingDate: "2026-11-01", revision: 2 }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      },
+    );
+    expect(dateConfirmed.status).toBe(200);
     await expect(requestAction(offer.id, "complete", 2)).resolves.toHaveProperty("status", 200);
     await removeOfferApprovalAttachment(offer.id, CANDIDATE, ORG);
     const [stored] = await db
@@ -668,6 +677,8 @@ describe("Offer SSC confirmation", () => {
       .where(eq(studioOfferDraft.id, offer.id));
     expect(stored).toMatchObject({
       approvalAttachment: null,
+      completionInfo: null,
+      preboardingDate: null,
       sscConfirmationStatus: "pending",
       sscRevision: 3,
     });

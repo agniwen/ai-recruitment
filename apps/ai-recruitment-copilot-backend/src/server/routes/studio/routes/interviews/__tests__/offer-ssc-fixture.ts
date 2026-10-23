@@ -143,10 +143,11 @@ export async function newLegacySscOffer() {
     organizationId: ORG,
   });
   // This fixture isolates the historical SSC lifecycle. The recruiter gate has
-  // dedicated coverage in dao/offer-recruiter-contact.test.ts.
+  // dedicated coverage in dao/offer-recruiter-contact.test.ts; preboarding-date
+  // validation has its own suite and this fixture isolates later SSC transitions.
   await db
     .update(studioOfferDraft)
-    .set({ recruiterConfirmationStatus: null })
+    .set({ preboardingDate: "2026-11-01", recruiterConfirmationStatus: null })
     .where(eq(studioOfferDraft.id, draft.id));
-  return { ...draft, recruiterConfirmationStatus: null };
+  return { ...draft, preboardingDate: "2026-11-01", recruiterConfirmationStatus: null };
 }

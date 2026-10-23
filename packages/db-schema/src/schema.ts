@@ -58,11 +58,13 @@ import type { ResumeParserStructured } from "./resume-parser-schema";
 import type { ResumeReview } from "./resume-review";
 import type { ResumeRecruitmentSource } from "./resume-recruitment-source";
 import type { OfferConfirmationDetails } from "./offer-confirmation";
+import type { OfferCompletionInfo } from "./offer-completion";
 import { sql } from "drizzle-orm";
 import {
   bigserial,
   boolean,
   check,
+  date,
   foreignKey,
   index,
   integer,
@@ -1918,6 +1920,7 @@ export const studioOfferDraft = pgTable(
     baseSalary: integer("base_salary").notNull(),
     bonus: integer("bonus"),
     candidateCounter: text("candidate_counter"),
+    completionInfo: jsonb("completion_info").$type<OfferCompletionInfo | null>(),
     confirmationInfo: jsonb("confirmation_info").$type<OfferConfirmationDetails | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
@@ -1935,6 +1938,7 @@ export const studioOfferDraft = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     position: text("position").notNull(),
+    preboardingDate: date("preboarding_date", { mode: "string" }),
     // NULL leaves historical Offers on their original SSC workflow.
     recruiterConfirmationStatus: text("recruiter_confirmation_status").$type<
       "pending" | "completed"

@@ -11,11 +11,13 @@ import { OfferSscActions, useOfferSscConfirmation } from "./offer-ssc-confirmati
 
 const mocks = vi.hoisted(() => ({
   complete: vi.fn(),
+  preboarding: vi.fn(),
   telegramLink: vi.fn(),
 }));
 
 vi.mock("@/lib/client/api", () => ({
   completeOfferSscConfirmation: mocks.complete,
+  confirmOfferPreboardingDate: mocks.preboarding,
   getOfferSscTelegramLink: mocks.telegramLink,
   receiveOfferSscConfirmation: vi.fn(),
 }));
@@ -38,6 +40,7 @@ function createDraft(overrides: Partial<OfferDraftRecord> = {}): OfferDraftRecor
     notes: null,
     organizationId: "org-1",
     position: "工程师",
+    preboardingDate: "2026-11-02",
     responseAt: null,
     sentAt: null,
     sscCompletedAt: null,
@@ -56,6 +59,7 @@ function createDraft(overrides: Partial<OfferDraftRecord> = {}): OfferDraftRecor
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.complete.mockResolvedValue(createDraft({ sscConfirmationStatus: "completed" }));
+  mocks.preboarding.mockResolvedValue(createDraft({ preboardingDate: "2026-11-05" }));
   mocks.telegramLink.mockResolvedValue({ url: null });
   vi.stubGlobal(
     "matchMedia",
@@ -157,6 +161,54 @@ async function waitForUi(assertion: () => void) {
 }
 
 describe("SSC internal approval confirmation", () => {
+  it("requires a confirmed preboarding date before final completion and offers date collection", () => {
+    const { host, rerender } = renderConfirmation();
+    rerender({ draft: { preboardingDate: null } });
+    expect(button("SSC完成确认", host)?.disabled).toBe(true);
+    expect(host.textContent).toContain("请先完成预入职时间确认");
+    expect(button("完成预入职时间确认", host)?.disabled).toBe(false);
+  });
+
+  it("validates and saves a preboarding date without completing the Offer or uploading a screenshot", async () => {
+    const { host, onSaved, rerender } = renderConfirmation();
+    rerender({ draft: { preboardingDate: null } });
+    await act(() => button("完成预入职时间确认", host)?.click());
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    if (!dialog) {
+      throw new Error("日期确认应打开专用输入弹窗");
+    }
+    expect(dialog.textContent).toContain("YYYY-MM-DD");
+    const input = dialog.querySelector<HTMLInputElement>('input[aria-label="预入职日期"]');
+    expect(input).not.toBeNull();
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    function enterDate(value: string) {
+      act(() => {
+        setValue?.call(input, value);
+        input?.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    enterDate("2026-02-30");
+    await act(() => button("确认预入职日期", dialog)?.click());
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("YYYY-MM-DD");
+    expect(mocks.preboarding).not.toHaveBeenCalled();
+    enterDate("2026-11-05");
+    await act(() => button("确认预入职日期", dialog)?.click());
+    await waitForUi(() => expect(onSaved).toHaveBeenCalledOnce());
+    expect(mocks.preboarding).toHaveBeenCalledExactlyOnceWith("demo", "candidate-1", "offer-1", {
+      preboardingDate: "2026-11-05",
+      revision: 3,
+    });
+    expect(mocks.complete).not.toHaveBeenCalled();
+  });
+
+  it("keeps preboarding date editing unavailable without SSC completion permission", () => {
+    const { host, rerender } = renderConfirmation();
+    rerender({ canConfirm: false, draft: { preboardingDate: null } });
+    expect(button("完成预入职时间确认", host)?.disabled).toBe(true);
+    expect(mocks.preboarding).not.toHaveBeenCalled();
+  });
+
   it("asks explicitly and allows completion without a screenshot", async () => {
     const { host, onSaved } = renderConfirmation();
     const dialog = await openDialog(host);
@@ -173,7 +225,7 @@ describe("SSC internal approval confirmation", () => {
       "demo",
       "candidate-1",
       "offer-1",
-      { internalApprovalConfirmed: true, revision: 3 },
+      { expectedPreboardingDate: "2026-11-02", internalApprovalConfirmed: true, revision: 3 },
       null,
     );
     await waitForUi(() => expect(document.body.querySelector('[role="dialog"]')).toBeNull());
@@ -208,7 +260,7 @@ describe("SSC internal approval confirmation", () => {
       "demo",
       "candidate-1",
       "offer-1",
-      { internalApprovalConfirmed: true, revision: 3 },
+      { expectedPreboardingDate: "2026-11-02", internalApprovalConfirmed: true, revision: 3 },
       file,
     );
   });
@@ -305,7 +357,7 @@ describe("SSC internal approval confirmation", () => {
       "demo",
       "candidate-1",
       "offer-1",
-      { internalApprovalConfirmed: true, revision: 3 },
+      { expectedPreboardingDate: "2026-11-02", internalApprovalConfirmed: true, revision: 3 },
       file,
     );
   });
@@ -316,6 +368,7 @@ describe("SSC internal approval confirmation", () => {
     { draft: { version: 3 }, label: "version" },
     { draft: { sscConfirmationStatus: "pending" as const }, label: "SSC state" },
     { draft: { status: "deleted" as const }, label: "retired draft" },
+    { draft: { preboardingDate: "2026-11-03" }, label: "preboarding date" },
     { canConfirm: false, label: "permission" },
     { disabled: true, label: "closed candidate" },
     { candidateId: "candidate-2", label: "candidate" },

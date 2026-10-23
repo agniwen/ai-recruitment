@@ -40,7 +40,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.load.mockResolvedValue({
     canConfirm: true,
-    draft: { sscConfirmationStatus: "confirming", sscRevision: 3, status: "draft" },
+    draft: {
+      preboardingDate: "2026-11-01",
+      sscConfirmationStatus: "confirming",
+      sscRevision: 3,
+      status: "draft",
+    },
     pipelineStage: "offer",
   });
   mocks.buildKey.mockResolvedValue("private/new.png");
@@ -53,6 +58,39 @@ beforeEach(() => {
 });
 
 describe("SSC completion screenshot service", () => {
+  it("rejects a changed expected date before saving screenshot bytes", async () => {
+    await expect(
+      completeOfferSscWithScreenshot({
+        ...input,
+        expectedPreboardingDate: "2026-11-02",
+        file: new File([png], "approved.png", { type: "image/png" }),
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining("预入职日期已更新"), status: 409 });
+    expect(mocks.putObjectBytes).not.toHaveBeenCalled();
+    expect(mocks.complete).not.toHaveBeenCalled();
+  });
+
+  it("requires the preboarding date before uploading a completion screenshot", async () => {
+    mocks.load.mockResolvedValueOnce({
+      canConfirm: true,
+      draft: {
+        preboardingDate: null,
+        sscConfirmationStatus: "confirming",
+        sscRevision: 3,
+        status: "draft",
+      },
+      pipelineStage: "offer",
+    });
+    await expect(
+      completeOfferSscWithScreenshot({
+        ...input,
+        file: new File([png], "approved.png", { type: "image/png" }),
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(mocks.putObjectBytes).not.toHaveBeenCalled();
+    expect(mocks.complete).not.toHaveBeenCalled();
+  });
+
   it("rejects pending recruiter contact confirmation before storing screenshots", async () => {
     mocks.load.mockResolvedValueOnce({
       canConfirm: true,

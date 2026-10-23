@@ -68,6 +68,7 @@ export function OfferDetails({
         )}
         <DataField label="股权" value={offer.equity} />
         <DataField kind="date" label="预计入职日期" value={offer.joiningDate} />
+        <DataField label="预入职日期" value={offer.preboardingDate ?? null} />
         <DataField kind="datetime" label="Offer 有效期至" value={offer.expiresAt} />
         <DataField kind="datetime" label="SSC 接收时间" value={offer.sscReceivedAt} />
         <DataField kind="datetime" label="SSC 完成时间" value={offer.sscCompletedAt} />
@@ -81,6 +82,7 @@ export function OfferDetails({
       <div className="mt-5 min-w-0">
         <OfferConfirmationText
           candidateRecordId={candidateRecordId}
+          completionInfo={offer.completionInfo}
           interviewRounds={interviewRounds}
           info={
             offer.confirmationInfo ?? { ...offerConfirmationDetailsSchema.parse({}), candidateName }

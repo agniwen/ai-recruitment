@@ -24,6 +24,115 @@ const completeInfo: OfferConfirmationDetails = {
 };
 
 describe("Offer confirmation text", () => {
+  const completionInfo = {
+    candidateCode: "C20260001",
+    candidateName: "张三",
+    candidatePrivateTelegram: "@candidate_private",
+    preboardingDate: "2026-11-01",
+    recruiterTelegram: "@recruiter_source",
+    recruitingGroupNames: ["中诚渠道", "招聘二组"],
+    recruitmentChannel: "TG",
+    resumeSource: "林图",
+  };
+
+  it("adds completed recruitment and preboarding sections to the same full Offer text", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      completionInfo,
+      currency: "CNY",
+      info: completeInfo,
+      interviewRounds: [],
+      position: "工程师",
+      sscConfirmationStatus: "completed",
+    });
+    expect(text).toContain(`3️⃣招聘信息
+招聘渠道：中诚渠道、招聘二组
+简历来源：林图
+招聘通道：TG
+招聘专员／内推人联系方式：TG—@recruiter_source
+
+4️⃣入职信息
+候选人编码：C20260001
+候选人姓名：张三
+入职日期：2026-11-01
+候选人联系方式：@candidate_private`);
+    expect(text.indexOf("2️⃣薪资信息")).toBeLessThan(text.indexOf("3️⃣招聘信息"));
+    expect(text.indexOf("4️⃣入职信息")).toBeLessThan(text.indexOf("【面试情况】"));
+    expect(text.split("\n").at(-1)).toBe("offer审批已通过");
+  });
+
+  it("includes recruitment and entry previews while confirmation is pending without claiming approval", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      completionInfo,
+      currency: "CNY",
+      info: completeInfo,
+      interviewRounds: [],
+      position: "工程师",
+      sscConfirmationStatus: "confirming",
+    });
+    expect(text).toContain("3️⃣招聘信息\n招聘渠道：中诚渠道、招聘二组");
+    expect(text).toContain("4️⃣入职信息\n候选人编码：C20260001");
+    expect(text).toContain("入职日期：2026-11-01");
+    expect(text).toContain("候选人联系方式：@candidate_private");
+    expect(text.indexOf("4️⃣入职信息")).toBeLessThan(text.indexOf("【面试情况】"));
+    expect(text).not.toContain("offer审批已通过");
+    expect(text).not.toContain("SSC 确认中");
+  });
+
+  it("does not invent recruitment or entry previews before a date has generated their data", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      completionInfo: null,
+      currency: "CNY",
+      info: completeInfo,
+      position: "工程师",
+      sscConfirmationStatus: "confirming",
+    });
+    expect(text).not.toContain("3️⃣招聘信息");
+    expect(text).not.toContain("4️⃣入职信息");
+    expect(text).not.toContain("offer审批已通过");
+  });
+
+  it.each(["pending", null, undefined] as const)(
+    "does not expose recruitment or entry details before SSC receipt for status %s",
+    (sscConfirmationStatus) => {
+      const text = buildOfferConfirmationText({
+        baseSalary: 12_000,
+        completionInfo,
+        currency: "CNY",
+        info: completeInfo,
+        position: "工程师",
+        sscConfirmationStatus,
+      });
+      expect(text).not.toContain("3️⃣招聘信息");
+      expect(text).not.toContain("4️⃣入职信息");
+    },
+  );
+
+  it("keeps missing completion data explicit without inventing a recruitment channel", () => {
+    const text = buildOfferConfirmationText({
+      baseSalary: 12_000,
+      completionInfo: {
+        ...completionInfo,
+        candidateCode: null,
+        candidatePrivateTelegram: null,
+        recruiterTelegram: null,
+        recruitingGroupNames: [],
+        recruitmentChannel: null,
+        resumeSource: null,
+      },
+      currency: "CNY",
+      info: completeInfo,
+      position: "工程师",
+      sscConfirmationStatus: "completed",
+    });
+    expect(text).toContain("招聘渠道：待补充\n简历来源：待补充\n招聘通道：待补充");
+    expect(text).toContain("招聘专员／内推人联系方式：待补充");
+    expect(text).toContain("4️⃣入职信息\n候选人编码：未填写");
+    expect(text).toContain("候选人联系方式：待补充");
+  });
+
   it("includes the confirmed private Telegram in the full Offer copy text", () => {
     const text = buildOfferConfirmationText({
       baseSalary: 12_000,

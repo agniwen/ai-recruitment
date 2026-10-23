@@ -3,11 +3,37 @@ import { createOfferTelegramAdapter } from "./offer-telegram-adapter";
 import type { TelegramAdapter, TelegramMessage } from "@chat-adapter/telegram";
 import { Chat } from "chat";
 import type { AdapterPostableMessage } from "chat";
-import { bindTelegramUser } from "../dao";
+import { z } from "zod";
+import { bindTelegramUser, isTelegramNotificationFollower } from "../dao";
 
 type TelegramBot = Chat<{ telegram: TelegramAdapter }>;
 
 let cached: { adapter: TelegramAdapter; bot: TelegramBot } | null = null;
+
+const fallbackPrivateMessageSchema = z.object({
+  chat: z.object({ id: z.number().int().positive(), type: z.literal("private") }),
+  from: z.object({ id: z.number().int().positive() }),
+});
+const unrecognizedOperationReply = "暂时无法识别本次操作，请从对应 Offer 的最新卡片重试。";
+
+async function directMessageFallbackReply(threadId: string, raw: unknown): Promise<string> {
+  const parsed = fallbackPrivateMessageSchema.safeParse(raw);
+  if (
+    !parsed.success ||
+    parsed.data.from.id !== parsed.data.chat.id ||
+    threadId !== `telegram:${parsed.data.chat.id}`
+  ) {
+    return unrecognizedOperationReply;
+  }
+  try {
+    return (await isTelegramNotificationFollower(String(parsed.data.chat.id)))
+      ? "你已关注机器人，无需重复发送 /start。当前消息未匹配到有效操作，请点击对应 Offer 的最新卡片，再回复机器人最新提示。"
+      : "发送 /start 即可关注并接收通知。";
+  } catch {
+    console.warn("[telegram-direct-message] notification_subscription_lookup_failed");
+    return unrecognizedOperationReply;
+  }
+}
 
 function getRequiredEnv(
   name: "DATABASE_URL" | "TELEGRAM_BOT_TOKEN" | "TELEGRAM_WEBHOOK_SECRET_TOKEN",
@@ -98,7 +124,7 @@ export function getTelegramBot(): TelegramBot {
     await openTelegramOffer(event, event.text?.trim() ?? "");
   });
 
-  bot.onAction(["osr", "osc", "osf", "osu", "osx"], async (event) => {
+  bot.onAction(["osr", "osd", "osc", "osf", "osu", "osx"], async (event) => {
     const { handleTelegramOfferAction } = await import("./offer-ssc");
     await handleTelegramOfferAction(event);
   });
@@ -113,11 +139,15 @@ export function getTelegramBot(): TelegramBot {
     if (await handleTelegramOfferScreenshot(thread, message)) {
       return;
     }
+    const { handleTelegramOfferPreboardingMessage } = await import("./offer-ssc");
+    if (await handleTelegramOfferPreboardingMessage(thread, message)) {
+      return;
+    }
     const { handleTelegramOfferRecruiterMessage } = await import("./offer-recruiter-contact");
     if (await handleTelegramOfferRecruiterMessage(thread, message)) {
       return;
     }
-    await thread.post("发送 /start 即可关注并接收通知。");
+    await thread.post(await directMessageFallbackReply(thread.id, message.raw));
   });
 
   cached = { adapter, bot };

@@ -30,17 +30,41 @@ export function receiveOfferSscConfirmation(
   );
 }
 
+export function confirmOfferPreboardingDate(
+  slug: string,
+  candidateId: string,
+  draftId: string,
+  input: { revision: number; preboardingDate: string },
+): Promise<OfferDraftRecord> {
+  return rpcFetch<OfferDraftRecord>(
+    rpc.api.w[":slug"].studio.interviews[":id"]["offer-drafts"][":draftId"].ssc[
+      "preboarding-date"
+    ].$post({
+      json: input,
+      param: { draftId, id: candidateId, slug },
+    }),
+    "预入职日期确认失败",
+  );
+}
+
 export function completeOfferSscConfirmation(
   slug: string,
   candidateId: string,
   draftId: string,
-  input: { revision: number; internalApprovalConfirmed: true },
+  input: {
+    revision: number;
+    expectedPreboardingDate?: string;
+    internalApprovalConfirmed: true;
+  },
   file: File | null = null,
 ): Promise<OfferDraftRecord> {
   if (file) {
     const form = new FormData();
     form.set("revision", String(input.revision));
     form.set("internalApprovalConfirmed", "true");
+    if (input.expectedPreboardingDate) {
+      form.set("expectedPreboardingDate", input.expectedPreboardingDate);
+    }
     form.set("file", file);
     return apiFetch<OfferDraftRecord>(
       `/api/w/${encodeURIComponent(slug)}/studio/interviews/${encodeURIComponent(candidateId)}/offer-drafts/${encodeURIComponent(draftId)}/ssc/complete-with-attachment`,

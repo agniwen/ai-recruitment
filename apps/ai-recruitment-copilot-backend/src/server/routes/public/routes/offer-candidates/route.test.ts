@@ -317,6 +317,32 @@ describe("Anonymous Offer candidate preview", () => {
     expect(body.candidate.name).toBe("测试候选人");
   });
 
+  it("includes the completed recruitment snapshot and SSC-confirmed preboarding date", async () => {
+    const completionInfo = {
+      candidateCode: "ZCLT00089",
+      candidateName: "确认时姓名",
+      candidatePrivateTelegram: "@candidate_private",
+      preboardingDate: "2026-11-01",
+      recruiterTelegram: "@recruiter_source",
+      recruitingGroupNames: ["中诚渠道"],
+      recruitmentChannel: "TG",
+      resumeSource: "林图",
+    };
+    mocks.context.mockResolvedValue({
+      draft: {
+        ...draft,
+        completionInfo,
+        preboardingDate: "2026-11-01",
+        sscConfirmationStatus: "completed",
+      },
+    });
+    const response = await app().request(`/api/public/offer-candidates/${token()}`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.offer).toMatchObject({ completionInfo, preboardingDate: "2026-11-01" });
+    expect(body.candidate.name).toBe("测试候选人");
+  });
+
   it("uses a fresh Offer status when the same link is read after SSC confirmation", async () => {
     const credential = token();
     mocks.context.mockResolvedValue({

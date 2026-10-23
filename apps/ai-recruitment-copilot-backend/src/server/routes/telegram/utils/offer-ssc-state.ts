@@ -21,6 +21,7 @@ const pendingSchema = z.object({
   interviewRecordId: z.string().min(1),
   organizationId: z.string().min(1),
   originMessageId: z.number().int().positive().optional(),
+  preboardingDate: z.iso.date().optional(),
   promptMessageId: z.number().int().positive(),
   revision: z.number().int().positive(),
   screenshot: screenshotSchema.optional(),
@@ -30,12 +31,40 @@ const pendingSchema = z.object({
   uploadSelectionId: z.uuid().optional(),
 });
 
+const openingSchema = z.object({
+  expiresAt: z.number().finite(),
+  revision: z.number().int().positive(),
+  token: z.string().regex(/^[0-9a-f]{32}$/u),
+});
+
 export type TelegramScreenshotReference = z.infer<typeof screenshotSchema>;
 export type TelegramOfferCompletionPending = z.infer<typeof pendingSchema>;
+type TelegramOfferCompletionOpening = z.infer<typeof openingSchema>;
 
 interface StatefulThread {
   readonly state: Promise<unknown>;
   setState(state: Record<string, unknown>): Promise<void>;
+}
+
+function readCompletionOpenings(state: unknown) {
+  const stored =
+    state && typeof state === "object" && "offerSscCompletionOpenings" in state
+      ? state.offerSscCompletionOpenings
+      : null;
+  const openings: Record<string, TelegramOfferCompletionOpening> = {};
+  if (stored && typeof stored === "object") {
+    for (const [draftId, value] of Object.entries(stored)) {
+      const parsed = openingSchema.safeParse(value);
+      if (
+        z.uuid().safeParse(draftId).success &&
+        parsed.success &&
+        parsed.data.expiresAt > Date.now()
+      ) {
+        openings[draftId] = parsed.data;
+      }
+    }
+  }
+  return openings;
 }
 
 // Action callbacks and message handlers do not necessarily share an SDK lock.
@@ -43,7 +72,10 @@ interface StatefulThread {
 export async function withTelegramOfferCompletionState<T>(
   thread: StatefulThread,
   chatId: string,
-  update: (pending: Record<string, TelegramOfferCompletionPending>) => T,
+  update: (
+    pending: Record<string, TelegramOfferCompletionPending>,
+    openings: Record<string, TelegramOfferCompletionOpening>,
+  ) => T,
 ): Promise<T> {
   return await db.transaction(async (tx) => {
     await tx.execute(
@@ -63,9 +95,11 @@ export async function withTelegramOfferCompletionState<T>(
         }
       }
     }
-    const result = update(pending);
+    const openings = readCompletionOpenings(state);
+    const result = update(pending, openings);
     await thread.setState({
       ...(state && typeof state === "object" ? state : {}),
+      offerSscCompletionOpenings: openings,
       offerSscCompletions: pending,
     });
     return result;

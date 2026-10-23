@@ -326,6 +326,7 @@ export function OfferInformationDialog({
         </DialogHeader>
         <OfferConfirmationText
           candidateRecordId={draft.interviewRecordId}
+          completionInfo={draft.completionInfo}
           info={draft.confirmationInfo}
           position={draft.position}
           baseSalary={draft.baseSalary}
