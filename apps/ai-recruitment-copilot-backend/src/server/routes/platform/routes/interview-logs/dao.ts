@@ -199,6 +199,10 @@ export async function loadMeetingLog(meetingId: string, q: LogQuery) {
       })),
     records: records.map((r) => ({
       ...hideStoredIp(r),
+      details: Object.fromEntries(
+        Object.entries(r.details).filter(([key]) => key !== "webrtcAddress"),
+      ),
+      hasWebRtcAddress: Boolean(r.details.webrtcAddress),
       occurredAt: r.occurredAt.toISOString(),
       receivedAt: r.receivedAt.toISOString(),
     })),

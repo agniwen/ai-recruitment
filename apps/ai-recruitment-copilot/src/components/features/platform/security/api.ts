@@ -47,7 +47,7 @@ export function verifyMfaReplacement(code: string) {
   );
 }
 export function revealIp(input: IpReference, signal: AbortSignal) {
-  return rpcFetch<{ ip: string; expiresAt: string }>(
+  return rpcFetch<{ ip: string; expiresAt: string; region: string | null }>(
     rpc.api.platform["interview-logs"].ip.reveal.$post(
       { json: input },
       { init: { cache: "no-store", signal } },

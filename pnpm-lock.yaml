@@ -282,6 +282,9 @@ importers:
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      ip2region:
+        specifier: 2.3.0
+        version: 2.3.0(@types/node@24.11.2)
       jotai:
         specifier: ^2.20.2
         version: 2.20.2(@babel/core@7.29.7)(@babel/template@7.29.7)(@types/react@19.2.17)(react@19.2.7)
@@ -619,6 +622,9 @@ importers:
       imapflow:
         specifier: ^1.4.1
         version: 1.4.1
+      ip2region:
+        specifier: 2.3.0
+        version: 2.3.0(@types/node@24.11.2)
       jose:
         specifier: 6.2.3
         version: 6.2.3
@@ -7718,6 +7724,11 @@ packages:
   ip-address@10.2.0:
     resolution: {integrity: sha512-/+S6j4E9AHvW9SWMSEY9Xfy66O5PWvVEJ08O0y5JGyEKQpojb0K0GKpz/v5HJ/G0vi3D2sjGK78119oXZeE0qA==}
     engines: {node: '>= 12'}
+
+  ip2region@2.3.0:
+    resolution: {integrity: sha512-zV5Xsadzrx9Ej6heoyhbXMsfGWWQ3C6bAIYStrHhw9kzLpGpVNlnAyRBxxPgxA1GNqr1Ti7oUxcWsMWNN3jZBg==}
+    peerDependencies:
+      '@types/node': '*'
 
   ipaddr.js@1.9.1:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}
@@ -17854,6 +17865,10 @@ snapshots:
       - supports-color
 
   ip-address@10.2.0: {}
+
+  ip2region@2.3.0(@types/node@24.11.2):
+    dependencies:
+      '@types/node': 24.11.2
 
   ipaddr.js@1.9.1: {}
 

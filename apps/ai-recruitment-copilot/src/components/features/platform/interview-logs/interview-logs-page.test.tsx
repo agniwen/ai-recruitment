@@ -97,6 +97,7 @@ describe("platform interview timeline", () => {
       fingerprintId: "a".repeat(32),
       fingerprintVersion: "fingerprintjs-test",
       hasIp: false,
+      hasWebRtcAddress: false,
       id: "event",
       ipSource: null,
       meetingId: "meeting",

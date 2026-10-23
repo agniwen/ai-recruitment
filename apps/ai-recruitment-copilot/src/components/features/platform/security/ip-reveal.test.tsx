@@ -43,16 +43,19 @@ describe("explicit IP reveal", () => {
     vi.mocked(revealIp).mockResolvedValue({
       expiresAt: new Date(Date.now() + 900_000).toISOString(),
       ip: "203.0.113.7",
+      region: "中国 · 广东省 · 东莞市 · 电信",
     });
     rendered = await renderInAct(<IpReveal hasIp reference={reference} />);
     expect(revealIp).not.toHaveBeenCalled();
     expect(document.body.textContent).not.toContain("203.0.113.7");
     click("查看 IP");
     await waitForUi(() => expect(document.body.textContent).toContain("203.0.113.7"));
+    expect(document.body.textContent).toContain("IP 归属地：中国 · 广东省 · 东莞市 · 电信");
     expect(revealIp).toHaveBeenCalledWith(reference, expect.any(AbortSignal));
     click("隐藏");
     expect(document.body.textContent).not.toContain("203.0.113.7");
     vi.useFakeTimers();
+    expect(document.body.textContent).not.toContain("广东省");
     click("查看 IP");
     await act(async () => {
       await Promise.resolve();
@@ -60,6 +63,18 @@ describe("explicit IP reveal", () => {
     expect(document.body.textContent).toContain("203.0.113.7");
     act(() => vi.advanceTimersByTime(60_000));
     expect(document.body.textContent).not.toContain("203.0.113.7");
+    expect(document.body.textContent).not.toContain("广东省");
+  });
+  it("still shows the IP when its region is unknown", async () => {
+    vi.mocked(revealIp).mockResolvedValue({
+      expiresAt: new Date(Date.now() + 900_000).toISOString(),
+      ip: "203.0.113.7",
+      region: null,
+    });
+    rendered = await renderInAct(<IpReveal hasIp reference={reference} />);
+    click("查看 IP");
+    await waitForUi(() => expect(document.body.textContent).toContain("IP 归属地：未知"));
+    expect(document.body.textContent).toContain("203.0.113.7");
   });
   it("redirects expired MFA to the verification page without revealing or retrying an IP", async () => {
     vi.mocked(revealIp).mockRejectedValue(new Error("MFA_REQUIRED"));

@@ -74,6 +74,17 @@ export async function saveClientEvents(
             ...evidence,
             ...event,
             browserId: event.browserId ?? event.details.browserId,
+            details: {
+              ...event.details,
+              ...(event.details.webrtcAddress
+                ? {
+                    webrtcAddress: await encryptIp(
+                      event.details.webrtcAddress,
+                      ipContext("webrtc", scope.organizationId, rowId),
+                    ),
+                  }
+                : {}),
+            },
             eventKey: id,
             fingerprintId: event.fingerprintId ?? event.details.fingerprint,
             fingerprintVersion: event.fingerprintVersion ?? event.details.fingerprintVersion,

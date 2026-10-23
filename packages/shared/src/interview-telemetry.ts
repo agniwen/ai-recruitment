@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { webRtcAddressSchema } from "./interview-webrtc";
 
 export const interviewClientEventTypes = [
   "entry_credential_client_failed",
@@ -10,6 +11,7 @@ export const interviewClientEventTypes = [
   "component_unmounted",
   "fingerprint_ready",
   "fingerprint_failed",
+  "webrtc_address_collected",
   "join_requested",
   "join_failed",
   "connected",
@@ -77,6 +79,12 @@ export const interviewEventDetailsSchema = z
     sendBitrate: metric.optional(),
     state: shortText.optional(),
     trackSource: shortText.optional(),
+    webrtcAddress: webRtcAddressSchema.optional(),
+    webrtcCandidateType: z.enum(["host", "srflx"]).optional(),
+    webrtcDurationMs: z.number().int().min(0).max(1e15).optional(),
+    webrtcProtocol: z.enum(["udp", "tcp"]).optional(),
+    webrtcServer: z.enum(["bilibili", "hitv"]).optional(),
+    webrtcStatus: z.enum(["completed", "timeout", "unsupported", "failed"]).optional(),
   })
   .strict();
 
@@ -102,7 +110,18 @@ export const interviewClientEventSchema = interviewTraceSchema
     roomSid: z.string().max(100).optional(),
     type: z.enum(interviewClientEventTypes),
   })
-  .strict();
+  .strict()
+  .refine(
+    (event) =>
+      event.type !== "webrtc_address_collected" ||
+      (event.details.webrtcServer !== undefined &&
+        event.details.webrtcStatus !== undefined &&
+        event.details.webrtcDurationMs !== undefined &&
+        (!event.details.webrtcAddress ||
+          (event.details.webrtcCandidateType !== undefined &&
+            event.details.webrtcProtocol !== undefined))),
+    { message: "WebRTC 采集记录不完整", path: ["details"] },
+  );
 
 export const interviewEventBatchSchema = z
   .object({
@@ -164,4 +183,5 @@ export const interviewEventLabels: Record<string, string> = {
   track_published: "开始发布媒体轨道",
   track_unmuted: "媒体轨道开启",
   track_unpublished: "停止发布媒体轨道",
+  webrtc_address_collected: "WebRTC 网络地址采集",
 };

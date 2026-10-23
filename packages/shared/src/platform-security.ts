@@ -29,7 +29,7 @@ export function platformMfaHref(returnTo: unknown) {
 export const mfaActivitySchema = z.object({ activeAt: z.number().int().nonnegative() });
 export const revealIpSchema = z.object({
   id: z.string().min(1).max(200),
-  kind: z.enum(["telemetry", "entry-use", "media"]),
+  kind: z.enum(["telemetry", "entry-use", "media", "webrtc"]),
   meetingId: z.string().min(1).max(200),
 });
 export type IpReference = z.infer<typeof revealIpSchema>;

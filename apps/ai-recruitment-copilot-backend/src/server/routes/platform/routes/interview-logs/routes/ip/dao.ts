@@ -12,8 +12,22 @@ import {
 import type { IpReference } from "@arc/shared/platform-security";
 import { requireRecentMfa } from "../../../../../security/mfa/service";
 import type { SecurityPrincipal } from "../../../../../security/mfa/service";
+import { lookupIpRegion } from "./region";
 
 async function loadEncryptedIp(input: IpReference) {
+  if (input.kind === "webrtc") {
+    const [row] = await db
+      .select({ details: event.details, organizationId: event.organizationId })
+      .from(event)
+      .where(and(eq(event.id, input.id), eq(event.meetingId, input.meetingId)))
+      .limit(1);
+    return row
+      ? {
+          ip: typeof row.details.webrtcAddress === "string" ? row.details.webrtcAddress : null,
+          organizationId: row.organizationId,
+        }
+      : null;
+  }
   if (input.kind === "media") {
     const [row] = await db
       .select({ environment: asset.environment, organizationId: room.organizationId })
@@ -65,5 +79,5 @@ export async function revealStoredIp(
   if (failed) {
     throw new Error("IP decryption unavailable");
   }
-  return ip ? { expiresAt, ip } : null;
+  return ip ? { expiresAt, ip, region: lookupIpRegion(ip) } : null;
 }

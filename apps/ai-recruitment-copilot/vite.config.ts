@@ -138,6 +138,7 @@ export default defineConfig(({ command }) => {
             },
           },
         },
+        traceDeps: ["ip2region*"],
       }),
     ],
     preview: {
@@ -151,6 +152,7 @@ export default defineConfig(({ command }) => {
       strictPort: true,
     },
     ssr: {
+      external: ["ip2region"],
       optimizeDeps: {
         // Flatten React Start's transitive export-star chain for the SSR module
         // runner. The server entry is loaded dynamically for the same HMR cycle.

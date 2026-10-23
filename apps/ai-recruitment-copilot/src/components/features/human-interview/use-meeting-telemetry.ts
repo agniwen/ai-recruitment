@@ -5,6 +5,8 @@ import type {
 } from "@arc/shared/interview-telemetry";
 import { createTelemetryClient, readNetwork } from "./telemetry-client";
 import type { BrowserNetwork, TelemetryClient } from "./telemetry-client";
+import { collectWebRtcAddress } from "./webrtc-address";
+import type { WebRtcServer } from "@arc/shared/interview-webrtc";
 
 export function useMeetingTelemetry(mode: "candidate" | "interviewer", inviteToken: string) {
   const client = useRef<TelemetryClient | null>(null);
@@ -13,6 +15,43 @@ export function useMeetingTelemetry(mode: "candidate" | "interviewer", inviteTok
     client.current = recorder;
     recorder.opened();
     let active = true;
+    let webRtcController = new AbortController();
+    let lastWebRtcProbe = 0;
+    let webRtcTimer: ReturnType<typeof setTimeout> | undefined;
+    async function sampleServer(server: WebRtcServer, signal: AbortSignal) {
+      const result = await collectWebRtcAddress(server, signal);
+      if (!active || signal.aborted || !result) {
+        return;
+      }
+      for (const candidate of result.candidates.length ? result.candidates : [undefined]) {
+        recorder.emit("webrtc_address_collected", {
+          webrtcAddress: candidate?.address,
+          webrtcCandidateType: candidate?.type,
+          webrtcDurationMs: result.durationMs,
+          webrtcProtocol: candidate?.protocol,
+          webrtcServer: server,
+          webrtcStatus: result.status,
+        });
+      }
+      void recorder.flush();
+    }
+    function sampleWebRtc() {
+      if (!active || !navigator.onLine) {
+        return;
+      }
+      if (webRtcController.signal.aborted) {
+        webRtcController = new AbortController();
+      }
+      lastWebRtcProbe = Date.now();
+      for (const server of ["bilibili", "hitv"] as const) {
+        void sampleServer(server, webRtcController.signal);
+      }
+    }
+    function scheduleWebRtc() {
+      clearTimeout(webRtcTimer);
+      webRtcTimer = setTimeout(sampleWebRtc, Math.max(1000, lastWebRtcProbe + 30_000 - Date.now()));
+    }
+    sampleWebRtc();
     async function fingerprint() {
       try {
         const fp = await import("@fingerprintjs/fingerprintjs");
@@ -36,17 +75,21 @@ export function useMeetingTelemetry(mode: "candidate" | "interviewer", inviteTok
       void recorder.flush(true);
     };
     const pagehide = (event: PageTransitionEvent) => {
+      clearTimeout(webRtcTimer);
+      webRtcController.abort();
       recorder.emit("page_exit", { persisted: event.persisted });
       void recorder.flush(true);
     };
     const pageshow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         recorder.emit("page_restored", { persisted: true });
+        scheduleWebRtc();
       }
     };
     const network = () => {
       recorder.emit("network_changed", readNetwork());
       void recorder.flush();
+      scheduleWebRtc();
     };
     const error = () => recorder.emit("client_error", { errorName: "window_error" });
     const rejection = () => recorder.emit("client_error", { errorName: "unhandled_rejection" });
@@ -61,6 +104,8 @@ export function useMeetingTelemetry(mode: "candidate" | "interviewer", inviteTok
     connection?.addEventListener("change", network);
     return () => {
       active = false;
+      clearTimeout(webRtcTimer);
+      webRtcController.abort();
       document.removeEventListener("visibilitychange", visibility);
       window.removeEventListener("pagehide", pagehide);
       window.removeEventListener("pageshow", pageshow);

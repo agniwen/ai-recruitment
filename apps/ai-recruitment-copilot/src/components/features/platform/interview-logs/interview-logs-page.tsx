@@ -14,6 +14,7 @@ import { MeetingMediaPanel } from "./meeting-media";
 import { MeetingEntryCredentials } from "./meeting-entry-credentials";
 import { MediaArchivesPanel } from "./media-archives";
 import { MeetingFingerprints } from "./meeting-fingerprints";
+import { WebRtcAddress } from "./webrtc-address";
 
 const route = getRouteApi("/platform/interview-logs");
 const controlClass =
@@ -160,10 +161,12 @@ function EventRow({ event }: { event: TimelineEvent }) {
         ) : null}
       </td>
       <td className="min-w-60 py-4 text-xs">
+        <p className="mb-1 text-muted-foreground">请求 IP</p>
         <IpReveal
           hasIp={event.hasIp}
           reference={{ id: event.id, kind: "telemetry", meetingId: event.meetingId }}
         />
+        <WebRtcAddress event={event} />
         <details className="mt-2">
           <summary className="cursor-pointer text-muted-foreground">
             查看设备、会话及事件详情

@@ -72,6 +72,7 @@
     "hono": "^4.12.18",
     "html-to-text": "9.0.5",
     "imapflow": "^1.4.1",
+    "ip2region": "2.3.0",
     "jose": "6.2.3",
     "jszip": "^3.10.1",
     "livekit-server-sdk": "^2.15.2",

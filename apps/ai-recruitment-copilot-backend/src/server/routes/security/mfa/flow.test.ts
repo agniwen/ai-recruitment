@@ -231,6 +231,7 @@ describe("platform MFA and explicit IP reveal in isolated PostgreSQL", () => {
     expect(await revealStoredIp(reference, principal, headers)).toEqual({
       expiresAt: result.expiresAt,
       ip,
+      region: null,
     });
     expect(
       await revealStoredIp({ ...reference, meetingId: "other" }, principal, headers),

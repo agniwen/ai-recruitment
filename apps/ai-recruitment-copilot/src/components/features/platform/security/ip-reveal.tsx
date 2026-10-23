@@ -10,7 +10,7 @@ interface IpRevealProps {
 }
 
 function IpRevealValue({ reference, hasIp }: IpRevealProps) {
-  const [visible, setVisible] = useState<{ ip: string; expiresAt: string } | null>(null);
+  const [visible, setVisible] = useState<Awaited<ReturnType<typeof revealIp>> | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setError] = useState("");
   const request = useRef<AbortController | null>(null);
@@ -78,11 +78,14 @@ function IpRevealValue({ reference, hasIp }: IpRevealProps) {
   return (
     <div className="space-y-1">
       {visible ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="break-all font-mono">{visible.ip}</span>
-          <Button size="sm" variant="ghost" onClick={() => setVisible(null)}>
-            隐藏
-          </Button>
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="break-all font-mono">{visible.ip}</span>
+            <Button size="sm" variant="ghost" onClick={() => setVisible(null)}>
+              隐藏
+            </Button>
+          </div>
+          <p className="text-muted-foreground">IP 归属地：{visible.region ?? "未知"}</p>
         </div>
       ) : (
         <Button
