@@ -48,6 +48,7 @@ export async function loadOfferCreationContext(input: {
       departmentHiringUnitName: departmentHiringUnit.name,
       departmentName: department.name,
       jobHiringUnitName: jobHiringUnit.name,
+      position: jobDescription.name,
       resumeFileName: studioInterview.resumeFileName,
       resumeProfile: studioInterview.resumeProfile,
       resumeStorageKey: studioInterview.resumeStorageKey,
@@ -141,6 +142,7 @@ export async function loadOfferCreationContext(input: {
       ),
       label: round.label,
     })),
+    position: canReadJob ? candidate.position : null,
     resume: {
       available: canReadResume && Boolean(candidate.resumeStorageKey),
       filename: candidate.resumeFileName,

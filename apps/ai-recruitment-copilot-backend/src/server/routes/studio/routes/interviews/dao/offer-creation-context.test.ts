@@ -47,7 +47,7 @@ beforeAll(async () => {
   mocks.database = drizzle({ client });
   await client.exec(`
     CREATE TABLE studio_interview (id text, organization_id text, candidate_name text, resume_profile jsonb, resume_file_name text, resume_storage_key text, job_description_id text);
-    CREATE TABLE job_description (id text, organization_id text, department_id text, hiring_unit_id text, creation_source text, service_unit text, job_level text, work_location text);
+    CREATE TABLE job_description (id text, organization_id text, department_id text, hiring_unit_id text, creation_source text, service_unit text, job_level text, work_location text, name text);
     CREATE TABLE department (id text, organization_id text, hiring_unit_id text, name text);
     CREATE TABLE hiring_unit (id text, organization_id text, name text);
     CREATE TABLE studio_offer_draft (id text, interview_record_id text, organization_id text, version integer, confirmation_info jsonb);
@@ -76,7 +76,7 @@ beforeEach(async () => {
     INSERT INTO studio_interview VALUES ('candidate-a', 'org-a', '正确姓名', '{"name":"简历旧姓名","gender":"女"}', 'resume.pdf', 'private/resume', 'job-a');
     INSERT INTO hiring_unit VALUES ('job-unit', 'org-a', '岗位编制组织'), ('department-unit', 'org-a', '部门所属组织');
     INSERT INTO department VALUES ('department-a', 'org-a', 'department-unit', '研发部');
-    INSERT INTO job_description VALUES ('job-a', 'org-a', 'department-a', 'job-unit', 'manual', '服务单位', 'P6', '上海');
+    INSERT INTO job_description VALUES ('job-a', 'org-a', 'department-a', 'job-unit', 'manual', '服务单位', 'P6', '上海', '当前投递岗位');
   `);
 });
 
@@ -128,6 +128,7 @@ describe("read-only Offer creation context", () => {
           label: "技术复面",
         },
       ],
+      position: "当前投递岗位",
       resume: { available: true, filename: "resume.pdf", mediaType: "application/pdf" },
     });
     expect(await client.query("SELECT * FROM studio_interview")).toEqual(before);
@@ -140,6 +141,18 @@ describe("read-only Offer creation context", () => {
     await client.exec("UPDATE job_description SET creation_source = 'google_sheets'");
     const googleContext = await loadOfferCreationContext(input);
     expect(googleContext?.defaults.hiringUnitName).toBeNull();
+  });
+
+  it("uses the candidate's current job and leaves missing or foreign jobs empty", async () => {
+    await client.exec("UPDATE job_description SET name = '调岗后的岗位'");
+    const changedJob = await loadOfferCreationContext(input);
+    expect(changedJob?.position).toBe("调岗后的岗位");
+    await client.exec("UPDATE job_description SET organization_id = 'org-b'");
+    const foreignJob = await loadOfferCreationContext(input);
+    expect(foreignJob?.position).toBeNull();
+    await client.exec("UPDATE studio_interview SET job_description_id = NULL");
+    const missingJob = await loadOfferCreationContext(input);
+    expect(missingJob?.position).toBeNull();
   });
 
   it("does not reveal the candidate across workspaces", async () => {
@@ -165,6 +178,7 @@ describe("read-only Offer creation context", () => {
   it("leaves job defaults empty without jd.read while retaining candidate defaults for manual completion", async () => {
     mocks.canReadJob = false;
     const context = await loadOfferCreationContext(input);
+    expect(context?.position).toBeNull();
     expect(context?.defaults).toMatchObject({
       candidateName: "正确姓名",
       departmentName: null,

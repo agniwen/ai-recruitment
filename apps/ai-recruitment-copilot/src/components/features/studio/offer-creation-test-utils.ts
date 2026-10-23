@@ -32,7 +32,7 @@ const completeInfo = {
   probationSalary: 25_000,
   workMode: "远程",
 };
-export function creationContext(name = "候选人甲") {
+export function creationContext(name = "候选人甲", position: string | null = "当前投递岗位") {
   return {
     defaults: { ...defaults, candidateName: name },
     interviewRounds: [
@@ -46,6 +46,7 @@ export function creationContext(name = "候选人甲") {
         label: "技术复面",
       },
     ],
+    position,
     resume: { available: true, filename: "original-resume.pdf", mediaType: "application/pdf" },
   };
 }

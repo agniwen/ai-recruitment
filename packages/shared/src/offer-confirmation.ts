@@ -15,6 +15,7 @@ export interface OfferCreationContext {
     feedback: string | null;
     interviewers: { id: string; name: string }[];
   }[];
+  position: string | null;
   resume: {
     filename: string | null;
     mediaType: string | null;
